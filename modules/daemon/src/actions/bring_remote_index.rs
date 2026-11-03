@@ -58,6 +58,12 @@ impl Action for ActionBringRemoteIndex {
     ) -> Result<Self::Output, ActionError> {
         let local = local_index(&ctx)?;
 
+        // The chain is one ask and one answer — what the Workspace holds, and the pack the Vault
+        // walks back — and both are exchanges a reader waits on: the bar moves once as the ask goes
+        // and once as the pack arrives, so a retrack of a version never fetched is not a capsule
+        // that sits at nothing until it is over.
+        let mut task = ctx.progress().begin("", Some(2));
+
         // What is wanted, and what this side already holds, is the Workspace's to say: the Vault is
         // told both as one value, so it walks down only as far as it has to.
         let asked = if ctx.is_workspace() {
@@ -80,6 +86,7 @@ impl Action for ActionBringRemoteIndex {
             None
         };
         let arrived = carry_blob(&mut ctx, Side::Vault, asked.clone()).await?;
+        task.advance_by(1);
         let asked = <(String, Vec<String>)>::decode(arrived.or(asked).unwrap_or_default())
             .map_err(codec_failed)?;
 
@@ -103,6 +110,7 @@ impl Action for ActionBringRemoteIndex {
             .transpose()
             .map_err(codec_failed)?;
         let arrived = carry_blob(&mut ctx, Side::Workspace, mine.clone()).await?;
+        task.advance_by(1);
         let bytes = arrived.or(mine).unwrap_or_default();
 
         // The objects are written here, where the index is the Workspace's own, and what the caller

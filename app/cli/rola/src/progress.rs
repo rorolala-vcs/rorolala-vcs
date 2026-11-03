@@ -5,21 +5,25 @@
 //! and here is where that answer is carried out. Nothing is drawn on the thread the work runs
 //! on, so watching a run never slows it down.
 //!
-//! The bars are [`indicatif`]'s, drawn the way Rorolala's build tooling draws its own: a task
-//! is one bar, the tasks of a run are stacked under it, and the bar carries how far it has got
-//! rather than a picture of it. The drawing is indicatif's to do and nobody else's, which is
-//! what keeps a run of this program looking like every other run of a Rust program.
+//! A task is one row, and every row keeps the same columns: a spinner, a fixed-width label, a
+//! line drawn in `━`, `╸` and `─`, a percentage, and the piece being moved. A task that does
+//! not know its length has no percentage to show, so its line becomes a marquee that runs right
+//! and comes back in from the left. The columns are fixed rather than laid out per row so that a
+//! run changing phase does not make every line in front of the reader jump.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::io::Write as _;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
+use console::{Style, Term};
+use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState, ProgressStyle};
 use rorolala_cli_setups::ResProgressSetting;
 use rorolala_utils_progress::{Direction, Progress, Signal, Transmitter};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TryRecvError;
+use unicode_width::UnicodeWidthChar as _;
 
 /// How many signals may be waiting to be drawn before the ones that do not fit are dropped.
 ///
@@ -28,40 +32,39 @@ use tokio::sync::mpsc::error::TryRecvError;
 /// becoming a slow run.
 const DEPTH: usize = 256;
 
-/// The characters a bar is drawn with: what is behind the work, where the work is, and what is
+/// The characters a line is drawn with: what is behind the work, where the work is, and what is
 /// ahead of it.
-const CHARS: &str = "=> ";
+const CHARS: &str = "━╸─";
 
-/// The bar the whole of a run is drawn as.
-///
-/// The width is written into the template rather than named, since a template's widths are
-/// literal: the two bars below are 28 cells for the same reason — so that a task's bar begins
-/// where every other bar of the run does. The message is what the whole of the run calls itself
-/// — a recording names the part it is in — and is empty for a bar that has nothing to say.
-const WHOLE_TEMPLATE: &str = "  [{bar:28}] {pos}/{len} {percent}% {msg}";
-
-/// The bar one task of a run is drawn as: which way its work moves, how fast it is moving, how far
-/// it has got, and what it is moving right now.
-///
-/// How far is said as a percentage, and how fast as so many bytes a second, because a task here is
-/// a transfer and a transfer is counted in bytes: a content crosses a piece at a time, and a reader
-/// watching one long content wants to see it move while it moves rather than only when it is done.
-const TASK_TEMPLATE: &str = "{prefix} [{bar:28}] {bytes_per_sec} {percent}% {msg}";
-
-/// How much of the name of a piece being moved is shown.
+/// How much of the name of a piece being moved is shown, in columns.
 ///
 /// A piece is named by the key its content is kept under, and a whole key is sixty-four
-/// characters: shown in full it is longer than the line it has to fit on, so it is the head
-/// of it that is shown — enough of it to tell one piece from the next, which is all a reader
-/// is being shown it for.
+/// characters: the head is enough to tell one piece from the next, which is all the last column
+/// is for.
 const PIECE: usize = 7;
 
-/// What is written where the rest of a piece's name was.
-const REST: &str = "...";
+/// How wide the label column is: enough for `DOWNLOADING` and no wider.
+const LABEL: usize = 12;
+
+/// How much room the line keeps at the left and the right of the terminal.
+const PAD_LEFT: usize = 4;
+const PAD_RIGHT: usize = 2;
+
+/// How long the waiting marquee takes to cross the line and come back in from the left.
+const SNAKE_PERIOD_MS: u128 = 1_200;
+
+/// The frames of a spinner for work that has no length to show.
+const WAIT_TICKS: &str = "◜◝◞◟✔";
+
+/// The frames of a spinner for work that knows its length but moves no data.
+const WORK_TICKS: &str = "◜◝◞◟";
+
+/// The fixed part of a row, which is what the marquee's length is worked out from.
+const FIXED_WIDTH: usize = PAD_LEFT + 1 + 1 + LABEL + 1 + 6 + PIECE + PAD_RIGHT;
 
 /// How long a run goes unwatched before it is watched.
 ///
-/// Long enough that a run which is going to be over quickly is over before the bars would
+/// Long enough that a run which is going to be over quickly is over before the rows would
 /// have been shown, and short enough that a run which is not is watched almost from the start.
 const DELAY: Duration = Duration::from_secs(2);
 
@@ -129,8 +132,8 @@ impl Reporting {
 
     /// Ends the watching, once there is nothing more for the run to say.
     ///
-    /// The way to say anything is let go of before the reader is waited for, because that is
-    /// what the reader is waiting for: a run that held on to it would be waiting on a thread
+    /// The way to say anything is let go of before the reader is waited for, because that
+    /// is what the reader is waiting for: a run that held on to it would be waiting on a thread
     /// that is waiting on the run.
     pub fn finish(self) {
         let Self { progress, watching } = self;
@@ -144,7 +147,7 @@ impl Reporting {
 
 /// How a run's signals are shown.
 enum Watcher {
-    /// Bars on the terminal, a task at a time.
+    /// Rows on the terminal, a task at a time.
     Terminal(Terminal),
     /// One record per signal, for another program to read.
     Records,
@@ -181,18 +184,18 @@ impl Watcher {
     }
 }
 
-/// The bars a run is drawn as, stacked one under another.
+/// The rows a run is drawn as, stacked one under another.
 struct Terminal {
-    /// The bars, kept together so that they share the terminal and are redrawn as one block.
+    /// The rows, kept together so that they share the terminal and are redrawn as one block.
     bars: MultiProgress,
-    /// What each bar is, by the id the task is named by.
+    /// What each row is, by the id the task is named by.
     drawn: BTreeMap<u64, ProgressBar>,
-    /// How long a run goes unwatched before the bars are let out.
+    /// How long a run goes unwatched before the rows are let out.
     delay: Duration,
 }
 
 impl Terminal {
-    /// A terminal with nothing drawn on it yet, holding the bars back for `delay`.
+    /// A terminal with nothing drawn on it yet, holding the rows back for `delay`.
     fn new(delay: Duration) -> Self {
         Self {
             bars: MultiProgress::with_draw_target(ProgressDrawTarget::hidden()),
@@ -201,14 +204,14 @@ impl Terminal {
         }
     }
 
-    /// Reads `receiver`, letting the bars out only once the run has gone on long enough to be
+    /// Reads `receiver`, letting the rows out only once the run has gone on long enough to be
     /// worth watching.
     ///
-    /// A run that is over in a moment has nothing to be watched for: bars that appear and are
+    /// A run that is over in a moment has nothing to be watched for: rows that appear and are
     /// wiped again a moment later are a flicker where there was nothing to say, and a person
     /// reading them learns nothing they did not already know from the run having ended. So for
     /// the first little while nothing is let out, though what the run says is read all the
-    /// same — the bars are as far along as the run is by the time they are shown — and a run
+    /// same — the rows are as far along as the run is by the time they are shown — and a run
     /// that ends inside that while is never shown at all.
     ///
     /// The waiting is the clock's and not the run's, so it is done by looking rather than by
@@ -225,7 +228,7 @@ impl Terminal {
             }
         }
 
-        // The bars have been drawn all along, into nothing: letting them out now shows them as
+        // The rows have been drawn all along, into nothing: letting them out now shows them as
         // they are, and drawing them again shows them at once rather than at the next thing the
         // run says — which may be a long way off, since this is the run's own pace.
         self.bars.set_draw_target(ProgressDrawTarget::stderr());
@@ -257,7 +260,7 @@ impl Terminal {
         }
     }
 
-    /// Starts drawing a task: a bar of its own when it is one, and a name on the bar above it
+    /// Starts drawing a task: a row of its own when it is one, and a name on the row above it
     /// when it is a piece of one.
     fn begin(
         &mut self,
@@ -268,44 +271,42 @@ impl Terminal {
         total: Option<u64>,
     ) {
         match (parent, direction) {
-            // The whole of the run: the bar every other bar is stacked under.
+            // The whole of the run: a row every other row is stacked under.
             (None, _) => {
-                let bar = self.bars.add(bar(total, WHOLE_TEMPLATE));
+                let bar = self.bars.add(bar(total, direction));
+                bar.set_prefix(label_for(what, direction, total));
 
-                // What the whole of the run is, when it names itself: a recording says which part of
-                // itself it is in — reading, writing, recording — and the name is the whole of what
-                // says so on a bar that has no direction of its own.
-                if !what.is_empty() {
-                    bar.set_message(what.to_owned());
+                if direction.is_some() && !what.is_empty() {
+                    bar.set_message(fit(what, PIECE));
                 }
 
                 self.drawn.insert(id, bar);
             }
-            // One direction of it: a bar of its own, saying which way its work moves.
+            // One direction of it: a row of its own, saying which way its work moves.
             (Some(_), Some(direction)) => {
-                let bar = self.bars.add(bar(total, TASK_TEMPLATE));
-                bar.set_prefix(arrow(direction).to_string());
+                let bar = self.bars.add(bar(total, Some(direction)));
+                bar.set_prefix(label_for("", Some(direction), total));
 
                 if !what.is_empty() {
-                    bar.set_message(what.to_owned());
+                    bar.set_message(fit(what, PIECE));
                 }
 
                 self.drawn.insert(id, bar);
             }
-            // A piece being done right now: not a bar of its own, but what the bar above it is
-            // moving — which is the name at the end of that bar.
+            // A piece being done right now: not a row of its own, but what the row above it is
+            // moving — which is the last column of that row.
             (Some(parent), None) => {
                 if let Some(above) = self.drawn.get(&parent) {
-                    above.set_message(head(what));
+                    above.set_message(fit(what, PIECE));
                 }
             }
         }
     }
 
-    /// Stops drawing a task, and takes its bar off the terminal.
+    /// Stops drawing a task, and takes its row off the terminal.
     ///
     /// A task that is over has nothing left to say, so what is left behind is the whole of the
-    /// run rather than a row of bars that have all stopped: a piece being done is not a bar at
+    /// run rather than a row of bars that have all stopped: a piece being done is not a row at
     /// all, so finishing one says nothing to the terminal and waits for the next name.
     fn finish(&mut self, id: u64) {
         if let Some(bar) = self.drawn.remove(&id) {
@@ -314,65 +315,260 @@ impl Terminal {
     }
 }
 
-/// The arrow a task's bar is prefixed with, which is what says which way its work moves.
-const fn arrow(direction: Direction) -> char {
-    match direction {
-        Direction::Up => '↑',
-        Direction::Down => '↓',
-    }
+/// What a row calls itself: the work's own word when it has one, and what the row is doing
+/// otherwise.
+///
+/// The answer is padded or cut to [`LABEL`] columns so that the line after it starts in the
+/// same place on every row, which is what keeps a run changing phase from moving the bar under
+/// the reader's eye.
+fn label_for(what: &str, direction: Option<Direction>, total: Option<u64>) -> String {
+    let said = match (direction, total) {
+        (Some(Direction::Up), _) => "UPLOADING",
+        (Some(Direction::Down), _) => "DOWNLOADING",
+        (None, None) => "WAITING",
+        (None, Some(_)) if what.is_empty() => "WORKING",
+        _ => what,
+    };
+
+    fit(said, LABEL)
 }
 
-/// The head of the name of a piece being moved, and what says the rest of it is not shown.
+/// Pads or cuts `text` to exactly `width` terminal columns.
 ///
-/// A name shorter than the head is shown whole, and so is one the same length: there is
-/// nothing being left out of either, and a name that says everything it has to say should not
-/// be made to look as though it does not.
-fn head(what: &str) -> String {
-    let mut shown: String = what.chars().take(PIECE).collect();
+/// A column is a terminal cell rather than a character: a Chinese word in a label is two cells
+/// wide, and counting it as one would make the column after it stand in a different place in
+/// each language.
+fn fit(text: &str, width: usize) -> String {
+    let mut shown = String::new();
+    let mut used = 0;
 
-    if what.chars().count() > PIECE {
-        shown.push_str(REST);
+    for character in text.chars() {
+        let cells = character.width().unwrap_or(0);
+
+        if used + cells > width {
+            break;
+        }
+
+        shown.push(character);
+        used += cells;
     }
+
+    shown.push_str(&" ".repeat(width - used));
 
     shown
 }
 
-/// A bar `total` long, drawn with `template`.
-///
-/// A task whose length is not known is drawn as an empty bar rather than a spinner: what this
-/// program says about its work is how much of it there is, and a task that cannot say that is
-/// a task nothing here knows how to draw.
-fn bar(total: Option<u64>, template: &str) -> ProgressBar {
+/// A row `total` long, drawn for work moving `direction`.
+fn bar(total: Option<u64>, direction: Option<Direction>) -> ProgressBar {
     let bar = ProgressBar::new(total.unwrap_or(0));
+    let style = match total {
+        Some(_) => transfer_style(direction),
+        None => wait_style(),
+    };
 
-    // UNWRAP: both templates are this program's own, so a template that will not parse is a
-    // mistake in the program rather than anything a run can bring about.
-    bar.set_style(
-        ProgressStyle::default_bar()
-            .template(template)
-            .unwrap()
-            .progress_chars(CHARS),
-    );
+    bar.set_style(style);
 
     bar
 }
 
+/// The row a run is drawn as while it has no length to show: a marquee crossing the line.
+fn wait_style() -> ProgressStyle {
+    let left = " ".repeat(PAD_LEFT);
+    let right = " ".repeat(PAD_RIGHT);
+    let width = snake_width();
+    let block = (width / 4).max(4).min(width);
+    let filled = Style::new().bright().yellow().for_stderr();
+    let empty = Style::new().yellow().dim().for_stderr();
+
+    // UNWRAP: this template is the program's own, so one that will not parse is a mistake in
+    // the program rather than anything a run can bring about.
+    ProgressStyle::with_template(&format!(
+        "{left}{{spinner:.bright.yellow}} {{prefix:.bold}} {{snake}}   -- {{msg:.dim}}{right}"
+    ))
+    .unwrap()
+    .with_key(
+        "snake",
+        move |state: &ProgressState, out: &mut dyn std::fmt::Write| {
+            let elapsed = state.elapsed().as_millis();
+            let cells = u128::try_from(width).unwrap_or(u128::MAX);
+            let offset = (elapsed % SNAKE_PERIOD_MS) * cells / SNAKE_PERIOD_MS;
+            let offset = usize::try_from(offset).unwrap_or(0) % width;
+            let is_filled = |index: usize| (index + width - offset) % width < block;
+
+            let mut line = String::with_capacity(width * 16);
+            let mut index = 0;
+            while index < width {
+                let cell = is_filled(index);
+                let start = index;
+                while index < width && is_filled(index) == cell {
+                    index += 1;
+                }
+                let segment = if cell { "━" } else { "─" }.repeat(index - start);
+                let styled = if cell {
+                    filled.apply_to(segment)
+                } else {
+                    empty.apply_to(segment)
+                };
+                let _ = write!(line, "{styled}");
+            }
+            let _ = out.write_str(&line);
+        },
+    )
+    .tick_chars(WAIT_TICKS)
+}
+
+/// The row a transfer is drawn as: a line whose fill is the share of the work that is done.
+fn transfer_style(direction: Option<Direction>) -> ProgressStyle {
+    let (color, ticks) = match direction {
+        Some(Direction::Up) => ("cyan", "↑↑"),
+        Some(Direction::Down) => ("green", "↓↓"),
+        None => ("blue", WORK_TICKS),
+    };
+    let left = " ".repeat(PAD_LEFT);
+    let right = " ".repeat(PAD_RIGHT);
+
+    // UNWRAP: this template is the program's own, so one that will not parse is a mistake in
+    // the program rather than anything a run can bring about.
+    ProgressStyle::with_template(&format!(
+        "{left}{{spinner:.bright.{color}}} {{prefix:.bold}} \
+         {{wide_bar:.bright.{color}/dim}} {{percent:>3}}% {{msg:.dim}}{right}"
+    ))
+    .unwrap()
+    .progress_chars(CHARS)
+    .tick_chars(ticks)
+}
+
+/// The width the marquee has, which is the terminal's width less every fixed column.
+fn snake_width() -> usize {
+    let columns = Term::stderr().size().1 as usize;
+    let columns = if columns == 0 { 80 } else { columns };
+
+    columns.saturating_sub(FIXED_WIDTH).max(4)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::head;
+    use std::io;
+    use std::sync::{Arc, Mutex};
+
+    use indicatif::{ProgressBar, ProgressDrawTarget, TermLike};
+
+    use super::{Direction, fit, label_for, transfer_style, wait_style};
+
+    /// A terminal that keeps what is drawn on it, so a row can be read as text.
+    #[derive(Debug, Clone, Default)]
+    struct Captured(Arc<Mutex<String>>);
+
+    impl TermLike for Captured {
+        fn width(&self) -> u16 {
+            100
+        }
+
+        fn move_cursor_up(&self, _: usize) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn move_cursor_down(&self, _: usize) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn move_cursor_right(&self, _: usize) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn move_cursor_left(&self, _: usize) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn write_line(&self, said: &str) -> io::Result<()> {
+            self.0.lock().expect("the captured line").push_str(said);
+            self.0.lock().expect("the captured line").push('\n');
+
+            Ok(())
+        }
+
+        fn write_str(&self, said: &str) -> io::Result<()> {
+            self.0.lock().expect("the captured row").push_str(said);
+
+            Ok(())
+        }
+
+        fn clear_line(&self) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn flush(&self) -> io::Result<()> {
+            Ok(())
+        }
+    }
 
     #[test]
-    fn a_key_is_shown_by_its_head_and_says_the_rest_is_left_out() {
+    fn the_row_templates_are_this_programs_own() {
+        let _ = wait_style();
+
+        for direction in [None, Some(Direction::Up), Some(Direction::Down)] {
+            let _ = transfer_style(direction);
+        }
+    }
+
+    #[test]
+    fn a_transfer_row_is_a_line_with_its_label_and_share() {
+        let captured = Captured::default();
+        let bar = ProgressBar::with_draw_target(
+            Some(100),
+            ProgressDrawTarget::term_like(Box::new(captured.clone())),
+        );
+        bar.set_style(transfer_style(Some(Direction::Up)));
+        bar.set_prefix(label_for("", Some(Direction::Up), Some(100)));
+        bar.set_message(fit("abcdefghi", 7));
+        bar.set_position(50);
+        bar.tick();
+
+        let row = captured.0.lock().expect("the captured row").clone();
+
+        assert!(row.contains("UPLOADING"));
+        assert!(row.contains("50%"));
+        assert!(row.contains('━'));
+    }
+
+    #[test]
+    fn a_waiting_row_has_no_share_and_shows_the_marquee() {
+        let captured = Captured::default();
+        let bar = ProgressBar::with_draw_target(
+            None,
+            ProgressDrawTarget::term_like(Box::new(captured.clone())),
+        );
+        bar.set_style(wait_style());
+        bar.set_prefix(label_for("", None, None));
+        bar.tick();
+
+        let row = captured.0.lock().expect("the captured row").clone();
+
+        assert!(row.contains("WAITING"));
+        assert!(row.contains("--"));
+        assert!(row.contains('━') || row.contains('─'));
+    }
+
+    #[test]
+    fn a_piece_is_shown_by_its_head_and_the_rest_is_left_out() {
         assert_eq!(
-            head("5b4ac19152456173022e06a1614665a594c615ce1307d40f9a3d5006622991e4"),
-            "5b4ac19..."
+            fit(
+                "5b4ac19152456173022e06a1614665a594c615ce1307d40f9a3d5006622991e4",
+                7
+            ),
+            "5b4ac19"
         );
     }
 
     #[test]
-    fn a_name_that_says_everything_it_has_to_say_is_shown_whole() {
-        assert_eq!(head("a key"), "a key");
-        assert_eq!(head("1234567"), "1234567");
-        assert_eq!(head(""), "");
+    fn a_name_that_is_shorter_than_its_column_is_padded() {
+        assert_eq!(fit("a key", 7), "a key  ");
+        assert_eq!(fit("", 7), "       ");
+    }
+
+    #[test]
+    fn a_label_is_counted_in_terminal_columns_rather_than_characters() {
+        assert_eq!(fit("中文", 6), "中文  ");
+        assert_eq!(fit("中文中文", 5), "中文 ");
     }
 }

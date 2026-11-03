@@ -512,7 +512,7 @@ internal sealed class OverviewView : UserControl
         _tableCell = new Grid();
 
         // The sync's own state, which the strip in the dock's header draws from; what the runs of every command
-        // say is gathered in the hub, which the panel down the right draws from and which every place a command
+        // say is gathered in the hub, which the floating capsules draw from and which every place a command
         // may be run from — the strip, an entry's menu — writes to.
         _strip = new SyncStrip(
             _host,
@@ -522,25 +522,18 @@ internal sealed class OverviewView : UserControl
             () => _showIgnored,
             ToggleIgnored
         );
-        _panel = new ProgressPanel(hub);
+        _panel = new ProgressPanel(hub, _host.Icons);
 
         var root = new Grid();
 
-        // Two columns rather than one: what a sync is doing stands down the right of the reading, so that the
-        // work and the run are read at once. The panel's column is nothing while no run is going, and the table
-        // has the whole width then — see `Split`.
-        root.ColumnDefinitions.Add(_tableColumn);
-        root.ColumnDefinitions.Add(_panelColumn);
-
-        // The reading and the words that stand in for one share the left column, one at a time: a work with
-        // changes is the table, and one without them is the words.
+        // One column: what a command is doing floats over the bottom right of the reading rather than taking a
+        // column of it, so the table keeps its width whether a run is going or not.
         //
         // Nothing scrolls the whole of the reading: the list of rows scrolls inside itself — see `Table` — and a
         // table that fills the dock and is then put in a scroller would be measured with no end to fill and so
         // would fill nothing, which is the height this view had before the table was one of its own.
         var reading = new Grid { Children = { _tableCell, _notice } };
 
-        Grid.SetColumn(_panel, 1);
         root.Children.Add(reading);
         root.Children.Add(_panel);
 
@@ -583,33 +576,11 @@ internal sealed class OverviewView : UserControl
         // there is to carry — see `BecameVisible`.
         PropertyChanged += BecameVisible;
 
-        // What a command is doing decides whether the panel has anywhere to stand: with nothing shown, the room
-        // down the right is given back to the table rather than left as an empty third of the dock.
-        Split(hub.Any);
+        // A run that has just ended is the fetch or the sync the reading was held for, and the capsule of one that
+        // has ended fades out of the stack while the reading is read again.
         _running = hub.Any;
 
         Draw();
-    }
-
-    /// <summary>How the width is shared while a run is going: the reading to the panel.</summary>
-    private const double TableShare = 7;
-
-    /// <summary>The panel's share of the width while a run is going, which is a third of the dock.</summary>
-    private const double PanelShare = 3;
-
-    /// <summary>
-    /// Gives the panel its share of the width while a run is going, and takes it back when none is.
-    /// </summary>
-    /// <remarks>
-    /// The share is a third of the dock, which is what a row of a bar and a path reads in, and the reading keeps
-    /// the rest. With no run going there is nothing down the right, so the reading has the whole width rather
-    /// than an empty third of it.
-    /// </remarks>
-    /// <param name="running">Whether a run is going.</param>
-    private void Split(bool running)
-    {
-        _tableColumn.Width = new GridLength(running ? TableShare : 1, GridUnitType.Star);
-        _panelColumn.Width = new GridLength(running ? PanelShare : 0, GridUnitType.Star);
     }
 
     /// <summary>Asks what there is to carry when the dock is shown again, and reads the work again with it.</summary>
@@ -636,15 +607,13 @@ internal sealed class OverviewView : UserControl
         _sync.Plan(BaseDirectory.Current);
     }
 
-    /// <summary>Redraws the width the panel stands in, which every change to the runs may have moved.</summary>
+    /// <summary>Reads the work again when the runs end, which is what a fetch or a sync writes the reading from.</summary>
     /// <param name="sender">What raised it.</param>
     /// <param name="changed">The event.</param>
     private void Sizing(object? sender, EventArgs changed)
     {
         _ = sender;
         _ = changed;
-
-        Split(_hub.Any);
 
         // A run that has just ended is the fetch or the sync the reading was held for: what it wrote is what the
         // work is read from now, and nothing else will say so — see <see cref="Drawn"/>.
@@ -669,28 +638,22 @@ internal sealed class OverviewView : UserControl
     /// <summary>What the reading is drawn from, and what a sync is watched by.</summary>
     private readonly SyncWatcher _sync;
 
-    /// <summary>What every command this plugin runs reports itself to, which the width of the panel follows.</summary>
+    /// <summary>What every command this plugin runs reports itself to, which the capsule stack follows.</summary>
     private readonly ProgressHub _hub;
 
     /// <summary>The strip the dock's header carries.</summary>
     private readonly SyncStrip _strip;
 
-    /// <summary>What every command this plugin runs is drawn as, down the right of the reading.</summary>
+    /// <summary>What every command this plugin runs is drawn as, floating over the bottom right of the reading.</summary>
     private readonly ProgressPanel _panel;
-
-    /// <summary>The column the reading takes, which is the whole width while no run is going.</summary>
-    private readonly ColumnDefinition _tableColumn = new(new GridLength(TableShare, GridUnitType.Star));
-
-    /// <summary>The column the panel takes, which is nothing while no run is going.</summary>
-    private readonly ColumnDefinition _panelColumn = new(new GridLength(0, GridUnitType.Star));
 
     /// <summary>
     /// Fetches the Vault's Layout and reads the work again, which is what the dock's own command asks for.
     /// </summary>
     /// <remarks>
     /// What is fetched is the copy every reading of the work is made from, so a reading made before it would say
-    /// what the Vault held when the copy was last brought over. The run is shown down the panel as a card of its
-    /// own, and the reading and what a sync would carry are asked for once it is over. A directory no Workspace
+    /// what the Vault held when the copy was last brought over. The run is shown as a capsule in the stack, and the
+    /// reading and what a sync would carry are asked for once it is over. A directory no Workspace
     /// holds has nothing to fetch, so it is only read again.
     /// <para>
     /// A sync is what brings the same copy, so a refresh while one is going asks nothing: the run's own end is

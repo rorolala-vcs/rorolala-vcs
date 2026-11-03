@@ -28,28 +28,233 @@ rorolala_vcs:
       en: Accounts
       zh-CN: 账户管理
 
-  # What the Version Graph says when it has nothing to draw: no file has been clicked yet, or the
-  # file that was has no chain of versions recorded for it. The two are different answers — one is
-  # waiting for a click and the other is the click's whole answer — so they are two keys.
+  # What the Version Graph says when it has nothing to draw: no Workspace holds the directory, no
+  # Layout is being worked in, or nothing in it records a version yet. The graph itself needs no click
+  # to say something: with no file chosen it stands on the whole work.
   version_graph:
-    no_file:
-      en: Click a file in Directories to see its version history
-      zh-CN: 在“目录”中点击一个文件以查看其版本历史
-    no_history:
-      en: This file has no version history
-      zh-CN: 该文件没有版本历史
+    empty:
+      en: There is no version history to draw here yet
+      zh-CN: 这里还没有可画的版本历史
 
-    # What stands in place of the graph when the choice holds several files: one chain is one file's,
-    # and a choice of many has no one chain to draw. The row under it still acts on the choice.
-    many_files:
-      en: The version graph is hidden when multiple files are selected
-      zh-CN: 多个文件选择时将隐藏版本图
+    # A card for a file the work says is changed but not tracked. The colour says which of the two
+    # kinds it is: a change a track continues the file's record with, or one that would fork it.
+    draft_label:
+      en: Draft
+      zh-CN: 草稿
+    draft_message:
+      en: Unrecorded change
+      zh-CN: 未记录的修改
+    draft_wrong_message:
+      en: Change based on an older version
+      zh-CN: 基于旧版本的修改
+    draft_unowned_message:
+      en: Change that is not yours to record
+      zh-CN: 不是你有权记录的修改
+    draft_badge:
+      en: Draft
+      zh-CN: 草稿
+    draft_wrong_badge:
+      en: "⚠ Based on an older version"
+      zh-CN: "⚠ 基于旧版本"
+    draft_unowned_badge:
+      en: "⚠ Not yours to record"
+      zh-CN: "⚠ 无权记录"
 
-    # What the switch in the graph's corner is hovered for: it shows the variants the chain draws
-    # nowhere, asked of the command line since the graph's own reading reaches only what a link reaches.
-    show_unjoined:
-      en: Show unjoined variants
-      zh-CN: 显示未闭合的变体
+    # What the card of a variant waiting to be merged says in place of a message: the file it is to
+    # be joined into, whose name is the only thing about it a reader is looking for.
+    pending_into:
+      en: Merging into “%{file}”
+      zh-CN: 正在合并至 “%{file}”
+
+    # What a variant no entry points at is marked with, and what a base version the index does not
+    # hold is labelled. The first is a history branch's card; the second is a broken node beside one.
+    no_entries:
+      en: No entries · history branch
+      zh-CN: 无条目 · 历史分支
+    unknown_base:
+      en: Unknown base version
+      zh-CN: 未知基版本
+
+    # The labels the edges are drawn with. A merge's label names the variant that was merged in; a
+    # draft's names the version it stands on, and a forking one also the version it should stand on.
+    merged_into:
+      en: merged in %{version}
+      zh-CN: 并入 %{version}
+    same_content:
+      en: same content
+      zh-CN: 同内容
+    draft_based_on:
+      en: Draft · based on %{version}
+      zh-CN: 草稿 · 基于 %{version}
+    draft_wrong_based_on:
+      en: "⚠ Based on %{version} · should be %{should}"
+      zh-CN: "⚠ 基于 %{version} · 应基于 %{should}"
+    draft_wrong_based_on_only:
+      en: "⚠ Based on %{version}"
+      zh-CN: "⚠ 基于 %{version}"
+
+    # What the graph says when the reading stopped at the window's limit rather than walking out.
+    truncated:
+      en: The reading stops at the window's limit; the history goes on
+      zh-CN: 读取停在窗口上限，历史还在继续
+
+    # How the graph counts itself, in the corner.
+    stats_variants:
+      en: "%{count} variants"
+      zh-CN: "%{count} 变体"
+    stats_entries:
+      en: "%{count} entries"
+      zh-CN: "%{count} 条目"
+    stats_merges:
+      en: "%{count} merges"
+      zh-CN: "%{count} 合并"
+    stats_same:
+      en: "%{count} same content"
+      zh-CN: "%{count} 同内容"
+    stats_pending:
+      en: "%{count} pending"
+      zh-CN: "%{count} 待合并"
+    stats_drafts:
+      en: "%{count} drafts"
+      zh-CN: "%{count} 草稿"
+
+    # The switch in the graph's corner: whether hovering a thing says what it is.
+    show_info:
+      en: Show hover details
+      zh-CN: 显示悬浮详情
+
+    # What a right-click on a variant's hash offers when a file is chosen: joining that variant into
+    # the file the user is on. The graph's own menu offers the same when the variant is unjoined, and
+    # this is the way to it from the variant that names itself.
+    join_selected:
+      en: Merge variant into the selected entry
+      zh-CN: 合并变体到当前选中条目
+
+    # What a right-click on another side's entry offers: making the file the user is on record that
+    # entry. The first item moves the record and lets the content follow it where the two versions say
+    # so; the second moves the record alone and leaves the file as it stands.
+    switch_uuid:
+      en: Switch tracking to this UUID
+      zh-CN: 切换跟踪至该 UUID
+    switch_uuid_keep:
+      en: Switch tracking to this UUID (keep content)
+      zh-CN: 切换跟踪至该 UUID（保留内容）
+    switch_uuid_failed:
+      en: The tracked entry could not be switched
+      zh-CN: 未能切换跟踪条目
+
+    # What is asked when a file whose content is to follow a switch holds changes that were never
+    # recorded: restoring writes over them, and keeping the content moves the record alone.
+    switch_uuid_confirm_title:
+      en: Switch the tracked entry?
+      zh-CN: 要切换跟踪条目吗？
+    switch_uuid_confirm_message:
+      en: "`%{file}` has changes that were never recorded. Restore its content to the entry's version, or keep what the file holds?"
+      zh-CN: "`%{file}` 有尚未记录的改动。要把它还原为所切换条目的版本，还是保留文件当前内容？"
+    switch_uuid_restore:
+      en: Restore content and switch
+      zh-CN: 还原内容并切换
+    switch_uuid_keep_choice:
+      en: Keep content and switch
+      zh-CN: 保留内容并切换
+    switch_uuid_cancel:
+      en: Cancel
+      zh-CN: 取消
+
+    # What a right-click on the work's own entry offers: giving the path a new Uuid while it goes on
+    # holding the version it holds. The record keeps its data and changes the identity it is kept
+    # under, which is how a file stops following an entry it was following.
+    fork_uuid:
+      en: Fork a new UUID from here
+      zh-CN: 从此处分叉新的 UUID
+    fork_uuid_failed:
+      en: The entry could not be forked
+      zh-CN: 未能分叉条目
+
+    # What the hover table says about a thing. A pill cannot show a whole hash or a whole path, so the
+    # table is where the whole of it is read; a right-click copies it. A value wider than its column
+    # ends in an ellipsis.
+    info_version:
+      en: Version
+      zh-CN: 版本
+    info_variant:
+      en: Variant
+      zh-CN: 变体
+    info_content:
+      en: Content
+      zh-CN: 内容
+    info_base:
+      en: Base
+      zh-CN: 基版本
+    info_should:
+      en: Should be
+      zh-CN: 应基于
+    info_creator:
+      en: Creator
+      zh-CN: 创建者
+    info_creator_hash:
+      en: Creator hash
+      zh-CN: 创建者哈希
+    info_message:
+      en: Message
+      zh-CN: 消息
+    info_owner:
+      en: Owner
+      zh-CN: 持有者
+    info_uuid:
+      en: UUID
+      zh-CN: UUID
+    info_path:
+      en: Path
+      zh-CN: 路径
+    info_entries:
+      en: Entries
+      zh-CN: 条目
+    info_join:
+      en: Merges in
+      zh-CN: 并入
+    info_merging:
+      en: Merging into
+      zh-CN: 正在合并至
+    info_state:
+      en: State
+      zh-CN: 状态
+    info_no_message:
+      en: No message
+      zh-CN: 无消息
+    info_unknown_base:
+      en: The index does not hold the version it is based on.
+      zh-CN: 索引里没有它的基版本。
+    info_draft_correct:
+      en: A track continues this file's record.
+      zh-CN: 追踪会接着这条记录往下走。
+    info_draft_wrong:
+      en: A track would fork from an older version; retrack the file first.
+      zh-CN: 追踪会从旧版本分叉；应先重新追踪该文件。
+    info_deprecated:
+      en: Moved under the deprecated marker.
+      zh-CN: 已移动到弃用标记下。
+
+    # What a right-click on a thing offers besides the two hashes: the whole of what a pill or a
+    # message could only show a part of.
+    copy_uuid:
+      en: Copy UUID
+      zh-CN: 复制 UUID
+    copy_path:
+      en: Copy path
+      zh-CN: 复制路径
+    copy_message:
+      en: Copy message
+      zh-CN: 复制消息
+    copy_creator_name:
+      en: Copy creator
+      zh-CN: 复制创建者
+    copy_creator_hash:
+      en: Copy creator hash
+      zh-CN: 复制创建者哈希
+    copy_content_hash:
+      en: Copy content hash
+      zh-CN: 复制内容哈希
 
     # What a right-click on a node offers: the index's name for it, copied whole. Versions and
     # variants are words of their own, so the two are two items rather than one.
@@ -776,6 +981,12 @@ rorolala_vcs:
     path_remove:
       en: Removing the entry upstream
       zh-CN: 正在删除上游条目
+    switch_uuid:
+      en: Switching the tracked entry
+      zh-CN: 正在切换跟踪条目
+    fork_uuid:
+      en: Forking the entry
+      zh-CN: 正在分叉条目
     sync:
       en: Syncing
       zh-CN: 同步数据
@@ -811,7 +1022,13 @@ rorolala_vcs:
       zh-CN: 更新中
     working:
       en: Working…
-      zh-CN: 处理中……
+      zh-CN: 处理中…
+    header:
+      en: Commands
+      zh-CN: 命令
+    waiting:
+      en: Waiting…
+      zh-CN: 等待前序…
 
   # The Accounts dock: which account the work acts as, and what may be done about them. The rows are the
   # accounts `rola account` lists, and what a row offers is a run of `rola` — naming the account the work acts

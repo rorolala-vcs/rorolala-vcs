@@ -180,28 +180,23 @@ public sealed class SyncStripTests
         Assert.Equal(rule, Colour(around.BorderBrush));
     }
 
-    /// <summary>A card is drawn for every command a run reports, and a bar for every task of it.</summary>
+    /// <summary>A capsule is drawn for every command, and the whole bar adds up its own phases.</summary>
     /// <remarks>
-    /// What is drawn is what the commands said of themselves: one card per command, the command's own tasks added
-    /// up as the bar at the head of it, and a bar under it for each task that is part of another. A task whose
-    /// length was never said is drawn as a bar that moves rather than as one at nothing done.
+    /// What is drawn is what the commands said of themselves: one capsule per command, the command's own phases
+    /// added up as the bar at its head, and a row under it for every phase it reports — the rows are the capsule's
+    /// own detail, shown while the pointer is on it.
     /// </remarks>
     [Fact]
-    public void ThePanelDrawsACardForEveryRunAndABarForEveryTask()
+    public void TheStackDrawsACapsuleForEveryRunAndAddsUpItsOwnPhases()
     {
-        var services = Host.Services();
-        var host = services.For(new PluginId(Identity), 0);
-
-        new Vcs().Initialize(host);
-
         var hub = new ProgressHub();
-        var panel = new ProgressPanel(hub);
+        var services = Host.Services();
+        var panel = new ProgressPanel(hub, services.Icons);
+
         Assert.False(panel.IsVisible);
 
         var run = hub.Begin("rorolala_vcs.progress.sync");
 
-        // A bar of the run's own, a direction under it, and a piece the direction is moving: the run and the
-        // direction are bars of their own, and the piece is what the direction says it is moving.
         Assert.True(
             run.Records.Read(
                 """{"signal":"begin","id":1,"parent":null,"what":"","direction":null,"total":4}"""
@@ -212,73 +207,54 @@ public sealed class SyncStripTests
                 """{"signal":"begin","id":2,"parent":1,"what":"","direction":"up","total":10}"""
             )
         );
-        Assert.True(
-            run.Records.Read(
-                """{"signal":"begin","id":3,"parent":2,"what":"a/file.psd","direction":null,"total":null}"""
-            )
-        );
         Assert.True(run.Records.Read("""{"signal":"advance","id":2,"done":3}"""));
 
         panel.Draw();
 
         Assert.True(panel.IsVisible);
 
-        var card = Assert.Single(Cards(panel));
-        var rows = Rows(card);
+        var capsule = Assert.Single(Capsules(panel));
 
-        // Two bars, not three: the piece is not a bar of its own, it is what the direction is moving.
-        Assert.Equal(2, rows.Count);
+        // The whole bar adds up the run's own tasks rather than the direction under one of them, which is a row
+        // in the capsule's detail instead of a second bar beside the command's own.
+        Assert.Equal(4, Whole(capsule).Maximum);
+        Assert.Equal(0, Whole(capsule).Value);
 
-        Assert.Equal(RolaI18N.Get("rorolala_vcs.progress.sync"), Name(rows[0]));
-        Assert.Equal("0%", Share(rows[0]));
-        Assert.Equal(4, Bar(rows[0]).Maximum);
-        Assert.Equal(0, Bar(rows[0]).Value);
-
-        Assert.Equal("↑ " + RolaI18N.Get("rorolala_vcs.progress.row_up"), Name(rows[1]));
-        Assert.Equal("30%", Share(rows[1]));
-        Assert.Equal(10, Bar(rows[1]).Maximum);
-        Assert.Equal(3, Bar(rows[1]).Value);
-        Assert.Equal("a/file.psd", Moving(rows[1]));
-
-        // A task that has not said how long it is moves rather than sits at nothing done, and one the command has
-        // not finished makes the whole of the command move too: a sum of lengths one of which is unknown.
+        // A second phase of the same command is what the bar follows, rather than the two phases' lengths being
+        // added together: a plan of steps and a transfer of blocks are not counted in the same thing.
         Assert.True(
             run.Records.Read(
-                """{"signal":"begin","id":4,"parent":null,"what":"plan","direction":null,"total":null}"""
+                """{"signal":"begin","id":4,"parent":null,"what":"","direction":null,"total":8}"""
             )
         );
         panel.Draw();
 
-        Assert.True(Bar(Rows(card)[0]).IsIndeterminate);
+        Assert.Equal(8, Whole(capsule).Maximum);
+        Assert.Equal(0, Whole(capsule).Value);
 
-        // A second command is a card of its own, in the order the hub began it.
         var claim = hub.Begin("rorolala_vcs.progress.hold");
         Assert.True(
             claim.Records.Read(
                 """{"signal":"begin","id":9,"parent":null,"what":"","direction":null,"total":2}"""
             )
         );
+
         panel.Draw();
 
-        Assert.Equal(2, Cards(panel).Count);
-
-        // A task that is over is kept and marked full, so a card still has something to show while it lingers.
-        Assert.True(run.Records.Read("""{"signal":"finish","id":2}"""));
-        panel.Draw();
-
-        Assert.Equal(10, Bar(Rows(card)[1]).Value);
-        Assert.Equal("100%", Share(rows[1]));
-
-        // The two columns the bars line up by are fixed rather than sized to what a row currently says: a name of
-        // another length and a percentage of another width move neither end of the bar, which is what keeps every
-        // bar of a card as long as every other and keeps them from twitching as a run works.
-        var cells = rows.Select(row => Assert.IsType<Border>(row.Children[0])).ToArray();
-        var shares = rows.Select(row => Assert.IsType<TextBlock>(row.Children[2])).ToArray();
-
-        Assert.All(cells, cell => Assert.Equal(cells[0].Width, cell.Width));
-        Assert.All(shares, share => Assert.Equal(shares[0].Width, share.Width));
-        Assert.All(shares, share => Assert.Equal(TextAlignment.Right, share.TextAlignment));
+        Assert.Equal(2, Capsules(panel).Count);
     }
+
+    /// <summary>The capsules a panel has drawn, in the order the commands began.</summary>
+    /// <param name="panel">The panel.</param>
+    /// <returns>The capsules.</returns>
+    private static IReadOnlyList<Border> Capsules(ProgressPanel panel) =>
+        Assert.IsType<StackPanel>(panel.Children[1]).Children.OfType<Border>().ToArray();
+
+    /// <summary>The bar for the whole of a command, at the head of its capsule.</summary>
+    /// <param name="capsule">The capsule.</param>
+    /// <returns>The bar.</returns>
+    private static ProgressBar Whole(Border capsule) =>
+        Assert.IsType<StackPanel>(capsule.Child).Children.OfType<ProgressBar>().Single();
 
     /// <summary>The plugin's identity, which is what its settings are kept under.</summary>
     private const string Identity = "rorolala.vcs";
@@ -345,51 +321,6 @@ public sealed class SyncStripTests
             .Select(button => Assert.IsType<Border>(button.Content))
             .ToArray();
     }
-
-    /// <summary>The cards a panel has drawn, in the order the commands began.</summary>
-    /// <param name="panel">The panel.</param>
-    /// <returns>The cards.</returns>
-    private static IReadOnlyList<Border> Cards(ProgressPanel panel)
-    {
-        var scroll = Assert.IsType<ScrollViewer>(panel.Child);
-        var cards = Assert.IsType<StackPanel>(scroll.Content);
-
-        return cards.Children.OfType<Border>().ToArray();
-    }
-
-    /// <summary>The bars of a card, the whole of the command first and its tasks under it.</summary>
-    /// <param name="card">The card.</param>
-    /// <returns>The bars.</returns>
-    private static IReadOnlyList<Grid> Rows(Border card)
-    {
-        var rows = Assert.IsType<StackPanel>(card.Child);
-
-        return rows.Children.OfType<Grid>().ToArray();
-    }
-
-    /// <summary>What a bar is captioned with.</summary>
-    /// <param name="row">The bar's line.</param>
-    /// <returns>The words at the start of the line.</returns>
-    private static string Name(Grid row) =>
-        Assert.IsType<TextBlock>(Assert.IsType<Border>(row.Children[0]).Child).Text ?? string.Empty;
-
-    /// <summary>What a bar says of how far its task has got.</summary>
-    /// <param name="row">The bar's line.</param>
-    /// <returns>The words at the end of the line.</returns>
-    private static string Share(Grid row) =>
-        Assert.IsType<TextBlock>(row.Children[2]).Text ?? string.Empty;
-
-    /// <summary>The bar of a bar's line, which is drawn inside it with what is being moved.</summary>
-    /// <param name="row">The bar's line.</param>
-    /// <returns>The bar.</returns>
-    private static ProgressBar Bar(Grid row) =>
-        Assert.IsType<Grid>(row.Children[1]).Children.OfType<ProgressBar>().Single();
-
-    /// <summary>What a bar says it is moving, which is drawn inside the bar rather than beside it.</summary>
-    /// <param name="row">The bar's line.</param>
-    /// <returns>What is being moved.</returns>
-    private static string? Moving(Grid row) =>
-        Assert.IsType<Grid>(row.Children[1]).Children.OfType<TextBlock>().Single().Text;
 
     /// <summary>What one of the look's own names is drawn in.</summary>
     /// <param name="resources">The look's resources.</param>

@@ -24,7 +24,7 @@
 #![allow(clippy::too_many_lines)]
 // The handler's parameters are the resources the framework injects, so how many of them there are
 // is what the command needs of the run rather than a signature this program shaped.
-#![allow(clippy::too_many_arguments)]
+#![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -51,8 +51,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResConcurrency, ResCurrentRemoteVault, ResForce, ResOffline, ResRorolalaStorage, ResVCSIndex,
-    ResVault, ResWorkspace,
+    ResConcurrency, ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting,
+    ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -79,6 +79,7 @@ use crate::layout::{
     ErrorLayoutShouldInWorkspace, chosen, failed as layout_failed, readonly_layout_copy,
     remote_spec, switch_entry,
 };
+use crate::progress::Reporting;
 
 /// How alike two text files have to be to count as the same file moved.
 ///
@@ -420,6 +421,7 @@ pub fn handle_retrack(
     current: &mut LazyRes<ResCurrentAccount>,
     offline: &ResOffline,
     concurrency: &ResConcurrency,
+    progress: &ResProgressSetting,
 ) -> Next {
     let StateRetrack {
         file,
@@ -479,9 +481,14 @@ pub fn handle_retrack(
         Err(error) => return failed(error.to_string()),
     };
 
+    // The chain and the content may be fetched from a Vault, and what the exchanges do is watched
+    // while they run: a retrack of a version this side never fetched is a pull of blocks, and it
+    // reaches its end only after the bytes are here.
+    let reporting = Reporting::start(*progress);
+
     // A run that names an entry, or a fork, is done before anything a version target is resolved
     // for: what it records is not a version of this entry but the entry the path is to be.
-    match recording {
+    let next = match recording {
         Recording::Version(level) => record_version(RecordingVersion {
             level: &level,
             written: &written,
@@ -498,11 +505,12 @@ pub fn handle_retrack(
             current,
             offline: **offline,
             concurrency: **concurrency,
+            progress: reporting.progress(),
             only_index,
             deny_jump,
             force,
-        })?,
-        Recording::Entry(entry) => switch_uuid(Switching {
+        }),
+        Recording::Entry(entry) => Ok(switch_uuid(Switching {
             entry: Some(entry),
             written: &written,
             layout: &layout,
@@ -518,11 +526,12 @@ pub fn handle_retrack(
             current,
             offline: **offline,
             concurrency: **concurrency,
+            progress: reporting.progress(),
             only_index,
             deny_jump,
             force,
-        }),
-        Recording::Fork => switch_uuid(Switching {
+        })),
+        Recording::Fork => Ok(switch_uuid(Switching {
             entry: None,
             written: &written,
             layout: &layout,
@@ -538,11 +547,16 @@ pub fn handle_retrack(
             current,
             offline: **offline,
             concurrency: **concurrency,
+            progress: reporting.progress(),
             only_index,
             deny_jump,
             force,
-        }),
-    }
+        })),
+    };
+
+    reporting.finish();
+
+    next?
 }
 
 /// What a run that moves a version pointer was asked for, and what it was asked about.
@@ -580,6 +594,8 @@ struct RecordingVersion<'a> {
     offline: bool,
     /// How many units of content a transfer carries at a time.
     concurrency: usize,
+    /// What the transfers of a retrack say about themselves.
+    progress: Progress,
     /// Whether the file on disk is to be left alone.
     only_index: bool,
     /// Whether a version off the way back is refused.
@@ -616,6 +632,7 @@ fn record_version(asked: RecordingVersion<'_>) -> Result<Next, Next> {
         current,
         offline,
         concurrency,
+        progress,
         only_index,
         deny_jump,
         force,
@@ -647,6 +664,7 @@ fn record_version(asked: RecordingVersion<'_>) -> Result<Next, Next> {
                     runtime,
                     end: vault_end(held, remote, current)?,
                     text: written,
+                    progress: progress.clone(),
                 };
 
                 bringer.bring(*key.digest())?;
@@ -728,6 +746,7 @@ fn record_version(asked: RecordingVersion<'_>) -> Result<Next, Next> {
             let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
             let sources = Sources::new(held, account, remote.get_ref(), primary, offline)
                 .map_err(failed)?
+                .reporting(progress)
                 .with_concurrency(concurrency);
 
             Some(sources)
@@ -832,6 +851,8 @@ struct Switching<'a> {
     offline: bool,
     /// How many units of content a transfer carries at a time.
     concurrency: usize,
+    /// What the transfers of a retrack say about themselves.
+    progress: Progress,
     /// Whether the file on disk is to be left alone.
     only_index: bool,
     /// Whether a version off the way to the other one is refused.
@@ -875,6 +896,7 @@ fn switch_uuid(asked: Switching<'_>) -> Next {
         current,
         offline,
         concurrency,
+        progress,
         only_index,
         deny_jump,
         force,
@@ -914,7 +936,9 @@ fn switch_uuid(asked: Switching<'_>) -> Next {
     // written; holding changes that were never recorded, it is what `--force` is for.
     let action = match &entry {
         None => SwitchAction::Keep,
-        Some(_) => match stand_of(data, &source, vcs, runtime, held, remote, current, offline) {
+        Some(_) => match stand_of(
+            data, &source, vcs, runtime, held, remote, current, offline, &progress,
+        ) {
             Ok(relation) => match switch_action(relation, only_index, deny_jump) {
                 Ok(action) => action,
                 Err(SwitchRefusal::NotOnChain) => {
@@ -1022,7 +1046,9 @@ fn switch_uuid(asked: Switching<'_>) -> Next {
                     let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
                     let sources =
                         match Sources::new(held, account, remote.get_ref(), primary, offline) {
-                            Ok(sources) => sources.with_concurrency(concurrency),
+                            Ok(sources) => sources
+                                .reporting(progress.clone())
+                                .with_concurrency(concurrency),
                             Err(cause) => return failed(cause),
                         };
 
@@ -1257,6 +1283,7 @@ fn stand_of(
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     offline: bool,
+    progress: &Progress,
 ) -> Result<Relation, Next> {
     let cur = data.version();
     let target_version = target.version();
@@ -1281,6 +1308,7 @@ fn stand_of(
                 runtime,
                 end: vault_end(held, remote, current)?,
                 text: &text,
+                progress: progress.clone(),
             };
 
             bringer.bring(target_version)?;
@@ -1623,6 +1651,8 @@ struct Bringer<'a> {
     end: VaultEnd,
     /// The target as the run wrote it, for the refusal that names it.
     text: &'a str,
+    /// What the transfer says about itself while it runs.
+    progress: Progress,
 }
 
 impl Bringer<'_> {
@@ -1644,7 +1674,7 @@ impl Bringer<'_> {
                 &self.end.account,
                 self.end.address.clone(),
                 Key::new(hash).hex(),
-                Progress::silent(),
+                self.progress.clone(),
             ))
             .map_err(|error| failed(error.to_string()))?;
 

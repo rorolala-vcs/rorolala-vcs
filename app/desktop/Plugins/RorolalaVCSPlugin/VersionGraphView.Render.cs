@@ -1,20 +1,69 @@
+using System.Globalization;
+
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.TextFormatting;
+using RolaSharp;
 using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;
 
+/// <summary>What part of a card the pointer is on.</summary>
+internal enum HoverPart
+{
+    /// <summary>The card itself, away from its content.</summary>
+    Card,
+
+    /// <summary>The message the card shows.</summary>
+    Message,
+
+    /// <summary>The creator's pill.</summary>
+    Creator,
+
+    /// <summary>The big faint version number.</summary>
+    Number,
+
+    /// <summary>The pill naming the variant's hash.</summary>
+    HashPill,
+
+    /// <summary>A pill naming an entry.</summary>
+    EntryPill,
+
+    /// <summary>A pill naming a state.</summary>
+    BadgePill,
+
+    /// <summary>The pill naming the file a draft belongs to.</summary>
+    FilePill,
+
+    /// <summary>A base version the index does not hold.</summary>
+    Ghost,
+}
+
+/// <summary>One thing the pointer can be on.</summary>
+/// <param name="Card">The card, when what is under the pointer is part of one.</param>
+/// <param name="Part">Which part of it.</param>
+/// <param name="Chip">The pill, when the part is one.</param>
+/// <param name="Ghost">The missing base version, when that is what is under the pointer.</param>
+/// <param name="GhostIndex">Its place among the ghosts, which is what makes two hovers the same.</param>
+internal sealed record Hover(
+    GraphCard? Card,
+    HoverPart Part,
+    GraphChip? Chip,
+    GraphGhost? Ghost,
+    int GhostIndex
+);
+
+/// <summary>The drawing half of the view: what is drawn over the graph, and what the pointer is on.</summary>
 internal sealed partial class VersionGraphView
 {
     /// <inheritdoc />
     public override void Render(DrawingContext context)
     {
-        var ink = CurrentInk();
+        ArgumentNullException.ThrowIfNull(context);
 
-        context.FillRectangle(
-            new SolidColorBrush(ink.Ground),
-            new Rect(Bounds.Size)
-        );
+        var ink = CurrentInk();
+        context.FillRectangle(new SolidColorBrush(ink.Ground), new Rect(Bounds.Size));
 
         if (Bounds.Width <= 0 || Bounds.Height <= 0)
         {
@@ -23,1226 +72,815 @@ internal sealed partial class VersionGraphView
 
         if (_drawing is null)
         {
-            DrawGrid(context, ink);
             DrawEmpty(context, ink);
             DrawZoom(context, ink);
+            DrawTruncated(context, ink);
 
             return;
         }
 
-        var metrics = CurrentMetrics();
+        ClampPan();
 
-        ClampPan(metrics.MaxRight + Inset * _zoom, _drawing.Height * _zoom);
-        DrawGrid(context, ink);
-        DrawArcs(context, ink);
-        DrawVersions(context, ink, metrics);
-        DrawUpstream(context, ink, metrics);
-        DrawVariants(context, ink, metrics);
-        DrawBubbles(context, ink, metrics);
+        var lineage = _hover?.Card is { } hovered ? LineageOf(hovered) : null;
+        var stats = Stats();
+        var frame = new VariantGraphFrame(
+            _zoom,
+            new Point(_panX, _panY),
+            _hover?.Card?.Index,
+            lineage,
+            stats,
+            _drawing.Truncated
+        );
 
-        if (_hover?.Variant is { } hovered)
-        {
-            DrawVariantTooltip(context, ink, hovered);
-        }
-        else if (_hover?.Upstream is { Unknown: true } upstream)
-        {
-            DrawUpstreamTooltip(context, ink, upstream);
-        }
-
+        Renderer.Render(context, Bounds.Size, _drawing, ink, frame);
+        DrawTruncated(context, ink);
         DrawZoom(context, ink);
+        DrawStats(context, ink, stats);
     }
 
-    /// <summary>Draws the 20px/40px grid the drawing stands on.</summary>
-    private void DrawGrid(DrawingContext context, Ink ink)
-    {
-        var step = 20 * _zoom;
-
-        // Below this the lines are closer together than they can be read, so the overview is left
-        // as a plain ground.
-        if (step < 6)
-        {
-            return;
-        }
-
-        var showMinor = step >= 8;
-        var minorPen = new Pen(new SolidColorBrush(ink.GridMinor), 1);
-        var majorPen = new Pen(new SolidColorBrush(ink.GridMajor), 1);
-        var width = Bounds.Width;
-        var height = Bounds.Height;
-
-        if (showMinor)
-        {
-            for (
-                var index = (long)Math.Ceiling(-_panX / step);
-                ;
-                index++
-            )
-            {
-                var x = _panX + index * step;
-
-                if (x > width)
-                {
-                    break;
-                }
-
-                if (index % 2 != 0)
-                {
-                    context.DrawLine(minorPen, new Point(x, 0), new Point(x, height));
-                }
-            }
-
-            for (
-                var index = (long)Math.Ceiling(-_panY / step);
-                ;
-                index++
-            )
-            {
-                var y = _panY + index * step;
-
-                if (y > height)
-                {
-                    break;
-                }
-
-                if (index % 2 != 0)
-                {
-                    context.DrawLine(minorPen, new Point(0, y), new Point(width, y));
-                }
-            }
-        }
-
-        for (
-            var index = (long)Math.Ceiling(-_panX / step);
-            ;
-            index++
-        )
-        {
-            var x = _panX + index * step;
-
-            if (x > width)
-            {
-                break;
-            }
-
-            if (index % 2 == 0)
-            {
-                context.DrawLine(majorPen, new Point(x, 0), new Point(x, height));
-            }
-        }
-
-        for (
-            var index = (long)Math.Ceiling(-_panY / step);
-            ;
-            index++
-        )
-        {
-            var y = _panY + index * step;
-
-            if (y > height)
-            {
-                break;
-            }
-
-            if (index % 2 == 0)
-            {
-                context.DrawLine(majorPen, new Point(0, y), new Point(width, y));
-            }
-        }
-    }
-
-    /// <summary>Draws the dashed line that runs from each version down to the next.</summary>
+    /// <summary>The control that draws the hover table over the switch in the corner.</summary>
     /// <remarks>
-    /// A broken line rather than a solid one: what the versions are joined by is the chain of variants,
-    /// and this only says they stand in one column where no variant sits between them. It is drawn before
-    /// the nodes, so a circle covers its ends rather than a dash poking out from under one.
+    /// It is made here rather than by the dock so that the drawing and the table stay one reading: the
+    /// overlay asks this view what the pointer is on, and the dock only has to put it above the switch.
     /// </remarks>
-    private void DrawVersionAxis(DrawingContext context, Ink ink)
-    {
-        if (_drawing is null || _drawing.Versions.Count < 2)
-        {
-            return;
-        }
+    internal Control InfoTable => _infoOverlay ??= new InfoOverlay(this);
 
-        var pen = new Pen(new SolidColorBrush(ink.Muted), Math.Max(1, 1 * _zoom))
-        {
-            DashStyle = new DashStyle([5, 5], 0),
-        };
-        var x = _panX + _drawing.VersionX * _zoom;
-
-        for (var at = 0; at + 1 < _drawing.Versions.Count; at++)
-        {
-            var above = _drawing.Versions[at];
-            var below = _drawing.Versions[at + 1];
-
-            context.DrawLine(
-                pen,
-                new Point(x, _panY + above.Y * _zoom),
-                new Point(x, _panY + below.Y * _zoom)
-            );
-        }
-    }
-
-    /// <summary>
-    /// Draws the edges: the dashed line down the version axis, the quarter arcs of the spine, and the
-    /// joins between variants.
-    /// </summary>
-    private void DrawArcs(DrawingContext context, Ink ink)
-    {
-        DrawVersionAxis(context, ink);
-        DrawUpstreamAxis(context, ink);
-
-        var pen = new Pen(
-            new SolidColorBrush(ink.Muted),
-            Math.Max(1, 1.5 * _zoom)
-        )
-        {
-            LineCap = PenLineCap.Round,
-            LineJoin = PenLineJoin.Round,
-        };
-
-        for (var level = 0UL; level < _drawing!.Top; level++)
-        {
-            if (
-                !_drawing.VersionByLevel.TryGetValue(level, out var below)
-                || !_drawing.VersionByLevel.TryGetValue(level + 1, out var above)
-                || !_drawing.SpineByLevel.TryGetValue(level, out var variant)
-            )
-            {
-                continue;
-            }
-
-            // From the version above to the variant: the right point to the bottom point of an
-            // ellipse centred on the variant's column.
-            DrawArc(
-                context,
-                pen,
-                new Point(
-                    _panX + variant.X * _zoom,
-                    _panY + above.Y * _zoom
-                ),
-                (above.X - variant.X) * _zoom,
-                (variant.Y - above.Y) * _zoom,
-                0,
-                Math.PI / 2,
-                SweepDirection.Clockwise
-            );
-
-            // From the variant on to the version below: the left point to the bottom point of an
-            // ellipse centred on the version's column.
-            DrawArc(
-                context,
-                pen,
-                new Point(
-                    _panX + below.X * _zoom,
-                    _panY + variant.Y * _zoom
-                ),
-                (below.X - variant.X) * _zoom,
-                (below.Y - variant.Y) * _zoom,
-                Math.PI,
-                Math.PI / 2,
-                SweepDirection.CounterClockwise
-            );
-        }
-
-        void BaseEdge(VersionGraphDrawing.VariantNode variant)
-        {
-            if (!_drawing!.VersionByLevel.TryGetValue(variant.Level, out var below))
-            {
-                return;
-            }
-
-            // The arc is the one the chain draws from a variant down to the version it is based on,
-            // carried over to this variant's own column: the same quarter turn at every column, so
-            // every base edge is read as the same curve.
-            var endX =
-                _panX
-                + (variant.X + VersionGraphDrawing.AxisGap) * _zoom;
-
-            DrawArc(
-                context,
-                pen,
-                new Point(endX, _panY + variant.Y * _zoom),
-                VersionGraphDrawing.AxisGap * _zoom,
-                (below.Y - variant.Y) * _zoom,
-                Math.PI,
-                Math.PI / 2,
-                SweepDirection.CounterClockwise
-            );
-
-            // What the arc does not reach — the run from its end to the version's own column — is a
-            // straight line, so a variant further out is the same arc with a longer run attached.
-            var versionX = _panX + below.X * _zoom;
-
-            if (versionX > endX)
-            {
-                var row = _panY + below.Y * _zoom;
-
-                context.DrawLine(pen, new Point(endX, row), new Point(versionX, row));
-            }
-        }
-
-        void Elbow(
-            IPen line,
-            double sourceX,
-            double sourceY,
-            double targetX,
-            double targetY,
-            double half
-        )
-        {
-            var fromX = _panX + sourceX * _zoom;
-            var fromY = _panY + sourceY * _zoom;
-            var toX = _panX + targetX * _zoom;
-            var toY = _panY + targetY * _zoom;
-            var dx = toX - fromX;
-            var dy = toY - fromY;
-            var directionX = Math.Sign(dx);
-            var directionY = Math.Sign(dy);
-
-            if (directionX == 0 || directionY == 0)
-            {
-                var edge = directionY == 0
-                    ? new Point(fromX, fromY)
-                    : new Point(fromX, fromY + directionY * half * _zoom);
-
-                context.DrawLine(line, edge, new Point(toX, toY));
-
-                return;
-            }
-
-            // The same quarter the chain draws from a variant to the version it is based on: the
-            // horizontal span and the drop are the chain's own, so every arc is the same curve. What
-            // the arc does not cover — a longer run down or across — is a straight line, before it or
-            // after it.
-            var rx = Math.Min(VersionGraphDrawing.AxisGap * _zoom, Math.Abs(dx));
-            var ry = Math.Min(
-                VersionGraphDrawing.VersionToVariant * _zoom,
-                Math.Abs(dy)
-            );
-            var extra = Math.Abs(dy) - ry;
-            var start = new Point(fromX, fromY + directionY * extra);
-            var end = new Point(fromX + directionX * rx, toY);
-
-            if (extra > 0.5)
-            {
-                context.DrawLine(
-                    line,
-                    new Point(fromX, fromY + directionY * half * _zoom),
-                    start
-                );
-            }
-
-            var geometry = new StreamGeometry();
-
-            // A quintic that leaves the vertical and enters the horizontal with no curvature at either
-            // end: the straight and the curve meet with the same tangent and the same curvature, which
-            // is what keeps the join from reading as a kink. Its control points are on the two tangents,
-            // so it stays within the same quarter the chain's arc covers.
-            //
-            // The control points sit on the two tangents at 20% and 56%, the distances that make the
-            // quintic track the chain's quarter ellipse of AxisGap by VersionToVariant — within half a
-            // unit along the curve and a third of a unit in length — while meeting the straight runs
-            // with no step in curvature, which is the kink an ellipse leaves at both ends.
-            var first = new Point(start.X, start.Y + directionY * ry * 0.2);
-            var second = new Point(start.X, start.Y + directionY * ry * 0.56);
-            var third = new Point(end.X - directionX * rx * 0.56, end.Y);
-            var fourth = new Point(end.X - directionX * rx * 0.2, end.Y);
-            var steps = Math.Clamp(
-                (int)Math.Ceiling(Math.Max(rx, ry) / 2),
-                16,
-                256
-            );
-
-            using (var path = geometry.Open())
-            {
-                path.BeginFigure(start, false);
-
-                for (var at = 1; at <= steps; at++)
-                {
-                    var t = at / (double)steps;
-                    var u = 1 - t;
-                    var b0 = u * u * u * u * u;
-                    var b1 = 5 * u * u * u * u * t;
-                    var b2 = 10 * u * u * u * t * t;
-                    var b3 = 10 * u * u * t * t * t;
-                    var b4 = 5 * u * t * t * t * t;
-                    var b5 = t * t * t * t * t;
-
-                    path.LineTo(
-                        new Point(
-                            (b0 * start.X)
-                                + (b1 * first.X)
-                                + (b2 * second.X)
-                                + (b3 * third.X)
-                                + (b4 * fourth.X)
-                                + (b5 * end.X),
-                            (b0 * start.Y)
-                                + (b1 * first.Y)
-                                + (b2 * second.Y)
-                                + (b3 * third.Y)
-                                + (b4 * fourth.Y)
-                                + (b5 * end.Y)
-                        )
-                    );
-                }
-            }
-
-            context.DrawGeometry(null, line, geometry);
-
-            if (Math.Abs(toX - end.X) > 0.5)
-            {
-                context.DrawLine(line, end, new Point(toX, toY));
-            }
-        }
-
-        void PendingEdge(
-            VersionGraphDrawing.VariantNode edit,
-            VersionGraphDrawing.VariantNode pending
-        )
-        {
-            var line = new Pen(
-                new SolidColorBrush(RorolalaColours.UnderWay),
-                Math.Max(1, 1.5 * _zoom)
-            )
-            {
-                DashStyle = new DashStyle([5, 4], 0),
-                LineCap = PenLineCap.Round,
-            };
-
-            // The run the join line will make once the merge is recorded: it starts at the variant being
-            // joined and ends at the one the work becomes, where the ? stands now. Drawing it in the same
-            // direction and by the same curve is what lets the dash turn into the line without a change
-            // of shape.
-            Elbow(
-                line,
-                pending.X,
-                pending.Y,
-                edit.X,
-                edit.Y,
-                VersionGraphDrawing.CapsuleHeight / 2
-            );
-        }
-
-        foreach (var variant in _drawing!.Variants)
-        {
-            if (variant.State is not null)
-            {
-                // The edit is based on the highest version and would make the one the index does not
-                // have: only the second half of a spine edge exists, from the capsule down to it.
-                BaseEdge(variant);
-
-                // A merge waiting under a change is the other half of what the ? node is about: the
-                // dashed edge says the work is on its way into the pending variant as well as being
-                // based on the version above.
-                if (variant.Merging)
-                {
-                    var pending = _drawing.Variants.FirstOrDefault(
-                        one => one.Unjoined && one.Merging
-                    );
-
-                    if (pending is not null)
-                    {
-                        PendingEdge(variant, pending);
-                    }
-                }
-
-                continue;
-            }
-
-            // Every variant that is not on the spine is based on a version of the chain and is not
-            // reached by the two arcs a spine variant has: its base edge is the one that says where it
-            // stands. A merged variant and an unjoined one are the same here — the join edge is the
-            // other relation, not this one.
-            if (
-                variant.State is null
-                && !variant.Spine
-                && _drawing.VersionByLevel.TryGetValue(variant.Level, out var below)
-            )
-            {
-                Elbow(
-                    pen,
-                    variant.X,
-                    variant.Y,
-                    below.X,
-                    below.Y,
-                    VersionGraphDrawing.CapsuleHeight / 2
-                );
-            }
-
-            if (
-                variant.Join is not { } join
-                || join < 0
-                || join >= _drawing.Variants.Count
-            )
-            {
-                continue;
-            }
-
-            // The joined variant is the one the run leaves from: it is the lower one, and the line goes
-            // up (or down) from its own column, turns, and runs into the merge variant's column.
-            var target = _drawing.Variants[join];
-
-            Elbow(
-                pen,
-                target.X,
-                target.Y,
-                variant.X,
-                variant.Y,
-                VersionGraphDrawing.CapsuleHeight / 2
-            );
-        }
-    }
-
-    /// <summary>Draws one elliptical arc.</summary>
-    private static void DrawArc(
-        DrawingContext context,
-        IPen pen,
-        Point center,
-        double rx,
-        double ry,
-        double start,
-        double end,
-        SweepDirection sweep
-    )
-    {
-        if (rx <= 0 || ry <= 0)
-        {
-            return;
-        }
-
-        var from = new Point(
-            center.X + rx * Math.Cos(start),
-            center.Y + ry * Math.Sin(start)
-        );
-        var to = new Point(
-            center.X + rx * Math.Cos(end),
-            center.Y + ry * Math.Sin(end)
-        );
-        var geometry = new StreamGeometry();
-
-        using (var path = geometry.Open())
-        {
-            path.BeginFigure(from, false);
-            path.ArcTo(to, new Size(rx, ry), 0, false, sweep);
-        }
-
-        context.DrawGeometry(null, pen, geometry);
-    }
-
-    /// <summary>Draws the dashed line down the Vault's chain, and — where it parted — the branch from the common ancestor.</summary>
+    /// <summary>The switch in the graph's corner and the table it shows, kept apart from the drawing.</summary>
     /// <remarks>
-    /// A Vault that is only ahead continues the work's own chain, so its versions stand in the same column
-    /// and the line is that axis continued. Once both sides have moved on they stand in a column of their
-    /// own to the right, and the line from the common ancestor to the lowest version only the Vault has is
-    /// the branch. Either way it is broken like the version axis, so a line between two versions is read as
-    /// the chain they are part of rather than as a variant's edge.
+    /// The table wants to cover the switch, and a control's own drawing cannot cover a sibling control
+    /// drawn after it. This is the sibling that does: it is added after the switch and draws the table
+    /// over it, and it takes no pointer of its own so that the switch underneath is still the thing the
+    /// pointer meets when the table has gone.
     /// </remarks>
-    private void DrawUpstreamAxis(DrawingContext context, Ink ink)
+    private sealed class InfoOverlay(VersionGraphView graph) : Control
     {
-        if (_drawing is null || _drawing.Upstream.Count == 0)
+        /// <inheritdoc />
+        public override void Render(DrawingContext context)
         {
-            return;
-        }
+            ArgumentNullException.ThrowIfNull(context);
 
-        var pen = new Pen(new SolidColorBrush(ink.Muted), Math.Max(1, 1 * _zoom))
-        {
-            DashStyle = new DashStyle([4, 5], 0),
-        };
-        var x = _panX + _drawing.UpstreamX * _zoom;
-
-        for (var at = 0; at + 1 < _drawing.Upstream.Count; at++)
-        {
-            var above = _drawing.Upstream[at];
-            var below = _drawing.Upstream[at + 1];
-
-            context.DrawLine(
-                pen,
-                new Point(x, _panY + above.Y * _zoom),
-                new Point(x, _panY + below.Y * _zoom)
-            );
-        }
-
-        if (
-            _drawing.BranchFrom is { } level
-            && _drawing.VersionByLevel.TryGetValue(level, out var from)
-        )
-        {
-            var to = _drawing.Upstream[^1];
-            var start = new Point(_panX + from.X * _zoom, _panY + from.Y * _zoom);
-            var end = new Point(x, _panY + to.Y * _zoom);
-
-            // A chain that is only the work's own, continued upstream, is one line joining the two
-            // columns. The arc is for a divergence, where both sides have moved on from the common
-            // ancestor and the two rows are read as a fork rather than as one chain.
-            if (!_drawing.Diverged)
+            if (graph.InfoOnScreen() is { } table)
             {
-                context.DrawLine(pen, start, end);
-
-                return;
+                DrawInfoPanel(context, table.Ink, table.Info, Bounds.Size);
             }
-
-            var dx = end.X - start.X;
-            var dy = end.Y - start.Y;
-            var branch = new StreamGeometry();
-
-            using (var path = branch.Open())
-            {
-                path.BeginFigure(start, false);
-                path.CubicBezierTo(
-                    new Point(start.X + dx * 0.55, start.Y),
-                    new Point(end.X, end.Y - dy * 0.55),
-                    end
-                );
-            }
-
-            context.DrawGeometry(null, pen, branch);
         }
     }
 
-    /// <summary>Draws the version nodes, their labels and the Vault's ring.</summary>
-    private void DrawVersions(
-        DrawingContext context,
-        Ink ink,
-        Metrics metrics
-    )
+    /// <summary>What the table would show now, or nothing when there is no table.</summary>
+    /// <returns>The colours and the table.</returns>
+    private (GraphInk Ink, Info Info)? InfoOnScreen()
     {
-        var primary = new SolidColorBrush(ink.Primary);
-        var ring = new Pen(primary, Math.Max(1.5, 2 * _zoom));
-
-        foreach (var version in _drawing!.Versions)
+        if (!_showInfo || _hover is not { } hover)
         {
-            var cx = _panX + version.X * _zoom;
-            var cy = _panY + version.Y * _zoom;
-            var radius = VersionGraphDrawing.Radius * _zoom;
-
-            if (
-                cx + radius < 0
-                || cx - radius > Bounds.Width
-                || cy + radius < 0
-                || cy - radius > Bounds.Height
-            )
-            {
-                continue;
-            }
-
-            context.DrawEllipse(primary, null, new Point(cx, cy), radius, radius);
-
-            if (version.Origin)
-            {
-                context.DrawEllipse(
-                    null,
-                    ring,
-                    new Point(cx, cy),
-                    radius + 5 * _zoom,
-                    radius + 5 * _zoom
-                );
-            }
-
-            var label = metrics.Versions[version.Level].Label;
-            context.DrawText(
-                label,
-                new Point(cx - label.Width / 2, cy - label.Height / 2)
-            );
+            return null;
         }
+
+        var ink = CurrentInk();
+        var info = InfoFor(hover, ink);
+
+        return info.Title.Length == 0 && info.Rows.Count == 0 ? null : (ink, info);
     }
 
-    /// <summary>Draws the Vault's versions that the work's own chain does not hold.</summary>
-    /// <remarks>
-    /// They are hollow rather than filled, which is what tells them from the work's own versions at a
-    /// glance: the work is what the reader acts on, and the Vault's chain is what it stands beside. A
-    /// version only the Layout names — one this index never fetched — is drawn broken, since no level
-    /// or words are known for it.
-    /// </remarks>
-    private void DrawUpstream(DrawingContext context, Ink ink, Metrics metrics)
+    /// <summary>What a hover table says about a thing, as its title and the rows under it.</summary>
+    /// <param name="Title">What is written over the table.</param>
+    /// <param name="Rows">The label and value of each row.</param>
+    /// <param name="Accent">The colour the title is drawn in.</param>
+    private sealed record Info(
+        string Title,
+        IReadOnlyList<(string Label, string Value)> Rows,
+        Color Accent
+    );
+
+    /// <summary>The colours in force, read again when the look or the palette changes.</summary>
+    /// <returns>The colours.</returns>
+    private GraphInk CurrentInk()
     {
-        if (_drawing is null || _drawing.Upstream.Count == 0)
-        {
-            return;
-        }
-
-        var fill = new SolidColorBrush(ink.Elevated);
-        var muted = new SolidColorBrush(ink.Muted);
-        var pen = new Pen(muted, Math.Max(1, 1.25 * _zoom));
-        var broken = new Pen(muted, Math.Max(1, 1 * _zoom))
-        {
-            DashStyle = new DashStyle([3, 3], 0),
-        };
-
-        for (var at = 0; at < _drawing.Upstream.Count; at++)
-        {
-            var version = _drawing.Upstream[at];
-            var cx = _panX + version.X * _zoom;
-            var cy = _panY + version.Y * _zoom;
-            var radius = VersionGraphDrawing.Radius * _zoom;
-
-            if (
-                cx + radius < 0
-                || cx - radius > Bounds.Width
-                || cy + radius < 0
-                || cy - radius > Bounds.Height
-            )
-            {
-                continue;
-            }
-
-            context.DrawEllipse(
-                fill,
-                version.Unknown ? broken : pen,
-                new Point(cx, cy),
-                radius,
-                radius
-            );
-
-            var label = metrics.Upstream[at].Label;
-            context.DrawText(
-                label,
-                new Point(cx - label.Width / 2, cy - label.Height / 2)
-            );
-        }
-    }
-
-    /// <summary>Draws the variant capsules and their labels.</summary>
-    private void DrawVariants(
-        DrawingContext context,
-        Ink ink,
-        Metrics metrics
-    )
-    {
-        var fill = new SolidColorBrush(ink.Elevated);
-
-        foreach (var variant in _drawing!.Variants)
-        {
-            var metric = metrics.Variants[variant.Index];
-            var width = metric.Width;
-            var height = VersionGraphDrawing.CapsuleHeight * _zoom;
-            var cx = _panX + variant.X * _zoom;
-            var cy = _panY + variant.Y * _zoom;
-            var stroke = variant.Merging
-                ? RorolalaColours.UnderWay
-                : variant.State is null
-                    ? ink.Accent
-                    : variant.Wrong
-                        ? ink.Del
-                        : ink.Add;
-            var pen = new Pen(new SolidColorBrush(stroke), Math.Max(1, 1.5 * _zoom));
-
-            if (
-                cx + width / 2 < 0
-                || cx - width / 2 > Bounds.Width
-                || cy + height / 2 < 0
-                || cy - height / 2 > Bounds.Height
-            )
-            {
-                continue;
-            }
-
-            context.DrawRectangle(
-                fill,
-                pen,
-                new Rect(cx - width / 2, cy - height / 2, width, height),
-                height / 2,
-                height / 2
-            );
-            context.DrawText(
-                metric.Label,
-                new Point(
-                    cx - metric.Label.Width / 2,
-                    cy - metric.Label.Height / 2
-                )
-            );
-        }
-    }
-
-    /// <summary>Draws the version bubbles, and the hash under the one hovered.</summary>
-    private void DrawBubbles(
-        DrawingContext context,
-        Ink ink,
-        Metrics metrics
-    )
-    {
-        var fill = new SolidColorBrush(ink.Elevated);
-
-        // The Vault's bubbles are drawn first, so a version of the work's own that is hovered in the
-        // same row can be read over the one that stands there instead of it.
-        for (var at = 0; at < _drawing!.Upstream.Count; at++)
-        {
-            var version = _drawing.Upstream[at];
-
-            if (version.Unknown || metrics.Upstream[at].Bubble is not { } bubble)
-            {
-                continue;
-            }
-
-            DrawBubble(
-                context,
-                ink,
-                fill,
-                version.X,
-                version.Y,
-                false,
-                bubble,
-                ReferenceEquals(_hover?.Upstream, version)
-            );
-        }
-
-        foreach (var version in _drawing.Versions)
-        {
-            var bubble = metrics.Versions[version.Level].Bubble;
-
-            if (bubble is null)
-            {
-                continue;
-            }
-
-            var hovered = ReferenceEquals(_hover?.Version, version);
-
-            // A version of the work's and one of the Vault's are in the same row only where the two
-            // chains have parted: there the Vault's bubble is the one drawn, and the work's is left
-            // for the pointer. Rows the Vault has no version in keep their own bubble.
-            if (
-                !hovered
-                && _drawing.Upstream.Any(
-                    one => !one.Unknown && one.Level == version.Level
-                )
-            )
-            {
-                continue;
-            }
-
-            DrawBubble(
-                context,
-                ink,
-                fill,
-                version.X,
-                version.Y,
-                version.Origin,
-                bubble,
-                hovered
-            );
-        }
-    }
-
-    /// <summary>Draws one version's bubble, with its tail on the node.</summary>
-    private void DrawBubble(
-        DrawingContext context,
-        Ink ink,
-        IBrush fill,
-        double nodeX,
-        double nodeY,
-        bool origin,
-        BubbleMetrics bubble,
-        bool hovered
-    )
-    {
-        var x =
-            _panX
-            + (nodeX + VersionGraphDrawing.Radius + VersionGraphDrawing.BubbleGap)
-                * _zoom;
-        var cy = _panY + nodeY * _zoom;
-        var width = hovered ? bubble.Width : bubble.RestWidth;
-        var height = hovered
-            ? bubble.RestHeight + bubble.HashGap + (bubble.Hash?.Height ?? 0)
-            : bubble.RestHeight;
-        var y = cy - height / 2;
-        var border = origin ? ink.Primary : ink.Splitter;
-        var pen = new Pen(
-            new SolidColorBrush(border),
-            Math.Max(1, (origin ? 1.5 : 1.25) * _zoom)
-        );
-        var tail = VersionGraphDrawing.BubbleTail * _zoom;
-        var half = VersionGraphDrawing.BubbleTailHalf * _zoom;
-        var tip = new Point(x - tail, cy);
-        var radius = 10 * _zoom;
-
-        // Body and tail are one outline, because two strokes would draw a line across the joint —
-        // the bubble's left edge — and cut the tail off the bubble it belongs to. The edge stops
-        // at the tail's base on both sides and the tail bridges the rest.
-        var geometry = new StreamGeometry();
-
-        using (var path = geometry.Open())
-        {
-            path.BeginFigure(new Point(x, cy + half), false);
-            path.LineTo(new Point(x, y + height - radius));
-            path.ArcTo(
-                new Point(x + radius, y + height),
-                new Size(radius, radius),
-                0,
-                false,
-                SweepDirection.CounterClockwise
-            );
-            path.LineTo(new Point(x + width - radius, y + height));
-            path.ArcTo(
-                new Point(x + width, y + height - radius),
-                new Size(radius, radius),
-                0,
-                false,
-                SweepDirection.CounterClockwise
-            );
-            path.LineTo(new Point(x + width, y + radius));
-            path.ArcTo(
-                new Point(x + width - radius, y),
-                new Size(radius, radius),
-                0,
-                false,
-                SweepDirection.CounterClockwise
-            );
-            path.LineTo(new Point(x + radius, y));
-            path.ArcTo(
-                new Point(x, y + radius),
-                new Size(radius, radius),
-                0,
-                false,
-                SweepDirection.CounterClockwise
-            );
-            path.LineTo(new Point(x, cy - half));
-            path.LineTo(tip);
-            path.EndFigure(true);
-        }
-
-        context.DrawGeometry(fill, pen, geometry);
-
-        var textY = y + bubble.PaddingY;
-
-        if (bubble.Creator is { } creator)
-        {
-            // A neutral chip, not a colour of state: the bubble's border and the node's ring are
-            // what say a version is the origin, so the name does not have to say it as well.
-            var pill = new Rect(
-                x + bubble.PaddingX,
-                textY,
-                bubble.PillWidth,
-                bubble.PillHeight
-            );
-
-            context.DrawRectangle(
-                new SolidColorBrush(ink.Splitter),
-                null,
-                pill,
-                bubble.PillHeight / 2,
-                bubble.PillHeight / 2
-            );
-            context.DrawText(
-                creator,
-                new Point(
-                    pill.X + bubble.PillPaddingX,
-                    pill.Y + bubble.PillPaddingY
-                )
-            );
-            textY += bubble.PillHeight + bubble.Gap;
-        }
-
-        if (bubble.Message is { } message)
-        {
-            context.DrawText(
-                message,
-                new Point(x + bubble.PaddingX, textY)
-            );
-            textY += message.Height;
-        }
-
-        if (hovered && bubble.Hash is { } hashText)
-        {
-            textY += bubble.HashGap;
-            context.DrawText(hashText, new Point(x + bubble.PaddingX, textY));
-        }
-    }
-
-    /// <summary>Draws a variant's own words, above or below its capsule.</summary>
-    private void DrawVariantTooltip(
-        DrawingContext context,
-        Ink ink,
-        VersionGraphDrawing.VariantNode variant
-    )
-    {
-        var padding = 9 * _zoom;
-        var contentWidth = TooltipMaxWidth * _zoom - padding * 2;
-
-        // An edit has no maker and no message of its own — the only thing to say about it is what the
-        // working file is — so the state's own sentence is the tooltip.
-        var creator = variant.State is null && variant.Creator.Length > 0
-            ? Text(
-                $"({variant.Creator})",
-                FaceMedium,
-                11.5 * _zoom,
-                ink.Muted
-            )
-            : null;
-        var said = variant.State ?? variant.Message;
-        var message = said.Length > 0
-            ? Text(said, FaceNormal, 12.5 * _zoom, ink.Front)
-            : null;
-
-        if (message is not null)
-        {
-            var lineHeight = 18 * _zoom;
-
-            message.MaxTextWidth = contentWidth;
-            message.MaxTextHeight = 4 * lineHeight;
-            message.LineHeight = lineHeight;
-            message.Trimming = TextTrimming.CharacterEllipsis;
-        }
-
-        if (creator is null && message is null)
-        {
-            return;
-        }
-
-        var gap = creator is not null && message is not null ? 2 * _zoom : 0;
-        var width =
-            Math.Max(creator?.Width ?? 0, message?.Width ?? 0) + padding * 2;
-        var height =
-            padding * 2
-            + (creator?.Height ?? 0)
-            + gap
-            + (message?.Height ?? 0);
-        var cx = _panX + variant.X * _zoom;
-        var cy = _panY + variant.Y * _zoom;
-        var half = VersionGraphDrawing.CapsuleHeight / 2 * _zoom;
-        var maxX = Math.Max(8, Bounds.Width - width - 8);
-        var x = Math.Clamp(cx - width / 2, 8, maxX);
-        var above = true;
-        var y = cy - half - 10 * _zoom - height;
-
-        if (y < 8)
-        {
-            y = cy + half + 10 * _zoom;
-            above = false;
-        }
-
-        var maxY = Math.Max(8, Bounds.Height - height - 8);
-        y = Math.Clamp(y, 8, maxY);
-
-        var tail = 8 * _zoom;
-        var tailX = Math.Clamp(cx - x, 14 * _zoom, width - 14 * _zoom);
-        var fill = new SolidColorBrush(ink.Elevated);
-        var pen = new Pen(
-            new SolidColorBrush(ink.Splitter),
-            Math.Max(1, 1.25 * _zoom)
-        );
-        var baseY = above ? y + height : y;
-        var tipY = above ? baseY + tail : baseY - tail;
-        var tailGeometry = new StreamGeometry();
-
-        using (var path = tailGeometry.Open())
-        {
-            path.BeginFigure(new Point(x + tailX, tipY), true);
-            path.LineTo(new Point(x + tailX - tail, baseY));
-            path.LineTo(new Point(x + tailX + tail, baseY));
-            path.EndFigure(true);
-        }
-
-        context.DrawGeometry(fill, null, tailGeometry);
-        context.DrawRectangle(
-            fill,
-            pen,
-            new Rect(x, y, width, height),
-            8 * _zoom,
-            8 * _zoom
-        );
-        context.DrawLine(
-            pen,
-            new Point(x + tailX, tipY),
-            new Point(x + tailX - tail, baseY)
-        );
-        context.DrawLine(
-            pen,
-            new Point(x + tailX, tipY),
-            new Point(x + tailX + tail, baseY)
+        var signature = (
+            _themeVersion,
+            _palette.Mid,
+            _palette.Primary,
+            _palette.Accent,
+            _palette.Front
         );
 
-        var textY = y + padding;
-
-        if (creator is not null)
+        if (_ink is null || !_inkFor.Equals(signature))
         {
-            context.DrawText(creator, new Point(x + padding, textY));
-            textY += creator.Height + gap;
+            _ink = GraphInk.From(_palette);
+            _inkFor = signature;
+            _renderer?.Invalidate();
         }
 
-        if (message is not null)
-        {
-            context.DrawText(message, new Point(x + padding, textY));
-        }
+        return _ink;
     }
 
-    /// <summary>Draws the words for a version only the Vault holds.</summary>
+    /// <summary>Draws what is said in place of a graph.</summary>
     /// <param name="context">Where to draw.</param>
     /// <param name="ink">The colours in force.</param>
-    /// <param name="version">The upstream version under the pointer.</param>
-    private void DrawUpstreamTooltip(
-        DrawingContext context,
-        Ink ink,
-        VersionGraphDrawing.UpstreamNode version
-    )
+    private void DrawEmpty(DrawingContext context, GraphInk ink)
     {
-        var padding = 9 * _zoom;
-        var contentWidth = TooltipMaxWidth * _zoom - padding * 2;
-        var vault = _drawing!.UpstreamVault;
-        var head = version.Unknown
-            ? Text(
-                RolaI18N.Get("rorolala_vcs.version_graph.upstream_unknown"),
-                FaceNormal,
-                11.5 * _zoom,
-                ink.Muted
-            )
-            : Text(
-                vault.Length > 0
-                    ? $"{RolaI18N.Get("rorolala_vcs.column_upstream")}: {vault}"
-                    : RolaI18N.Get("rorolala_vcs.column_upstream"),
-                FaceMedium,
-                11 * _zoom,
-                ink.Muted
-            );
-        head.MaxTextWidth = contentWidth;
-
-        var creator = version.Creator.Length > 0
-            ? Text($"({version.Creator})", FaceMedium, 11.5 * _zoom, ink.Muted)
-            : null;
-        FormattedText? message = null;
-
-        if (version.Message.Length > 0)
-        {
-            var lineHeight = 18 * _zoom;
-
-            message = Text(version.Message, FaceNormal, 12.5 * _zoom, ink.Front);
-            message.MaxTextWidth = contentWidth;
-            message.MaxTextHeight = 4 * lineHeight;
-            message.LineHeight = lineHeight;
-            message.Trimming = TextTrimming.CharacterEllipsis;
-        }
-
-        var hash = version.Hash.Length > 0
-            ? Text(version.Hash, MonoMedium, 10 * _zoom, ink.Muted)
-            : null;
-
-        if (hash is not null)
-        {
-            hash.MaxTextWidth = contentWidth;
-        }
-
-        var gap = 3 * _zoom;
-        var width =
-            Math.Max(
-                head.Width,
-                Math.Max(
-                    creator?.Width ?? 0,
-                    Math.Max(message?.Width ?? 0, hash?.Width ?? 0)
-                )
-            )
-            + padding * 2;
-        var height =
-            padding * 2
-            + head.Height
-            + (creator is null ? 0 : gap + creator.Height)
-            + (message is null ? 0 : gap + message.Height)
-            + (hash is null ? 0 : gap + hash.Height);
-        var cx = _panX + version.X * _zoom;
-        var cy = _panY + version.Y * _zoom;
-        var radius = VersionGraphDrawing.Radius * _zoom;
-        var x = cx + radius + 10 * _zoom;
-
-        if (x + width > Bounds.Width - 8)
-        {
-            x = cx - radius - 10 * _zoom - width;
-        }
-
-        var maxX = Math.Max(8, Bounds.Width - width - 8);
-        var maxY = Math.Max(8, Bounds.Height - height - 8);
-
-        x = Math.Clamp(x, 8, maxX);
-
-        var y = Math.Clamp(cy - height / 2, 8, maxY);
-        var fill = new SolidColorBrush(ink.Elevated);
-        var pen = new Pen(
-            new SolidColorBrush(ink.Splitter),
-            Math.Max(1, 1.25 * _zoom)
-        );
-
-        context.DrawRectangle(
-            fill,
-            pen,
-            new Rect(x, y, width, height),
-            8 * _zoom,
-            8 * _zoom
-        );
-
-        var textY = y + padding;
-
-        context.DrawText(head, new Point(x + padding, textY));
-        textY += head.Height;
-
-        if (creator is not null)
-        {
-            textY += gap;
-            context.DrawText(creator, new Point(x + padding, textY));
-            textY += creator.Height;
-        }
-
-        if (message is not null)
-        {
-            textY += gap;
-            context.DrawText(message, new Point(x + padding, textY));
-            textY += message.Height;
-        }
-
-        if (hash is not null)
-        {
-            textY += gap;
-            context.DrawText(hash, new Point(x + padding, textY));
-        }
-    }
-
-    /// <summary>Draws the words for a file with no graph.</summary>
-    private void DrawEmpty(DrawingContext context, Ink ink)
-    {
-        if (string.IsNullOrEmpty(_emptyText))
+        if (_emptyText is not { Length: > 0 } said)
         {
             return;
         }
 
-        var maxWidth = Math.Min(420, Bounds.Width - 64);
+        var text = new FormattedText(
+            said,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(FontFamily.Default),
+            13,
+            new SolidColorBrush(ink.Muted)
+        );
 
-        if (maxWidth <= 0)
-        {
-            return;
-        }
-
-        var text = Text(_emptyText, FaceNormal, 13, ink.Muted);
-        text.MaxTextWidth = maxWidth;
-        text.TextAlignment = TextAlignment.Center;
         context.DrawText(
             text,
             new Point(
-                (Bounds.Width - maxWidth) / 2,
-                (Bounds.Height - text.Height) / 2
+                Math.Max(0, (Bounds.Width - text.Width) / 2),
+                Math.Max(0, (Bounds.Height - text.Height) / 2)
             )
         );
     }
 
     /// <summary>Draws the scale in the corner.</summary>
-    private void DrawZoom(DrawingContext context, Ink ink)
+    /// <param name="context">Where to draw.</param>
+    /// <param name="ink">The colours in force.</param>
+    private void DrawZoom(DrawingContext context, GraphInk ink)
     {
-        var text = Text(_zoomText, MonoMedium, 11, ink.Muted);
-        const double paddingX = 5;
-        const double paddingY = 2;
-        var width = text.Width + paddingX * 2;
-        var height = text.Height + paddingY * 2;
-        var x = Bounds.Width - 12 - width;
-        var y = Bounds.Height - 9 - height;
-
-        if (x < 0 || y < 0)
+        if (_drawing is null)
         {
             return;
         }
 
-        context.DrawRectangle(
-            new SolidColorBrush(
-                Color.FromArgb(0xB8, ink.Ground.R, ink.Ground.G, ink.Ground.B)
-            ),
-            null,
-            new Rect(x, y, width, height),
-            4,
-            4
+        var text = new FormattedText(
+            _zoomText,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(GraphMeasure.Mono),
+            11,
+            new SolidColorBrush(ink.Muted)
         );
-        context.DrawText(text, new Point(x + paddingX, y + paddingY));
+        var width = text.Width + 16;
+        var height = text.Height + 8;
+        var at = new Rect(Inset, Bounds.Height - Inset - height, width, height);
+
+        context.DrawRectangle(
+            new SolidColorBrush(GraphTint.Alpha(ink.Card, 220)),
+            new Pen(new SolidColorBrush(ink.CardEdge), 1),
+            at,
+            6,
+            6
+        );
+        context.DrawText(text, new Point(at.X + 8, at.Y + 4));
+    }
+
+    /// <summary>Draws how much the graph holds, beside its corner.</summary>
+    /// <param name="context">Where to draw.</param>
+    /// <param name="ink">The colours in force.</param>
+    /// <param name="stats">What to say.</param>
+    private void DrawStats(DrawingContext context, GraphInk ink, string stats)
+    {
+        if (_drawing is null || stats.Length == 0)
+        {
+            return;
+        }
+
+        var text = new FormattedText(
+            stats,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(GraphMeasure.Mono),
+            10.5,
+            new SolidColorBrush(ink.Faint)
+        );
+
+        context.DrawText(
+            text,
+            new Point(
+                Math.Max(Inset, Bounds.Width - Inset - text.Width),
+                Bounds.Height - Inset - text.Height
+            )
+        );
+    }
+
+    /// <summary>Draws the warning that the reading stopped at the window's limit.</summary>
+    /// <param name="context">Where to draw.</param>
+    /// <param name="ink">The colours in force.</param>
+    private void DrawTruncated(DrawingContext context, GraphInk ink)
+    {
+        if (_drawing is not { Truncated: true })
+        {
+            return;
+        }
+
+        var said = RolaI18N.Get("rorolala_vcs.version_graph.truncated");
+        var text = new FormattedText(
+            said,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(FontFamily.Default),
+            11,
+            new SolidColorBrush(ink.Pending)
+        );
+        var at = new Rect(Inset, Inset, text.Width + 16, text.Height + 8);
+
+        context.DrawRectangle(
+            new SolidColorBrush(GraphTint.Alpha(ink.Card, 220)),
+            new Pen(new SolidColorBrush(ink.Pending), 1),
+            at,
+            6,
+            6
+        );
+        context.DrawText(text, new Point(at.X + 8, at.Y + 4));
+    }
+
+    /// <summary>The cards and entries the graph is counted in.</summary>
+    /// <returns>The line, or an empty string when there is no drawing.</returns>
+    private string Stats()
+    {
+        if (_drawing is not { } drawing)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>
+        {
+            RolaI18N.Get("rorolala_vcs.version_graph.stats_variants", drawing.VariantCount),
+            RolaI18N.Get("rorolala_vcs.version_graph.stats_entries", drawing.EntryCount),
+            RolaI18N.Get("rorolala_vcs.version_graph.stats_merges", drawing.JoinCount),
+            RolaI18N.Get("rorolala_vcs.version_graph.stats_same", drawing.SamePairCount),
+        };
+
+        if (drawing.PendingCount > 0)
+        {
+            parts.Add(
+                RolaI18N.Get("rorolala_vcs.version_graph.stats_pending", drawing.PendingCount)
+            );
+        }
+
+        if (drawing.DraftCount > 0)
+        {
+            parts.Add(
+                RolaI18N.Get("rorolala_vcs.version_graph.stats_drafts", drawing.DraftCount)
+            );
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>The thing under a point, or nothing.</summary>
+    /// <param name="at">The point, in the control's coordinates.</param>
+    /// <returns>The hover answer.</returns>
+    private Hover? HitTest(Point at)
+    {
+        if (_drawing is null)
+        {
+            return null;
+        }
+
+        var x = (at.X - _panX) / _zoom;
+        var y = (at.Y - _panY) / _zoom;
+
+        for (var index = 0; index < _drawing.Ghosts.Count; index++)
+        {
+            var ghost = _drawing.Ghosts[index];
+            var dx = x - ghost.X;
+            var dy = y - ghost.Y;
+
+            if (dx * dx + dy * dy <= 24 * 24)
+            {
+                return new Hover(null, HoverPart.Ghost, null, ghost, index);
+            }
+        }
+
+        foreach (var card in _drawing.Cards)
+        {
+            if (
+                x < card.CardLeft
+                || x > card.CardRight
+                || y < card.CardTop
+                || y > card.ContentBottom
+            )
+            {
+                continue;
+            }
+
+            if (y <= card.CardTop + VariantGraphDrawing.CardHeight)
+            {
+                var middle = y - card.Y;
+
+                if (
+                    x >= card.CardLeft + 11
+                    && x <= card.CardLeft + 11 + 34 + card.CreatorWidth
+                    && middle >= -10
+                    && middle <= 10
+                )
+                {
+                    return new Hover(card, HoverPart.Creator, null, null, -1);
+                }
+
+                if (x >= card.CardLeft + 57 + card.CreatorWidth)
+                {
+                    return new Hover(card, HoverPart.Message, null, null, -1);
+                }
+
+                return new Hover(card, HoverPart.Card, null, null, -1);
+            }
+
+            var rowTop = card.CardTop + VariantGraphDrawing.CardHeight + VariantGraphDrawing.PillGap;
+
+            foreach (var row in card.Rows)
+            {
+                var left = card.CardLeft;
+
+                foreach (var chip in row)
+                {
+                    if (
+                        x >= left
+                        && x <= left + chip.Width
+                        && y >= rowTop
+                        && y <= rowTop + VariantGraphDrawing.ChipHeight
+                    )
+                    {
+                        return new Hover(card, PartOf(chip), chip, null, -1);
+                    }
+
+                    left += chip.Width + VariantGraphDrawing.ChipGap;
+                }
+
+                rowTop += VariantGraphDrawing.ChipHeight + VariantGraphDrawing.ChipGap;
+            }
+
+            return new Hover(card, HoverPart.Card, null, null, -1);
+        }
+
+        return null;
+    }
+
+    /// <summary>Which part a pill is.</summary>
+    /// <param name="chip">The pill.</param>
+    /// <returns>The part.</returns>
+    private static HoverPart PartOf(GraphChip chip) => chip.Kind switch
+    {
+        GraphChipKind.Hash => HoverPart.HashPill,
+        GraphChipKind.Entry => HoverPart.EntryPill,
+        GraphChipKind.Badge => HoverPart.BadgePill,
+        _ => HoverPart.FilePill,
+    };
+
+    /// <summary>The cards that stand around one: what it came from, what came from it and what it merges with.</summary>
+    /// <param name="card">The card the pointer is on.</param>
+    /// <returns>The cards to keep in full.</returns>
+    private IReadOnlySet<int> LineageOf(GraphCard card)
+    {
+        var lineage = new HashSet<int>();
+        var all = _drawing?.Cards ?? [];
+
+        if (_drawing is null)
+        {
+            return lineage;
+        }
+
+        lineage.Add(card.Index);
+        AddAncestors(card, lineage);
+
+        if (card.Join is { } join && _drawing.ByHash.TryGetValue(join, out var merged))
+        {
+            lineage.Add(merged.Index);
+            AddAncestors(merged, lineage);
+        }
+
+        var grew = true;
+
+        while (grew)
+        {
+            grew = false;
+
+            foreach (var one in all)
+            {
+                if (
+                    one.BaseVariant is { } baseVariant
+                    && _drawing.ByHash.TryGetValue(baseVariant, out var parent)
+                    && lineage.Contains(parent.Index)
+                    && lineage.Add(one.Index)
+                )
+                {
+                    grew = true;
+                }
+
+                if (
+                    one.Join is { } mergedIn
+                    && _drawing.ByHash.TryGetValue(mergedIn, out var source)
+                    && lineage.Contains(one.Index)
+                    && lineage.Add(source.Index)
+                )
+                {
+                    grew = true;
+                }
+            }
+        }
+
+        // The same file on another side is a chain beside this one rather than a descendant, so the
+        // entries naming this card's file are what says which chains belong together.
+        var paths = PathsOf(card);
+
+        if (paths.Count > 0)
+        {
+            foreach (var one in all)
+            {
+                if (one.Entries.Any(entry => paths.Contains(VariantGraphDrawing.Normalize(entry.Path))))
+                {
+                    lineage.Add(one.Index);
+                    AddAncestors(one, lineage);
+                }
+
+                if (one.Draft is { } draft && paths.Contains(draft.Path))
+                {
+                    lineage.Add(one.Index);
+                }
+            }
+        }
+
+        if (card.Draft is { } own)
+        {
+            foreach (var one in all)
+            {
+                if (one.Draft?.Path == own.Path)
+                {
+                    lineage.Add(one.Index);
+                }
+
+                if (one.Entries.Any(entry => VariantGraphDrawing.Normalize(entry.Path) == own.Path))
+                {
+                    lineage.Add(one.Index);
+                    AddAncestors(one, lineage);
+                }
+            }
+        }
+
+        return lineage;
+    }
+
+    /// <summary>The files a card belongs to, as the paths its entries name.</summary>
+    /// <param name="card">The card.</param>
+    /// <returns>The paths, without the deprecated marker.</returns>
+    private static HashSet<string> PathsOf(GraphCard card)
+    {
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var entry in card.Entries)
+        {
+            paths.Add(VariantGraphDrawing.Normalize(entry.Path));
+        }
+
+        if (card.Draft is { } draft)
+        {
+            paths.Add(draft.Path);
+        }
+
+        return paths;
+    }
+
+    /// <summary>Adds a card's ancestors to a lineage.</summary>
+    /// <param name="card">The card to walk up from.</param>
+    /// <param name="lineage">The set to add to.</param>
+    private void AddAncestors(GraphCard card, HashSet<int> lineage)
+    {
+        var seen = new HashSet<int> { card.Index };
+        var here = card;
+
+        while (
+            _drawing is not null
+            && here.BaseVariant is { } baseVariant
+            && _drawing.ByHash.TryGetValue(baseVariant, out var parent)
+            && seen.Add(parent.Index)
+        )
+        {
+            lineage.Add(parent.Index);
+            here = parent;
+        }
+    }
+
+    /// <summary>What hovering a thing says about it: a table rather than a line of prose.</summary>
+    /// <param name="hover">What the pointer is on.</param>
+    /// <param name="ink">The colours in force.</param>
+    /// <returns>The table's title, rows and the colour the title is drawn in.</returns>
+    private Info InfoFor(Hover hover, GraphInk ink)
+    {
+        if (hover.Ghost is not null)
+        {
+            return new Info(
+                Words.UnknownBase,
+                [(string.Empty, RolaI18N.Get("rorolala_vcs.version_graph.info_unknown_base"))],
+                ink.Muted
+            );
+        }
+
+        if (hover.Card is not { } card)
+        {
+            return new Info(string.Empty, [], ink.Muted);
+        }
+
+        return hover.Part switch
+        {
+            HoverPart.EntryPill => EntryInfo(card, hover.Chip, ink),
+            HoverPart.HashPill => HashInfo(card, hover.Chip, ink),
+            HoverPart.FilePill => FileInfo(card, hover.Chip),
+            HoverPart.BadgePill => BadgeInfo(card, hover.Chip, ink),
+            HoverPart.Creator => new Info(
+                card.Creator,
+                [(Label("info_creator_hash"), card.CreatorHash.Length > 0 ? card.CreatorHash : "?")],
+                ink.Primary
+            ),
+            HoverPart.Message => new Info(
+                card.Creator,
+                [(Label("info_message"), Said(card.Message))],
+                ink.Primary
+            ),
+            _ => CardInfo(card, ink),
+        };
+    }
+
+    /// <summary>What a whole card says about itself.</summary>
+    /// <param name="card">The card.</param>
+    /// <param name="ink">The colours in force.</param>
+    /// <returns>The table.</returns>
+    private Info CardInfo(GraphCard card, GraphInk ink)
+    {
+        var rows = new List<(string Label, string Value)>
+        {
+            (Label("info_creator"), card.Creator),
+            (Label("info_message"), Said(card.Message)),
+        };
+
+        if (card.Entries.Count > 0)
+        {
+            rows.Add((Label("info_entries"), card.Entries.Count.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        if (
+            card.Join is { } join
+            && _drawing is { } drawing
+            && drawing.ByHash.TryGetValue(join, out var merged)
+        )
+        {
+            rows.Add((Label("info_join"), VariantGraphDrawing.VersionLabel(merged)));
+        }
+
+        if (card.Kind == GraphCardKind.Draft && card.Draft is { } draft)
+        {
+            rows.Add((Label("info_path"), draft.Path));
+            rows.Add((Label("info_base"), draft.BaseLabel));
+
+            if (draft.ShouldLabel is { } should)
+            {
+                rows.Add((Label("info_should"), should));
+            }
+
+            rows.Add(
+                (
+                    Label("info_state"),
+                    RolaI18N.Get(
+                        draft.Correct
+                            ? "rorolala_vcs.version_graph.info_draft_correct"
+                            : "rorolala_vcs.version_graph.info_draft_wrong"
+                    )
+                )
+            );
+
+            return new Info(
+                Words.DraftLabel,
+                rows,
+                draft.Correct ? ink.Local : ink.Danger
+            );
+        }
+
+        if (card.Pending && card.PendingPath is { Length: > 0 } pending)
+        {
+            rows.Add((Label("info_merging"), pending));
+        }
+
+        return new Info(
+            VariantGraphDrawing.VersionLabel(card),
+            rows,
+            card.Pending ? ink.Pending : ink.Primary
+        );
+    }
+
+    /// <summary>What a pill naming an entry says.</summary>
+    /// <param name="card">The card it hangs under.</param>
+    /// <param name="chip">The pill.</param>
+    /// <param name="ink">The colours in force.</param>
+    /// <returns>The table.</returns>
+    private Info EntryInfo(GraphCard card, GraphChip? chip, GraphInk ink)
+    {
+        if (chip?.Entry is not { } entry)
+        {
+            return CardInfo(card, ink);
+        }
+
+        var rows = new List<(string Label, string Value)>
+        {
+            (Label("info_path"), entry.Path),
+            (Label("info_uuid"), entry.Uuid),
+            (Label("info_version"), VariantGraphDrawing.VersionLabel(card)),
+        };
+
+        if (entry.Owner is { Length: > 0 } owner)
+        {
+            rows.Add((Label("info_owner"), owner));
+        }
+
+        if (entry.Deprecated)
+        {
+            rows.Add((string.Empty, RolaI18N.Get("rorolala_vcs.version_graph.info_deprecated")));
+        }
+
+        return new Info($"{chip.Tag} · {chip.Name}", rows, ink.Side(entry.Side));
+    }
+
+    /// <summary>What a pill naming a variant's hash says.</summary>
+    /// <param name="card">The card it hangs under.</param>
+    /// <param name="chip">The pill.</param>
+    /// <param name="ink">The colours in force.</param>
+    /// <returns>The table.</returns>
+    private Info HashInfo(GraphCard card, GraphChip? chip, GraphInk ink)
+    {
+        var rows = new List<(string Label, string Value)>
+        {
+            (Label("info_variant"), card.Hash),
+        };
+
+        if (card.HasVersion)
+        {
+            rows.Add((Label("info_version"), card.VersionHash!));
+        }
+
+        rows.Add((Label("info_content"), card.Storage));
+
+        if (
+            card.Join is { } join
+            && _drawing is { } drawing
+            && drawing.ByHash.TryGetValue(join, out var merged)
+        )
+        {
+            rows.Add((Label("info_join"), VariantGraphDrawing.VersionLabel(merged)));
+        }
+
+        return new Info(chip?.Text ?? string.Empty, rows, ink.Primary);
+    }
+
+    /// <summary>What the pill naming a draft's file says.</summary>
+    /// <param name="card">The card it hangs under.</param>
+    /// <param name="chip">The pill.</param>
+    /// <returns>The table.</returns>
+    private Info FileInfo(GraphCard card, GraphChip? chip) =>
+        new(
+            chip?.Name ?? string.Empty,
+            card.Draft is { } draft
+                ? [(Label("info_path"), draft.Path)]
+                : [],
+            CurrentInk().Local
+        );
+
+    /// <summary>What a badge says, which is the reason it is worn.</summary>
+    /// <param name="card">The card it hangs under.</param>
+    /// <param name="chip">The pill.</param>
+    /// <param name="ink">The colours in force.</param>
+    /// <returns>The table.</returns>
+    private static Info BadgeInfo(GraphCard card, GraphChip? chip, GraphInk ink)
+    {
+        IReadOnlyList<(string Label, string Value)> rows = card.Draft switch
+        {
+            { } draft =>
+            [
+                (
+                    Label("info_state"),
+                    RolaI18N.Get(
+                        draft.Correct
+                            ? "rorolala_vcs.version_graph.info_draft_correct"
+                            : "rorolala_vcs.version_graph.info_draft_wrong"
+                    )
+                ),
+            ],
+            _ => [],
+        };
+
+        return new Info(
+            chip?.Text ?? string.Empty,
+            rows,
+            card.Draft is { Correct: false } ? ink.Danger : ink.Local
+        );
+    }
+
+    /// <summary>One row's label, in the language the program speaks.</summary>
+    /// <param name="key">The label's key under <c>rorolala_vcs.version_graph</c>.</param>
+    /// <returns>The words.</returns>
+    private static string Label(string key) => RolaI18N.Get($"rorolala_vcs.version_graph.{key}");
+
+    /// <summary>What a message is said as, when it may be nothing.</summary>
+    /// <param name="message">The message.</param>
+    /// <returns>The message, or what nothing is said as.</returns>
+    private static string Said(string message) =>
+        message.Length > 0
+            ? message
+            : RolaI18N.Get("rorolala_vcs.version_graph.info_no_message");
+
+    /// <summary>Draws the table the pointer's thing is read through, in the graph's corner.</summary>
+    /// <remarks>
+    /// It stands still while the graph moves under it: a table that followed the pointer would cover
+    /// what is being read, and one placed in the corner is read once rather than chased. A value wider
+    /// than its column ends in an ellipsis; the whole of it is what a right-click copies.
+    /// </remarks>
+    /// <param name="context">Where to draw.</param>
+    /// <param name="ink">The colours in force.</param>
+    /// <param name="info">What the table says.</param>
+    /// <param name="size">The room the table stands in, which is the graph's whole stage.</param>
+    private static void DrawInfoPanel(DrawingContext context, GraphInk ink, Info info, Size size)
+    {
+        const double width = 300;
+        const double padding = 12;
+        const double labelWidth = 64;
+        const double rowHeight = 19;
+
+        if (info.Title.Length == 0 && info.Rows.Count == 0)
+        {
+            return;
+        }
+
+        var title = new FormattedText(
+            info.Title,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold),
+            12.5,
+            new SolidColorBrush(info.Accent)
+        );
+
+        // The right and top are the switch's own: the table covers it exactly, and its first row starts
+        // where the switch did rather than one padding step below it.
+        var titleTop = Corner;
+        var rowsTop = titleTop + title.Height + 9;
+        var height = (rowsTop - titleTop) + (info.Rows.Count * rowHeight) + 10;
+        var x = size.Width - Corner - width;
+        var y = titleTop;
+
+        context.DrawRectangle(
+            new SolidColorBrush(ink.Shadow),
+            null,
+            new Rect(x, y + 4, width, height),
+            8,
+            8
+        );
+        context.DrawRectangle(
+            new SolidColorBrush(GraphTint.Alpha(ink.Card, 242)),
+            new Pen(new SolidColorBrush(ink.CardEdge), 1),
+            new Rect(x, y, width, height),
+            8,
+            8
+        );
+        context.DrawText(title, new Point(x + padding, y + 9));
+
+        for (var index = 0; index < info.Rows.Count; index++)
+        {
+            var (label, value) = info.Rows[index];
+            var top = rowsTop + (index * rowHeight);
+            var valueLeft = label.Length > 0 ? x + padding + labelWidth : x + padding;
+            var valueWidth = label.Length > 0
+                ? width - (padding * 2) - labelWidth
+                : width - (padding * 2);
+
+            if (label.Length > 0)
+            {
+                var said = new FormattedText(
+                    label,
+                    CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight,
+                    new Typeface(FontFamily.Default),
+                    10.5,
+                    new SolidColorBrush(ink.Faint)
+                );
+
+                context.DrawText(
+                    said,
+                    new Point(x + padding, top + ((rowHeight - said.Height) / 2))
+                );
+            }
+
+            var text = new FormattedText(
+                value,
+                CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight,
+                new Typeface(FontFamily.Default),
+                11,
+                new SolidColorBrush(label.Length > 0 ? ink.Text : ink.Muted)
+            )
+            {
+                MaxTextWidth = Math.Max(1, valueWidth),
+                MaxLineCount = 1,
+                Trimming = TextTrimming.CharacterEllipsis,
+            };
+
+            context.DrawText(text, new Point(valueLeft, top + ((rowHeight - text.Height) / 2)));
+        }
     }
 }

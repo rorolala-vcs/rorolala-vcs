@@ -33,7 +33,7 @@ pub struct GraphRequest {
     pub forward: u32,
     /// Whether to walk into what a variant merges in.
     pub joins: bool,
-    /// Whether to take in a variant based on a version in the window, one hop.
+    /// Whether to take in the variants based on a version in the window, following each branch on.
     ///
     /// The root is not such a version: every file's first variant is based on it, so its dependents are
     /// the other chains rather than branches of this one.
@@ -195,10 +195,10 @@ impl Snapshot {
     /// The window of the graph `request` asks for.
     ///
     /// The window is walked from each focus: back along the base chain, forward over the variants
-    /// based on it, into what the variants in the window merge in, and one hop into the variants
-    /// based on the versions in the window — each within the request's limits. A version or variant
-    /// the records do not name is answered as missing rather than left unexplained, since a reader
-    /// that asked where its focus is can only be told that it is not here.
+    /// based on it, into what the variants in the window merge in, and over the branches on the
+    /// versions in the window — each followed on to what was built on it — within the request's
+    /// limits. A version or variant the records do not name is answered as missing rather than left
+    /// unexplained, since a reader that asked where its focus is can only be told that it is not here.
     #[must_use]
     pub fn graph(&self, request: &GraphRequest) -> GraphView {
         let mut walk = Walk::new(self, request.max_nodes);
@@ -252,11 +252,17 @@ impl Snapshot {
         for start in &starts {
             walk.walk_children(*start, request.forward);
         }
+
+        // What the focus's own history holds is what branches are looked for under: a chain reached
+        // only by a merge is another file's line, and taking its branches in would draw that file's
+        // history around this one.
+        let branch_seeds = walk.versions.clone();
+
         if request.joins {
             walk.walk_joins(request.back);
         }
         if request.branches {
-            walk.take_branches();
+            walk.take_branches(branch_seeds);
         }
 
         walk.view(anchors)
@@ -495,15 +501,29 @@ impl<'a> Walk<'a> {
         }
     }
 
-    /// Takes in one hop of the variants based on the versions already in the window.
+    /// Takes in the variants based on the versions in the window, until none is left.
+    ///
+    /// A branch is a line of its own: taking in its first variant and stopping there would leave the
+    /// versions it goes on to unseen, so a reader who advanced the same variant under another Uuid
+    /// could not find what that Uuid went on to record. Each variant taken in brings the versions
+    /// fixing it into the window, and those are seeds for the next round of branches.
     ///
     /// The root is left out: every file's first variant is based on it, so its dependents are the other
     /// chains rather than branches of this one, and taking them in would draw a workspace's whole first
     /// row around any window that reached the root.
-    fn take_branches(&mut self) {
-        let versions: Vec<Hash> = self.versions.iter().copied().collect();
+    ///
+    /// Only the versions the focus's own walks reached seed this, not the ones a merge brought in: a
+    /// merged chain is another file's line, and the versions built on it are that file's future
+    /// rather than branches of this history.
+    fn take_branches(&mut self, seeds: BTreeSet<Hash>) {
+        let mut pending = VecDeque::from_iter(seeds);
+        let mut expanded = BTreeSet::new();
 
-        for version in versions {
+        while let Some(version) = pending.pop_front() {
+            if !expanded.insert(version) {
+                continue;
+            }
+
             if self
                 .snapshot
                 .version(version)
@@ -512,10 +532,16 @@ impl<'a> Walk<'a> {
                 continue;
             }
 
-            let branches = self.snapshot.variants_based_on(version).to_vec();
+            for branch in self.snapshot.variants_based_on(version).to_vec() {
+                let pins: Vec<Hash> = self.snapshot.versions_pinning(branch).to_vec();
 
-            for branch in branches {
                 self.take_variant(branch);
+
+                for pin in pins {
+                    if !expanded.contains(&pin) {
+                        pending.push_back(pin);
+                    }
+                }
             }
         }
     }
@@ -630,8 +656,11 @@ mod tests {
         /// The third variant, and the version fixing it.
         third_variant: Hash,
         third: Hash,
-        /// The variant based on the first version as well.
+        /// The variant based on the first version as well, its version, and what was built on it.
         branch: Hash,
+        branch_version: Hash,
+        branch_child: Hash,
+        branch_child_version: Hash,
         /// A variant based on the root alone, merged in from another chain.
         foreign: Hash,
         /// The variant based on the third version, merging the foreign one in.
@@ -663,6 +692,9 @@ mod tests {
             third_variant: Hash::new([0x06; 32]),
             third: Hash::new([0x07; 32]),
             branch: Hash::new([0x08; 32]),
+            branch_version: Hash::new([0x0c; 32]),
+            branch_child: Hash::new([0x0d; 32]),
+            branch_child_version: Hash::new([0x0e; 32]),
             foreign: Hash::new([0x09; 32]),
             merge: Hash::new([0x0a; 32]),
             merge_version: Hash::new([0x0b; 32]),
@@ -673,18 +705,27 @@ mod tests {
         variant(&mut table, chain.second_variant, chain.first, None);
         variant(&mut table, chain.third_variant, chain.second, None);
         variant(&mut table, chain.branch, chain.first, None);
+        variant(&mut table, chain.branch_child, chain.branch_version, None);
         variant(&mut table, chain.foreign, chain.root, None);
         variant(&mut table, chain.merge, chain.third, Some(chain.foreign));
 
         table.add(chain.first_variant, chain.first, Edge::Variant);
         table.add(chain.second_variant, chain.second, Edge::Variant);
         table.add(chain.third_variant, chain.third, Edge::Variant);
+        table.add(chain.branch, chain.branch_version, Edge::Variant);
+        table.add(
+            chain.branch_child,
+            chain.branch_child_version,
+            Edge::Variant,
+        );
         table.add(chain.merge, chain.merge_version, Edge::Variant);
         table.add(Hash::new([0x00; 32]), chain.root, Edge::Variant);
         table.set_number(chain.root, ROOT_VERSION);
         table.set_number(chain.first, 0);
         table.set_number(chain.second, 1);
         table.set_number(chain.third, 2);
+        table.set_number(chain.branch_version, 1);
+        table.set_number(chain.branch_child_version, 2);
         table.set_number(chain.merge_version, 3);
 
         (table, chain)
@@ -768,7 +809,7 @@ mod tests {
     }
 
     #[test]
-    fn a_branch_is_taken_in_one_hop() {
+    fn a_branch_is_taken_in_whole() {
         let (snapshot, chain) = snapshot();
         let view = snapshot.graph(&GraphRequest {
             focus: vec![chain.second],
@@ -776,10 +817,19 @@ mod tests {
             ..GraphRequest::default()
         });
 
-        // The branch is based on the first version, which is in the window, so it is one hop in.
+        // The branch is based on the first version, which is in the window, so it is taken in.
         assert!(
             view.nodes.iter().any(|node| node.hash == chain.branch),
             "the branch based on a version in the window is not in it",
+        );
+
+        // The branch's own version is then in the window too, so what was built on it is taken in as
+        // well: a line of its own is walked whole rather than stopped at its first variant.
+        assert!(
+            view.nodes
+                .iter()
+                .any(|node| node.hash == chain.branch_child),
+            "what was built on the branch was not taken in",
         );
 
         // The third variant is forward of the second and is one hop as well.

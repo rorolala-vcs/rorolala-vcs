@@ -134,9 +134,10 @@ pub struct Standing {
 
 /// How every version this Layout records stands beside the one upstream records for the same entry.
 ///
-/// A path this side records and upstream does not name is left out: there is no version to be beside, and
-/// nothing there for a record to be based on. So is one either side names without a version, which is an
-/// entry that was never recorded rather than one that is behind.
+/// A path this side records and upstream does not name is ahead: the other side has never been told of
+/// it, so a sync would send it, and there is no version there to be based on. One either side names
+/// without a version is left out, which is an entry that was never recorded rather than one that is
+/// ahead.
 ///
 /// This is the whole of what [`wrong_base`] is a filter of, and it is read the same way — one walk of the
 /// chain per path, which is what the command line already pays for every path it draws.
@@ -151,9 +152,18 @@ pub fn every(
         .paths()
         .into_iter()
         .filter_map(|(path, id)| {
-            let (Some(local), Some(upstream)) = (version_of(local, id), version_of(copy, id))
-            else {
-                return None;
+            let local = version_of(local, id)?;
+
+            // A path upstream does not name has no version to stand beside; what is known is the
+            // direction, which is what a reader of the work is shown as a send.
+            let Some(upstream) = version_of(copy, id) else {
+                return Some((
+                    path,
+                    Standing {
+                        relation: Relation::Ahead,
+                        distance: None,
+                    },
+                ));
             };
 
             let base = compare(index, runtime, &local, &upstream);

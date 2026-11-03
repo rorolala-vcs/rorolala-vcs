@@ -431,9 +431,9 @@ impl Status {
     /// # FFI
     ///
     /// A `Standing` by value, which is `Unknown` for a path this reading holds no standing for: one it is
-    /// not about, one nothing was ever recorded for, and one upstream does not name. `Same` and `Unknown`
-    /// are told apart by `rola_status_standing_distance_of`, which is zero for the first and negative for
-    /// the second.
+    /// not about, one nothing was ever recorded for, and one the copy could not be read for. `Same` and
+    /// `Unknown` are told apart by `rola_status_standing_distance_of`, which is zero for the first and
+    /// negative for the second. A path this side records and upstream does not name is `Ahead`.
     #[must_use]
     #[lazyffi(export = rola_status_standing_of)]
     pub fn standing(&self, path: &Path) -> Standing {

@@ -49,6 +49,22 @@ public static class ChosenEntry
         Current = entry;
         Changed?.Invoke();
     }
+
+    /// <summary>Says that no file is the one last clicked, which is a choice taken away from elsewhere.</summary>
+    /// <remarks>
+    /// A view of the work that the user clicks away from has nothing standing on a file any more, and
+    /// this is that answer: the next click is the one that names a file again.
+    /// </remarks>
+    public static void Clear()
+    {
+        if (Current is null)
+        {
+            return;
+        }
+
+        Current = null;
+        Changed?.Invoke();
+    }
 }
 
 /// <summary>
@@ -74,6 +90,26 @@ public static class ChosenFiles
 
     /// <summary>Raised when <see cref="Current"/> says something else.</summary>
     public static event Action? Changed;
+
+    /// <summary>Raised when a view outside the listings takes the choice away.</summary>
+    /// <remarks>
+    /// A click on the space of a view of the work is not a click on a listing, so the listing's own
+    /// highlight has to be told: what the choice is and what is drawn as chosen are the same answer,
+    /// and a row left marked would say a file is still the one being worked on.
+    /// </remarks>
+    public static event Action? Cleared;
+
+    /// <summary>Says that the choice is nothing, which is a click away from every file.</summary>
+    public static void Clear()
+    {
+        if (Current.Count > 0)
+        {
+            Current = [];
+            Changed?.Invoke();
+        }
+
+        Cleared?.Invoke();
+    }
 
     /// <summary>
     /// Says what the choice holds now, so that a view of the work follows it.

@@ -54,7 +54,7 @@ variants are based on a version, which merge one in, which were made of one cont
 shape a graph is walked in.
 
 `Snapshot::graph` cuts a window out of it: a focus, how far back towards the root and forward away
-from it to walk, whether to follow merges and one-hop branches, and a cap. What it answers with is
+from it to walk, whether to follow merges and branches, and a cap. What it answers with is
 the variants, the versions, the edges between them, the keys the index does not hold, and a
 `frontier` on each node saying which way the window stopped short — so a reader that reaches the
 edge asks `Snapshot::expand` for the part beyond it rather than for the whole index again. Nothing

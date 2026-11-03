@@ -857,6 +857,23 @@ internal sealed class DockManager
         Raise();
     }
 
+    /// <summary>Says what several splits were dragged to at once, which is one layout change rather than several.</summary>
+    /// <remarks>
+    /// A crossing grip moves a split on each of its axes, and a rebuild apiece would throw the structure away
+    /// between two halves of one gesture: what a drag leaves behind is one arrangement, so it is written down
+    /// and said once.
+    /// </remarks>
+    /// <param name="ratios">What each split is left at.</param>
+    internal void SetRatios(IReadOnlyList<(LayoutSplit Split, double Ratio)> ratios)
+    {
+        foreach (var (split, ratio) in ratios)
+        {
+            split.Ratio = DockTree.Share(ratio);
+        }
+
+        Raise();
+    }
+
     /// <summary>
     /// Opens the docks a saved layout names, in the groups and tab orders it states.
     /// </summary>

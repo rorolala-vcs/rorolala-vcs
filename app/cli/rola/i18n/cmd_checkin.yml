@@ -12,18 +12,8 @@ checkin:
             --join <FILE>        Name the file a checked-in variant is to be merged into
             --by-name            Land each reference under the destination by its own name
             --offline            Build the file only from content already stored locally
-            --force              Skip the chain consistency check for a variant checkin
+            --force              Skip the shared-history check for a variant checkin
             --concurrency <N>    Carry the content N units at a time (default 4)
-
-        **About landing**:
-            A destination that is a directory is a prefix: a reference keeps its whole Vault path under it
-            --by-name makes the destination the parent instead: the reference keeps only its own name, and a folder keeps the tree it is
-
-        **About merging**:
-            When checking in a variant as a file, `--join` must be used to name the file to merge into
-            After the merge starts, manually merge the variant file's content into the local file
-
-            To confirm, simply track as usual with `rola track <FILE>`, and it will **automatically** be recorded as a merge
     zh-CN: |
         将上游布局的条目加入到本地布局中
 
@@ -34,18 +24,8 @@ checkin:
             --join <本地文件>    为签入的变体指定待合入的文件
             --by-name            每条参考按自己的名字落在目标目录下
             --offline            仅使用本地已存储的内容来构建文件
-            --force              跳过变体签入的链一致性检查
+            --force              跳过变体签入的共享版本检查
             --concurrency <N>    每次同时搬运 N 份内容（默认 4）
-
-        **关于落点**：
-            目录型目标是前缀：参考保留它在 Vault 里的整条路径
-            --by-name 让目标成为父目录：参考只保留自己的名字，文件夹保留自己的树
-
-        **关于合并**：
-            签入变体作为文件时，必须使用 `--join` 来指定待合入的文件
-            合并开始后，需手动将变体文件的内容合入本地文件
-
-            若需要确认，请正常使用 `rola track <文件>` 追踪即可，它会 **自动** 记录为一次合并
 
   description:
     en: Add the entries of an upstream Layout into the local Layout
@@ -89,8 +69,8 @@ checkin:
     zh-CN: 该变体已经签入过
 
   err_join_off_chain:
-    en: it is not based on a version of this file's own chain — pass `--force` to join it anyway
-    zh-CN: 该变体并非基于所指文件版本链上的版本，若你确实需要并入，请使用 `--force`
+    en: it shares no version with this file's own chain — pass `--force` to join it anyway
+    zh-CN: 该变体与所指文件的版本链没有共同的版本，若你确实需要并入，请使用 `--force`
 
   err_join_chain:
     en: the file's version chain could not be read

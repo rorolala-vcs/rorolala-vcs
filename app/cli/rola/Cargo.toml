@@ -25,6 +25,7 @@ rorolala-errors.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+unicode-width.workspace = true
 uuid.workspace = true
 
 # Restoring the default `SIGPIPE` disposition is a Unix concern; Windows has no such signal and

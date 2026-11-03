@@ -1695,6 +1695,41 @@ internal sealed class RorolalaTheme
                 Brushed(TemplatedControl.BackgroundProperty, SplitterAcrossHover)
             ),
 
+            // Where a column seam and a row seam meet, the two lines cross and a drag on the crossing resizes all
+            // the panels around it. The grip is given both lines so it reads as that crossing rather than as a
+            // third splitter lying over the docks; under the pointer the two turn to the accent, the same answer
+            // a single splitter gives.
+            On(
+                selector => selector.OfType<Rectangle>().Class(DockArea.CrossDownClass),
+                Brushed(Shape.FillProperty, SplitterDown)
+            ),
+            On(
+                selector => selector.OfType<Rectangle>().Class(DockArea.CrossAcrossClass),
+                Brushed(Shape.FillProperty, SplitterAcross)
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Panel>()
+                        .Class(DockArea.CrossClass)
+                        .Class(":pointerover")
+                        .Descendant()
+                        .OfType<Rectangle>()
+                        .Class(DockArea.CrossDownClass),
+                Brushed(Shape.FillProperty, SplitterDownHover)
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Panel>()
+                        .Class(DockArea.CrossClass)
+                        .Class(":pointerover")
+                        .Descendant()
+                        .OfType<Rectangle>()
+                        .Class(DockArea.CrossAcrossClass),
+                Brushed(Shape.FillProperty, SplitterAcrossHover)
+            ),
+
             // The points a dragged dock may be put on, filling the group the drag is over: four isosceles trapezoids
             // around a centre rectangle. They are the answer rather than a hint — a drag that is on one of them can
             // be let go of — so they are drawn filled rather than as hairlines, and the one the pointer is on is

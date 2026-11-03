@@ -10,8 +10,8 @@ namespace RorolalaVCSPlugin;
 /// <remarks>
 /// One of these belongs to a dock's view, and the strip in the dock's header reads it: whether there is work to
 /// carry, whether a run is going, and why not when there is not. What the run says while it goes is not kept here
-/// but written to the <see cref="ProgressHub"/>, which is what the panel down the Overview's right draws from:
-/// the run's card stands beside the cards of every other command this plugin may be running.
+/// but written to the <see cref="ProgressHub"/>, which is what the capsule stack in the Overview draws from:
+/// the run's capsule stands under the capsules of every other command this plugin may be running.
 /// <para>
 /// The plan is asked for off the window's thread, because asking costs a fetch of the Vault's Layout: a dock
 /// that asked on its own thread would freeze while the network answered. Every change is said on the window's

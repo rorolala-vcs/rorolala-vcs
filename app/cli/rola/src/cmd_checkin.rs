@@ -294,9 +294,6 @@ pub fn handle_checkin(
     // references are read against — while the objects themselves may come from any Vault that has
     // them, since a key is the hash of what it names.
     let primary = fetch::primary(remote.get_ref(), Some(vault_name.as_str()));
-    let sources = Sources::new(held, &account, remote.get_ref(), primary, **offline)
-        .map_err(|cause| ErrorCheckinFailed { cause })?
-        .with_concurrency(**concurrency);
 
     // What the Vault holds now is what the references are read against, so its copy is brought up
     // to date first — the same fetch `rola layout fetch` makes. Offline, the copy that is here is
@@ -331,7 +328,9 @@ pub fn handle_checkin(
     };
 
     // The index is what names the objects a checkin reads, and it is the light half: it is moved
-    // whole, while the content is asked for by what `bring_in` finds it needs.
+    // whole, while the content is asked for by what `bring_in` finds it needs. Both are the run's
+    // progress: the index crosses first and every content after it, so a reader watching the
+    // capsule sees the blocks arrive rather than a bar that stops at the index.
     let reporting = Reporting::start(*progress);
 
     if let Err(error) = pull(
@@ -350,7 +349,16 @@ pub fn handle_checkin(
         .into();
     }
 
-    reporting.finish();
+    let sources = match Sources::new(held, &account, remote.get_ref(), primary, **offline) {
+        Ok(sources) => sources
+            .reporting(reporting.progress())
+            .with_concurrency(**concurrency),
+        Err(cause) => {
+            reporting.finish();
+
+            return ErrorCheckinFailed { cause }.into();
+        }
+    };
 
     let (entries, failed) = bring_in(
         held,
@@ -364,6 +372,8 @@ pub fn handle_checkin(
     );
 
     sources.report();
+    drop(sources);
+    reporting.finish();
 
     ResultCheckedIn {
         layout: DEFAULT_LAYOUT_NAME.to_owned(),
@@ -453,11 +463,11 @@ fn checkin_variant(
         return join_failed(target, t!("checkin.err_join_unknown").trim());
     };
 
-    // A variant is joined into a file whose history it shares: its base has to be a version the
-    // file's own chain holds, or the two are histories that never met and the drawing has no place
-    // to put it. `--force` is how a run says it knows that and means to join it anyway.
+    // A variant is joined into a file whose history it shares: the two chains have to meet at some
+    // version below the root, or they are histories that never met and the drawing has no place to
+    // put it. `--force` is how a run says it knows that and means to join it anyway.
     if !force {
-        match on_chain(
+        match shares_history(
             index,
             &runtime,
             data.version(),
@@ -481,24 +491,37 @@ fn checkin_variant(
         .must_bind()
         .ok()
         .and_then(|name| account_named(&name, Some(held), None).ok());
-    if let Some(account) = &account {
+    let reporting = Reporting::start(*progress);
+    let brought = account.as_ref().and_then(|account| {
         let tracked = tracked_vault(held);
         let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
 
-        if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline)
-            .map(|sources| sources.with_concurrency(**concurrency))
-        {
-            let missing = sources.bring(store, &[content]);
-            sources.report();
+        Sources::new(held, account, remote.get_ref(), primary, **offline)
+            .map(|sources| {
+                sources
+                    .reporting(reporting.progress())
+                    .with_concurrency(**concurrency)
+            })
+            .ok()
+            .map(|sources| {
+                let missing = sources.bring(store, &[content]);
+                sources.report();
 
-            // A version is only a meaning once what it stored is here. A run that could have asked
-            // for it and did not get it fails now, rather than handing over a name whose content is
-            // nowhere and leaving the next run to discover it. A run with no Vault to ask never had a
-            // way to bring it, which is a checkin of what is here rather than a fetch that failed.
-            if sources.can_ask() && !missing.is_empty() {
-                return join_failed(target, t!("checkin.err_join_no_content").trim());
-            }
-        }
+                (missing, sources.can_ask())
+            })
+    });
+
+    reporting.finish();
+
+    // A version is only a meaning once what it stored is here. A run that could have asked for it
+    // and did not get it fails now, rather than handing over a name whose content is nowhere and
+    // leaving the next run to discover it. A run with no Vault to ask never had a way to bring it,
+    // which is a checkin of what is here rather than a fetch that failed.
+    if let Some((missing, can_ask)) = brought
+        && can_ask
+        && !missing.is_empty()
+    {
+        return join_failed(target, t!("checkin.err_join_no_content").trim());
     }
 
     // A place the run names is checked as it is given: one that climbs out of the Workspace is
@@ -617,28 +640,29 @@ fn read_variant(index: &VCSIndex, runtime: &tokio::runtime::Runtime, key: &Key) 
     }
 }
 
-/// Whether `base` is a version on the chain the version `head` heads.
+/// Whether two histories meet at a version below the root.
 ///
-/// The chain is read by following what each version points at and what that variant was based on,
-/// back to the root. A version met twice is the end of the reading rather than a loop to follow,
-/// since only a corrupted index has one.
-fn on_chain(
+/// The file's own chain is read from the version it records back to the root; the variant's chain is
+/// read from the version it is based on in the same way. Meeting anywhere on the two lines is a
+/// shared history: two chains that forked from one version and advanced separately are still one
+/// history, and the merge belongs in it. A variant based on the root is a new history's first
+/// variant, which joins as it always has; the root alone is not a shared base between two deeper
+/// chains, since every file's first variant is based on it.
+///
+/// A chain that cannot be read to a version the index holds proves nothing, and is answered as no
+/// shared history rather than as a failure of the index: what a run can act on is whether the merge
+/// has a place, not why one could not be found.
+fn shares_history(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
     head: [u8; 32],
     base: &[u8; 32],
 ) -> Result<bool, String> {
-    let mut seen = BTreeSet::new();
+    let mut chain = BTreeSet::new();
     let mut current = head;
+    let mut seen = BTreeSet::new();
 
-    loop {
-        if current == *base {
-            return Ok(true);
-        }
-        if !seen.insert(current) {
-            return Ok(false);
-        }
-
+    while seen.insert(current) {
         let version = match runtime.block_on(index.read(Key::new(current))) {
             Ok(VCSIndexObject::Version(version)) => version,
             Ok(_) => return Err(t!("checkin.err_join_chain").trim().to_owned()),
@@ -646,8 +670,10 @@ fn on_chain(
         };
 
         if version.is_root() {
-            return Ok(false);
+            break;
         }
+
+        chain.insert(current);
 
         let variant = match runtime.block_on(index.read(Key::new(*version.variant()))) {
             Ok(VCSIndexObject::Variant(variant)) => variant,
@@ -657,6 +683,40 @@ fn on_chain(
 
         current = *variant.base_version();
     }
+
+    match runtime.block_on(index.read(Key::new(*base))) {
+        Ok(VCSIndexObject::Version(version)) if version.is_root() => return Ok(true),
+        Ok(VCSIndexObject::Version(_)) => {}
+        Ok(_) | Err(_) => return Ok(false),
+    }
+
+    let mut current = *base;
+    let mut seen = BTreeSet::new();
+
+    while seen.insert(current) {
+        if chain.contains(&current) {
+            return Ok(true);
+        }
+
+        let Ok(VCSIndexObject::Version(version)) = runtime.block_on(index.read(Key::new(current)))
+        else {
+            return Ok(false);
+        };
+
+        if version.is_root() {
+            return Ok(false);
+        }
+
+        let Ok(VCSIndexObject::Variant(variant)) =
+            runtime.block_on(index.read(Key::new(*version.variant())))
+        else {
+            return Ok(false);
+        };
+
+        current = *variant.base_version();
+    }
+
+    Ok(false)
 }
 
 /// The failure a variant that could not be checked in is answered with.

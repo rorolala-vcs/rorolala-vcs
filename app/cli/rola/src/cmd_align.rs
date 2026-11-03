@@ -15,7 +15,11 @@
 //
 // The handler's parameters are the resources the framework injects, so how many of them there are is
 // what the command needs of the run rather than a signature this program shaped.
-#![allow(clippy::too_many_lines, clippy::too_many_arguments)]
+#![allow(
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::trivially_copy_pass_by_ref
+)]
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -39,8 +43,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResConcurrency, ResCurrentRemoteVault, ResOffline, ResRorolalaStorage, ResVCSIndex, ResVault,
-    ResWorkspace,
+    ResConcurrency, ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResRorolalaStorage,
+    ResVCSIndex, ResVault, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -57,6 +61,7 @@ use crate::failure::failure;
 use crate::fetch::{self, Sources};
 use crate::keys::account_named;
 use crate::layout::{ErrorLayoutShouldInWorkspace, chosen, failed};
+use crate::progress::Reporting;
 
 /// Where content a restore writes comes from: the store it is read out of, the index that names it,
 /// and the Vaults it may be asked of when the store does not hold it.
@@ -323,6 +328,7 @@ pub fn handle_align(
     current: &mut LazyRes<ResCurrentAccount>,
     offline: &ResOffline,
     concurrency: &ResConcurrency,
+    progress: &ResProgressSetting,
 ) -> Next {
     let StateAlign {
         path,
@@ -351,12 +357,18 @@ pub fn handle_align(
         .must_bind()
         .ok()
         .and_then(|name| account_named(&name, Some(held), None).ok());
+    // What a restore writes comes out of the store, and a store short of it is brought from the
+    // Vaults the Workspace has bound: those are blocks moving, and the watcher is started before
+    // the first of them is asked for.
+    let reporting = Reporting::start(*progress);
     let sources = match &account {
         Some(account) => {
             let tracked = tracked_vault(held);
             let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
             let sources = match Sources::new(held, account, remote.get_ref(), primary, **offline) {
-                Ok(sources) => sources.with_concurrency(**concurrency),
+                Ok(sources) => sources
+                    .reporting(reporting.progress())
+                    .with_concurrency(**concurrency),
                 Err(cause) => return align_failed(cause),
             };
 
@@ -483,6 +495,11 @@ pub fn handle_align(
     if let Some(sources) = &sources {
         sources.report();
     }
+
+    // The watcher is told the run has stopped saying before it is waited for: the sources hold the
+    // last way to say anything, so they go first and the reader then sees the channel close.
+    drop(sources);
+    reporting.finish();
 
     next
 }

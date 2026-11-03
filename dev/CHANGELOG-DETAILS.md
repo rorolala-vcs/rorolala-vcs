@@ -136,7 +136,50 @@ refuses it, by the read-only name `truth@VAULT`. The Layout's own batch writes g
 need: an entry can be removed in the same batch that binds its path to another, which is one write
 and no moment where the path names nothing.
 
-### 7. [`modules`] [`inverse-index`] Read the inverse index the other way, and rebuild it incrementally
+### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Draw the desktop Version Graph as the work's variant graph
+
+The Version Graph dock now draws what the variant graph module reads: a card per variant, a lane per
+file and a column per version depth, with the merges, the drafts and the entries laid beside them.
+The old drawing was one file's chain, on a vertical version axis, made from the retired version-graph
+reading; it is replaced rather than kept beside the new one, and the dock keeps its name and its
+place in a saved layout.
+
+A card is two rows: a description row with the creator's pill, the message and the version number,
+and a row of pills under it naming the variant's hash and the entries that point at it. The
+creator's pill is an outline in the name's own colour, as the pills under it are. The work's own
+entries wear the look's accent and a Vault's the primary, and the chain of the entry being read is
+outlined in the accent. The local pill of a file the user has chosen is drawn in the look's ink
+instead, so the files a reading stands on are told from the rest of the work; choosing several marks
+each of their pills. The graph stands on
+the files chosen in a directory listing, or on the whole work when none is chosen, and a Vault's
+fetched copy stands on the same lanes as the work. A merge that was recorded is a plain edge; a merge
+still waiting is the amber broken one — both leave and arrive at the points the chain's own edges
+use, at a card's middle, rather than hanging off its top or bottom. A file the work says is changed but not tracked stands as a
+draft card — in the accent when a track would continue its record, red when the change is based on an older
+version — and the version it should be standing on is named on its edge. A base version the index
+does not hold is a broken node beside the card naming it.
+
+Hovering a card's message, a pill or the creator's pill fills a table in the graph's corner with what
+that thing says — the whole hash, the Uuid, the path, the owner, the reason a state is worn — and the
+switch beside it turns the table on and off. A value wider than its column ends in an ellipsis, and a
+right-click on the thing copies the whole of it; a right-click on a variant's hash also offers
+retracking the chosen file to that version and joining the variant into it, and a right-click on
+another side's entry offers switching the chosen file's record to that entry's Uuid, either moving the
+record alone or letting the content follow it — an edited file is asked about before its content is
+written over. A right-click on the work's own entry offers forking its path into a new Uuid, holding
+what it held, which is how a file stops following an entry it was following. Pressing a local entry's
+pill asks the browser to show the file it names. A right-click on the card still offers the retrack,
+join, cancel-merge and delete-changes runs the old graph offered. A press on a card brings it to the
+middle of the dock at twice its size, and a press on the empty ground takes the choice away — the
+listing's rows and the graph's chains both — while a drag across the ground moves the drawing. The
+scale and place ease into view rather than snapping, and the wheel likewise. The drawing stands on a
+grid of
+twenty-unit squares, and the version columns are its ruler: a broken line the height of the panel and
+the numbers fixed at its top, at one size at every zoom, drawn whole while the graph is read from afar
+and faded out as it comes close. The drag, the wheel and `F` still move and frame the drawing, and only
+the cards and edges the viewport holds are drawn.
+
+### 8. [`modules`] [`inverse-index`] Read the inverse index the other way, and rebuild it incrementally
 
 The inverse index can now be read as a snapshot: every variant by its key with the version it is
 based on, the variant it merges in, and the content, creator and message it names; every version by
@@ -145,13 +188,16 @@ fix a variant, which variants are based on a version, which merge one in, which 
 content — is answered from that inversion rather than by reading the records again per step.
 
 A snapshot also cuts a window of the variant graph: `Snapshot::graph` takes a focus, how far back
-towards the root and forward away from it to walk, whether to follow merges and one-hop branches, and
-a cap on nodes. What it answers with is the variants, the versions, the base and join edges, the keys
-the index does not hold, and a `frontier` on each node saying which way the window stopped short;
-`Snapshot::expand` walks one step further from a node. A one-hop branch is not taken from the root:
-every file's first variant is based on it, so its dependents are the other chains rather than this
-one's history. Nothing is read from the objects and nothing is fetched: a version or variant the index
-does not hold is named as missing.
+towards the root and forward away from it to walk, whether to follow merges and branches, and a cap
+on nodes. What it answers with is the variants, the versions, the base and join edges, the keys the
+index does not hold, and a `frontier` on each node saying which way the window stopped short;
+`Snapshot::expand` walks one step further from a node. A branch is walked whole rather than stopped at
+its first variant: the same variant may be advanced under another Uuid, and the versions that other
+record went on to make are what a reader is looking for when it finds a fork. A branch is not taken
+from the root: every file's first variant is based on it, so its dependents are the other chains
+rather than this one's history, and a chain a merge brought in does not seed branches either. Nothing
+is read from the objects and nothing is fetched: a version or variant the index does not hold is named
+as missing.
 
 A rebuild is now incremental. The keys the records cover are compared with the keys the index lists,
 and only the difference is read; the file is built afresh only when it cannot be added to — it is
@@ -162,7 +208,7 @@ numbered by a later rebuild when the link arrives. The report now says which of 
 The file format is unchanged, so existing records stay valid and the first rebuild after this takes
 them in incrementally; `Edge::Join` gains the `join_dependents` question the other roles already had.
 
-### 8. [`modules`] [`status`] [`variant-graph`] Read the variant graph of a workspace as one JSON document
+### 9. [`modules`] [`status`] [`variant-graph`] Read the variant graph of a workspace as one JSON document
 
 `rorolala-status` gains `locate_variant_graph_json`, which reads the variant graph around the entries
 a request names and answers with one JSON document: the graph, the entries that name it, the merges

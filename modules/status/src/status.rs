@@ -248,7 +248,8 @@ pub struct Status {
     /// has not been told of, and one that is behind is work it has not been given.
     ///
     /// A path either side names without a version is not here — nothing was ever recorded for it, so there
-    /// is nothing to stand beside anything — and neither is a path upstream does not name at all. A reading
+    /// is nothing to stand beside anything. A path this side records and upstream does not name is ahead:
+    /// the other side has never been told of it, so a sync would send it. A reading
     /// made without the copy, the index or a runtime has nothing here, since the walk is what answers it.
     ///
     /// The distance is not always there: the version the Vault records is ordinarily one this side never
@@ -379,7 +380,7 @@ impl Status {
     ///
     /// The path is one a caller names, as [`state_of`](Self::state_of) takes it, and the answer is
     /// [`Relation::Unknown`] with no distance for a path this reading holds no standing for — one it is not
-    /// about, one nothing was ever recorded for, and one upstream does not name. A caller that cannot tell
+    /// about, one nothing was ever recorded for, and one the copy could not be read for. A caller that cannot tell
     /// those apart from a path in step is asking for the distance beside it: in step is a distance of zero
     /// and nothing else is. Nor is a distance what a path the Vault is ahead on always has: what the Vault is
     /// at is ordinarily a version this side never fetched, so being behind is answered without one — see
@@ -917,6 +918,37 @@ mod tests {
         assert_eq!(status.unowned, vec!["hero.psd".to_owned()], "{status:?}");
         assert_eq!(status.modified, Vec::<String>::new(), "{status:?}");
         assert_eq!(status.state_of(&dir.join("hero.psd")), PathState::Wrong);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A path the fetched copy does not name is ahead: the Vault has never been told of it, so a sync
+    /// would send it.
+    #[test]
+    fn a_path_the_vault_does_not_name_is_ahead() {
+        let (dir, workspace) = workspace("ahead-new");
+        track(&workspace, 1, "new.txt");
+        workspace.set_layout_track("vault").unwrap();
+
+        let copy_dir = workspace.readonly_layouts_dir("vault", VAULT_LAYOUT_NAME);
+        fs::create_dir_all(&copy_dir).unwrap();
+        let copy = Layout::open(&copy_dir).unwrap();
+
+        let index = rorolala_vcs::VCSIndex::create(dir.join(".rola/index"));
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let standings = crate::base::every(&working(&workspace), &copy, &index, &runtime);
+
+        assert_eq!(
+            standings,
+            vec![(
+                LayoutPath::new("new.txt").unwrap(),
+                crate::base::Standing {
+                    relation: crate::base::Relation::Ahead,
+                    distance: None,
+                },
+            )],
+            "{standings:?}"
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }

@@ -1,94 +1,122 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// What the commands this plugin runs are doing, as one card per command down the right of the Overview.
+/// What the commands this plugin runs are doing, as a stack of capsules at the bottom right of the Overview.
 /// </summary>
 /// <remarks>
-/// Every command this plugin runs — a sync, a claim, a release, and whatever is added later — reports itself as
-/// a run gathered in the <see cref="ProgressHub"/>, and each is drawn as a card of its own: the command's name,
-/// and a bar for every task it says it is doing. A reader watching the work sees which commands are going and
-/// how far each has got, rather than one bar that would have to stand for all of them at once.
+/// A capsule is one command: what it is called, how far its own phases have got, and — under the pointer — the
+/// phases themselves. The stack floats over the reading rather than taking a column of it, so the table keeps
+/// its width whether a run is going or not; a command that appears fades into the stack, and one that ends
+/// fades out of it.
 /// <para>
-/// A card is taken away the moment its command ends, and the room the panel stands in is given back to the table
-/// when the last one goes, so an Overview with nothing running is the table and nothing else.
-/// </para>
-/// <para>
-/// A card is drawn once and brought up to date rather than rebuilt on every record: a bar is a control whose fill
-/// tweens towards a new value, and a bar made afresh each time would slide from nothing on every step instead of
-/// from where it already was.
+/// The runs come from the <see cref="ProgressHub"/>, which outlives every Overview: a run begun from a menu has
+/// to reach a panel that may not exist yet, and a panel opened after the run began has to see it. A capsule is
+/// drawn once per run and brought up to date afterwards, so a bar slides from where it was rather than from
+/// nothing on every record.
 /// </para>
 /// </remarks>
-internal sealed class ProgressPanel : Border
+internal sealed class ProgressPanel : StackPanel
 {
-    /// <summary>How tall a row's bar is, which is tall enough to hold the line drawn inside it.</summary>
-    private const double BarHeight = 18;
+    /// <summary>How wide the stack is, which is what a name and a bar are read in.</summary>
+    private const double WidthOfStack = 300;
 
-    /// <summary>How wide the name column is, fixed so that every bar of a card starts at the same place.</summary>
-    private const double NameWidth = 140;
+    /// <summary>How long a capsule takes to leave the stack after its command ends.</summary>
+    private static readonly TimeSpan Leaving = TimeSpan.FromMilliseconds(230);
 
-    /// <summary>
-    /// How wide the percentage column is, fixed so that a percentage changing its number of digits does not
-    /// change the length of the bar beside it.
-    /// </summary>
-    /// <remarks>
-    /// Wide enough for `100%` in the look's own type: the column is not sized to what a row currently says, since
-    /// what it says changes as the run works and a bar that grew and shrank with it would be a bar a reader cannot
-    /// read at a glance.
-    /// </remarks>
-    private const double ShareWidth = 48;
+    /// <summary>The pictures the capsule heads are drawn with.</summary>
+    private readonly IIconLibrary _icons;
 
-    /// <summary>How far a name is inset where its bar stands under another's.</summary>
-    private const double Indent = 12;
-
-    /// <summary>Where the cards go, one per run the hub holds, in the order they began.</summary>
-    private readonly StackPanel _cards = new() { Spacing = 10 };
-
-    /// <summary>The card drawn for each run that is being shown.</summary>
-    /// <remarks>
-    /// Keyed by the run itself, because a run is what says the same card over again: the panel is handed a fresh
-    /// list on every change, but the runs in it are the ones it drew last time, and matching on them is what lets
-    /// a card be found rather than made anew.
-    /// </remarks>
-    private readonly Dictionary<ProgressRun, Card> _drawn = new(ReferenceEqualityComparer.Instance);
-
-    /// <summary>What the panel is drawn from.</summary>
+    /// <summary>What the stack is drawn from.</summary>
     private readonly ProgressHub _hub;
 
-    /// <summary>Makes the panel.</summary>
-    /// <param name="hub">What the panel is drawn from.</param>
-    public ProgressPanel(ProgressHub hub)
+    /// <summary>The capsule drawn for each run being shown, and the runs that are leaving.</summary>
+    private readonly Dictionary<ProgressRun, Capsule> _drawn = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>The row the capsules stand in, under the small heading.</summary>
+    private readonly StackPanel _capsules = new() { Spacing = 7 };
+
+    /// <summary>The small heading that says how many commands are running.</summary>
+    private readonly Border _heading;
+
+    /// <summary>How many commands the heading says are running.</summary>
+    private readonly TextBlock _count = new() { Classes = { "muted" } };
+
+    /// <summary>Makes the stack.</summary>
+    /// <param name="hub">What the stack is drawn from.</param>
+    /// <param name="icons">The pictures a command's capsule is headed with.</param>
+    public ProgressPanel(ProgressHub hub, IIconLibrary icons)
     {
         ArgumentNullException.ThrowIfNull(hub);
+        ArgumentNullException.ThrowIfNull(icons);
 
         _hub = hub;
+        _icons = icons;
 
-        Padding = new Thickness(10, 8);
-
-        // The rule down the left is the look's own line between two things, drawn like the band above the table:
-        // the two are one edge each of the same table, and a panel that drew its own colour would be a seam.
-        BorderThickness = new Thickness(1, 0, 0, 0);
-        this[!BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
-
-        Child = new ScrollViewer
-        {
-            Content = _cards,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        };
-
+        Width = WidthOfStack;
+        HorizontalAlignment = HorizontalAlignment.Right;
+        VerticalAlignment = VerticalAlignment.Bottom;
+        Margin = new Thickness(0, 0, 18, 18);
+        Spacing = 7;
         IsVisible = false;
 
-        // The runs are followed only while the panel is on screen: a panel that is not drawn has nothing to draw
-        // for, and a handler left on a hub that outlives it would keep the panel alive for nothing.
+        var heading = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var dot = new Border
+        {
+            Width = 5,
+            Height = 5,
+            CornerRadius = new CornerRadius(3),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        dot[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Accent);
+
+        var word = new TextBlock
+        {
+            Text = RolaI18N.Get("rorolala_vcs.progress.header"),
+            FontSize = 10,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        word[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(PaletteKeys.Muted);
+
+        heading.Children.Add(dot);
+        heading.Children.Add(word);
+        heading.Children.Add(_count);
+
+        _heading = new Border
+        {
+            HorizontalAlignment = HorizontalAlignment.Right,
+            CornerRadius = new CornerRadius(999),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8, 3),
+            Margin = new Thickness(0, 0, 0, 1),
+            Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)),
+            Child = heading,
+            IsHitTestVisible = false,
+        };
+        _heading[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
+
+        Children.Add(_heading);
+        Children.Add(_capsules);
+
         AttachedToVisualTree += (_, _) =>
         {
             _hub.Changed += Redraw;
@@ -107,307 +135,392 @@ internal sealed class ProgressPanel : Border
     {
         _ = sender;
         _ = changed;
-
         Draw();
     }
 
-    /// <summary>
-    /// Draws a card for every run the hub holds, and takes away the cards of the runs it no longer does.
-    /// </summary>
-    /// <remarks>
-    /// The cards already drawn are kept and brought up to date; one whose run has gone is taken away, and one for
-    /// a run that has begun since is given a card of its own at the end, which is where the hub opened it, so the
-    /// order of the cards is the order of the commands without one ever having to be moved.
-    /// </remarks>
+    /// <summary>Draws a capsule for every run the hub holds, and takes away the ones it no longer does.</summary>
     internal void Draw()
     {
         var runs = _hub.Runs;
-
-        IsVisible = runs.Count > 0;
-
         var live = new HashSet<ProgressRun>(runs, ReferenceEqualityComparer.Instance);
 
         foreach (var gone in _drawn.Keys.Where(run => !live.Contains(run)).ToArray())
         {
-            _cards.Children.Remove(_drawn[gone].Root);
-            _drawn.Remove(gone);
+            var capsule = _drawn[gone];
+
+            if (capsule.LeavingStarted)
+            {
+                continue;
+            }
+
+            capsule.Leave(() =>
+            {
+                _capsules.Children.Remove(capsule.Root);
+                _drawn.Remove(gone);
+                Settle();
+            });
         }
 
         foreach (var run in runs)
         {
-            if (!_drawn.TryGetValue(run, out var card))
+            if (!_drawn.TryGetValue(run, out var capsule))
             {
-                card = new Card();
-                _drawn[run] = card;
-                _cards.Children.Add(card.Root);
+                capsule = new Capsule(_icons, run.TitleKey);
+                _drawn[run] = capsule;
+                _capsules.Children.Add(capsule.Root);
             }
 
-            card.Draw(run);
+            capsule.Draw(run);
         }
+
+        Settle();
     }
 
-    /// <summary>What a task is called: its own name when it has one, and its direction when it has not.</summary>
-    /// <param name="task">The task.</param>
-    /// <returns>What to write at the start of its bar.</returns>
-    private static string Head(ProgressTask task) =>
-        task.What is { Length: > 0 } named
-            ? named
-            : task.Aim switch
-            {
-                MoveAim.Up => "↑ " + RolaI18N.Get("rorolala_vcs.progress.row_up"),
-                MoveAim.Down => "↓ " + RolaI18N.Get("rorolala_vcs.progress.row_down"),
-                _ => RolaI18N.Get("rorolala_vcs.progress.working"),
-            };
+    /// <summary>Says whether there is anything to look at, and how many commands are still running.</summary>
+    private void Settle()
+    {
+        IsVisible = _drawn.Count > 0;
+        _heading.IsVisible = _hub.Any;
+        _count.Text = _hub.Any
+            ? _hub.Runs.Count.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+    }
 
-    /// <summary>How far something has got, as a percentage, or nothing when its length was never said.</summary>
-    /// <param name="done">How much is behind it.</param>
-    /// <param name="total">How long it is in all, or nothing when that was never said.</param>
-    /// <returns>What to write at the end of the bar, or nothing.</returns>
-    private static string Share(long done, long? total) =>
-        total switch
+    /// <summary>One command's capsule: its head, its own bar, and the phases under it while the pointer is on it.</summary>
+    private sealed class Capsule
+    {
+        /// <summary>The head: what the command is called and how far it has got.</summary>
+        private readonly Grid _head = new()
         {
-            null => string.Empty,
-            0 => "100%",
-            { } length => ((done * 100) / length).ToString(CultureInfo.InvariantCulture) + "%",
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"),
+            ColumnSpacing = 8,
         };
 
-    /// <summary>
-    /// One command's card: its name over a bar for the whole of it, and a bar for each task under it.
-    /// </summary>
-    /// <remarks>
-    /// The name is the first bar's own caption rather than a title above it, so that every line of the card reads
-    /// the same way and nothing is said twice. The tasks that are part of another stand below the whole and are
-    /// inset, so that what is the command's own progress is told apart from what is being done under it.
-    /// </remarks>
-    private sealed class Card
-    {
-        /// <summary>Where the bars go, the whole of the command first and its tasks under it.</summary>
-        private readonly StackPanel _rows = new() { Spacing = 6 };
-
-        /// <summary>The bar for the whole of the command, which is the sum of its parts that are its own.</summary>
-        private readonly Bar _whole = new(indent: false);
-
-        /// <summary>The bar drawn for each task that is part of another.</summary>
-        private readonly Dictionary<ProgressTask, Bar> _parts = new(ReferenceEqualityComparer.Instance);
-
-        /// <summary>The card, which is the rows inside a frame.</summary>
-        private readonly Border _root;
-
-        /// <summary>Makes a card with nothing but the bar for the whole of a command in it.</summary>
-        public Card()
-        {
-            _root = new Border
-            {
-                // A card is a section rather than a raised surface: nothing is rounded and nothing is inset, and
-                // the one line drawn is the rule under it, which is what tells one command's card from the next.
-                CornerRadius = new CornerRadius(0),
-                Margin = new Thickness(0),
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                Padding = new Thickness(8),
-                Child = _rows,
-            };
-
-            _root[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
-
-            _rows.Children.Add(_whole.Root);
-        }
-
-        /// <summary>The card, for the panel to hold.</summary>
-        public Control Root => _root;
-
-        /// <summary>Draws a run, bringing every bar of the card to what the run now is.</summary>
-        /// <param name="run">The run.</param>
-        public void Draw(ProgressRun run)
-        {
-            var tasks = run.Records.Tasks;
-
-            // What is the command's own is a task that is part of nothing: the phases of a sync, the one batch of
-            // a claim. What is done under one of those — a direction of a transfer — is a bar of its own below.
-            var whole = tasks.Where(task => task.Parent is null).ToArray();
-            var parts = tasks.Where(task => task.Parent is not null).ToArray();
-
-            DrawWhole(run, whole);
-            DrawParts(parts);
-        }
-
-        /// <summary>Draws the bar for the whole of the command, which is its own tasks added up.</summary>
-        /// <param name="run">The run, whose name captions the bar.</param>
-        /// <param name="whole">The tasks that are the command's own.</param>
-        private void DrawWhole(ProgressRun run, IReadOnlyList<ProgressTask> whole)
-        {
-            var done = 0L;
-            var total = 0L;
-            var length = whole.Count > 0;
-            string? moving = null;
-
-            foreach (var task in whole)
-            {
-                done += task.Done;
-
-                if (task.Total is { } amount)
-                {
-                    total += amount;
-                }
-                else
-                {
-                    // One phase that has not said how long it is makes the sum unknown, and a bar drawn to a
-                    // length nobody stated would be a bar telling the reader less than nothing.
-                    length = false;
-                }
-
-                moving ??= task.Moving;
-            }
-
-            _whole.Draw(
-                run.Title,
-                Share(done, length ? total : null),
-                done,
-                length ? total : null,
-                moving
-            );
-        }
-
-        /// <summary>Draws a bar for each task done under the command's own, keeping the bars it drew before.</summary>
-        /// <param name="parts">The tasks that are part of another.</param>
-        private void DrawParts(IReadOnlyList<ProgressTask> parts)
-        {
-            foreach (var task in parts)
-            {
-                if (!_parts.TryGetValue(task, out var bar))
-                {
-                    bar = new Bar(indent: true);
-                    _parts[task] = bar;
-                    _rows.Children.Add(bar.Root);
-                }
-
-                bar.Draw(Head(task), Share(task.Done, task.Total), task.Done, task.Total, task.Moving);
-            }
-        }
-    }
-
-    /// <summary>
-    /// One bar of a card: a name, a bar with what is being moved drawn inside it, and how far it has got.
-    /// </summary>
-    /// <remarks>
-    /// All three on one line, so that a card of several bars is a list rather than a stack of small paragraphs.
-    /// What is being moved is drawn inside the bar rather than beside it, over the left of it and clipped to a
-    /// third of its width: a name long enough to matter would otherwise push the percentage off the line, and
-    /// what a reader wants of it is only the head of it — see how the command line itself shortens a key.
-    /// </remarks>
-    private sealed class Bar
-    {
-        /// <summary>What the task is called, at the start of the line.</summary>
-        private readonly TextBlock _name = new()
+        /// <summary>The command's name.</summary>
+        private readonly TextBlock _title = new()
         {
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
-        /// <summary>The name's column, which is the width every bar of a card lines up by.</summary>
-        /// <remarks>
-        /// A fixed width rather than the text's: a name sized to its own content would put the bar after it
-        /// wherever the name ended, and no two rows of a card would start their bars together. The indent of a bar
-        /// under another is this cell's padding, so that it moves the name and not the columns beside it.
-        /// </remarks>
-        private readonly Border _cell;
+        /// <summary>Which phase of the command is being drawn, when it reports more than one.</summary>
+        private readonly TextBlock _phase = new()
+        {
+            Classes = { "muted" },
+            FontSize = 10,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
 
-        /// <summary>How far it has got, at the end of the line.</summary>
-        /// <remarks>
-        /// Right-aligned in a column of its own width, so that one digit more or fewer moves nothing: the bar's
-        /// other edge is the column's, not the text's.
-        /// </remarks>
+        /// <summary>How far the command has got, as the look's muted ink writes it.</summary>
         private readonly TextBlock _share = new()
         {
             Classes = { "muted" },
-            Width = ShareWidth,
-            TextAlignment = TextAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        /// <summary>What is being moved, drawn over the left of the bar.</summary>
-        private readonly TextBlock _moving = new()
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
             FontSize = 11,
-            Margin = new Thickness(4, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
         };
 
-        /// <summary>The bar itself.</summary>
-        private readonly ProgressBar _fill = new()
+        /// <summary>The bar for the whole of the command.</summary>
+        private readonly ProgressBar _whole = new()
         {
-            Height = BarHeight,
+            Height = 4,
             MinHeight = 0,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        /// <summary>The line, which is the name, the bar with what it is moving, and the percentage.</summary>
-        private readonly Grid _root;
+        /// <summary>The phases, shown only while the pointer is on the capsule.</summary>
+        private readonly StackPanel _details = new() { Spacing = 5 };
 
-        /// <summary>Makes a bar, inset where it is one of the tasks under a command's own.</summary>
-        /// <param name="indent">Whether it stands under another bar rather than at the head of a card.</param>
-        public Bar(bool indent)
+        /// <summary>The frame the phases stand in, which is what the pointer shows and hides.</summary>
+        private readonly Border _detailFrame;
+
+        /// <summary>The phase rows, by the phase they stand for.</summary>
+        private readonly Dictionary<ProgressTask, Phase> _phases = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>The capsule itself.</summary>
+        private readonly Border _root;
+
+        /// <summary>The command now drawn, which decides whether there are phases to show.</summary>
+        private ProgressRun? _run;
+
+        /// <summary>Whether the fade out has begun, so it is not begun twice.</summary>
+        public bool LeavingStarted { get; private set; }
+
+        /// <summary>Makes a capsule headed with the picture of its command.</summary>
+        /// <param name="icons">The pictures the commands are drawn with.</param>
+        /// <param name="titleKey">What the command is called, which is also what its picture is chosen by.</param>
+        public Capsule(IIconLibrary icons, string titleKey)
         {
-            // What is moving is drawn inside the bar, so the bar and the piece share a grid: the bar spans both
-            // shares and the piece takes the left third of it, which is the width it is clipped to.
-            var inside = new Grid { ColumnDefinitions = new ColumnDefinitions("35*,65*") };
-
-            Grid.SetColumnSpan(_fill, 2);
-            Grid.SetColumn(_moving, 0);
-            inside.Children.Add(_fill);
-            inside.Children.Add(_moving);
-
-            _root = new Grid
+            var glyph = new Border
             {
-                ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
-                ColumnSpacing = 6,
-            };
-
-            _cell = new Border
-            {
-                Width = NameWidth,
+                Width = 18,
+                Height = 18,
+                CornerRadius = new CornerRadius(5),
                 VerticalAlignment = VerticalAlignment.Center,
-                Padding = indent ? new Thickness(Indent, 0, 0, 0) : default,
-                Child = _name,
             };
+            glyph[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Dark);
 
-            Grid.SetColumn(_cell, 0);
-            Grid.SetColumn(inside, 1);
-            Grid.SetColumn(_share, 2);
-            _root.Children.Add(_cell);
-            _root.Children.Add(inside);
-            _root.Children.Add(_share);
+            if (icons.Find(IconOf(titleKey)) is { } picture)
+            {
+                var mark = new Border
+                {
+                    Width = 12,
+                    Height = 12,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
+                };
+                mark[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Front);
+                RenderOptions.SetBitmapInterpolationMode(mark, BitmapInterpolationMode.HighQuality);
+                glyph.Child = mark;
+            }
+
+            Grid.SetColumn(glyph, 0);
+            Grid.SetColumn(_title, 1);
+            Grid.SetColumn(_phase, 2);
+            Grid.SetColumn(_share, 3);
+            _head.Children.Add(glyph);
+            _head.Children.Add(_title);
+            _head.Children.Add(_phase);
+            _head.Children.Add(_share);
+
+            _whole[!TemplatedControl.ForegroundProperty] =
+                new DynamicResourceExtension(PaletteKeys.Primary);
+
+            _detailFrame = new Border
+            {
+                IsVisible = false,
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                Padding = new Thickness(0, 7, 0, 0),
+                Child = _details,
+            };
+            _detailFrame[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
+
+            var content = new StackPanel { Spacing = 8 };
+            content.Children.Add(_head);
+            content.Children.Add(_whole);
+            content.Children.Add(_detailFrame);
+
+            _root = new Border
+            {
+                CornerRadius = new CornerRadius(9),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(10, 9),
+                Child = content,
+                Opacity = 0,
+                Transitions = new Transitions
+                {
+                    new DoubleTransition
+                    {
+                        Property = OpacityProperty,
+                        Duration = TimeSpan.FromMilliseconds(180),
+                    },
+                },
+            };
+            _root[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Bright);
+            _root[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
+
+            _root.AttachedToVisualTree += (_, _) =>
+                Dispatcher.UIThread.Post(() => _root.Opacity = 1);
+
+            _root.PointerEntered += (_, _) =>
+                _detailFrame.IsVisible = _run is { Records.Tasks.Count: > 0 };
+            _root.PointerExited += (_, _) => _detailFrame.IsVisible = false;
         }
 
-        /// <summary>The line, for the card to hold.</summary>
+        /// <summary>The capsule, for the stack to hold.</summary>
         public Control Root => _root;
 
-        /// <summary>Draws the bar, bringing every part of the line to what the task now is.</summary>
-        /// <param name="name">What it is called.</param>
-        /// <param name="share">How far it has got, as a percentage, or nothing when its length is unknown.</param>
-        /// <param name="done">How much is behind it.</param>
-        /// <param name="total">How long it is in all, or nothing when that was never said.</param>
-        /// <param name="moving">What is being moved, or nothing when nothing is.</param>
-        public void Draw(string name, string share, long done, long? total, string? moving)
+        /// <summary>Draws the capsule from its run, keeping the phase rows it already has.</summary>
+        /// <param name="run">The run.</param>
+        public void Draw(ProgressRun run)
         {
-            _name.Text = name;
-            _share.Text = share;
-            _moving.Text = moving ?? string.Empty;
+            _run = run;
 
-            if (total is { } length)
+            var tasks = run.Records.Tasks;
+            var tops = tasks.Where(task => task.Parent is null).ToArray();
+
+            // A run's top-level tasks are its phases, and they are counted in what each phase is:
+            // a sync counts the plan's steps, the index's objects, the blocks it moves and the
+            // entries it writes, and adding those up would be adding steps to bytes to entries.
+            // The bar therefore follows the phase being worked on, and the counters beside it say
+            // which phase that is out of how many the run has reported so far.
+            var at = Array.FindLastIndex(tops, task => task.Total is not { } total || task.Done < total);
+            if (at < 0)
             {
-                // A task with nothing to do is a task that is already done, which is what the command line draws
-                // for one: a bar of no length is full rather than empty. The value is written at once — the bar's
-                // own look tweens the fill towards it, so what is said here is where it is going.
-                _fill.IsIndeterminate = false;
-                _fill.Maximum = Math.Max(length, 1);
-                _fill.Value = length > 0 ? Math.Clamp(done, 0, length) : 1;
+                at = tops.Length - 1;
             }
-            else
+
+            var focus = at >= 0 ? tops[at] : null;
+
+            _title.Text = run.Title;
+            _phase.IsVisible = focus is not null && tops.Length > 1;
+            _phase.Text = focus is null || tops.Length < 2
+                ? string.Empty
+                : $"{at + 1}/{tops.Length}";
+            _share.Text = tasks.Count == 0
+                ? RolaI18N.Get("rorolala_vcs.progress.waiting")
+                : focus?.Total is { } length
+                    ? Share(focus.Done, length)
+                    : "…";
+
+            _whole.IsIndeterminate = focus?.Total is null;
+            _whole.Maximum = Math.Max(focus?.Total ?? 1, 1);
+            _whole.Value = focus?.Total is { } whole
+                ? Math.Clamp(focus.Done, 0, Math.Max(whole, 1))
+                : 0;
+
+            DrawPhases(tasks);
+        }
+
+        /// <summary>Starts the fade that takes a capsule of a command that has ended out of the stack.</summary>
+        /// <param name="removed">What to do once the fade is over.</param>
+        public void Leave(Action removed)
+        {
+            LeavingStarted = true;
+            _root.IsHitTestVisible = false;
+            _root.Opacity = 0;
+
+            var timer = new DispatcherTimer { Interval = Leaving };
+            timer.Tick += (_, _) =>
             {
-                // A task that has not said how long it is is drawn as a bar that moves rather than as one at
-                // nothing done, which would read as no progress at all.
-                _fill.IsIndeterminate = true;
+                timer.Stop();
+                removed();
+            };
+            timer.Start();
+        }
+
+        /// <summary>Draws a row for every phase, keeping the rows it drew before.</summary>
+        /// <param name="tasks">The phases.</param>
+        private void DrawPhases(IReadOnlyList<ProgressTask> tasks)
+        {
+            foreach (var task in tasks)
+            {
+                if (!_phases.TryGetValue(task, out var row))
+                {
+                    row = new Phase();
+                    _phases[task] = row;
+                    _details.Children.Add(row.Root);
+                }
+
+                row.Draw(Head(task), task.Done, task.Total);
+            }
+        }
+
+        /// <summary>What a phase is called: its own name, or the direction it moves in.</summary>
+        /// <param name="task">The phase.</param>
+        /// <returns>What to write at the start of its row.</returns>
+        private static string Head(ProgressTask task) =>
+            task.What is { Length: > 0 } named
+                ? named
+                : task.Aim switch
+                {
+                    MoveAim.Up => "↑ " + RolaI18N.Get("rorolala_vcs.progress.row_up"),
+                    MoveAim.Down => "↓ " + RolaI18N.Get("rorolala_vcs.progress.row_down"),
+                    _ => RolaI18N.Get("rorolala_vcs.progress.working"),
+                };
+
+        /// <summary>How far something has got, as a percentage.</summary>
+        /// <param name="done">How much is behind it.</param>
+        /// <param name="total">How long it is in all.</param>
+        /// <returns>The percentage.</returns>
+        private static string Share(long done, long total) =>
+            total == 0
+                ? "100%"
+                : ((done * 100) / total).ToString(CultureInfo.InvariantCulture) + "%";
+
+        /// <summary>The picture a command is headed with.</summary>
+        /// <param name="titleKey">What the command is called.</param>
+        /// <returns>The key of its picture.</returns>
+        private static string IconOf(string titleKey) => titleKey switch
+        {
+            "rorolala_vcs.progress.sync" => Icons.Sync,
+            "rorolala_vcs.progress.fetch" => Icons.CloudDownload,
+            "rorolala_vcs.progress.checkin" => Icons.CloudUpload,
+            "rorolala_vcs.progress.hold" => Icons.Lock,
+            "rorolala_vcs.progress.giveup" => Icons.LockOpen,
+            "rorolala_vcs.progress.track" => Icons.Add,
+            "rorolala_vcs.progress.retrack" => Icons.AltRoute,
+            "rorolala_vcs.progress.join" => Icons.Merge,
+            "rorolala_vcs.progress.restore" => Icons.Download,
+            "rorolala_vcs.progress.unmerge" => Icons.CallSplit,
+            "rorolala_vcs.progress.path_move" => Icons.ArrowRightAlt,
+            "rorolala_vcs.progress.path_remove" => Icons.Error,
+            _ => Icons.Work,
+        };
+
+        /// <summary>One phase's row: its name, a thin bar and its share.</summary>
+        private sealed class Phase
+        {
+            /// <summary>The name, in the left column.</summary>
+            private readonly TextBlock _name = new()
+            {
+                FontSize = 10.5,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+
+            /// <summary>The thin bar.</summary>
+            private readonly ProgressBar _bar = new()
+            {
+                Height = 3,
+                MinHeight = 0,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            /// <summary>The share, in the right column.</summary>
+            private readonly TextBlock _share = new()
+            {
+                Classes = { "muted" },
+                FontSize = 10,
+                Width = 34,
+                TextAlignment = TextAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            /// <summary>The row.</summary>
+            private readonly Grid _root;
+
+            /// <summary>Makes a row.</summary>
+            public Phase()
+            {
+                _root = new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("84,*,34"),
+                    ColumnSpacing = 7,
+                };
+                _bar[!TemplatedControl.ForegroundProperty] =
+                    new DynamicResourceExtension(PaletteKeys.Primary);
+                Grid.SetColumn(_name, 0);
+                Grid.SetColumn(_bar, 1);
+                Grid.SetColumn(_share, 2);
+                _root.Children.Add(_name);
+                _root.Children.Add(_bar);
+                _root.Children.Add(_share);
+            }
+
+            /// <summary>The row, for the capsule to hold.</summary>
+            public Control Root => _root;
+
+            /// <summary>Draws the row from its phase.</summary>
+            /// <param name="name">What it is called.</param>
+            /// <param name="done">How much is behind it.</param>
+            /// <param name="total">How long it is in all, or nothing when that was never said.</param>
+            public void Draw(string name, long done, long? total)
+            {
+                _name.Text = name;
+
+                if (total is not { } length)
+                {
+                    _bar.IsIndeterminate = true;
+                    _share.Text = "…";
+                }
+                else
+                {
+                    _bar.IsIndeterminate = false;
+                    _bar.Maximum = Math.Max(length, 1);
+                    _bar.Value = length > 0 ? Math.Clamp(done, 0, length) : 1;
+                    _share.Text = length == 0 ? "100%" : ((done * 100) / length) + "%";
+                }
             }
         }
     }

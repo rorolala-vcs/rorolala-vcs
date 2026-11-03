@@ -21,7 +21,9 @@ namespace RorolalaDesktop.Docking;
 /// <remarks>
 /// The area draws the main window's layout tree. Every leaf of it is a <see cref="Region"/> — one group of
 /// tabs — and every split is a two-cell grid with a splitter between the cells, recursively, so any group may
-/// be split again and the geometry follows the window rather than the other way round.
+/// be split again and the geometry follows the window rather than the other way round. Where a column seam
+/// and a row seam cross, the two lines are drawn as one grip so that a single drag resizes every panel around
+/// the crossing: the four of a two-by-two arrangement move together rather than a seam at a time.
 /// <para>
 /// A region keeps every dock it was given and shows one of them at a time, rather than being rebuilt when the
 /// set of open docks changes. That is not an optimisation: a control has one parent, and a view moved from one
@@ -102,6 +104,19 @@ internal sealed class DockArea : UserControl
 
     /// <summary>The class a splitter that resizes rows carries, in addition to <see cref="SplitterClass"/>.</summary>
     public const string SplitterRowsClass = "dock-splitter-rows";
+
+    /// <summary>The class the grip where a column splitter and a row splitter cross carries.</summary>
+    /// <remarks>
+    /// It is a grip of its own because a drag on it is about two splits at once: what a pointer on it does is
+    /// the four panels around the crossing, rather than the two a single seam divides.
+    /// </remarks>
+    public const string CrossClass = "dock-cross";
+
+    /// <summary>The class the column line of a crossing grip carries.</summary>
+    public const string CrossDownClass = "dock-cross-down";
+
+    /// <summary>The class the row line of a crossing grip carries.</summary>
+    public const string CrossAcrossClass = "dock-cross-across";
 
     /// <summary>
     /// The class one of the dock points a dragged dock can be put on carries.
@@ -318,6 +333,18 @@ internal sealed class DockArea : UserControl
     /// <summary>The splitters the structure currently holds, for deciding which of them the window can honour.</summary>
     private readonly List<SplitPart> _splits = [];
 
+    /// <summary>How large the grip where two seams cross is, and how far around the crossing it reaches.</summary>
+    private const double CrossSize = 11;
+
+    /// <summary>The layers the crossing grips are drawn in, over the structure and under a dock drag.</summary>
+    private readonly Canvas _crossLayer = new();
+
+    /// <summary>The crossing grip the pointer is dragging, if it is on one.</summary>
+    private CrossDrag? _crossDrag;
+
+    /// <summary>The crossings last placed, so a layout pass that moved none of them places none again.</summary>
+    private IReadOnlyList<CrossSpot> _crossSpots = [];
+
     /// <summary>
     /// The drag the pointer is on, if it is on one.
     /// </summary>
@@ -408,6 +435,10 @@ internal sealed class DockArea : UserControl
         // when a splitter is dragged, a window is resized, a tab changes or a group is rearranged, and a ring left
         // where the dock used to be is worse than no ring at all.
         LayoutUpdated += (_, _) => Ring();
+
+        // The crossings are where the seams are, which is only known once the layout has given them their
+        // room: a grip put where a seam was before a resize would not be on the seam it resizes.
+        LayoutUpdated += (_, _) => Crosses();
     }
 
     /// <summary>
@@ -652,6 +683,44 @@ internal sealed class DockArea : UserControl
     /// <param name="Second">The control drawn in the split's second child.</param>
     private sealed record SplitPart(LayoutSplit Split, GridSplitter Handle, Control First, Control Second);
 
+    /// <summary>One place two seams cross, and the grips a drag there resizes.</summary>
+    /// <param name="Center">Where the crossing stands, in the area's coordinates.</param>
+    /// <param name="Splits">The splitters whose seams meet there, one per axis.</param>
+    private sealed record CrossSpot(Point Center, IReadOnlyList<SplitPart> Splits);
+
+    /// <summary>One splitter a crossing drag is moving, with the share it had when the drag began.</summary>
+    /// <param name="Split">The splitter.</param>
+    /// <param name="Ratio">The share it had, which the drag is measured from.</param>
+    /// <param name="Room">The room its two children shared, which is what a pixel of the drag is a share of.</param>
+    private sealed class CrossMoved(SplitPart split, double ratio, double room)
+    {
+        /// <summary>The splitter.</summary>
+        public SplitPart Split { get; } = split;
+
+        /// <summary>The share it had when the drag began, which every move is measured from.</summary>
+        public double Start { get; } = ratio;
+
+        /// <summary>The share it stands at now.</summary>
+        public double Ratio { get; set; } = ratio;
+
+        /// <summary>The room its two children share.</summary>
+        public double Room { get; } = room;
+    }
+
+    /// <summary>A drag on a crossing grip: what it is moving, and where it holds the grip.</summary>
+    /// <param name="Handle">The grip the pointer went down on.</param>
+    /// <param name="From">Where the pointer went down.</param>
+    /// <param name="Splits">The splitters the drag moves, from the shares the drag began at.</param>
+    /// <param name="Left">Where the grip stood, in the layer's coordinates.</param>
+    /// <param name="Top">Where the grip stood, in the layer's coordinates.</param>
+    private sealed record CrossDrag(
+        Panel Handle,
+        Point From,
+        IReadOnlyList<CrossMoved> Splits,
+        double Left,
+        double Top
+    );
+
     /// <summary>
     /// What a dragged dock has come to: the group under the pointer, or the whole area when there is no group
     /// to be over.
@@ -695,6 +764,10 @@ internal sealed class DockArea : UserControl
         _zones.IsVisible = false;
 
         _surface.Children.Add(_structure);
+
+        // The crossing grips stand over the docks, under the points a dragged dock may be put on: a drag that
+        // is looking for a place to land is about the docks, and the seams are not something to catch.
+        _surface.Children.Add(_crossLayer);
         _surface.Children.Add(_zones);
 
         // The ring is drawn over the docks and over the drop points: a drag is a gesture about where a dock may
@@ -1261,6 +1334,8 @@ internal sealed class DockArea : UserControl
 
         _structure.Children.Clear();
         _splits.Clear();
+        _crossLayer.Children.Clear();
+        _crossSpots = [];
 
         if (Layout.Root is null)
         {
@@ -1423,6 +1498,295 @@ internal sealed class DockArea : UserControl
 
         _manager.SetRatio(split, ratio);
     }
+
+    /// <summary>
+    /// Places a grip wherever a column seam and a row seam meet, so one drag resizes the panels around it.
+    /// </summary>
+    /// <remarks>
+    /// Every crossing is a column split and a row split whose grips overlap once the layout has given them their
+    /// room: a grip is wider than its seam and hangs over both sides, so a point where the two are over one
+    /// another is a place the pointer can be told is the four panels rather than one seam. A layout where two
+    /// row splitters meet one column splitter a few pixels apart — a two-by-two grid, where the two sides may not
+    /// stand at the same ratio — is one crossing rather than two, since the grips overlap and the drag is about
+    /// the same four panels.
+    /// </remarks>
+    private void Crosses()
+    {
+        if (_crossDrag is not null)
+        {
+            // While a grip is being dragged the seams move under it, and the controls must not be thrown
+            // away under the pointer that captured one.
+            return;
+        }
+
+        var spots = new List<(Point Center, List<SplitPart> Splits)>();
+        var columns = _splits.Where(part => part.Split.Axis == DockAxis.Columns).ToList();
+        var rows = _splits.Where(part => part.Split.Axis == DockAxis.Rows).ToList();
+
+        foreach (var column in columns)
+        {
+            var down = BoundsOf(column.Handle);
+
+            foreach (var row in rows)
+            {
+                var at = down.Intersect(BoundsOf(row.Handle));
+
+                if (at.Width <= 0.5 || at.Height <= 0.5)
+                {
+                    continue;
+                }
+
+                var center = at.Center;
+                var near = spots.FindIndex(spot =>
+                    Math.Abs(spot.Center.X - center.X) <= CrossSize
+                    && Math.Abs(spot.Center.Y - center.Y) <= CrossSize
+                );
+
+                if (near < 0)
+                {
+                    spots.Add((center, [column, row]));
+
+                    continue;
+                }
+
+                var (known, splits) = spots[near];
+
+                foreach (var split in new[] { column, row })
+                {
+                    if (!splits.Contains(split))
+                    {
+                        splits.Add(split);
+                    }
+                }
+
+                spots[near] = (known, splits);
+            }
+        }
+
+        // What is placed is rebuilt when the crossings move, which is what a splitter drag, a resize or a
+        // rearrangement makes them do. A layout pass that moved none of them is the common case and must not
+        // touch the controls: adding them back would be another layout pass, and that one another.
+        if (SameCrossings(spots))
+        {
+            return;
+        }
+
+        _crossSpots = [.. spots.Select(spot => new CrossSpot(spot.Center, spot.Splits))];
+        _crossLayer.Children.Clear();
+
+        foreach (var (center, splits) in spots)
+        {
+            var handle = Cross(center, splits);
+            Canvas.SetLeft(handle, center.X - (CrossSize / 2));
+            Canvas.SetTop(handle, center.Y - (CrossSize / 2));
+            _crossLayer.Children.Add(handle);
+        }
+    }
+
+    /// <summary>Whether the crossings placed are the ones the layout has now, at the places it has them.</summary>
+    /// <param name="spots">The crossings the layout has now.</param>
+    /// <returns>Whether they are the ones already drawn.</returns>
+    private bool SameCrossings(List<(Point Center, List<SplitPart> Splits)> spots)
+    {
+        if (spots.Count != _crossSpots.Count)
+        {
+            return false;
+        }
+
+        for (var at = 0; at < spots.Count; at++)
+        {
+            var (center, splits) = spots[at];
+            var drawn = _crossSpots[at];
+
+            if (
+                Math.Abs(center.X - drawn.Center.X) > 0.25
+                || Math.Abs(center.Y - drawn.Center.Y) > 0.25
+                || !splits.SequenceEqual(drawn.Splits)
+            )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The grip drawn where two seams cross, which carries the drag for both of them.</summary>
+    /// <param name="center">Where the crossing stands.</param>
+    /// <param name="splits">The splitters whose seams meet there.</param>
+    /// <returns>The grip.</returns>
+    private Panel Cross(Point center, IReadOnlyList<SplitPart> splits)
+    {
+        var grip = new Panel
+        {
+            Width = CrossSize,
+            Height = CrossSize,
+            Background = Brushes.Transparent,
+            Cursor = new Cursor(StandardCursorType.SizeAll),
+        };
+
+        grip.Classes.Add(CrossClass);
+
+        var down = new Rectangle { Width = 1, HorizontalAlignment = HorizontalAlignment.Center };
+        down.Classes.Add(CrossDownClass);
+
+        var across = new Rectangle { Height = 1, VerticalAlignment = VerticalAlignment.Center };
+        across.Classes.Add(CrossAcrossClass);
+
+        grip.Children.Add(down);
+        grip.Children.Add(across);
+
+        grip.PointerPressed += (_, e) => BeginCross(center, splits, grip, e);
+        grip.PointerMoved += MovedCross;
+        grip.PointerReleased += EndedCross;
+
+        return grip;
+    }
+
+    /// <summary>Starts a drag on a crossing, from the shares the splitters stand at.</summary>
+    /// <param name="center">Where the crossing stands.</param>
+    /// <param name="splits">The splitters whose seams meet there.</param>
+    /// <param name="grip">The grip the pointer went down on.</param>
+    /// <param name="e">What the pointer did.</param>
+    private void BeginCross(
+        Point center,
+        IReadOnlyList<SplitPart> splits,
+        Panel grip,
+        PointerPressedEventArgs e
+    )
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        var moved = new List<CrossMoved>(splits.Count);
+
+        foreach (var split in splits)
+        {
+            var columns = split.Split.Axis == DockAxis.Columns;
+            var first = columns ? split.First.Bounds.Width : split.First.Bounds.Height;
+            var second = columns ? split.Second.Bounds.Width : split.Second.Bounds.Height;
+            var room = first + second;
+
+            if (room <= 0)
+            {
+                continue;
+            }
+
+            moved.Add(new CrossMoved(split, first / room, room));
+        }
+
+        if (moved.Count == 0)
+        {
+            return;
+        }
+
+        _crossDrag = new CrossDrag(
+            grip,
+            e.GetPosition(this),
+            moved,
+            center.X - (CrossSize / 2),
+            center.Y - (CrossSize / 2)
+        );
+
+        e.Pointer.Capture(grip);
+        e.Handled = true;
+    }
+
+    /// <summary>Moves every splitter a crossing drag holds by the share the pointer has moved.</summary>
+    /// <param name="sender">The grip the pointer is on.</param>
+    /// <param name="e">What the pointer did.</param>
+    private void MovedCross(object? sender, PointerEventArgs e)
+    {
+        if (_crossDrag is not { } drag)
+        {
+            return;
+        }
+
+        var at = e.GetPosition(this);
+        var movedX = at.X - drag.From.X;
+        var movedY = at.Y - drag.From.Y;
+
+        foreach (var moved in drag.Splits)
+        {
+            var columns = moved.Split.Split.Axis == DockAxis.Columns;
+            var least =
+                (columns
+                    ? DockTree.MinimumWidth(moved.Split.Split.First)
+                    : DockTree.MinimumHeight(moved.Split.Split.First))
+                / moved.Room;
+            var most =
+                1
+                - (
+                    (columns
+                        ? DockTree.MinimumWidth(moved.Split.Split.Second)
+                        : DockTree.MinimumHeight(moved.Split.Split.Second))
+                    / moved.Room
+                );
+            var ratio = moved.Start + ((columns ? movedX : movedY) / moved.Room);
+            moved.Ratio = least <= most ? Math.Clamp(ratio, least, most) : ratio;
+            ApplyRatio(moved.Split, moved.Ratio);
+        }
+
+        Canvas.SetLeft(drag.Handle, drag.Left + movedX);
+        Canvas.SetTop(drag.Handle, drag.Top + movedY);
+        e.Handled = true;
+    }
+
+    /// <summary>Writes what a crossing drag left every splitter at, as one change.</summary>
+    /// <param name="sender">The grip the pointer is on.</param>
+    /// <param name="e">What the pointer did.</param>
+    private void EndedCross(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_crossDrag is not { } drag)
+        {
+            return;
+        }
+
+        _crossDrag = null;
+        _manager.SetRatios([.. drag.Splits.Select(moved => (moved.Split.Split, moved.Ratio))]);
+
+        e.Pointer.Capture(null);
+        e.Handled = true;
+    }
+
+    /// <summary>Draws a split's two star weights where its seam now stands.</summary>
+    /// <param name="part">The splitter.</param>
+    /// <param name="ratio">The share its first child is to have.</param>
+    private static void ApplyRatio(SplitPart part, double ratio)
+    {
+        if (part.Handle.Parent is not Grid grid)
+        {
+            return;
+        }
+
+        var first = new GridLength(ratio, GridUnitType.Star);
+        var second = new GridLength(1 - ratio, GridUnitType.Star);
+
+        if (part.Split.Axis == DockAxis.Columns && grid.ColumnDefinitions.Count >= 3)
+        {
+            grid.ColumnDefinitions[0].Width = first;
+            grid.ColumnDefinitions[2].Width = second;
+
+            return;
+        }
+
+        if (grid.RowDefinitions.Count >= 3)
+        {
+            grid.RowDefinitions[0].Height = first;
+            grid.RowDefinitions[2].Height = second;
+        }
+    }
+
+    /// <summary>Where a control stands, in the area's own coordinates.</summary>
+    /// <param name="control">The control.</param>
+    /// <returns>Its rectangle, or an empty one when it is not laid out yet.</returns>
+    private Rect BoundsOf(Control control) =>
+        control.TranslatePoint(default, this) is { } origin
+        && control.Bounds.Size is { Width: > 0, Height: > 0 } size
+            ? new Rect(origin, size)
+            : default;
 
     /// <summary>
     /// Disables the splitters a window is too small to let both of their children have their least size.

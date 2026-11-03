@@ -170,7 +170,7 @@ public sealed record Standing(StandingRelation Relation, ulong? Distance);
 /// </remarks>
 public enum SyncStanding
 {
-    /// <summary>Nothing says: the path is in step, upstream does not name it, or the chain does not say.</summary>
+    /// <summary>Nothing says: the path is in step, or the chain does not say.</summary>
     None,
 
     /// <summary>This side's version is further on, so a sync sends it.</summary>

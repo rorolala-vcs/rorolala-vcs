@@ -44,10 +44,11 @@ fn main() {
     let cached = sandbox.join("cached");
     let ignoreme = sandbox.join("ignoreme");
     let switching = sandbox.join("switching");
+    let joining = sandbox.join("joining");
 
     for dir in [
         &home, &data, &rola_home, &empty, &plain, &initme, &files, &held, &claimed, &cached,
-        &ignoreme, &switching,
+        &ignoreme, &switching, &joining,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -77,6 +78,7 @@ fn main() {
     accounts(&rola, &plain, &ws, &mut checked);
     lookback(&rola, &ws, &mut checked);
     merging(&rola, &ws, &files, &mut checked);
+    shared_history(&rola, &joining, &files, &mut checked);
     ignore_rules(&rola, &ignoreme, &mut checked);
     vaults(&rola, &ws, &mut checked);
     explain(&rola, &ws, &mut checked);
@@ -1306,6 +1308,114 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     );
 }
 
+/// Joining a variant that shares a version with the file's chain, though its own base is not on it.
+///
+/// Two chains that forked from one version are one history; a variant built on the other fork is
+/// joined without `--force`, since the version the two share is a base the merge belongs on.
+fn shared_history(rola: &Rola, dir: &Path, files: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to join in", &ran, 0);
+
+    let ran = rola.run(dir, &["account", "bob"]);
+    checked.exits("the work acts as an account that is installed", &ran, 0);
+
+    fs::create_dir_all(dir.join("branch")).expect("a directory to work in");
+    fs::write(dir.join("branch/file.txt"), "base\n").expect("a file to merge into");
+
+    let ran = rola.run(
+        dir,
+        &[
+            "track",
+            "branch/file.txt",
+            "--message",
+            "base",
+            "--no-editor",
+        ],
+    );
+    checked.exits("a file to merge into is recorded", &ran, 0);
+
+    let shared = entry_field(rola, dir, "branch/file.txt", "version")
+        .expect("the version the file records first");
+
+    fs::write(dir.join("branch/file.txt"), "next\n").expect("the file is advanced");
+    let ran = rola.run(
+        dir,
+        &[
+            "track",
+            "branch/file.txt",
+            "--message",
+            "next",
+            "--no-editor",
+        ],
+    );
+    checked.exits("the file is advanced past the shared version", &ran, 0);
+
+    let incoming = files.join("joined.bin");
+    fs::write(&incoming, "from the other fork\n").expect("the incoming content");
+
+    let ran = rola.run(dir, &["storage", "write-file", &text(&incoming)]);
+    checked.exits("the incoming content is stored", &ran, 0);
+    let storage = ran.stdout.trim().to_owned();
+
+    let creator = rola.run(dir, &["vcs-index", "write-creator", "bob"]);
+    let creator = creator.stdout.trim().to_owned();
+    let message = rola.run(dir, &["vcs-index", "write-msg", "from bob"]);
+    let message = message.stdout.trim().to_owned();
+
+    let ran = rola.run(
+        dir,
+        &[
+            "vcs-index",
+            "write-variant",
+            &shared,
+            &storage,
+            &creator,
+            &message,
+        ],
+    );
+    checked.exits("the other fork's first variant is written", &ran, 0);
+    let first = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(dir, &["vcs-index", "write-version", &first]);
+    checked.exits("the other fork's first version is written", &ran, 0);
+    let first_version = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(
+        dir,
+        &[
+            "vcs-index",
+            "write-variant",
+            &first_version,
+            &storage,
+            &creator,
+            &message,
+        ],
+    );
+    checked.exits("the other fork's second variant is written", &ran, 0);
+    let second = ran.stdout.trim().to_owned();
+
+    // The variant's own base is the other fork's first version, which is not on the file's chain.
+    // The two chains meet at the shared version, so the join is not forced.
+    let ran = rola.run(dir, &["checkin", &second, "--join", "branch/file.txt"]);
+    checked.exits(
+        "a variant sharing a version with the file's chain is joined without forcing",
+        &ran,
+        0,
+    );
+
+    let ran = rola.run(dir, &["status", "--json"]);
+    checked.wants(
+        "the shared-history merge is in the data",
+        json(&ran).is_some_and(|value| {
+            value
+                .get("merging")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|merging| !merging.is_empty())
+        }),
+        &said(&ran),
+    );
+}
+
 /// The ignore rules a Workspace manages: what the readings leave out, and what a run may not select.
 fn ignore_rules(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let ran = rola.run(dir, &["init"]);
@@ -1802,15 +1912,24 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.exits("the work acts as an account that is installed", &ran, 0);
 
     fs::write(dir.join("a.txt"), "one").expect("a file to record");
-    let ran = rola.run(dir, &["track", "a.txt", "--message", "first", "--no-editor"]);
+    let ran = rola.run(
+        dir,
+        &["track", "a.txt", "--message", "first", "--no-editor"],
+    );
     checked.exits("a file is recorded", &ran, 0);
 
     fs::write(dir.join("a.txt"), "two").expect("the second reading of the file");
-    let ran = rola.run(dir, &["track", "a.txt", "--message", "second", "--no-editor"]);
+    let ran = rola.run(
+        dir,
+        &["track", "a.txt", "--message", "second", "--no-editor"],
+    );
     checked.exits("the file is recorded again", &ran, 0);
 
     fs::write(dir.join("b.txt"), "bee").expect("a file on a chain of its own");
-    let ran = rola.run(dir, &["track", "b.txt", "--message", "other", "--no-editor"]);
+    let ran = rola.run(
+        dir,
+        &["track", "b.txt", "--message", "other", "--no-editor"],
+    );
     checked.exits("a second file is recorded", &ran, 0);
 
     let a = entry_field(rola, dir, "a.txt", "uuid").expect("the entry the file records");
@@ -1833,7 +1952,10 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
         "a fork answers with the two Uuids and the version",
         json(&ran).is_some_and(|value| {
             value.get("from").and_then(JsonValue::as_str) == Some(a.as_str())
-                && value.get("to").and_then(JsonValue::as_str).is_some_and(|to| to != a)
+                && value
+                    .get("to")
+                    .and_then(JsonValue::as_str)
+                    .is_some_and(|to| to != a)
                 && value.get("version").and_then(JsonValue::as_str) == Some(top.as_str())
                 && value.get("forked") == Some(&JsonValue::Bool(true))
                 && value.get("switched") == Some(&JsonValue::Bool(false))
@@ -1844,8 +1966,7 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let forked = entry_field(rola, dir, "a.txt", "uuid").expect("the entry the fork records");
     checked.wants(
         "the path records the new Uuid at the version it was at",
-        forked != a
-            && entry_field(rola, dir, "a.txt", "version").as_deref() == Some(top.as_str()),
+        forked != a && entry_field(rola, dir, "a.txt", "version").as_deref() == Some(top.as_str()),
         &said(&ran),
     );
     checked.wants(
@@ -1892,7 +2013,11 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.exits("a path already naming the entry is refused", &ran, 191);
 
     let ran = rola.run(dir, &["retrack", "a.txt", made]);
-    checked.exits("recording the entry the path records already is refused", &ran, 251);
+    checked.exits(
+        "recording the entry the path records already is refused",
+        &ran,
+        251,
+    );
     checked.stderr_has(
         "the refusal says the entry is the one it records",
         &ran,
@@ -1907,7 +2032,14 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     let ran = rola.run(
         dir,
-        &["layout", "path", "new-uuid", "a.txt", "--layout", "truth@origin"],
+        &[
+            "layout",
+            "path",
+            "new-uuid",
+            "a.txt",
+            "--layout",
+            "truth@origin",
+        ],
     );
     checked.exits("a fetched copy is not a Layout to change", &ran, 190);
 
@@ -1915,11 +2047,7 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     // holds, and a fork given a target as well.
     let ran = rola.run(dir, &["retrack", "a.txt", &b]);
     checked.exits("an entry another path records is refused", &ran, 251);
-    checked.stderr_has(
-        "the refusal names the path that records it",
-        &ran,
-        "b.txt",
-    );
+    checked.stderr_has("the refusal names the path that records it", &ran, "b.txt");
 
     let ran = rola.run(
         dir,
@@ -1938,8 +2066,16 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.stderr_has("the refusal names the spelling that reads", &ran, "~1");
 
     let ran = rola.run(dir, &["retrack", "a.txt", "art/none.psd"]);
-    checked.exits("a path of a Vault's Layout needs a Vault tracked", &ran, 251);
-    checked.stderr_has("the refusal says no Vault is tracked", &ran, "tracks no Vault");
+    checked.exits(
+        "a path of a Vault's Layout needs a Vault tracked",
+        &ran,
+        251,
+    );
+    checked.stderr_has(
+        "the refusal says no Vault is tracked",
+        &ran,
+        "tracks no Vault",
+    );
 
     // The copy of a Vault's Layout a `layout fetch` leaves, written where a reader looks for it. The
     // `TRACK` file is written directly rather than by `layout set-track`, since what is checked here
@@ -1976,9 +2112,17 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     // Another chain is a jump, which a retrack makes by default: the content is switched and the
     // path records the entry the target names.
     let ran = rola.run(dir, &["retrack", "b.txt", "--fork"]);
-    checked.exits("the other file's entry is forked away from the copy's", &ran, 0);
+    checked.exits(
+        "the other file's entry is forked away from the copy's",
+        &ran,
+        0,
+    );
     let ran = rola.run(dir, &["retrack", "a.txt", "b.txt"]);
-    checked.exits("a version on another chain is jumped to by default", &ran, 0);
+    checked.exits(
+        "a version on another chain is jumped to by default",
+        &ran,
+        0,
+    );
     checked.wants(
         "the content is the version the copy records, and the file names its entry",
         fs::read_to_string(dir.join("a.txt")).is_ok_and(|it| it == "bee")
@@ -1988,7 +2132,11 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     // A run that does not want the jump says so, and is told what refusing it came to.
     let ran = rola.run(dir, &["retrack", "a.txt", made, "--deny-jump"]);
-    checked.exits("a version on another chain is refused when the jump is denied", &ran, 251);
+    checked.exits(
+        "a version on another chain is refused when the jump is denied",
+        &ran,
+        251,
+    );
     checked.stderr_has("the refusal names the way past it", &ran, "--deny-jump");
 
     // A copy that is not here is not read, and a run that may not fetch is refused rather than
@@ -2006,11 +2154,17 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     // own state, not the flag. A file holding changes that were never recorded is still what
     // `--force` is for, and `--only-index` still keeps the content where it is.
     fs::write(dir.join("c.txt"), "c-one").expect("a file on a chain of its own");
-    let ran = rola.run(dir, &["track", "c.txt", "--message", "c first", "--no-editor"]);
+    let ran = rola.run(
+        dir,
+        &["track", "c.txt", "--message", "c first", "--no-editor"],
+    );
     checked.exits("a third file is recorded", &ran, 0);
     let cv1 = entry_field(rola, dir, "c.txt", "version").expect("its first version");
     fs::write(dir.join("c.txt"), "c-two").expect("its second reading");
-    let ran = rola.run(dir, &["track", "c.txt", "--message", "c second", "--no-editor"]);
+    let ran = rola.run(
+        dir,
+        &["track", "c.txt", "--message", "c second", "--no-editor"],
+    );
     checked.exits("the third file is recorded again", &ran, 0);
     let cv2 = entry_field(rola, dir, "c.txt", "version").expect("its second version");
 
@@ -2046,7 +2200,11 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let ran = rola.run(dir, &["layout", "entry", "create", forced, &cv2]);
     checked.exits("another entry at the newer version is made", &ran, 0);
     let ran = rola.run(dir, &["retrack", "c.txt", forced]);
-    checked.exits("a file with unrecorded changes still needs --force", &ran, 253);
+    checked.exits(
+        "a file with unrecorded changes still needs --force",
+        &ran,
+        253,
+    );
     checked.stderr_has("the refusal names the way past it", &ran, "--force");
 
     let ran = rola.run(dir, &["retrack", "c.txt", forced, "--force"]);
@@ -2059,13 +2217,21 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     // The record alone, with the file left where it is.
     let ran = rola.run(dir, &["retrack", "c.txt"]);
-    checked.exits("the third file is taken back for the record-only switch", &ran, 0);
+    checked.exits(
+        "the third file is taken back for the record-only switch",
+        &ran,
+        0,
+    );
     let held = "00000000-0000-0000-0000-0000000000c6";
     let ran = rola.run(dir, &["layout", "entry", "create", held, &cv2]);
     checked.exits("a third entry at the newer version is made", &ran, 0);
     let before = fs::read_to_string(dir.join("c.txt")).unwrap_or_default();
     let ran = rola.run(dir, &["retrack", "c.txt", held, "--only-index"]);
-    checked.exits("--only-index records the entry and leaves the file", &ran, 0);
+    checked.exits(
+        "--only-index records the entry and leaves the file",
+        &ran,
+        0,
+    );
     checked.wants(
         "the record names the entry and the file still holds what it held",
         entry_field(rola, dir, "c.txt", "uuid").as_deref() == Some(held)

@@ -2796,9 +2796,9 @@ internal static partial class RorolalaBinding
     /// How the version recorded for a path stands beside the one upstream records.
     ///
     /// A `Standing` by value, which is `Unknown` for a path this reading holds no standing for: one it is
-    /// not about, one nothing was ever recorded for, and one upstream does not name. `Same` and `Unknown`
-    /// are told apart by `rola_status_standing_distance_of`, which is zero for the first and negative for
-    /// the second.
+    /// not about, one nothing was ever recorded for, and one the copy could not be read for. `Same` and
+    /// `Unknown` are told apart by `rola_status_standing_distance_of`, which is zero for the first and
+    /// negative for the second. A path this side records and upstream does not name is `Ahead`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RolaStanding rola_status_standing_of(nint self, nint path);

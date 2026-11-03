@@ -12,8 +12,9 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 4. **\[BREAKING!\]** [`modules`] [`daemon`] [`move-remote-path`] Move a path in a Vault's Layout without holding the entry — [See details](dev/CHANGELOG-DETAILS.md#4-breaking-modules-daemon-move-remote-path-move-a-path-in-a-vaults-layout-without-holding-the-entry)
 5. [`app`] [`rola`] [`inv-idx`] List the variants and versions the inverse index holds — [See details](dev/CHANGELOG-DETAILS.md#5-app-rola-inv-idx-list-the-variants-and-versions-the-inverse-index-holds)
 6. [`app`] [`rola`] [`layout`] Change or renew the Uuid a Layout path names — [See details](dev/CHANGELOG-DETAILS.md#6-app-rola-layout-change-or-renew-the-uuid-a-layout-path-names)
-7. [`modules`] [`inverse-index`] Read the inverse index the other way, and rebuild it incrementally — [See details](dev/CHANGELOG-DETAILS.md#7-modules-inverse-index-read-the-inverse-index-the-other-way-and-rebuild-it-incrementally)
-8. [`modules`] [`status`] [`variant-graph`] Read the variant graph of a workspace as one JSON document — [See details](dev/CHANGELOG-DETAILS.md#8-modules-status-variant-graph-read-the-variant-graph-of-a-workspace-as-one-json-document)
+7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Draw the desktop Version Graph as the work's variant graph — [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolaladesktop-plugins-rorolala-vcs-draw-the-desktop-version-graph-as-the-works-variant-graph)
+8. [`modules`] [`inverse-index`] Read the inverse index the other way, and rebuild it incrementally — [See details](dev/CHANGELOG-DETAILS.md#8-modules-inverse-index-read-the-inverse-index-the-other-way-and-rebuild-it-incrementally)
+9. [`modules`] [`status`] [`variant-graph`] Read the variant graph of a workspace as one JSON document — [See details](dev/CHANGELOG-DETAILS.md#9-modules-status-variant-graph-read-the-variant-graph-of-a-workspace-as-one-json-document)
 
 ## Refactor
 

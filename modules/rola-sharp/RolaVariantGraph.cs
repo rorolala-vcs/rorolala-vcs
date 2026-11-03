@@ -38,7 +38,7 @@ public sealed record VariantGraphRequest
     /// <summary>Whether to walk into what a variant merges in.</summary>
     public bool Joins { get; init; } = true;
 
-    /// <summary>Whether to take in a variant based on a version in the window, one hop.</summary>
+    /// <summary>Whether to take in the variants based on a version in the window, following each branch on.</summary>
     public bool Branches { get; init; } = true;
 
     /// <summary>How many variants the window holds at most.</summary>

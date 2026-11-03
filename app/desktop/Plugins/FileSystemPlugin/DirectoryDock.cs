@@ -401,12 +401,14 @@ internal sealed class DirectoryControl : UserControl
             // What a place cut is drawn faded, and the rows are repainted for it: the offer is one for every dock, so a
             // cut made in one is faded in the next one drawn rather than only in the one it was made in.
             logical.Changed += RepaintPlace;
+            ChosenFiles.Cleared += ClearedSelection;
             Watch(Location);
             Draw();
         };
         DetachedFromVisualTree += (_, _) =>
         {
             logical.Changed -= RepaintPlace;
+            ChosenFiles.Cleared -= ClearedSelection;
             Watch(null);
         };
 
@@ -1011,6 +1013,9 @@ internal sealed class DirectoryControl : UserControl
 
     /// <summary>Draws a place's rows again after what is on offer to a paste changed.</summary>
     private void RepaintPlace() => _logical?.Repaint();
+
+    /// <summary>Draws the listing with nothing chosen, which is what a view of the work taking the choice away means.</summary>
+    private void ClearedSelection() => _view?.Choose([]);
 
     /// <summary>
     /// Takes a turn of the wheel with control held as a step of zoom.
