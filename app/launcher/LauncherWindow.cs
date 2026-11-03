@@ -24,10 +24,10 @@ namespace RorolalaLauncher;
 /// can be done about them at the bottom.
 /// </summary>
 /// <remarks>
-/// The window is one size, always, and draws its own frame: the picture is the frame, so a window whose
-/// frame was the desktop's would be two frames around one picture. It is opened as a dialog over nothing,
-/// which is what keeps a tiling window manager from tiling it with everything else — the same way it keeps
-/// the windows the program opens over itself where they were put.
+/// On a desktop that draws its own frame the window is one size and draws that frame itself: the picture is
+/// the frame, so a window whose frame was the desktop's would be two frames around one picture. Under a
+/// tiling window manager it is a resizable window the manager may tile, with the same drawn frame and a
+/// banner sized from the window's width and the picture's own ratio.
 /// <para>
 /// What the window is made of is made again whenever the look or the list changes: a launcher is a small
 /// window over a small state, and one statement of what it looks like is easier to keep true than a hundred
@@ -36,13 +36,13 @@ namespace RorolalaLauncher;
 /// </remarks>
 internal sealed class LauncherWindow : Window
 {
-    /// <summary>The window's width, which is also the width the list is laid out in.</summary>
+    /// <summary>The window's width when it is not a tiling window manager's, which is also the width the list is laid out in.</summary>
     private const double WidthOfWindow = 540;
 
-    /// <summary>The window's height.</summary>
+    /// <summary>The window's height when it is not a tiling window manager's.</summary>
     private const double HeightOfWindow = 600;
 
-    /// <summary>The height of the banner, which is the window's width over four.</summary>
+    /// <summary>The height of the banner before its picture says otherwise, which is the window's width over four.</summary>
     private const double HeightOfBanner = WidthOfWindow / 4;
 
     /// <summary>The height of the row the three buttons sit in.</summary>
@@ -124,6 +124,9 @@ internal sealed class LauncherWindow : Window
     /// <summary>The banner.</summary>
     private BannerView _banner = null!;
 
+    /// <summary>The row the banner is drawn in, whose height follows the width and the picture's ratio.</summary>
+    private Grid _bannerFrame = null!;
+
     /// <summary>The window's own buttons.</summary>
     private TitleChrome _chrome = null!;
 
@@ -203,7 +206,9 @@ internal sealed class LauncherWindow : Window
         Title = "Rola Launcher";
         Width = WidthOfWindow;
         Height = HeightOfWindow;
-        CanResize = false;
+        MinWidth = 360;
+        MinHeight = 360;
+        CanResize = Program.Tiling;
         WindowDecorations = Avalonia.Controls.WindowDecorations.None;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = _skin.Mid;
@@ -342,35 +347,62 @@ internal sealed class LauncherWindow : Window
         var scroll = new ScrollViewer
         {
             Content = _content,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Background = _skin.Mid,
         };
 
-        var banner = new Grid { Height = HeightOfBanner };
+        _bannerFrame = new Grid { Height = HeightOfBanner };
 
-        banner.Children.Add(new Border { Background = _skin.Dark });
-        banner.Children.Add(_banner);
-        banner.Children.Add(OverBanner());
-        banner.Children.Add(_chrome);
+        _bannerFrame.Children.Add(new Border { Background = _skin.Dark });
+        _bannerFrame.Children.Add(_banner);
+        _bannerFrame.Children.Add(OverBanner());
+        _bannerFrame.Children.Add(_chrome);
 
         var root = new Grid
         {
-            RowDefinitions = new RowDefinitions($"{HeightOfBanner},*,{HeightOfToolbar}"),
+            RowDefinitions = new RowDefinitions($"Auto,*,{HeightOfToolbar}"),
             Background = _skin.Mid,
         };
 
         var toolbar = Toolbar();
 
-        root.Children.Add(banner);
+        root.Children.Add(_bannerFrame);
         Grid.SetRow(scroll, 1);
         root.Children.Add(scroll);
         Grid.SetRow(toolbar, 2);
         root.Children.Add(toolbar);
 
+        root.SizeChanged += (_, _) => FitBanner(root.Bounds.Width);
         Content = root;
 
+        FitBanner(WidthOfWindow);
         Fill();
+    }
+
+    /// <summary>
+    /// Sizes the banner to the window's width and the picture's own ratio.
+    /// </summary>
+    /// <remarks>
+    /// The banner is the window's frame, so it follows the window's width; what it is tall is the
+    /// picture's ratio rather than a number written here, which is what keeps a picture drawn at its
+    /// own shape when the window is a tiling window manager's and is made a different size.
+    /// </remarks>
+    /// <param name="width">The width the banner has to fill.</param>
+    private void FitBanner(double width)
+    {
+        if (_bannerFrame is null)
+        {
+            return;
+        }
+
+        var ratio = _banner.AspectRatio > 0 ? _banner.AspectRatio : 4;
+        var height = Math.Max(1, width / ratio);
+
+        if (Math.Abs(_bannerFrame.Height - height) > 0.5)
+        {
+            _bannerFrame.Height = height;
+        }
     }
 
     /// <summary>

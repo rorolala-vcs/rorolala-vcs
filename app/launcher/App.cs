@@ -11,11 +11,12 @@ namespace RorolalaLauncher;
 /// The application: one look, and one window.
 /// </summary>
 /// <remarks>
-/// The window is opened as a dialog over a window that is not seen. That is not a trick to keep the window
-/// on top: a tiling window manager keeps a dialog where it was put rather than tiling it with everything
-/// else, and a launcher that was tiled would be a launcher in a quarter of the screen with a list it cannot
-/// show. The unseen window is what a dialog is a dialog of, and it is transparent, a pixel wide, and put
-/// where no screen reaches.
+/// On a desktop that draws its own frame the window is opened as a dialog over a window that is not seen:
+/// a tiling window manager does not tile a dialog, and a launcher tiled into a corner would have a list
+/// it cannot show. Under a tiling window manager the launcher is a window in its own right instead — the
+/// manager tiles that one and keeps no hidden companion behind it — and the window is made resizable so
+/// the manager can place it like any other window. The banner inside it is sized from the window's width
+/// and the picture's own ratio, so both arrangements show the picture at its own shape.
 /// </remarks>
 public sealed class App : Application
 {
@@ -45,19 +46,6 @@ public sealed class App : Application
             // which is what a file that names "system" asked for.
             ActualThemeVariantChanged += (_, _) => theme.Refresh();
 
-            var owner = new Window
-            {
-                Width = 1,
-                Height = 1,
-                CanResize = false,
-                ShowInTaskbar = false,
-                WindowDecorations = Avalonia.Controls.WindowDecorations.None,
-                WindowStartupLocation = WindowStartupLocation.Manual,
-                Position = new PixelPoint(-32000, -32000),
-                Background = Brushes.Transparent,
-                Opacity = 0,
-            };
-
             var window = new LauncherWindow(
                 Program.Files,
                 Program.Rola,
@@ -67,17 +55,39 @@ public sealed class App : Application
                 Program.Settings
             );
 
-            owner.Show();
-
-            desktop.MainWindow = owner;
-
             window.Closed += (_, _) => desktop.Shutdown();
-
-            // What the window shows is read once it is up rather than before it is shown: the launcher is then
-            // something to look at while it finds out what it has to show, which is the mark it holds until then.
             window.Opened += (_, _) => _ = window.Load();
 
-            _ = window.ShowDialog(owner);
+            if (Program.Tiling)
+            {
+                // Under a tiling window manager a dialog over an unseen owner is a floating window with a
+                // hidden companion: the manager tiles the owner and keeps the launcher over it, which is
+                // two windows for one person. The launcher is the window instead, and the manager tiles
+                // it like any other.
+                desktop.MainWindow = window;
+                window.Show();
+            }
+            else
+            {
+                var owner = new Window
+                {
+                    Width = 1,
+                    Height = 1,
+                    CanResize = false,
+                    ShowInTaskbar = false,
+                    WindowDecorations = Avalonia.Controls.WindowDecorations.None,
+                    WindowStartupLocation = WindowStartupLocation.Manual,
+                    Position = new PixelPoint(-32000, -32000),
+                    Background = Brushes.Transparent,
+                    Opacity = 0,
+                };
+
+                owner.Show();
+
+                desktop.MainWindow = owner;
+
+                _ = window.ShowDialog(owner);
+            }
         }
 
         base.OnFrameworkInitializationCompleted();

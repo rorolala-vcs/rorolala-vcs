@@ -48,6 +48,12 @@ internal static class Program
     public static ThemeConfiguration Theme { get; private set; } = null!;
 
     /// <summary>
+    /// Whether this session is a tiling window manager's, which decides whether the launcher is a window
+    /// the manager may tile rather than a dialog over an unseen owner.
+    /// </summary>
+    public static bool Tiling { get; private set; }
+
+    /// <summary>
     /// Switches the language the program speaks, and keeps the choice where the Desktop program reads it.
     /// </summary>
     /// <remarks>
@@ -93,6 +99,8 @@ internal static class Program
         }
 
         Theme = theme;
+        Tiling = !OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS() &&
+                 WindowStyles.Tiling(Environment.GetEnvironmentVariable);
 
         Files = LauncherFiles.ForThisRun().Made();
         Settings = LauncherSettings.Read(Files.Settings);

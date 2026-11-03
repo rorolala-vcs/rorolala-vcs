@@ -14,11 +14,11 @@ namespace RorolalaLauncher.Banner;
 /// The picture at the top of the window: the frames of an aseprite file, played in a loop.
 /// </summary>
 /// <remarks>
-/// It fills its whole area rather than fitting inside it, because it is the window's own frame as much as a
-/// picture: the area is the banner, and the banner is four to one whatever the file it was made in. A
-/// pixel picture is drawn with the hard interpolation that keeps a pixel a square, and a picture that is
-/// taller than a pixel picture would sensibly be — where a smoother interpolation is what the plan asks
-/// for — is drawn with the smoother one.
+/// It fits inside its area rather than filling it, because it is the window's own frame as much as a
+/// picture: the area is sized to the picture's own ratio, so the picture is drawn at that ratio rather
+/// than stretched to whatever the window happens to be. A pixel picture is drawn with the hard
+/// interpolation that keeps a pixel a square, and a picture that is taller than a pixel picture would
+/// sensibly be — where a smoother interpolation is what the plan asks for — is drawn with the smoother one.
 /// <para>
 /// A double click asks for a replacement rather than opening anything itself: choosing a file is a window
 /// over this one, and the window is what knows how to put one up.
@@ -32,7 +32,7 @@ internal sealed class BannerView : UserControl
     /// <summary>Where the frames are drawn.</summary>
     private readonly Image _image = new()
     {
-        Stretch = Stretch.Fill,
+        Stretch = Stretch.Uniform,
         HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
     };
@@ -70,6 +70,12 @@ internal sealed class BannerView : UserControl
 
     /// <summary>Whether there is a picture to see.</summary>
     public bool HasPicture => _animation is not null;
+
+    /// <summary>The picture's width over its height, or nothing when there is no picture.</summary>
+    public double AspectRatio =>
+        _animation is { Width: > 0, Height: > 0 } animation
+            ? (double)animation.Width / animation.Height
+            : 0;
 
     /// <summary>
     /// Puts a picture up, or takes the one that is there away.
