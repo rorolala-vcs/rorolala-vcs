@@ -1,9 +1,11 @@
 ---
 name: write-documents
-description: Load this skill when you need to write documentation or similar material, to learn how to produce docs that meet the standard
+description: Load this skill before writing user-facing copy (i18n strings, CLI output, error and help text, desktop UI text) or documentation, to learn the project's punctuation and phrasing rules. It ships Python checkers for banned symbols and sentence patterns.
 ---
 
 The project directory `.agents/skills/write-documents/langs/` holds versions of this skill in other languages, one file per language (for example `.agents/skills/write-documents/langs/zh_CN.md`). If the document you are writing is in one of those languages, open that file and follow it as well.
+
+This skill is mandatory for user-facing copy: every i18n string, CLI output, error and help text, and desktop UI label. Load it before writing that copy. The closed punctuation list covers that copy; the banned symbols apply to every new sentence, comments and developer documentation included. The punctuation section below states both scopes.
 
 # How to Write Technical Documentation: Decide First, Then Write
 
@@ -39,14 +41,14 @@ Write in a professional, clear, practical, and friendly tone. Aim for a formal p
 - **Put examples where the reader acts.** Use commands he can copy and outputs he can observe. Order examples by the most likely sequence of use: default usage first, explicit parameters and edge cases after. Don't restate in prose what an example already shows; when the example ends, stop—no summary, no comparison table, no "in summary." Without examples, close the section without introducing anything new.
 - **Let form follow relationship.** Layout makes relationships visible; determine the relationship first, then choose a list, table, or diagram.
 
-  | Relationship between content       | Usual form                 |
-  | ---------------------------------- | -------------------------- |
-  | Parallel items, steps, check items | List; number it if ordered |
-  | Lookup, comparison                 | Table                      |
-  | Sequence, dependency, hierarchy    | Diagram or numbering       |
-  | Content to be copied verbatim      | Code block                 |
+    | Relationship between content       | Usual form                 |
+    | ---------------------------------- | -------------------------- |
+    | Parallel items, steps, check items | List; number it if ordered |
+    | Lookup, comparison                 | Table                      |
+    | Sequence, dependency, hierarchy    | Diagram or numbering       |
+    | Content to be copied verbatim      | Code block                 |
 
-  Tables answer "what is this value" and aren't suited to carrying reasoning; write a cell up to "what it is" and no tutorial. Platform differences must land on concrete values; when comparing several systems, a table is usually clearer than a sentence. Diagram node names match the body text; when one sentence can state the relationship, skip the diagram.
+    Tables answer "what is this value" and aren't suited to carrying reasoning; write a cell up to "what it is" and no tutorial. Platform differences must land on concrete values; when comparing several systems, a table is usually clearer than a sentence. Diagram node names match the body text; when one sentence can state the relationship, skip the diagram.
 
 - **A heading is a promise.** Write as much body text as the heading promises. Use plain, descriptive nouns and avoid vague labels like "Introduction" or "A Brief Look" whose scope can't be judged.
 
@@ -57,6 +59,21 @@ Write in a professional, clear, practical, and friendly tone. Aim for a formal p
 - **Keep words stable, and justify degree words.** Use the same name for the same object, and say what it is the first time it appears. Keep degree words only when they convey a constraint: "any" and "must" carry information; "very simple" and "just" usually don't. You may bold key conditions, constraints, or conclusions—at most once per paragraph, marking the word rather than the whole sentence.
 - **Use a well-established abbreviation when one exists.** When a term has a widely recognized short form, write the short form rather than the full word: i18n for internationalization, l10n for localization, and so on. Write the full word at first mention if the reader might not know it, then use the abbreviation from there on. Don't invent abbreviations the reader has to decode.
 - **Person can be natural.** Address the reader as "you," or keep an impersonal statement. Pick whichever reads better; don't avoid the second person just to sound objective.
+
+## Punctuation
+
+The closed list of sentence punctuation covers what a user reads at run time: the i18n files under `app/cli/*/i18n/` and `app/desktop/**/i18n/`, plus any string a program prints or draws. Code, comments and developer documentation are outside that list.
+
+The banned symbols apply to every new sentence, wherever it is written: user-facing copy, comments, documentation and commit messages. Existing text stays as it is unless the user asks for a cleanup. A typographic dash or a decorative mark does not make a sentence easier to read; it draws the eye and irritates the reader.
+
+- Sentence punctuation in user-facing copy comes only from these sets. Any other sentence punctuation is a defect there:
+    - Chinese: `：` `，` `。` `、` `“` `”` `；` `！` `？`
+    - English: `:` `,` `.` `"` `;` `!` `?`
+
+- Banned in every language, in all new text: the dash family (`—`, `——`, `–`, `‒`, `―`, `−`, `⸺`, `⸻`) and decorative marks (`…`, `·`, `•`, `〜`, `～`, and the like).
+- Backticks pair around code, identifiers, paths and commands. Markdown markers, brackets, parentheses, hyphens and the apostrophe inside a word are not sentence punctuation; keep them where the language or the code needs them.
+- Rewrite around a dash: end the sentence, start a new one, or use a comma, colon or parentheses. Substituting another glyph writes the same defect.
+- Run `scripts/check_symbols.py` on every file you write or edit before handing it over. It reports candidates, and a person decides.
 
 ## When to Include Warnings
 
@@ -97,6 +114,21 @@ Before you write a command, confirm it runs in the reader's directory, permissio
 | It reads like a template                          | Sentences fill space instead of answering        | Ask of each sentence: what is lost if it goes?                  |
 | Many warnings, and the reader still errs          | Warnings aren't at the risk point                | Move the warning to the step that fails                         |
 | Lots of formatting, and the point is still buried | Form doesn't match the relationship              | Determine the relationship, then pick a list, table, or diagram |
+
+## Checkers
+
+Two Python 3 scripts, standard library only, in `scripts/`, with the shared reading in `_common.py`. They find candidates and do not assert; both exit 0 unless `--strict` is given. They resolve the project root from their own location, so they run from anywhere.
+
+- `scripts/check_symbols.py` reports the banned dash and decorative marks, punctuation outside the Chinese or English sentence set, and a spaced hyphen used as a dash.
+- `scripts/check_phrases.py` reports negation-then-affirmation and the other phrasings named under Stance.
+
+With no paths, both scan the user-facing i18n files under `app/cli/` and `app/desktop/`. Pass files or directories to check comments, documentation or any other text. Inline code, fenced blocks and URLs are skipped, and `--include-code` scans them too.
+
+```sh
+python .agents/skills/write-documents/scripts/check_symbols.py
+python .agents/skills/write-documents/scripts/check_symbols.py app/cli/rola/i18n/cmd_checkin.yml
+python .agents/skills/write-documents/scripts/check_phrases.py --strict
+```
 
 ## In One Sentence
 

@@ -2,7 +2,7 @@
 
 Act as a professional Rorolala VCS developer and do what the user asks.
 
-`rolavcs` is a version control system for artists, whose material is binary — PSD, PPT and the
+`rolavcs` is a version control system for artists, whose material is binary: PSD, PPT and the
 like. `rola` is its command line, meant to make development convenient rather than to be the final
 shape; the desktop program (`app/desktop`, Avalonia) is. The CLI may stay crude; the libraries'
 semantics may not.
@@ -16,14 +16,37 @@ semantics may not.
   panicking `unwrap`/`expect`, `// PANIC:` on a panic path, and `// WORKAROUND:` on a bypass, with
   what it works around and when it can go.
 - Public items carry docs (`missing_docs` is enforced). The C header keeps only the first line and
-  the `# FFI` section, so words meant for a C reader go under `# FFI` — see `dev/bindgen`.
+  the `# FFI` section, so words meant for a C reader go under `# FFI`; see `dev/bindgen`.
+
+## Text and punctuation
+
+The closed list of sentence punctuation covers what a user reads at run time: the i18n files under
+`app/cli/*/i18n/` and `app/desktop/**/i18n/`, and any string a program prints or draws. Code,
+comments and developer documentation are outside that list.
+
+The banned symbols apply to every new sentence, wherever it is written: user-facing copy, comments,
+documentation and commit messages. Existing text is not rewritten for this rule alone. A typographic
+dash or a decorative mark does not make the text easier to read; it draws the eye and irritates the
+reader.
+
+- **Load the `write-documents` skill before writing user-facing copy.**
+- Sentence punctuation in user-facing copy comes only from these sets. Any other sentence
+  punctuation is a defect there:
+    - Chinese: `：` `，` `。` `、` `“` `”` `；` `！` `？`
+    - English: `:` `,` `.` `"` `;` `!` `?`
+- Banned in every language, in all new text: the dash family (`—`, `——`, `–`, `‒`, `―`, `−`, `⸺`,
+  `⸻`) and decorative marks (`…`, `·`, `•`, `〜`, `～`, and the like).
+- Backticks pair around code, identifiers, paths and commands. Markdown markers, brackets,
+  parentheses, hyphens and the apostrophe inside a word are not sentence punctuation.
+- Run `.agents/skills/write-documents/scripts/check_symbols.py` on every file you write or edit
+  before handing it over.
 
 ## Dependencies and other projects
 
 - mingling, the CLI framework, is at https://github.com/mingling-rs/mingling; it is taken from a
   git revision on the 0.6 line rather than the crates.io release, with the revision and features in
   the root `Cargo.toml`.
-- A framework problem — hooks, picking, completion, rendering, argument parsing — is fixed in
+- A framework problem (hooks, picking, completion, rendering, argument parsing) is fixed in
   mingling, with an entry in its `CHANGELOG.md`. Working around it in `rola` only means meeting it
   again on the next upgrade.
 - `arg-picker` must resolve to mingling's own version, or `SinglePickable` is two traits with one
@@ -33,19 +56,19 @@ semantics may not.
 
 ## Layers
 
-- `app/` — the user's side: the programs, the C ABI, the desktop program; may use `modules/` and
+- `app/`, the user's side: the programs, the C ABI, the desktop program; may use `modules/` and
   `utils/`.
-- `dev/` — development tools: the two build crates (`dev/build` is `cargo dev`, what produces the artifacts; `dev/ci` is `cargo ci`, what checks the tree), the C header generator and the other tools the two run; may use `modules/` and `utils/`.
-- `modules/` — Rust and C# feature modules. Only `app/` and `dev/` may depend on them, and they may
+- `dev/`, development tools: the two build crates (`dev/build` is `cargo dev`, what produces the artifacts; `dev/ci` is `cargo ci`, what checks the tree), the C header generator and the other tools the two run; may use `modules/` and `utils/`.
+- `modules/`, Rust and C# feature modules. Only `app/` and `dev/` may depend on them, and they may
   depend on each other, but never in a cycle.
-- `utils/` — Rust and C# shared facilities, which anything may depend on. They are not meant to
+- `utils/`, Rust and C# shared facilities, which anything may depend on. They are not meant to
   depend on each other; the exceptions are same-family implementation-plus-proc-macro splits
   (`lazyffi`, `lazyffi-core`, `lazyffi-macros`, `configure-macros`) and the crates using
   `lazyffi`'s export macro (`configure`, `constants`). Both kinds are one-way, and none is a cycle.
-- the root `src/` — `librorolala`, tying the modules together for the CLI and the C ABI.
-- `tests/<name>/` — integration suites, workspaces of their own, which run the real programs.
+- the root `src/`, `librorolala`, tying the modules together for the CLI and the C ABI.
+- `tests/<name>/`, integration suites, workspaces of their own, which run the real programs.
 - Generated files are never edited: the header comes from the root `build.rs` scanning `src`,
-  `modules` and `utils` — not `app` or `dev` — so the FFI surface lives in those three trees.
+  `modules` and `utils`, not `app` or `dev`, so the FFI surface lives in those three trees.
 
 ## FFI tests
 
@@ -53,14 +76,14 @@ semantics may not.
   against the generated header and linked to the built library, so what is checked is the ABI a
   caller meets rather than the Rust under it. A test in Rust can only meet the same types again.
 - A module is a directory `tests/ffi-c/ffi-<area>/` holding a `test.c`; the suite finds every one
-  and runs it, so adding a module is adding a directory. What they share — a check, a way to end
-  on them — is `tests/ffi-c/harness.h`.
+  and runs it, so adding a module is adding a directory. What they share (a check, a way to end
+  on them) is `tests/ffi-c/harness.h`.
 - What a module checks is behaviour: making and locating, a lock held and given back, the
   tag-and-payload of a fallible export and the release that goes with it. Not the values of
   constants, which the header already spells out and a test would only pin a copy of.
 - The suite builds `rorolala-ffi` itself, because the release programs do not depend on that
   crate: nothing else in the gate produces the library a C caller links.
-- The programs are C11 (`cc -std=c11 -Wall -Wextra -Werror`), and only Unix is spelled out — the
+- The programs are C11 (`cc -std=c11 -Wall -Wextra -Werror`), and only Unix is spelled out: the
   suite compiles with `cc` and links with `-Wl,-rpath,`.
 
 ## Subcommands
@@ -69,8 +92,8 @@ A command is a file, a node and a shape. What it carries before it is done:
 
 - **Layering.** One file under the module of its area, declared by
   `#[command(node = "...", entry = Entry...)]`. The `#[command]` function parses arguments and
-  pre-validates what can be refused on the spot — mutually exclusive modes, missing or unpaired
-  positions — and returns `Next` for those. Everything else goes into a `StateXxx` value and a
+  pre-validates what can be refused on the spot (mutually exclusive modes, missing or unpaired
+  positions) and returns `Next` for those. Everything else goes into a `StateXxx` value and a
   `#[chain]` handler: the entry turns arguments into state, the handler does the work.
   `#[chain(routeify)]` is what lets a handler use `?` on a failure the framework knows.
 - **Global flags are consumed, not declared.** `--vault`, `--force` and `--offline` are picked out
@@ -80,22 +103,22 @@ A command is a file, a node and a shape. What it carries before it is done:
 - **Network.** A command whose work is the exchange with the Vault is refused when `--offline` is
   set, with `ErrorOffline` (252), rather than reaching. A command that only fetches the Vault's
   Layout or content on the way to local work goes on without it. Content is brought on demand
-  through `crate::fetch::Sources` — never by a bulk store sync — and only the explicit
+  through `crate::fetch::Sources`, never by a bulk store sync, and only the explicit
   `storage ...` commands move whole stores. Check for what is missing immediately before the read
   that wants it, so nothing is fetched ahead of its use.
 - **Exit codes.** Every way of failing a caller may branch on gets a constant in
   `src/exit_codes.rs`, with its `exit_codes.<key>` doc comment above it and that key stated in
   `i18n/exit_codes.yml` in both languages. Where the gate runs, an exit status is one byte: no
   constant above 255. Blocks are ten apart, one per subject, and the room is nearly spent.
-  `src/exit_codes/explain.rs` is generated from the constants — never edited, always committed with
-  them.
+  `src/exit_codes/explain.rs` is generated from the constants. Never edit it, and commit it whenever
+  the constants change.
 - **Help.** `#[help(buffer)]` renders `t!("<area>.help")`, and the usage line names every flag the
   command takes, the global ones it honours included.
 - **Description.** `#[metadata(Entry...)]` and `desc_xxx() -> Description` exist, and the text is
   translated: it is what the command is listed and searched by.
 - **Completion.** Every command registers `#[completion(Entry...)]` with
-  `complete_xxx(ctx: ShellContext, ...) -> Suggest`, answering what only the run can know — bound
-  Vault names, accounts, the address history, paths — and `suggest!()` where nothing is known.
+  `complete_xxx(ctx: ShellContext, ...) -> Suggest`, answering what only the run can know (bound
+  Vault names, accounts, the address history, paths), and `suggest!()` where nothing is known.
 - **i18n.** Every key a call site names is stated in `i18n/` in `en` and `zh-CN`, checked by
   `cargo ci i18n`. stdout is the contract, so results are drawn through `t!` while progress and
   errors go to stderr.
@@ -125,14 +148,14 @@ A command is a file, a node and a shape. What it carries before it is done:
   what you did not do, why, and what is needed next.
 - An unclear request is asked about again and again, with choices and their costs, until the plan is
   clear.
-- **Restate** the plan in your own words before touching anything, listing every decision — types,
+- **Restate** the plan in your own words before touching anything, listing every decision: types,
   names, placement, what breaks, who calls what. **Restate! Restate! Restate!**
 - **Rebuild the artifacts at the end of every round** with `cargo dev export`, so the user can test
   them directly. Do it unless the user explicitly says not to.
 
 ## Mechanics
 
-- The gate is `cargo ci check`, and its exit code is the only thing it signals — read it with
+- The gate is `cargo ci check`, and its exit code is the only thing it signals; read it with
   `cargo ci check > /tmp/log 2>&1; echo $?`. The steps are the commands of `dev/ci` and `dev/build`.
 - Every crate denies `warnings`, `missing_docs`, `rust_2018_idioms`, `clippy::pedantic` and
   `clippy::nursery`. The C# side is held to the same standard: `cargo ci dotnet-lint` runs the
