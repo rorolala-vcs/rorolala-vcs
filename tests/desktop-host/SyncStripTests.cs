@@ -248,7 +248,7 @@ public sealed class SyncStripTests
     /// <param name="panel">The panel.</param>
     /// <returns>The capsules.</returns>
     private static IReadOnlyList<Border> Capsules(ProgressPanel panel) =>
-        Assert.IsType<StackPanel>(panel.Children[1]).Children.OfType<Border>().ToArray();
+        Assert.IsType<StackPanel>(panel.Children[0]).Children.OfType<Border>().ToArray();
 
     /// <summary>The bar for the whole of a command, at the head of its capsule.</summary>
     /// <param name="capsule">The capsule.</param>

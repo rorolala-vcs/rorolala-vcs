@@ -46,14 +46,8 @@ internal sealed class ProgressPanel : StackPanel
     /// <summary>The capsule drawn for each run being shown, and the runs that are leaving.</summary>
     private readonly Dictionary<ProgressRun, Capsule> _drawn = new(ReferenceEqualityComparer.Instance);
 
-    /// <summary>The row the capsules stand in, under the small heading.</summary>
+    /// <summary>The rows the capsules stand in.</summary>
     private readonly StackPanel _capsules = new() { Spacing = 7 };
-
-    /// <summary>The small heading that says how many commands are running.</summary>
-    private readonly Border _heading;
-
-    /// <summary>How many commands the heading says are running.</summary>
-    private readonly TextBlock _count = new() { Classes = { "muted" } };
 
     /// <summary>Makes the stack.</summary>
     /// <param name="hub">What the stack is drawn from.</param>
@@ -73,48 +67,6 @@ internal sealed class ProgressPanel : StackPanel
         Spacing = 7;
         IsVisible = false;
 
-        var heading = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var dot = new Border
-        {
-            Width = 5,
-            Height = 5,
-            CornerRadius = new CornerRadius(3),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        dot[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Accent);
-
-        var word = new TextBlock
-        {
-            Text = RolaI18N.Get("rorolala_vcs.progress.header"),
-            FontSize = 10,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        word[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(PaletteKeys.Muted);
-
-        heading.Children.Add(dot);
-        heading.Children.Add(word);
-        heading.Children.Add(_count);
-
-        _heading = new Border
-        {
-            HorizontalAlignment = HorizontalAlignment.Right,
-            CornerRadius = new CornerRadius(999),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(8, 3),
-            Margin = new Thickness(0, 0, 0, 1),
-            Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)),
-            Child = heading,
-            IsHitTestVisible = false,
-        };
-        _heading[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
-
-        Children.Add(_heading);
         Children.Add(_capsules);
 
         AttachedToVisualTree += (_, _) =>
@@ -176,15 +128,8 @@ internal sealed class ProgressPanel : StackPanel
         Settle();
     }
 
-    /// <summary>Says whether there is anything to look at, and how many commands are still running.</summary>
-    private void Settle()
-    {
-        IsVisible = _drawn.Count > 0;
-        _heading.IsVisible = _hub.Any;
-        _count.Text = _hub.Any
-            ? _hub.Runs.Count.ToString(CultureInfo.InvariantCulture)
-            : string.Empty;
-    }
+    /// <summary>Says whether there is anything to look at.</summary>
+    private void Settle() => IsVisible = _drawn.Count > 0;
 
     /// <summary>One command's capsule: its head, its own bar, and the phases under it while the pointer is on it.</summary>
     private sealed class Capsule
