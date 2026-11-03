@@ -6,20 +6,10 @@ vault_handshake:
         Speak the handshake action to a Vault daemon
 
         **Usage**: rola vault handshake [VAULT]
-
-        It runs as the account the work acts as, and introduces itself by that account's name
-        What the daemon answers is printed as it is
-        With no Vault named, the default Vault chosen by the Workspace is used
-        It has to be spoken from inside a Workspace
     zh-CN: |
         向保险库守护进程发起一次握手
 
         **用法**：rola vault handshake [保险库]
-
-        以当前工作所使用的账户身份发起，并以该账户的名字自报家门
-        守护进程的回答会原样输出
-        不指定保险库时，使用工作区选定的默认保险库
-        必须在工作区内发起
 
   cmd_vault_handshake_description:
     en: Speak the handshake action to a Vault daemon

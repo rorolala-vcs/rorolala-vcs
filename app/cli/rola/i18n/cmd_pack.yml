@@ -12,13 +12,10 @@ pack:
     en: |
         Tidy the objects of the store and the index into packs
 
-        **Usage**: `rola pack`
+        **Usage**: rola pack
         **Flags**:
             --no-index      Do not tidy the index, leave it as it is
             --no-storage    Do not tidy the store, leave it as it is
-
-        Tidy the objects of the store and the index into packs, laid as several once `max_pack_size` is exceeded
-        Both are tidied by default, and giving `--no-index` and `--no-storage` together is refused
     zh-CN: |
         把仓库与索引中的对象整理进 pack
 
@@ -26,9 +23,6 @@ pack:
         **标识**：
             --no-index      不整理索引，保持原样
             --no-storage    不整理仓库，保持原样
-
-        将仓库与索引中的对象整理成 pack，超过 `max_pack_size` 时落成多个
-        默认两者都整理，同时给出 `--no-index` 与 `--no-storage` 会被拒绝
 
   cmd_pack_description:
     en: Tidy the objects of the store and the index

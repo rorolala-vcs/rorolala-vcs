@@ -6,18 +6,10 @@ cmd_layout_ls_ownership:
         List the holder of each entry from the fetched copy
 
         **Usage**: rola layout ls-ownership [VAULT]
-
-        When no Vault name is given, the copy of the Workspace's default Vault is read
-        The result comes from the local copy `.rola/cache/readonly-layouts/<VAULT>/truth/`, and reflects the state at the last fetch
-        One entry a line: its `Uuid` and the account that holds it, marked when nobody holds it
     zh-CN: |
         从取回的副本中列出每个条目的持有者
 
         **用法**：rola layout ls-ownership [保险库名]
-
-        不指定保险库名时读取工作区默认保险库的副本
-        结果来自本地副本 `.rola/cache/readonly-layouts/<保险库名>/truth/`，反映上次取回时的状态
-        每行一个条目：它的 `Uuid` 与持有它的账户，无人持有则标明
 
   description:
     en: List the holder of each entry from the fetched copy

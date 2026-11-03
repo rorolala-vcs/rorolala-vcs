@@ -71,10 +71,10 @@ rorolala_file_system:
       zh-CN: 隐藏规则
     dot_file:
       en: Hide files whose name begins with a dot
-      zh-CN: 隐藏 . 开头的文件
+      zh-CN: 隐藏以点开头的文件
     dot_dir:
       en: Hide directories whose name begins with a dot
-      zh-CN: 隐藏 . 开头的目录
+      zh-CN: 隐藏以点开头的目录
     windows_hidden:
       en: Hide what Windows marks as hidden
       zh-CN: 隐藏 Windows 隐藏文件
@@ -116,8 +116,8 @@ rorolala_file_system:
   # The menu entry that copies the words of the cell the pointer is on. The words are written on it, because a
   # menu opened on a row is opened over one cell of it and a plain "Copy" would not say which cell's text it is.
   copy_text:
-    en: "Copy “%{text}”"
-    zh-CN: "复制「%{text}」"
+    en: "Copy \"%{text}\""
+    zh-CN: "复制 “%{text}”"
   cut:
     en: Cut
     zh-CN: 剪切
@@ -212,8 +212,8 @@ rorolala_file_system:
       en: The icons the system gives files and folders.
       zh-CN: 使用系统为文件和文件夹提供的图标。
     icon_set_by:
-      en: "By %{authors} — %{description}"
-      zh-CN: "作者：%{authors} — %{description}"
+      en: "By %{authors}: %{description}"
+      zh-CN: "作者：%{authors}（%{description}）"
     icon_set_author:
       en: "By %{authors}"
       zh-CN: "作者：%{authors}"

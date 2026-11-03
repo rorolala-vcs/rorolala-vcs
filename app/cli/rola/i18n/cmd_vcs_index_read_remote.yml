@@ -5,23 +5,15 @@ vcs_index_read_remote:
     en: |
         Read one index object from the other end
 
-        **Usage**: `rola vcs-index read-remote <HASH> [VAULT]`
+        **Usage**: rola vcs-index read-remote <HASH> [VAULT]
         **Flags**:
             --json    Output as JSON
-
-        Read an index object on the Vault by its hash, a Creator or a Message printed as its text, a Variant and a Version printed in their own list formats, the version's number worked out on the Vault
-        `[VAULT]` names the Vault to reach, and with none given, the Vault the Workspace uses by default
-        The command only reads and changes nothing
     zh-CN: |
         从对端读取一个索引对象
 
         **用法**：rola vcs-index read-remote <哈希> [保险库]
         **标识**：
             --json    以 JSON 输出
-
-        在保险库上按其哈希读取一个索引对象，Creator 与 Message 输出其文本，变体与版本输出各自的列表格式，版本的号在保险库上求得
-        `[保险库]` 指定要连接的保险库，不填时用工作区默认的保险库
-        该命令只读取，不做改动
 
   description:
     en: Read one index object from the index at the other end

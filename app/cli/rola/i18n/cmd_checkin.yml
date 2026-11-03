@@ -69,7 +69,7 @@ checkin:
     zh-CN: 该变体已经签入过
 
   err_join_off_chain:
-    en: it shares no version with this file's own chain — pass `--force` to join it anyway
+    en: "it shares no version with this file's own chain: pass `--force` to join it anyway"
     zh-CN: 该变体与所指文件的版本链没有共同的版本，若你确实需要并入，请使用 `--force`
 
   err_join_chain:

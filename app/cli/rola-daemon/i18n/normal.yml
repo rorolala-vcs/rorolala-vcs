@@ -5,7 +5,7 @@ daemon:
     en: |
       Serve every Vault registered for this user
 
-      **Usage**: `rola-daemon [--port <PORT>] [--concurrency <N>] [COMMAND]`
+      **Usage**: rola-daemon [--port <PORT>] [--concurrency <N>] [COMMAND]
       **Commands**:
           list                           List the namespaces this machine serves
           register <NAMESPACE> [PATH]    Serve the Vault at PATH, or the one here, under NAMESPACE
@@ -21,14 +21,14 @@ daemon:
     zh-CN: |
       为本用户注册的每一个保险库服务
 
-      **用法**：`rola-daemon [--port <端口>] [--concurrency <N>] [命令]`
+      **用法**：rola-daemon [--port <端口>] [--concurrency <N>] [命令]
       **命令**：
           list                          列出本机服务的所有命名空间
           register <命名空间> [路径]    将位于路径的保险库以该命名空间注册
           remove <命名空间>             停止服务某个命名空间
           check                         检查每个命名空间是否仍指向保险库
           serve <路径>                  通过本进程的标准输入输出服务位于路径的保险库，
-                                         供 `rola` 经 SSH 访问
+                                        供 `rola` 经 SSH 访问
       **标识**：
           --port <端口>                 监听该端口
           --concurrency <N>             同时最多承载 N 个传输
@@ -97,11 +97,11 @@ list:
     en: |
       List the namespaces this machine serves
 
-      **Usage**: `rola-daemon list`
+      **Usage**: rola-daemon list
     zh-CN: |
       列出本机服务的所有命名空间
 
-      **用法**：`rola-daemon list`
+      **用法**：rola-daemon list
 
   description:
     en: List the namespaces this machine serves
@@ -112,7 +112,7 @@ register:
     en: |
       Serve the Vault at PATH under NAMESPACE
 
-      **Usage**: `rola-daemon register <NAMESPACE> [PATH]`
+      **Usage**: rola-daemon register <NAMESPACE> [PATH]
     zh-CN: |
       将位于路径的保险库以该命名空间提供服务
 
@@ -131,14 +131,14 @@ remove:
     en: |
       Stop serving a namespace
 
-      **Usage**: `rola-daemon remove <NAMESPACE>`
+      **Usage**: rola-daemon remove <NAMESPACE>
 
       Only the row is removed: the Vault stays where it is, and registering it again is all
       it takes to have it served once more.
     zh-CN: |
       停止服务某个命名空间
 
-      **用法**：`rola-daemon remove <命名空间>`
+      **用法**：rola-daemon remove <命名空间>
 
       只移除表中的一行：保险库仍留在原处，再次注册即可重新服务。
 
@@ -155,7 +155,7 @@ check:
     en: |
       Check that every namespace still reaches a Vault
 
-      **Usage**: `rola-daemon check`
+      **Usage**: rola-daemon check
     zh-CN: |
       检查每个命名空间是否仍指向保险库
 
@@ -170,7 +170,7 @@ serve:
     en: |
       Serve the Vault at PATH over this process's standard input and output
 
-      **Usage**: `rola-daemon serve <PATH>`
+      **Usage**: rola-daemon serve <PATH>
 
       It is what a Vault reached over SSH is: one connection, carried by the two standard
       streams, and the process ends when it does. No port is bound, and the standard output

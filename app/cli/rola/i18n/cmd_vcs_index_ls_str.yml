@@ -5,21 +5,15 @@ vcs_index_ls_str:
     en: |
         List the hashes of the text objects the index holds
 
-        **Usage**: `rola vcs-index ls-str`
+        **Usage**: rola vcs-index ls-str
         **Flags**:
             --json    Output as JSON
-
-        List the hashes of the Creator and Message objects in the index, one per line, in hex
-        The run has to be inside a Vault or a Workspace
     zh-CN: |
         列出索引中文本对象的哈希
 
         **用法**：rola vcs-index ls-str
         **标识**：
             --json    以 JSON 输出
-
-        列出索引中 Creator 与 Message 对象的哈希，每行一个，十六进制
-        运行必须处在保险库或工作区内
 
   cmd_vcs_index_ls_str_description:
     en: List the hashes of the creator and message objects the index holds
@@ -36,7 +30,7 @@ vcs_index_ls_str:
         请在保险库或工作区内运行该命令
 
   err_read:
-    en: "The index could not be read — %{reason}"
+    en: "The index could not be read: \"%{reason}\""
     zh-CN: "无法读取索引：%{reason}"
 
   err_read_help:

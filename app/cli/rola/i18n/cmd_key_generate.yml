@@ -12,22 +12,12 @@ key_generate:
         **Usage**: rola key generate <NAME>
         **Flags**:
             --install    Write the pair into this machine's user key directory
-
-        Write the private key `<NAME>.pem` and the public key `<NAME>.pub` in the current directory
-        An extension on the name is treated as a boundary, and `alice`, `alice.pem` and `alice.pub` name the same two files
-
-        With `--install` it is written into the user key directory, `~/.local/share/rola/keys` on a machine that follows XDG, created when it is not there
     zh-CN: |
         按名字生成一对 Ed25519 密钥
 
         **用法**：rola key generate <名字>
         **标识**：
             --install    将密钥对写入本机用户密钥目录
-
-        在当前目录写出私钥 `<名字>.pem` 与公钥 `<名字>.pub`
-        名字上的扩展名当作分界，`alice`、`alice.pem`、`alice.pub` 表示同样的两个文件
-
-        `--install` 时写入用户密钥目录，遵循 XDG 的机器上是 `~/.local/share/rola/keys`，目录不存在时创建
 
   cmd_key_generate_description:
     en: Generate an Ed25519 key pair under a name
@@ -80,8 +70,8 @@ key_generate:
         请改为在当前目录生成，或设置 `XDG_DATA_HOME`
 
   err_install_dir:
-    en: Could not create the install directory %{path} — %{reason}
-    zh-CN: 无法创建安装目录 %{path} —— %{reason}
+    en: "Could not create the install directory %{path}: %{reason}"
+    zh-CN: "无法创建安装目录 %{path}：%{reason}"
 
   err_install_dir_help:
     en: |

@@ -12,18 +12,12 @@ entries:
         **Usage**: rola entries
         **Flags**:
             --remote    Read the Vault's own Layout instead of the one being worked in
-
-        By default, read the Layout currently in use
-        Use `--remote` to read the **already cached** remote Layout
     zh-CN: |
         列出布局命名的路径，一行一个
 
         **用法**：rola entries
         **标识**：
             --remote    读取保险库自己的布局，而非当前工作的布局
-
-        默认读取当前使用的布局
-        使用 `--remote` 读取 **已经缓存** 的远程布局
 
   description:
     en: List the paths a Layout names

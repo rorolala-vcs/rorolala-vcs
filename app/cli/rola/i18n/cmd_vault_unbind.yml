@@ -6,18 +6,10 @@ vault_unbind:
         Let a name go
 
         **Usage**: rola vault unbind <NAME>
-
-        The name no longer refers to any Vault
-        A name that was not bound is reported as an error
-        If the name is the one reached for by default, the default is cleared with it
     zh-CN: |
         解除名字的绑定
 
         **用法**：rola vault unbind <名字>
-
-        该名字不再指代任何保险库
-        未绑定的名字会报错
-        若该名字正是默认使用的保险库，默认选择会一并清除
 
   cmd_vault_unbind_description:
     en: Let a name go

@@ -5,17 +5,11 @@ storage_ls_storaged:
     en: |
         List every object the store holds
 
-        **Usage**: `rola storage ls-storaged`
-
-        List every object the store holds, one hash per line
-        A manifest whose chunks are gone does not appear
+        **Usage**: rola storage ls-storaged
     zh-CN: |
         列出仓库持有的全部对象
 
         **用法**：rola storage ls-storaged
-
-        列出仓库持有的全部对象，每行一个哈希
-        块已丢失的 manifest 不会出现
 
   cmd_storage_ls_storaged_description:
     en: List every object the store holds
@@ -29,11 +23,11 @@ storage_ls_storaged:
     en: |
         Please run this inside a store, or inside the Vault or Workspace that keeps a store
     zh-CN: |
-        请在仓库内运行，或在保有仓库的保险库／工作区内运行
+        请在仓库内运行，或在保有仓库的保险库或工作区内运行
 
   err_ls_failed:
-    en: "The objects in the store could not be listed — %{reason}"
-    zh-CN: "无法列出仓库中的对象 —— %{reason}"
+    en: "The objects in the store could not be listed: \"%{reason}\""
+    zh-CN: "无法列出仓库中的对象：“%{reason}”"
 
   err_ls_failed_help:
     en: |

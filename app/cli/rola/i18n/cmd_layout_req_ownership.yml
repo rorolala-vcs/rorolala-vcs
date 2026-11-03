@@ -6,18 +6,10 @@ cmd_layout_req_ownership:
         Ask the Vault to record the named entries' holder as the account this run uses
 
         **Usage**: rola layout req-ownership [VAULT] <UUID>...
-
-        Take each `UUID` in the order given
-        An entry nobody holds is recorded as held by this account, an entry another holds is left as it is and its holder is reported before stopping
-        When a copy of the Vault's Layout is kept locally, it is updated to agree with the Vault
     zh-CN: |
         请求保险库把指定条目的持有者记为本次运行所用的账户
 
         **用法**：rola layout req-ownership [保险库名] <UUID>...
-
-        按给出的顺序依次取得每个 `UUID`
-        无人持有的条目记为本账户持有，他人持有的条目保留原样并报告持有者后停止
-        本地存有该保险库的布局副本时，同步更新为与保险库一致
 
   description:
     en: Ask the Vault to record the named entries' holder as this account

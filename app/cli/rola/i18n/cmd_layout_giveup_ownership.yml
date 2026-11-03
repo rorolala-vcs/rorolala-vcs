@@ -6,19 +6,10 @@ cmd_layout_giveup_ownership:
         Ask the Vault to clear the holders of the named entries
 
         **Usage**: rola layout giveup-ownership [VAULT] <UUID>...
-
-        Give up each `UUID` in the order given
-        An entry this account holds has its holder cleared, an entry another account holds is left as it is and its holder is reported before stopping, and an entry nobody holds is taken as already satisfied
-        When a copy of the Vault's Layout is kept locally, it is updated to agree with the Vault
     zh-CN: |
         请求保险库把指定条目的持有者清空
 
         **用法**：rola layout giveup-ownership [保险库名] <UUID>...
-
-        按给出的顺序依次放弃每个 `UUID`
-        本账户持有的条目被清空持有者，他人持有的条目保留原样并报告持有者后停止，无人持有的条目视为已满足
-        本地存有该保险库的布局副本时，同步更新为与保险库一致
-
   description:
     en: Ask the Vault to clear the holders of the named entries
     zh-CN: 请求保险库将指定条目的持有者清空

@@ -10,13 +10,6 @@ desktop:
             --window-style <STYLE>    Choose the window frame style, one of windows, mac or tillingwm
             --query-window-style      Print how this machine draws a window frame, and open nothing
             --ready                   Ask the window to say on standard output when it is up
-
-        Open the Desktop program that sits beside the `rola` that was run
-        `--window-style` chooses the window frame style
-        `--query-window-style` probes this machine for the style it draws a window frame in
-        `--ready` asks the window to say when it is up, and changes nothing else about the run
-
-        This run waits for the window to close and ends with the window's own exit code
     zh-CN: |
         打开与 rola 并排的桌面程序
 
@@ -25,13 +18,6 @@ desktop:
             --window-style <样式>    选择窗口边框的样式，可选 windows、mac 或 tillingwm
             --query-window-style     打印本机绘制窗口边框的样式，不打开任何窗口
             --ready                  要求窗口在出现时于标准输出报到
-
-        打开与所运行的 `rola` 并排的桌面程序
-        `--window-style` 选择窗口边框的样式
-        `--query-window-style` 探测本机绘制窗口边框所用的样式
-        `--ready` 要求窗口在出现时报到，运行本身不做其他改变
-
-        本次运行一直等待窗口关闭并以窗口自己的退出码结束
 
   cmd_desktop_description:
     en: Open the companion Desktop program
@@ -99,8 +85,8 @@ desktop:
         [DEV_ONLY] 请运行 `cargo dev export`，它会把桌面程序导出到本程序旁边
 
   err_launch_failed:
-    en: "The Desktop program would not start — %{reason}"
-    zh-CN: "桌面程序无法启动 —— %{reason}"
+    en: "The Desktop program would not start: %{reason}"
+    zh-CN: "桌面程序无法启动：%{reason}"
 
   err_launch_failed_help:
     en: |

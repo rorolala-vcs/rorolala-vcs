@@ -3,7 +3,7 @@ _version: 2
 update:
   updated:
     en: "Updated rola.lock: %{materials} materials"
-    zh-CN: "已更新 rola.lock：%{materials} 个素材"
+    zh-CN: "已更新 `rola.lock`：%{materials} 个素材"
   err_no_account:
     en: no account is named on this machine; run `rola account <NAME>` to name one
     zh-CN: 本机没有指定账号；运行 `rola account <账号>` 指定一个

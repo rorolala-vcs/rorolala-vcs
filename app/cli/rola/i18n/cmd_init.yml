@@ -8,16 +8,12 @@ init:
         **Usage**: rola init
         **Flags**:
             --vault, -v    Create a Vault instead of a Workspace
-
-        Create a Workspace or Vault in the current directory
     zh-CN: |
         将当前目录创建为工作区或保险库
 
         **用法**：rola init
         **标识**：
             --vault, -v    创建保险库而不是工作区
-
-        在当前目录创建工作区或保险库
 
   cmd_init_description:
     en: Create a Workspace or Vault in the current directory

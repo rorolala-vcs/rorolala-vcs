@@ -6,20 +6,10 @@ storage_write_file:
         Store a file's content into the store, and print the hash it is kept under
 
         **Usage**: rola storage write-file <FILE>
-
-        Store a file's content into the store, and print the hash it is kept under
-        A single file is given, not a directory
-        How it is kept is the store's own decision from the content
-        Content kept in chunks is named `manifest:<DIGEST>`, the rest `blake3:<DIGEST>`
     zh-CN: |
         将文件内容存入仓库，并打印它所用的哈希
 
         **用法**：rola storage write-file <文件>
-
-        将文件内容存入仓库，并打印它所用的哈希
-        给出的是单个文件而非目录
-        如何保存由仓库根据内容决定
-        分块保存的内容命名为 `manifest:<摘要>`，其余为 `blake3:<摘要>`
 
   cmd_storage_write_file_description:
     en: Store a file's content and print its hash
@@ -43,7 +33,7 @@ storage_write_file:
     en: |
         Please run this inside a store, or inside the Vault or Workspace that keeps one
     zh-CN: |
-        请在仓库内运行，或在保有仓库的保险库／工作区内运行
+        请在仓库内运行，或在保有仓库的保险库或工作区内运行
 
   err_not_a_file:
     en: "%{path} is not a file"
@@ -51,13 +41,13 @@ storage_write_file:
 
   err_not_a_file_help:
     en: |
-        What is stored is a file's content, so the path has to name a file that is there — a directory has no content to take
+        What is stored is a file's content, so the path has to name a file that is there: a directory has no content to take
     zh-CN: |
-        存入的是文件内容，所以路径必须指向一个确实存在的文件——目录里没有可取的内容
+        存入的是文件内容，所以路径必须指向一个确实存在的文件：目录里没有可取的内容
 
   err_write_failed:
-    en: "The store would not take the content of %{path} — %{reason}"
-    zh-CN: "仓库未能接收 %{path} 的内容 —— %{reason}"
+    en: "The store would not take the content of %{path}: \"%{reason}\""
+    zh-CN: "仓库未能接收 %{path} 的内容：“%{reason}”"
 
   err_write_failed_help:
     en: |

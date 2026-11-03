@@ -13,9 +13,6 @@ vault:
             handshake [VAULT]     Speak the handshake action to a Vault daemon
             ls                    List the Vaults the current Workspace knows
             default               Print the Vault the Workspace reaches for
-
-        List the bound Vaults and their addresses in name order
-        The one reached for by default is marked `(current)`
     zh-CN: |
         列出当前工作区已知的保险库
 
@@ -27,9 +24,6 @@ vault:
             handshake [保险库]    向保险库守护进程发起握手
             ls                    列出当前工作区已知的保险库
             default               输出工作区默认使用的保险库
-
-        按名字排序列出已绑定的保险库及其地址
-        默认使用的会标上 `（当前）`
 
   cmd_vault_description:
     en: List the Vaults the current Workspace knows
@@ -49,14 +43,10 @@ vault_ls:
         List the Vaults the current Workspace knows
 
         **Usage**: rola vault ls
-
-        One name and its address a line, in name order
     zh-CN: |
         列出当前工作区已知的保险库
 
         **用法**：rola vault ls
-
-        每行输出一个名字及其地址，按名字排序
   description:
     en: List the Vaults the current Workspace knows
     zh-CN: 列出当前工作区已知的保险库
@@ -67,14 +57,10 @@ vault_default:
         Print the Vault the Workspace reaches for
 
         **Usage**: rola vault default
-
-        The name alone, and nothing when no Vault has been chosen
     zh-CN: |
         输出工作区默认使用的保险库
 
         **用法**：rola vault default
-
-        仅输出名字本身，未选择保险库时不输出任何内容
   description:
     en: Print the Vault the Workspace reaches for
     zh-CN: 输出工作区默认使用的保险库

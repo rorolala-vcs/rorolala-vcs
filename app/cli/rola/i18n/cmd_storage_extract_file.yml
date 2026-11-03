@@ -5,21 +5,11 @@ storage_extract_file:
     en: |
         Take the content back out by the hash it is kept under
 
-        **Usage**: `rola storage extract-file <HASH> [DIR]`
-
-        The hash is what `rola storage write-file` printed, written as a hex digest, with or without the hash's name in front of it
-        The content is written under that digest as the name, into `DIR`, or into the current directory when not named
-        `DIR` is created when it does not exist
-        When a file already exists under that name it is not overwritten, but an error is reported
+        **Usage**: rola storage extract-file <HASH> [DIR]
     zh-CN: |
         按内容所用的哈希将内容取出
 
         **用法**：rola storage extract-file <哈希> [目录]
-
-        哈希即 `rola storage write-file` 打印出的哈希，写成十六进制摘要，前面带不带哈希名均可
-        内容以该摘要为名写入 `目录`，不指定时写入当前目录
-        `目录` 不存在时会创建
-        该名字下已有文件时不会覆盖，而是报错
 
   cmd_storage_extract_file_description:
     en: Write the stored content out by its hash
@@ -43,7 +33,7 @@ storage_extract_file:
     en: |
         Please run this inside a store, or inside the Vault or Workspace that keeps a store
     zh-CN: |
-        请在仓库内运行，或在保有仓库的保险库／工作区内运行
+        请在仓库内运行，或在保有仓库的保险库或工作区内运行
 
   err_bad_hash:
     en: "`%{hash}` is not a valid hash"
@@ -70,8 +60,8 @@ storage_extract_file:
         请改用其他目录，或先删除该文件
 
   err_extract_failed:
-    en: "Could not write out the content of %{hash} — %{reason}"
-    zh-CN: "无法写出 %{hash} 的内容 —— %{reason}"
+    en: "Could not write out the content of %{hash}: \"%{reason}\""
+    zh-CN: "无法写出 %{hash} 的内容：“%{reason}”"
 
   err_extract_failed_help:
     en: |

@@ -16,8 +16,9 @@ inv_idx:
             msg-dep <HASH>        List the variants that carry a message
             version-num <HASH>    Print a version's number
 
-        The inverse index is made by the `rebuild` command
-        A stale index falls back to ordinary queries, and does not affect correctness
+        **NOTE**:
+            The inverse index is built by the `rebuild` subcommand
+            A stale index falls back to ordinary queries and does not affect correctness
     zh-CN: |
         手工建立并查询反向索引
 
@@ -32,8 +33,9 @@ inv_idx:
             msg-dep <哈希>          列出携带某 Message 的变体
             version-num <哈希>      输出某版本的号
 
-        反向索引由 `rebuild` 子命令建立
-        索引过期会回退到普通的查询，不影响正确性
+        **注意**：
+            反向索引由 `rebuild` 子命令建立
+            索引过期会回退到普通的查询，不影响正确性
 
   cmd_inv_idx_description:
     en: Build and ask the inverse index, by hand
@@ -109,24 +111,14 @@ inv_idx_list:
             --kind <KIND>      List `variant`, `version` or `all`
             --limit <ROWS>     Stop after this many rows
             --json             Write as JSON
-
-        A variant is a row with its key and what it is made of; a version is a row with the variant it fixes and its number
-        The rows are the variants and then the versions, each in key order
-        The objects are read instead of the records when the records do not describe the index
-        `--format` draws each row through a template, with the fields `--json` writes under `objects`
     zh-CN: |
         列出反向索引持有的变体与版本
 
         **用法**：rola inv-idx list
         **标识**：
             --kind <种类>      只列出 `variant`、`version` 或 `all`
-            --limit <行数>     最多列出这么多行
+            --limit <行数>     最多可以列出的行数
             --json             以 JSON 输出
-
-        变体一行，含其哈希与构成它的各部分；版本一行，含它固定的变体与它的号
-        先列变体、再列版本，各自按哈希顺序
-        记录不再描述索引时，改为读取对象
-        `--format` 按模板绘制每一行，字段与 `--json` 的 `objects` 相同
 
   description:
     en: List the variants and versions the inverse index holds
@@ -148,18 +140,12 @@ inv_idx_rebuild:
         **Usage**: rola inv-idx rebuild
         **Flags**:
             --json    Write the report of this build as JSON
-
-        Only the objects written since the last build are read, and a build whose records already describe the index reads nothing
-        The product is a file, nothing is printed on stdout, and `--json` answers with the report: what it had to do, what it read, and what it numbered
     zh-CN: |
         让反向索引跟上索引中的对象
 
         **用法**：rola inv-idx rebuild
         **标识**：
             --json    以 JSON 输出本次构建的报告
-
-        只读取上次构建之后写入的对象，记录已描述索引时什么都不读
-        产物是一个文件，stdout 不打印任何内容，`--json` 则以报告作答：做了什么、读了多少、编号了多少
 
   description:
     en: Bring the inverse index up to date with the index's objects
@@ -173,16 +159,12 @@ inv_idx_store_dep:
         **Usage**: rola inv-idx store-dep <STORE>
         **Flags**:
             --json    Write as JSON
-
-        List the variants made from that stored entry, one hash a line
     zh-CN: |
         列出基于某存储条目建立的变体
 
         **用法**：rola inv-idx store-dep <存储条目>
         **标识**：
             --json    以 JSON 输出
-
-        列出基于该存储条目建立的变体，每行一个哈希
 
   description:
     en: List the variants made from a stored entry
@@ -196,16 +178,12 @@ inv_idx_variant_dep:
         **Usage**: rola inv-idx variant-dep <HASH>
         **Flags**:
             --json    Write as JSON
-
-        List the versions that point at that variant, one hash a line
     zh-CN: |
         列出固定某变体的版本
 
         **用法**：rola inv-idx variant-dep <哈希>
         **标识**：
             --json    以 JSON 输出
-
-        列出指向该变体的版本，每行一个哈希
 
   description:
     en: List the versions that fix a variant
@@ -219,16 +197,12 @@ inv_idx_version_dep:
         **Usage**: rola inv-idx version-dep <HASH>
         **Flags**:
             --json    Write as JSON
-
-        List the variants that name that version, one hash a line
     zh-CN: |
         列出基于某版本的变体
 
         **用法**：rola inv-idx version-dep <哈希>
         **标识**：
             --json    以 JSON 输出
-
-        列出命名该版本的变体，每行一个哈希
 
   description:
     en: List the variants based on a version
@@ -242,16 +216,12 @@ inv_idx_creator_dep:
         **Usage**: rola inv-idx creator-dep <HASH>
         **Flags**:
             --json    Write as JSON
-
-        List the variants that carry that creator, one hash a line
     zh-CN: |
         列出某 Creator 创建的变体
 
         **用法**：rola inv-idx creator-dep <哈希>
         **标识**：
             --json    以 JSON 输出
-
-        列出携带该 Creator 的变体，每行一个哈希
 
   description:
     en: List the variants made by a creator
@@ -265,16 +235,12 @@ inv_idx_msg_dep:
         **Usage**: rola inv-idx msg-dep <HASH>
         **Flags**:
             --json    Write as JSON
-
-        List the variants that carry that message, one hash a line
     zh-CN: |
         列出携带某 Message 的变体
 
         **用法**：rola inv-idx msg-dep <哈希>
         **标识**：
             --json    以 JSON 输出
-
-        列出携带该 Message 的变体，每行一个哈希
 
   description:
     en: List the variants that carry a message

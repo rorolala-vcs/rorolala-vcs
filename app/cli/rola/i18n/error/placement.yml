@@ -8,10 +8,10 @@ error:
 
     err_should_in_workspace_help:
       en: |
-        Please run it inside one — `rola create <PATH>` can create a Workspace
+        Please run it inside one. `rola create <PATH>` can create a Workspace
         `--workspace-dir <PATH>` can name a Workspace that already exists
       zh-CN: |
-        请在工作区内运行 —— `rola create <PATH>` 可以创建工作区
+        请在工作区内运行。`rola create <PATH>` 可以创建工作区
         `--workspace-dir <PATH>` 可以指定已有的工作区
 
     err_should_in_vault:
@@ -20,10 +20,10 @@ error:
 
     err_should_in_vault_help:
       en: |
-        Please run it inside one — `rola create --vault <PATH>` can create a Vault
+        Please run it inside one. `rola create --vault <PATH>` can create a Vault
         `--vault-dir <PATH>` can name a Vault that already exists
       zh-CN: |
-        请在保险库内运行 —— `rola create --vault <PATH>` 可以创建保险库
+        请在保险库内运行。`rola create --vault <PATH>` 可以创建保险库
         `--vault-dir <PATH>` 可以指定已有的保险库
 
     err_config_unreadable:
@@ -31,8 +31,8 @@ error:
       zh-CN: 无法读取工作区配置：%{path}
 
     err_config_unreadable_help:
-      en: Please fix the file and try again — %{reason}
-      zh-CN: 请修复该文件后重试 —— %{reason}
+      en: "Please fix the file and try again: \"%{reason}\""
+      zh-CN: "请修复该文件后重试：“%{reason}”"
 
     err_not_chosen:
       en: No Vault was named to connect to, and the Workspace has no default choice

@@ -20,8 +20,8 @@ edit:
       zh-CN: 有未保存的更改；再按一次 Esc 将不保存离开
 
   hints:
-    en: "Ctrl+S save  ·  Esc exit"
-    zh-CN: "Ctrl+S 保存  ·  Esc 退出"
+    en: "Ctrl+S save, Esc exit"
+    zh-CN: "Ctrl+S 保存，Esc 退出"
 
   errors:
     no_file:

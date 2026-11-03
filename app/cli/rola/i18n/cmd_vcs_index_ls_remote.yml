@@ -5,23 +5,15 @@ vcs_index_ls_remote:
     en: |
         List the variants the index at the other end holds
 
-        **Usage**: `rola vcs-index ls-remote-variants [VAULT]`
+        **Usage**: rola vcs-index ls-remote-variants [VAULT]
         **Flags**:
             --json    Output as JSON
-
-        List on the Vault the variant hashes its index holds, one per line, the numbers are not worked out
-        `[VAULT]` names the Vault to reach, and with none given, the Vault the Workspace uses by default
-        The command only reads and changes nothing
     zh-CN: |
         列出对端索引持有的变体
 
         **用法**：rola vcs-index ls-remote-variants [保险库]
         **标识**：
             --json    以 JSON 输出
-
-        在保险库上列出其索引持有的变体哈希，每行一个，不计算号
-        `[保险库]` 指定要连接的保险库，不填时用工作区默认的保险库
-        该命令只读取，不做改动
 
   variants_description:
     en: List the variants the index at the other end holds
@@ -31,23 +23,15 @@ vcs_index_ls_remote:
     en: |
         List the versions the index at the other end holds
 
-        **Usage**: `rola vcs-index ls-remote-versions [VAULT]`
+        **Usage**: rola vcs-index ls-remote-versions [VAULT]
         **Flags**:
             --json    Output as JSON
-
-        List on the Vault the version hashes its index holds, one per line, the numbers are not worked out
-        `[VAULT]` names the Vault to reach, and with none given, the Vault the Workspace uses by default
-        The command only reads and changes nothing
     zh-CN: |
         列出对端索引持有的版本
 
         **用法**：rola vcs-index ls-remote-versions [保险库]
         **标识**：
             --json    以 JSON 输出
-
-        在保险库上列出其索引持有的版本哈希，每行一个，不计算号
-        `[保险库]` 指定要连接的保险库，不填时用工作区默认的保险库
-        该命令只读取，不做改动
 
   versions_description:
     en: List the versions the index at the other end holds
@@ -57,23 +41,15 @@ vcs_index_ls_remote:
     en: |
         List the hashes of the text objects in the index at the other end
 
-        **Usage**: `rola vcs-index ls-remote-str [VAULT]`
+        **Usage**: rola vcs-index ls-remote-str [VAULT]
         **Flags**:
             --json    Output as JSON
-
-        List on the Vault the text object hashes its index holds, one per line
-        `[VAULT]` names the Vault to reach, and with none given, the Vault the Workspace uses by default
-        The command only reads and changes nothing
     zh-CN: |
         列出对端索引中文本对象的哈希
 
         **用法**：rola vcs-index ls-remote-str [保险库]
         **标识**：
             --json    以 JSON 输出
-
-        在保险库上列出其索引持有的文本对象哈希，每行一个
-        `[保险库]` 指定要连接的保险库，不填时用工作区默认的保险库
-        该命令只读取，不做改动
 
   str_description:
     en: List the hashes of the text objects the index at the other end holds

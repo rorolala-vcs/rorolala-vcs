@@ -11,9 +11,6 @@ account:
         **Commands**:
             ls             List the available accounts on this machine
             current        Print the account currently in use
-
-        List the account names found in every scope
-        When an account is given, set it as the current account
     zh-CN: |
         查询或切换本机的可用账户
 
@@ -23,9 +20,6 @@ account:
         **命令**：
             ls             列出本机可用账户
             current        直接输出当前使用的账户
-
-        列出所有作用域中能找到的账户名
-        若指定账户，则设置为当前账户
 
   cmd_account_description:
     en: Query or switch the available accounts on this machine
@@ -74,7 +68,8 @@ account_ls:
         **Flags**:
             --vault, -v    Also show the accounts in the current Vault
 
-        This command has the same effect as `rola account`
+        **NOTE**:
+            This command has the same effect as `rola account`
     zh-CN: |
         列出本机可用账户
 
@@ -82,7 +77,8 @@ account_ls:
         **标识**：
             --vault, -v    同时显示当前所在保险库的账户
 
-        该命令效果和 `rola account` 一致
+        **注意**：
+            该命令效果和 `rola account` 一致
 
   description:
     en: List the available accounts on this machine
@@ -93,15 +89,18 @@ account_current:
     en: |
         Print the account currently in use
 
-        **Usage**: `rola account current`
+        **Usage**: rola account current
 
-        Print only the content to Stdout, and stay completely silent when no account is set
+        **NOTE**:
+            Print only the content to Stdout,
+            and stay completely silent when no account is set
     zh-CN: |
         直接输出当前使用的账户
 
-        **用法**：`rola account current`
+        **用法**：rola account current
 
-        仅输出内容到 Stdout，若未设置账户则完全静默
+        **注意**：
+            仅输出内容到 Stdout，若未设置账户则完全静默
   description:
     en: Print the account currently in use
     zh-CN: 直接输出当前使用的账户

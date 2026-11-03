@@ -63,14 +63,14 @@ rorolala_vcs:
     # What the card of a variant waiting to be merged says in place of a message: the file it is to
     # be joined into, whose name is the only thing about it a reader is looking for.
     pending_into:
-      en: Merging into “%{file}”
+      en: Merging into "%{file}"
       zh-CN: 正在合并至 “%{file}”
 
     # What a variant no entry points at is marked with, and what a base version the index does not
     # hold is labelled. The first is a history branch's card; the second is a broken node beside one.
     no_entries:
-      en: No entries · history branch
-      zh-CN: 无条目 · 历史分支
+      en: No entries (history branch)
+      zh-CN: 无条目（历史分支）
     unknown_base:
       en: Unknown base version
       zh-CN: 未知基版本
@@ -84,11 +84,11 @@ rorolala_vcs:
       en: same content
       zh-CN: 同内容
     draft_based_on:
-      en: Draft · based on %{version}
-      zh-CN: 草稿 · 基于 %{version}
+      en: Draft (based on %{version})
+      zh-CN: 草稿（基于 %{version}）
     draft_wrong_based_on:
-      en: "⚠ Based on %{version} · should be %{should}"
-      zh-CN: "⚠ 基于 %{version} · 应基于 %{should}"
+      en: "⚠ Based on %{version} (should be %{should})"
+      zh-CN: "⚠ 基于 %{version}（应基于 %{should}）"
     draft_wrong_based_on_only:
       en: "⚠ Based on %{version}"
       zh-CN: "⚠ 基于 %{version}"
@@ -698,43 +698,43 @@ rorolala_vcs:
     # say which of them a version belongs to. The ways that leave the Layout out say one thing whichever way
     # the run goes, since nothing about the Vault's Layout moves either way.
     warn_no_index_up:
-      en: The Layout and the storage are synced, but not the index — so what is uploaded is written into the Vault's Layout and its storage while neither goes into the Vault's index. Confirm?
+      en: The Layout and the storage are synced, but not the index, so what is uploaded is written into the Vault's Layout and its storage while neither goes into the Vault's index. Confirm?
       zh-CN: 同步布局和仓库，但不同步索引，这会使上传的版本写进保险库布局、内容进保险库仓库，却都不进保险库索引，请确认。
     warn_no_index_down:
-      en: The Layout and the storage are synced, but not the index — so the update fails where the local index lacks the Vault's version object. Confirm?
+      en: The Layout and the storage are synced, but not the index, so the update fails where the local index lacks the Vault's version object. Confirm?
       zh-CN: 同步布局和仓库，但不同步索引，这会使下拉因本地索引缺少保险库的版本对象而失败，请确认。
     warn_no_index_both:
-      en: The Layout and the storage are synced, but not the index — so what is uploaded does not go into the Vault's index, and the update fails where the local index lacks a version object. Confirm?
+      en: The Layout and the storage are synced, but not the index, so what is uploaded does not go into the Vault's index, and the update fails where the local index lacks a version object. Confirm?
       zh-CN: 同步布局和仓库，但不同步索引，这会使上传的内容不进保险库索引、下拉因本地索引缺版本对象而失败，请确认。
     warn_no_storage_up:
-      en: The Layout and the index are synced, but not the storage — so the Vault's Layout and index record a version whose content the Vault does not hold. Confirm?
+      en: The Layout and the index are synced, but not the storage, so the Vault's Layout and index record a version whose content the Vault does not hold. Confirm?
       zh-CN: 同步布局和索引，但不同步仓库，这会使保险库布局与索引记下一个仓库里没有内容的版本，请确认。
     warn_no_storage_down:
-      en: The Layout and the index are synced, but not the storage — so entries whose content is not here fail to update, and the Layout version is not advanced. Confirm?
+      en: The Layout and the index are synced, but not the storage, so entries whose content is not here fail to update, and the Layout version is not advanced. Confirm?
       zh-CN: 同步布局和索引，但不同步仓库，这会使内容不在本地的下拉条目失败、布局版本不再推进，请确认。
     warn_no_storage_both:
-      en: The Layout and the index are synced, but not the storage — so the Vault records a version whose content it does not hold, and the update fails where the local storage lacks the content. Confirm?
+      en: The Layout and the index are synced, but not the storage, so the Vault records a version whose content it does not hold, and the update fails where the local storage lacks the content. Confirm?
       zh-CN: 同步布局和索引，但不同步仓库，这会使保险库记下仓库里没有的版本、下拉因本地仓库缺内容而失败，请确认。
     warn_no_layout:
-      en: The index and the storage are synced, but not the Layout — so everything in the local index is uploaded, the Vault's Layout does not move, and there is no check for overwriting. Confirm?
+      en: The index and the storage are synced, but not the Layout, so everything in the local index is uploaded, the Vault's Layout does not move, and there is no check for overwriting. Confirm?
       zh-CN: 同步索引和仓库，但不同步布局，这会使本地索引里的全部内容被上传、保险库布局不动、没有覆盖检查，请确认。
     warn_layout_only_up:
-      en: Only the Layout is synced — so the Vault's Layout records a version whose content was never uploaded, and neither the index nor the storage moves. Confirm?
+      en: Only the Layout is synced, so the Vault's Layout records a version whose content was never uploaded, and neither the index nor the storage moves. Confirm?
       zh-CN: 仅同步布局，这会使保险库布局记下未上传内容的版本、索引与仓库都不动，请确认。
     warn_layout_only_down:
-      en: Only the Layout is synced — so the update fails where the local storage lacks the content, and neither the index nor the storage moves. Confirm?
+      en: Only the Layout is synced, so the update fails where the local storage lacks the content, and neither the index nor the storage moves. Confirm?
       zh-CN: 仅同步布局，这会使下拉因本地仓库缺内容而失败、索引与仓库都不动，请确认。
     warn_layout_only_both:
-      en: Only the Layout is synced — so the Vault records a version whose content it does not hold, the update fails where the local storage lacks the content, and neither the index nor the storage moves. Confirm?
+      en: Only the Layout is synced, so the Vault records a version whose content it does not hold, the update fails where the local storage lacks the content, and neither the index nor the storage moves. Confirm?
       zh-CN: 仅同步布局，这会使保险库记下没有内容的版本、下拉因本地仓库缺内容而失败，索引与仓库都不动，请确认。
     warn_index_only:
-      en: Only the index is synced — so the two sides' indexes swap objects while neither the Layout nor the storage moves. Confirm?
+      en: Only the index is synced, so the two sides' indexes swap objects while neither the Layout nor the storage moves. Confirm?
       zh-CN: 仅同步索引，这会使两侧索引互换对象、布局与仓库都不动，请确认。
     warn_storage_only:
-      en: Only the storage is synced — so everything in the local index is uploaded while neither the Vault's index nor its Layout moves. Confirm?
+      en: Only the storage is synced, so everything in the local index is uploaded while neither the Vault's index nor its Layout moves. Confirm?
       zh-CN: 仅同步仓库，这会使本地索引里的全部内容被上传、保险库索引与布局都不动，请确认。
     warn_nothing:
-      en: The Layout, the index and the storage are all left out — so this run changes nothing at all. Confirm?
+      en: The Layout, the index and the storage are all left out, so this run changes nothing at all. Confirm?
       zh-CN: 不同步布局、索引和仓库，这会使本次运行不做任何改动，请确认。
 
   # What the dock's own refresh does besides reading the work again: it brings the Vault's Layout here, so that
@@ -942,7 +942,7 @@ rorolala_vcs:
       en: This is not something the upstream place can take
       zh-CN: 这不是上游地点能够接收的内容
     refused_not_a_folder:
-      en: A list is not a folder — open it and drop into one of the things it lists
+      en: "A list is not a folder: open it and drop into one of the things it lists"
       zh-CN: 列表不是文件夹：请打开它，再放到它列出的某一项上
     refused_a_folder:
       en: "A folder is not moved: drop it on a directory to bring in what stands under it"
@@ -1024,11 +1024,11 @@ rorolala_vcs:
       en: Updating
       zh-CN: 更新中
     working:
-      en: Working…
-      zh-CN: 处理中…
+      en: Working
+      zh-CN: 处理中
     waiting:
-      en: Waiting…
-      zh-CN: 等待前序…
+      en: Waiting
+      zh-CN: 等待前序
 
   # The Accounts dock: which account the work acts as, and what may be done about them. The rows are the
   # accounts `rola account` lists, and what a row offers is a run of `rola` — naming the account the work acts
@@ -1132,7 +1132,7 @@ rorolala_vcs:
     # not asking the same question as the first.
     connecting:
       en: "..."
-      zh-CN: "…"
+      zh-CN: "..."
     pair:
       en: Pair
       zh-CN: 组合

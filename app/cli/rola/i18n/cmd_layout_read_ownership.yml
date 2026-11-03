@@ -6,18 +6,10 @@ cmd_layout_read_ownership:
         Read an entry's holder from the fetched copy
 
         **Usage**: rola layout read-ownership [VAULT] <UUID>
-
-        Read the holder of the entry named by `UUID`
-        When no Vault name is given, the copy of the Workspace's default Vault is read
-        The result comes from the local copy `.rola/cache/readonly-layouts/<VAULT>/truth/`, and reflects the state at the last fetch
     zh-CN: |
         从取回的副本中读取条目的持有者
 
         **用法**：rola layout read-ownership [保险库名] <UUID>
-
-        读取 `UUID` 所指定条目的持有者
-        不指定保险库名时读取工作区默认保险库的副本
-        结果来自本地副本 `.rola/cache/readonly-layouts/<保险库名>/truth/`，反映上次取回时的状态
 
   description:
     en: Read an entry's holder from the fetched copy

@@ -49,8 +49,8 @@ error:
         请检查保险库的存储与其所在的磁盘
 
     err_store:
-      en: The store failed — %{reason}
-      zh-CN: 仓库失败 —— %{reason}
+      en: "The store failed: \"%{reason}\""
+      zh-CN: "仓库失败：“%{reason}”"
 
     err_store_help:
       en: |
@@ -59,8 +59,8 @@ error:
         请确认仓库可读可写，然后重试
 
     err_local_file:
-      en: A file could not be read or written — %{reason}
-      zh-CN: 文件读写失败 —— %{reason}
+      en: "A file could not be read or written: \"%{reason}\""
+      zh-CN: "文件读写失败：“%{reason}”"
 
     err_local_file_help:
       en: |
@@ -79,8 +79,8 @@ error:
         请减少一次发送的内容，或提高两侧约定的帧大小
 
     err_io:
-      en: The channel failed — %{reason}
-      zh-CN: 通道失败 —— %{reason}
+      en: "The channel failed: \"%{reason}\""
+      zh-CN: "通道失败：“%{reason}”"
 
     err_io_help:
       en: |
@@ -89,8 +89,8 @@ error:
         请确认守护进程仍在运行且可达，然后重试
 
     err_codec:
-      en: A value could not cross the channel — %{reason}
-      zh-CN: 有值无法通过通道 —— %{reason}
+      en: "A value could not cross the channel: \"%{reason}\""
+      zh-CN: "有值无法通过通道：“%{reason}”"
 
     err_codec_help:
       en: |
@@ -111,8 +111,8 @@ error:
         请确认守护进程提供所请求的动作
 
     err_json:
-      en: The action's output could not be encoded — %{reason}
-      zh-CN: 动作的输出无法编码 —— %{reason}
+      en: "The action's output could not be encoded: \"%{reason}\""
+      zh-CN: "动作的输出无法编码：“%{reason}”"
 
     err_json_help:
       en: |
@@ -133,8 +133,8 @@ error:
         请写成 IP，例如 `127.0.0.1` 或 `127.0.0.1:7717`
 
     err_auth:
-      en: The session could not be established — %{reason}
-      zh-CN: 无法建立会话 —— %{reason}
+      en: "The session could not be established: \"%{reason}\""
+      zh-CN: "无法建立会话：“%{reason}”"
 
     err_auth_help:
       en: |
@@ -143,8 +143,8 @@ error:
         请确认密钥可读，且守护进程已把该账户的公钥认作成员
 
     err_transport:
-      en: The Vault could not be reached — %{reason}
-      zh-CN: 无法抵达该保险库 —— %{reason}
+      en: "The Vault could not be reached: \"%{reason}\""
+      zh-CN: 无法抵达该保险库：%{reason}
 
     err_transport_help:
       en: |

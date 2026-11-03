@@ -18,7 +18,7 @@ git_rola:
          init       在工作树内初始化 rola 工作区
          check      检查工作树和当前签入素材内容的差异
          restore    将已经签入但修改的素材换原
-         update     重新解析 rola.toml 并更新文件
+         update     重新解析 `rola.toml` 并更新文件
          hook       提供的钩子行为，它会在注册的钩子中执行
   version:
     en: git-rola version %{version}
@@ -34,7 +34,7 @@ git_rola:
     zh-CN: 不在任何 rola 项目内
   err_lock:
     en: "cannot read rola.lock: %{error}"
-    zh-CN: "无法读取 rola.lock：%{error}"
+    zh-CN: "无法读取 `rola.lock`：%{error}"
   err_git:
     en: "cannot run git: %{error}"
     zh-CN: "无法运行 git：%{error}"

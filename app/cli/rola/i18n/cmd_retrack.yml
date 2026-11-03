@@ -23,20 +23,6 @@ retrack:
             --force              Discard unrecorded changes or end a merge, and forcibly switch the content
             --offline            Do not reach for a Vault: use only what is already here
             --concurrency <N>    Carry the content N units at a time (default 4)
-
-        `PATH` must be a local path the Layout records, and `TARGET` names what it is to record, one version back by default
-        A version target moves the entry's pointer: `~N` N versions back, `N` the version numbered N, or a version's hash
-        The version's content is written back over the file with the pointer; `--only-index` moves the record and leaves the file alone
-        A hash off the way back is a jump, which a run makes unless `--deny-jump` refuses it; a step or a number past an end of the chain is always refused
-        A version this index does not hold is brought from the Vault the Layout tracks before the pointer moves; `--offline` refuses that
-
-        An entry target — a `Uuid`, or a path of the Vault's own Layout — records that entry for the path instead, dropping the one it recorded
-        The entry must hold no path of its own and must record a version; what it holds is read from the Vault's own Layout, or from this one
-        Whether the file changes follows how the two versions stand: the same or a later one keeps the file, an earlier one has its content written over the file when the file stands as recorded, and another chain is a jump `--deny-jump` refuses
-        `--fork` records a fresh `Uuid` with what the path records now, and cannot be given with a target
-
-        A step count written `-N` is read as a flag, so it is written `~N`
-        A file with unrecorded changes is refused where the content is to be switched, and so is one a variant waits for; `--force` goes past both
     zh-CN: |
         为文件的路径记录一个版本，或另一个条目
 
@@ -48,20 +34,6 @@ retrack:
             --force              丢弃未记录的改动或结束合并，强制切换内容
             --offline            不连接保险库，只使用本地已有的内容与版本
             --concurrency <N>    每次同时搬运 N 份内容（默认 4）
-
-        `路径` 必须是布局记录过的本地路径，`目标` 指定它要记录什么，默认回退一个版本
-        版本目标移动条目的指针：`~N` 回退 N 个版本、`N` 第 N 号版本，或某个版本的哈希
-        该版本的内容会随指针写回文件；`--only-index` 只移动记录、不动磁盘上的文件
-        不在回退路径上的哈希属于跳转，默认接受，`--deny-jump` 时拒绝；超出版本链两端的步数与编号一律拒绝
-        本地索引没有的版本会先从布局所跟踪的保险库取回，再移动指针；`--offline` 时拒绝这样做
-
-        条目目标 —— 一个 `Uuid`，或保险库自身布局中的路径 —— 让该路径改而记录那个条目，并删除它原先记录的条目
-        被记录的条目自身不能有路径，且必须记录过版本；其内容从保险库自身布局或本地布局中读取
-        是否改动文件由两个版本的关系决定：相同或本地领先则保留文件，本地落后会在文件处于“已记录”状态时把内容写回，不同链属于跳转，由 `--deny-jump` 拒绝
-        `--fork` 用该路径当前记录给条目换一个新的 `Uuid`，不能与目标同时给出
-
-        以 `-` 开头写的步数会被当成标志，请写成 `~N`
-        需要切换内容时，有未记录改动的文件会被拒绝；等待合并进该文件的变体同样如此；`--force` 可以越过两者
 
   description:
     en: Record a version, or another entry, for a file's path

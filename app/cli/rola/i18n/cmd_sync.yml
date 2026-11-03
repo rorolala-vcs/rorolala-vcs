@@ -39,19 +39,13 @@ sync:
             --no-layout          Do not read or write the Vault's Layout; exchange the index both ways and upload storage
             --force              Go on uploading when the version chain has moved apart
             --concurrency <N>    Carry the content N units at a time (default 4)
-
-        Bring the local Layout and the Vault it tracks into agreement
-        The Vault is named by the Layout's `TRACK`, and the Workspace binds it first
-        The run first fetches what the Vault holds now, then moves by the plan: a `Uuid` only the local side holds goes up, and the side that is behind is updated
-        A file changed here that the Vault is ahead on is refused, so it is never overwritten
-        --no-layout makes no plan and fetches nothing: the index is exchanged both ways and the stored content is uploaded, and a direction is refused beside it
     zh-CN: |
         让本地布局与它所追踪的保险库保持一致
 
         **用法**：rola sync
         **标识**：
-            --up-only            只上传本地布局持有的内容；不能与 --no-layout 同用
-            --down-only          只下拉保险库持有的内容；不能与 --no-layout 同用
+            --up-only            只上传本地布局持有的内容；与 --no-layout 互斥
+            --down-only          只下拉保险库持有的内容；与 --no-layout 互斥
             --both               双向同步，未指定方向时即此
 
             --dry-run            只显示计划，不做任何改动
@@ -60,12 +54,6 @@ sync:
             --no-layout          不读写保险库布局；索引双向交换，存储只上传
             --force              版本链已分叉时仍然上传
             --concurrency <N>    每次同时搬运 N 份内容（默认 4）
-
-        让本地布局与它所追踪的保险库保持一致
-        保险库由布局的 `TRACK` 指定，须先由工作区绑定
-        运行先取回保险库的当前内容，再按计划移动：本地独有的 `Uuid` 上传，落后的一端被更新
-        本地已改动而保险库更前的文件会被拒绝，避免被覆盖
-        --no-layout 不读取布局也不取回：索引双向交换、存储内容上传，且不能同时指定方向
 
   description:
     en: Bring the local Layout and the Vault it tracks into agreement

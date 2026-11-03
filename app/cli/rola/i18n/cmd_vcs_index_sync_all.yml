@@ -5,23 +5,15 @@ vcs_index_sync_all:
     en: |
         Make the indexes at both ends hold the same objects
 
-        **Usage**: `rola vcs-index sync-all [VAULT]`
+        **Usage**: rola vcs-index sync-all [VAULT]
         **Flags**:
             --confirm    Run without asking for confirmation beforehand
-
-        `[VAULT]` names the Vault to reach, either a name the Workspace has bound with `rola vault bind` or an ip, with the port a Vault listens on by default when none is written, and with none given, the Vault the Workspace uses by default
-        Transfer the objects only one end holds, one run leaving each index holding every object the two have together
-        Both indexes are changed, so confirmation is asked before the run
     zh-CN: |
         让两端索引持有相同的对象
 
         **用法**：rola vcs-index sync-all [保险库]
         **标识**：
             --confirm    运行前不征求确认，直接执行
-
-        `[保险库]` 指定要连接的保险库，可以是工作区已用 `rola vault bind` 绑定的名字，或一个 ip，不写端口时用保险库默认监听的端口，不指定时连接工作区默认使用的保险库
-        传输「只有一端持有」的对象，一次运行让两端索引都持有两者合计的全部对象
-        两个索引都会被改动，运行前会先征求确认
 
   cmd_vcs_index_sync_all_description:
     en: Make the indexes at both ends hold the same objects
@@ -36,5 +28,5 @@ vcs_index_sync_all:
     zh-CN: 两端索引现在持有相同的对象
 
   result_declined:
-    en: Nothing was done — the sync was not confirmed
+    en: "Nothing was done: the sync was not confirmed"
     zh-CN: 未做任何改动，同步未获确认

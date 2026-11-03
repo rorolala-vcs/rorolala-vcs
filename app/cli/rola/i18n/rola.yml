@@ -102,9 +102,9 @@ rola:
     zh-CN: 未知命令 `%{command}`
 
   err_unknown_command_similar:
-    en: "Found similar command: “%{commands}”"
-    zh-CN: "找到类似命令：“%{commands}”"
+    en: Found similar command `%{command}`
+    zh-CN: 找到类似命令：`%{commands}`
 
   err_unknown_command_help:
-    en: Please run `rola -h` to see the available commands
-    zh-CN: 请运行 `rola -h` 查看可用的命令
+    en: Run `rola -h` to see the available commands
+    zh-CN: 运行 `rola -h` 查看可用的命令

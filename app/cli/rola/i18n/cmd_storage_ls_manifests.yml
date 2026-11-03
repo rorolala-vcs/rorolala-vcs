@@ -5,15 +5,11 @@ storage_ls_manifests:
     en: |
         List every content the store keeps in chunks
 
-        **Usage**: `rola storage ls-manifests`
-
-        List every content the store keeps in chunks, each line named `manifest:<digest>`, and a manifest whose chunks are gone is still listed
+        **Usage**: rola storage ls-manifests
     zh-CN: |
         列出仓库中分块保存的全部内容
 
         **用法**：rola storage ls-manifests
-
-        列出仓库中分块保存的全部内容，每行名为 `manifest:<摘要>`，块已丢失的 manifest 仍会列出
 
   cmd_storage_ls_manifests_description:
     en: List every content the store keeps in chunks
@@ -27,11 +23,11 @@ storage_ls_manifests:
     en: |
         Please run this inside a store, or inside the Vault or Workspace that keeps a store
     zh-CN: |
-        请在仓库内运行，或在保有仓库的保险库／工作区内运行
+        请在仓库内运行，或在保有仓库的保险库或工作区内运行
 
   err_ls_failed:
-    en: "The manifests in the store could not be listed — %{reason}"
-    zh-CN: "无法列出仓库中的 manifest —— %{reason}"
+    en: "The manifests in the store could not be listed: \"%{reason}\""
+    zh-CN: "无法列出仓库中的 manifest：“%{reason}”"
 
   err_ls_failed_help:
     en: |

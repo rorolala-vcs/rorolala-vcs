@@ -33,30 +33,10 @@ fs_ops:
         Put a path at another position
 
         **Usage**: rola fs-ops mv <FROM> <TO>
-
-        `TO` is the new position it is to land at
-        Either side may be a file or a directory
-        Moving a directory moves everything under it
-
-        When both paths are in the same Workspace, the Layout moves with them
-        Moving out of the Workspace lets the corresponding entries leave the Layout
-        When the target position is already named by the Layout, it is refused rather than overwritten
-
-        A cross-device rename is done as copy first, then remove
     zh-CN: |
         把路径放到另一个位置
 
         **用法**：rola fs-ops mv <源路径> <目标路径>
-
-        `目标路径` 是要落到的新位置
-        两侧都可以是文件或目录
-        移动目录连同其下的一切
-
-        两条路径同属一个工作区时布局随之移动
-        移出工作区则让相应条目离开布局
-        目标位置已被布局命名时会被拒绝而不覆盖
-
-        跨设备的改名改为先复制、再删除
 
   mv_description:
     en: Put a path at another position
@@ -67,26 +47,10 @@ fs_ops:
         Put a copy of a path at another position
 
         **Usage**: rola fs-ops cp <FROM> <TO>
-
-        `TO` is the position the copy is to have
-        The source path stays where it is
-        Either side may be a file or a directory
-        Copying a directory copies everything under it
-
-        Only content and structure are promised
-        Permissions, ownership and times are decided by the destination
     zh-CN: |
         把路径的副本放到另一个位置
 
         **用法**：rola fs-ops cp <源路径> <目标路径>
-
-        `目标路径` 是副本应有的位置
-        源路径留在原处
-        两侧都可以是文件或目录
-        复制目录连同其下的一切
-
-        只承诺内容与结构
-        权限、属主与时间由目标处决定
 
   cp_description:
     en: Put a copy of a path at another position
@@ -97,32 +61,10 @@ fs_ops:
         Take a path away
 
         **Usage**: rola fs-ops rm <PATH>
-
-        Whether it is a file or a directory is read from the path itself
-        Deleting a directory removes everything under it
-        A symbolic link is unlinked rather than followed
-
-        There is no more confirmation
-        Whether to remove is decided by the caller first
-
-        When the path is in a Workspace, the Layout there is handled with it
-        The entries it names are let go of
-        Who holds the entry upstream is no longer read
     zh-CN: |
         把路径移除
 
         **用法**：rola fs-ops rm <路径>
-
-        文件还是目录从路径本身读取
-        删除目录连同其下的一切
-        符号链接被解除而不是被跟随
-
-        不会再有确认
-        删除与否由调用方先行决定
-
-        路径在工作区内时，那里的布局会随之处理
-        其命名的条目被让出
-        上游谁持有该条目不再查看
 
   rm_description:
     en: Take a path away
@@ -171,7 +113,7 @@ fs_ops:
         若是移动或复制，再给出要放到哪里
 
   err_failed:
-    en: "`%{verb}` could not be done — %{reason}"
+    en: "`%{verb}` could not be done: %{reason}"
     zh-CN: "`%{verb}` 执行失败：%{reason}"
 
   err_failed_help:

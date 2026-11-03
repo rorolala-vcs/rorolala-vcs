@@ -9,9 +9,6 @@ vault_admin:
         **Commands**:
             add <MEMBER>    Name a member an administrator of this Vault
             rm <MEMBER>     Stop a member being an administrator of this Vault
-
-        An administrator may change any file in the Vault's Layout, and an ordinary member only the files it holds
-        With no subcommand the administrators are listed
     zh-CN: |
         指定该保险库的管理员
 
@@ -19,9 +16,6 @@ vault_admin:
         **命令**：
             add <成员>    指定成员为该保险库的管理员
             rm <成员>     取消成员作为该保险库管理员
-
-        管理员可以修改保险库布局中的任何文件，普通成员只能修改自己持有的文件
-        不指定子命令时列出管理员
 
   description:
     en: Name the administrators of this Vault
@@ -32,14 +26,10 @@ vault_admin:
         Name a member an administrator of this Vault
 
         **Usage**: rola vault admin add <MEMBER>
-
-        Naming the same member again is not an error
     zh-CN: |
         指定成员为该保险库的管理员
 
         **用法**：rola vault admin add <成员>
-
-        重复指定同一个成员不算错误
 
   add_description:
     en: Name a member an administrator of this Vault
@@ -50,14 +40,10 @@ vault_admin:
         Stop a member being an administrator of this Vault
 
         **Usage**: rola vault admin rm <MEMBER>
-
-        The last administrator cannot be removed
     zh-CN: |
         取消成员作为该保险库管理员
 
         **用法**：rola vault admin rm <成员>
-
-        最后一个管理员无法被移除
 
   rm_description:
     en: Stop a member being an administrator of this Vault

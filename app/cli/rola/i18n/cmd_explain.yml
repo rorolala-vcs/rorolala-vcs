@@ -8,20 +8,12 @@ explain:
         **Usage**: rola explain <COMMAND>
         **Commands**:
             exit-code [N]    Explain exit code N, or the last failing exit code when N is omitted
-
-        What can be explained is decided by the subcommand
-
-        The meaning of an exit code is spoken in the language chosen for this run
     zh-CN: |
         解释程序留下的数字或名字的含义
 
         **用法**：rola explain <命令>
         **命令**：
             exit-code [N]    解释退出码 N，省略 N 时解释上次失败的退出码
-
-        能解释什么由子命令决定
-
-        退出码的含义以本次运行所选的语言说出
 
   cmd_explain_description:
     en: Explain what a number or a name the program left behind means
@@ -33,28 +25,10 @@ explain_exit_code:
         Explain an exit code
 
         **Usage**: rola explain exit-code [N]
-
-        `N` must be an exit code this program has stated
-        They are listed below
-
-        When `N` is omitted, explain the exit code of the last failing run, which is kept under the user's local data directory, at `~/.local/share/rola/lastec` on an XDG machine
-
-        A code the program has not stated is reported as an error, rather than quietly passed over
-
-        **Exit codes**
     zh-CN: |
         解释一个退出码
 
         **用法**：rola explain exit-code [N]
-
-        `N` 须是本程序声明过的退出码
-        它们列在下方
-
-        省略 `N` 时解释上一次失败运行的退出码，该退出码保存在用户的本地数据目录下，XDG 机器上位于 `~/.local/share/rola/lastec`
-
-        程序没有声明的码会报错，而不是默默略过
-
-        **退出码**
 
   cmd_explain_exit_code_description:
     en: Explain an exit code

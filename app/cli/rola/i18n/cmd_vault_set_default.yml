@@ -6,18 +6,10 @@ vault_set_default:
         Choose the Vault the Workspace reaches for by default
 
         **Usage**: rola vault set-default <NAME>
-
-        The name chosen must be one the Workspace has bound
-        It becomes the default when no Vault is named
-        Choosing the current one again is not an error
     zh-CN: |
         选择工作区默认使用的保险库
 
         **用法**：rola vault set-default <名字>
-
-        所选名字必须是工作区已绑定的名字
-        它成为未指定保险库时的默认选择
-        重复指定当前的选择不算错误
 
   cmd_vault_set_default_description:
     en: Choose the Vault the Workspace reaches for

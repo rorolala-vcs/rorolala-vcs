@@ -139,7 +139,7 @@ align:
 
   err_not_lost:
     en: "`%{path}` is not a path the Layout names and the tree lacks"
-    zh-CN: "`%{path}` 不是「布局命名、工作树缺失」的路径"
+    zh-CN: "`%{path}` 不是“布局命名、工作树缺失”的路径"
 
   err_not_lost_help:
     en: |

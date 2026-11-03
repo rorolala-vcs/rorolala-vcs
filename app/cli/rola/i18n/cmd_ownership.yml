@@ -9,15 +9,10 @@ hold:
     en: |
       Claim entries for your account
 
-      **Usage**: `rola hold <PATH>...`
+      **Usage**: rola hold <PATH>...
       **Flags**:
           --allow-partial    Move what can be processed first when not everything can be processed
           --force            Skip the version consistency check
-
-      Each `PATH` is where a file sits in the Layout, `.` is the directory the run was made in, and directories are taken recursively
-      Before claiming, the Layout of the Vault the Layout tracks is fetched, and what it holds now is what is read
-      An entry can be claimed only when the Vault already holds it, local content is at the version the Vault records, and nobody holds it yet
-      When a batch cannot be done whole, nothing is changed
     zh-CN: |
       为本机账户占有条目
 
@@ -25,11 +20,6 @@ hold:
       **标识**：
           --allow-partial    无法全部处理时，先处理可以处理的部分
           --force            跳过版本一致性的检查
-
-      每个 `PATH` 是文件在布局中的位置，`.` 为运行所在目录，目录按递归处理
-      占有前取回布局所追踪保险库的布局，并以它当前的内容为准
-      条目需为保险库已持有、本地内容与保险库版本一致且尚无人持有，才能占有
-      一次无法全部完成时不做任何改动
 
   description:
     en: Claim entries for your account
@@ -40,15 +30,10 @@ giveup:
     en: |
       Let go of entries your account holds
 
-      **Usage**: `rola giveup <PATH>...`
+      **Usage**: rola giveup <PATH>...
       **Flags**:
           --allow-partial    Move what can be processed first when not everything can be processed
           --force            Skip the version consistency and unrecorded change checks
-
-      Each `PATH` is where a file sits in the Layout, `.` is the directory the run was made in, and directories are taken recursively
-      Before letting go, the Layout of the Vault the Layout tracks is fetched, and what it holds now is what is read
-      An entry can be let go of only when the Vault already holds it, local content is at the version the Vault records, there are no unrecorded changes, and this account holds it
-      When a batch cannot be done whole, nothing is changed
     zh-CN: |
       放弃本机账户持有的条目
 
@@ -56,11 +41,6 @@ giveup:
       **标识**：
           --allow-partial    无法全部处理时，先处理可以处理的部分
           --force            跳过版本一致性与未记录改动的检查
-
-      每个 `PATH` 是文件在布局中的位置，`.` 为运行所在目录，目录按递归处理
-      放弃前取回布局所追踪保险库的布局，并以它当前的内容为准
-      条目需为保险库已持有、本地内容与保险库版本一致、无未记录改动并由本账户持有，才能放弃
-      一次无法全部完成时不做任何改动
 
   description:
     en: Let go of entries your account holds

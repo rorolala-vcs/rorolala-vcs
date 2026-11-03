@@ -5,7 +5,7 @@ storage:
     en: |
         Read and write the content a store holds, by hand
 
-        **Usage**: `rola storage <COMMAND>`
+        **Usage**: rola storage <COMMAND>
         **Commands**:
             write-file <FILE>                Store the file's content, and print the hash it is kept under
             extract-file <HASH> [DIR]        Write the stored content out by its hash
