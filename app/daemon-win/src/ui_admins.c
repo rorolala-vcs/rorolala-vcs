@@ -214,6 +214,11 @@ static void free_suggestions(NameDialog *dialog) {
 static INT_PTR CALLBACK NameDialogProc(HWND dialog, UINT message, WPARAM wparam,
                                        LPARAM lparam) {
   NameDialog *state = (NameDialog *)GetWindowLongPtrW(dialog, DWLP_USER);
+  INT_PTR themed;
+
+  if (theme_message(dialog, message, wparam, lparam, &themed)) {
+    return themed;
+  }
 
   switch (message) {
   case WM_INITDIALOG:
@@ -357,7 +362,12 @@ static void edit_vault_config(void) {
 
 static INT_PTR CALLBACK AdminsPageProcImpl(HWND dialog, UINT message,
                                            WPARAM wparam, LPARAM lparam) {
+  INT_PTR themed;
   (void)lparam;
+
+  if (theme_message(dialog, message, wparam, lparam, &themed)) {
+    return themed;
+  }
 
   switch (message) {
   case WM_INITDIALOG:

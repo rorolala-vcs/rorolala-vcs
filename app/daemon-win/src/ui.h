@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include "theme.h"
 #include "util.h"
 
 typedef struct AppState {

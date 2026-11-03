@@ -31,6 +31,23 @@ to `.cache/daemon-win`, so nothing is left in the source tree.
 .\app\daemon-win\scripts\daemon-win-clean.ps1
 ```
 
+## Colour
+
+The window follows the desktop's application theme. Windows 10 1809 and later
+answer for themselves — the registry's `AppsUseLightTheme`, the DWM frame
+attribute, and the two uxtheme exports that allow a process's controls to be
+drawn dark — and that is the look the window is drawn in when the desktop says
+dark.
+
+Anything that cannot answer is drawn light: a build older than 1809, high
+contrast, a registry value that cannot be read, or a uxtheme that does not export
+the two controls' entry points. Nothing is half-dark: the title bar, the dialog
+ground, the controls and the tab strip all follow the same decision. A change to
+the desktop's setting is picked up while the window is open.
+
+The tab strip is painted by the window after the control has drawn itself,
+because the control's own dark theme leaves the unselected tabs light.
+
 ## The four tabs
 
 - **Daemon** — starts the `rola-daemon.exe` beside the window, appending its stdout and stderr to

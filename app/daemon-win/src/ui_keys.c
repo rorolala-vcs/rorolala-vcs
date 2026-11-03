@@ -209,7 +209,12 @@ static void reveal_selected(void) {
 
 static INT_PTR CALLBACK KeysPageProcImpl(HWND dialog, UINT message,
                                          WPARAM wparam, LPARAM lparam) {
+  INT_PTR themed;
   (void)lparam;
+
+  if (theme_message(dialog, message, wparam, lparam, &themed)) {
+    return themed;
+  }
 
   switch (message) {
   case WM_INITDIALOG:

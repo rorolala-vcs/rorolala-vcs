@@ -225,7 +225,12 @@ static void create_pages(HWND main) {
 
 static INT_PTR CALLBACK MainDialogProc(HWND dialog, UINT message, WPARAM wparam,
                                        LPARAM lparam) {
+  INT_PTR themed;
   (void)lparam;
+
+  if (theme_message(dialog, message, wparam, lparam, &themed)) {
+    return themed;
+  }
 
   switch (message) {
   case WM_INITDIALOG:
@@ -318,6 +323,8 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE previous,
                                       COINIT_DISABLE_OLE1DDE))) {
     return 1;
   }
+
+  theme_init();
 
   fix_daemon_path();
   if (!app_daemon_file_exists()) {

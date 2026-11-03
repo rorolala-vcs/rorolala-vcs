@@ -120,6 +120,11 @@ void registry_page_reload(void) { reload(FALSE); }
 static INT_PTR CALLBACK EntryDialogProc(HWND dialog, UINT message,
                                         WPARAM wparam, LPARAM lparam) {
   EntryDialog *state = (EntryDialog *)GetWindowLongPtrW(dialog, DWLP_USER);
+  INT_PTR themed;
+
+  if (theme_message(dialog, message, wparam, lparam, &themed)) {
+    return themed;
+  }
 
   switch (message) {
   case WM_INITDIALOG:
@@ -397,7 +402,12 @@ static void check_registry(void) {
 
 static INT_PTR CALLBACK RegistryPageProcImpl(HWND dialog, UINT message,
                                              WPARAM wparam, LPARAM lparam) {
+  INT_PTR themed;
   (void)lparam;
+
+  if (theme_message(dialog, message, wparam, lparam, &themed)) {
+    return themed;
+  }
 
   switch (message) {
   case WM_INITDIALOG:

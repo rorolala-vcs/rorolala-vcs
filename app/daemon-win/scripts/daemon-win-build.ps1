@@ -82,7 +82,7 @@ $lines = @(
     'if errorlevel 1 exit /b 1'
     "cl $($common -join ' ') /Fo`"$objDir\\`" `"$srcDir\*.c`""
     'if errorlevel 1 exit /b 1'
-    "cl /nologo /Fe:`"$exe`" `"$objDir\*.obj`" `"$objDir\app.res`" /link /SUBSYSTEM:WINDOWS /MANIFEST:NO user32.lib gdi32.lib comctl32.lib comdlg32.lib shell32.lib ole32.lib"
+    "cl /nologo /Fe:`"$exe`" `"$objDir\*.obj`" `"$objDir\app.res`" /link /SUBSYSTEM:WINDOWS /MANIFEST:NO user32.lib gdi32.lib comctl32.lib comdlg32.lib shell32.lib ole32.lib uxtheme.lib advapi32.lib"
     'if errorlevel 1 exit /b 1'
     'exit /b 0'
 )
