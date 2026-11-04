@@ -18,7 +18,7 @@ internal enum HoverPart
     /// <summary>The message the card shows.</summary>
     Message,
 
-    /// <summary>The creator's pill.</summary>
+    /// <summary>The creator's name.</summary>
     Creator,
 
     /// <summary>The big faint version number.</summary>
@@ -370,8 +370,8 @@ internal sealed partial class VersionGraphView
                 var middle = y - card.Y;
 
                 if (
-                    x >= card.CardLeft + 11
-                    && x <= card.CardLeft + 11 + 34 + card.CreatorWidth
+                    x >= card.CardLeft + 13
+                    && x <= card.CardLeft + 13 + card.CreatorWidth
                     && middle >= -10
                     && middle <= 10
                 )
@@ -379,7 +379,7 @@ internal sealed partial class VersionGraphView
                     return new Hover(card, HoverPart.Creator, null, null, -1);
                 }
 
-                if (x >= card.CardLeft + 57 + card.CreatorWidth)
+                if (x >= card.CardLeft + 23 + card.CreatorWidth)
                 {
                     return new Hover(card, HoverPart.Message, null, null, -1);
                 }

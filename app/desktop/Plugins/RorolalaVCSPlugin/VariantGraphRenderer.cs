@@ -1043,7 +1043,7 @@ internal sealed class VariantGraphRenderer
         );
     }
 
-    /// <summary>Draws the card's first row: the creator's pill and the message.</summary>
+    /// <summary>Draws the card's first row: the creator's name and the message.</summary>
     /// <param name="context">Where to draw.</param>
     /// <param name="ink">The colours in force.</param>
     /// <param name="frame">Where the graph is drawn.</param>
@@ -1061,35 +1061,23 @@ internal sealed class VariantGraphRenderer
     {
         var zoom = frame.Zoom;
         var middle = top + (VariantGraphDrawing.CardHeight / 2 * zoom);
-        var pillWidth = (34 + card.CreatorWidth) * zoom;
-        var pill = new Rect(left + (11 * zoom), middle - (10 * zoom), pillWidth, 20 * zoom);
         var maker = GraphHue.For(card.Creator, 0.55, 0.43);
         var tint = GraphTint.Mix(maker, ink.Text, 0.2);
-        var edge = GraphTint.Mix(maker, ink.ChipEdge, 0.4);
 
-        // The creator's pill is drawn as the pills under it are: the chip's own ground with the
-        // creator's colour for its border, its pen and its name, so one name reads the same way
-        // wherever the graph says it.
-        context.DrawRectangle(
-            new SolidColorBrush(ink.ChipFill),
-            new Pen(new SolidColorBrush(edge), Math.Max(0.7, 0.9 * zoom)),
-            pill,
-            10 * zoom,
-            10 * zoom
-        );
-
-        DrawPen(context, left + (24 * zoom), middle + (1.2 * zoom), tint, zoom);
-
+        // The creator's name is written as text rather than in a pill of its own: the card has one pill
+        // row already, and a second chip in the first row would read as another fact about the version
+        // instead of the name that signed it.
+        var nameLeft = left + (13 * zoom);
         var name = Text(GraphFont.Creator, card.Creator, tint, zoom);
-        context.DrawText(name, new Point(left + (35 * zoom), middle + (4 * zoom) - name.Baseline));
+        context.DrawText(name, new Point(nameLeft, middle + (4 * zoom) - name.Baseline));
 
         if (card.Message.Length == 0)
         {
             return;
         }
 
-        var textLeft = left + ((57 + card.CreatorWidth) * zoom);
-        var room = (VariantGraphDrawing.CardWidth - 57 - card.CreatorWidth - 14) * zoom;
+        var textLeft = left + ((23 + card.CreatorWidth) * zoom);
+        var room = (VariantGraphDrawing.CardWidth - 23 - card.CreatorWidth - 14) * zoom;
 
         if (room <= 4)
         {
@@ -1111,69 +1099,6 @@ internal sealed class VariantGraphRenderer
         };
 
         context.DrawText(message, new Point(textLeft, middle + (4.5 * zoom) - message.Baseline));
-    }
-
-    /// <summary>Draws the pen that marks a creator's pill, at the size the drawing stands at.</summary>
-    /// <param name="context">Where to draw.</param>
-    /// <param name="x">The pill's left edge, in screen units.</param>
-    /// <param name="y">The pen's middle, in screen units.</param>
-    /// <param name="colour">The creator's colour, which the pen is drawn in.</param>
-    /// <param name="zoom">How large content units are drawn.</param>
-    private static void DrawPen(DrawingContext context, double x, double y, Color colour, double zoom)
-    {
-        // The glyph is drawn in a twelve-unit square turned so its point reads as a pen rather than a
-        // slash, and the square's middle is what stands at the pill's icon place.
-        var scale = 0.85 * zoom;
-
-        using (
-            context.PushTransform(
-                new Matrix(scale, 0, 0, scale, x - (6 * scale), y - (6 * scale))
-            )
-        )
-        {
-            context.DrawGeometry(new SolidColorBrush(colour), null, PenPath());
-            context.DrawGeometry(
-                new SolidColorBrush(GraphTint.Alpha(Colors.Black, 70)),
-                null,
-                PenNib()
-            );
-        }
-    }
-
-    /// <summary>The shape of the pen's body, in the units the pill stands at.</summary>
-    /// <returns>The geometry.</returns>
-    private static StreamGeometry PenPath()
-    {
-        var geometry = new StreamGeometry();
-
-        using (var path = geometry.Open())
-        {
-            path.BeginFigure(new Point(3, 9.2), true);
-            path.LineTo(new Point(4.1, 6.2));
-            path.LineTo(new Point(9.2, 1.1));
-            path.LineTo(new Point(11, 2.9));
-            path.LineTo(new Point(5.9, 8));
-            path.EndFigure(true);
-        }
-
-        return geometry;
-    }
-
-    /// <summary>The shape of the nib, which is the pen's darker corner.</summary>
-    /// <returns>The geometry.</returns>
-    private static StreamGeometry PenNib()
-    {
-        var geometry = new StreamGeometry();
-
-        using (var path = geometry.Open())
-        {
-            path.BeginFigure(new Point(3, 9.2), true);
-            path.LineTo(new Point(3.7, 7.3));
-            path.LineTo(new Point(4.9, 8.5));
-            path.EndFigure(true);
-        }
-
-        return geometry;
     }
 
     /// <summary>Draws a card's pills, directly under its first row.</summary>

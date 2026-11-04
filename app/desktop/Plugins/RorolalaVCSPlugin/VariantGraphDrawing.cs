@@ -12,7 +12,7 @@ internal enum GraphFont
     /// <summary>A variant's message, one line in its description card.</summary>
     Message,
 
-    /// <summary>The name inside a creator's pill.</summary>
+    /// <summary>The name of the account that made a version.</summary>
     Creator,
 
     /// <summary>The side a pill's entry is on: <c>LOCAL</c>, a Vault's name.</summary>
@@ -228,7 +228,7 @@ internal sealed record DraftInfo(
 /// <param name="PillsHeight">How tall all its pill rows are.</param>
 /// <param name="Entries">The entries that point at it.</param>
 /// <param name="IncomingJoins">How many variants merge it in.</param>
-/// <param name="CreatorWidth">How wide its creator's pill is, in content units.</param>
+/// <param name="CreatorWidth">How wide its creator's name is, in content units.</param>
 /// <param name="LaneColour">The colour of the file whose lane it stands in.</param>
 /// <param name="CreatorHash">The Creator object it names, as hex; empty for a draft.</param>
 /// <param name="MessageHash">The Message object it names, as hex; empty for a draft.</param>
@@ -1610,7 +1610,7 @@ internal sealed class VariantGraphDrawing
         /// <summary>The row of its card's centre.</summary>
         public double Y { get; set; }
 
-        /// <summary>How wide its creator's pill is.</summary>
+        /// <summary>How wide its creator's name is.</summary>
         public double CreatorWidth { get; set; }
 
         /// <summary>The colour of the file whose lane it stands in.</summary>
@@ -1670,7 +1670,7 @@ internal sealed class VariantGraphDrawing
     }
 }
 
-/// <summary>Gives a name a colour, which is what a creator's pill and a file's lane are drawn with.</summary>
+/// <summary>Gives a name a colour, which is what a creator's name and a file's lane are drawn with.</summary>
 /// <remarks>
 /// The same rule the launcher's workspace badges use: the name's bytes are hashed, the hash's three
 /// low bytes are read as a colour, and that colour's hue is kept with one fixed saturation and

@@ -157,9 +157,10 @@ The old drawing was one file's chain, on a vertical version axis, made from the 
 reading; it is replaced rather than kept beside the new one, and the dock keeps its name and its
 place in a saved layout.
 
-A card is two rows: a description row with the creator's pill, the message and the version number,
+A card is two rows: a description row with the creator's name, the message and the version number,
 and a row of pills under it naming the variant's hash and the entries that point at it. The
-creator's pill is an outline in the name's own colour, as the pills under it are. The work's own
+creator's name is written in its own colour, not in a pill of its own, so the row of pills beneath it
+is the only pill row on the card. The work's own
 entries wear the look's accent and a Vault's the primary, and the chain of the entry being read is
 outlined in the accent. The local pill of a file the user has chosen is drawn in the look's ink
 instead, so the files a reading stands on are told from the rest of the work; choosing several marks
@@ -172,7 +173,7 @@ draft card — in the accent when a track would continue its record, red when th
 version — and the version it should be standing on is named on its edge. A base version the index
 does not hold is a broken node beside the card naming it.
 
-Hovering a card's message, a pill or the creator's pill fills a table in the graph's corner with what
+Hovering a card's message, a pill or the creator's name fills a table in the graph's corner with what
 that thing says — the whole hash, the Uuid, the path, the owner, the reason a state is worn — and the
 switch beside it turns the table on and off. A value wider than its column ends in an ellipsis, and a
 right-click on the thing copies the whole of it; a right-click on a variant's hash also offers
@@ -185,6 +186,8 @@ pill asks the browser to show the file it names. A right-click on the card still
 join, cancel-merge and delete-changes runs the old graph offered. A press on a card brings it to the
 middle of the dock at twice its size, and a press on the empty ground takes the choice away — the
 listing's rows and the graph's chains both — while a drag across the ground moves the drawing. The
+choice's emphasis goes with it, but the cards stay where they are until another file is chosen, so a
+click that chose nothing does not replace the drawing with every variant of the work. The
 scale and place ease into view rather than snapping, and the wheel likewise. The drawing stands on a
 grid of
 twenty-unit squares, and the version columns are its ruler: a broken line the height of the panel and
