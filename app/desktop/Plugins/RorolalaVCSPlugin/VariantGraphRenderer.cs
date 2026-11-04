@@ -3,7 +3,6 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
 using RorolalaDesktop.Contract;
-using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;
 
@@ -42,7 +41,6 @@ internal static class GraphTint
 /// <param name="Text">A card's message.</param>
 /// <param name="Muted">What is said beside the content.</param>
 /// <param name="Faint">What is said furthest beside it.</param>
-/// <param name="Axis">The column lines and their labels.</param>
 /// <param name="GridMajor">The grid's heavier lines.</param>
 /// <param name="GridMinor">The grid's lighter lines.</param>
 /// <param name="BaseEdge">The colour of a chain edge.</param>
@@ -73,7 +71,6 @@ internal sealed record GraphInk(
     Color Text,
     Color Muted,
     Color Faint,
-    Color Axis,
     Color GridMajor,
     Color GridMinor,
     Color BaseEdge,
@@ -119,7 +116,6 @@ internal sealed record GraphInk(
             Text: front,
             Muted: GraphTint.Mix(front, ground, 0.45),
             Faint: GraphTint.Mix(front, ground, 0.28),
-            Axis: GraphTint.Mix(front, ground, 0.20),
             GridMajor: GraphTint.Alpha(palette.Accent, light ? (byte)26 : (byte)15),
             GridMinor: GraphTint.Alpha(palette.Accent, light ? (byte)13 : (byte)8),
             BaseEdge: GraphTint.Mix(front, ground, light ? 0.34 : 0.18),
@@ -172,6 +168,7 @@ internal sealed record GraphInk(
 /// Whether the graph's focused chains are to be picked out. A graph whose choice has been taken away keeps
 /// its focus chains in the drawing, so the same cards stay on screen, but stops emphasising them.
 /// </param>
+/// <param name="Edge">The edge the pointer is on, when it is on one, which is drawn thicker and on top.</param>
 internal sealed record VariantGraphFrame(
     double Zoom,
     Point Pan,
@@ -179,7 +176,8 @@ internal sealed record VariantGraphFrame(
     IReadOnlySet<int>? Lineage,
     string Stats,
     bool Truncated,
-    bool Emphasized
+    bool Emphasized,
+    int? Edge
 );
 
 /// <summary>
@@ -275,11 +273,9 @@ internal sealed class VariantGraphRenderer
         var focused = frame.Emphasized && drawing.FocusChain.Count > 0 && frame.Hover is null;
 
         DrawGrid(context, size, ink, frame);
-        DrawAxisLines(context, size, ink, frame, drawing);
-        DrawEdges(context, ink, frame, drawing, screen, active);
+        DrawEdges(context, ink, frame, drawing, screen, active, frame.Edge);
         DrawGhosts(context, ink, frame, drawing);
-        DrawCards(context, ink, frame, drawing, visible, active, focused);
-        DrawAxisLabels(context, size, ink, frame, drawing);
+        DrawCards(context, ink, frame, drawing, visible, active, focused, frame.Edge);
     }
 
     /// <summary>What the pointer's lineage is, or what the focused chains are when it is on nothing.</summary>
@@ -368,138 +364,6 @@ internal sealed class VariantGraphRenderer
         }
     }
 
-    /// <summary>Draws a broken line down every version column, the whole height of the panel.</summary>
-    /// <remarks>
-    /// The line is the ruler the columns are read against, so it is not the drawing's: it is pinned to
-    /// the panel's height and its brokenness is a screen measurement rather than content units, which
-    /// is what keeps it reading as a ruler at every zoom. What moves is where it stands, which is where
-    /// its column is.
-    /// </remarks>
-    /// <param name="context">Where to draw.</param>
-    /// <param name="size">How large the control is.</param>
-    /// <param name="ink">The colours in force.</param>
-    /// <param name="frame">Where the graph is drawn.</param>
-    /// <param name="drawing">The graph.</param>
-    private static void DrawAxisLines(
-        DrawingContext context,
-        Size size,
-        GraphInk ink,
-        VariantGraphFrame frame,
-        VariantGraphDrawing drawing
-    )
-    {
-        var opacity = RulerOpacity(frame);
-
-        if (opacity <= 0)
-        {
-            return;
-        }
-
-        var pen = new Pen(
-            new SolidColorBrush(GraphTint.Alpha(ink.Axis, (byte)Math.Round(255 * opacity))),
-            1
-        )
-        {
-            DashStyle = new DashStyle([2, 6], 0),
-        };
-
-        foreach (var tick in drawing.Ticks)
-        {
-            var x = frame.Pan.X + (tick.X * frame.Zoom);
-
-            if (x < 0 || x > size.Width)
-            {
-                continue;
-            }
-
-            context.DrawLine(pen, new Point(x, 0), new Point(x, size.Height));
-        }
-    }
-
-    /// <summary>How strongly the ruler is drawn at a scale: whole while the graph is read from afar.</summary>
-    /// <remarks>
-    /// The columns and their numbers are a reading aid rather than the drawing, so they are drawn whole
-    /// until the graph is at half its natural size and are then faded out, gone before the graph reaches
-    /// the scale its cards are read at. A ruler that stayed over a close-up would be one more line across
-    /// the work, and one that disappeared at once would make the version a reader was looking at hard to
-    /// find.
-    /// </remarks>
-    /// <param name="frame">Where the graph is drawn.</param>
-    /// <returns>Its opacity, from 1 at the far scale to 0 at the near one.</returns>
-    private static double RulerOpacity(VariantGraphFrame frame) => frame.Zoom switch
-    {
-        <= 0.5 => 1,
-        >= 1.1 => 0,
-        _ => 1 - ((frame.Zoom - 0.5) / 0.6),
-    };
-
-    /// <summary>Draws the version numbers at the top of the panel, as a ruler over the columns.</summary>
-    /// <remarks>
-    /// The numbers stand at the panel's top rather than over each column's content, and they are drawn
-    /// at one size at every zoom: they are read as marks on a ruler, not as part of the drawing, so a
-    /// reader can find a version by the column under one whatever the graph is scaled to.
-    /// </remarks>
-    /// <param name="context">Where to draw.</param>
-    /// <param name="size">How large the control is.</param>
-    /// <param name="ink">The colours in force.</param>
-    /// <param name="frame">Where the graph is drawn.</param>
-    /// <param name="drawing">The graph.</param>
-    private static void DrawAxisLabels(
-        DrawingContext context,
-        Size size,
-        GraphInk ink,
-        VariantGraphFrame frame,
-        VariantGraphDrawing drawing
-    )
-    {
-        var opacity = RulerOpacity(frame);
-
-        if (opacity <= 0)
-        {
-            return;
-        }
-
-        var alpha = (byte)Math.Round(255 * opacity);
-        var colour = GraphTint.Alpha(GraphTint.Mix(ink.Axis, ink.Ground, 0.3), alpha);
-        var mask = GraphTint.Alpha(ink.Ground, alpha);
-        var baseline = 18.0;
-
-        foreach (var tick in drawing.Ticks)
-        {
-            var x = frame.Pan.X + (tick.X * frame.Zoom);
-
-            if (x < -30 || x > size.Width + 30)
-            {
-                continue;
-            }
-
-            var text = new FormattedText(
-                tick.Label,
-                CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight,
-                new Typeface(GraphMeasure.Mono),
-                10.5,
-                new SolidColorBrush(colour)
-            );
-
-            var left = x - (text.Width / 2);
-            var top = baseline - text.Baseline;
-
-            // The number sits on the ruler rather than in the drawing, so the column's own broken
-            // line is masked where the number stands: a dash running through the glyphs is read as a
-            // fault in the letter rather than as the line behind it.
-            context.DrawRectangle(
-                new SolidColorBrush(mask),
-                null,
-                new Rect(left - 3, top - 2, text.Width + 6, text.Height + 4),
-                3,
-                3
-            );
-
-            context.DrawText(text, new Point(left, top));
-        }
-    }
-
     /// <summary>Draws the edges: what came of the same content, then the chains, then the merges.</summary>
     /// <param name="context">Where to draw.</param>
     /// <param name="ink">The colours in force.</param>
@@ -507,17 +371,20 @@ internal sealed class VariantGraphRenderer
     /// <param name="drawing">The graph.</param>
     /// <param name="screen">The control's own rectangle, which the edges are drawn in.</param>
     /// <param name="active">The cards to keep in full, or nothing when nothing is emphasised.</param>
-    private void DrawEdges(
+    /// <param name="hovered">The edge the pointer is on, when it is on one.</param>
+    private static void DrawEdges(
         DrawingContext context,
         GraphInk ink,
         VariantGraphFrame frame,
         VariantGraphDrawing drawing,
         Rect screen,
-        IReadOnlySet<int>? active
+        IReadOnlySet<int>? active,
+        int? hovered
     )
     {
-        foreach (var link in drawing.Links)
+        for (var index = 0; index < drawing.Links.Count; index++)
         {
+            var link = drawing.Links[index];
             var from = drawing.Cards[link.From];
             var to = drawing.Cards[link.To];
             var (start, end, control1, control2, arrow) = GeometryOf(from, to, link.Kind, frame);
@@ -534,8 +401,16 @@ internal sealed class VariantGraphRenderer
                 continue;
             }
 
-            var faint = active is not null && (!active.Contains(link.From) || !active.Contains(link.To));
+            var onPointer = hovered == index;
+            var faint = !onPointer && active is not null && (!active.Contains(link.From) || !active.Contains(link.To));
             var (colour, dash, width) = EdgeStyle(link.Kind, ink);
+
+            if (onPointer)
+            {
+                colour = ink.Accent;
+                width = Math.Max(2.4, width * 1.9);
+            }
+
             IDisposable? undo = faint ? context.PushOpacity(0.14) : null;
 
             var pen = new Pen(new SolidColorBrush(colour), width)
@@ -555,11 +430,6 @@ internal sealed class VariantGraphRenderer
             if (arrow)
             {
                 context.DrawGeometry(new SolidColorBrush(colour), null, Arrow(end, control2, frame.Zoom));
-            }
-
-            if (frame.Zoom >= TextZoom)
-            {
-                DrawEdgeLabel(context, ink, frame, link, from, to, control1, control2);
             }
 
             undo?.Dispose();
@@ -595,7 +465,7 @@ internal sealed class VariantGraphRenderer
     /// <param name="kind">What the edge means.</param>
     /// <param name="frame">Where the graph is drawn.</param>
     /// <returns>The start and end points, the two controls, and whether it is arrowed.</returns>
-    private static (Point Start, Point End, Point Control1, Point Control2, bool Arrow) GeometryOf(
+    internal static (Point Start, Point End, Point Control1, Point Control2, bool Arrow) GeometryOf(
         GraphCard from,
         GraphCard to,
         GraphLinkKind kind,
@@ -650,89 +520,6 @@ internal sealed class VariantGraphRenderer
             new Point(left.X + bend, left.Y),
             new Point(right.X - bend, right.Y),
             kind is not GraphLinkKind.Same
-        );
-    }
-
-    /// <summary>Draws what an edge is, over the middle of it.</summary>
-    /// <param name="context">Where to draw.</param>
-    /// <param name="ink">The colours in force.</param>
-    /// <param name="frame">Where the graph is drawn.</param>
-    /// <param name="link">The edge.</param>
-    /// <param name="from">The card it is walked from.</param>
-    /// <param name="to">The card it reaches.</param>
-    /// <param name="control1">The curve's first control point.</param>
-    /// <param name="control2">The curve's second control point.</param>
-    private void DrawEdgeLabel(
-        DrawingContext context,
-        GraphInk ink,
-        VariantGraphFrame frame,
-        GraphLink link,
-        GraphCard from,
-        GraphCard to,
-        Point control1,
-        Point control2
-    )
-    {
-        var at = PointAt(control1, control2, 0.5);
-        var colour = ink.Muted;
-        string? said = link.Kind switch
-        {
-            GraphLinkKind.Same => RolaI18N.Get("rorolala_vcs.version_graph.same_content"),
-            GraphLinkKind.Join or GraphLinkKind.Merging => RolaI18N.Get(
-                "rorolala_vcs.version_graph.merged_into",
-                VariantGraphDrawing.VersionLabel(from)
-            ),
-            GraphLinkKind.Draft => RolaI18N.Get(
-                "rorolala_vcs.version_graph.draft_based_on",
-                to.Draft?.BaseLabel ?? VariantGraphDrawing.VersionLabel(from)
-            ),
-            GraphLinkKind.Wrong when to.Draft?.ShouldLabel is { } should => RolaI18N.Get(
-                "rorolala_vcs.version_graph.draft_wrong_based_on",
-                to.Draft.BaseLabel,
-                should
-            ),
-            GraphLinkKind.Wrong => RolaI18N.Get(
-                "rorolala_vcs.version_graph.draft_wrong_based_on_only",
-                to.Draft?.BaseLabel ?? VariantGraphDrawing.VersionLabel(from)
-            ),
-            _ => null,
-        };
-
-        if (said is null)
-        {
-            return;
-        }
-
-        if (link.Kind == GraphLinkKind.Merging)
-        {
-            colour = ink.Pending;
-        }
-
-        var text = Text(GraphFont.Tag, said, colour, frame.Zoom);
-        context.DrawText(
-            text,
-            new Point(
-                at.X - (text.Width / 2),
-                at.Y - ((VariantGraphDrawing.CardHeight / 2) + 8) * frame.Zoom
-            )
-        );
-    }
-
-    /// <summary>The point half way along a cubic curve.</summary>
-    /// <param name="control1">The curve's first control point.</param>
-    /// <param name="control2">Its second.</param>
-    /// <param name="part">Where along it.</param>
-    /// <returns>The point.</returns>
-    private static Point PointAt(Point control1, Point control2, double part)
-    {
-        var first = new Point(
-            (control1.X + control2.X) / 2,
-            (control1.Y + control2.Y) / 2
-        );
-
-        return new Point(
-            (first.X * part) + (control1.X * (1 - part)) + ((control2.X - control1.X) * part),
-            (first.Y * part) + (control1.Y * (1 - part)) + ((control2.Y - control1.Y) * part)
         );
     }
 
@@ -809,6 +596,7 @@ internal sealed class VariantGraphRenderer
     /// <param name="visible">The content the viewport holds.</param>
     /// <param name="active">The cards to keep in full, or nothing when nothing is emphasised.</param>
     /// <param name="focused">Whether a focused chain is being emphasised.</param>
+    /// <param name="hoveredEdge">The edge the pointer is on, when it is on one.</param>
     private void DrawCards(
         DrawingContext context,
         GraphInk ink,
@@ -816,33 +604,96 @@ internal sealed class VariantGraphRenderer
         VariantGraphDrawing drawing,
         Rect visible,
         IReadOnlySet<int>? active,
-        bool focused
+        bool focused,
+        int? hoveredEdge
     )
     {
+        HashSet<int>? onTop = null;
+
+        if (hoveredEdge is int index && index >= 0 && index < drawing.Links.Count)
+        {
+            var link = drawing.Links[index];
+            onTop = [link.From, link.To];
+        }
+
         foreach (var card in drawing.Cards)
         {
-            var bounds = new Rect(
-                card.CardLeft,
-                card.CardTop,
-                VariantGraphDrawing.CardWidth,
-                (card.ContentBottom - card.CardTop) + 4
-            );
-
-            if (!bounds.Intersects(visible))
+            if (onTop?.Contains(card.Index) is true || !CardVisible(card, visible))
             {
                 continue;
             }
 
-            var faint = active is not null && !active.Contains(card.Index);
-            var onChain = focused && drawing.FocusChain.Contains(card.Index);
-            var beside = focused && !onChain && drawing.FocusRelated.Contains(card.Index);
-            var hovered = frame.Hover == card.Index;
-            IDisposable? undo = faint ? context.PushOpacity(0.26) : null;
-
-            DrawCard(context, ink, frame, card, onChain, beside, hovered);
-
-            undo?.Dispose();
+            DrawOneCard(context, ink, frame, drawing, card, active, focused, endpoint: false);
         }
+
+        // The two ends of the edge under the pointer are drawn after the rest of the graph, so the edge
+        // they belong to is read against them rather than under the cards that happen to cover them.
+        if (onTop is null)
+        {
+            return;
+        }
+
+        foreach (var card in drawing.Cards)
+        {
+            if (!onTop.Contains(card.Index) || !CardVisible(card, visible))
+            {
+                continue;
+            }
+
+            DrawOneCard(
+                context,
+                ink,
+                frame,
+                drawing,
+                card,
+                active: null,
+                focused: false,
+                endpoint: true
+            );
+        }
+    }
+
+    /// <summary>Whether a card intersects the part of the drawing the viewport holds.</summary>
+    /// <param name="card">The card.</param>
+    /// <param name="visible">The viewport, in content units.</param>
+    /// <returns>Whether it is drawn.</returns>
+    private static bool CardVisible(GraphCard card, Rect visible) =>
+        new Rect(
+            card.CardLeft,
+            card.CardTop,
+            VariantGraphDrawing.CardWidth,
+            (card.ContentBottom - card.CardTop) + 4
+        ).Intersects(visible);
+
+    /// <summary>Draws one card with the emphasis the focus and pointer give it.</summary>
+    /// <param name="context">Where to draw.</param>
+    /// <param name="ink">The colours in force.</param>
+    /// <param name="frame">Where the graph is drawn.</param>
+    /// <param name="drawing">The graph.</param>
+    /// <param name="card">The card.</param>
+    /// <param name="active">The cards to keep in full, or nothing when nothing is emphasised.</param>
+    /// <param name="focused">Whether a focused chain is being emphasised.</param>
+    /// <param name="endpoint">Whether it is one end of the edge under the pointer.</param>
+    private void DrawOneCard(
+        DrawingContext context,
+        GraphInk ink,
+        VariantGraphFrame frame,
+        VariantGraphDrawing drawing,
+        GraphCard card,
+        IReadOnlySet<int>? active,
+        bool focused,
+        bool endpoint
+    )
+    {
+        var faint = active is not null && !active.Contains(card.Index);
+        var onChain = focused && drawing.FocusChain.Contains(card.Index);
+        var beside = focused && !onChain && drawing.FocusRelated.Contains(card.Index);
+        var hovered = frame.Hover == card.Index;
+        IDisposable? undo = faint ? context.PushOpacity(0.26) : null;
+
+        DrawCard(context, ink, frame, card, onChain, beside, hovered, endpoint);
+
+        undo?.Dispose();
     }
 
     /// <summary>Draws one card: its shape, its content and its pills.</summary>
@@ -853,6 +704,7 @@ internal sealed class VariantGraphRenderer
     /// <param name="onChain">Whether it is on a focused entry's own chain.</param>
     /// <param name="beside">Whether it stands beside such a chain.</param>
     /// <param name="hovered">Whether the pointer is on it.</param>
+    /// <param name="endpoint">Whether it is one end of the edge under the pointer.</param>
     private void DrawCard(
         DrawingContext context,
         GraphInk ink,
@@ -860,7 +712,8 @@ internal sealed class VariantGraphRenderer
         GraphCard card,
         bool onChain,
         bool beside,
-        bool hovered
+        bool hovered,
+        bool endpoint
     )
     {
         var zoom = frame.Zoom;
@@ -873,7 +726,13 @@ internal sealed class VariantGraphRenderer
         var radius = 12 * zoom;
         var (fill, stroke, dash, thickness) = CardStyle(card, ink, onChain);
 
-        if (hovered)
+        if (endpoint)
+        {
+            stroke = ink.Accent;
+            dash = null;
+            thickness = Math.Max(1.8, 2.2 * zoom);
+        }
+        else if (hovered)
         {
             stroke = ink.Text;
             dash = null;
@@ -1161,12 +1020,14 @@ internal sealed class VariantGraphRenderer
         var rect = new Rect(x, y, width, height);
         var radius = 6 * zoom;
         var side = chip.Entry is { } entry ? entry.Side : chip.Kind == GraphChipKind.File ? "local" : null;
-        var sideColour = side switch
-        {
-            null => ink.Muted,
-            "local" when chip.Chosen => ink.Text,
-            _ => ink.Side(side),
-        };
+        var sideColour = chip.Tracked
+            ? ink.Accent
+            : side switch
+            {
+                null => ink.Muted,
+                "local" when chip.Chosen => ink.Text,
+                _ => ink.Side(side),
+            };
         var (fill, stroke, dash) = chip.Kind switch
         {
             GraphChipKind.Hash => (
@@ -1181,11 +1042,14 @@ internal sealed class VariantGraphRenderer
             ),
             _ => (
                 ink.ChipFill,
-                GraphTint.Mix(sideColour, ink.ChipEdge, 0.45),
+                chip.Tracked ? ink.Accent : GraphTint.Mix(sideColour, ink.ChipEdge, 0.45),
                 (DashStyle?)null
             ),
         };
-        var pen = new Pen(new SolidColorBrush(stroke), Math.Max(0.7, 0.9 * zoom));
+        var pen = new Pen(
+            new SolidColorBrush(stroke),
+            Math.Max(chip.Tracked ? 1 : 0.7, (chip.Tracked ? 1.2 : 0.9) * zoom)
+        );
 
         if (dash is not null)
         {
@@ -1228,7 +1092,7 @@ internal sealed class VariantGraphRenderer
                 var name = Text(
                     GraphFont.Name,
                     chip.Name,
-                    chip.Strike ? ink.Muted : ink.Text,
+                    chip.Tracked ? ink.Accent : chip.Strike ? ink.Muted : ink.Text,
                     zoom
                 );
                 var nameX = x + ((8 + chip.TagWidth + 7) * zoom);

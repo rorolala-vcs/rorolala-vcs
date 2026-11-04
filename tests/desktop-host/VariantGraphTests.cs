@@ -243,9 +243,6 @@ public sealed class VariantGraphTests
         Assert.Equal("DRAFT", VariantGraphDrawing.VersionLabel(draft));
         Assert.Contains(draft.Chips, chip => chip.Text == words.DraftBadge);
 
-        // The columns are the axis, numbered from the first version.
-        Assert.Equal(["#0", "#1", "#2"], drawing.Ticks.Select(tick => tick.Label));
-
         // A chain edge joins each version to the one before it: one for the two versions of art.txt,
         // and none for other.txt's only one.
         Assert.Equal(

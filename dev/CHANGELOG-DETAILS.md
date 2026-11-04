@@ -164,13 +164,15 @@ is the only pill row on the card. The work's own
 entries wear the look's accent and a Vault's the primary, and the chain of the entry being read is
 outlined in the accent. The local pill of a file the user has chosen is drawn in the look's ink
 instead, so the files a reading stands on are told from the rest of the work; choosing several marks
-each of their pills. The graph stands on
+each of their pills. The entry at a chosen file's path on another side is the record that file tracks,
+and its pill is drawn in the accent in both its border and its words. The graph stands on
 the files chosen in a directory listing, or on the whole work when none is chosen, and a Vault's
 fetched copy stands on the same lanes as the work. A merge that was recorded is a plain edge; a merge
 still waiting is the amber broken one — both leave and arrive at the points the chain's own edges
-use, at a card's middle, rather than hanging off its top or bottom. A file the work says is changed but not tracked stands as a
+use, at a card's middle, rather than hanging off its top or bottom. An edge says what it is by its
+colour, its arrow and the cards it joins, rather than by a label over it. A file the work says is changed but not tracked stands as a
 draft card — in the accent when a track would continue its record, red when the change is based on an older
-version — and the version it should be standing on is named on its edge. A base version the index
+version — and a base version the index
 does not hold is a broken node beside the card naming it.
 
 Hovering a card's message, a pill or the creator's name fills a table in the graph's corner with what
@@ -182,7 +184,9 @@ another side's entry offers switching the chosen file's record to that entry's U
 record alone or letting the content follow it — an edited file is asked about before its content is
 written over. A right-click on the work's own entry offers forking its path into a new Uuid, holding
 what it held, which is how a file stops following an entry it was following. Pressing a local entry's
-pill asks the browser to show the file it names. A right-click on the card still offers the retrack,
+pill asks the browser to show the file it names. A card and the hash pill under it name one variant
+and offer one menu: copying its hashes, joining it, ending a merge, and retracking the chosen file to
+its version. A right-click on the card still offers the retrack,
 join, cancel-merge and delete-changes runs the old graph offered. A press on a card brings it to the
 middle of the dock, enlarged to 130% when the drawing reads smaller than that and left at its scale
 otherwise, and a press on the empty ground takes the choice away — the
@@ -190,11 +194,10 @@ listing's rows and the graph's chains both — while a drag across the ground mo
 choice's emphasis goes with it, but the cards stay where they are until another file is chosen, so a
 click that chose nothing does not replace the drawing with every variant of the work. The
 scale and place ease into view rather than snapping, and the wheel likewise. The drawing stands on a
-grid of
-twenty-unit squares, and the version columns are its ruler: a broken line the height of the panel and
-the numbers fixed at its top, at one size at every zoom, drawn whole while the graph is read from afar
-and faded out as it comes close. The drag, the wheel and `F` still move and frame the drawing, and only
-the cards and edges the viewport holds are drawn.
+grid of twenty-unit squares. Hovering an edge draws it heavier in the accent and lifts its two ends
+over the rest of the cards, and the version columns carry no ruler or labels of their own: the column
+position and the card's number are the reading. The drag, the wheel and `F` still move and frame the
+drawing, and only the cards and edges the viewport holds are drawn.
 
 ### 9. [`modules`] [`inverse-index`] Read the inverse index the other way, and rebuild it incrementally
 

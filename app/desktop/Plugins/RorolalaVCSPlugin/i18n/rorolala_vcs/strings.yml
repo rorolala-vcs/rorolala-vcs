@@ -75,24 +75,6 @@ rorolala_vcs:
       en: Unknown base version
       zh-CN: 未知基版本
 
-    # The labels the edges are drawn with. A merge's label names the variant that was merged in; a
-    # draft's names the version it stands on, and a forking one also the version it should stand on.
-    merged_into:
-      en: merged in %{version}
-      zh-CN: 并入 %{version}
-    same_content:
-      en: same content
-      zh-CN: 同内容
-    draft_based_on:
-      en: Draft (based on %{version})
-      zh-CN: 草稿（基于 %{version}）
-    draft_wrong_based_on:
-      en: "⚠ Based on %{version} (should be %{should})"
-      zh-CN: "⚠ 基于 %{version}（应基于 %{should}）"
-    draft_wrong_based_on_only:
-      en: "⚠ Based on %{version}"
-      zh-CN: "⚠ 基于 %{version}"
-
     # What the graph says when the reading stopped at the window's limit rather than walking out.
     truncated:
       en: The reading stops at the window's limit; the history goes on
@@ -123,9 +105,8 @@ rorolala_vcs:
       en: Show hover details
       zh-CN: 显示悬浮详情
 
-    # What a right-click on a variant's hash offers when a file is chosen: joining that variant into
-    # the file the user is on. The graph's own menu offers the same when the variant is unjoined, and
-    # this is the way to it from the variant that names itself.
+    # What a right-click on a variant's hash or on the node naming it offers when a file is chosen:
+    # joining that variant into the file the user is on. Both name one variant, so both offer this.
     join_selected:
       en: Merge variant into the selected entry
       zh-CN: 合并变体到当前选中条目

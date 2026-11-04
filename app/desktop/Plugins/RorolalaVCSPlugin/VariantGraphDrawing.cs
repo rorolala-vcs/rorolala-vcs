@@ -171,6 +171,9 @@ internal enum GraphLinkKind
 /// <param name="Wrong">Whether a badge is a wrong change.</param>
 /// <param name="Strike">Whether the entry was moved under the deprecated marker.</param>
 /// <param name="Chosen">Whether it names a file the user has chosen, which is drawn in the look's ink.</param>
+/// <param name="Tracked">
+/// Whether it is the entry of another side at a chosen file's path, which is the one that file tracks.
+/// </param>
 internal sealed record GraphChip(
     GraphChipKind Kind,
     string Text,
@@ -182,7 +185,8 @@ internal sealed record GraphChip(
     bool Warn,
     bool Wrong,
     bool Strike,
-    bool Chosen
+    bool Chosen,
+    bool Tracked
 );
 
 /// <summary>What a draft card says about the edit it stands for.</summary>
@@ -288,11 +292,6 @@ internal sealed record GraphCard(
 /// <param name="To">The card it reaches.</param>
 internal sealed record GraphLink(GraphLinkKind Kind, int From, int To);
 
-/// <summary>One column of the graph, and the version number that names it.</summary>
-/// <param name="X">The column's x.</param>
-/// <param name="Label">What is written over it.</param>
-internal sealed record GraphAxisTick(double X, string Label);
-
 /// <summary>A base version the index does not hold, drawn as a broken node beside the card naming it.</summary>
 /// <param name="X">The column of its centre.</param>
 /// <param name="Y">The row of its centre.</param>
@@ -396,7 +395,6 @@ internal sealed class VariantGraphDrawing
     /// <param name="cards">The cards, in column order.</param>
     /// <param name="byHash">The card each variant hash stands at.</param>
     /// <param name="links">The edges.</param>
-    /// <param name="ticks">The columns.</param>
     /// <param name="ghosts">The missing base versions.</param>
     /// <param name="focusChain">The cards the focused entries' own chains are.</param>
     /// <param name="focusRelated">The cards beside those: merges in, drafts and other sides.</param>
@@ -415,7 +413,6 @@ internal sealed class VariantGraphDrawing
         IReadOnlyList<GraphCard> cards,
         IReadOnlyDictionary<string, GraphCard> byHash,
         IReadOnlyList<GraphLink> links,
-        IReadOnlyList<GraphAxisTick> ticks,
         IReadOnlyList<GraphGhost> ghosts,
         IReadOnlySet<int> focusChain,
         IReadOnlySet<int> focusRelated,
@@ -435,7 +432,6 @@ internal sealed class VariantGraphDrawing
         Cards = cards;
         ByHash = byHash;
         Links = links;
-        Ticks = ticks;
         Ghosts = ghosts;
         FocusChain = focusChain;
         FocusRelated = focusRelated;
@@ -460,9 +456,6 @@ internal sealed class VariantGraphDrawing
 
     /// <summary>The edges between the cards.</summary>
     internal IReadOnlyList<GraphLink> Links { get; }
-
-    /// <summary>The columns, oldest first.</summary>
-    internal IReadOnlyList<GraphAxisTick> Ticks { get; }
 
     /// <summary>The base versions the index does not hold.</summary>
     internal IReadOnlyList<GraphGhost> Ghosts { get; }
@@ -812,9 +805,23 @@ internal sealed class VariantGraphDrawing
             ? graph.Focus.Select(focus => (focus.Side, Path: Normalize(focus.Path))).ToHashSet()
             : [];
 
+        // A chosen file records its path on the work's side, and the entry at that path on another side
+        // is the one the file tracks: that entry's Uuid is the record the track names, so it is the pill
+        // the reader has to be able to find. The path is the relation the reading carries; the versions
+        // may differ while the file is behind or ahead of the Vault.
+        var tracked = emphasized
+            ? graph
+                .Entries.Where(entry =>
+                    entry.Side != "local"
+                    && chosen.Contains(("local", Normalize(entry.Path)))
+                )
+                .Select(entry => (entry.Side, Path: Normalize(entry.Path)))
+                .ToHashSet()
+            : [];
+
         foreach (var card in cards)
         {
-            var chips = ChipsOf(card, words, measure, chosen);
+            var chips = ChipsOf(card, words, measure, chosen, tracked);
             card.Rows = RowsOf(chips);
             card.PillsHeight = PillsHeightOf(card.Rows);
             card.CreatorWidth = measure.Width(card.Creator, GraphFont.Creator);
@@ -959,19 +966,6 @@ internal sealed class VariantGraphDrawing
 
         var samePairs = links.Count(link => link.Kind == GraphLinkKind.Same);
 
-        var ticks = new List<GraphAxisTick>();
-        var maxColumn = written.Count == 0 ? 0 : written.Max(card => card.Column);
-
-        for (var column = 0; column <= maxColumn; column++)
-        {
-            ticks.Add(
-                new GraphAxisTick(
-                    column * ColumnPitch,
-                    string.Create(CultureInfo.InvariantCulture, $"#{column}")
-                )
-            );
-        }
-
         var left = written.Count == 0 ? 0 : written.Min(card => card.CardLeft);
         var right = written.Count == 0 ? 0 : written.Max(card => card.CardRight);
         var top = written.Count == 0 ? 0 : written.Min(card => card.CardTop);
@@ -989,7 +983,6 @@ internal sealed class VariantGraphDrawing
             frozen,
             byHash,
             links,
-            ticks,
             ghosts,
             chain,
             related,
@@ -1187,12 +1180,14 @@ internal sealed class VariantGraphDrawing
     /// <param name="words">The words the layout writes.</param>
     /// <param name="measure">The measurer.</param>
     /// <param name="chosen">The side and path of every file the user has chosen.</param>
+    /// <param name="tracked">The other sides' entries at those files' paths, which those files track.</param>
     /// <returns>The pills.</returns>
     private static List<GraphChip> ChipsOf(
         Work card,
         GraphVocabulary words,
         GraphMeasure measure,
-        IReadOnlySet<(string Side, string Path)> chosen
+        IReadOnlySet<(string Side, string Path)> chosen,
+        IReadOnlySet<(string Side, string Path)> tracked
     )
     {
         var chips = new List<GraphChip>(card.Entries.Count + 2);
@@ -1211,7 +1206,8 @@ internal sealed class VariantGraphDrawing
                     false,
                     !draft.Correct,
                     false,
-                    chosen.Contains(("local", Normalize(draft.Path)))
+                    chosen.Contains(("local", Normalize(draft.Path))),
+                    false
                 )
             );
 
@@ -1231,7 +1227,8 @@ internal sealed class VariantGraphDrawing
                     false,
                     false,
                     false,
-                    chosen.Contains(("local", Normalize(draft.Path)))
+                    chosen.Contains(("local", Normalize(draft.Path))),
+                    false
                 )
             );
 
@@ -1249,6 +1246,7 @@ internal sealed class VariantGraphDrawing
                 measure.Width(hash, GraphFont.Hash) + 16,
                 0,
                 null,
+                false,
                 false,
                 false,
                 false,
@@ -1275,7 +1273,8 @@ internal sealed class VariantGraphDrawing
                     false,
                     false,
                     entry.Deprecated,
-                    chosen.Contains((entry.Side, Normalize(entry.Path)))
+                    chosen.Contains((entry.Side, Normalize(entry.Path))),
+                    tracked.Contains((entry.Side, Normalize(entry.Path)))
                 )
             );
         }
@@ -1293,6 +1292,7 @@ internal sealed class VariantGraphDrawing
                     measure.Width(text, GraphFont.Name) + 18,
                     0,
                     null,
+                    false,
                     false,
                     false,
                     false,

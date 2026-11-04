@@ -38,6 +38,9 @@ internal enum HoverPart
 
     /// <summary>A base version the index does not hold.</summary>
     Ghost,
+
+    /// <summary>An edge between two cards.</summary>
+    Edge,
 }
 
 /// <summary>One thing the pointer can be on.</summary>
@@ -46,12 +49,16 @@ internal enum HoverPart
 /// <param name="Chip">The pill, when the part is one.</param>
 /// <param name="Ghost">The missing base version, when that is what is under the pointer.</param>
 /// <param name="GhostIndex">Its place among the ghosts, which is what makes two hovers the same.</param>
+/// <param name="Edge">The edge, when that is what is under the pointer.</param>
+/// <param name="EdgeIndex">Its place among the edges, which is what makes two hovers the same.</param>
 internal sealed record Hover(
     GraphCard? Card,
     HoverPart Part,
     GraphChip? Chip,
     GraphGhost? Ghost,
-    int GhostIndex
+    int GhostIndex,
+    GraphLink? Edge = null,
+    int EdgeIndex = -1
 );
 
 /// <summary>The drawing half of the view: what is drawn over the graph, and what the pointer is on.</summary>
@@ -90,7 +97,8 @@ internal sealed partial class VersionGraphView
             lineage,
             stats,
             _drawing.Truncated,
-            _showFocus
+            _showFocus,
+            _hover?.EdgeIndex is >= 0 ? _hover.EdgeIndex : null
         );
 
         Renderer.Render(context, Bounds.Size, _drawing, ink, frame);
@@ -328,6 +336,9 @@ internal sealed partial class VersionGraphView
         return string.Join(" · ", parts);
     }
 
+    /// <summary>How close the pointer has to be to an edge to be on it, in screen units.</summary>
+    private const double EdgeReach = 7;
+
     /// <summary>The thing under a point, or nothing.</summary>
     /// <param name="at">The point, in the control's coordinates.</param>
     /// <returns>The hover answer.</returns>
@@ -414,7 +425,88 @@ internal sealed partial class VersionGraphView
             return new Hover(card, HoverPart.Card, null, null, -1);
         }
 
-        return null;
+        // Edges are drawn under the cards, so the cards are asked first and an edge is met only in the
+        // ground between them. The curve is sampled rather than measured: an edge is a cubic, and a
+        // reader's reach of seven pixels around it does not need the exact nearest point.
+        var frame = new VariantGraphFrame(
+            _zoom,
+            new Point(_panX, _panY),
+            null,
+            null,
+            string.Empty,
+            _drawing.Truncated,
+            _showFocus,
+            null
+        );
+        var nearest = EdgeReach;
+        Hover? onEdge = null;
+
+        for (var index = 0; index < _drawing.Links.Count; index++)
+        {
+            var link = _drawing.Links[index];
+            var from = _drawing.Cards[link.From];
+            var to = _drawing.Cards[link.To];
+            var (start, end, control1, control2, _) = VariantGraphRenderer.GeometryOf(
+                from,
+                to,
+                link.Kind,
+                frame
+            );
+            var distance = DistanceToCurve(at, start, control1, control2, end);
+
+            if (distance <= nearest)
+            {
+                nearest = distance;
+                onEdge = new Hover(null, HoverPart.Edge, null, null, -1, link, index);
+            }
+        }
+
+        return onEdge;
+    }
+
+    /// <summary>How far a point is from a cubic curve, sampled at a resolution a pointer can tell apart.</summary>
+    /// <param name="at">The point.</param>
+    /// <param name="start">Where the curve starts.</param>
+    /// <param name="control1">Its first control point.</param>
+    /// <param name="control2">Its second.</param>
+    /// <param name="end">Where it ends.</param>
+    /// <returns>The distance to the nearest sampled point.</returns>
+    private static double DistanceToCurve(
+        Point at,
+        Point start,
+        Point control1,
+        Point control2,
+        Point end
+    )
+    {
+        const int steps = 24;
+        var nearest = double.MaxValue;
+
+        for (var step = 0; step <= steps; step++)
+        {
+            var t = (double)step / steps;
+            var rest = 1 - t;
+            var x =
+                (rest * rest * rest * start.X)
+                + (3 * rest * rest * t * control1.X)
+                + (3 * rest * t * t * control2.X)
+                + (t * t * t * end.X);
+            var y =
+                (rest * rest * rest * start.Y)
+                + (3 * rest * rest * t * control1.Y)
+                + (3 * rest * t * t * control2.Y)
+                + (t * t * t * end.Y);
+            var dx = at.X - x;
+            var dy = at.Y - y;
+            var distance = Math.Sqrt((dx * dx) + (dy * dy));
+
+            if (distance < nearest)
+            {
+                nearest = distance;
+            }
+        }
+
+        return nearest;
     }
 
     /// <summary>Which part a pill is.</summary>

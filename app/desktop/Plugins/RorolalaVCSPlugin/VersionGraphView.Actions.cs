@@ -125,54 +125,7 @@ internal sealed partial class VersionGraphView
                 return;
 
             case HoverPart.HashPill when hover.Card is { } named:
-                Add(menu, "copy_variant_hash", Icons.ContentCopy, () => Copy(named.Hash));
-
-                if (named.HasVersion)
-                {
-                    Add(menu, "copy_version_hash", Icons.ContentCopy, () => Copy(named.VersionHash!));
-                }
-
-                Add(menu, "copy_content_hash", Icons.ContentCopy, () => Copy(named.Storage));
-
-                // A variant's hash names the version it produced, so the file the user is on may be
-                // moved back or forward to it from here: the same runs the card's own menu offers.
-                if (Subject() is { } target && named.HasVersion)
-                {
-                    menu.Items.Add(new Separator());
-                    menu.Items.Add(
-                        RetrackItem(
-                            target.Path,
-                            named.VersionHash!,
-                            VariantGraphDrawing.VersionLabel(named),
-                            onlyIndex: false
-                        )
-                    );
-                    menu.Items.Add(
-                        RetrackItem(
-                            target.Path,
-                            named.VersionHash!,
-                            VariantGraphDrawing.VersionLabel(named),
-                            onlyIndex: true
-                        )
-                    );
-                }
-
-                // A variant may be joined into the file the user is on without going back to the
-                // graph's own menu: the press is already on the variant being named.
-                if (
-                    Subject() is { } selected
-                    && PendingMerge(selected.Path) is null
-                )
-                {
-                    menu.Items.Add(new Separator());
-                    Add(
-                        menu,
-                        "join_selected",
-                        Icons.Merge,
-                        () => BeginJoin(selected.Path, hover.Card!.Hash)
-                    );
-                }
-
+                VariantMenu(menu, named);
                 menu.Open(this);
 
                 return;
@@ -210,6 +163,19 @@ internal sealed partial class VersionGraphView
             return;
         }
 
+        VariantMenu(menu, card);
+    }
+
+    /// <summary>Offers what a right-click on a variant or on the hash that names it can do.</summary>
+    /// <remarks>
+    /// A card and the variant hash pill on it name one variant, so they offer one menu: the items that
+    /// copy what the variant says, the join and its two ends, and the retracks the chosen file may take
+    /// to the version it produced.
+    /// </remarks>
+    /// <param name="menu">The menu to add to.</param>
+    /// <param name="card">The variant.</param>
+    private void VariantMenu(ContextMenu menu, GraphCard card)
+    {
         Add(
             menu,
             "copy_variant_hash",
@@ -223,14 +189,30 @@ internal sealed partial class VersionGraphView
             Add(menu, "copy_version_hash", Icons.ContentCopy, () => Copy(card.VersionHash!));
         }
 
+        Add(menu, "copy_content_hash", Icons.ContentCopy, () => Copy(card.Storage));
+
         if (card.Message.Length > 0)
         {
             Add(menu, "copy_message", Icons.ContentCopy, () => Copy(card.Message));
         }
 
-        // An unrecorded variant is one no version points at: joining it into the file is what makes it
-        // a merge waiting to be recorded. A file already in a merge has nowhere for a second one.
-        if (Joinable(card))
+        // A variant may be joined into the file the user is on. The press is on the variant being
+        // merged in, so the node and the hash pill both offer it; without a chosen file, a card with an
+        // unrecorded variant of its own is what the join can stand on.
+        if (Subject() is { } selected)
+        {
+            if (PendingMerge(selected.Path) is null)
+            {
+                menu.Items.Add(new Separator());
+                Add(
+                    menu,
+                    "join_selected",
+                    Icons.Merge,
+                    () => BeginJoin(selected.Path, card.Hash)
+                );
+            }
+        }
+        else if (Joinable(card))
         {
             menu.Items.Add(new Separator());
             Add(menu, "join_variant", Icons.Merge, () => BeginJoin(TargetFor(card)!, card.Hash));
@@ -260,8 +242,22 @@ internal sealed partial class VersionGraphView
         if (card.HasVersion && TargetFor(card) is { } target)
         {
             menu.Items.Add(new Separator());
-            menu.Items.Add(RetrackItem(target, card.VersionHash!, VariantGraphDrawing.VersionLabel(card), onlyIndex: false));
-            menu.Items.Add(RetrackItem(target, card.VersionHash!, VariantGraphDrawing.VersionLabel(card), onlyIndex: true));
+            menu.Items.Add(
+                RetrackItem(
+                    target,
+                    card.VersionHash!,
+                    VariantGraphDrawing.VersionLabel(card),
+                    onlyIndex: false
+                )
+            );
+            menu.Items.Add(
+                RetrackItem(
+                    target,
+                    card.VersionHash!,
+                    VariantGraphDrawing.VersionLabel(card),
+                    onlyIndex: true
+                )
+            );
         }
     }
 
