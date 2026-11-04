@@ -202,13 +202,15 @@ pub fn integration_suites(workspace: &Workspace) -> Result<Vec<PathBuf>, Error> 
 ///
 /// `bin_dir` is where the built programs are, and it crosses to every suite as `ROLA_BIN_DIR`: the
 /// plugins a suite drives reach the C ABI library, which no published program lays beside a test
-/// process, so the suites are told where to find it the way the cargo suites are told where the
-/// programs are.
+/// process, so the library is built for this machine and laid beside the programs, and the suites are
+/// told where to find it the way the cargo suites are told where the programs are.
 ///
 /// # Errors
 ///
-/// Reports [`Error::Status`] naming the count when any suite failed.
+/// Reports the build's own failure, and [`Error::Status`] naming the count when any suite failed.
 pub fn run_integration_suites(workspace: &Workspace, bin_dir: &Path) -> Result<(), Error> {
+    crate::ops::library::build_suite_library(workspace)?;
+
     let suites = integration_suites(workspace)?;
     let mut failed = Vec::new();
     let environment = [("ROLA_BIN_DIR", bin_dir.as_os_str())];

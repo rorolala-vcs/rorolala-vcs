@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -25,11 +26,39 @@ internal static class DataHome
     internal static void SetUp()
     {
         Directory.CreateDirectory(Root);
-        System.Environment.SetEnvironmentVariable("ROLA_DATA_HOME", Root);
-        System.Environment.SetEnvironmentVariable("XDG_DATA_HOME", Root);
+        Name("ROLA_DATA_HOME", Root);
+        Name("XDG_DATA_HOME", Root);
 
         AppDomain.CurrentDomain.ProcessExit += (_, _) => Remove();
     }
+
+    /// <summary>Names one variable to the whole process, managed and native alike.</summary>
+    /// <remarks>
+    /// On Unix, <see cref="Environment.SetEnvironmentVariable(string, string)"/> answers managed
+    /// readers and the environment a child is started in, but the C library goes on handing out what
+    /// the process began with. The plugins ask the C ABI who the account is, and that answer is read
+    /// from the data home, so the variable is set in the C library as well. Windows has one
+    /// environment for both readers, and its managed set already changes that one.
+    /// </remarks>
+    /// <param name="name">The variable's name.</param>
+    /// <param name="value">What it is set to.</param>
+    private static void Name(string name, string value)
+    {
+        Environment.SetEnvironmentVariable(name, value);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            _ = SetEnv(name, value, 1);
+        }
+    }
+
+    /// <summary>Sets a variable in the C library's own environment.</summary>
+    /// <param name="name">The variable's name.</param>
+    /// <param name="value">What it is set to.</param>
+    /// <param name="overwrite">Whether a value already there is replaced.</param>
+    /// <returns>Zero when it succeeded.</returns>
+    [DllImport("libc", EntryPoint = "setenv")]
+    private static extern int SetEnv(string name, string value, int overwrite);
 
     /// <summary>
     /// Forgets every configuration file, so a test begins with none.
