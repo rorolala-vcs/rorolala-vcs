@@ -168,13 +168,18 @@ internal sealed record GraphInk(
 /// </param>
 /// <param name="Stats">The line the graph is counted in.</param>
 /// <param name="Truncated">Whether the reading was cut short, and so is what is drawn.</param>
+/// <param name="Emphasized">
+/// Whether the graph's focused chains are to be picked out. A graph whose choice has been taken away keeps
+/// its focus chains in the drawing, so the same cards stay on screen, but stops emphasising them.
+/// </param>
 internal sealed record VariantGraphFrame(
     double Zoom,
     Point Pan,
     int? Hover,
     IReadOnlySet<int>? Lineage,
     string Stats,
-    bool Truncated
+    bool Truncated,
+    bool Emphasized
 );
 
 /// <summary>
@@ -267,7 +272,7 @@ internal sealed class VariantGraphRenderer
         var screen = new Rect(0, 0, size.Width, size.Height);
 
         var active = Active(drawing, frame);
-        var focused = drawing.FocusChain.Count > 0 && frame.Hover is null;
+        var focused = frame.Emphasized && drawing.FocusChain.Count > 0 && frame.Hover is null;
 
         DrawGrid(context, size, ink, frame);
         DrawAxisLines(context, size, ink, frame, drawing);
@@ -288,7 +293,7 @@ internal sealed class VariantGraphRenderer
             return lineage;
         }
 
-        if (drawing.FocusChain.Count == 0)
+        if (!frame.Emphasized || drawing.FocusChain.Count == 0)
         {
             return null;
         }

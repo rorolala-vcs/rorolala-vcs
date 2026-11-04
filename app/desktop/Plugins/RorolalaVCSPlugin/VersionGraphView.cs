@@ -185,6 +185,12 @@ internal sealed class VersionGraphDock : IDockView
 /// files (which are being edited and which changes are wrong) is read beside it and becomes the draft
 /// cards. The unit of the drawing is a content unit: <see cref="VariantGraphRenderer"/> applies the
 /// zoom, so what is laid out and measured here is the same at every scale.
+/// <para>
+/// The choice decides what the drawing is made of, but taking the choice away does not throw the drawing
+/// out: the same cards stay, their focused chains lose their emphasis, and the next file chosen is what
+/// reads another graph. A click on the ground would otherwise replace a focused graph with every variant
+/// of the work, which is a large change for a click that chose nothing.
+/// </para>
 /// </remarks>
 internal sealed partial class VersionGraphView : Control
 {
@@ -277,6 +283,21 @@ internal sealed partial class VersionGraphView : Control
 
     /// <summary>Whether hovering a thing says what it is, which the switch in the corner turns.</summary>
     private bool _showInfo = true;
+
+    /// <summary>
+    /// Whether the drawing's focused chains are emphasised. Taking the choice away stops the emphasis but
+    /// keeps the drawing: a graph that jumped to every variant when the pointer left a file would be one
+    /// that changed more than the click did.
+    /// </summary>
+    private bool _showFocus;
+
+    /// <summary>How many files the last choice held, so a choice that became empty is told from no choice.</summary>
+    private int _chosenCount;
+
+    /// <summary>
+    /// Whether the graph is being kept after its choice was taken away. The next choice of a file ends it.
+    /// </summary>
+    private bool _retained;
 
     /// <summary>What is said in place of a drawing, or nothing while a read is going.</summary>
     private string? _emptyText;
@@ -453,8 +474,9 @@ internal sealed partial class VersionGraphView : Control
 
         // Listening while the view is on screen rather than for as long as it exists: the catalogue
         // outlives every dock, and a dock that was closed has no reason to be told what was clicked.
-        ChosenEntry.Changed += Refresh;
-        ChosenFiles.Changed += Refresh;
+        _chosenCount = ChosenFiles.Current.Count;
+        ChosenEntry.Changed += EntryChanged;
+        ChosenFiles.Changed += ChoiceChanged;
         BaseDirectory.Changed += Refresh;
         _files.Changed += Refresh;
 
@@ -471,8 +493,8 @@ internal sealed partial class VersionGraphView : Control
     /// <inheritdoc />
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        ChosenEntry.Changed -= Refresh;
-        ChosenFiles.Changed -= Refresh;
+        ChosenEntry.Changed -= EntryChanged;
+        ChosenFiles.Changed -= ChoiceChanged;
         BaseDirectory.Changed -= Refresh;
         _files.Changed -= Refresh;
         _files.Redrawn -= Refresh;
@@ -559,11 +581,73 @@ internal sealed partial class VersionGraphView : Control
         _settle.Start();
     }
 
+    /// <summary>
+    /// Says that the file clicked last changed, which is a choice of a file again.
+    /// </summary>
+    private void EntryChanged()
+    {
+        _retained = false;
+        Refresh();
+    }
+
+    /// <summary>
+    /// Says that a choice was made or taken away, and keeps the drawing when it became empty.
+    /// </summary>
+    /// <remarks>
+    /// A file clicked in a listing is also <see cref="ChosenEntry"/>'s answer, and an empty choice leaves
+    /// that answer standing: the graph used to fall back to the last clicked file and then read it again.
+    /// What an empty choice means here is that the emphasis goes and the drawing stays, until a file is
+    /// chosen again.
+    /// </remarks>
+    private void ChoiceChanged()
+    {
+        var count = ChosenFiles.Current.Count;
+
+        if (count == 0 && _chosenCount > 0)
+        {
+            _retained = true;
+            HoldDrawing();
+        }
+        else if (count > 0)
+        {
+            _retained = false;
+        }
+
+        _chosenCount = count;
+        Refresh();
+    }
+
     /// <summary>Reads what <see cref="Refresh"/> said to wait for.</summary>
     private void Settled(object? sender, EventArgs e)
     {
         _settle.Stop();
         Read();
+    }
+
+    /// <summary>Takes the choice's emphasis away while leaving the drawing where it is.</summary>
+    /// <remarks>
+    /// The drawings of neighbouring files share most of their cards, so replacing one with the whole work
+    /// the moment a click lands on the ground would move almost everything for a click that chose nothing.
+    /// The cards stay, the focused chains stop being picked out, and the next chosen file is what reads a
+    /// new graph.
+    /// </remarks>
+    private void HoldDrawing()
+    {
+        _showFocus = false;
+        _hover = null;
+        _again = false;
+
+        if (_reading)
+        {
+            // The read was for a choice that is gone, and its answer must not arrive over the drawing that
+            // is being left alone.
+            _reading = false;
+            _generation++;
+        }
+
+        UpdateCursor();
+        RedrawInfo();
+        InvalidateVisual();
     }
 
     /// <summary>The one file the graph would act on, or nothing when none or several are chosen.</summary>
@@ -648,6 +732,23 @@ internal sealed partial class VersionGraphView : Control
         }
 
         var entries = Considered();
+
+        // Taking the choice away is not a reason to read the whole work: the graph that was on screen is
+        // still the graph the reader was looking at, and it stays while the emphasis goes. A read that was
+        // already in flight is overtaken here, so it cannot put another graph up after the choice is gone.
+        if (
+            _drawing is not null
+            && (
+                (_retained && ChosenFiles.Current.Count == 0)
+                || (entries.Count == 0 && ChosenFiles.Current.Count == 0)
+            )
+        )
+        {
+            HoldDrawing();
+
+            return;
+        }
+
         var directory = DirectoryOf(entries);
         var generation = ++_generation;
 
@@ -714,6 +815,7 @@ internal sealed partial class VersionGraphView : Control
                 {
                     _target = files.Length == 1 ? files[0] : null;
                     _root = root;
+                    _showFocus = false;
                     ShowMessage(RolaI18N.Get("rorolala_vcs.version_graph.empty"));
                 }
                 else
@@ -724,6 +826,7 @@ internal sealed partial class VersionGraphView : Control
                     _drawing = VariantGraphDrawing.From(graph, drafts, Words, _measure, emphasized);
                     _renderer?.Invalidate();
                     _emptyText = null;
+                    _showFocus = emphasized;
                     _hover = null;
                     RedrawInfo();
                     _target = files.Length == 1 ? files[0] : null;
@@ -1218,6 +1321,7 @@ internal sealed partial class VersionGraphView : Control
     private void CancelSelection()
     {
         _hover = null;
+        _showFocus = false;
         UpdateCursor();
         ChosenFiles.Clear();
         ChosenEntry.Clear();

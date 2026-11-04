@@ -89,7 +89,8 @@ internal sealed partial class VersionGraphView
             _hover?.Card?.Index,
             lineage,
             stats,
-            _drawing.Truncated
+            _drawing.Truncated,
+            _showFocus
         );
 
         Renderer.Render(context, Bounds.Size, _drawing, ink, frame);
