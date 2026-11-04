@@ -32,7 +32,7 @@ jobs:
   # check for a machine that has the corpus; this is the half a runner can make.
   fast-check:
     name: Fast-Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # The runner checks out CRLF on Windows (the tree's own files are LF). A build rewrites a
       # generated file as LF, and `git-unlock` would read the difference between the two as a change
@@ -147,14 +147,14 @@ jobs:
       # those are for is filling the cache when it is not there.
       - name: Cache the NuGet packages
         id: nuget
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         if: steps.nuget.outputs.cache-hit != 'true'
         with:
           dotnet-version: "10.0.x"
@@ -193,7 +193,7 @@ jobs:
       # and the root dependencies stay where they are.
       - name: Cache the integration suites' target
         id: tests-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tests/.cache/rs-target
           key: it-target-${{ runner.os }}-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('tests/Cargo.lock', 'Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', 'tests/.cargo/config.toml', 'rust-toolchain', 'rust-toolchain.toml') }}
@@ -213,7 +213,7 @@ jobs:
   prewarm-linux:
     name: Pre-Warm (linux)
     needs: [fast-check]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       MUSL: "true"
     steps: *prewarm-steps
@@ -259,13 +259,13 @@ jobs:
           cache-workspaces: |
             . -> .cache/rs-target
           cache-on-failure: true
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           # The version `global.json` pins; the projects themselves target `net8.0`.
           dotnet-version: "10.0.x"
 
       - name: Cache the NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
@@ -276,7 +276,7 @@ jobs:
       # one (see Pre-Warm).
       - name: Restore the integration suites' target
         if: matrix.item == 'integration'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tests/.cache/rs-target
           key: it-target-${{ runner.os }}-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('tests/Cargo.lock', 'Cargo.lock', '**/Cargo.toml', '.cargo/config.toml', 'tests/.cargo/config.toml', 'rust-toolchain', 'rust-toolchain.toml') }}
@@ -340,7 +340,7 @@ jobs:
       # Collected reports are uploaded even on failure, so the report job can render them.
       - name: Upload collected reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ci-collect-${{ github.job }}-${{ matrix.item }}
           path: .cache/reports/collect/
@@ -353,7 +353,7 @@ jobs:
       fail-fast: false
       matrix:
         item: [build, test, clippy, fmt, doc, integration, dotnet]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       MUSL: "true"
     steps: *check-steps
@@ -379,12 +379,12 @@ jobs:
           cache-workspaces: |
             . -> .cache/rs-target
           cache-on-failure: true
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
       - name: Cache the NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
@@ -425,7 +425,7 @@ jobs:
         run: cargo dev publish
 
       - name: Upload the package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rola-windows-package
           path: build/rorolala-*-setup.exe
@@ -434,7 +434,7 @@ jobs:
   package-linux:
     name: Package (linux)
     needs: [fast-check]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Use the tree's own line endings
         shell: bash
@@ -447,12 +447,12 @@ jobs:
           cache-workspaces: |
             . -> .cache/rs-target
           cache-on-failure: true
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
       - name: Cache the NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
@@ -513,7 +513,7 @@ jobs:
           cp "build/rola-launcher-${VERSION}.appimage" dist/
 
       - name: Upload the package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rola-linux-package
           path: dist/*
@@ -522,7 +522,7 @@ jobs:
   package-linux-musl:
     name: Package (linux / musl)
     needs: [fast-check]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Use the tree's own line endings
         shell: bash
@@ -535,12 +535,12 @@ jobs:
           cache-workspaces: |
             . -> .cache/rs-target
           cache-on-failure: true
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
       - name: Cache the NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props', 'RorolalaSharp.sln') }}
@@ -596,7 +596,7 @@ jobs:
           cp "build/rorolala-musl-${VERSION}.deb" "build/rorolala-musl-${VERSION}.rpm" "build/rorolala-musl-${VERSION}.pkg.tar.zst" dist/
 
       - name: Upload the package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rola-linux-musl-package
           path: dist/*
@@ -609,13 +609,13 @@ jobs:
     needs: [check-windows, check-linux]
     # No reports exist when Fast-Check stopped the matrices.
     if: always() && (needs.check-windows.result != 'skipped' || needs.check-linux.result != 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Download collected reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: .cache/reports/collect
           pattern: ci-collect-*
@@ -643,7 +643,7 @@ jobs:
         package-linux-musl,
       ]
     if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -651,7 +651,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download the packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           # The collected reports are artifacts of this run as well, and what a release carries is
