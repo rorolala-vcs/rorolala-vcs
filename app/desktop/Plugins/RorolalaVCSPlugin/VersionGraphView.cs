@@ -209,6 +209,9 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>The room the switch in the corner keeps from the top and the right edge.</summary>
     internal const double Corner = 12;
 
+    /// <summary>What a press on a card brings the drawing up to, when it is smaller.</summary>
+    private const double FocusZoom = 1.3;
+
     /// <summary>How much larger than the drawing the view may be panned away from it.</summary>
     private const double PanSlack = 2;
 
@@ -1280,7 +1283,7 @@ internal sealed partial class VersionGraphView : Control
         {
             // A press on a thing is not a pan: the cards are what the pointer reads, and a pill naming
             // a local entry is also the way to the file it names. A press on the card itself reads it:
-            // the node is brought to the middle at twice its size.
+            // the node is brought to the middle, and the drawing is enlarged only when it reads small.
             if (hit.Part is HoverPart.EntryPill or HoverPart.FilePill)
             {
                 RevealOnClick(hit);
@@ -1304,11 +1307,16 @@ internal sealed partial class VersionGraphView : Control
         e.Handled = true;
     }
 
-    /// <summary>Brings one node into the middle of the view at twice its natural size.</summary>
+    /// <summary>Brings one node into the middle of the view, and enlarges a drawing that reads small.</summary>
+    /// <remarks>
+    /// The enlargement stops at <see cref="FocusZoom"/>: a press is a way to read one node at a size that
+    /// is comfortable, not a command to undo a scale the reader chose. A drawing already larger than that
+    /// keeps its scale and only moves the node into the middle.
+    /// </remarks>
     /// <param name="card">The node to bring.</param>
     private void FocusCard(GraphCard card)
     {
-        var zoom = Math.Clamp(2, MinZoom, MaxZoom);
+        var zoom = _zoom < FocusZoom ? FocusZoom : _zoom;
 
         GlideTo(
             zoom,

@@ -184,7 +184,8 @@ written over. A right-click on the work's own entry offers forking its path into
 what it held, which is how a file stops following an entry it was following. Pressing a local entry's
 pill asks the browser to show the file it names. A right-click on the card still offers the retrack,
 join, cancel-merge and delete-changes runs the old graph offered. A press on a card brings it to the
-middle of the dock at twice its size, and a press on the empty ground takes the choice away — the
+middle of the dock, enlarged to 130% when the drawing reads smaller than that and left at its scale
+otherwise, and a press on the empty ground takes the choice away — the
 listing's rows and the graph's chains both — while a drag across the ground moves the drawing. The
 choice's emphasis goes with it, but the cards stay where they are until another file is chosen, so a
 click that chose nothing does not replace the drawing with every variant of the work. The
