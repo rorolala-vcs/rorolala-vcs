@@ -278,6 +278,15 @@ rorolala_vcs:
     track_tip:
       en: Record the unrecorded change as a new version
       zh-CN: 将未记录的修改记录为新版本
+    track_force_hint:
+      en: Hold Shift to force the track
+      zh-CN: 按住 Shift 强制追踪
+    track_force_title:
+      en: Force this track?
+      zh-CN: 要强制追踪吗？
+    track_force_message:
+      en: "A plain track refuses these changes: %{files}. Force tracking records them anyway. Confirm?"
+      zh-CN: "普通追踪会拒绝这些修改：%{files}。强制追踪仍会记录它们。请确认。"
     track_directory_tip:
       en: Record every unrecorded change under the chosen directory as new versions
       zh-CN: 将所选目录下所有未记录的修改记录为新版本

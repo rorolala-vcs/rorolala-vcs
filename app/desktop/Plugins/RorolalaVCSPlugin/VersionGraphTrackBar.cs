@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
@@ -38,6 +39,9 @@ internal sealed class VersionGraphTrackBar : Border
     /// <summary>The room the field keeps inside itself, which is the whole of its frame.</summary>
     private const double Room = 16;
 
+    /// <summary>What the button is drawn in while Shift is held: the colour the look spends on what must not be done.</summary>
+    private const string Held = PaletteKeys.Del;
+
     /// <summary>The message the new versions are to carry.</summary>
     private readonly TextBox _message;
 
@@ -61,6 +65,9 @@ internal sealed class VersionGraphTrackBar : Border
 
     /// <summary>Whether a track is going, which is what holds the button until it ends.</summary>
     private bool _busy;
+
+    /// <summary>Whether Shift is held, which makes the button a forced track and draws it red.</summary>
+    private bool _shifted;
 
     /// <summary>Makes the row.</summary>
     /// <param name="host">The host, which is what the button reaches to run and to report.</param>
@@ -179,6 +186,16 @@ internal sealed class VersionGraphTrackBar : Border
         ChosenEntry.Changed += Paint;
         ChosenDirectory.Changed += Paint;
         _files.Redrawn += Paint;
+
+        // Shift is held while the pointer is anywhere, so the key is watched on the window rather than on
+        // this row: a row that only heard it while its own field had the keyboard would not turn red for
+        // the hand that is already moving to the button.
+        if (TopLevel.GetTopLevel(this) is { } window)
+        {
+            window.AddHandler(InputElement.KeyDownEvent, KeyHeld, RoutingStrategies.Tunnel);
+            window.AddHandler(InputElement.KeyUpEvent, KeyLetGo, RoutingStrategies.Tunnel);
+        }
+
         Paint();
     }
 
@@ -189,6 +206,45 @@ internal sealed class VersionGraphTrackBar : Border
         ChosenEntry.Changed -= Paint;
         ChosenDirectory.Changed -= Paint;
         _files.Redrawn -= Paint;
+
+        if (TopLevel.GetTopLevel(this) is { } window)
+        {
+            window.RemoveHandler(InputElement.KeyDownEvent, KeyHeld);
+            window.RemoveHandler(InputElement.KeyUpEvent, KeyLetGo);
+        }
+    }
+
+    /// <summary>Draws the button red while the key that forces the run is down.</summary>
+    /// <param name="source">What raised it.</param>
+    /// <param name="pressed">The event.</param>
+    private void KeyHeld(object? source, KeyEventArgs pressed)
+    {
+        _ = source;
+        Modifiers(pressed.KeyModifiers);
+    }
+
+    /// <summary>Draws it as it was once the key is up.</summary>
+    /// <param name="source">What raised it.</param>
+    /// <param name="released">The event.</param>
+    private void KeyLetGo(object? source, KeyEventArgs released)
+    {
+        _ = source;
+        Modifiers(released.KeyModifiers);
+    }
+
+    /// <summary>Redraws the button in the colour the modifiers say.</summary>
+    /// <param name="modifiers">What is being held.</param>
+    private void Modifiers(KeyModifiers modifiers)
+    {
+        var shifted = modifiers.HasFlag(KeyModifiers.Shift);
+
+        if (shifted == _shifted)
+        {
+            return;
+        }
+
+        _shifted = shifted;
+        Paint();
     }
 
     /// <summary>Gives the template's border the nothing every state of the field is drawn as.</summary>
@@ -220,14 +276,45 @@ internal sealed class VersionGraphTrackBar : Border
             return;
         }
 
+        var force = _shifted;
         var message = written.Trim();
-        var targets = Targets();
+        var targets = Targets(force);
 
         if (message.Length == 0 || targets.Count == 0)
         {
             return;
         }
 
+        var forced = targets
+            .Where(target => target.Forced)
+            .Select(target => Path.GetFileName(target.File))
+            .ToArray();
+
+        if (force && forced.Length > 0)
+        {
+            _dialogs.Show(
+                new Dialog(
+                    RolaI18N.Get("rorolala_vcs.version_graph.track_force_title"),
+                    RolaI18N.Get(
+                        "rorolala_vcs.version_graph.track_force_message",
+                        string.Join(", ", forced)
+                    ),
+                    () => AskDiverged(message, targets, force)
+                )
+            );
+
+            return;
+        }
+
+        AskDiverged(message, targets, force);
+    }
+
+    /// <summary>Asks about a version that would part from the Vault, then runs the track.</summary>
+    /// <param name="message">What the versions are to say.</param>
+    /// <param name="targets">The files to record.</param>
+    /// <param name="force">Whether the run records changes the work would otherwise refuse.</param>
+    private void AskDiverged(string message, IReadOnlyList<Target> targets, bool force)
+    {
         var diverged = targets
             .Where(target => target.Diverged)
             .Select(target => Path.GetFileName(target.File))
@@ -242,20 +329,21 @@ internal sealed class VersionGraphTrackBar : Border
                         "rorolala_vcs.version_graph.track_diverged_message",
                         string.Join(", ", diverged)
                     ),
-                    () => Run(message, targets)
+                    () => Run(message, targets, force)
                 )
             );
 
             return;
         }
 
-        Run(message, targets);
+        Run(message, targets, force);
     }
 
     /// <summary>Runs the track over the files the question was answered for.</summary>
     /// <param name="message">What the versions are to say.</param>
     /// <param name="targets">The files to record, read when the question was put.</param>
-    private void Run(string message, IReadOnlyList<Target> targets)
+    /// <param name="force">Whether the run records changes the work would otherwise refuse.</param>
+    private void Run(string message, IReadOnlyList<Target> targets, bool force)
     {
         if (_busy || targets.Count == 0)
         {
@@ -271,7 +359,7 @@ internal sealed class VersionGraphTrackBar : Border
 
         _ = Task.Run(() =>
         {
-            var (done, said) = TrackCommand.Run(directory, files, message);
+            var (done, said) = TrackCommand.Run(directory, files, message, force);
 
             Dispatcher.UIThread.Post(() =>
             {
@@ -303,24 +391,27 @@ internal sealed class VersionGraphTrackBar : Border
 
     /// <summary>
     /// The files a track would record: those chosen whose content changed, less the ones that need no
-    /// recording or must not be recorded, each with whether its chain has parted from the Vault's.
+    /// recording or that only a forced run may record, each with whether its chain has parted from the
+    /// Vault's.
     /// </summary>
     /// <remarks>
     /// A file that stands as recorded is nothing to make a version of, and the command line skips it;
     /// skipping it here is what makes the button's answer the same as the run's. A new file is work to
     /// record; a file whose base upstream moved past is too, and is the one the question is put for.
-    /// A file another account holds, a move that changed nothing, and one waiting to be merged are
-    /// each a different action's to settle rather than a track's, so they are left out.
+    /// A file another account holds is left out unless the run is forced, because the version made here
+    /// would be one this side cannot push. A move that changed nothing and a file waiting to be merged
+    /// are different actions' to settle rather than a track's.
     /// </remarks>
+    /// <param name="force">Whether the files a plain track refuses are to be recorded anyway.</param>
     /// <returns>The files to record, in the order the listing shows them.</returns>
-    private IReadOnlyList<Target> Targets()
+    private IReadOnlyList<Target> Targets(bool force)
     {
         // A directory is a place, and what a track on it means is every untracked entry under it.
         // That is asked before the file choice because the click that made the place was about the
         // place: a listing's previous files are not what the reader is pointing at any more.
         if (ChosenDirectory.Current is { } place)
         {
-            return DirectoryTargets(place);
+            return DirectoryTargets(place, force);
         }
 
         var chosen = ChosenFiles.Current;
@@ -360,7 +451,7 @@ internal sealed class VersionGraphTrackBar : Border
                     PathState.Merging => status.Modified.Any(named =>
                         StatusReadings.Names(status.Root, named, entry.Path)
                     ),
-                    PathState.Wrong => !status.Unowned.Any(named =>
+                    PathState.Wrong => force || !status.Unowned.Any(named =>
                         StatusReadings.Names(status.Root, named, entry.Path)
                     ),
                     _ => false,
@@ -372,7 +463,8 @@ internal sealed class VersionGraphTrackBar : Border
                         new Target(
                             directory,
                             entry.Path,
-                            status.SyncOf(entry.Path) == SyncStanding.Diverged
+                            status.SyncOf(entry.Path) == SyncStanding.Diverged,
+                            state == PathState.Wrong
                         )
                     );
                 }
@@ -404,8 +496,9 @@ internal sealed class VersionGraphTrackBar : Border
     /// </para>
     /// </remarks>
     /// <param name="place">The directory clicked in a listing.</param>
+    /// <param name="force">Whether the files a plain track refuses are to be recorded anyway.</param>
     /// <returns>The files under it a track would record.</returns>
-    private IReadOnlyList<Target> DirectoryTargets(Entry place)
+    private IReadOnlyList<Target> DirectoryTargets(Entry place, bool force)
     {
         var holder = Path.GetDirectoryName(place.Path) ?? place.Path;
         var status = _statuses.Reading(holder) ?? _statuses.Reading(place.Path);
@@ -418,9 +511,16 @@ internal sealed class VersionGraphTrackBar : Border
         var directory = Path.GetFullPath(place.Path);
         var targets = new List<Target>();
 
-        foreach (var file in RecordableUnder(read, directory))
+        foreach (var file in RecordableUnder(read, directory, force))
         {
-            targets.Add(new Target(directory, file, read.SyncOf(file) == SyncStanding.Diverged));
+            targets.Add(
+                new Target(
+                    directory,
+                    file,
+                    read.SyncOf(file) == SyncStanding.Diverged,
+                    read.StateOf(file) == PathState.Wrong
+                )
+            );
         }
 
         return targets;
@@ -435,8 +535,13 @@ internal sealed class VersionGraphTrackBar : Border
     /// </remarks>
     /// <param name="read">What the work says about itself.</param>
     /// <param name="directory">The place whose entries are wanted.</param>
+    /// <param name="force">Whether the files a plain track refuses are to be recorded anyway.</param>
     /// <returns>The full paths to record, in the order the reading names them.</returns>
-    internal static IReadOnlyList<string> RecordableUnder(RolaStatus read, string directory)
+    internal static IReadOnlyList<string> RecordableUnder(
+        RolaStatus read,
+        string directory,
+        bool force = false
+    )
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(directory);
@@ -487,7 +592,7 @@ internal sealed class VersionGraphTrackBar : Border
                 PathState.Merging => read.Modified.Any(named =>
                     StatusReadings.Names(read.Root, named, file)
                 ),
-                PathState.Wrong => !read.Unowned.Any(named =>
+                PathState.Wrong => force || !read.Unowned.Any(named =>
                     StatusReadings.Names(read.Root, named, file)
                 ),
                 _ => false,
@@ -505,22 +610,44 @@ internal sealed class VersionGraphTrackBar : Border
     /// <summary>Draws the button as the files chosen and what is written say it is.</summary>
     private void Paint()
     {
-        var targets = Targets();
+        var targets = Targets(_shifted);
         var ready = !_busy && targets.Count > 0 && !string.IsNullOrWhiteSpace(_message.Text);
+        var held = _shifted && ready;
 
         _track.IsEnabled = ready;
 
         // The button keeps the look's ink while it can be pressed and the faint one while it cannot:
         // what the row offers is said by the weight of the word as well as by the press being refused.
+        // Shift makes the run a forced one, so the word and the line are drawn in the colour the look
+        // spends on what must not be done.
         _track[!TemplatedControl.ForegroundProperty] = new DynamicResourceExtension(
-            ready ? PaletteKeys.Front : PaletteKeys.Faint
+            held ? Held : ready ? PaletteKeys.Front : PaletteKeys.Faint
         );
+        _track[!TemplatedControl.BorderBrushProperty] = new DynamicResourceExtension(
+            held ? Held : PaletteKeys.Splitter
+        );
+
+        if (held)
+        {
+            _track[!TemplatedControl.BackgroundProperty] = new DynamicResourceExtension(
+                PaletteKeys.DelWash
+            );
+        }
+        else
+        {
+            _track.Background = Brushes.Transparent;
+        }
 
         var tip = RolaI18N.Get(
             ChosenDirectory.Current is null
                 ? "rorolala_vcs.version_graph.track_tip"
                 : "rorolala_vcs.version_graph.track_directory_tip"
         );
+
+        if (_shifted)
+        {
+            tip = $"{tip} — {RolaI18N.Get("rorolala_vcs.version_graph.track_force_hint")}";
+        }
 
         if (targets.Any(target => target.Diverged))
         {
@@ -547,5 +674,6 @@ internal sealed class VersionGraphTrackBar : Border
     /// <param name="Directory">The directory the file is in, and where a run over it is made.</param>
     /// <param name="File">The file, as the program names it.</param>
     /// <param name="Diverged">Whether tracking it makes a version the Vault's chain does not carry.</param>
-    private sealed record Target(string Directory, string File, bool Diverged);
+    /// <param name="Forced">Whether it is a change a plain track refuses and only a forced one records.</param>
+    private sealed record Target(string Directory, string File, bool Diverged, bool Forced);
 }

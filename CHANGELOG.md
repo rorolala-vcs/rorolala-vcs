@@ -2,6 +2,12 @@
 
 This document records all Changelog entries for Rorolala VCS starting from 0.1.0, managed by the `cargo changelog` command built into this project.
 
+# 0.2.1 (Unreleased)
+
+## Feature
+
+1. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7) — [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-rorolala-vcs-force-a-track-from-the-version-graph-with-shift-7)
+
 # 0.2.0 (2026-11-04)
 
 ## Feature

@@ -2,6 +2,16 @@
 
 This document records all Changelog entries for Rorolala VCS starting from 0.1.0, managed by the `cargo changelog` command built into this project.
 
+# 0.2.1 (Unreleased)
+
+## Feature
+
+### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
+
+The TRACK button under the Version Graph turns red while Shift is held. A press then records
+the chosen changes with `rola track --force`, and a question names the files whose changes a plain
+track refuses before anything is written. Without Shift the button records the changes as before.
+
 # 0.2.0 (2026-11-04)
 
 ## Feature
