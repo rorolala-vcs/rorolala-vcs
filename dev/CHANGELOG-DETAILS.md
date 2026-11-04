@@ -136,7 +136,20 @@ refuses it, by the read-only name `truth@VAULT`. The Layout's own batch writes g
 need: an entry can be removed in the same batch that binds its path to another, which is one write
 and no moment where the path names nothing.
 
-### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Draw the desktop Version Graph as the work's variant graph
+### 7. [`app`] [`rola-daemon-gui`] [`windows`] Give the Windows daemon window the dark theme of Windows 10 and later
+
+`rola-daemon-gui.exe` now draws in the dark application theme of Windows 10 1809
+and later. The title bar, the dialog ground, the buttons, edits, lists and the tab
+strip all follow the desktop's theme, and a change of that theme is followed
+while the window is open.
+
+Dark is used only when the machine answers for itself. A build older than 1809,
+high contrast, a theme value that cannot be read, or a uxtheme that does not
+export the dark-mode entry points leaves the window light, and no state is half
+dark. The tab strip is painted by the window after the control draws itself,
+because the control's dark theme leaves the unselected tabs light.
+
+### 8. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Draw the desktop Version Graph as the work's variant graph
 
 The Version Graph dock now draws what the variant graph module reads: a card per variant, a lane per
 file and a column per version depth, with the merges, the drafts and the entries laid beside them.
@@ -179,7 +192,7 @@ the numbers fixed at its top, at one size at every zoom, drawn whole while the g
 and faded out as it comes close. The drag, the wheel and `F` still move and frame the drawing, and only
 the cards and edges the viewport holds are drawn.
 
-### 8. [`modules`] [`inverse-index`] Read the inverse index the other way, and rebuild it incrementally
+### 9. [`modules`] [`inverse-index`] Read the inverse index the other way, and rebuild it incrementally
 
 The inverse index can now be read as a snapshot: every variant by its key with the version it is
 based on, the variant it merges in, and the content, creator and message it names; every version by
@@ -208,7 +221,7 @@ numbered by a later rebuild when the link arrives. The report now says which of 
 The file format is unchanged, so existing records stay valid and the first rebuild after this takes
 them in incrementally; `Edge::Join` gains the `join_dependents` question the other roles already had.
 
-### 9. [`modules`] [`status`] [`variant-graph`] Read the variant graph of a workspace as one JSON document
+### 10. [`modules`] [`status`] [`variant-graph`] Read the variant graph of a workspace as one JSON document
 
 `rorolala-status` gains `locate_variant_graph_json`, which reads the variant graph around the entries
 a request names and answers with one JSON document: the graph, the entries that name it, the merges
