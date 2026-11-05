@@ -43,13 +43,16 @@ pub use rorolala_inverse_index as inverse_index;
 pub use rorolala_layout as layout;
 
 /// Reading a Workspace's tree against the Layout it works from
-pub use rorolala_tree_analyze as tree_analyze;
+pub use rorolala_workspace_analyze as workspace_analyze;
 
 /// Transport and wire protocol
 pub use rorolala_protocol as protocol;
 
 /// Storage of file data, and the layout that places it
 pub use rorolala_storage as storage;
+
+/// A directory versioned as one file: its structure, and what a tree version names
+pub use rorolala_tree as tree;
 
 /// Client-side workspace
 pub use rorolala_workspace as workspace;
@@ -153,4 +156,43 @@ pub fn account_locate(vault: &Vault, rule: &KeyLocateRule) -> Accounts {
 #[lazyffi(export = rola_account_find)]
 pub fn account_find(account_name: &str, rule: &KeyLocateRule) -> Option<Account> {
     auth::find_account(account_name, &roots_here(), rule)
+}
+
+/// The entries of a tree's structure, as the JSON a caller reads.
+///
+/// A tree's structure crosses as its bytes, and the format behind those bytes is this crate's own.
+/// A caller that read them back would be keeping a second copy of the format; it hands them here
+/// instead, as hex, and reads the entries as data: each entry's path, kind, mode, storage and link
+/// target.
+///
+/// The answer is `null` when the text is not hex or the bytes are not a structure this build reads,
+/// so a caller always reads JSON and says what an answer that names nothing means.
+#[must_use]
+#[lazyffi(export = rola_tree_entries_json)]
+pub fn tree_entries_json(structure_hex: &str) -> String {
+    let Some(bytes) = unhex(structure_hex) else {
+        return "null".to_owned();
+    };
+
+    let decoded = rorolala_tree::TreeStructure::decode(&bytes).ok();
+
+    serde_json::to_string(&decoded).unwrap_or_else(|_| "null".to_owned())
+}
+
+/// The bytes `text` writes as hex, when every pair is a hex digit.
+fn unhex(text: &str) -> Option<Vec<u8>> {
+    if !text.len().is_multiple_of(2) {
+        return None;
+    }
+
+    let digits = text.as_bytes();
+    let mut bytes = Vec::with_capacity(digits.len() / 2);
+
+    for pair in digits.windows(2).step_by(2) {
+        let high = char::from(pair[0]).to_digit(16)?;
+        let low = char::from(pair[1]).to_digit(16)?;
+        bytes.push(u8::try_from(high * 16 + low).ok()?);
+    }
+
+    Some(bytes)
 }

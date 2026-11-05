@@ -33,12 +33,13 @@ use std::str::FromStr as _;
 use librorolala::auth::Account;
 use librorolala::daemon::{Chain, action_bring_remote_index_async, action_fetch_layout};
 use librorolala::ignore::IgnoreRuleSet;
-use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::layout::{EntryKind as LayoutEntryKind, Layout, LayoutPath, MutableData};
 use librorolala::status::{tracked_vault, variant_moves};
-use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
-use librorolala::tree_analyze::{Cache, cache_path, entry_of, tree_diff};
+use librorolala::storage::{Blake3Hash, Key, RorolalaStorage, StorageBackend as _};
+use librorolala::tree::{EntryKind as TreeEntryKind, Staging, Tree, TreeStructure, read_structure};
 use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version};
 use librorolala::workspace::{Merging, Pending, Workspace};
+use librorolala::workspace_analyze::{Cache, cache_path, entry_of, tree_diff};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -480,6 +481,33 @@ pub fn handle_retrack(
         Ok(runtime) => runtime,
         Err(error) => return failed(error.to_string()),
     };
+
+    // A tree is one version unit rather than content at a path: what moves back is the whole
+    // structure, and what the work holds is put back from it rather than from a content object.
+    if data.kind() == LayoutEntryKind::Tree {
+        let Some(store) = storage.get_ref().as_ref() else {
+            return failed(t!("retrack.err_no_store").trim());
+        };
+
+        let asked = RetrackTree {
+            recording: &recording,
+            written: &written,
+            layout: &layout,
+            held,
+            root: &root,
+            path: &path,
+            id,
+            data: &data,
+            vcs,
+            runtime: &runtime,
+            store,
+            only_index,
+            force,
+            deny_jump,
+        };
+
+        return retrack_tree(&asked);
+    }
 
     // The chain and the content may be fetched from a Vault, and what the exchanges do is watched
     // while they run: a retrack of a version this side never fetched is a pull of blocks, and it
@@ -2568,6 +2596,340 @@ pub fn render_error_retrack_failed(error: ErrorRetrackFailed, ec: &mut ResExitCo
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("retrack.err_failed_help").trim()));
     ec.exit_code = EC_ERR_RETRACK;
+}
+
+/// What a retrack of a tree was asked to do.
+struct RetrackTree<'a> {
+    /// What the run named the pointer go to.
+    recording: &'a Recording,
+    /// The target as it was written, for the words a refusal uses.
+    written: &'a str,
+    /// The Layout being worked in.
+    layout: &'a Layout,
+    /// The Workspace the run is in.
+    held: &'a Workspace,
+    /// The Workspace's root, where the work is.
+    root: &'a Path,
+    /// The tree's path in the Layout.
+    path: &'a LayoutPath,
+    /// The entry the tree records now.
+    id: Uuid,
+    /// What the entry records now.
+    data: &'a MutableData,
+    /// The index the versions are read from.
+    vcs: &'a VCSIndex,
+    /// The runtime the reads run on.
+    runtime: &'a tokio::runtime::Runtime,
+    /// The store the tree's content is read from.
+    store: &'a RorolalaStorage,
+    /// Whether only the record moves and the work is left alone.
+    only_index: bool,
+    /// Whether work that was never recorded is written over.
+    force: bool,
+    /// Whether a version off the way back is refused.
+    deny_jump: bool,
+}
+
+/// Moves a tree's record to another version, and puts the work back from it.
+///
+/// What is put back is the target version's structure: a path it holds is written as it holds it,
+/// and a path the tree recorded that the target does not hold is taken out of the work. What the
+/// tree never recorded is left where it is, so a retrack does not reach beyond the version unit.
+fn retrack_tree(asked: &RetrackTree<'_>) -> Next {
+    let Recording::Version(level) = asked.recording else {
+        return ErrorRetrackTreeUnsupported.into();
+    };
+
+    let current = match read_version(asked.vcs, asked.runtime, asked.data.version()) {
+        Ok(current) => current,
+        Err(next) => return next,
+    };
+    let chain = match ancestors(asked.vcs, asked.runtime, &current) {
+        Ok(chain) => chain,
+        Err(next) => return next,
+    };
+    let (target_hash, _number) = match resolve_target(
+        asked.vcs,
+        asked.runtime,
+        &chain,
+        &Asked {
+            text: asked.written,
+            level,
+            path: asked.path.as_str(),
+            deny_jump: asked.deny_jump,
+        },
+    ) {
+        Ok(resolved) => resolved,
+        Err(next) => return next,
+    };
+
+    let tree_root = asked.root.join(asked.path.to_path_buf());
+    let tree = match Tree::open(asked.held.get_root(), &tree_root) {
+        Ok(tree) => tree,
+        Err(error) => return failed(error.to_string()),
+    };
+
+    let target = match asked
+        .runtime
+        .block_on(read_structure(asked.vcs, asked.store, &target_hash))
+    {
+        Ok(target) => target,
+        Err(error) => return failed(error.to_string()),
+    };
+
+    let recorded =
+        match asked
+            .runtime
+            .block_on(tree.recorded_structure(asked.layout, asked.vcs, asked.store))
+        {
+            Ok(recorded) => recorded,
+            Err(error) => return failed(error.to_string()),
+        };
+
+    let staging = Staging::new(&tree_root);
+    let staged = match staging.structure() {
+        Ok(Some(staged)) => staged,
+        Ok(None) => recorded.clone(),
+        Err(error) => return failed(error.to_string()),
+    };
+    let conflicts = match staging.conflicts() {
+        Ok(conflicts) => conflicts,
+        Err(error) => return failed(error.to_string()),
+    };
+
+    let rules = match tree.rules(crate::ignore::rules(asked.held, false)) {
+        Ok(rules) => rules,
+        Err(error) => return failed(error.to_string()),
+    };
+    let scanned = match tree.scan(&rules, false) {
+        Ok(scanned) => scanned,
+        Err(error) => return failed(error.to_string()),
+    };
+    let status = librorolala::tree::compare(&recorded, &staged, &scanned.structure, &conflicts);
+
+    let dirty =
+        !status.staged.is_empty() || !status.unstaged.is_empty() || !status.conflicts.is_empty();
+
+    if dirty && !asked.only_index && !asked.force {
+        return ErrorRetrackTreeDirty {
+            path: asked.path.as_str().to_owned(),
+        }
+        .into();
+    }
+
+    if !asked.only_index {
+        if let Err(error) = put_back(&tree_root, &target, &recorded, asked.store, asked.runtime) {
+            return error;
+        }
+
+        let conflicts = match staging.conflicts() {
+            Ok(conflicts) => conflicts,
+            Err(error) => return failed(error.to_string()),
+        };
+        for path in &conflicts {
+            let _ = fs::remove_file(tree_root.join(librorolala::tree::conflict_copy(path)));
+        }
+        if let Err(error) = staging.clear() {
+            return failed(error.to_string());
+        }
+    }
+
+    let data = MutableData::new(
+        asked.data.owner().map(str::to_owned),
+        target_hash,
+        asked.data.description().to_owned(),
+    )
+    .with_kind(LayoutEntryKind::Tree)
+    .with_preference(asked.data.preference().map(str::to_owned));
+
+    let mut batch = asked.layout.batch();
+    if let Err(error) = batch.update_entry(asked.id, data) {
+        return layout_failed(&error);
+    }
+    if let Err(error) = batch.commit() {
+        return layout_failed(&error);
+    }
+
+    let scanned = match tree.scan(&rules, false) {
+        Ok(scanned) => scanned,
+        Err(error) => return failed(error.to_string()),
+    };
+    let baseline = tree.baseline();
+    if let Err(error) = baseline.write(&target, &target_hash) {
+        return failed(error.to_string());
+    }
+    if let Err(error) = baseline.write_entries(&scanned.cache) {
+        return failed(error.to_string());
+    }
+
+    ResultRetrackTree {
+        path: asked.path.as_str().to_owned(),
+        version: crate::vcs_index::hex(&target_hash),
+    }
+    .into()
+}
+
+/// Writes `target` over the work at `root`, and takes out what `old` recorded and `target` does not.
+fn put_back(
+    root: &Path,
+    target: &TreeStructure,
+    old: &TreeStructure,
+    store: &RorolalaStorage,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<(), Next> {
+    if let Err(error) = fs::create_dir_all(root) {
+        return Err(failed(error.to_string()));
+    }
+
+    for entry in target.entries() {
+        let disk = root.join(entry.path());
+
+        match entry.kind() {
+            TreeEntryKind::Directory => {
+                if let Err(error) = fs::create_dir_all(&disk) {
+                    return Err(failed(error.to_string()));
+                }
+            }
+            TreeEntryKind::File => {
+                let Some(storage) = entry.storage() else {
+                    continue;
+                };
+                let bytes = match runtime.block_on(store.read_object(storage)) {
+                    Ok(bytes) => bytes,
+                    Err(error) => return Err(failed(error.to_string())),
+                };
+                if let Some(parent) = disk.parent()
+                    && let Err(error) = fs::create_dir_all(parent)
+                {
+                    return Err(failed(error.to_string()));
+                }
+                if let Err(error) = fs::write(&disk, bytes) {
+                    return Err(failed(error.to_string()));
+                }
+            }
+            TreeEntryKind::Symlink => {
+                let Some(target_path) = entry.target() else {
+                    continue;
+                };
+                if disk.exists() {
+                    let _ = fs::remove_file(&disk);
+                }
+                if let Some(parent) = disk.parent()
+                    && let Err(error) = fs::create_dir_all(parent)
+                {
+                    return Err(failed(error.to_string()));
+                }
+                #[cfg(unix)]
+                {
+                    if let Err(error) = std::os::unix::fs::symlink(target_path, &disk) {
+                        return Err(failed(error.to_string()));
+                    }
+                }
+                #[cfg(windows)]
+                {
+                    if let Err(error) = std::os::windows::fs::symlink_file(target_path, &disk) {
+                        return Err(failed(error.to_string()));
+                    }
+                }
+            }
+        }
+    }
+
+    for entry in old.entries() {
+        if target.entry(entry.path()).is_some() {
+            continue;
+        }
+
+        let disk = root.join(entry.path());
+        match entry.kind() {
+            TreeEntryKind::Directory => {
+                let _ = fs::remove_dir(&disk);
+            }
+            TreeEntryKind::File | TreeEntryKind::Symlink => {
+                let _ = fs::remove_file(&disk);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Result: a tree's record moved to another version.
+#[derive(Grouped)]
+pub struct ResultRetrackTree {
+    /// The tree as a person knows it.
+    path: String,
+    /// The version it records now.
+    version: String,
+}
+
+#[renderer(buffer)]
+pub fn render_result_retrack_tree(result: ResultRetrackTree, ec: &mut ResExitCode) {
+    r_println!(
+        "{}",
+        t!(
+            "retrack.result_tree",
+            path = result.path,
+            version = result.version
+        )
+        .trim()
+    );
+
+    let _ = ec;
+}
+
+/// Error: a tree is only retracked to a version.
+#[derive(Grouped)]
+pub struct ErrorRetrackTreeUnsupported;
+
+impl Failure for ErrorRetrackTreeUnsupported {
+    fn name(&self) -> &'static str {
+        "error_retrack_tree_unsupported"
+    }
+
+    fn reason(&self) -> String {
+        t!("retrack.err_tree_unsupported").trim().to_string()
+    }
+}
+
+failure!(ErrorRetrackTreeUnsupported);
+
+#[renderer(buffer)]
+pub fn render_error_retrack_tree_unsupported(_: ErrorRetrackTreeUnsupported, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(t!("retrack.err_tree_unsupported").trim()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("retrack.err_tree_unsupported_help").trim())
+    );
+    ec.exit_code = EC_ERR_RETRACK_ARGUMENT;
+}
+
+/// Error: a tree holds work that was never recorded.
+#[derive(Grouped)]
+pub struct ErrorRetrackTreeDirty {
+    /// The tree.
+    path: String,
+}
+
+impl Failure for ErrorRetrackTreeDirty {
+    fn name(&self) -> &'static str {
+        "error_retrack_tree_dirty"
+    }
+
+    fn reason(&self) -> String {
+        t!("retrack.err_tree_dirty", path = self.path)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorRetrackTreeDirty);
+
+#[renderer(buffer)]
+pub fn render_error_retrack_tree_dirty(error: ErrorRetrackTreeDirty, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("retrack.err_tree_dirty_help").trim()));
+    ec.exit_code = EC_ERR_RETRACK_DIRTY;
 }
 
 #[cfg(test)]

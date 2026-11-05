@@ -11,12 +11,12 @@ use std::path::Path;
 use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{Layout, LayoutPath};
 use rorolala_storage::Key;
-use rorolala_tree_analyze::tree_diff;
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::{Lookback, VCSIndex, VariantView, chain_of, read_chain};
 use rorolala_workspace::Workspace;
+use rorolala_workspace_analyze::tree_diff;
 use uuid::Uuid;
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.

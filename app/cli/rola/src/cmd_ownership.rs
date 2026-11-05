@@ -31,10 +31,10 @@ use librorolala::daemon::{
     Ownership, action_fetch_layout, action_giveup_ownership_async, action_request_ownership_async,
 };
 use librorolala::ignore::IgnoreRuleSet;
-use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::layout::{EntryKind, Layout, LayoutPath, MutableData};
 use librorolala::protocol::VaultAddress;
-use librorolala::tree_analyze::{TreeDiff, tree_diff, walk};
 use librorolala::workspace::Workspace;
+use librorolala::workspace_analyze::{TreeDiff, tree_diff, walk};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -67,6 +67,8 @@ use crate::failure::failure;
 use crate::keys::account_named;
 use crate::layout::{ErrorLayoutFailed, cached_vault_copy, set_cached_owners};
 use crate::progress::Reporting;
+use crate::tree::cmd_tree::shown;
+use librorolala::tree::Tree;
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const ALIKE: f32 = 0.6;
@@ -448,6 +450,23 @@ fn change(
         }
     };
 
+    // A tree is one unit of ownership: a path inside one is not a file the Layout names, so it is
+    // not a path a claim or a release can be about. Naming the tree itself is.
+    let root = held.get_root();
+    for name in names {
+        let resolved = normalize(&crate::tree::cmd_tree::resolve(&cwd, name));
+
+        if let Ok(tree) = Tree::locate(root, &resolved)
+            && resolved != normalize(tree.root())
+        {
+            return ErrorOwnershipInTree {
+                path: name.clone(),
+                tree: shown(&tree).unwrap_or_default(),
+            }
+            .into();
+        }
+    }
+
     let vault_name = remote.get_ref().name_or_default(track)?;
     let target = remote.get_ref().vault_or_default(vault_name.clone())?;
     let account_name = current.get_ref().must_bind()?;
@@ -588,6 +607,12 @@ fn expanded(
         };
 
         for file in found.iter() {
+            // A tree is one entry of its own; expanding the directory it sits in does not walk
+            // into it, and an entry for it is named by naming it.
+            if file.kind != EntryKind::File {
+                continue;
+            }
+
             if under(&prefix, &file.path) {
                 paths.entry(file.path.clone()).or_insert(false);
             }
@@ -923,6 +948,36 @@ impl Failure for ErrorOwnershipArgument {
 }
 
 failure!(ErrorOwnershipArgument);
+
+/// Error: a path inside a tree was named, where the tree is the unit that is owned.
+#[derive(Grouped)]
+pub struct ErrorOwnershipInTree {
+    /// The path named.
+    path: String,
+    /// The tree it is in.
+    tree: String,
+}
+
+impl Failure for ErrorOwnershipInTree {
+    fn name(&self) -> &'static str {
+        "error_ownership_in_tree"
+    }
+
+    fn reason(&self) -> String {
+        t!("ownership.err_in_tree", path = self.path, tree = self.tree)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorOwnershipInTree);
+
+#[renderer(buffer)]
+pub fn render_error_ownership_in_tree(error: ErrorOwnershipInTree, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("ownership.err_in_tree_help").trim()));
+    ec.exit_code = EC_ERR_LAYOUT_OWNERSHIP;
+}
 
 #[renderer(buffer)]
 pub fn render_error_ownership_argument(error: ErrorOwnershipArgument, ec: &mut ResExitCode) {

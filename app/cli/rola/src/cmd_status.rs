@@ -23,10 +23,12 @@ use std::str::FromStr as _;
 use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{Broken, Relation, Status, compare};
-use librorolala::storage::{Blake3Hash, Key};
-use librorolala::tree_analyze::tree_diff;
+use librorolala::storage::{Blake3Hash, Key, RorolalaStorage};
+use librorolala::tree::{Tree, TreeStatus};
 use librorolala::vcs::{LookbackError, VCSIndex, read_chain};
 use librorolala::workspace::{Merging, Pending, Workspace};
+use librorolala::workspace_analyze::tree_diff;
+use librorolala::workspace_analyze::walk;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -38,7 +40,7 @@ use mingling::{
     picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
@@ -58,6 +60,8 @@ use crate::hash::resolve as resolve_hash;
 use crate::layout::{
     ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_copy,
 };
+use crate::tree::cmd_tree::shown;
+use crate::tree::cmd_tree_status::lines as tree_lines;
 use crate::vcs_index::cmd_vcs_index_lookback::{
     MergeHint, ResLookback, Standing, StandingRelation, from_object,
 };
@@ -200,6 +204,7 @@ pub fn handle_status(
     vault: &mut LazyRes<ResVault>,
     account: &mut LazyRes<ResCurrentAccount>,
     index: &mut LazyRes<ResVCSIndex>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
 ) -> Next {
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
@@ -212,7 +217,19 @@ pub fn handle_status(
 
     let merging = Merging::read(held.get_root());
 
+    // A run standing in a tree reads the tree rather than the Workspace: what a tree holds is one
+    // unit of work, and what there is to do about it is what `tree status` says.
+    if state.target.is_none()
+        && let Some(next) = status_in_tree(held, &layout, index, storage, state.include_ignored)
+    {
+        return next;
+    }
+
     if let Some(target) = state.target {
+        if let Some(next) = status_named_tree(held, &layout, index, storage, &target) {
+            return next;
+        }
+
         let me = account.get_ref().must_bind().ok();
         let me = me.as_deref();
 
@@ -256,7 +273,26 @@ pub fn handle_status(
         Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
     };
 
+    let Some(index) = index.get_ref().as_ref() else {
+        return ErrorLayoutFailed::new(t!("status.err_no_index").trim().to_string()).into();
+    };
+    let Some(store) = storage.get_ref().as_ref() else {
+        return ErrorLayoutFailed::new(t!("status.err_no_store").trim().to_string()).into();
+    };
+
+    let trees = match tree_reading(
+        held,
+        &layout,
+        Some(index),
+        Some(store),
+        state.include_ignored,
+    ) {
+        Ok(trees) => trees,
+        Err(error) => return ErrorLayoutFailed::new(error).into(),
+    };
+
     ResultStatus {
+        trees,
         lost: status.lost,
         untagged: status.untagged,
         modified: status.modified,
@@ -856,6 +892,227 @@ pub fn render_error_status_target(error: ErrorStatusTarget, ec: &mut ResExitCode
     ec.exit_code = EC_ERR_LAYOUT_ARGUMENT;
 }
 
+/// The tree a run named, read as a tree's status, or a refusal for a file inside one.
+///
+/// A tree is one unit of work, so a path of its own is not something a status reads as a file: it
+/// says to ask the tree instead. It answers nothing when the name is not a tree's.
+fn status_named_tree(
+    held: &Workspace,
+    layout: &Layout,
+    index: &mut LazyRes<ResVCSIndex>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+    target: &str,
+) -> Option<Next> {
+    let cwd = std::env::current_dir().ok()?;
+    let resolved = crate::tree::cmd_tree::resolve(&cwd, target);
+    let tree = Tree::locate(held.get_root(), &resolved).ok()?;
+
+    if !resolved.is_dir() {
+        return Some(
+            ErrorStatusTreeFile {
+                path: target.to_owned(),
+            }
+            .into(),
+        );
+    }
+
+    let Some(store): Option<&RorolalaStorage> = storage.get_ref().as_ref() else {
+        return Some(ErrorLayoutFailed::new(t!("status.err_no_store").trim().to_string()).into());
+    };
+    let Some(index) = index.get_ref().as_ref() else {
+        return Some(ErrorLayoutFailed::new(t!("status.err_no_index").trim().to_string()).into());
+    };
+
+    let rules = crate::ignore::rules(held, false);
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => return Some(ErrorLayoutFailed::new(error.to_string()).into()),
+    };
+    let status = match runtime.block_on(tree.status(layout, index, store, rules, false)) {
+        Ok(status) => status,
+        Err(error) => return Some(ErrorLayoutFailed::new(error.to_string()).into()),
+    };
+
+    match shown(&tree) {
+        Ok(path) => Some(ResultStatusTree { path, status }.into()),
+        Err(next) => Some(next),
+    }
+}
+
+/// Error: a status was asked about a file inside a tree.
+#[derive(Grouped)]
+pub struct ErrorStatusTreeFile {
+    /// The path named.
+    path: String,
+}
+
+impl Failure for ErrorStatusTreeFile {
+    fn name(&self) -> &'static str {
+        "error_status_tree_file"
+    }
+
+    fn reason(&self) -> String {
+        t!("status.err_tree_file", path = self.path)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorStatusTreeFile);
+
+#[renderer(buffer)]
+pub fn render_error_status_tree_file(error: ErrorStatusTreeFile, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("status.err_tree_file_help").trim()));
+    ec.exit_code = crate::exit_codes::EC_ERR_TREE_ARGUMENT;
+}
+
+/// The tree a run is standing in, when it is standing in one, read as a tree's status.
+///
+/// It answers nothing when the run is not inside a tree, so the Workspace reading goes on as it
+/// would have; what it answers is what the run ends with, whether that is a reading or a refusal.
+fn status_in_tree(
+    held: &Workspace,
+    layout: &Layout,
+    index: &mut LazyRes<ResVCSIndex>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+    include_ignored: bool,
+) -> Option<Next> {
+    let cwd = std::env::current_dir().ok()?;
+    let tree = Tree::locate(held.get_root(), &cwd).ok()?;
+
+    let Some(store): Option<&RorolalaStorage> = storage.get_ref().as_ref() else {
+        return Some(ErrorLayoutFailed::new(t!("status.err_no_store").trim().to_string()).into());
+    };
+    let Some(index) = index.get_ref().as_ref() else {
+        return Some(ErrorLayoutFailed::new(t!("status.err_no_index").trim().to_string()).into());
+    };
+
+    let rules = crate::ignore::rules(held, include_ignored);
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => return Some(ErrorLayoutFailed::new(error.to_string()).into()),
+    };
+
+    let status = match runtime.block_on(tree.status(layout, index, store, rules, include_ignored)) {
+        Ok(status) => status,
+        Err(error) => return Some(ErrorLayoutFailed::new(error.to_string()).into()),
+    };
+
+    match shown(&tree) {
+        Ok(path) => Some(ResultStatusTree { path, status }.into()),
+        Err(next) => Some(next),
+    }
+}
+
+/// How the trees of the Workspace stand, as lines, when a run reads the Workspace rather than one.
+///
+/// A tree the Layout records is clean unless its own reading finds staged work, work not staged or a
+/// conflict; a directory holding a tree mark the Layout does not name is untracked. What is clean is
+/// not a line, since a reading of the Workspace is about what there is to do.
+fn tree_reading(
+    held: &Workspace,
+    layout: &Layout,
+    index: Option<&VCSIndex>,
+    store: Option<&RorolalaStorage>,
+    include_ignored: bool,
+) -> Result<Vec<String>, String> {
+    let Some(index) = index else {
+        return Ok(Vec::new());
+    };
+    let Some(store) = store else {
+        return Ok(Vec::new());
+    };
+
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| error.to_string())?;
+    let root = held.get_root();
+    let mut tracked: BTreeSet<String> = BTreeSet::new();
+    let mut lines = Vec::new();
+
+    for (id, data) in layout.entries() {
+        if data.kind() != librorolala::layout::EntryKind::Tree {
+            continue;
+        }
+        let Some(path) = layout.path_of(id) else {
+            continue;
+        };
+        tracked.insert(path.as_str().to_owned());
+
+        let disk = root.join(path.to_path_buf());
+        let Ok(tree) = Tree::open(root, &disk) else {
+            continue;
+        };
+        let rules = crate::ignore::rules(held, include_ignored);
+        let status = runtime
+            .block_on(tree.status(layout, index, store, rules, include_ignored))
+            .map_err(|error| error.to_string())?;
+
+        if status.is_clean() {
+            continue;
+        }
+
+        lines.push(
+            t!(
+                "status.tree_line",
+                path = path.as_str(),
+                staged = status.staged.len().to_string(),
+                unstaged = status.unstaged.len().to_string(),
+                untracked = status.untracked.len().to_string(),
+                conflicts = status.conflicts.len().to_string()
+            )
+            .trim()
+            .to_string(),
+        );
+    }
+
+    for found in walk(root).0 {
+        if found.kind != librorolala::layout::EntryKind::Tree || found.disk == root {
+            continue;
+        }
+        let Ok(relative) = found.disk.strip_prefix(root) else {
+            continue;
+        };
+        let Ok(path) = LayoutPath::from_relative(relative) else {
+            continue;
+        };
+        if tracked.contains(path.as_str()) || layout.id_of(&path).is_some() {
+            continue;
+        }
+
+        lines.push(
+            t!("status.untracked_tree", path = path.as_str())
+                .trim()
+                .to_string(),
+        );
+    }
+
+    Ok(lines)
+}
+
+/// Result: how a tree stands, as `rola status` draws it when the run is inside one.
+#[derive(Grouped, StructuralData, serde::Serialize)]
+pub struct ResultStatusTree {
+    /// The tree as a person knows it.
+    path: String,
+    /// How its work stands.
+    status: TreeStatus,
+}
+
+#[renderer(buffer)]
+pub fn render_result_status_tree(result: ResultStatusTree, ec: &mut ResExitCode) {
+    if result.status.is_clean() {
+        r_println!("{}", t!("tree.status.clean", path = result.path).trim());
+    } else {
+        r_println!("{}", t!("tree.status.header", path = result.path).trim());
+
+        for line in tree_lines(&result.status) {
+            r_println!("{line}");
+        }
+    }
+
+    let _ = ec;
+}
+
 /// Result: how the tree stood beside the Layout.
 ///
 /// The reading is the same one `rola layout tree-diff` gives, so what a `--json` run reads here is
@@ -875,6 +1132,8 @@ pub struct ResultStatus {
     renamed: Vec<RenameItem>,
     /// Paths the fetched copy of the Vault's Layout says another account holds.
     unowned: Vec<String>,
+    /// Trees whose work is not settled, and whether the Layout records them, one line each.
+    trees: Vec<String>,
     /// Files a variant is waiting to be joined into, and the variant waiting.
     merging: Vec<MergingItem>,
     /// Merges that cannot go on, one line each.
@@ -999,6 +1258,7 @@ pub fn render_result_status(result: ResultStatus) {
     if structural == 0
         && changed.is_empty()
         && result.unowned.is_empty()
+        && result.trees.is_empty()
         && result.merging.is_empty()
         && result.broken.is_empty()
     {
@@ -1007,6 +1267,18 @@ pub fn render_result_status(result: ResultStatus) {
         let mark = t!("status.mark_modified");
         let unowned = !result.unowned.is_empty();
         let merging = !result.merging.is_empty() || !result.broken.is_empty();
+
+        // A tree is one unit of work, so what its own reading finds is a line about the tree rather
+        // than about each path under it.
+        if !result.trees.is_empty() {
+            r_println!("{}", trd!(t!("status.header_trees")).trim());
+
+            for line in &result.trees {
+                r_println!("{line}");
+            }
+
+            r_println!("");
+        }
 
         // What is being merged is said first: it is work already under way, and what the next
         // `rola track` of the file would record.

@@ -62,7 +62,7 @@ use crate::complete::{strip_written, typing_flag};
 use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_SYNC, EC_ERR_SYNC_ARGUMENT, EC_HELP};
 use crate::failure::failure;
-use crate::fetch;
+use crate::fetch::{self, Sources};
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutFailed, ErrorLayoutNoCurrent, ErrorLayoutNotCached, add_cached_entry, cached_copy,
@@ -499,6 +499,14 @@ struct Carry<'a> {
     runtime: &'a tokio::runtime::Runtime,
 }
 
+/// Whether the Layout names a tree, which is what a run without a plan cannot carry the inside of.
+fn carries_trees(layout: &Layout) -> bool {
+    layout
+        .entries()
+        .iter()
+        .any(|(_, data)| data.kind() == librorolala::layout::EntryKind::Tree)
+}
+
 /// Writes what a plan names, and moves the content that gives it meaning.
 ///
 /// Content is moved before the Layout is touched either way: a version is only a meaning once what
@@ -533,6 +541,14 @@ fn carry_with(
     // a run with no plan reports having asked for.
     let indexed = plan.is_none().then(|| indexed(carry));
 
+    // With no plan, what moves is the version and what a storage key names. For a tree the version's
+    // storage key is its structure, and what the structure names is not carried: enumerating it needs
+    // the structure read first, which is the two-stage exchange a plan makes. The run says so rather
+    // than leaving the reader to wonder why a pulled tree's files are missing.
+    if plan.is_none() && carries_trees(carry.layout) {
+        eprintln!("{}", t!("sync.no_layout_trees").trim());
+    }
+
     let entries = plan_entries(plan);
 
     let sources = sources_of(state, carry, vault_name, progress)?;
@@ -554,6 +570,8 @@ fn carry_with(
 
         if let Some(store) = carry.store {
             sources.bring(store, &receive);
+
+            bring_tree_inside(&entries, carry, store, sources);
         }
 
         sources
@@ -820,10 +838,11 @@ fn content_of(entries: &[&Entry], state: StateSync, carry: &Carry<'_>) -> (Vec<K
 
         // The version and everything it stands on: a version read back needs its own content, and
         // the versions below it are what a run reaches for when it moves a pointer back.
-        let Ok(chain) = carry
-            .runtime
-            .block_on(sync::chain_store_keys(carry.index, version.digest()))
-        else {
+        let Ok(chain) = carry.runtime.block_on(sync::chain_store_keys(
+            carry.index,
+            version.digest(),
+            carry.store,
+        )) else {
             continue;
         };
 
@@ -852,6 +871,48 @@ fn count(entries: &[&Entry], down: bool) -> u64 {
         .count();
 
     u64::try_from(moved).unwrap_or(u64::MAX)
+}
+
+/// Brings what a tree's structure names, after the structure crossed with the first exchange.
+///
+/// The version's storage key is the structure, and only reading it says which keys the files inside
+/// hold. The second exchange asks for those, so a pulled tree's files are here before the Layout
+/// names the version that holds them.
+fn bring_tree_inside(
+    entries: &[&Entry],
+    carry: &Carry<'_>,
+    store: &RorolalaStorage,
+    sources: &Sources<'_>,
+) {
+    let mut inside: Vec<Key> = Vec::new();
+
+    for entry in entries {
+        if entry.kind != Kind::Receive || entry.item_kind != Some("tree") {
+            continue;
+        }
+        let Some(version) = entry
+            .remote_version
+            .as_deref()
+            .and_then(|text| Key::from_str(text).ok())
+        else {
+            continue;
+        };
+
+        if let Ok(keys) = carry.runtime.block_on(sync::tree_internal_keys(
+            carry.index,
+            store,
+            version.digest(),
+        )) {
+            inside.extend(keys);
+        }
+    }
+
+    inside.sort_unstable();
+    inside.dedup();
+
+    if !inside.is_empty() {
+        sources.bring(store, &inside);
+    }
 }
 
 /// The name an entry is shown by while it is being moved.
@@ -994,7 +1055,7 @@ fn apply_entries(
     failed: &mut Vec<String>,
 ) -> Result<(), ErrorSyncFailed> {
     // What is asked for, paired with the entry it is asked for, so an answer can be put back to it.
-    let mut creates: Vec<(String, String, String)> = Vec::new();
+    let mut creates: Vec<(String, String, String, String)> = Vec::new();
     let mut create_entries: Vec<&Entry> = Vec::new();
     let mut sets: Vec<(String, String)> = Vec::new();
     let mut setting: Vec<&Entry> = Vec::new();
@@ -1009,7 +1070,12 @@ fn apply_entries(
                     continue;
                 };
 
-                creates.push((path.to_owned(), entry.uuid.clone(), version.to_owned()));
+                creates.push((
+                    path.to_owned(),
+                    entry.uuid.clone(),
+                    version.to_owned(),
+                    entry.item_kind.unwrap_or("file").to_owned(),
+                ));
                 create_entries.push(entry);
             }
             Kind::Send | Kind::Diverged => {
@@ -1031,6 +1097,13 @@ fn apply_entries(
                     "{}: {}",
                     entry.uuid,
                     t!("sync.write_refused").trim()
+                ));
+            }
+            Kind::Mismatched => {
+                failed.push(format!(
+                    "{}: {}",
+                    entry.uuid,
+                    t!("sync.kind_mismatch").trim()
                 ));
             }
             _ => {}
@@ -1506,5 +1579,6 @@ fn kind_token(kind: Kind) -> &'static str {
         Kind::Blocked => "blocked",
         Kind::RemoteOnly => "remote-only",
         Kind::UpToDate => "up-to-date",
+        Kind::Mismatched => "kind-mismatch",
     }
 }

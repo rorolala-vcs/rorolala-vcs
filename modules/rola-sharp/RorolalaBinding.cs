@@ -1743,6 +1743,12 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_account_find(nint account_name, nint rule);
 
     /// <summary>
+    /// The entries of a tree's structure, as the JSON a caller reads.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_entries_json(nint structure_hex);
+
+    /// <summary>
     /// Prepares a Workspace's ownership answers for the directory `directory` sits in.
     ///
     /// A `RolaOwnership` the caller releases with `free_rola_ownership`, or null when there is nothing

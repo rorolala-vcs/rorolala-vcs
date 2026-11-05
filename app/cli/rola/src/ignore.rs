@@ -51,7 +51,7 @@ pub fn rules(held: &Workspace, include_ignored: bool) -> IgnoreRuleSet {
 pub fn selectable(
     rules: &IgnoreRuleSet,
     path: &librorolala::layout::LayoutPath,
-    renames: &[librorolala::tree_analyze::PathRename],
+    renames: &[librorolala::workspace_analyze::PathRename],
 ) -> bool {
     if renames.iter().any(|rename| rename.to == *path) {
         return true;

@@ -259,3 +259,25 @@ track:
       Choose another one with `rola track --policy <NAME>`, or use a build that carries `%{name}`. Policies this build carries: %{known}
     zh-CN: |
       用 `rola track --policy <名称>` 换一个策略，或改用携带 `%{name}` 的构建。本构建携带的策略：%{known}
+
+  err_tree_unsupported:
+    en: A tree cannot be recorded with `--replace` or `--policy`
+    zh-CN: 树不能用 `--replace` 或 `--policy` 记录
+  err_tree_unsupported_help:
+    en: Record the tree on its own with its staged work, or use those flags for files
+    zh-CN: 请单独记录树的暂存内容，或把这些参数用于文件
+  err_tree_failed:
+    en: "The tree could not be recorded: %{cause}"
+    zh-CN: "无法记录树：%{cause}"
+  err_tree_failed_help:
+    en: Check that the tree, its staging area and the Workspace's store are readable and writable
+    zh-CN: 请检查树、它的暂存区与工作区的仓库是否可读写
+  err_tree_conflict:
+    en: "`%{path}` has a conflict that was never settled"
+    zh-CN: "`%{path}` 有尚未解决的冲突"
+  err_tree_conflict_help:
+    en: Settle it with `rola tree add` or `rola tree rm` first
+    zh-CN: 请先用 `rola tree add` 或 `rola tree rm` 解决冲突
+  err_tree_no_cwd:
+    en: The run has no directory to read names against
+    zh-CN: 本次运行没有可用于解析路径的目录

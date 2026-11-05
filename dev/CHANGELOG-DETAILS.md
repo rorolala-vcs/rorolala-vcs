@@ -14,11 +14,27 @@ names it; the baseline version keeps the entries of the other sides.
 
 ## Feature
 
-### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
+### 1. **\[BREAKING!\]** [`app`] [`rola`] [`tree`] Version a directory as one tree
+
+`rola tree` is a new namespace for directories that are versions in their own right: `init`, `status`, `add`, `rm`, `desc`, `write-desc`, `cat-desc`, `ls-tree`, `ls-staging-tree` and `diff-stat`. A directory with a `.rola-tree` mark is one unit of work, `rola track` records its staged structure as one version, and `rola status` reads it as a tree whether the run stands inside it or names it. Aligning a tree with `--restore`, and moving its record back with `rola retrack`, put the whole directory back from a version. A tree merges with `rola checkin --join <VARIANT> --tree-merge`, which compares two structures over their shared version and leaves `~theirs` copies beside the work for what both sides changed. The C ABI gains `rola_tree_entries_json`.
+
+Breaking: the Layout snapshot format is version 3 and its records carry a kind byte. A Workspace or Vault written by an earlier version cannot be read by this one, and a Vault written here cannot be read by an earlier one. A sync carries the kind of each entry it creates, so a Vault's Layout records trees as trees, and a path the two sides name as different things is refused rather than transferred.
+
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
 
 The TRACK button under the Version Graph turns red while Shift is held. A press then records
 the chosen changes with `rola track --force`, and a question names the files whose changes a plain
 track refuses before anything is written. Without Shift the button records the changes as before.
+
+### 3. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
+
+`rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. A caller that cannot decode the structure format hands the bytes over instead of keeping a second copy of it, and text that is not hex or bytes that are not a structure answer as `null`, so an answer is always JSON. The string is freed with `free_string`.
+
+### 4. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+
+The new `rorolala-tree` crate holds what a tree is: a canonical structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path. Content moves into the Workspace's store with `publish_from`, which carries manifests and their chunks without rewriting what is already there.
+
+A tree's structure names what its version holds, so a sync carries the head version's structure and its description and file content in a second exchange. A Workspace scan treats a directory holding a `.rola-tree` mark as one tree entry rather than the files under it, and the Layout, its records and its snapshot carry a kind so a file and a tree are told apart.
 
 # 0.2.0 (2026-11-04)
 

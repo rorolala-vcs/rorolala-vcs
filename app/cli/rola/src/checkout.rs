@@ -5,7 +5,7 @@
 //! writes down that the two agree. A path left marked as disagreed would be reported as changed by
 //! the very next reading, which is the one thing a pull must not leave behind.
 //!
-//! What a run reads and writes down is one [cache](librorolala::tree_analyze::Cache), so a run that
+//! What a run reads and writes down is one [cache](librorolala::workspace_analyze::Cache), so a run that
 //! brings many paths down opens it once, remembers each path in memory, and writes it once — rather
 //! than reading and writing the whole cache for every path, which is what a run of many files would
 //! otherwise pay.
@@ -13,7 +13,7 @@
 use std::path::{Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath};
-use librorolala::tree_analyze::{Cache, cache_path, entry_of};
+use librorolala::workspace_analyze::{Cache, cache_path, entry_of};
 
 /// A run's readings of the tree, written down once when the run is done.
 pub struct Checkout {

@@ -53,7 +53,7 @@ impl Action for ActionCreateRemoteEntry {
             input,
             |layout, (path, uuid, version), me, _admin| {
                 batched(layout, |batch| {
-                    create_remote(batch, &path, &uuid, &version, me)
+                    create_remote(batch, &path, &uuid, &version, "file", me)
                 })
             },
         )

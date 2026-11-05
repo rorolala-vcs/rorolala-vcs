@@ -27,10 +27,14 @@ use std::path::{Path, PathBuf};
 use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{VariantMove, tracked_vault, variant_moves};
+use librorolala::storage::RorolalaStorage;
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
-use librorolala::tree_analyze::{Cache, PathRename, TreeDiff, cache_path, entry_of, tree_diff};
+use librorolala::tree::{EntryKind as TreeEntryKind, Tree, read_structure};
 use librorolala::vcs::VCSIndex;
-use librorolala::workspace::{Merging, Pending};
+use librorolala::workspace::{Merging, Pending, Workspace};
+use librorolala::workspace_analyze::{
+    Cache, PathRename, TreeDiff, cache_path, entry_of, tree_diff,
+};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -348,6 +352,36 @@ pub fn handle_align(
         return ErrorLayoutShouldInWorkspace.into();
     };
     let root = normalize(held.get_root());
+
+    // A tree is one unit of work: `--restore` puts the whole of it back to what the Layout records,
+    // rather than a file's content at a path, and the per-file modes have nothing to settle for it.
+    let cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(error) => return align_failed(error.to_string()),
+    };
+    let target_path = crate::tree::cmd_tree::resolve(&cwd, &path);
+    if let Ok(tree) = Tree::locate(&root, &target_path)
+        && target_path.is_dir()
+    {
+        if !matches!(mode, Mode::Restore) {
+            return ErrorAlignTreeUnsupported.into();
+        }
+
+        return match restore_tree(
+            held,
+            &layout,
+            &tree,
+            index.get_ref().as_ref(),
+            storage,
+            completely,
+        ) {
+            Ok(()) => ResultAlignTree {
+                path: tree_path(&tree),
+            }
+            .into(),
+            Err(next) => next,
+        };
+    }
 
     // Content a restore writes comes out of the store, and the store may not hold it: what is
     // missing is asked of the Vaults the Workspace has bound. A run that cannot say which account it
@@ -1675,4 +1709,175 @@ pub fn render_error_align_failed(error: ErrorAlignFailed, ec: &mut ResExitCode) 
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("align.err_failed_help").trim()));
     ec.exit_code = EC_ERR_ALIGN;
+}
+
+/// The tree's path as a person knows it.
+fn tree_path(tree: &Tree) -> String {
+    tree.layout_path()
+        .map_or_else(|_| ".".to_owned(), |path| path.as_str().to_owned())
+}
+
+/// Puts the work of a tree back to the structure the Layout records.
+///
+/// What the version holds is written over the paths it names; `--completely` also takes out what the
+/// tree never recorded.
+fn restore_tree(
+    held: &Workspace,
+    layout: &Layout,
+    tree: &Tree,
+    index: Option<&VCSIndex>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+    completely: bool,
+) -> Result<(), Next> {
+    let Some(store): Option<&RorolalaStorage> = storage.get_ref().as_ref() else {
+        return Err(align_failed(t!("align.err_no_store").trim()));
+    };
+    let Some(index) = index else {
+        return Err(align_failed(t!("align.err_no_index").trim()));
+    };
+
+    let runtime =
+        tokio::runtime::Runtime::new().map_err(|error| align_failed(error.to_string()))?;
+
+    let Ok(path) = tree.layout_path() else {
+        return Err(align_failed(t!("align.err_not_recorded").trim()));
+    };
+    let Some(id) = layout.id_of(&path) else {
+        return Err(align_failed(t!("align.err_not_recorded").trim()));
+    };
+    let Some(data) = layout.entry(id) else {
+        return Err(align_failed(t!("align.err_not_recorded").trim()));
+    };
+
+    if data.version() == [0; 32] {
+        return Err(align_failed(t!("align.err_not_recorded").trim()));
+    }
+
+    let target = runtime
+        .block_on(read_structure(index, store, &data.version()))
+        .map_err(|error| align_failed(error.to_string()))?;
+
+    let root = tree.root();
+    if let Err(error) = fs::create_dir_all(root) {
+        return Err(align_failed(error.to_string()));
+    }
+
+    for entry in target.entries() {
+        let disk = root.join(entry.path());
+
+        match entry.kind() {
+            TreeEntryKind::Directory => {
+                if let Err(error) = fs::create_dir_all(&disk) {
+                    return Err(align_failed(error.to_string()));
+                }
+            }
+            TreeEntryKind::File => {
+                let Some(storage_key) = entry.storage() else {
+                    continue;
+                };
+                let bytes = runtime
+                    .block_on(store.read_object(storage_key))
+                    .map_err(|error| align_failed(error.to_string()))?;
+                if let Some(parent) = disk.parent()
+                    && let Err(error) = fs::create_dir_all(parent)
+                {
+                    return Err(align_failed(error.to_string()));
+                }
+                if let Err(error) = fs::write(&disk, bytes) {
+                    return Err(align_failed(error.to_string()));
+                }
+            }
+            TreeEntryKind::Symlink => {
+                let Some(link) = entry.target() else {
+                    continue;
+                };
+                if disk.exists() {
+                    let _ = fs::remove_file(&disk);
+                }
+                if let Some(parent) = disk.parent()
+                    && let Err(error) = fs::create_dir_all(parent)
+                {
+                    return Err(align_failed(error.to_string()));
+                }
+                #[cfg(unix)]
+                {
+                    if let Err(error) = std::os::unix::fs::symlink(link, &disk) {
+                        return Err(align_failed(error.to_string()));
+                    }
+                }
+                #[cfg(windows)]
+                {
+                    if let Err(error) = std::os::windows::fs::symlink_file(link, &disk) {
+                        return Err(align_failed(error.to_string()));
+                    }
+                }
+            }
+        }
+    }
+
+    if completely {
+        let rules = tree
+            .rules(crate::ignore::rules(held, false))
+            .map_err(|error| align_failed(error.to_string()))?;
+        let scanned = tree
+            .scan(&rules, false)
+            .map_err(|error| align_failed(error.to_string()))?;
+
+        for entry in scanned.structure.entries() {
+            if target.entry(entry.path()).is_some() {
+                continue;
+            }
+
+            let disk = root.join(entry.path());
+            match entry.kind() {
+                TreeEntryKind::Directory => {
+                    let _ = fs::remove_dir(&disk);
+                }
+                TreeEntryKind::File | TreeEntryKind::Symlink => {
+                    let _ = fs::remove_file(&disk);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Result: the work of a tree was put back.
+#[derive(Grouped)]
+pub struct ResultAlignTree {
+    /// The tree as a person knows it.
+    path: String,
+}
+
+#[renderer(buffer)]
+pub fn render_result_align_tree(result: ResultAlignTree, ec: &mut ResExitCode) {
+    r_println!("{}", t!("align.result_tree", path = result.path).trim());
+    let _ = ec;
+}
+
+/// Error: a per-file mode was asked of a tree.
+#[derive(Grouped)]
+pub struct ErrorAlignTreeUnsupported;
+
+impl Failure for ErrorAlignTreeUnsupported {
+    fn name(&self) -> &'static str {
+        "error_align_tree_unsupported"
+    }
+
+    fn reason(&self) -> String {
+        t!("align.err_tree_unsupported").trim().to_string()
+    }
+}
+
+failure!(ErrorAlignTreeUnsupported);
+
+#[renderer(buffer)]
+pub fn render_error_align_tree_unsupported(_: ErrorAlignTreeUnsupported, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(t!("align.err_tree_unsupported").trim()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("align.err_tree_unsupported_help").trim())
+    );
+    ec.exit_code = EC_ERR_ALIGN_ARGUMENT;
 }

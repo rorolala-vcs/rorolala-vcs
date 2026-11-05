@@ -36,14 +36,16 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
 use librorolala::ignore::IgnoreRuleSet;
-use librorolala::layout::{Batch, Layout, LayoutPath, MutableData};
+use librorolala::layout::{Batch, EntryKind, Layout, LayoutPath, MutableData};
 use librorolala::status::{tracked_vault, unowned};
 use librorolala::storage::{
-    Chunking, Key, Lockable as _, RorolalaStorage, key_of_file, store_file,
+    Chunking, Codec, Key, Lockable as _, RorolalaStorage, StorageBackend as _, key_of_file,
+    store_file,
 };
-use librorolala::tree_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
+use librorolala::tree::{Staging, Tree};
 use librorolala::vcs::{Creator, Message, VCSIndex, VCSIndexBatch, Variant, Version};
-use librorolala::workspace::{DATA_DIR, Merging, Pending};
+use librorolala::workspace::{DATA_DIR, Merging, Pending, Workspace};
+use librorolala::workspace_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -358,6 +360,11 @@ fn record(
         include_ignored,
     } = state;
 
+    // What the run named, before it is read into files: a path that is a tree is recorded as that
+    // tree, and the named paths are what tells the two apart later.
+    let named = files.clone();
+    let group_message = message.clone();
+
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
         Err(next) => return next,
@@ -415,11 +422,19 @@ fn record(
         Err(error) => return fail(error.to_string()),
     };
 
+    // A path that is a tree, or inside one, is recorded as that tree rather than as the files under
+    // it; what is left is what prepares as files.
+    let file_names: Vec<String> = files
+        .iter()
+        .filter(|given| !names_tree(&root, given))
+        .cloned()
+        .collect();
+
     let prepared = match prepare(
         &layout,
         &root,
         &cwd,
-        &files,
+        &file_names,
         &diff.renamed,
         &ignored,
         &rules,
@@ -649,6 +664,64 @@ fn record(
         pack_index(vcs, &runtime);
     }
 
+    // A tree named, or standing under a directory named, is one unit of work: it is recorded after
+    // the files, since recording it writes a version of its own rather than a version per file.
+    match trees_named(&named, held, &layout) {
+        Ok(trees) if !trees.is_empty() => {
+            if replace || policy.is_some() {
+                return ErrorTrackTreeUnsupported.into();
+            }
+
+            let mut pending = Vec::new();
+            for tree in trees {
+                match tree_needs_commit(&tree, &layout, vcs, store, &runtime) {
+                    Ok(true) => pending.push(tree),
+                    Ok(false) => {}
+                    Err(next) => return next,
+                }
+            }
+
+            if !pending.is_empty() {
+                let text = match tree_message(
+                    &root,
+                    editor,
+                    group_message.as_deref(),
+                    no_editor,
+                    &pending,
+                ) {
+                    Ok(text) => text,
+                    Err(next) => return next,
+                };
+
+                for tree in pending {
+                    match commit_tree(
+                        &layout,
+                        vcs,
+                        store,
+                        &runtime,
+                        &creator_name,
+                        held,
+                        &tree,
+                        &text,
+                        include_ignored,
+                    ) {
+                        Ok((path, added)) => items.push(TrackItem {
+                            path,
+                            action: if added {
+                                TrackAction::Added
+                            } else {
+                                TrackAction::Updated
+                            },
+                        }),
+                        Err(next) => return next,
+                    }
+                }
+            }
+        }
+        Ok(_) => {}
+        Err(next) => return next,
+    }
+
     ResultTrack { items }.into()
 }
 
@@ -854,6 +927,10 @@ fn prepare(
                 let mut under: Vec<(LayoutPath, PathBuf)> = walk(&disk)
                     .0
                     .into_iter()
+                    // A directory that is a tree is one unit of work, not a directory of files, so
+                    // expanding a directory over it turns it into one entry elsewhere. It is left
+                    // out here rather than read as the files it holds.
+                    .filter(|found| found.kind == EntryKind::File)
                     .filter_map(|found| {
                         let relative = found.disk.strip_prefix(&root).ok()?;
                         let path = LayoutPath::from_relative(relative).ok()?;
@@ -1942,6 +2019,97 @@ pub fn render_error_track_merge_changed(error: ErrorTrackMergeChanged, ec: &mut 
     ec.exit_code = EC_ERR_TRACK;
 }
 
+/// Error: a tree cannot be recorded with the flags this run gave.
+#[derive(Grouped)]
+pub struct ErrorTrackTreeUnsupported;
+
+impl Failure for ErrorTrackTreeUnsupported {
+    fn name(&self) -> &'static str {
+        "error_track_tree_unsupported"
+    }
+
+    fn reason(&self) -> String {
+        t!("track.err_tree_unsupported").trim().to_string()
+    }
+}
+
+failure!(ErrorTrackTreeUnsupported);
+
+#[renderer(buffer)]
+pub fn render_error_track_tree_unsupported(_: ErrorTrackTreeUnsupported, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(t!("track.err_tree_unsupported").trim()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("track.err_tree_unsupported_help").trim())
+    );
+    ec.exit_code = EC_ERR_TRACK_ARGUMENT;
+}
+
+/// Error: a tree could not be recorded.
+#[derive(Grouped)]
+pub struct ErrorTrackTreeFailed {
+    /// What happened.
+    cause: String,
+}
+
+impl ErrorTrackTreeFailed {
+    /// The failure of recording a tree, for `cause`.
+    fn new(cause: impl Into<String>) -> Self {
+        Self {
+            cause: cause.into(),
+        }
+    }
+}
+
+impl Failure for ErrorTrackTreeFailed {
+    fn name(&self) -> &'static str {
+        "error_track_tree_failed"
+    }
+
+    fn reason(&self) -> String {
+        t!("track.err_tree_failed", cause = self.cause)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorTrackTreeFailed);
+
+#[renderer(buffer)]
+pub fn render_error_track_tree_failed(error: ErrorTrackTreeFailed, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("track.err_tree_failed_help").trim()));
+    ec.exit_code = EC_ERR_TRACK;
+}
+
+/// Error: a tree has a conflict that was never settled.
+#[derive(Grouped)]
+pub struct ErrorTrackTreeConflict {
+    /// The tree.
+    path: String,
+}
+
+impl Failure for ErrorTrackTreeConflict {
+    fn name(&self) -> &'static str {
+        "error_track_tree_conflict"
+    }
+
+    fn reason(&self) -> String {
+        t!("track.err_tree_conflict", path = self.path)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorTrackTreeConflict);
+
+#[renderer(buffer)]
+pub fn render_error_track_tree_conflict(error: ErrorTrackTreeConflict, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("track.err_tree_conflict_help").trim()));
+    ec.exit_code = EC_ERR_TRACK;
+}
+
 /// Error: the messages do not line up, or none could be worked out.
 #[derive(Grouped)]
 pub struct ErrorTrackMessage {
@@ -2141,6 +2309,355 @@ fn known_policies() -> String {
     }
 
     names.join(", ")
+}
+
+/// Whether the path `given` names is a tree, or is inside one.
+fn names_tree(root: &Path, given: &str) -> bool {
+    let Ok(cwd) = std::env::current_dir() else {
+        return false;
+    };
+    let resolved = crate::tree::cmd_tree::resolve(&cwd, given);
+
+    Tree::locate(root, &resolved).is_ok()
+}
+
+/// The trees the run named, directly or under a directory it named.
+///
+/// A tree named as a path is that tree. A directory brings every tree the Layout records under it,
+/// and every directory holding a tree mark that the workspace reading finds under it; what is under
+/// a tree is that tree's own work, so a nested tree is recorded by naming it or its tree.
+fn trees_named(named: &[String], held: &Workspace, layout: &Layout) -> Result<Vec<Tree>, Next> {
+    let root = held.get_root();
+    let Ok(cwd) = std::env::current_dir() else {
+        return Err(
+            ErrorTrackTreeFailed::new(t!("track.err_tree_no_cwd").trim().to_string()).to_chain(),
+        );
+    };
+
+    let mut trees: BTreeMap<PathBuf, Tree> = BTreeMap::new();
+
+    for given in named {
+        let resolved = crate::tree::cmd_tree::resolve(&cwd, given);
+
+        if let Ok(tree) = Tree::locate(root, &resolved) {
+            trees.insert(tree.root().to_path_buf(), tree);
+            continue;
+        }
+
+        if !resolved.is_dir() {
+            continue;
+        }
+
+        let scope = resolved
+            .strip_prefix(root)
+            .ok()
+            .and_then(|relative| LayoutPath::from_relative(relative).ok());
+
+        for (id, data) in layout.entries() {
+            if data.kind() != EntryKind::Tree {
+                continue;
+            }
+            let Some(path) = layout.path_of(id) else {
+                continue;
+            };
+            if !under_scope(scope.as_ref(), &path) {
+                continue;
+            }
+
+            let disk = root.join(path.to_path_buf());
+            if let Ok(tree) = Tree::open(root, &disk) {
+                trees.insert(tree.root().to_path_buf(), tree);
+            }
+        }
+
+        for found in walk(&resolved).0 {
+            if found.kind != EntryKind::Tree {
+                continue;
+            }
+            if let Ok(tree) = Tree::open(root, &found.disk) {
+                trees.insert(tree.root().to_path_buf(), tree);
+            }
+        }
+    }
+
+    Ok(trees.into_values().collect())
+}
+
+/// Whether `path` is `scope` itself or under it; no scope is the whole of the work.
+fn under_scope(scope: Option<&LayoutPath>, path: &LayoutPath) -> bool {
+    let Some(scope) = scope else {
+        return true;
+    };
+
+    path == scope
+        || path
+            .as_str()
+            .strip_prefix(scope.as_str())
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// Whether the tree has anything a commit would record.
+fn tree_needs_commit(
+    tree: &Tree,
+    layout: &Layout,
+    index: &VCSIndex,
+    store: &RorolalaStorage,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<bool, Next> {
+    let recorded = runtime
+        .block_on(tree.recorded(layout, index, store))
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+
+    // A tree the Layout records nothing for is one whose first version is its work as it stands.
+    if recorded.is_none() {
+        return Ok(true);
+    }
+
+    let staging = tree.staging();
+    let staged = staging
+        .structure()
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+    let description = staging
+        .description()
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+    let conflicts = staging
+        .conflicts()
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+
+    Ok(staged.is_some() || description.is_some() || !conflicts.is_empty())
+}
+
+/// The message a run of tree commits carries, asking for it when it has to.
+fn tree_message(
+    root: &Path,
+    editor: &ResEditor,
+    message: Option<&str>,
+    no_editor: bool,
+    trees: &[Tree],
+) -> Result<String, Next> {
+    if let Some(message) = message {
+        return Ok(message.to_owned());
+    }
+
+    if no_editor {
+        return Ok(String::new());
+    }
+
+    let path = root.join(".rola").join("EDITING-TREE.md");
+    let mut text = String::from(
+        "# What this run recorded, in one message. Lines starting with # are dropped.\n",
+    );
+
+    for tree in trees {
+        let shown = tree
+            .layout_path()
+            .map_or_else(|_| ".".to_owned(), |path| path.to_string());
+        let _ = writeln!(text, "# tree {shown}");
+    }
+
+    if let Err(error) = fs::write(&path, text) {
+        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
+    }
+
+    let Ok(editor) = editor.must_bind() else {
+        return Err(
+            ErrorTrackTreeFailed::new(t!("editor.err_no_editor").trim().to_string()).to_chain(),
+        );
+    };
+    if let Err(error) = open(editor, &path) {
+        return Err(error.into());
+    }
+
+    let read = match fs::read_to_string(&path) {
+        Ok(read) => read,
+        Err(error) => return Err(ErrorTrackTreeFailed::new(error.to_string()).into()),
+    };
+
+    Ok(read
+        .lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_owned())
+}
+
+/// Records one tree's staged structure as a version, and makes the Layout name it.
+///
+/// It answers the tree's path and whether the version is the first one.
+// The commit is one sequence of writes that has to stay in its order: reading what is staged, taking
+// the content into the work's store, making the objects, naming the version in the Layout, and only
+// then letting the staging area go.
+#[allow(clippy::too_many_arguments)]
+fn commit_tree(
+    layout: &Layout,
+    index: &VCSIndex,
+    store: &RorolalaStorage,
+    runtime: &tokio::runtime::Runtime,
+    creator_name: &str,
+    held: &Workspace,
+    tree: &Tree,
+    text: &str,
+    include_ignored: bool,
+) -> Result<(String, bool), Next> {
+    let path = tree
+        .layout_path()
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+    let shown = path.as_str().to_owned();
+
+    let recorded = runtime
+        .block_on(tree.recorded(layout, index, store))
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+
+    let staging = Staging::new(tree.root());
+    let staged = staging
+        .structure()
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+    let description = staging
+        .description()
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+    let conflicts = staging
+        .conflicts()
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+
+    if !conflicts.is_empty() {
+        return Err(ErrorTrackTreeConflict { path: shown }.into());
+    }
+
+    let rules = tree
+        .rules(crate::ignore::rules(held, include_ignored))
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+    let scanned = tree
+        .scan(&rules, include_ignored)
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+
+    // What the version holds: what was staged, or the tree as it stands when this is its first
+    // version. A tree with nothing staged and a version already keeps that version.
+    let structure = match staged {
+        Some(staged) => staged,
+        None => match &recorded {
+            Some(recorded) if description.is_none() => {
+                staging
+                    .clear()
+                    .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+
+                return Ok((shown, false));
+            }
+            Some(recorded) => recorded.structure.clone(),
+            None => scanned.structure.clone(),
+        },
+    };
+
+    let description_key = match description {
+        Some(text) => Some(
+            runtime
+                .block_on(store.write_object(text.as_bytes(), Codec::Raw))
+                .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?,
+        ),
+        None => None,
+    };
+    let structure = structure.with_description(description_key);
+
+    if let Some(recorded) = &recorded
+        && recorded.structure == structure
+    {
+        staging
+            .clear()
+            .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+
+        return Ok((shown, false));
+    }
+
+    // The staging store's content is the work's now: it is carried into the Workpace's store before
+    // anything names it, so a failure leaves content nothing refers to rather than a version whose
+    // content is not here.
+    if let Some(staged_content) = staging.store() {
+        let keys = runtime
+            .block_on(staged_content.list_exist_keys())
+            .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+        runtime
+            .block_on(store.publish_from(&staged_content, &keys))
+            .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+    }
+
+    let structure_key = runtime
+        .block_on(store.write_object(&structure.encode(), Codec::Raw))
+        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
+
+    let creator =
+        Creator::try_from(creator_name.to_owned()).map_err(|error| fail(error.to_string()))?;
+    let message = Message::try_from(text.to_owned()).map_err(|error| fail(error.to_string()))?;
+
+    let mut writes = index.batch();
+    let creator_key = writes.add(&creator);
+    let message_key = writes.add(&message);
+
+    let variant = if let Some(recorded) = &recorded {
+        {
+            let version = runtime
+                .block_on(index.read(Key::new(recorded.version)))
+                .map_err(|error| fail(error.reason()))?
+                .expect_version()
+                .map_err(|error| fail(error.to_string()))?;
+
+            version.new_variant(
+                *structure_key.digest(),
+                *creator_key.digest(),
+                *message_key.digest(),
+            )
+        }
+    } else {
+        let root = Version::root();
+        writes.add(&root);
+        root.new_variant(
+            *structure_key.digest(),
+            *creator_key.digest(),
+            *message_key.digest(),
+        )
+    };
+    let version = variant.new_version();
+    writes.add(&variant);
+    let version_key = writes.add(&version);
+
+    if let Err(error) = runtime.block_on(writes.publish()) {
+        return Err(fail(error.to_string()));
+    }
+
+    let data = MutableData::new(
+        Some(creator_name.to_owned()),
+        *version_key.digest(),
+        String::new(),
+    )
+    .with_kind(EntryKind::Tree);
+
+    let mut batch = layout.batch();
+    let id = layout.id_of(&path);
+    let created = match id {
+        Some(id) => batch.update_entry(id, data).map(|()| false),
+        None => batch
+            .create_file(Uuid::new_v4(), data, &path)
+            .map(|()| true),
+    };
+    if let Err(error) = created {
+        return Err(failed(&error));
+    }
+    if let Err(error) = batch.commit() {
+        return Err(failed(&error));
+    }
+
+    let baseline = tree.baseline();
+    if let Err(error) = baseline.write(&structure, version_key.digest()) {
+        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
+    }
+    if let Err(error) = baseline.write_entries(&scanned.cache) {
+        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
+    }
+
+    if let Err(error) = staging.clear() {
+        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
+    }
+
+    Ok((shown, recorded.is_none()))
 }
 
 #[cfg(test)]

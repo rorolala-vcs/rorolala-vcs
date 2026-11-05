@@ -330,3 +330,19 @@ retrack:
         Please check that the store, the index and the Layout are writable, then try again
     zh-CN: |
         请检查仓库、索引与布局是否可写，然后重试
+
+  result_tree:
+    en: "Tree `%{path}` records version %{version} now"
+    zh-CN: "树 `%{path}` 现在记录的版本是 %{version}"
+  err_tree_unsupported:
+    en: A tree is only retracked to a version
+    zh-CN: 树只能回退到某个版本
+  err_tree_unsupported_help:
+    en: Name a step count, a version number or a version hash
+    zh-CN: 请给出步数、版本号或版本哈希
+  err_tree_dirty:
+    en: "Tree `%{path}` holds work that was never recorded"
+    zh-CN: "树 `%{path}` 有从未记录的改动"
+  err_tree_dirty_help:
+    en: Record or discard the work first, or give `--force` to write over it
+    zh-CN: 请先记录或放弃这些改动，或用 `--force` 覆盖它们

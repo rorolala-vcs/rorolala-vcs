@@ -845,7 +845,7 @@ fn replay(
 fn apply_slot(slots: &mut HashMap<Uuid, Slot>, record: &Record) -> Result<(), LayoutError> {
     match record {
         Record::CreatePath { id, path } => {
-            slots.entry(*id).or_default().path = Some(LayoutPath::new(path)?);
+            slots.entry(*id).or_default().path = Some(LayoutPath::from_stored(path)?);
         }
         Record::RemovePath { id, .. } => {
             if let Some(slot) = slots.get_mut(id) {
@@ -856,14 +856,14 @@ fn apply_slot(slots: &mut HashMap<Uuid, Slot>, record: &Record) -> Result<(), La
             }
         }
         Record::MovePath { id, to, .. } => {
-            slots.entry(*id).or_default().path = Some(LayoutPath::new(to)?);
+            slots.entry(*id).or_default().path = Some(LayoutPath::from_stored(to)?);
         }
         Record::CreateEntry { id, data } | Record::UpdateEntry { id, data } => {
             slots.entry(*id).or_default().data = Some(data.clone());
         }
         Record::Create { id, path, data } => {
             let slot = slots.entry(*id).or_default();
-            slot.path = Some(LayoutPath::new(path)?);
+            slot.path = Some(LayoutPath::from_stored(path)?);
             slot.data = Some(data.clone());
         }
         Record::RemoveEntry { id } => {
@@ -878,11 +878,15 @@ fn apply_slot(slots: &mut HashMap<Uuid, Slot>, record: &Record) -> Result<(), La
 fn apply_index(index: &mut Index, record: &Record) -> Result<(), LayoutError> {
     match record {
         Record::CreatePath { id, path } | Record::Create { id, path, .. } => {
-            index.bind(LayoutPath::new(path)?, *id);
+            index.bind(LayoutPath::from_stored(path)?, *id);
         }
-        Record::RemovePath { id, path } => index.unbind(&LayoutPath::new(path)?, *id),
+        Record::RemovePath { id, path } => index.unbind(&LayoutPath::from_stored(path)?, *id),
         Record::MovePath { id, from, to } => {
-            index.rename(*id, &LayoutPath::new(from)?, &LayoutPath::new(to)?);
+            index.rename(
+                *id,
+                &LayoutPath::from_stored(from)?,
+                &LayoutPath::from_stored(to)?,
+            );
         }
         Record::RemoveEntry { id } => index.forget(*id),
         Record::CreateEntry { .. } | Record::UpdateEntry { .. } => {}

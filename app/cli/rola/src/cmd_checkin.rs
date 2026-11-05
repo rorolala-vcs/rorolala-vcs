@@ -26,10 +26,11 @@ use std::str::FromStr as _;
 
 use globset::GlobBuilder;
 use librorolala::daemon::{action_fetch_layout, action_sync_index_all_async};
-use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::layout::{EntryKind, Layout, LayoutPath, MutableData};
 use librorolala::protocol::ActionError;
 use librorolala::status::tracked_vault;
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
+use librorolala::tree::{Staging, Tree, TreeStructure};
 use librorolala::vcs::{VCSIndex, VCSIndexObject, Variant};
 use librorolala::workspace::{Merging, Pending};
 use mingling::{
@@ -86,6 +87,9 @@ const ARG_JOIN: PickerArg<'static, Option<String>> = arg![join: Option<String>];
 /// reference the name: `<TO>/hero.psd`, and a folder keeps the tree it is under its own name.
 const ARG_BY_NAME: PickerArg<'static, Flag> = arg![by_name: Flag];
 
+/// Merge a tree variant into its tree rather than putting it beside the work.
+const ARG_TREE_MERGE: PickerArg<'static, Flag> = arg![tree_merge: Flag];
+
 /// The mark the Vault puts in front of a path that is not placed: `@/new/a.fbx` is an entry the
 /// Vault holds no path for yet, and `@/removed/a.fbx` one that was taken out of the work.
 ///
@@ -119,6 +123,7 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
             suggest! {
                 ARG_JOIN: t!("checkin.complete.join"),
                 ARG_BY_NAME: t!("checkin.complete.by_name"),
+                ARG_TREE_MERGE: t!("checkin.complete.tree_merge"),
             },
         );
     }
@@ -181,9 +186,16 @@ pub fn checkin(args: EntryCheckin) -> Next {
         .pick(arg![Vec<String>])
         .pick(ARG_JOIN)
         .pick(ARG_BY_NAME)
+        .pick(ARG_TREE_MERGE)
         .pick(&UNMATCHED)
         .to_result();
-    let (words, join, by_name, unmatched): (Vec<String>, Option<String>, Flag, _) = match picked {
+    let (words, join, by_name, tree_merge, unmatched): (
+        Vec<String>,
+        Option<String>,
+        Flag,
+        Flag,
+        _,
+    ) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -201,6 +213,7 @@ pub fn checkin(args: EntryCheckin) -> Next {
         to,
         join,
         by_name: matches!(by_name, Flag::Active),
+        tree_merge: matches!(tree_merge, Flag::Active),
     }
     .into()
 }
@@ -218,6 +231,8 @@ pub struct StateCheckin {
     join: Option<String>,
     /// Whether each reference keeps only its own name under the destination.
     by_name: bool,
+    /// Whether a tree variant is merged into its tree rather than put beside the work.
+    tree_merge: bool,
 }
 
 #[chain(routeify)]
@@ -238,6 +253,7 @@ pub fn handle_checkin(
         to,
         join,
         by_name,
+        tree_merge,
     } = state;
 
     workspace.get_ref().check()?;
@@ -271,6 +287,7 @@ pub fn handle_checkin(
             progress,
             offline,
             **force,
+            tree_merge,
             concurrency,
         );
     }
@@ -408,6 +425,7 @@ fn checkin_variant(
     progress: &ResProgressSetting,
     offline: &ResOffline,
     force: bool,
+    tree_merge: bool,
     concurrency: &ResConcurrency,
 ) -> Next {
     let Some(index) = index.get_ref().as_ref() else {
@@ -524,6 +542,99 @@ fn checkin_variant(
         return join_failed(target, t!("checkin.err_join_no_content").trim());
     }
 
+    // A tree variant's content is a structure rather than a file's bytes: what is put beside the
+    // work is the whole directory the structure names, so the two sides can be compared as trees.
+    let tree_structure = runtime
+        .block_on(store.read_object(&content))
+        .ok()
+        .and_then(|bytes| TreeStructure::decode(&bytes).ok());
+
+    // A tree variant merged into its tree is decided by structure: the version the variant names as
+    // its base is the shared ancestor, this tree's recorded structure is this side, and the variant's
+    // structure is the other. What both sides changed differently becomes a conflict copy beside the
+    // work and a path the tree's staging names, which `tree add` settles.
+    if tree_merge
+        && data.kind() == EntryKind::Tree
+        && let Some(structure) = &tree_structure
+    {
+        let Some(tree_path) = layout.path_of(id) else {
+            return join_failed(target, t!("checkin.err_join_target").trim());
+        };
+        let tree_dir = root.join(tree_path.to_path_buf());
+
+        let ours = match runtime.block_on(librorolala::tree::read_structure(
+            index,
+            store,
+            &data.version(),
+        )) {
+            Ok(ours) => ours,
+            Err(error) => return join_failed(target, error.to_string()),
+        };
+        let base = match runtime.block_on(librorolala::tree::read_structure(
+            index,
+            store,
+            variant_object.base_version(),
+        )) {
+            Ok(base) => base,
+            Err(error) => return join_failed(target, error.to_string()),
+        };
+
+        let merged = librorolala::tree::merge(&base, &ours, structure);
+
+        // What the variant's structure names is brought in a second ask, since the structure is what
+        // says what the inside is made of.
+        let account = current
+            .get_ref()
+            .must_bind()
+            .ok()
+            .and_then(|name| account_named(&name, Some(held), None).ok());
+        let reporting = Reporting::start(*progress);
+        if let Some(account) = &account {
+            let tracked = tracked_vault(held);
+            let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
+            if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline) {
+                let sources = sources
+                    .reporting(reporting.progress())
+                    .with_concurrency(**concurrency);
+                sources.bring(store, &structure.content_keys());
+                sources.report();
+            }
+        }
+        reporting.finish();
+
+        if let Err(error) =
+            crate::tree::worktree::write(&tree_dir, &merged.structure, store, &runtime)
+        {
+            return join_failed(target, error);
+        }
+
+        for path in &merged.conflicts {
+            let Some(entry) = structure.entry(path) else {
+                continue;
+            };
+            let theirs = tree_dir.join(librorolala::tree::conflict_copy(path));
+
+            if entry.kind() == librorolala::tree::EntryKind::Directory {
+                let inside = structure.subtree(path);
+                let _ = crate::tree::worktree::write(&theirs, &inside, store, &runtime);
+            } else if let Some(storage) = entry.storage() {
+                let _ = runtime.block_on(store.extract_file(storage, &theirs));
+            }
+        }
+
+        let staging = Staging::new(&tree_dir);
+        if let Err(error) = staging.write_conflicts(&merged.conflicts) {
+            return join_failed(target, error.to_string());
+        }
+
+        return ResultCheckinJoin {
+            target: target.to_owned(),
+            variant: variant.to_owned(),
+            path: tree_path.as_str().to_owned(),
+        }
+        .into();
+    }
+
     // A place the run names is checked as it is given: one that climbs out of the Workspace is
     // refused rather than held at the root, since there is no target that has moved yet to excuse
     // it. A place that comes to climb out later, by the target moving shallower, is held instead.
@@ -541,8 +652,16 @@ fn checkin_variant(
     let disk = root.join(path.to_path_buf());
 
     // Nothing is written over: a file already at the place is something to be told about rather than
-    // replaced, which is how `checkin` reads a landing everywhere else.
-    if disk.exists() {
+    // replaced, which is how `checkin` reads a landing everywhere else. A tree may take an empty
+    // directory, the same way a checkin lands one.
+    let taken = if tree_structure.is_some() {
+        disk.exists()
+            && !(disk.is_dir()
+                && std::fs::read_dir(&disk).map_or(true, |mut entries| entries.next().is_none()))
+    } else {
+        disk.exists()
+    };
+    if taken {
         return join_failed(
             target,
             t!("checkin.err_join_taken", path = path.as_str()).trim(),
@@ -554,7 +673,36 @@ fn checkin_variant(
     {
         return join_failed(target, error.to_string());
     }
-    if let Err(error) = runtime.block_on(store.extract_file(&content, &disk)) {
+
+    if let Some(structure) = &tree_structure {
+        // What the structure names is brought in a second ask, since the structure is what says what
+        // the inside is made of.
+        let account = current
+            .get_ref()
+            .must_bind()
+            .ok()
+            .and_then(|name| account_named(&name, Some(held), None).ok());
+        let reporting = Reporting::start(*progress);
+
+        if let Some(account) = &account {
+            let tracked = tracked_vault(held);
+            let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
+
+            if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline) {
+                let sources = sources
+                    .reporting(reporting.progress())
+                    .with_concurrency(**concurrency);
+                sources.bring(store, &structure.content_keys());
+                sources.report();
+            }
+        }
+
+        reporting.finish();
+
+        if let Err(error) = crate::tree::worktree::write(&disk, structure, store, &runtime) {
+            return join_failed(target, error);
+        }
+    } else if let Err(error) = runtime.block_on(store.extract_file(&content, &disk)) {
         return join_failed(target, error.to_string());
     }
 
@@ -808,6 +956,23 @@ struct Wanted {
     path: LayoutPath,
 }
 
+/// Whether where an entry lands is already taken.
+///
+/// A tree may land on a directory that is there and empty: a folder made for it, with nothing in it,
+/// is the same as nothing being there for a thing that is a directory. A file is only ever a landing
+/// where nothing is.
+fn landing_taken(root: &Path, path: &LayoutPath, data: &MutableData) -> bool {
+    let disk = root.join(path.to_path_buf());
+    if !disk.exists() {
+        return false;
+    }
+    if data.kind() != EntryKind::Tree || !disk.is_dir() {
+        return true;
+    }
+
+    std::fs::read_dir(&disk).map_or(true, |mut entries| entries.next().is_some())
+}
+
 /// Reads every reference before anything is written, so one that names nothing leaves nothing half
 /// done.
 fn resolve(
@@ -847,7 +1012,7 @@ fn resolve(
         // there, and not where an earlier reference of this run is to land.
         if !landings.insert(path.as_str().to_owned())
             || layout.id_of(&path).is_some()
-            || root.join(path.to_path_buf()).exists()
+            || landing_taken(root, &path, &data)
         {
             return Err(Refusal::Taken(path.as_str().to_owned()));
         }
@@ -1226,6 +1391,67 @@ fn bring_in(
 
             continue;
         }
+
+        // A tree lands as a directory rather than a file: its structure says what the work is, its
+        // file content is brought in a second ask, and its baseline records the version the Vault
+        // holds so the tree is clean as soon as it is here.
+        if data.kind() == EntryKind::Tree {
+            let bytes = match runtime.block_on(store.read_object(&stored)) {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    failed.push(format!("{id}: {error}"));
+
+                    continue;
+                }
+            };
+            let structure = match TreeStructure::decode(&bytes) {
+                Ok(structure) => structure,
+                Err(error) => {
+                    failed.push(format!("{id}: {error}"));
+
+                    continue;
+                }
+            };
+
+            sources.bring(store, &structure.content_keys());
+
+            if let Err(error) = crate::tree::worktree::write(&disk, &structure, store, runtime) {
+                failed.push(format!("{id}: {error}"));
+
+                continue;
+            }
+
+            let staging = Staging::new(&disk);
+            if let Err(error) = staging.ensure_store() {
+                failed.push(format!("{id}: {error}"));
+
+                continue;
+            }
+            let Ok(tree) = Tree::open(held.get_root(), &disk) else {
+                failed.push(format!("{id}: {}", t!("checkin.err_tree_mark").trim()));
+
+                continue;
+            };
+            if let Err(error) = tree.baseline().write(&structure, &data.version()) {
+                failed.push(format!("{id}: {error}"));
+
+                continue;
+            }
+            if let Err(error) = batch.create_file(id, data, &path) {
+                failed.push(format!("{id}: {error}"));
+
+                continue;
+            }
+
+            entries.push(CheckinItem {
+                uuid: id.to_string(),
+                remote_path: remote.path_of(id).map(|path| path.as_str().to_owned()),
+                local_path: path.as_str().to_owned(),
+            });
+
+            continue;
+        }
+
         if let Err(error) = runtime.block_on(store.extract_file(&stored, &disk)) {
             failed.push(format!("{id}: {error}"));
 

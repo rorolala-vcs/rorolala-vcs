@@ -30,7 +30,8 @@ members = [
     "modules/protocol-macros",
     "modules/status",
     "modules/storage",
-    "modules/tree-analyze",
+    "modules/tree",
+    "modules/workspace-analyze",
     "modules/vault",
     "modules/vcs",
     "modules/workspace",
@@ -101,7 +102,8 @@ rorolala-protocol = { path = "modules/protocol" }
 rorolala-protocol-macros = { path = "modules/protocol-macros" }
 rorolala-status = { path = "modules/status" }
 rorolala-storage = { path = "modules/storage" }
-rorolala-tree-analyze = { path = "modules/tree-analyze" }
+rorolala-tree = { path = "modules/tree" }
+rorolala-workspace-analyze = { path = "modules/workspace-analyze" }
 rorolala-utils-cli-theme = { path = "utils/cli-theme" }
 rorolala-utils-configure = { path = "utils/configure" }
 rorolala-utils-configure-macros = { path = "utils/configure-macros" }
@@ -261,10 +263,11 @@ rorolala-errors.workspace = true
 rorolala-ignore.workspace = true
 rorolala-inverse-index.workspace = true
 rorolala-layout.workspace = true
-rorolala-tree-analyze.workspace = true
+rorolala-workspace-analyze.workspace = true
 rorolala-protocol.workspace = true
 rorolala-status.workspace = true
 rorolala-storage.workspace = true
+rorolala-tree.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
@@ -272,6 +275,7 @@ rorolala-vault.workspace = true
 rorolala-vcs.workspace = true
 rorolala-workspace.workspace = true
 rola-desktop-pty.workspace = true
+serde_json.workspace = true
 
 [build-dependencies]
 rorolala-dev-bindgen.workspace = true

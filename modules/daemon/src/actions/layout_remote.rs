@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::str::FromStr as _;
 
 use rorolala_errors::{BincodeError, IoError};
-use rorolala_layout::{Batch, Layout, LayoutError, LayoutPath, MutableData};
+use rorolala_layout::{Batch, EntryKind, Layout, LayoutError, LayoutPath, MutableData};
 use rorolala_protocol::{ActionContext, ActionError, Encodable as _, OnlyWorkspace};
 use rorolala_storage::Key;
 use rorolala_utils_constants::VAULT_LAYOUT_DIR;
@@ -616,6 +616,7 @@ pub(crate) fn create_remote(
     path: &str,
     uuid: &str,
     version: &str,
+    kind: &str,
     owner: &str,
 ) -> Result<EntryWrite, ActionError> {
     let Ok(path) = LayoutPath::new(path) else {
@@ -638,10 +639,16 @@ pub(crate) fn create_remote(
         return Ok(EntryWrite::Taken);
     }
 
+    let kind = match kind {
+        "tree" => EntryKind::Tree,
+        _ => EntryKind::File,
+    };
+
     batch
         .create_file(
             id,
-            MutableData::new(Some(owner.to_owned()), *version.digest(), String::new()),
+            MutableData::new(Some(owner.to_owned()), *version.digest(), String::new())
+                .with_kind(kind),
             &path,
         )
         .map_err(|error| ActionError::Store(error.to_string()))?;
@@ -923,6 +930,7 @@ mod tests {
                 "art/hero@abc1234.psd",
                 &id.to_string(),
                 &version,
+                "file",
                 "alice"
             ))
             .unwrap(),
@@ -941,6 +949,7 @@ mod tests {
                 "art/other@abc1234.psd",
                 &id.to_string(),
                 &version,
+                "file",
                 "alice"
             ))
             .unwrap(),
@@ -952,6 +961,7 @@ mod tests {
                 "art/hero@abc1234.psd",
                 &uuid::Uuid::from_u128(4).to_string(),
                 &version,
+                "file",
                 "alice"
             ))
             .unwrap(),
@@ -966,6 +976,7 @@ mod tests {
                 "@/new/old.psd",
                 &uuid::Uuid::from_u128(5).to_string(),
                 &version,
+                "file",
                 "alice"
             ))
             .unwrap(),
@@ -981,6 +992,7 @@ mod tests {
                     refused,
                     &uuid::Uuid::from_u128(6).to_string(),
                     &version,
+                    "file",
                     "alice"
                 ))
                 .unwrap(),

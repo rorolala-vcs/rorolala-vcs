@@ -1,4 +1,4 @@
-# rorolala-tree-analyze
+# rorolala-workspace-analyze
 
 What a Workspace's tree looks like beside the Layout it works from: what a Layout names that the
 tree no longer holds, what the tree holds that no Layout names, what moved, and what changed.

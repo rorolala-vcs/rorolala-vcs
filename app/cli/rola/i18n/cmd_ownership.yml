@@ -47,6 +47,12 @@ giveup:
     zh-CN: 放弃本机账户持有的条目
 
 ownership:
+  err_in_tree:
+    en: "`%{path}` is inside the tree `%{tree}`"
+    zh-CN: "`%{path}` 在树 `%{tree}` 里"
+  err_in_tree_help:
+    en: Ownership is the tree's, so name the tree itself
+    zh-CN: 所有权属于整棵树，请直接给出树
   # What a claim or a release says it is doing while it does it: the bar that is drawn while the Vault
   # is asked about each entry, one at a time over the one connection. The words are this crate's
   # because the action is the daemon's and holds no language of its own — the name crosses with the
@@ -213,3 +219,4 @@ ownership:
   result_given:
     en: "The entry `%{path}` is no longer held"
     zh-CN: "条目 `%{path}` 已不再被持有"
+

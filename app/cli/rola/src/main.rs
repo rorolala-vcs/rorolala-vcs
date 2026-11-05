@@ -65,6 +65,7 @@ mod progress;
 mod rebuild;
 mod storage;
 mod sync;
+mod tree;
 mod unmatched;
 mod user;
 mod vault;

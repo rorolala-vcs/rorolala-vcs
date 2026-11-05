@@ -32,7 +32,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use rorolala_ignore::IgnoreRuleSet;
-use rorolala_layout::{Layout, LayoutPath};
+use rorolala_layout::{EntryKind, Layout, LayoutPath};
 use rorolala_utils_constants::WORKSPACE_CACHE_DIR;
 use rorolala_utils_location::Locate as _;
 use rorolala_workspace::{Merging, Workspace};
@@ -100,6 +100,16 @@ pub struct TreeDiff {
     /// Paths that stayed where they were and whose content changed.
     pub modified: Vec<LayoutPath>,
 
+    /// Tree entries whose own reading says the work in them has changed.
+    ///
+    /// The workspace reading does not read inside a tree: it asks the tree itself, and a reading
+    /// that has no tree crate beside it leaves this empty. A tree with unrecorded work is then
+    /// reported as itself rather than as a lost path or a gain.
+    pub trees_modified: Vec<LayoutPath>,
+
+    /// Directories that are trees and that no Layout entry names.
+    pub untagged_trees: Vec<LayoutPath>,
+
     /// Paths that could not be looked at.
     pub failed: Vec<FailedPath>,
 }
@@ -152,15 +162,40 @@ pub fn tree_diff(
         .filter(|file| !ignored.contains(&file.path))
         .collect();
 
-    let tracked: BTreeSet<LayoutPath> = layout.paths().into_iter().map(|(path, _)| path).collect();
+    // A tree is one entry of the work: the workspace reading compares it as a path, and what is in
+    // it is the tree's own reading. So its directory is kept apart from the file map.
+    let mut disk_trees: BTreeSet<LayoutPath> = BTreeSet::new();
+    let mut disk_files: BTreeMap<LayoutPath, scan::Found> = BTreeMap::new();
+    for file in found {
+        match file.kind {
+            EntryKind::Tree => {
+                disk_trees.insert(file.path.clone());
+            }
+            EntryKind::File => {
+                disk_files.insert(file.path.clone(), file);
+            }
+        }
+    }
+
+    // Which entries are files and which are trees is a fact of the Layout, not of the disk.
+    let mut tracked_files: BTreeSet<LayoutPath> = BTreeSet::new();
+    let mut tracked_trees: BTreeSet<LayoutPath> = BTreeSet::new();
+    for (path, id) in layout.paths() {
+        let tree = layout
+            .entry(id)
+            .is_some_and(|data| data.kind() == EntryKind::Tree);
+
+        if tree {
+            tracked_trees.insert(path);
+        } else {
+            tracked_files.insert(path);
+        }
+    }
 
     let cache_path = cache_path(root, layout);
     let previous = Cache::read(&cache_path);
 
-    let mut disk: BTreeMap<LayoutPath, scan::Found> = BTreeMap::new();
-    for file in found {
-        disk.insert(file.path.clone(), file);
-    }
+    let disk = disk_files;
 
     // What each file on disk holds now. A file whose time and length are what the last reading
     // wrote down is not read again; the rest are read together, since reading and hashing is where
@@ -200,20 +235,36 @@ pub fn tree_diff(
     // changed is reported as changed until something records it.
     let mut modified: Vec<LayoutPath> = current
         .iter()
-        .filter(|(path, entry)| tracked.contains(*path) && entry.agreed() != Some(entry.digest()))
+        .filter(|(path, entry)| {
+            tracked_files.contains(*path) && entry.agreed() != Some(entry.digest())
+        })
         .map(|(path, _)| path.clone())
         .collect();
 
-    let mut lost: Vec<LayoutPath> = tracked
+    let mut lost: Vec<LayoutPath> = tracked_files
         .iter()
         .filter(|path| !disk.contains_key(*path))
         .cloned()
         .collect();
-    let mut untagged: Vec<LayoutPath> = disk
-        .keys()
-        .filter(|path| !tracked.contains(*path))
+    let lost_trees: Vec<LayoutPath> = tracked_trees
+        .iter()
+        .filter(|path| !disk_trees.contains(*path))
         .cloned()
         .collect();
+    let mut untagged: Vec<LayoutPath> = disk
+        .keys()
+        .filter(|path| !tracked_files.contains(*path))
+        .cloned()
+        .collect();
+    let mut untagged_trees: Vec<LayoutPath> = disk_trees
+        .iter()
+        .filter(|path| !tracked_trees.contains(*path))
+        .cloned()
+        .collect();
+
+    // No tree is read here, so no tree entry is a changed one: what a tree reports about its own
+    // work is the tree crate's answer, and a reader that has it fills this list.
+    let trees_modified: Vec<LayoutPath> = Vec::new();
 
     let mut renamed = Vec::new();
     let mut moved_from: BTreeSet<LayoutPath> = BTreeSet::new();
@@ -302,6 +353,11 @@ pub fn tree_diff(
     lost.retain(|path| !moved_from.contains(path));
     untagged.retain(|path| !moved_to.contains(path));
 
+    // A tree is never moved by the file reading: its move has no bytes to compare, and the path it
+    // was at is one loss and one gain until the Layout is told otherwise.
+    lost.extend(lost_trees);
+    lost.sort_unstable();
+
     // The ignore rules govern only what the tree gained, and only once the moves are known: a gain
     // that turned out to be where a tracked file went is a move, and a move is not the rules' to
     // hide. What is left is an addition nobody is answerable for, which is exactly what a rule is
@@ -317,12 +373,27 @@ pub fn tree_diff(
         true
     });
 
+    // A directory that is a tree but that no entry names is a gain in the same sense a file is, so
+    // it is the rules' to hide for the same reason. The rules ask about it as a directory, since
+    // that is what a rule ending in `/` is decided by.
+    untagged_trees.retain(|path| {
+        if rules.is_ignore(Path::new(path.as_str()), true) {
+            ignored.push(path.clone());
+
+            return false;
+        }
+
+        true
+    });
+
     Ok(TreeDiff {
         lost,
         untagged,
         ignored,
         renamed,
         modified,
+        trees_modified,
+        untagged_trees,
         failed,
     })
 }
@@ -591,7 +662,7 @@ mod tests {
     use std::time::Duration;
 
     use rorolala_ignore::IgnoreRuleSet;
-    use rorolala_layout::{LayoutPath, MutableData};
+    use rorolala_layout::{EntryKind, LayoutPath, MutableData};
     use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
@@ -604,7 +675,7 @@ mod tests {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
 
         let dir = std::env::temp_dir().join(format!(
-            "rorolala-tree-analyze-{}-{label}-{}",
+            "rorolala-workspace-analyze-{}-{label}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
@@ -841,5 +912,102 @@ mod tests {
 
         assert_eq!(diff.untagged, expected, "{diff:?}");
         assert!(diff.failed.is_empty(), "{diff:?}");
+    }
+
+    /// Makes `name` a tree under `dir`, with one file in it.
+    fn make_tree(dir: &Path, name: &str) {
+        let root = dir.join(name);
+        fs::create_dir_all(root.join(".rola-tree")).unwrap();
+        fs::write(root.join("inside.txt"), b"inside").unwrap();
+    }
+
+    /// Makes the Layout name `tree` as a tree entry.
+    fn track_tree(workspace: &Workspace, id: u128, tree: &LayoutPath) {
+        let layout = working(workspace);
+        layout
+            .create_entry(
+                Uuid::from_u128(id),
+                MutableData::new(None, [1; 32], String::new()).with_kind(EntryKind::Tree),
+            )
+            .unwrap();
+        layout.create_path(tree, Uuid::from_u128(id)).unwrap();
+    }
+
+    #[test]
+    fn a_directory_holding_a_tree_mark_is_one_gain_rather_than_its_files() {
+        let (dir, workspace) = workspace("tree-gain");
+        make_tree(&dir, "main");
+        fs::write(dir.join("notes.txt"), b"notes").unwrap();
+
+        let layout = working(&workspace);
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+
+        assert_eq!(diff.untagged_trees, vec![path("main")], "{diff:?}");
+        assert_eq!(diff.untagged, vec![path("notes.txt")], "{diff:?}");
+    }
+
+    #[test]
+    fn a_tracked_tree_that_is_there_is_not_lost() {
+        let (dir, workspace) = workspace("tree-there");
+        track_tree(&workspace, 1, &path("main"));
+        make_tree(&dir, "main");
+
+        let layout = working(&workspace);
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+
+        assert!(diff.lost.is_empty(), "{diff:?}");
+        assert!(diff.untagged_trees.is_empty(), "{diff:?}");
+        assert!(diff.untagged.is_empty(), "{diff:?}");
+    }
+
+    #[test]
+    fn a_tracked_tree_that_is_gone_is_lost() {
+        let (_dir, workspace) = workspace("tree-lost");
+        track_tree(&workspace, 1, &path("main"));
+
+        let layout = working(&workspace);
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+
+        assert_eq!(diff.lost, vec![path("main")], "{diff:?}");
+        assert!(diff.untagged_trees.is_empty(), "{diff:?}");
+    }
+
+    #[test]
+    fn a_tree_the_rules_ignore_is_ignored() {
+        let (dir, workspace) = workspace("tree-ignored");
+        make_tree(&dir, "main");
+
+        let layout = working(&workspace);
+        let ignoring = rules(&dir, "main/\n");
+        let diff = tree_diff(&layout, &workspace, 0.5, &ignoring).unwrap();
+
+        assert!(diff.untagged_trees.is_empty(), "{diff:?}");
+        assert_eq!(diff.ignored, vec![path("main")], "{diff:?}");
+    }
+
+    #[test]
+    fn conflict_copies_are_not_work() {
+        let (dir, workspace) = workspace("conflict-copy");
+        fs::write(dir.join("raw.psd"), b"ours").unwrap();
+        fs::write(dir.join("raw~theirs.psd"), b"theirs").unwrap();
+        fs::write(dir.join("keep~theirs"), b"theirs").unwrap();
+
+        let layout = working(&workspace);
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+
+        assert_eq!(diff.untagged, vec![path("raw.psd")], "{diff:?}");
+    }
+
+    #[test]
+    fn a_workspace_whose_root_is_a_tree_is_one_entry_at_the_root() {
+        let (dir, workspace) = workspace("root-tree");
+        fs::create_dir_all(dir.join(".rola-tree")).unwrap();
+        fs::write(dir.join("inside.txt"), b"inside").unwrap();
+
+        let layout = working(&workspace);
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+
+        assert_eq!(diff.untagged_trees, vec![LayoutPath::root()], "{diff:?}");
+        assert!(diff.untagged.is_empty(), "{diff:?}");
     }
 }

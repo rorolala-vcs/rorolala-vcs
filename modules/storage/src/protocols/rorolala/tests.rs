@@ -1108,3 +1108,49 @@ async fn a_content_whose_chunk_is_gone_is_not_readable() {
 
     let _ = fs::remove_dir_all(&parent);
 }
+
+#[tokio::test]
+async fn publishing_from_another_store_carries_objects_and_manifests() {
+    let (source_parent, source) = store("publish-source");
+    let (target_parent, target) = store("publish-target");
+
+    let whole = source
+        .write_object(b"a whole object", Codec::Raw)
+        .await
+        .unwrap();
+
+    let file = source_parent.join("file");
+    let content: Vec<u8> = (0..4096_u32).map(|value| (value % 251) as u8).collect();
+    fs::write(&file, &content).unwrap();
+    let cut = source
+        .clone()
+        .with_forced_cut(Chunking::Fixed { size: 512 });
+    let chunked = store_file(&cut, &file).await.unwrap();
+    assert_ne!(whole, chunked);
+
+    let report = target
+        .publish_from(&source, &[whole, chunked])
+        .await
+        .unwrap();
+    assert_eq!(report.manifests, 1);
+    assert_eq!(report.objects, 9);
+    assert_eq!(report.written, 10);
+
+    let out = target_parent.join("out");
+    target.extract_file(&whole, &out).await.unwrap();
+    assert_eq!(fs::read(&out).unwrap(), b"a whole object");
+    target.extract_file(&chunked, &out).await.unwrap();
+    assert_eq!(fs::read(&out).unwrap(), content);
+
+    // A second run finds everything already there, and writes nothing.
+    let again = target
+        .publish_from(&source, &[whole, chunked])
+        .await
+        .unwrap();
+    assert_eq!(again.written, 0);
+    assert_eq!(again.objects, 9);
+    assert_eq!(again.manifests, 1);
+
+    let _ = fs::remove_dir_all(&source_parent);
+    let _ = fs::remove_dir_all(&target_parent);
+}

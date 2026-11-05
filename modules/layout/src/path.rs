@@ -102,13 +102,49 @@ impl LayoutPath {
         Ok(Self { text })
     }
 
-    /// The path as it is compared and stored: components joined by `/`.
+    /// The path the layout's own root is named by.
+    ///
+    /// It is the one path a Layout may hold that names no component: the entry at it is the root
+    /// itself, which is how a tree that covers the whole Workspace or the whole Vault is recorded.
+    /// Only a tree entry may be at it. It is written down as an empty string and displayed as `.`.
+    #[must_use]
+    pub const fn root() -> Self {
+        Self {
+            text: String::new(),
+        }
+    }
+
+    /// The path stored as `text`: the root when it is empty, and a path otherwise.
+    ///
+    /// It is what a reader of a log or a snapshot uses. A command taking a name from a person uses
+    /// [`new`](Self::new), which refuses a name that holds no component.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::Path`] if `text` is not the empty string and does not name a path.
+    pub fn from_stored(text: &str) -> Result<Self, LayoutError> {
+        if text.is_empty() {
+            return Ok(Self::root());
+        }
+
+        Self::new(text)
+    }
+
+    /// Whether this path names the layout's root rather than a component.
+    #[must_use]
+    pub const fn is_root(&self) -> bool {
+        self.text.is_empty()
+    }
+
+    /// The path as it is compared and stored: components joined by `/`, or nothing at the root.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.text
     }
 
     /// The path as a [`PathBuf`], the way the platform writes separators.
+    ///
+    /// The root is the empty path, so joining it onto the root directory names the root itself.
     #[must_use]
     pub fn to_path_buf(&self) -> PathBuf {
         self.text.split('/').collect()
@@ -117,6 +153,11 @@ impl LayoutPath {
 
 impl fmt::Display for LayoutPath {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // A person spells the root as the directory they are in.
+        if self.is_root() {
+            return formatter.write_str(".");
+        }
+
         formatter.write_str(&self.text)
     }
 }
@@ -151,6 +192,7 @@ mod tests {
 
     #[test]
     fn a_path_that_names_nothing_is_refused() {
+        // The root is built rather than parsed into, so a name from a person still names a place.
         assert!(LayoutPath::new("").is_err());
         assert!(LayoutPath::new(".").is_err());
         assert!(LayoutPath::new("/").is_err());
@@ -160,6 +202,23 @@ mod tests {
     fn an_absolute_path_or_a_drive_is_refused() {
         assert!(LayoutPath::from_relative(Path::new("/etc/passwd")).is_err());
         assert!(LayoutPath::from_relative(Path::new("a/b")).is_ok());
+    }
+
+    #[test]
+    fn the_root_is_the_empty_path_that_displays_as_the_directory_itself() {
+        let root = LayoutPath::root();
+
+        assert!(root.is_root());
+        assert_eq!(root.as_str(), "");
+        assert_eq!(root.to_string(), ".");
+        assert_eq!(root.to_path_buf(), Path::new(""));
+        assert_eq!(LayoutPath::from_stored("").unwrap(), root);
+    }
+
+    #[test]
+    fn a_stored_path_reads_back_as_one() {
+        assert_eq!(LayoutPath::from_stored("a/b").unwrap().as_str(), "a/b");
+        assert!(LayoutPath::from_stored("../b").is_err());
     }
 
     #[test]

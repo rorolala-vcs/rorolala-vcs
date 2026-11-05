@@ -1,5 +1,5 @@
 [package]
-name = "rorolala-tree-analyze"
+name = "rorolala-workspace-analyze"
 version.workspace = true
 edition.workspace = true
 
