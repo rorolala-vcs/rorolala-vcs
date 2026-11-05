@@ -819,9 +819,16 @@ internal sealed class VariantGraphDrawing
                 .ToHashSet()
             : [];
 
+        // The local entry a draft is based on is the same file as the draft: it has moved to the card
+        // that stands for the edit, and leaving its pill on the baseline card would draw one file twice.
+        var drafted = draftCards
+            .Where(card => card.Draft is not null)
+            .Select(card => Normalize(card.Draft!.Path))
+            .ToHashSet(StringComparer.Ordinal);
+
         foreach (var card in cards)
         {
-            var chips = ChipsOf(card, words, measure, chosen, tracked);
+            var chips = ChipsOf(card, words, measure, chosen, tracked, drafted);
             card.Rows = RowsOf(chips);
             card.PillsHeight = PillsHeightOf(card.Rows);
             card.CreatorWidth = measure.Width(card.Creator, GraphFont.Creator);
@@ -1181,13 +1188,15 @@ internal sealed class VariantGraphDrawing
     /// <param name="measure">The measurer.</param>
     /// <param name="chosen">The side and path of every file the user has chosen.</param>
     /// <param name="tracked">The other sides' entries at those files' paths, which those files track.</param>
+    /// <param name="drafted">The local paths a draft card stands on, whose entry pill the draft owns.</param>
     /// <returns>The pills.</returns>
     private static List<GraphChip> ChipsOf(
         Work card,
         GraphVocabulary words,
         GraphMeasure measure,
         IReadOnlySet<(string Side, string Path)> chosen,
-        IReadOnlySet<(string Side, string Path)> tracked
+        IReadOnlySet<(string Side, string Path)> tracked,
+        IReadOnlySet<string> drafted
     )
     {
         var chips = new List<GraphChip>(card.Entries.Count + 2);
@@ -1256,6 +1265,11 @@ internal sealed class VariantGraphDrawing
 
         foreach (var entry in card.Entries)
         {
+            if (entry.Side == "local" && drafted.Contains(Normalize(entry.Path)))
+            {
+                continue;
+            }
+
             var tag = entry.Side == "local" ? "LOCAL" : entry.Side.ToUpperInvariant();
             var name = entry.Path.Length == 0 ? "?" : NameOf(entry.Path);
             var tagWidth = measure.Width(tag, GraphFont.Tag);

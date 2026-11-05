@@ -243,6 +243,17 @@ public sealed class VariantGraphTests
         Assert.Equal("DRAFT", VariantGraphDrawing.VersionLabel(draft));
         Assert.Contains(draft.Chips, chip => chip.Text == words.DraftBadge);
 
+        // The file is being edited, so its local pill is on the draft rather than on the version the
+        // draft is based on: one file is one place in the drawing.
+        Assert.Contains(
+            draft.Chips,
+            chip => chip.Kind == GraphChipKind.File && chip.Tag == "LOCAL"
+        );
+        Assert.DoesNotContain(
+            artCards.Single(card => card.Number == 1).Chips,
+            chip => chip.Kind == GraphChipKind.Entry && chip.Entry?.Side == "local"
+        );
+
         // A chain edge joins each version to the one before it: one for the two versions of art.txt,
         // and none for other.txt's only one.
         Assert.Equal(

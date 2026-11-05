@@ -4,6 +4,14 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 # 0.2.1 (Unreleased)
 
+## Bugfix
+
+### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
+
+The Version Graph no longer draws an edited file's local pill on the version its draft is based on
+as well as on the draft. While the file has an unrecorded change, its draft is the one card that
+names it; the baseline version keeps the entries of the other sides.
+
 ## Feature
 
 ### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
