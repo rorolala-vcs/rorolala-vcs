@@ -2552,7 +2552,7 @@ fn commit_tree(
     let path = tree
         .layout_path()
         .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-    let shown = path.as_str().to_owned();
+    let shown = crate::tree::cmd_tree::shown(tree)?;
 
     let recorded = runtime
         .block_on(tree.recorded(layout, index, store))

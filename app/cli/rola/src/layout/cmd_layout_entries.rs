@@ -173,7 +173,16 @@ pub fn handle_layout_entries(
                 .is_some_and(|path| path.as_str().starts_with(REMOVED_PREFIX));
 
             EntryItem {
-                path: path.map_or_else(String::new, |path| path.as_str().to_owned()),
+                path: path.map_or_else(
+                    || ".".to_owned(),
+                    |path| {
+                        if path.is_root() {
+                            ".".to_owned()
+                        } else {
+                            path.as_str().to_owned()
+                        }
+                    },
+                ),
                 uuid: entry.to_string(),
                 version: Key::new(data.version()).hex(),
                 owner: data.owner().unwrap_or_default().to_owned(),

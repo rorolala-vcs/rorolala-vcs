@@ -134,7 +134,7 @@ pub fn scan(
             // `.rolaignore` is work like any other file, and it is always read, since it is the file
             // that says what the rest of the rules are.
             let keep =
-                path == crate::consts::IGNORE || include_ignored || !rules.ignored(&path, false);
+                name == crate::consts::IGNORE || include_ignored || !rules.ignored(&path, false);
             if !keep {
                 continue;
             }

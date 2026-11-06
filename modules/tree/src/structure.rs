@@ -494,12 +494,6 @@ fn normalize_path(text: &str) -> Result<String, TreeError> {
         if part.contains(':') {
             return Err(TreeError::Path(text.to_owned()));
         }
-        // The rules of a tree are one file at the root, and a copy of them at any depth would be a
-        // rule set a version could not say how to apply.
-        if *part == ".rolaignore" && parts.len() > 1 {
-            return Err(TreeError::Path(text.to_owned()));
-        }
-
         if at > 0 {
             normalized.push('/');
         }
@@ -808,7 +802,6 @@ mod tests {
             ".rola/x",
             "a/.rola-tree",
             "x~theirs.psd",
-            "a/.rolaignore",
         ] {
             assert!(
                 TreeStructure::build(None, [TreeEntry::directory(path)]).is_err(),
@@ -816,8 +809,18 @@ mod tests {
             );
         }
 
-        // The rules of a tree are one file at its root, and that one is a path.
+        // A rules file is a path like any other, at the tree root or under a directory.
         assert!(TreeStructure::build(None, [TreeEntry::directory(".rolaignore")]).is_ok());
+        assert!(
+            TreeStructure::build(
+                None,
+                [
+                    TreeEntry::directory("a"),
+                    TreeEntry::directory("a/.rolaignore")
+                ]
+            )
+            .is_ok()
+        );
     }
 
     #[test]

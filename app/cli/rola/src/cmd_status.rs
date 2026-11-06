@@ -678,7 +678,11 @@ fn targets(target: &str, root: &Path, cwd: Option<&Path>) -> Vec<LayoutPath> {
         let root = normalize(root);
         let absolute = normalize(&resolve(cwd, target));
 
-        if let Ok(relative) = absolute.strip_prefix(&root)
+        // The Workspace root is the reserved path, which names the root tree when there is one;
+        // a name that resolves to the root is read as it rather than as a path with no components.
+        if absolute == root {
+            paths.push(LayoutPath::root());
+        } else if let Ok(relative) = absolute.strip_prefix(&root)
             && let Ok(path) = LayoutPath::from_relative(relative)
         {
             paths.push(path);

@@ -49,6 +49,8 @@ fn main() {
     desc_editor(&rola, &ws, &mut checked);
     reset_staging(&rola, &ws, &mut checked);
     refusals(&rola, &ws, &mut checked);
+    ignore_rules(&rola, &ws, &mut checked);
+    root_tree(&rola, &ws, &mut checked);
 
     checked.report();
 }
@@ -659,6 +661,105 @@ fn refusals(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["tree", "rm", "main/sub"]);
     checked.exits("a directory is not taken without `--recursive`", &ran, 94);
     checked.stderr_has("the refusal says what a directory needs", &ran, "recursive");
+}
+
+/// A rules file under a directory of a tree decides what is under that directory.
+fn ignore_rules(rola: &Rola, ws: &Path, checked: &mut Checked) {
+    let tree = ws.join("main");
+    let nested = tree.join("sub2");
+    fs::create_dir_all(nested.join("deep")).expect("a directory with rules");
+    fs::write(nested.join(".rolaignore"), "*.psd\n!keep.psd\n").expect("nested rules");
+    fs::write(nested.join("hidden.psd"), b"hidden").expect("a file the rules hide");
+    fs::write(nested.join("deep").join("hidden.psd"), b"hidden").expect("one deeper");
+    fs::write(nested.join("keep.psd"), b"kept").expect("a file the rules take back");
+
+    let ran = rola.run(ws, &["tree", "status", "main"]);
+    checked.exits("the tree is read with nested rules", &ran, 0);
+    checked.stdout_has("the nested rules file is work", &ran, "sub2/.rolaignore");
+    checked.stdout_has("the rule that takes a file back is read", &ran, "sub2/keep.psd");
+    checked.wants(
+        "a nested rule hides the files it names",
+        !ran.stdout.contains("hidden.psd"),
+        "a nested rule was not applied",
+    );
+
+    let ran = rola.run(ws, &["tree", "status", "main", "--include-ignored"]);
+    checked.exits("the tree is read including what the rules hide", &ran, 0);
+    checked.stdout_has(
+        "the hidden file is found when the rules are left out",
+        &ran,
+        "sub2/hidden.psd",
+    );
+
+    let ran = rola.run(&tree, &["tree", "add", "."]);
+    checked.exits("the tree stages what the rules keep", &ran, 0);
+    checked.stdout_has("the nested rules file is staged as work", &ran, "sub2/.rolaignore");
+
+    // The tree's own root file is the shallow layer, and a nested file decides after it.
+    fs::write(tree.join(".rolaignore"), "*.psd\n").expect("rules at the tree root");
+    fs::write(tree.join("ignored-root.psd"), b"hidden").expect("a file the root rules hide");
+
+    let ran = rola.run(ws, &["tree", "status", "main"]);
+    checked.exits("the tree is read with rules at both layers", &ran, 0);
+    checked.wants(
+        "a rule at the tree root hides a file",
+        !ran.stdout.contains("ignored-root.psd"),
+        "the rule at the tree root was not applied",
+    );
+
+    let _ = rola.run(&tree, &["tree", "reset"]);
+    let _ = fs::remove_file(tree.join(".rolaignore"));
+    let _ = fs::remove_file(tree.join("ignored-root.psd"));
+    let _ = fs::remove_dir_all(nested);
+}
+
+/// A Workspace whose root is a tree records it at the reserved root path and can look it back.
+fn root_tree(rola: &Rola, ws: &Path, checked: &mut Checked) {
+    let sandbox = ws.parent().expect("the sandbox");
+    let root = sandbox.join("rootws");
+    fs::create_dir_all(&root).expect("a Workspace for a root tree");
+
+    let ran = rola.run(&root, &["init"]);
+    checked.exits("the root tree's Workspace is made", &ran, 0);
+
+    let ran = rola.run(&root, &["account", "alice"]);
+    checked.exits("the root tree's run has an account", &ran, 0);
+
+    fs::write(root.join("a.psd"), b"one").expect("a file under the root tree");
+
+    let ran = rola.run(&root, &["tree", "init", ".", "--force"]);
+    checked.exits("the Workspace root is made a tree", &ran, 0);
+
+    let ran = rola.run(&root, &["tree", "add", "."]);
+    checked.exits("the root tree's work is staged", &ran, 0);
+
+    let ran = rola.run(&root, &["track", ".", "--message", "the root tree"]);
+    checked.exits("the root tree is recorded", &ran, 0);
+
+    let ran = rola.run(&root, &["layout", "entries", "--json"]);
+    checked.exits("the Layout is read as data", &ran, 0);
+    checked.wants(
+        "the root tree is recorded at the reserved root path",
+        json(&ran)
+            .and_then(|value| value.get("entries")?.get(0)?.get("path")?.as_str().map(str::to_owned))
+            .as_deref()
+            == Some("."),
+        "the root tree is not shown at the root path",
+    );
+
+    let ran = rola.run(&root, &["status", "."]);
+    checked.exits("the root tree is looked back at from `.`", &ran, 0);
+    checked.stdout_has("the chain draws the root tree's version", &ran, "V0");
+
+    fs::write(root.join("a.psd"), b"two").expect("work the root tree has not recorded");
+
+    let ran = rola.run(&root, &["status", "."]);
+    checked.exits("the root tree is looked back at after a change", &ran, 0);
+    checked.stdout_has("the change is a draft above the chain", &ran, "??");
+
+    let ran = rola.run(&root, &["tree", "status", "."]);
+    checked.exits("the root tree's own reading is drawn", &ran, 0);
+    checked.stdout_has("the root tree is named by the root", &ran, "Tree `.`");
 }
 
 /// A command that runs `rola`, working in `dir` and keeping the user's files in the sandbox.
