@@ -14,11 +14,27 @@ names it; the baseline version keeps the entries of the other sides.
 
 ## Feature
 
-### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
+### 1. **\[BREAKING!\]** [`app`] [`rola`] [`tree`] Version a directory as one tree
+
+`rola tree` is a new namespace for directories that are versions in their own right: `init`, `status`, `add`, `rm`, `desc`, `write-desc`, `cat-desc`, `ls-tree`, `ls-staging-tree` and `diff-stat`. A directory with a `.rola-tree` mark is one unit of work, `rola track` records its staged structure as one version, and it is named and described in the same list as a file: the group message, its own `--file-message` by position, and the same editor sections all work for it, Running `rola status` inside a tree reads the tree itself, while naming a tree draws its version chain the way naming a file does, with a draft above the chain while its work is unrecorded. From outside a tree, its work is one row among the Workspace's structural and content changes, a tree object beside the paths, with trees drawn before the files and the parts that are zero left out. Aligning a tree with `--restore`, and moving its record back with `rola retrack`, put the whole directory back from a version. A tree whose directory was deleted is restored whole as well: which paths are trees is read from the Layout rather than from a mark that is gone, so the directory, its `.rola-tree` skeleton and its baseline are recreated, a path inside the tree names the tree, and a file sitting where the tree belongs is replaced. Naming a tree or anything under it in `rola hold` or `rola giveup` names the tree's one entry, so its ownership moves as one thing. A tree merges with `rola checkin --join <VARIANT> --tree-merge`, which compares two structures over their shared version and leaves `~theirs` copies beside the work for what both sides changed. The C ABI gains `rola_tree_entries_json`.
+
+Breaking: the Layout snapshot format is version 3 and its records carry a kind byte. A Workspace or Vault written by an earlier version cannot be read by this one, and a Vault written here cannot be read by an earlier one. A sync carries the kind of each entry it creates, so a Vault's Layout records trees as trees, and a path the two sides name as different things is refused rather than transferred.
+
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
 
 The TRACK button under the Version Graph turns red while Shift is held. A press then records
 the chosen changes with `rola track --force`, and a question names the files whose changes a plain
 track refuses before anything is written. Without Shift the button records the changes as before.
+
+### 3. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
+
+`rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. A caller that cannot decode the structure format hands the bytes over instead of keeping a second copy of it, and text that is not hex or bytes that are not a structure answer as `null`, so an answer is always JSON. The string is freed with `free_string`.
+
+### 4. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+
+The new `rorolala-tree` crate holds what a tree is: a canonical structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path. Content moves into the Workspace's store with `publish_from`, which carries manifests and their chunks without rewriting what is already there.
+
+`rola tree reset` puts the staging area back to the recorded version, for the whole tree or only the paths named, and leaves the work untouched; it has no hard or soft form, since `retrack` and `retrack --only-index` move the work and the record. `rola tree desc` opens the same editing file and editor as `rola track`, and stages what the editor wrote only after it ends successfully, so a cancelled edit leaves the staged description as it was. A tree's structure names what its version holds, so a sync carries the head version's structure and its description and file content in a second exchange. A Workspace scan treats a directory holding a `.rola-tree` mark as one tree entry rather than the files under it, and the Layout, its records and its snapshot carry a kind so a file and a tree are told apart.
 
 # 0.2.0 (2026-11-04)
 

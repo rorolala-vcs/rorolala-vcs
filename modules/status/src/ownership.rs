@@ -12,9 +12,9 @@
 use std::collections::BTreeMap;
 
 use rorolala_layout::{Layout, LayoutError, LayoutPath};
-use rorolala_tree_analyze::TreeDiff;
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_workspace::Workspace;
+use rorolala_workspace_analyze::TreeDiff;
 
 /// The Vault the Layout being worked in tracks, when it tracks one.
 #[must_use]

@@ -1161,6 +1161,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-tree"
+version = "0.1.0"
+dependencies = [
+ "rorolala-utils-sandbox",
+ "serde_json",
+]
+
+[[package]]
 name = "it-vault-auth"
 version = "0.1.0"
 dependencies = [
@@ -1321,7 +1329,7 @@ dependencies = [
  "rorolala-protocol",
  "rorolala-status",
  "rorolala-storage",
- "rorolala-tree-analyze",
+ "rorolala-tree",
  "rorolala-utils-constants",
  "rorolala-utils-icons",
  "rorolala-utils-lazyffi",
@@ -1329,6 +1337,7 @@ dependencies = [
  "rorolala-vault",
  "rorolala-vcs",
  "rorolala-workspace",
+ "rorolala-workspace-analyze",
  "serde_json",
  "toml 0.8.23",
 ]
@@ -1978,12 +1987,12 @@ dependencies = [
  "rorolala-inverse-index",
  "rorolala-layout",
  "rorolala-storage",
- "rorolala-tree-analyze",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
  "rorolala-vcs",
  "rorolala-workspace",
+ "rorolala-workspace-analyze",
  "serde",
  "serde_json",
  "tokio",
@@ -2008,15 +2017,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "rorolala-tree-analyze"
+name = "rorolala-tree"
 version = "0.2.1"
 dependencies = [
  "blake3",
+ "rorolala-errors",
  "rorolala-ignore",
  "rorolala-layout",
- "rorolala-utils-constants",
+ "rorolala-storage",
  "rorolala-utils-location",
- "rorolala-workspace",
+ "rorolala-vcs",
+ "rorolala-workspace-analyze",
+ "serde",
+ "unicode-normalization",
+ "uuid",
 ]
 
 [[package]]
@@ -2161,6 +2175,18 @@ dependencies = [
  "serde",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "rorolala-workspace-analyze"
+version = "0.2.1"
+dependencies = [
+ "blake3",
+ "rorolala-ignore",
+ "rorolala-layout",
+ "rorolala-utils-constants",
+ "rorolala-utils-location",
+ "rorolala-workspace",
 ]
 
 [[package]]

@@ -23,10 +23,12 @@ use std::str::FromStr as _;
 use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{Broken, Relation, Status, compare};
-use librorolala::storage::{Blake3Hash, Key};
-use librorolala::tree_analyze::tree_diff;
+use librorolala::storage::{Blake3Hash, Key, RorolalaStorage};
+use librorolala::tree::{Tree, TreeStatus};
 use librorolala::vcs::{LookbackError, VCSIndex, read_chain};
 use librorolala::workspace::{Merging, Pending, Workspace};
+use librorolala::workspace_analyze::tree_diff;
+use librorolala::workspace_analyze::walk;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -38,7 +40,7 @@ use mingling::{
     picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
@@ -58,6 +60,8 @@ use crate::hash::resolve as resolve_hash;
 use crate::layout::{
     ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_copy,
 };
+use crate::tree::cmd_tree::shown;
+use crate::tree::cmd_tree_status::lines as tree_lines;
 use crate::vcs_index::cmd_vcs_index_lookback::{
     MergeHint, ResLookback, Standing, StandingRelation, from_object,
 };
@@ -200,6 +204,7 @@ pub fn handle_status(
     vault: &mut LazyRes<ResVault>,
     account: &mut LazyRes<ResCurrentAccount>,
     index: &mut LazyRes<ResVCSIndex>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
 ) -> Next {
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
@@ -212,7 +217,19 @@ pub fn handle_status(
 
     let merging = Merging::read(held.get_root());
 
+    // A run standing in a tree reads the tree rather than the Workspace: what a tree holds is one
+    // unit of work, and what there is to do about it is what `tree status` says.
+    if state.target.is_none()
+        && let Some(next) = status_in_tree(held, &layout, index, storage, state.include_ignored)
+    {
+        return next;
+    }
+
     if let Some(target) = state.target {
+        if let Some(next) = status_tree_file(held, &target) {
+            return next;
+        }
+
         let me = account.get_ref().must_bind().ok();
         let me = me.as_deref();
 
@@ -256,7 +273,27 @@ pub fn handle_status(
         Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
     };
 
+    let Some(index) = index.get_ref().as_ref() else {
+        return ErrorLayoutFailed::new(t!("status.err_no_index").trim().to_string()).into();
+    };
+    let Some(store) = storage.get_ref().as_ref() else {
+        return ErrorLayoutFailed::new(t!("status.err_no_store").trim().to_string()).into();
+    };
+
+    let (trees_structural, trees_content) = match tree_reading(
+        held,
+        &layout,
+        Some(index),
+        Some(store),
+        state.include_ignored,
+    ) {
+        Ok(trees) => trees,
+        Err(error) => return ErrorLayoutFailed::new(error).into(),
+    };
+
     ResultStatus {
+        trees_structural,
+        trees_content,
         lost: status.lost,
         untagged: status.untagged,
         modified: status.modified,
@@ -801,6 +838,35 @@ fn version_of(layout: &Layout, id: Uuid) -> Result<Blake3Hash, String> {
 /// A move whose file was edited is already among the modified: the tree reading counts a move's
 /// destination there as well, since what changed is the content at the path the file is at now.
 fn editing(held: &Workspace, layout: &Layout, path: &LayoutPath) -> Result<bool, String> {
+    // A tree's being changed is its own reading: a staged structure, a description or a conflict is
+    // work to record, and so is work its recorded structure does not hold.
+    if let Some(id) = layout.id_of(path)
+        && layout
+            .entry(id)
+            .is_some_and(|data| data.kind() == librorolala::layout::EntryKind::Tree)
+    {
+        let disk = held.get_root().join(path.to_path_buf());
+        let Ok(tree) = Tree::open(held.get_root(), &disk) else {
+            return Ok(false);
+        };
+
+        if tree.pending().map_err(|error| error.to_string())? {
+            return Ok(true);
+        }
+
+        let Some(recorded) = tree.baseline().tree().map_err(|error| error.to_string())? else {
+            return Ok(false);
+        };
+        let rules = tree
+            .rules(crate::ignore::rules(held, false))
+            .map_err(|error| error.to_string())?;
+        let scanned = tree
+            .scan(&rules, false)
+            .map_err(|error| error.to_string())?;
+
+        return Ok(!librorolala::tree::diff(&recorded, &scanned.structure).is_empty());
+    }
+
     // A path's being changed is answered from `modified`, which the ignore rules do not govern.
     let diff = tree_diff(layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty())
         .map_err(|error| error.to_string())?;
@@ -856,6 +922,239 @@ pub fn render_error_status_target(error: ErrorStatusTarget, ec: &mut ResExitCode
     ec.exit_code = EC_ERR_LAYOUT_ARGUMENT;
 }
 
+/// The refusal for a file inside a tree, when the target names one.
+///
+/// A tree is one version unit, so a path of its own is not a chain to look back from: the run is
+/// told to ask about the tree. A directory the run names is a chain like any other entry, and
+/// answers nothing here.
+fn status_tree_file(held: &Workspace, target: &str) -> Option<Next> {
+    let cwd = std::env::current_dir().ok()?;
+    let resolved = resolve(&cwd, target);
+    Tree::locate(held.get_root(), &resolved).ok()?;
+
+    if resolved.is_dir() {
+        return None;
+    }
+
+    Some(
+        ErrorStatusTreeFile {
+            path: target.to_owned(),
+        }
+        .into(),
+    )
+}
+
+/// Error: a status was asked about a file inside a tree.
+#[derive(Grouped)]
+pub struct ErrorStatusTreeFile {
+    /// The path named.
+    path: String,
+}
+
+impl Failure for ErrorStatusTreeFile {
+    fn name(&self) -> &'static str {
+        "error_status_tree_file"
+    }
+
+    fn reason(&self) -> String {
+        t!("status.err_tree_file", path = self.path)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorStatusTreeFile);
+
+#[renderer(buffer)]
+pub fn render_error_status_tree_file(error: ErrorStatusTreeFile, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("status.err_tree_file_help").trim()));
+    ec.exit_code = crate::exit_codes::EC_ERR_TREE_ARGUMENT;
+}
+
+/// The tree a run is standing in, when it is standing in one, read as a tree's status.
+///
+/// It answers nothing when the run is not inside a tree, so the Workspace reading goes on as it
+/// would have; what it answers is what the run ends with, whether that is a reading or a refusal.
+fn status_in_tree(
+    held: &Workspace,
+    layout: &Layout,
+    index: &mut LazyRes<ResVCSIndex>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+    include_ignored: bool,
+) -> Option<Next> {
+    let cwd = std::env::current_dir().ok()?;
+    let tree = Tree::locate(held.get_root(), &cwd).ok()?;
+
+    let Some(store): Option<&RorolalaStorage> = storage.get_ref().as_ref() else {
+        return Some(ErrorLayoutFailed::new(t!("status.err_no_store").trim().to_string()).into());
+    };
+    let Some(index) = index.get_ref().as_ref() else {
+        return Some(ErrorLayoutFailed::new(t!("status.err_no_index").trim().to_string()).into());
+    };
+
+    let rules = crate::ignore::rules(held, include_ignored);
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => return Some(ErrorLayoutFailed::new(error.to_string()).into()),
+    };
+
+    let status = match runtime.block_on(tree.status(layout, index, store, rules, include_ignored)) {
+        Ok(status) => status,
+        Err(error) => return Some(ErrorLayoutFailed::new(error.to_string()).into()),
+    };
+
+    match shown(&tree) {
+        Ok(path) => Some(ResultStatusTree { path, status }.into()),
+        Err(next) => Some(next),
+    }
+}
+
+/// How the trees of the Workspace stand, beside the Layout and in their own work.
+///
+/// A tree the Layout records and the work does not hold is a lost tree; a directory holding a tree
+/// mark the Layout does not name is an added one. Both are structural, and are drawn among the other
+/// structural changes rather than in a block of their own. A tree the work holds is content: its own
+/// reading says how much is staged, changed, untracked or in conflict, and a clean tree is no line at
+/// all, since a reading of the Workspace is about what there is to do.
+fn tree_reading(
+    held: &Workspace,
+    layout: &Layout,
+    index: Option<&VCSIndex>,
+    store: Option<&RorolalaStorage>,
+    include_ignored: bool,
+) -> Result<(Vec<TreeStructuralLine>, Vec<TreeContentLine>), String> {
+    let Some(index) = index else {
+        return Ok((Vec::new(), Vec::new()));
+    };
+    let Some(store) = store else {
+        return Ok((Vec::new(), Vec::new()));
+    };
+
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| error.to_string())?;
+    let root = held.get_root();
+    let mut tracked: BTreeSet<String> = BTreeSet::new();
+    let mut structural = Vec::new();
+    let mut content = Vec::new();
+
+    for (id, data) in layout.entries() {
+        if data.kind() != librorolala::layout::EntryKind::Tree {
+            continue;
+        }
+        let Some(path) = layout.path_of(id) else {
+            continue;
+        };
+        tracked.insert(path.as_str().to_owned());
+
+        let disk = root.join(path.to_path_buf());
+        if !disk.is_dir() {
+            structural.push(TreeStructuralLine {
+                path: path.as_str().to_owned(),
+                change: "lost",
+            });
+
+            continue;
+        }
+
+        let Ok(tree) = Tree::open(root, &disk) else {
+            structural.push(TreeStructuralLine {
+                path: path.as_str().to_owned(),
+                change: "lost",
+            });
+
+            continue;
+        };
+
+        let rules = crate::ignore::rules(held, include_ignored);
+        let status = runtime
+            .block_on(tree.status(layout, index, store, rules, include_ignored))
+            .map_err(|error| error.to_string())?;
+
+        if status.is_clean() {
+            continue;
+        }
+
+        content.push(TreeContentLine {
+            path: path.as_str().to_owned(),
+            staged: status.staged.len(),
+            unstaged: status.unstaged.len(),
+            untracked: status.untracked.len(),
+            conflicts: status.conflicts.len(),
+        });
+    }
+
+    for found in walk(root).0 {
+        if found.kind != librorolala::layout::EntryKind::Tree || found.disk == root {
+            continue;
+        }
+        let Ok(relative) = found.disk.strip_prefix(root) else {
+            continue;
+        };
+        let Ok(path) = LayoutPath::from_relative(relative) else {
+            continue;
+        };
+        if tracked.contains(path.as_str()) || layout.id_of(&path).is_some() {
+            continue;
+        }
+
+        structural.push(TreeStructuralLine {
+            path: path.as_str().to_owned(),
+            change: "added",
+        });
+    }
+
+    Ok((structural, content))
+}
+
+/// Result: how a tree stands, as `rola status` draws it when the run is inside one.
+#[derive(Grouped, StructuralData, serde::Serialize)]
+pub struct ResultStatusTree {
+    /// The tree as a person knows it.
+    path: String,
+    /// How its work stands.
+    status: TreeStatus,
+}
+
+#[renderer(buffer)]
+pub fn render_result_status_tree(result: ResultStatusTree, ec: &mut ResExitCode) {
+    if result.status.is_clean() {
+        r_println!("{}", t!("tree.status.clean", path = result.path).trim());
+    } else {
+        r_println!("{}", t!("tree.status.header", path = result.path).trim());
+
+        for line in tree_lines(&result.status) {
+            r_println!("{line}");
+        }
+    }
+
+    let _ = ec;
+}
+
+/// One tree the Layout and the work disagree about structurally.
+#[derive(Serialize)]
+pub struct TreeStructuralLine {
+    /// The tree's path in the Layout, or where the work holds it.
+    path: String,
+    /// What the disagreement is: `added` for a tree the work holds and the Layout does not, `lost`
+    /// for one the Layout names and the work does not.
+    change: &'static str,
+}
+
+/// One tree whose own reading finds work to record.
+#[derive(Serialize)]
+pub struct TreeContentLine {
+    /// The tree's path in the Layout.
+    path: String,
+    /// How many paths are staged.
+    staged: usize,
+    /// How many paths changed and were not staged.
+    unstaged: usize,
+    /// How many paths the tree holds and nothing staged has.
+    untracked: usize,
+    /// How many paths a merge left in conflict.
+    conflicts: usize,
+}
+
 /// Result: how the tree stood beside the Layout.
 ///
 /// The reading is the same one `rola layout tree-diff` gives, so what a `--json` run reads here is
@@ -875,6 +1174,10 @@ pub struct ResultStatus {
     renamed: Vec<RenameItem>,
     /// Paths the fetched copy of the Vault's Layout says another account holds.
     unowned: Vec<String>,
+    /// Trees the Layout and the work disagree about structurally, one line each.
+    trees_structural: Vec<TreeStructuralLine>,
+    /// Trees whose own reading finds work to record, one line each.
+    trees_content: Vec<TreeContentLine>,
     /// Files a variant is waiting to be joined into, and the variant waiting.
     merging: Vec<MergingItem>,
     /// Merges that cannot go on, one line each.
@@ -980,7 +1283,10 @@ pub fn render_result_status_unjoined(result: ResultStatusUnjoined) {
 
 #[renderer(buffer)]
 pub fn render_result_status(result: ResultStatus) {
-    let structural = result.renamed.len() + result.lost.len() + result.untagged.len();
+    let structural = result.renamed.len()
+        + result.lost.len()
+        + result.untagged.len()
+        + result.trees_structural.len();
 
     // A move's destination is already a line of its own among the moves, so what is left for the
     // content that changed is everything modified that did not move.
@@ -996,8 +1302,10 @@ pub fn render_result_status(result: ResultStatus) {
         .map(String::as_str)
         .collect();
 
+    let content = changed.len() + result.trees_content.len();
+
     if structural == 0
-        && changed.is_empty()
+        && content == 0
         && result.unowned.is_empty()
         && result.merging.is_empty()
         && result.broken.is_empty()
@@ -1101,6 +1409,17 @@ pub fn render_result_status(result: ResultStatus) {
             r_println!("{}", header.trim());
             r_println!("");
 
+            let object = t!("status.tree_object");
+            for tree in &result.trees_structural {
+                let (color, symbol) = if tree.change == "lost" {
+                    ("red", "-")
+                } else {
+                    ("green", "+")
+                };
+                let line = format!("[[{color}]]{symbol}[[/]] {} ({object})", tree.path);
+
+                r_println!("{}", trd!(line));
+            }
             for rename in &result.renamed {
                 let mark = if rename.modified {
                     t!("status.mark_modified").to_string()
@@ -1119,19 +1438,65 @@ pub fn render_result_status(result: ResultStatus) {
             }
         }
 
-        if !changed.is_empty() {
+        if content > 0 {
             // A blank line separates the blocks; the first block has none before it.
             if unowned || merging || structural > 0 {
                 r_println!("");
             }
 
             let header = if structural == 0 {
-                trd!(t!("status.header_content", count = changed.len()))
+                trd!(t!("status.header_content", count = content))
             } else {
-                trd!(t!("status.header_content_more", count = changed.len()))
+                trd!(t!("status.header_content_more", count = content))
             };
             r_println!("{}", header.trim());
             r_println!("");
+
+            for tree in &result.trees_content {
+                let mut parts: Vec<String> = Vec::new();
+                if tree.staged > 0 {
+                    parts.push(
+                        t!("status.tree_part_staged", count = tree.staged.to_string())
+                            .trim()
+                            .to_string(),
+                    );
+                }
+                if tree.unstaged > 0 {
+                    parts.push(
+                        t!(
+                            "status.tree_part_unstaged",
+                            count = tree.unstaged.to_string()
+                        )
+                        .trim()
+                        .to_string(),
+                    );
+                }
+                if tree.untracked > 0 {
+                    parts.push(
+                        t!(
+                            "status.tree_part_untracked",
+                            count = tree.untracked.to_string()
+                        )
+                        .trim()
+                        .to_string(),
+                    );
+                }
+                if tree.conflicts > 0 {
+                    parts.push(
+                        t!(
+                            "status.tree_part_conflicts",
+                            count = tree.conflicts.to_string()
+                        )
+                        .trim()
+                        .to_string(),
+                    );
+                }
+
+                r_println!(
+                    "{}",
+                    trd!(format!("  {} ({})", tree.path, parts.join(", ")))
+                );
+            }
 
             for path in &changed {
                 r_println!("{}", trd!(format!("  {path} {mark}")));
@@ -1158,7 +1523,7 @@ pub fn render_result_status(result: ResultStatus) {
             };
             r_println!("{}", help_line!(said.trim()));
         }
-        if !changed.is_empty() {
+        if content > 0 {
             r_println!("{}", help_line!(t!("status.help_track").trim()));
         }
     }

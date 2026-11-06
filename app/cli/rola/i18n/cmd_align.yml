@@ -240,3 +240,17 @@ align:
         Check the Workspace, the Layout and the analysis cache, then try again
     zh-CN: |
         请检查工作区、布局与分析缓存，然后重试
+
+  result_tree:
+    en: "Tree `%{path}` is back to what it records"
+    zh-CN: "树 `%{path}` 已还原到记录的版本"
+  err_tree_unsupported:
+    en: A tree is settled with `--restore`, not a per-file mode
+    zh-CN: 树只能用 `--restore` 处理，不能用逐文件模式
+  err_tree_unsupported_help:
+    en: Give `--restore` to put the whole tree back, or name a file outside a tree
+    zh-CN: 请用 `--restore` 还原整棵树，或给出树外的文件
+
+  err_not_recorded:
+    en: The tree records no version yet
+    zh-CN: 树还没有记录任何版本

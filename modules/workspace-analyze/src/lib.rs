@@ -7,11 +7,11 @@
 
 mod cache;
 mod error;
-mod fingerprint;
+pub mod fingerprint;
 mod scan;
 mod tree_diff;
 
-pub use cache::Cache;
+pub use cache::{Cache, Entry};
 pub use error::*;
 pub use scan::{Found, walk};
 pub use tree_diff::*;

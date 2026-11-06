@@ -152,6 +152,17 @@ pub const EC_ERR_STORAGE_LS_MANIFESTS_NO_STORAGE: i32 = 91;
 /// `exit_codes.storage_ls_manifests_failed`
 pub const EC_ERR_STORAGE_LS_MANIFESTS_FAILED: i32 = 92;
 
+// Trees
+
+/// `exit_codes.tree_argument`
+pub const EC_ERR_TREE_ARGUMENT: i32 = 94;
+
+/// `exit_codes.tree_not_a_tree`
+pub const EC_ERR_TREE_NOT_A_TREE: i32 = 95;
+
+/// `exit_codes.tree_failed`
+pub const EC_ERR_TREE_FAILED: i32 = 99;
+
 // Packing
 
 /// `exit_codes.pack_no_storage`

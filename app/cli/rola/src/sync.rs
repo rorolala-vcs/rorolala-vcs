@@ -11,11 +11,11 @@
 use std::collections::{BTreeSet, HashMap};
 
 use librorolala::ignore::IgnoreRuleSet;
-use librorolala::layout::{Layout, LayoutPath};
+use librorolala::layout::{EntryKind, Layout, LayoutPath};
 use librorolala::storage::{Blake3Hash, Key};
-use librorolala::tree_analyze::tree_diff;
 use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSIndexReadingError, Version};
 use librorolala::workspace::Workspace;
+use librorolala::workspace_analyze::tree_diff;
 use rorolala_errors::Failure as _;
 use serde::Serialize;
 
@@ -114,6 +114,9 @@ pub enum Kind {
     Blocked,
     /// The Vault holds a `Uuid` this Layout does not; `checkin` is what brings one.
     RemoteOnly,
+    /// The two name it as different things, a file and a tree, so neither side may take it.
+    #[serde(rename = "kind_mismatch")]
+    Mismatched,
     /// Both are at the version the Vault holds.
     UpToDate,
 }
@@ -137,6 +140,8 @@ pub struct Entry {
     pub owner: Option<String>,
     /// Whether the Vault has moved it under `@/removed/`.
     pub deprecated: bool,
+    /// What the entry is, a file or a tree, as the Layout names it.
+    pub item_kind: Option<&'static str>,
     /// Whether the file this Layout names has been changed in the tree.
     pub modified: bool,
     /// What the plan means to do with it.
@@ -249,6 +254,7 @@ async fn local_entries(
                     remote_version: None,
                     owner: None,
                     deprecated: false,
+                    item_kind: Some(kind_name(data.kind())),
                     modified: changed,
                     kind: Kind::Create,
                 });
@@ -273,6 +279,14 @@ async fn local_entries(
             other => other,
         };
 
+        // A path the two name as different things is not one either side may take: a file and a tree
+        // are not two shapes of one thing, and a transfer would write one over the other.
+        let kind = if data.kind() == held.kind() {
+            kind
+        } else {
+            Kind::Mismatched
+        };
+
         if kind == Kind::UpToDate {
             up_to_date += 1;
 
@@ -291,12 +305,21 @@ async fn local_entries(
             remote_version: Some(hex(held.version())),
             owner: held.owner().map(str::to_owned),
             deprecated,
+            item_kind: Some(kind_name(data.kind())),
             modified: changed,
             kind,
         });
     }
 
     Ok((entries, up_to_date))
+}
+
+/// The name of what a Layout entry is, as a plan says it.
+const fn kind_name(kind: EntryKind) -> &'static str {
+    match kind {
+        EntryKind::File => "file",
+        EntryKind::Tree => "tree",
+    }
 }
 
 /// What the Vault holds and this Layout does not.
@@ -329,6 +352,7 @@ fn remote_only(local: &Layout, remote: &Layout, direction: Direction) -> Vec<Ent
             remote_version: Some(hex(data.version())),
             owner: data.owner().map(str::to_owned),
             deprecated,
+            item_kind: Some(kind_name(data.kind())),
             modified: false,
             kind: Kind::RemoteOnly,
         });
@@ -343,9 +367,12 @@ fn kept(kind: Kind, direction: Direction) -> bool {
         Direction::Both => true,
         Direction::Up => matches!(
             kind,
-            Kind::Create | Kind::Send | Kind::Diverged | Kind::Refused
+            Kind::Create | Kind::Send | Kind::Diverged | Kind::Refused | Kind::Mismatched
         ),
-        Direction::Down => matches!(kind, Kind::Receive | Kind::Blocked | Kind::RemoteOnly),
+        Direction::Down => matches!(
+            kind,
+            Kind::Receive | Kind::Blocked | Kind::RemoteOnly | Kind::Mismatched
+        ),
     }
 }
 
@@ -549,13 +576,22 @@ pub async fn store_of(index: &VCSIndex, digest: &[u8; 32]) -> Result<Option<Key>
 /// # Errors
 ///
 /// Returns a message when the index could not be read.
-pub async fn chain_store_keys(index: &VCSIndex, head: &[u8; 32]) -> Result<Vec<Key>, String> {
+pub async fn chain_store_keys(
+    index: &VCSIndex,
+    head: &[u8; 32],
+    store: Option<&librorolala::storage::RorolalaStorage>,
+) -> Result<Vec<Key>, String> {
     let mut keys = Vec::new();
     let mut seen = BTreeSet::new();
     let mut at = *head;
+    let mut top: Option<Key> = None;
 
     while seen.insert(at) {
         if let Some(key) = store_of(index, &at).await? {
+            if at == *head {
+                top = Some(key);
+            }
+
             keys.push(key);
         }
 
@@ -569,7 +605,46 @@ pub async fn chain_store_keys(index: &VCSIndex, head: &[u8; 32]) -> Result<Vec<K
         at = base;
     }
 
+    // What the head version holds when it is a tree: its structure names the description and every
+    // file's content, and those are what a reader of the version reaches for. Only the head is
+    // expanded: a version below it is reached for through its structure, and the content below can
+    // be asked for when it is reached for.
+    if let (Some(store), Some(top)) = (store, top)
+        && let Ok(bytes) = store.read_object(&top).await
+        && let Ok(structure) = librorolala::tree::TreeStructure::decode(&bytes)
+    {
+        for key in structure.content_keys() {
+            if seen.insert(*key.digest()) {
+                keys.push(key);
+            }
+        }
+    }
+
     Ok(keys)
+}
+
+/// What a tree version holds inside it: the description and every file's content.
+///
+/// The version's storage key is its structure, and the structure names what the version's files
+/// hold. A pull reads the structure after the first exchange and asks for these in a second: the
+/// structure is what says which keys the inside is made of.
+pub async fn tree_internal_keys(
+    index: &VCSIndex,
+    store: &librorolala::storage::RorolalaStorage,
+    version: &[u8; 32],
+) -> Result<Vec<Key>, String> {
+    let Some(structure_key) = store_of(index, version).await? else {
+        return Ok(Vec::new());
+    };
+
+    let Ok(bytes) = store.read_object(&structure_key).await else {
+        return Ok(Vec::new());
+    };
+    let Ok(structure) = librorolala::tree::TreeStructure::decode(&bytes) else {
+        return Ok(Vec::new());
+    };
+
+    Ok(structure.content_keys())
 }
 
 /// The version `digest` stands on, when the index holds the chain to it.
@@ -669,7 +744,7 @@ mod tests {
 
         let keys = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(chain_store_keys(&index, &digest(&three)))
+            .block_on(chain_store_keys(&index, &digest(&three), None))
             .expect("the index reads");
 
         assert_eq!(
@@ -689,7 +764,7 @@ mod tests {
 
         let keys = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(chain_store_keys(&index, &digest(&one)))
+            .block_on(chain_store_keys(&index, &digest(&one), None))
             .expect("the index reads");
 
         assert_eq!(keys, vec![Key::new(only)]);

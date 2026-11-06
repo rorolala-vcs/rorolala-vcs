@@ -12,12 +12,16 @@
 use uuid::Uuid;
 
 use crate::bytes::{
-    crc32, put_data, put_str, put_uuid, rest_empty, take_data, take_str, take_uuid,
+    crc32, put_data, put_str, put_uuid, rest_empty, take_data, take_data_v1, take_str, take_uuid,
 };
 use crate::data::MutableData;
 use crate::error::LayoutError;
 
 /// The number each kind of change is written down by.
+///
+/// A change an entry's data is part of has two numbers: the one written before entries had a kind,
+/// and the one this build writes. The older number reads back as a file entry, so a log written by
+/// a build before trees is replayed whole rather than refused.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tag {
@@ -27,14 +31,20 @@ pub enum Tag {
     RemovePath = 1,
     /// A `Uuid` was moved from one path to another.
     MovePath = 2,
-    /// An entry was created.
-    CreateEntry = 3,
+    /// An entry was created, in the shape before entries had a kind.
+    CreateEntryV1 = 3,
     /// An entry was dropped.
     RemoveEntry = 4,
-    /// An entry's data was changed.
-    UpdateEntry = 5,
-    /// An entry was created at a path, as one change.
-    Create = 6,
+    /// An entry's data was changed, in the shape before entries had a kind.
+    UpdateEntryV1 = 5,
+    /// An entry was created at a path, in the shape before entries had a kind.
+    CreateV1 = 6,
+    /// An entry was created, with its kind.
+    CreateEntry = 7,
+    /// An entry's data was changed, with its kind.
+    UpdateEntry = 8,
+    /// An entry was created at a path, with its kind.
+    Create = 9,
 }
 
 impl Tag {
@@ -51,10 +61,13 @@ impl Tag {
             0 => Some(Self::CreatePath),
             1 => Some(Self::RemovePath),
             2 => Some(Self::MovePath),
-            3 => Some(Self::CreateEntry),
+            3 => Some(Self::CreateEntryV1),
             4 => Some(Self::RemoveEntry),
-            5 => Some(Self::UpdateEntry),
-            6 => Some(Self::Create),
+            5 => Some(Self::UpdateEntryV1),
+            6 => Some(Self::CreateV1),
+            7 => Some(Self::CreateEntry),
+            8 => Some(Self::UpdateEntry),
+            9 => Some(Self::Create),
             _ => None,
         }
     }
@@ -227,6 +240,11 @@ impl Record {
                     to: to.to_owned(),
                 }
             }
+            Tag::CreateEntryV1 => {
+                let (data, rest) = take_data_v1(rest)?;
+                rest_empty(rest)?;
+                Self::CreateEntry { id, data }
+            }
             Tag::CreateEntry => {
                 let (data, rest) = take_data(rest)?;
                 rest_empty(rest)?;
@@ -236,10 +254,25 @@ impl Record {
                 rest_empty(rest)?;
                 Self::RemoveEntry { id }
             }
+            Tag::UpdateEntryV1 => {
+                let (data, rest) = take_data_v1(rest)?;
+                rest_empty(rest)?;
+                Self::UpdateEntry { id, data }
+            }
             Tag::UpdateEntry => {
                 let (data, rest) = take_data(rest)?;
                 rest_empty(rest)?;
                 Self::UpdateEntry { id, data }
+            }
+            Tag::CreateV1 => {
+                let (path, rest) = take_str(rest)?;
+                let (data, rest) = take_data_v1(rest)?;
+                rest_empty(rest)?;
+                Self::Create {
+                    id,
+                    path: path.to_owned(),
+                    data,
+                }
             }
             Tag::Create => {
                 let (path, rest) = take_str(rest)?;
@@ -284,8 +317,58 @@ fn wrap(tag: Tag, id: Uuid, fields: Vec<u8>) -> Vec<u8> {
 mod tests {
     use uuid::Uuid;
 
-    use super::Record;
-    use crate::data::MutableData;
+    use super::{Record, Tag, wrap};
+    use crate::bytes::put_data_without_kind;
+    use crate::data::{EntryKind, MutableData};
+
+    #[test]
+    fn a_tree_entry_round_trips_as_a_tree() {
+        let id = Uuid::from_u128(7);
+        let data = MutableData::new(None, [5; 32], String::new()).with_kind(EntryKind::Tree);
+
+        for record in [
+            Record::CreateEntry {
+                id,
+                data: data.clone(),
+            },
+            Record::UpdateEntry {
+                id,
+                data: data.clone(),
+            },
+            Record::Create {
+                id,
+                path: "main".to_owned(),
+                data,
+            },
+        ] {
+            let bytes = record.encode();
+            let (read, used) = Record::decode(&bytes).unwrap().unwrap();
+
+            assert_eq!(read, record);
+            assert_eq!(used, bytes.len());
+        }
+    }
+
+    #[test]
+    fn a_record_written_before_trees_reads_as_a_file() {
+        let id = Uuid::from_u128(13);
+        let data = MutableData::new(Some("alice".to_owned()), [6; 32], "legacy".to_owned());
+
+        let mut fields = Vec::new();
+        put_data_without_kind(&mut fields, &data);
+        let bytes = wrap(Tag::CreateEntryV1, id, fields);
+        let (read, used) = Record::decode(&bytes).unwrap().unwrap();
+
+        assert_eq!(
+            read,
+            Record::CreateEntry {
+                id,
+                data: data.clone()
+            }
+        );
+        assert_eq!(used, bytes.len());
+        assert_eq!(data.kind(), EntryKind::File);
+    }
 
     #[test]
     fn every_kind_of_change_round_trips_through_its_bytes() {

@@ -188,3 +188,11 @@ sync:
     zh-CN: |
         请用 `rola track` 记录该改动，或将其放到一边，然后重试
         合并语义尚未实现
+
+  no_layout_trees:
+    en: This Workspace holds trees, and `--no-layout` moves their structures without their files
+    zh-CN: 这个工作区有树，`--no-layout` 只搬它们结构，不搬内部文件
+
+  kind_mismatch:
+    en: the two Layouts name it as different things, a file and a tree
+    zh-CN: 两侧把它记成不同的东西，一个是文件，一个是树

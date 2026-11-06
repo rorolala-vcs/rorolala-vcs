@@ -35,7 +35,7 @@ pub fn digest(bytes: &[u8]) -> [u8; 32] {
 
 /// The spans `bytes` is cut into: each with its hash, and how many bytes it spans.
 ///
-/// Content is cut at a line feed, or every [`SPAN_LIMIT`] bytes, whichever comes first; a text
+/// Content is cut at a line feed, or every `SPAN_LIMIT` bytes, whichever comes first; a text
 /// file's carriage return before a line feed is dropped, so that the same text written with and
 /// without CRLF reads the same. Equal spans are counted together, and what comes back is in hash
 /// order, so two files' spans line up by walking both.

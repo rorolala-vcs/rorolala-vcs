@@ -15,9 +15,9 @@ use std::path::Path;
 
 use rorolala_layout::{Layout, LayoutPath};
 use rorolala_storage::{Blake3Hash, Key};
-use rorolala_tree_analyze::entry_of;
 use rorolala_vcs::{VCSIndex, VCSIndexObject};
 use rorolala_workspace::Merging;
+use rorolala_workspace_analyze::entry_of;
 use uuid::Uuid;
 
 /// A variant file the tree holds somewhere other than where the merge record puts it.

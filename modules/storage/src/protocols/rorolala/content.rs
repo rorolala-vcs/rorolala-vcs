@@ -17,6 +17,25 @@ use crate::{
     Key, Layout, Manifest, PackIndex,
 };
 
+/// What [`RorolalaStorage::publish_from`] moved.
+///
+/// A count of content rather than of files: an object is one key's bytes, and a chunked content is
+/// its manifest plus the chunks that manifest names.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PublishReport {
+    /// Every object key the run considered, whether it was already here or written.
+    ///
+    /// It is the number of `keys` that are whole content plus the chunks named by the manifests
+    /// among them, counted once each.
+    pub objects: u64,
+
+    /// Every manifest key the run considered, whether it was already here or written.
+    pub manifests: u64,
+
+    /// Entries newly written into this store: objects and manifests.
+    pub written: u64,
+}
+
 impl RorolalaStorage {
     /// Writes `plain` as an object of its own, encoded with `codec`, and answers with its key.
     ///
@@ -341,6 +360,100 @@ impl RorolalaStorage {
         }
 
         Ok(missing)
+    }
+
+    /// Carries content from another store of the same kind into this one.
+    ///
+    /// It is how a staging store's content is made part of the work's own store: what is named here
+    /// is moved by content, so a key this store already holds is not written again and a key it does
+    /// not hold is read from `source` and written here. A chunked content is carried as its manifest
+    /// and the chunks the manifest names, and a whole one as the object under the key.
+    ///
+    /// The copy is by content rather than by file layout: the bytes are read back through `source`
+    /// and written this store's own way, so a source kept with another codec is a key that still
+    /// names the same content. What is written is compacted by this store's own codec choice.
+    ///
+    /// `keys` names content, not chunks: a chunk named by a manifest is carried with it, and naming
+    /// one on its own carries that chunk's bytes as an object.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NotFound`] when `source` cannot produce a key or a chunk it names,
+    /// [`Error::Corrupt`] when what it produces does not hash to its key, and whatever reading or
+    /// writing fails with. A key that is already here is not read at all.
+    pub async fn publish_from(&self, source: &Self, keys: &[Key]) -> Result<PublishReport, Error> {
+        let mut report = PublishReport::default();
+        let mut objects = BTreeSet::new();
+        let mut manifests = BTreeSet::new();
+
+        for key in keys {
+            self.publish_one(source, key, &mut objects, &mut manifests, &mut report)
+                .await?;
+        }
+
+        report.objects = u64::try_from(objects.len()).unwrap_or(u64::MAX);
+        report.manifests = u64::try_from(manifests.len()).unwrap_or(u64::MAX);
+
+        Ok(report)
+    }
+
+    /// Carries one key, and the chunks of a manifest that is kept under it.
+    async fn publish_one(
+        &self,
+        source: &Self,
+        key: &Key,
+        objects: &mut BTreeSet<Key>,
+        manifests: &mut BTreeSet<Key>,
+        report: &mut PublishReport,
+    ) -> Result<(), Error> {
+        // A chunked content first: the manifest is what a reader looks for, and the chunks it names
+        // are what a read falls back to only when the manifest is missing.
+        if let Some(manifest) = source.read_manifest(key).await? {
+            let mut whole = true;
+
+            for chunk in manifest.chunks() {
+                let chunk_key = chunk.key();
+                if !objects.insert(chunk_key) {
+                    continue;
+                }
+
+                match source.read_object(&chunk_key).await {
+                    Ok(bytes) => {
+                        if !self.holds_object(&chunk_key).await? {
+                            self.write_object(&bytes, self.codec).await?;
+                            report.written += 1;
+                        }
+                    }
+                    Err(Error::NotFound(_)) => whole = false,
+                    Err(error) => return Err(error),
+                }
+            }
+
+            if whole {
+                if manifests.insert(*key) && !self.holds_manifest(key).await? {
+                    self.put_manifest(key, &manifest).await?;
+                    report.written += 1;
+                }
+
+                return Ok(());
+            }
+        }
+
+        // A whole content, or the object a chunked one also left behind. A key already under this
+        // store is not read from the source at all.
+        if !objects.insert(*key) {
+            return Ok(());
+        }
+
+        if self.holds_object(key).await? {
+            return Ok(());
+        }
+
+        let bytes = source.read_object(key).await?;
+        self.write_object(&bytes, self.codec).await?;
+        report.written += 1;
+
+        Ok(())
     }
 
     /// How many bytes the content stored under `key` is carried to another store as, read without

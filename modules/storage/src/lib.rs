@@ -76,4 +76,4 @@ pub use protocols::RorolalaStorage;
 ///
 /// Both are named here for the same reason [`RorolalaStorage`] is: a caller keeps one in a field
 /// or hands it to a function, and a type it cannot write down it cannot do either with.
-pub use protocols::{Batch, ObjectBatch};
+pub use protocols::{Batch, ObjectBatch, PublishReport};

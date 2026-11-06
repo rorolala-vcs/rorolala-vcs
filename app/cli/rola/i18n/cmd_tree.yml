@@ -1,0 +1,446 @@
+_version: 2
+
+tree:
+  help:
+    en: |
+        Version a directory as one file
+
+        **Usage**: rola tree <COMMAND>
+        **Commands**:
+            init [DIR]                 Make a directory a tree
+            add <PATH>...              Stage paths of the tree
+            rm <PATH>...               Stage their removal
+            reset [<PATH>...]          Put the staging area back to the recorded version
+            desc [TREE]                Write the description of the next version
+            write-desc [TEXT]          Write it without an editor
+            diff-stat [A] [B]          Compare tree structures
+            status [TREE]              Show what is staged, changed and in conflict
+            ls-tree [TARGET]           List the entries of a tree version
+            ls-staging-tree [TREE]     List the entries a commit would record
+            cat-desc [TARGET]          Print the description of a tree version
+    zh-CN: |
+        把一个目录当作一个文件来版本控制
+
+        **用法**：rola tree <子命令>
+        **命令**：
+            init [目录]                把一个目录变成树
+            add <路径>...              暂存树中的路径
+            rm <路径>...               暂存这些路径的删除
+            reset [<路径>...]          把暂存区回到已记录版本
+            desc [树]                  写下一个版本的描述
+            write-desc [文本]          不用编辑器直接写描述
+            diff-stat [A] [B]          比较两个树结构
+            status [树]                查看已暂存、已改动与冲突的内容
+            ls-tree [目标]             列出一个树版本的条目
+            ls-staging-tree [树]       列出一次提交会记录的条目
+            cat-desc [目标]            打印一个树版本的描述
+  description:
+    en: Version a directory as one file
+    zh-CN: 把一个目录当作一个文件来版本控制
+
+  err_not_a_tree:
+    en: "`%{path}` is not inside a tree"
+    zh-CN: "`%{path}` 不在任何树中"
+  err_not_a_tree_help:
+    en: Run it in a directory that holds `.rola-tree`, or name a path inside one
+    zh-CN: 请在带有 `.rola-tree` 的目录中运行，或指定其中的路径
+  err_should_in_workspace:
+    en: This run is not inside a Workspace
+    zh-CN: 本次运行不在任何工作区中
+  err_should_in_workspace_help:
+    en: A tree lives in a Workspace, so run it where the work is
+    zh-CN: 树位于工作区中，请在工作的目录里运行
+  err_argument:
+    en: "`rola tree` was given arguments it cannot use"
+    zh-CN: "`rola tree` 收到了无法使用的参数"
+  err_argument_help:
+    en: Run `rola tree <COMMAND> -h` for the arguments a command takes
+    zh-CN: 运行 `rola tree <子命令> -h` 查看该命令的参数
+  err_failed:
+    en: "The tree could not be read: %{cause}"
+    zh-CN: "无法读取树：%{cause}"
+  err_failed_help:
+    en: Check that the tree's `.rola-tree` is intact, and that the Workspace is readable
+    zh-CN: 请检查树的 `.rola-tree` 是否完好，以及工作区是否可读
+  err_no_store:
+    en: This run is nowhere a store is
+    zh-CN: 本次运行不在任何仓库中
+  err_no_index:
+    en: This run is nowhere an index is
+    zh-CN: 本次运行不在任何索引中
+
+  status:
+    help:
+      en: |
+          Show how a tree's work stands
+
+          **Usage**: rola tree status [TREE] [--json] [--include-ignored]
+      zh-CN: |
+          查看一棵树的工作状态
+
+          **用法**：rola tree status [树] [--json] [--include-ignored]
+    description:
+      en: Show how a tree's work stands
+      zh-CN: 查看一棵树的工作状态
+    complete:
+      json:
+        en: Print the reading as data
+        zh-CN: 以数据形式打印结果
+    clean:
+      en: "Tree `%{path}` is clean"
+      zh-CN: "树 `%{path}` 是干净的"
+    header:
+      en: "Tree `%{path}`"
+      zh-CN: "树 `%{path}`"
+    conflicts_header:
+      en: "Conflicts:"
+      zh-CN: 冲突：
+    conflict:
+      en: "`%{path}` (theirs: `%{theirs}`)"
+      zh-CN: "`%{path}`（外来版本：`%{theirs}`）"
+    staged_header:
+      en: "Staged:"
+      zh-CN: 已暂存：
+    unstaged_header:
+      en: "Not staged:"
+      zh-CN: 未暂存：
+    untracked_header:
+      en: "Untracked:"
+      zh-CN: 未跟踪：
+    added:
+      en: added
+      zh-CN: 新增
+    modified:
+      en: modified
+      zh-CN: 修改
+    metadata:
+      en: metadata
+      zh-CN: 元数据
+    deleted:
+      en: deleted
+      zh-CN: 删除
+    type_changed:
+      en: type changed
+      zh-CN: 类型变化
+    renamed:
+      en: renamed
+      zh-CN: 重命名
+
+  ls_tree:
+    help:
+      en: |
+          List the entries one tree version holds
+
+          **Usage**: rola tree ls-tree [TARGET] [--json]
+      zh-CN: |
+          列出一个树版本持有的条目
+
+          **用法**：rola tree ls-tree [目标] [--json]
+    description:
+      en: List the entries of a tree version
+      zh-CN: 列出一个树版本的条目
+    complete:
+      json:
+        en: Print the listing as data
+        zh-CN: 以数据形式打印列表
+    err_failed:
+      en: "The entries could not be listed: %{cause}"
+      zh-CN: "无法列出条目：%{cause}"
+    err_failed_help:
+      en: Check that the tree's files and the Workspace's store are readable
+      zh-CN: 请检查树的文件与工作区的仓库是否可读
+
+  ls_staging_tree:
+    help:
+      en: |
+          List the entries a commit of the tree would record
+
+          **Usage**: rola tree ls-staging-tree [TREE] [--json]
+      zh-CN: |
+          列出提交这棵树时会记录的条目
+
+          **用法**：rola tree ls-staging-tree [树] [--json]
+    description:
+      en: List the entries a commit would record
+      zh-CN: 列出一次提交会记录的条目
+    complete:
+      json:
+        en: Print the listing as data
+        zh-CN: 以数据形式打印列表
+    nothing_staged:
+      en: Nothing is staged, so the recorded version is listed
+      zh-CN: 没有暂存内容，列出的是记录的版本
+
+  cat_desc:
+    help:
+      en: |
+          Print the description of one tree version
+
+          **Usage**: rola tree cat-desc [TARGET]
+      zh-CN: |
+          打印一个树版本的描述
+
+          **用法**：rola tree cat-desc [目标]
+    description:
+      en: Print the description of a tree version
+      zh-CN: 打印一个树版本的描述
+    err_failed:
+      en: "The description could not be read: %{cause}"
+      zh-CN: "无法读取描述：%{cause}"
+    err_failed_help:
+      en: Check that the version and its description are in the Workspace's store
+      zh-CN: 请检查版本及其描述是否在工作区的仓库中
+
+  init:
+    help:
+      en: |
+          Make a directory a tree
+
+          **Usage**: rola tree init [DIR] [--force]
+      zh-CN: |
+          把一个目录变成树
+
+          **用法**：rola tree init [目录] [--force]
+    description:
+      en: Make a directory a tree
+      zh-CN: 把一个目录变成树
+    complete:
+      force:
+        en: Answer the confirmation yes
+        zh-CN: 对确认回答是
+    confirm_root:
+      en: Make the Workspace root a tree? Recorded files become entries of its first version, and this cannot be undone. [y/N]
+      zh-CN: 要把工作区根变成树吗？已记录的文件会成为它第一个版本的条目，这一步不可撤销。[y/N]
+    confirm_collapse:
+      en: Make the directory a tree? Recorded files under it become entries of its first version, and this cannot be undone. [y/N]
+      zh-CN: 要把这个目录变成树吗？其下已记录的文件会成为它第一个版本的条目，这一步不可撤销。[y/N]
+    result:
+      en: "Tree `%{path}` is ready; its first version is recorded by `rola track`"
+      zh-CN: "树 `%{path}` 已就绪，第一个版本由 `rola track` 记录"
+    result_root:
+      en: "The Workspace root is a tree now; its first version is recorded by `rola track`"
+      zh-CN: "工作区根现在是一棵树，第一个版本由 `rola track` 记录"
+    result_collapsed:
+      en: "%{count} recorded files became entries of the tree"
+      zh-CN: "%{count} 个已记录的文件成了树的条目"
+    err_argument:
+      en: The directory cannot be made a tree
+      zh-CN: 无法把这个目录变成树
+    err_argument_help:
+      en: Give a directory that exists, is inside the Workspace, and is not already a tree
+      zh-CN: 请给出一个已存在、在工作区内且还不是树的目录
+    err_cancelled:
+      en: The tree was not made
+      zh-CN: 没有创建树
+    err_cancelled_help:
+      en: Run it on a terminal to answer the confirmation, or give `--force` to answer yes
+      zh-CN: 请在终端中运行以回答确认，或用 `--force` 回答是
+    err_failed:
+      en: "The tree could not be made: %{cause}"
+      zh-CN: "无法创建树：%{cause}"
+    err_failed_help:
+      en: Check that the directory and the Workspace's Layout and index are readable
+      zh-CN: 请检查目录以及工作区的布局与索引是否可读
+
+  add:
+    help:
+      en: |
+          Stage work of a tree
+
+          **Usage**: rola tree add <PATH>... [--include-ignored]
+      zh-CN: |
+          暂存一棵树中的工作
+
+          **用法**：rola tree add <路径>... [--include-ignored]
+    description:
+      en: Stage work of a tree
+      zh-CN: 暂存一棵树中的工作
+    added:
+      en: added
+      zh-CN: 新增
+    updated:
+      en: updated
+      zh-CN: 修改
+    deleted:
+      en: deleted
+      zh-CN: 删除
+    err_argument:
+      en: The path cannot be staged
+      zh-CN: 无法暂存该路径
+    err_argument_help:
+      en: Give a path inside the tree that exists, or a recorded path that is gone
+      zh-CN: 请给出树内已存在的路径，或已记录但已消失的路径
+    err_failed:
+      en: "The work could not be staged: %{cause}"
+      zh-CN: "无法暂存工作：%{cause}"
+    err_failed_help:
+      en: Check that the tree, its staging area and the Workspace's store are writable
+      zh-CN: 请检查树、它的暂存区与工作区的仓库是否可写
+
+  rm:
+    help:
+      en: |
+          Stage the removal of work from a tree
+
+          **Usage**: rola tree rm <PATH>... [--cached] [--recursive]
+      zh-CN: |
+          暂存树中工作的删除
+
+          **用法**：rola tree rm <路径>... [--cached] [--recursive]
+    description:
+      en: Stage the removal of work from a tree
+      zh-CN: 暂存树中工作的删除
+    complete:
+      cached:
+        en: Stage the removal and leave the work where it is
+        zh-CN: 只暂存删除，保留工作区文件
+      recursive:
+        en: Take a directory and everything under it
+        zh-CN: 删除目录及其下的内容
+    deleted:
+      en: deleted
+      zh-CN: 删除
+    cached_note:
+      en: The work was left where it is
+      zh-CN: 工作区文件已保留
+    err_argument:
+      en: The path cannot be removed
+      zh-CN: 无法删除该路径
+    err_argument_help:
+      en: Give a path the tree holds, and use `--recursive` for a directory
+      zh-CN: 请给出树持有的路径，删除目录时加 `--recursive`
+    err_dirty:
+      en: "`%{path}` holds work that was never staged"
+      zh-CN: "`%{path}` 有从未暂存的改动"
+    err_dirty_help:
+      en: Stage the work first, or give `--force` to drop it
+      zh-CN: 请先暂存这些改动，或用 `--force` 放弃它们
+    err_failed:
+      en: "The removal could not be staged: %{cause}"
+      zh-CN: "无法暂存删除：%{cause}"
+    err_failed_help:
+      en: Check that the tree, its staging area and the work are writable
+      zh-CN: 请检查树、它的暂存区与工作区是否可写
+
+  reset:
+    help:
+      en: |
+          Reset the staging area of a tree
+
+          **Usage**: rola tree reset [<PATH>...]
+      zh-CN: |
+          重置一棵树的暂存区
+
+          **用法**：rola tree reset [<路径>...]
+    description:
+      en: Reset the staging area of a tree
+      zh-CN: 重置一棵树的暂存区
+    action:
+      en: "reset %{path}"
+      zh-CN: "已重置 %{path}"
+    cleared:
+      en: The staging area is back to the recorded version
+      zh-CN: 暂存区已回到已记录版本
+    err_argument:
+      en: The path cannot be reset
+      zh-CN: 无法重置该路径
+    err_argument_help:
+      en: Give a path the tree records or has staged
+      zh-CN: 请给出树已记录或已暂存的路径
+    err_failed:
+      en: "The staging area could not be reset: %{cause}"
+      zh-CN: "无法重置暂存区：%{cause}"
+    err_failed_help:
+      en: Check that the tree and its staging area are writable
+      zh-CN: 请检查树及其暂存区是否可写
+
+  desc:
+    help:
+      en: |
+          Write the description of the next version of a tree
+
+          **Usage**: rola tree desc [TREE]
+      zh-CN: |
+          写一棵树下一个版本的描述
+
+          **用法**：rola tree desc [树]
+    description:
+      en: Write the description of the next version of a tree
+      zh-CN: 写一棵树下一个版本的描述
+    editing_header:
+      en: Write the description of the next version of this tree below this line. Leave it empty to clear the description.
+      zh-CN: 在这行下面写下这棵树下一个版本的描述。留空会清除描述。
+    err_failed:
+      en: "The tree could not be read: %{cause}"
+      zh-CN: "无法读取树：%{cause}"
+    err_failed_help:
+      en: Check that the tree is intact and the Workspace is readable
+      zh-CN: 请检查树是否完好，以及工作区是否可读
+
+  write_desc:
+    help:
+      en: |
+          Write the description of the next version of a tree without an editor
+
+          **Usage**: rola tree write-desc [TEXT]
+      zh-CN: |
+          不用编辑器直接写一棵树下一个版本的描述
+
+          **用法**：rola tree write-desc [文本]
+    description:
+      en: Write the description of the next version without an editor
+      zh-CN: 不用编辑器直接写下一个版本的描述
+    written:
+      en: "The description is %{bytes} bytes"
+      zh-CN: "描述共 %{bytes} 字节"
+    cleared:
+      en: The description is cleared
+      zh-CN: 描述已清除
+    err_argument:
+      en: "The description could not be read: %{cause}"
+      zh-CN: "无法读取描述：%{cause}"
+    err_argument_help:
+      en: Check that the input is readable
+      zh-CN: 请检查输入是否可读
+    err_failed:
+      en: "The description could not be written: %{cause}"
+      zh-CN: "无法写入描述：%{cause}"
+    err_failed_help:
+      en: Check that the tree's `.rola-tree` is writable
+      zh-CN: 请检查树的 `.rola-tree` 是否可写
+
+  diff_stat:
+    help:
+      en: |
+          Compare tree structures and say what holds apart
+
+          **Usage**: rola tree diff-stat [A [B]] [--staged] [--json]
+      zh-CN: |
+          比较两个树结构并说出差异
+
+          **用法**：rola tree diff-stat [甲 [乙]] [--staged] [--json]
+    description:
+      en: Compare tree structures
+      zh-CN: 比较树结构
+    complete:
+      staged:
+        en: Compare the staged structure rather than the recorded version
+        zh-CN: 比较暂存结构而不是记录版本
+    header:
+      en: "%{before} -> %{after}: %{count} changes"
+      zh-CN: "%{before} -> %{after}：%{count} 项变化"
+    counts:
+      en: "  added %{added}, modified %{modified}, deleted %{deleted}, metadata %{metadata}, type changed %{type_changed}"
+      zh-CN: "  新增 %{added}，内容 %{modified}，删除 %{deleted}，元数据 %{metadata}，类型 %{type_changed}"
+    err_argument:
+      en: The comparison cannot be made
+      zh-CN: 无法进行比较
+    err_argument_help:
+      en: Name at most two operands, each a tree, a version hash or a variant hash
+      zh-CN: 最多给出两个操作数，每个是树、版本哈希或变体哈希
+    err_failed:
+      en: "The structures could not be read: %{cause}"
+      zh-CN: "无法读取结构：%{cause}"
+    err_failed_help:
+      en: Check that the versions and the tree's work are readable
+      zh-CN: 请检查版本与树的工作是否可读

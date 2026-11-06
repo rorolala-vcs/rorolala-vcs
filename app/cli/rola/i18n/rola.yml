@@ -38,6 +38,7 @@ rola:
             track <FILE>                 Record the file into the current Layout
             retrack <FILE>               Move a file's recorded version back
             sync                         Bring this Layout and the Vault it tracks into agreement
+            tree                         Operate and manage the Workspace's tree
             pack                         Organize the objects in the store and the index into packs
 
         **Help**
@@ -81,6 +82,7 @@ rola:
             track <文件>              将文件记入当前布局
             retrack <文件>            回退文件已记录的版本
             sync                      让当前布局与它追踪的保险库重新一致
+            tree                      操作和管理工作区的树
             pack                      将仓库与索引中的对象整理进 pack
 
         **帮助**

@@ -396,3 +396,13 @@ exit_codes:
   docs_argument:
     en: "`rola docs` was given arguments it cannot use"
     zh-CN: "`rola docs` 收到了无法使用的参数"
+
+  tree_argument:
+    en: "`rola tree` was given arguments it cannot use"
+    zh-CN: "`rola tree` 收到了无法使用的参数"
+  tree_not_a_tree:
+    en: The path is not inside a tree
+    zh-CN: 该路径不在任何树中
+  tree_failed:
+    en: A tree's files, store or Layout could not be read or written
+    zh-CN: 无法读写树的文件、仓库或布局

@@ -13,8 +13,8 @@ use super::layout_remote::{batched, create_remote, remote_transact, set_remote};
 /// The writes a sync asks the Vault to make, as they cross.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RemoteWrites {
-    /// Each entry to create: its path, its `Uuid`, and the version to hold it at.
-    pub creates: Vec<(String, String, String)>,
+    /// Each entry to create: its path, its `Uuid`, the version to hold it at, and what it is.
+    pub creates: Vec<(String, String, String, String)>,
 
     /// Each version to move: the `Uuid` and the version.
     pub sets: Vec<(String, String)>,
@@ -24,7 +24,7 @@ pub struct RemoteWrites {
 ///
 /// # Input
 ///
-/// The writes, as JSON: the entries to create — each a path, a `Uuid`, and a version — and the
+/// The writes, as JSON: the entries to create — each a path, a `Uuid`, a version and what it is — and the
 /// versions to set, each a `Uuid` and a version.
 ///
 /// # Output
@@ -63,8 +63,8 @@ impl Action for ActionWriteRemoteEntries {
             // the answers are the ones one exchange per entry would give.
             batched(layout, |batch| {
                 let mut outcomes = Vec::with_capacity(writes.creates.len() + writes.sets.len());
-                for (path, uuid, version) in &writes.creates {
-                    outcomes.push(create_remote(batch, path, uuid, version, me)?);
+                for (path, uuid, version, kind) in &writes.creates {
+                    outcomes.push(create_remote(batch, path, uuid, version, kind, me)?);
                 }
                 for (uuid, version) in &writes.sets {
                     outcomes.push(set_remote(batch, uuid, version, me, admin)?);

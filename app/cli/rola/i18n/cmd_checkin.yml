@@ -40,6 +40,9 @@ checkin:
       en: Name the file a checked-in variant is to be merged into
       zh-CN: 为签入的变体指定待合入的文件
 
+    tree_merge:
+      en: Merge a tree variant into its tree instead of putting it beside the work
+      zh-CN: 把树变体合并进它所在的树，而不是放在工作区旁边
   err_join:
     en: "a variant cannot be joined into `%{target}`: %{cause}"
     zh-CN: "无法将变体并入 `%{target}`：%{cause}"
@@ -191,3 +194,12 @@ checkin:
   result_summary:
     en: "%{checked} checked in, %{failed} not done"
     zh-CN: "已签入 %{checked} 项，未完成 %{failed} 项"
+
+  err_tree_mark:
+    en: The tree landed without its `.rola-tree` mark
+    zh-CN: 树落地后没有 `.rola-tree` 标记
+
+  err_join_tree:
+    en: The variant is a tree, and a tree is joined by `--tree-merge` rather than as a file
+    zh-CN: 这个变体是一棵树，树要用 `--tree-merge` 合并，不能当作文件处理
+

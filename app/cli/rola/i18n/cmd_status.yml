@@ -270,6 +270,21 @@ status:
     en: "Also, %{count} content changes need confirmation:"
     zh-CN: "另外，%{count} 项内容变更需要确认："
 
+  tree_object:
+    en: tree object
+    zh-CN: 树对象
+  tree_part_staged:
+    en: "%{count} staged"
+    zh-CN: "%{count} 项已暂存"
+  tree_part_unstaged:
+    en: "%{count} not staged"
+    zh-CN: "%{count} 项未暂存"
+  tree_part_untracked:
+    en: "%{count} untracked"
+    zh-CN: "%{count} 项未跟踪"
+  tree_part_conflicts:
+    en: "%{count} in conflict"
+    zh-CN: "%{count} 项冲突"
   mark_modified:
     en: " (*)"
     zh-CN: " (*)"
@@ -285,3 +300,27 @@ status:
   help_track:
     en: "Use `rola track` to confirm the content changes"
     zh-CN: "使用 `rola track` 确认内容变更"
+
+  err_no_store:
+    en: This run is nowhere a store is
+    zh-CN: 本次运行不在任何仓库中
+  err_no_index:
+    en: This run is nowhere an index is
+    zh-CN: 本次运行不在任何索引中
+
+  header_trees:
+    en: "Trees:"
+    zh-CN: 树：
+  tree_line:
+    en: "%{path}: %{staged} staged, %{unstaged} not staged, %{untracked} untracked, %{conflicts} in conflict"
+    zh-CN: "%{path}：%{staged} 项已暂存，%{unstaged} 项未暂存，%{untracked} 项未跟踪，%{conflicts} 项冲突"
+  untracked_tree:
+    en: "%{path}: untracked tree"
+    zh-CN: "%{path}：未跟踪的树"
+
+  err_tree_file:
+    en: "`%{path}` is a file inside a tree"
+    zh-CN: "`%{path}` 是树内的文件"
+  err_tree_file_help:
+    en: A tree is one unit of work, so ask `rola tree status` about it, or `rola status` about the tree
+    zh-CN: 树是一个整体，请用 `rola tree status` 查看它，或用 `rola status` 查看树

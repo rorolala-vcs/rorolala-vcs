@@ -17,11 +17,11 @@ use std::path::{Path, PathBuf};
 use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{Layout, LayoutError, LayoutPath};
 use rorolala_storage::Key;
-use rorolala_tree_analyze::{TreeDiffError, entry_of, tree_diff};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::{Merging, Pending, Workspace};
+use rorolala_workspace_analyze::{TreeDiffError, entry_of, tree_diff};
 
 use crate::base;
 use crate::base::Relation;
@@ -656,10 +656,10 @@ mod tests {
 
     use rorolala_ignore::IgnoreRuleSet;
     use rorolala_layout::{Layout, LayoutPath, MutableData};
-    use rorolala_tree_analyze::remember_moved;
     use rorolala_utils_constants::VAULT_LAYOUT_NAME;
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
+    use rorolala_workspace_analyze::remember_moved;
     use uuid::Uuid;
 
     use super::{PathState, Status};

@@ -10,7 +10,10 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Feature
 
-1. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7) — [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-rorolala-vcs-force-a-track-from-the-version-graph-with-shift-7)
+1. **\[BREAKING!\]** [`app`] [`rola`] [`tree`] Version a directory as one tree — [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rola-tree-version-a-directory-as-one-tree)
+2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7) — [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-rorolala-vcs-force-a-track-from-the-version-graph-with-shift-7)
+3. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI — [See details](dev/CHANGELOG-DETAILS.md#3-librorolala-tree-read-a-tree-structures-entries-as-json-across-the-c-abi)
+4. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge — [See details](dev/CHANGELOG-DETAILS.md#4-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
 
 # 0.2.0 (2026-11-04)
 

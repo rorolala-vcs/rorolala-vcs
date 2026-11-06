@@ -31,10 +31,11 @@ use librorolala::daemon::{
     Ownership, action_fetch_layout, action_giveup_ownership_async, action_request_ownership_async,
 };
 use librorolala::ignore::IgnoreRuleSet;
-use librorolala::layout::{Layout, LayoutPath, MutableData};
+use librorolala::layout::{EntryKind, Layout, LayoutPath, MutableData};
 use librorolala::protocol::VaultAddress;
-use librorolala::tree_analyze::{TreeDiff, tree_diff, walk};
+use librorolala::tree::Tree;
 use librorolala::workspace::Workspace;
+use librorolala::workspace_analyze::{TreeDiff, tree_diff, walk};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -483,6 +484,7 @@ fn change(
     let (wanted, mut failed, skipped) = plan(
         kind,
         force,
+        held,
         &layout,
         &copy,
         &account_name,
@@ -558,6 +560,13 @@ fn expanded(
             name: given.clone(),
         })?;
 
+        // A tree is one entry of its own, and a path inside one is that tree as well: ownership is
+        // the tree's, so naming the tree or anything under it names the same entry.
+        if let Some(tree) = tree_under(&root, &disk) {
+            paths.insert(tree, true);
+            continue;
+        }
+
         if disk.is_file() {
             let path = LayoutPath::from_relative(relative).map_err(|_| ErrorOwnershipName {
                 name: given.clone(),
@@ -588,6 +597,12 @@ fn expanded(
         };
 
         for file in found.iter() {
+            // A directory brings in the files under it and the trees under it as one entry each; the
+            // walk does not descend into a tree, so its own entry is the whole of what it brings.
+            if !matches!(file.kind, EntryKind::File | EntryKind::Tree) {
+                continue;
+            }
+
             if under(&prefix, &file.path) {
                 paths.entry(file.path.clone()).or_insert(false);
             }
@@ -598,6 +613,16 @@ fn expanded(
         .into_iter()
         .map(|(path, direct)| Named { path, direct })
         .collect())
+}
+
+/// The tree a path is in, when it is in one; a path outside every tree answers nothing.
+///
+/// It is what makes a run naming a file under a tree the same run as one naming the tree: the Layout
+/// holds the tree as one entry, so ownership is about that entry.
+fn tree_under(root: &Path, disk: &Path) -> Option<LayoutPath> {
+    let tree = Tree::locate(root, disk).ok()?;
+
+    tree.layout_path().ok()
 }
 
 /// Why an entry's ownership may not be moved.
@@ -624,6 +649,7 @@ enum Refusal {
 fn plan(
     kind: Own,
     force: bool,
+    held: &Workspace,
     layout: &Layout,
     copy: &Layout,
     me: &str,
@@ -657,7 +683,7 @@ fn plan(
             Ok(())
         } else {
             diff.map_or(Ok(()), |diff| {
-                settled(kind, path, layout, id, &upstream, diff)
+                settled(kind, held, path, layout, id, &upstream, diff)
             })
         };
 
@@ -681,6 +707,7 @@ fn plan(
 /// than one with unreckoned work over it.
 fn settled(
     kind: Own,
+    held: &Workspace,
     path: &LayoutPath,
     layout: &Layout,
     id: Uuid,
@@ -695,11 +722,49 @@ fn settled(
         return Ok(());
     }
 
-    if diff.modified.contains(path) {
+    if diff.modified.contains(path) || tree_changed(held, layout, path) {
         return Err(Refusal::Changed(path.as_str().to_owned()));
     }
 
     Ok(())
+}
+
+/// Whether a tree's work is not what the Layout records, so letting go of it would hand over work
+/// nobody has recorded.
+///
+/// It is the tree's own reading, the same one `tree status` gives: staged work, a description, a
+/// conflict, or a work tree the baseline does not hold. A tree that cannot be read at all is taken as
+/// changed, since what it holds is not known.
+fn tree_changed(held: &Workspace, layout: &Layout, path: &LayoutPath) -> bool {
+    if !layout
+        .id_of(path)
+        .and_then(|id| layout.entry(id))
+        .is_some_and(|data| data.kind() == EntryKind::Tree)
+    {
+        return false;
+    }
+
+    let root = held.get_root();
+    let disk = root.join(path.to_path_buf());
+    let Ok(tree) = Tree::open(root, &disk) else {
+        return true;
+    };
+
+    if tree.pending().unwrap_or(true) {
+        return true;
+    }
+
+    let Ok(Some(recorded)) = tree.baseline().tree() else {
+        return false;
+    };
+    let Ok(rules) = tree.rules(crate::ignore::rules(held, false)) else {
+        return true;
+    };
+    let Ok(scanned) = tree.scan(&rules, false) else {
+        return true;
+    };
+
+    !librorolala::tree::diff(&recorded, &scanned.structure).is_empty()
 }
 
 /// Reads who holds it, which is the gate `--force` does not move.
@@ -1275,5 +1340,51 @@ pub fn render_result_ownership(result: ResultOwnership, ec: &mut ResExitCode) {
 
     if !result.failed.is_empty() {
         ec.exit_code = EC_ERR_LAYOUT_OWNERSHIP;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use librorolala::tree::Staging;
+
+    use super::tree_under;
+
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    fn scratch(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-ownership-{label}-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("a scratch directory");
+
+        dir
+    }
+
+    /// Naming a tree or anything under it names the tree's one Layout entry.
+    #[test]
+    fn a_tree_and_everything_under_it_names_the_tree() {
+        let root = scratch("tree");
+        let tree = root.join("main");
+        fs::create_dir_all(tree.join("sub")).expect("a tree's directory");
+        Staging::new(&tree).ensure_store().expect("a tree's mark");
+
+        assert_eq!(
+            tree_under(&root, &tree).map(|path| path.as_str().to_owned()),
+            Some("main".to_owned())
+        );
+        assert_eq!(
+            tree_under(&root, &tree.join("sub").join("a.psd")).map(|path| path.as_str().to_owned()),
+            Some("main".to_owned())
+        );
+        assert!(tree_under(&root, &root.join("beside.psd")).is_none());
+
+        let _ = fs::remove_dir_all(&root);
     }
 }

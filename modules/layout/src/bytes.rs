@@ -6,7 +6,7 @@
 
 use uuid::Uuid;
 
-use crate::data::MutableData;
+use crate::data::{EntryKind, MutableData};
 use crate::error::LayoutError;
 
 /// Writes a UUID as the sixteen bytes it is.
@@ -57,9 +57,19 @@ pub fn take_str(bytes: &[u8]) -> Result<(&str, &[u8]), LayoutError> {
     ))
 }
 
-/// Writes the data an entry holds: whether an owner is named and who, the version, what it says, and
-/// whether it has a preference and which.
+/// Writes the data an entry holds: whether an owner is named and who, the version, what it says,
+/// whether it has a preference and which, and whether it names a file or a tree.
 pub fn put_data(out: &mut Vec<u8>, data: &MutableData) {
+    put_data_without_kind(out, data);
+    out.push(data.kind().id());
+}
+
+/// Writes the data an entry held before entries had a kind: everything [`put_data`] writes, and no
+/// kind byte.
+///
+/// It is what a snapshot version 2 or a record written before trees holds, so a build reading one
+/// reads its data with this.
+pub fn put_data_without_kind(out: &mut Vec<u8>, data: &MutableData) {
     match data.owner() {
         Some(owner) => {
             out.push(1);
@@ -86,6 +96,24 @@ pub fn put_data(out: &mut Vec<u8>, data: &MutableData) {
 ///
 /// Returns [`LayoutError::Malformed`] if what follows is not the data this build writes.
 pub fn take_data(bytes: &[u8]) -> Result<(MutableData, &[u8]), LayoutError> {
+    let (data, rest) = take_data_without_kind(bytes)?;
+    let (&kind, rest) = rest.split_first().ok_or(LayoutError::Malformed)?;
+    let kind = EntryKind::from_id(kind).ok_or(LayoutError::Malformed)?;
+
+    Ok((data.with_kind(kind), rest))
+}
+
+/// Reads what a build before trees wrote, which is a file entry.
+///
+/// # Errors
+///
+/// Returns [`LayoutError::Malformed`] if what follows is not the data that build wrote.
+pub fn take_data_v1(bytes: &[u8]) -> Result<(MutableData, &[u8]), LayoutError> {
+    take_data_without_kind(bytes)
+}
+
+/// Reads the fields an entry holds apart from its kind.
+fn take_data_without_kind(bytes: &[u8]) -> Result<(MutableData, &[u8]), LayoutError> {
     let (&flag, rest) = bytes.split_first().ok_or(LayoutError::Malformed)?;
     let (owner, rest) = match flag {
         0 => (None, rest),
@@ -186,8 +214,10 @@ pub fn crc32(bytes: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{crc32, put_data, put_str, take_data, take_str};
-    use crate::data::MutableData;
+    use super::{
+        crc32, put_data, put_data_without_kind, put_str, take_data, take_data_v1, take_str,
+    };
+    use crate::data::{EntryKind, MutableData};
 
     /// An entry holding everything an entry can hold, a preference included.
     fn full() -> MutableData {
@@ -204,6 +234,33 @@ mod tests {
 
         assert_eq!(read, full());
         assert_eq!(read.preference(), Some("maya-binary"));
+        assert_eq!(read.kind(), EntryKind::File);
+        assert_eq!(rest, [] as [u8; 0]);
+    }
+
+    #[test]
+    fn a_tree_entry_round_trips_as_a_tree() {
+        let data = full().with_kind(EntryKind::Tree);
+        let mut bytes = Vec::new();
+        put_data(&mut bytes, &data);
+
+        let (read, rest) = take_data(&bytes).unwrap();
+
+        assert_eq!(read, data);
+        assert_eq!(read.kind(), EntryKind::Tree);
+        assert_eq!(rest, [] as [u8; 0]);
+    }
+
+    #[test]
+    fn the_shape_before_trees_reads_as_a_file() {
+        let data = full();
+        let mut bytes = Vec::new();
+        put_data_without_kind(&mut bytes, &data);
+
+        let (read, rest) = take_data_v1(&bytes).unwrap();
+
+        assert_eq!(read, data);
+        assert_eq!(read.kind(), EntryKind::File);
         assert_eq!(rest, [] as [u8; 0]);
     }
 
@@ -220,6 +277,15 @@ mod tests {
         assert_eq!(read, data);
         assert_eq!(read.preference(), None);
         assert_eq!(rest, [] as [u8; 0]);
+    }
+
+    #[test]
+    fn a_kind_no_build_knows_is_refused() {
+        let mut bytes = Vec::new();
+        put_data_without_kind(&mut bytes, &full());
+        bytes.push(9);
+
+        assert!(take_data(&bytes).is_err());
     }
 
     #[test]

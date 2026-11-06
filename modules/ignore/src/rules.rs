@@ -108,6 +108,63 @@ impl IgnoreRuleSet {
         })
     }
 
+    /// Reads the lines of one rule file, with `root` as what its patterns are written from.
+    ///
+    /// The set is the lines themselves: a file at a tree's root holds the rules of that tree, and
+    /// there is no directory of them to walk. A pattern that does not read is left out, the same
+    /// way one line of a managed rule file is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when the patterns cannot be built into a matcher.
+    pub fn from_text(root: &Path, text: &str) -> io::Result<Self> {
+        let mut builder = GitignoreBuilder::new(root);
+        let mut lines = 0;
+
+        for line in text.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            // A line that does not read as a pattern is not one: gitignore's own answer to a
+            // malformed pattern is to match it literally, and what cannot even be that is dropped.
+            let _ = builder.add_line(None, line);
+            lines += 1;
+        }
+
+        let inner = builder
+            .build()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+
+        Ok(Self {
+            inner,
+            root: root.to_path_buf(),
+            files: usize::from(lines > 0),
+        })
+    }
+
+    /// What this set says about `path`, if any rule matches it.
+    ///
+    /// It is the answer a caller needs when one rule set is layered over another: whether this set
+    /// says anything about the path at all, and what it says. A path under a directory this set
+    /// ignores is not one it says anything about on its own; a caller walking a tree asks about a
+    /// directory before it enters it, so the directory's answer is the one that stands.
+    ///
+    /// A pattern that names a directory only is decided by `is_dir`.
+    #[must_use]
+    pub fn decide(&self, path: &Path, is_dir: bool) -> Option<bool> {
+        let path = path.strip_prefix(&self.root).unwrap_or(path);
+        let matched = self.inner.matched(path, is_dir);
+
+        if matched.is_ignore() {
+            Some(true)
+        } else if matched.is_whitelist() {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
     /// Whether no rule files went into the set.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
@@ -364,5 +421,30 @@ mod tests {
 
         assert!(set.is_empty());
         assert!(!set.is_ignore(Path::new("a.mb"), false));
+    }
+
+    #[test]
+    fn one_file_of_rules_is_a_set_of_them() {
+        let dir = scratch("one-file");
+        let set = IgnoreRuleSet::from_text(&dir, "*.mb\n!keep.mb\n").unwrap();
+
+        assert!(!set.is_empty());
+        assert!(set.is_ignore(Path::new("a.mb"), false));
+        assert!(!set.is_ignore(Path::new("keep.mb"), false));
+        assert_eq!(set.decide(Path::new("a.mb"), false), Some(true));
+        assert_eq!(set.decide(Path::new("keep.mb"), false), Some(false));
+        assert_eq!(set.decide(Path::new("a.ma"), false), None);
+    }
+
+    #[test]
+    fn a_tree_rule_file_is_read_from_the_tree_it_sits_in() {
+        let dir = scratch("tree-file");
+        let set = IgnoreRuleSet::from_text(&dir, "textures/\n").unwrap();
+
+        // A rule that names a directory decides the directory, so a reading that enters a tree
+        // asks before it walks in; the file under it is covered by the directory's answer.
+        assert_eq!(set.decide(&dir.join("textures"), true), Some(true));
+        assert!(set.is_ignore(&dir.join("textures/a.psd"), false));
+        assert_eq!(set.decide(Path::new("textures/a.psd"), false), None);
     }
 }

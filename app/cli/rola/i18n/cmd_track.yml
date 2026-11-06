@@ -24,7 +24,7 @@ track:
       **Usage**: rola track <FILE>...
       **Flags**:
           --message <MESSAGE>         Give the whole group one commit message
-          --file-message <MESSAGE>    Give each file its own commit message, one per file
+          --file-message <MESSAGE>    Give each file or tree its own message, one per subject, in order
 
           --policy <NAME>             Cut these files with the named chunking policy, and prefer it from now on
           --no-editor                 Record only what is already known, without opening an editor
@@ -37,7 +37,7 @@ track:
       **用法**：rola track <路径>...
       **标识**：
           --message <信息>         为整组文件指定提交信息
-          --file-message <信息>    为单个文件指定提交信息，每个文件一个
+          --file-message <信息>    为每个文件或树指定自己的信息，按顺序每个对象一条
 
           --policy <名称>          用指定的分块策略切分这些文件，并在此后沿用
           --no-editor              只记录已知信息，不打开编辑器
@@ -64,12 +64,12 @@ track:
 
   editing_header:
     en: |
-      You are recording the files below, so write what each change was
+      You are recording the files and trees below, so write what each change was
 
       Lines starting with `#` are ignored
       Every section needs a message
     zh-CN: |
-      你正在记录下列文件，请写出每一处更改的内容
+      你正在记录下列文件与树，请写出每一处更改的内容
 
       以 `#` 开头的行会被忽略
       每一节都需要填写信息
@@ -259,3 +259,25 @@ track:
       Choose another one with `rola track --policy <NAME>`, or use a build that carries `%{name}`. Policies this build carries: %{known}
     zh-CN: |
       用 `rola track --policy <名称>` 换一个策略，或改用携带 `%{name}` 的构建。本构建携带的策略：%{known}
+
+  err_tree_unsupported:
+    en: A tree cannot be recorded with `--replace` or `--policy`
+    zh-CN: 树不能用 `--replace` 或 `--policy` 记录
+  err_tree_unsupported_help:
+    en: Record the tree on its own with its staged work, or use those flags for files
+    zh-CN: 请单独记录树的暂存内容，或把这些参数用于文件
+  err_tree_failed:
+    en: "The tree could not be recorded: %{cause}"
+    zh-CN: "无法记录树：%{cause}"
+  err_tree_failed_help:
+    en: Check that the tree, its staging area and the Workspace's store are readable and writable
+    zh-CN: 请检查树、它的暂存区与工作区的仓库是否可读写
+  err_tree_conflict:
+    en: "`%{path}` has a conflict that was never settled"
+    zh-CN: "`%{path}` 有尚未解决的冲突"
+  err_tree_conflict_help:
+    en: Settle it with `rola tree add` or `rola tree rm` first
+    zh-CN: 请先用 `rola tree add` 或 `rola tree rm` 解决冲突
+  err_tree_no_cwd:
+    en: The run has no directory to read names against
+    zh-CN: 本次运行没有可用于解析路径的目录

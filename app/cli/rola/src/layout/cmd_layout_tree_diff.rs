@@ -1,6 +1,6 @@
 //! The `rola layout tree-diff` command: what the working tree holds beside a Layout.
 
-use librorolala::tree_analyze::tree_diff;
+use librorolala::workspace_analyze::tree_diff;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -248,7 +248,7 @@ pub struct ResultLayoutTreeDiff {
 
 impl ResultLayoutTreeDiff {
     /// The result the reading described.
-    fn of(diff: &librorolala::tree_analyze::TreeDiff) -> Self {
+    fn of(diff: &librorolala::workspace_analyze::TreeDiff) -> Self {
         Self {
             lost: diff
                 .lost

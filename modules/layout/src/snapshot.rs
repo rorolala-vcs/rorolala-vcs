@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::bytes::{
     crc32, put_count, put_data, put_str, put_uuid, rest_empty, take_checksum, take_count,
-    take_data, take_str, take_uuid,
+    take_data, take_data_v1, take_str, take_uuid,
 };
 use crate::error::LayoutError;
 use crate::path::LayoutPath;
@@ -24,10 +24,15 @@ const MAGIC: &[u8; 4] = b"RLAY";
 
 /// The version of the snapshot this build writes.
 ///
-/// A snapshot carries what an entry's data is, and that shape changed when an entry gained a
-/// preference. The version is what refuses an older one by name, rather than leaving the refusal to
-/// a decoder that would read the next entry's bytes as this one's and call the result malformed.
-const VERSION: u8 = 2;
+/// A snapshot carries what an entry's data is, and that shape changed twice: when an entry gained a
+/// preference, and when an entry gained a kind. The version is what refuses a snapshot this build
+/// cannot read by name, rather than leaving the refusal to a decoder that would read the next
+/// entry's bytes as this one's and call the result malformed. Version 2 is read as file entries, so
+/// a snapshot written before trees is still a Layout this build works in.
+const VERSION: u8 = 3;
+
+/// The version before entries had a kind, which reads as file entries.
+const LEGACY_VERSION: u8 = 2;
 
 /// Writes `slots` to `path` as a whole shard.
 ///
@@ -103,7 +108,9 @@ pub fn decode(bytes: &[u8]) -> Result<HashMap<Uuid, Slot>, LayoutError> {
     }
 
     let (&version, rest) = rest.split_first().ok_or(LayoutError::Malformed)?;
-    if version != VERSION {
+    // Version 2 is the shape before entries had a kind, and its files are still files; version 3 is
+    // what this build writes. Anything else is a snapshot whose bytes may mean anything.
+    if version != VERSION && version != LEGACY_VERSION {
         return Err(LayoutError::Malformed);
     }
 
@@ -125,7 +132,7 @@ pub fn decode(bytes: &[u8]) -> Result<HashMap<Uuid, Slot>, LayoutError> {
             1 => {
                 let (text, after) = take_str(rest)?;
                 rest = after;
-                Some(LayoutPath::new(text)?)
+                Some(LayoutPath::from_stored(text)?)
             }
             _ => return Err(LayoutError::Malformed),
         };
@@ -135,7 +142,11 @@ pub fn decode(bytes: &[u8]) -> Result<HashMap<Uuid, Slot>, LayoutError> {
         let data = match has_data {
             0 => None,
             1 => {
-                let (data, after) = take_data(rest)?;
+                let (data, after) = if version == LEGACY_VERSION {
+                    take_data_v1(rest)?
+                } else {
+                    take_data(rest)?
+                };
                 rest = after;
                 Some(data)
             }
@@ -148,4 +159,78 @@ pub fn decode(bytes: &[u8]) -> Result<HashMap<Uuid, Slot>, LayoutError> {
     rest_empty(rest)?;
 
     Ok(slots)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use uuid::Uuid;
+
+    use super::{LEGACY_VERSION, MAGIC, VERSION, decode, encode};
+    use crate::bytes::{crc32, put_count, put_data_without_kind, put_str, put_uuid};
+    use crate::data::{EntryKind, MutableData};
+    use crate::path::LayoutPath;
+    use crate::slot::Slot;
+
+    /// A snapshot as a build before trees wrote it.
+    fn legacy(version: u8) -> Vec<u8> {
+        let id = Uuid::from_u128(21);
+        let data = MutableData::new(Some("alice".to_owned()), [7; 32], "legacy".to_owned());
+
+        let mut body = Vec::new();
+        put_count(&mut body, 1);
+        put_uuid(&mut body, id);
+        body.push(1);
+        put_str(&mut body, "a/b");
+        body.push(1);
+        put_data_without_kind(&mut body, &data);
+
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(MAGIC);
+        bytes.push(version);
+        bytes.extend_from_slice(&crc32(&body).to_be_bytes());
+        bytes.extend_from_slice(&body);
+
+        bytes
+    }
+
+    #[test]
+    fn a_snapshot_written_before_trees_reads_as_files() {
+        let slots = decode(&legacy(LEGACY_VERSION)).unwrap();
+        let id = Uuid::from_u128(21);
+        let slot = slots.get(&id).unwrap();
+
+        assert_eq!(slot.path.as_ref().map(LayoutPath::as_str), Some("a/b"));
+        assert_eq!(
+            slot.data.as_ref().map(MutableData::kind),
+            Some(EntryKind::File)
+        );
+    }
+
+    #[test]
+    fn a_snapshot_this_build_writes_keeps_the_kind_of_an_entry() {
+        let id = Uuid::from_u128(22);
+        let mut slots = HashMap::new();
+        slots.insert(
+            id,
+            Slot {
+                path: Some(LayoutPath::root()),
+                data: Some(
+                    MutableData::new(None, [8; 32], String::new()).with_kind(EntryKind::Tree),
+                ),
+            },
+        );
+
+        let bytes = encode(&slots);
+        assert_eq!(bytes[MAGIC.len()], VERSION);
+
+        let read = decode(&bytes).unwrap();
+        let slot = read.get(&id).unwrap();
+        assert_eq!(slot.path, Some(LayoutPath::root()));
+        assert_eq!(
+            slot.data.as_ref().map(MutableData::kind),
+            Some(EntryKind::Tree)
+        );
+    }
 }
