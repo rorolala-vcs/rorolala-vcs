@@ -27,7 +27,7 @@ pub(super) const SLICE_SECOND: usize = 2;
 /// The codec content no rule recognises is written with, unless the store was told otherwise.
 ///
 /// Content is written as it came in by default, for the same reason: compressing makes a store
-/// smaller, so it is something a store is asked for — see
+/// smaller, so it is something a store is asked for, see
 /// [`with_codec`](super::RorolalaStorage::with_codec).
 pub(super) const DEFAULT_CODEC: Codec = Codec::Raw;
 
@@ -43,7 +43,7 @@ pub(super) const SNIFF_LEN: usize = 8000;
 /// they are run a few at a time rather than one after another. The number is bounded rather than the
 /// run's own length: what is being asked about can be a content of thousands of chunks, and a store
 /// that opened a file for every one of them at once would be a store that ran out of them. It bounds
-/// a run and not the store — a batch of cut contents checks a run per content — so the work in flight
+/// a run and not the store, a batch of cut contents checks a run per content, so the work in flight
 /// is a small fixed multiple of this rather than the number of chunks.
 pub(super) const HOLDS_AT_ONCE: usize = 8;
 
@@ -65,8 +65,8 @@ pub(super) const TEXT_CUT: Chunking = Chunking::Text {
 
 /// Which of the two things a store keeps a pack holds.
 ///
-/// A pack holds one kind, and the kinds are told apart by where their indexes sit — see
-/// [`index_path`](super::RorolalaStorage::index_path) — so an object and a manifest under one key are
+/// A pack holds one kind, and the kinds are told apart by where their indexes sit, see
+/// [`index_path`](super::RorolalaStorage::index_path), so an object and a manifest under one key are
 /// two entries in two packs and neither is mistaken for the other.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(super) enum PackKind {

@@ -12,8 +12,8 @@ namespace RorolalaLauncher.Theming;
 /// The picture a day-or-night choice is made by: one small window, drawn once per variant.
 /// </summary>
 /// <remarks>
-/// The artwork is a wireframe of the program's own window — a border, a row, some lines of text, a panel
-/// beside them — drawn in six flat colours that stand for the six a look is made of. So it is recoloured
+/// The artwork is a wireframe of the program's own window, a border, a row, some lines of text, a panel
+/// beside them, drawn in six flat colours that stand for the six a look is made of. So it is recoloured
 /// rather than redrawn: each colour in the file is replaced by the colour the variant gives that part, and
 /// what comes out is a window in the look the choice would put the program in.
 /// <para>
@@ -103,7 +103,7 @@ internal static class ThemePreview
     /// </summary>
     /// <remarks>
     /// The split is the diagonal from the picture's top-right corner to its bottom-left one, and the part
-    /// above it — the part whose pixels satisfy <c>x/width + y/height &lt; 1</c> — is the first palette. The
+    /// above it, the part whose pixels satisfy <c>x/width + y/height &lt; 1</c>, is the first palette. The
     /// two corners the line passes through belong to neither side in particular; they are drawn in the second
     /// palette, which is what makes the line read as one rather than as a step.
     /// </remarks>
@@ -200,7 +200,7 @@ internal static class ThemePreview
     /// The artwork itself, read from the assembly it travels in.
     /// </summary>
     /// <returns>The picture.</returns>
-    // The artwork is kept for as long as the program runs — it is the one lazy value — so it is handed on
+    // The artwork is kept for as long as the program runs, it is the one lazy value, so it is handed on
     // rather than lost at the end of this scope.
     [SuppressMessage(
         "Reliability",

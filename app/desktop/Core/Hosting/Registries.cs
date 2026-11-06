@@ -121,7 +121,7 @@ internal sealed class ContextMenuRegistry
     /// </summary>
     /// <remarks>
     /// Every plugin's, and deliberately not one plugin's: the menu a context is drawn in is another plugin's
-    /// — the File System's is what folds these in — so what is asked for is what there is rather than what
+    ///, the File System's is what folds these in, so what is asked for is what there is rather than what
     /// one of the plugins that contributed it has to say.
     /// </remarks>
     /// <param name="target">The context.</param>
@@ -291,7 +291,7 @@ internal sealed class IconBadgeRegistry
 /// <remarks>
 /// A picture is held rather than made: what a plugin contributes is already the image, and a key is
 /// looked up every time an entry of a listing is drawn, so making one there would make it again for
-/// every row. What a reader does with the size — a badge is as large as the icon it sits on — is the
+/// every row. What a reader does with the size, a badge is as large as the icon it sits on, is the
 /// reader's, since the same picture is read at more than one size.
 /// </remarks>
 internal sealed class IconLibrary : IIconLibrary

@@ -234,7 +234,7 @@ void daemon_stop(void) {
   pid = run->pid;
 
   /* rola-daemon has no stop command, so stopping the process this window
-     started is the whole of it — the same thing `TerminateProcess` is on
+     started is the whole of it, the same thing `TerminateProcess` is on
      Windows. SIGTERM is asked first so the runtime may shut down cleanly;
      SIGKILL is what is left when it will not. */
   (void)kill(pid, SIGTERM);

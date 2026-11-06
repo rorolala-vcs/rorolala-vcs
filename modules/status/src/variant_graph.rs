@@ -1,8 +1,8 @@
 //! The variant graph as the Desktop draws it: the graph itself, the entries that name it, and the
 //! texts of the variants in it.
 //!
-//! The inverse index answers what the graph is — which variants there are, how they are based on one
-//! another and what they merge in — and knows nothing about where the work stands. This adds what only
+//! The inverse index answers what the graph is, which variants there are, how they are based on one
+//! another and what they merge in, and knows nothing about where the work stands. This adds what only
 //! the workspace knows: the entries the window holds, from the Layout being worked in and from every
 //! fetched copy; the merge a file is in the middle of; and the words of the creators and messages the
 //! window's variants name.
@@ -10,7 +10,7 @@
 //! The request is a window, not a file: it names the entries it is centred on and how far to look, and
 //! the answer is that part of the graph with a `frontier` on each node where it stops. A caller that
 //! reaches the edge asks again from the node it reached. The whole answer crosses as one JSON document
-//! — the graph, the entries, the merging records and the texts — because it is read as one picture, and
+//! (the graph, the entries, the merging records and the texts) because it is read as one picture, and
 //! one document is one crossing.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -39,14 +39,14 @@ const DEPRECATED_PREFIX: &str = "@/removed/";
 /// The variant graph around the entries `request` names, as one JSON document.
 ///
 /// The window is walked over the inverse index's records, rebuilt first when they do not describe the
-/// index, so what is drawn is what the index holds now — no fetch and no network. What only the
+/// index, so what is drawn is what the index holds now, no fetch and no network. What only the
 /// workspace knows is added beside it: the entries the window holds, from the Layout being worked in
 /// and from every fetched copy, each with the side it is named on; the merges in progress; and the
 /// text of each creator and message the window's variants name. A key the index does not hold is
 /// answered as missing rather than fetched.
 ///
-/// The graph's window is the request's: `focus` names the entries to stand on — each a `side` and a
-/// `path`, a side being `local` or the name of a Vault whose copy was fetched — and an empty `focus`
+/// The graph's window is the request's: `focus` names the entries to stand on, each a `side` and a
+/// `path`, a side being `local` or the name of a Vault whose copy was fetched, and an empty `focus`
 /// stands on every entry of the Layout being worked in that records a version. `back`, `forward`,
 /// `joins`, `branches` and `max_nodes` are the walk's, as the graph reads them.
 ///

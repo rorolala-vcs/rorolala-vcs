@@ -3,7 +3,7 @@
  *
  * The same three behaviours a C caller leans on for a Workspace, on the other side of the work:
  * making one answers in the tag-and-payload shape, locating one hands out an owned handle or
- * nothing, and locking one is a guard C holds and gives back — the Vault's own pair of locking
+ * nothing, and locking one is a guard C holds and gives back, the Vault's own pair of locking
  * functions, so a Vault and a Workspace are met the same way and are not one type.
  */
 

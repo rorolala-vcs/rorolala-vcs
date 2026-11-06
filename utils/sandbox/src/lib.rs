@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 ///
 /// The gate sets `ROLA_BIN_DIR` to the release programs it built. Run by hand there is
 /// nothing to set: a suite is run from the directory that holds it, so the programs are the
-/// ones the workspace put beside that directory — `../.cache/rs-target/release`, as seen from
+/// ones the workspace put beside that directory, `../.cache/rs-target/release`, as seen from
 /// there.
 #[must_use]
 pub fn bin_dir() -> PathBuf {
@@ -77,7 +77,7 @@ pub fn run(command: &mut Command) -> Ran {
 /// # Panics
 ///
 /// Panics if the program could not be started, if it stopped before it listened, or if it
-/// was not listening within `within` — each of which is a suite that would otherwise wait
+/// was not listening within `within`, each of which is a suite that would otherwise wait
 /// forever or check an answer nothing was there to give.
 #[must_use]
 pub fn serve(command: &mut Command, at: impl ToSocketAddrs, within: Duration) -> Serving {
@@ -155,7 +155,7 @@ impl Sandbox {
 /// early, or unwound out of a panic.
 ///
 /// It is the same shape as [`Serving`], which stops the program it started when it goes out of
-/// scope — a guard is how the part that has to happen afterwards is made to happen whatever
+/// scope, a guard is how the part that has to happen afterwards is made to happen whatever
 /// happens first. What is reached through the guard is the sandbox it holds, handed out as the
 /// sandbox it is.
 pub struct Guard {
@@ -221,7 +221,7 @@ impl Ran {
     /// Fails the suite unless it ended successfully, showing what it said when it did not.
     ///
     /// It borrows rather than consumes, so that a run that did end successfully can still be
-    /// read afterwards — which is the usual shape: check the program was happy, then check what
+    /// read afterwards, which is the usual shape: check the program was happy, then check what
     /// it said.
     ///
     /// # Panics
@@ -229,7 +229,7 @@ impl Ran {
     /// Panics with what the program wrote, since a run that failed is a suite that has to
     /// say what was wrong with the program to be worth reading.
     pub fn expect_success(&self) {
-        // PANIC: the caller asked for a run that succeeded, and one that did not is the answer —
+        // PANIC: the caller asked for a run that succeeded, and one that did not is the answer,
         // both streams travel with it because that is all a failed run can be read from.
         assert!(
             self.success(),
@@ -243,8 +243,8 @@ impl Ran {
 
 /// A program that was started and is still running.
 ///
-/// It is stopped when it goes out of scope, so a suite that returns early — even by
-/// panicking — does not leave a program holding the port the next check needs.
+/// It is stopped when it goes out of scope, so a suite that returns early, even by
+/// panicking, does not leave a program holding the port the next check needs.
 pub struct Serving {
     child: Child,
 }

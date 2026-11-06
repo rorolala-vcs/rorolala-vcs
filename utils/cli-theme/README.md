@@ -10,7 +10,7 @@ depends on it.
 
 The switch that decides whether any of it is colored at all lives here, because every
 style in this crate reads it. `Colorize` is re-exported rather than wrapped, so a call
-site is written the way it would be with `colored` itself — there is no second
+site is written the way it would be with `colored` itself, there is no second
 vocabulary to learn:
 
 ```rust
@@ -24,15 +24,15 @@ set_enabled(true);
 assert!(is_enabled());
 ```
 
-Until a program states its own answer, the environment decides — `CLICOLOR_FORCE`,
-`NO_COLOR`, then `CLICOLOR` together with whether standard output is a terminal — which
+Until a program states its own answer, the environment decides, `CLICOLOR_FORCE`,
+`NO_COLOR`, then `CLICOLOR` together with whether standard output is a terminal, which
 is the rule `colored` already follows. Stating one takes that decision over, for
 everything in the workspace that colors through `colored`.
 
 ## Themes
 
 How much a style may ask of the terminal is `ThemeChoice`, and it is global for the same
-reason the coloring switch is — every style reads it:
+reason the coloring switch is, every style reads it:
 
 ```rust
 use rorolala_utils_cli_theme::{ThemeChoice, set_theme_choice, theme_choice};
@@ -44,8 +44,8 @@ assert_eq!(theme_choice(), ThemeChoice::Pretty);
 `ThemeChoice::auto_select` is what the choice is until a program states one: the
 terminal's own answer, which is as much as anything can know. A run that is not being
 written to a terminal gets `Text`. A terminal gets `Pretty` where it names itself one of
-the modern terminals a `NerdFont` is commonly installed for — Windows Terminal, Zed,
-`WezTerm`, kitty, Ghostty, iTerm, VS Code's terminal and the rest of the list — and
+the modern terminals a `NerdFont` is commonly installed for, Windows Terminal, Zed,
+`WezTerm`, kitty, Ghostty, iTerm, VS Code's terminal and the rest of the list, and
 `Simple` everywhere else.
 
 That is an approximation on purpose: a terminal carries no answer about its font, so the
@@ -68,7 +68,7 @@ is what a message or a status line wants.
 
 ## Styles
 
-A message is written the way it should read and drawn once, by the `trd!` macro — or,
+A message is written the way it should read and drawn once, by the `trd!` macro, or,
 where a macro does not fit, by `TextRendering::render`. What the drawing may use is
 read off the theme and the coloring switch, so one message draws itself as plain text
 on a terminal that wants none of it:
@@ -173,10 +173,10 @@ nest, where Markdown's emphasis only ever pairs up.
 
 | Written                              | Drawn                                |
 | ------------------------------------ | ------------------------------------ |
-| `[[red]]` … `[[/]]`                  | red, `[[RED]]` being the bright one  |
-| `[[~red]]` … `[[/]]`                 | red behind the text                  |
-| `[[#FF0000]]` … `[[/]]`              | an exact colour                      |
-| `[[?https://example.com]]` … `[[/]]` | a link a terminal can follow         |
+| `[[red]]` to `[[/]]`                  | red, `[[RED]]` being the bright one  |
+| `[[~red]]` to `[[/]]`                 | red behind the text                  |
+| `[[#FF0000]]` to `[[/]]`              | an exact colour                      |
+| `[[?https://example.com]]` to `[[/]]` | a link a terminal can follow         |
 | `**bold**`                           | bold                                 |
 | `*italic*`                           | italic                               |
 | `***both***`                         | bold and italic                      |
@@ -185,13 +185,13 @@ nest, where Markdown's emphasis only ever pairs up.
 | `` `code` ``                         | bold and bright cyan, markers kept   |
 | `<flag>`                             | italic and bright cyan, markers kept |
 
-A link is an escape sequence of its own — `ESC ] 8 ; ; address` around the text — so it
+A link is an escape sequence of its own, `ESC ] 8 ; ; address` around the text, so it
 is drawn only where escape sequences are being drawn at all: where there are none, and
 inside a table cell, the text is drawn without the address. A terminal that does not
 know the sequence ignores it, which leaves the text.
 
 A backslash takes the meaning away from `*`, `_` and `~`, and names a character by
-number — as `\u2764`, as `\u{2764}`, or, for a character past the Basic Multilingual
+number, as `\u2764`, as `\u{2764}`, or, for a character past the Basic Multilingual
 Plane, as the two code units UTF-16 spells it with: `\udb82\udce3` is the one glyph
 `\u{f08e3}`, which is how a `NerdFont` icon is usually written down.
 
@@ -200,12 +200,12 @@ stays arithmetic.
 
 ## Tables
 
-A listing table — the shape `gh issue list` draws — is [`Table`]: columns with titles and
+A listing table, the shape `gh issue list` draws, is [`Table`]: columns with titles and
 rows of cells. A column is as wide as it needs, exactly as wide as it is told, or filled
 with whatever the others leave; one filled column is what makes a table reach the terminal's
 right edge. There are no borders: the header is bold and underlined, the columns are
 separated by two spaces, and every line is padded out to the table's whole width. A cell
-holds runs, so a word can be drawn another way — the highlight a search puts on a match —
+holds runs, so a word can be drawn another way, the highlight a search puts on a match,
 without the table having to read a colour language:
 
 ```rust

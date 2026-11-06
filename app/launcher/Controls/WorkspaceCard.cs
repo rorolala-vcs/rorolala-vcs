@@ -16,7 +16,7 @@ namespace RorolalaLauncher.Controls;
 /// <remarks>
 /// What a card shows is read from the file system each time it is drawn rather than kept beside the path:
 /// the list outlives the directories it names, and a Workspace that was moved or taken away says so the
-/// next time the list is seen. A card is a place rather than a button — the whole of it is pressed, and the
+/// next time the list is seen. A card is a place rather than a button, the whole of it is pressed, and the
 /// window is opened where the card says; the one thing on it that is not the place is the mark at its end,
 /// which takes the card off the list and is the only part of it that must not open anything.
 /// </remarks>

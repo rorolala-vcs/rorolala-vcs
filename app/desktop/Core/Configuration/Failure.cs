@@ -39,7 +39,7 @@ internal enum ExitCode
 /// The reason is written to standard error and the process exits with <see cref="Code"/>. The
 /// program does not fall back to a default configuration: a silently ignored configuration error is
 /// worse than a loud stop, and the files are plain JSON a person can edit. The natural place to
-/// repair plugin configuration — the plugin manager — is inside the program that refuses to start,
+/// repair plugin configuration, the plugin manager, is inside the program that refuses to start,
 /// so recovery is by editing the file, guided by the reason on standard error.
 /// </remarks>
 internal sealed class ConfigurationFailure : Exception

@@ -2,8 +2,8 @@
  * Ownership across the ABI: who holds an entry, and who the work acts as.
  *
  * What a C caller can lean on here is the absence shape, because the positive path is not reachable
- * from C: an ownership is read from the two Layouts a Workspace keeps — the one it works in and the
- * copy of the Vault's it has fetched — and no Layout is exported, so a C program can neither make
+ * from C: an ownership is read from the two Layouts a Workspace keeps, the one it works in and the
+ * copy of the Vault's it has fetched, and no Layout is exported, so a C program can neither make
  * one nor put an entry in it. The read itself is checked on the Rust side, where a Workspace with a
  * Layout can be made.
  *

@@ -6,7 +6,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The fetch: what a run of it is told, and what its card is drawn from when it says nothing of itself.
 /// </summary>
 /// <remarks>
-/// The exchange itself is the command line's and is not run here — a run needs a Vault and a network — so what is
+/// The exchange itself is the command line's and is not run here, a run needs a Vault and a network, so what is
 /// checked is everything this plugin decides: the command a refresh runs, and that a fetch asks for no progress
 /// records, which is what has its card drawn as one still moving rather than as a bar to fill.
 /// </remarks>

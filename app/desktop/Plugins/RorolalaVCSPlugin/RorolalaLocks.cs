@@ -8,7 +8,7 @@ namespace RorolalaVCSPlugin;
 /// Rorolala's answer to who holds an entry: the Ownership column, and the badge a locked tile wears.
 /// </summary>
 /// <remarks>
-/// What it reads is the Vault copy the Workspace has fetched, through <see cref="OwnershipReadings"/> —
+/// What it reads is the Vault copy the Workspace has fetched, through <see cref="OwnershipReadings"/>,
 /// nothing is reached for, so a listing says what the Vault held when it was last fetched. The two
 /// pictures are contributed to the icon library rather than drawn here: the File System plugin draws an
 /// entry's lock in the ink the theme gives it, and a picture contributed under a key is what it draws.
@@ -49,7 +49,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         {
             // Held by the reader, which is the pencil: holding it is what makes it theirs to change, and the
             // badge says so in the green the look uses for what has come in, worn on the dark ground the way
-            // another account's lock is — the two are the two answers to the same question, so they are drawn
+            // another account's lock is, the two are the two answers to the same question, so they are drawn
             // the same way round. The words stay in the ordinary ink, since "you" is a name like any other and
             // a column that shouted it would shout every row it holds.
             //
@@ -67,7 +67,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
 
             // Held by somebody else, which is the lock: the one answer on the card that is not the
             // reader's, so it is drawn in the error red and worn on the dark ground, the way the shell draws a
-            // state. The words name whoever holds it, in the same red — and the badge, which is only a
+            // state. The words name whoever holds it, in the same red, and the badge, which is only a
             // picture of a lock, is hovered for the phrase that name goes in.
             { Kind: EntryLockKind.Held, Holder: { Length: > 0 } holder } => new EntryMark(
                 Text: holder,
@@ -117,7 +117,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         EntryColumns.Register(new RorolalaStanding(statuses));
 
         // A state is worn on a tile as well as drawn in the list's own column, and it is worn before the rest:
-        // what a file of the work is, is the first thing about it — who holds it and how far it has come are
+        // what a file of the work is, is the first thing about it, who holds it and how far it has come are
         // read after that.
         EntryMarkProviders.Register(new RorolalaStates(statuses));
 
@@ -126,14 +126,14 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         // answer may hide the other.
         EntryMarkProviders.Register(new RorolalaStandingBadge(statuses));
 
-        // And what a variant file is — content waiting to be joined into the file beside it — is the third,
+        // And what a variant file is, content waiting to be joined into the file beside it, is the third,
         // worn after both: it is the one answer that is about the file's own place in a merge rather than
         // about the work around it.
         EntryMarkProviders.Register(new RorolalaMergeBadge(statuses));
 
         // Nothing is subscribed to here for letting go of what was read: the File System plugin says
-        // when the files may have changed — after an operation of its own, and when the window is come
-        // back to — and that is the one thing an answer about a lock can go stale from.
+        // when the files may have changed, after an operation of its own, and when the window is come
+        // back to, and that is the one thing an answer about a lock can go stale from.
     }
 
     /// <summary>

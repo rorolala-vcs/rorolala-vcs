@@ -1,8 +1,8 @@
 //! Errors for the `rola vault` commands.
 //!
 //! A name that is missing and a name that is not bound are answers more than one of those
-//! commands gives — binding, letting go, and choosing all need a name, and the last two both
-//! answer when it names nothing — so they are rendered here rather than in any one of them.
+//! commands gives, binding, letting go, and choosing all need a name, and the last two both
+//! answer when it names nothing, so they are rendered here rather than in any one of them.
 
 use mingling::{
     Grouped,

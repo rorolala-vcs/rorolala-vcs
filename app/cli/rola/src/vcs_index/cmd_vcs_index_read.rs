@@ -33,7 +33,7 @@ use crate::vcs_index::{
 
 /// How one object is drawn when no template is named.
 ///
-/// The one line the command has always printed, whichever kind the object turned out to be —
+/// The one line the command has always printed, whichever kind the object turned out to be,
 /// except that the colour is not in it: a template says nothing about a terminal. A hash is written
 /// as `blake3:<hex>` in the data, so the name in front is trimmed off where a line has no room for
 /// it, which is how the line was always written.
@@ -177,8 +177,8 @@ pub fn view_of(object: VCSIndexObject, number: Option<u64>) -> ReadObject {
 /// One index object, as it was read: which kind it is, and what it holds.
 ///
 /// The kind travels in the data rather than in the line printed, so what a `--json` run prints is
-/// the object itself — the text of a Creator or a Message, the hashes a Variant carries, the number
-/// and hashes of a Version — rather than the string a reader would have been shown.
+/// the object itself, the text of a Creator or a Message, the hashes a Variant carries, the number
+/// and hashes of a Version, rather than the string a reader would have been shown.
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ReadObject {

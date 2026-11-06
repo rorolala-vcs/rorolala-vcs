@@ -10,7 +10,7 @@ use super::palette::RenderOptions;
 /// How wide `bat` is told the terminal is.
 ///
 /// `bat` needs a width to lay a snippet out against, and asks the terminal for one
-/// when it has not been given it — which a library has no business doing, because the
+/// when it has not been given it, which a library has no business doing, because the
 /// answer decides what comes out. Nothing is wrapped here, so the number only has to
 /// be large enough not to matter.
 const WIDTH: usize = 200;
@@ -23,7 +23,7 @@ const TAB_WIDTH: usize = 4;
 /// `bat` is given the code rather than a file, so it has nothing to guess from: the
 /// language is whatever the fence said, and a name `bat` does not know is drawn as
 /// plain code rather than refused. If even that fails, the code is handed back as it
-/// came in — a message is worth more than its highlighting.
+/// came in, a message is worth more than its highlighting.
 #[must_use]
 pub(super) fn highlight(code: &str, language: Option<&str>, options: RenderOptions) -> String {
     let Some(drawn) = language

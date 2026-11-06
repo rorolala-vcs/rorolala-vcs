@@ -6,7 +6,7 @@ namespace FileSystemPlugin;
 /// <summary>A command that did not finish cleanly, and what it said.</summary>
 /// <remarks>
 /// The command is another program's, so what went wrong is its to say: what is kept here is the
-/// program, the status it left and its own error stream — not a sentence about them — so that a
+/// program, the status it left and its own error stream, not a sentence about them, so that a
 /// caller can say why in its own words and in the reader's language.
 /// </remarks>
 /// <param name="Program">The program that was started.</param>
@@ -94,8 +94,8 @@ internal sealed class Result
 /// Nothing here asks a question: every decision was made before this runs, so a called-off run is
 /// one where no item runs and every item reads <c>skipped</c>.
 /// <para>
-/// The command is a program of its own — the file operations themselves are the command line's, not
-/// this program's — so this blocks while each one runs and is meant to be called off the window's thread.
+/// The command is a program of its own, the file operations themselves are the command line's, not
+/// this program's, so this blocks while each one runs and is meant to be called off the window's thread.
 /// </para>
 /// </remarks>
 internal static class Executor
@@ -129,7 +129,7 @@ internal static class Executor
     /// <remarks>
     /// Checked once for the whole call rather than per item, because the reason names the command rather
     /// than an item. A placeholder is never the program, so a template that opens with one names no
-    /// program; a transfer must name both paths, and a removal names only a source — a target it named
+    /// program; a transfer must name both paths, and a removal names only a source, a target it named
     /// would have nothing to put there.
     /// <para>
     /// A variable the template names is read here rather than where the command runs, so that a machine
@@ -199,7 +199,7 @@ internal static class Executor
         }
 
         // An unanswered conflict must never run. A conflict means the command would land on something already
-        // there, so running it is how that something is lost — and arriving here undecided means the window
+        // there, so running it is how that something is lost, and arriving here undecided means the window
         // that should have asked never answered, which is a failure to report rather than a choice to make.
         if (item.Conflict && item.Resolution == Resolution.Undecided)
         {
@@ -248,7 +248,7 @@ internal static class Executor
         }
 
         // A transfer runs over the source and its target; a removal runs over the source alone, which is
-        // why its target is empty — and why a removal template that named the target was refused before.
+        // why its target is empty, and why a removal template that named the target was refused before.
         var failure = Launch(Arguments(tokens, item.From, target));
 
         return failure is null
@@ -259,8 +259,8 @@ internal static class Executor
     /// <summary>The template's tokens with the placeholders replaced by what they stand for.</summary>
     /// <remarks>
     /// A placeholder is a token of its own, never part of one, so a path with a space in it stays one
-    /// argument exactly as it would be handed over were it appended — and so does what an environment
-    /// variable holds. An item with no target — every removal — never reaches a <c>{{to}}</c>, which its
+    /// argument exactly as it would be handed over were it appended, and so does what an environment
+    /// variable holds. An item with no target, every removal, never reaches a <c>{{to}}</c>, which its
     /// template was refused for naming.
     /// </remarks>
     /// <param name="tokens">The template, split into tokens.</param>
@@ -291,7 +291,7 @@ internal static class Executor
     /// <remarks>
     /// A token names a variable or says nothing about one: a name that is empty is a variable named by
     /// nothing rather than a word to keep, which is what <c>{{env:}}</c> being read here as the empty name
-    /// means — it is refused as unset, which says what is wrong with it.
+    /// means, it is refused as unset, which says what is wrong with it.
     /// </remarks>
     /// <param name="token">The token to read.</param>
     /// <returns>The variable's name, or nothing.</returns>
@@ -321,7 +321,7 @@ internal static class Executor
     }
 
     /// <summary>
-    /// A free name beside an existing target, by the <c>name (2).ext</c>, <c>name (3).ext</c> … scheme.
+    /// A free name beside an existing target, following the <c>name (2).ext</c>, <c>name (3).ext</c> pattern.
     /// </summary>
     /// <remarks>
     /// How much of the name is the name is <see cref="Names.Numbered"/>, which is the rule a rename box
@@ -363,12 +363,12 @@ internal static class Executor
     /// <remarks>
     /// Every argument is handed over as it is, so a path with a space in it is one argument: joining the
     /// line by hand and letting the platform split it again is how such a path becomes two. The first
-    /// argument is the program, and what a template names after it — including a shell, as the Windows
-    /// commands do with <c>cmd /c</c> — is up to the user who wrote the template.
+    /// argument is the program, and what a template names after it, including a shell, as the Windows
+    /// commands do with <c>cmd /c</c>, is up to the user who wrote the template.
     /// <para>
     /// Both of the child's streams are drained while it runs, so a child that fills one pipe while this
-    /// waits on the other cannot block against itself; what it said is kept — the status and its own
-    /// error stream, apart — so a caller can say why, in its own words and where it wants them said.
+    /// waits on the other cannot block against itself; what it said is kept, the status and its own
+    /// error stream, apart, so a caller can say why, in its own words and where it wants them said.
     /// </para>
     /// </remarks>
     private static CommandFailure? Launch(IReadOnlyList<string> arguments)
@@ -380,7 +380,7 @@ internal static class Executor
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            // A template's default commands are `rola`, which writes UTF-8 — as every stream this
+            // A template's default commands are `rola`, which writes UTF-8, as every stream this
             // project's programs write is, and as `git`'s is read elsewhere. Left unstated, a redirected
             // stream is decoded in the machine's codepage, and on a Chinese Windows that is GBK.
             StandardOutputEncoding = Encoding.UTF8,

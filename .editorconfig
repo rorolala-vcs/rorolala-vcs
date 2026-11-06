@@ -4,7 +4,7 @@
 # (`AnalysisMode=All`) and makes every diagnostic an error. Some of what that tier carries does not
 # fit an application, and each such rule is excused here, one at a time, with the reason it is
 # excused. The tier is not lowered for them: a rule excused in writing and a rule never asked are
-# two different things, and this file says which and why — the same division the Rust side makes
+# two different things, and this file says which and why, the same division the Rust side makes
 # with a targeted `#[allow(..., reason = ...)]` rather than by dropping a lint group.
 #
 # A rule excused here is excused wherever it fires, so the reason has to hold of the whole tree and
@@ -72,8 +72,8 @@ dotnet_diagnostic.CA1716.severity = none
 dotnet_diagnostic.CA1812.severity = none
 
 # A type whose name repeats its namespace's: the Desktop's kernel types live under the program's own
-# namespace and are named the way C# names a program — `RorolalaDesktop.App`, `RorolalaDesktop.
-# MainWindow` — which is what a markup compiler and an entry point look for. The repetition is the
+# namespace and are named the way C# names a program, `RorolalaDesktop.App`, `RorolalaDesktop.
+# MainWindow`, which is what a markup compiler and an entry point look for. The repetition is the
 # convention here rather than an accident.
 dotnet_diagnostic.CA1724.severity = none
 

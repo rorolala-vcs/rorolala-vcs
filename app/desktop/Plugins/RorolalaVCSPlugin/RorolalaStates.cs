@@ -11,15 +11,15 @@ namespace RorolalaVCSPlugin;
 /// badge a tile's icon wears.
 /// </summary>
 /// <remarks>
-/// What it reads is a reading of the work, through <see cref="RolaStatus"/> — nothing is reached for, and a
+/// What it reads is a reading of the work, through <see cref="RolaStatus"/>, nothing is reached for, and a
 /// reading is what the tree held when it was made. One reading answers for the whole directory being
 /// listed, and one path is asked of it rather than answered from a copy of its lists: which state a path is
 /// in is a judgement about the reading, and it is the library's to make.
 /// <para>
 /// What it contributes to a list is a dot rather than a column of words: a file is in one of a handful of
 /// states, and which one is read from the colour before any word of it is read. A tile has no column to put
-/// one in, so there the state is a badge on the icon — a picture in the same colour, since what a state is
-/// coloured is the state (see <see cref="RorolalaColours"/>) — and the words are the dot's and the badge's
+/// one in, so there the state is a badge on the icon, a picture in the same colour, since what a state is
+/// coloured is the state (see <see cref="RorolalaColours"/>), and the words are the dot's and the badge's
 /// own, said when the pointer rests on either.
 /// </para>
 /// </remarks>
@@ -42,7 +42,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// No key at all, since there is no word that would fit over a column of dots.
     /// </summary>
     /// <remarks>
-    /// The listing draws a heading from a key, and a column that names none is headed by nothing — the same
+    /// The listing draws a heading from a key, and a column that names none is headed by nothing, the same
     /// way it heads the picture column. What the mark means is said on the mark itself, which is where a
     /// reader looking at one is looking.
     /// </remarks>
@@ -93,8 +93,8 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
 
     /// <summary>What the reading says about an entry and what it is said as, or nothing.</summary>
     /// <remarks>
-    /// The two places a state is drawn ask the same question of the same reading — a mark in a list and a
-    /// badge on a tile are one answer about one file — so what they read is read once here: a directory the
+    /// The two places a state is drawn ask the same question of the same reading, a mark in a list and a
+    /// badge on a tile are one answer about one file, so what they read is read once here: a directory the
     /// entry names none of, and a reading that could not answer, are both nothing to say rather than a
     /// failure, since a listing that will not appear is a worse answer than one without a mark on it.
     /// <para>
@@ -107,8 +107,8 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// <returns>What the reading says, or nothing.</returns>
     private Stated? Answer(Entry entry)
     {
-        // What a state is about is a file of the work, so an entry that names no directory of its own — the
-        // way up, which is a step rather than a place — is nothing this speaks about.
+        // What a state is about is a file of the work, so an entry that names no directory of its own, the
+        // way up, which is a step rather than a place, is nothing this speaks about.
         if (
             Path.GetDirectoryName(entry.Path) is not { Length: > 0 } directory
             || _readings.Reading(directory) is not { } status
@@ -144,7 +144,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// The two are one answer about one file, so the words are the panel's rather than the listing's: a reader
     /// who has learnt what a badge means has learnt what the panel's pill means, and a sentence corrected in one
     /// place is corrected in the other. They live here rather than in either view because they are what the
-    /// reading says about a file, and what a view does with them — a dot, a badge, a pill — is the view's own.
+    /// reading says about a file, and what a view does with them (a dot, a badge, a pill) is the view's own.
     /// <para>
     /// The one state whose words need more than the state is a change that is wrong: the two ways it can be are
     /// told apart by the lists the reading holds, which is <see cref="Wrong"/>, and what is said here is the
@@ -163,7 +163,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
             PathState.RenamedLikely => RolaI18N.Get("rorolala_vcs.status.kind_rename_weak"),
 
             // A merge the reading holds as one waiting to be joined: the words are the panel's for a merge, and
-            // the variant it waits for is on the badge of the variant file — the other half of the same record.
+            // the variant it waits for is on the badge of the variant file, the other half of the same record.
             PathState.Merging => RolaI18N.Get("rorolala_vcs.status.kind_merge"),
 
             // A path the Layout names and the tree does not hold is not an entry of any listing, and a path the
@@ -177,7 +177,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// </summary>
     /// <remarks>
     /// The panel's words for a merge name the variant, because that is the one thing about a merge no column of
-    /// its row carries — and what a reader who has stopped at a mark on a file wants to know is which variant is
+    /// its row carries, and what a reader who has stopped at a mark on a file wants to know is which variant is
     /// holding it up. The variant is read from the record the entry is the target of, which is the other half of
     /// the record whose variant file wears the same sentence; a file the reading calls merging with no record
     /// naming it as a target is said the way the state alone can say it.
@@ -224,7 +224,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// What a state is drawn as: a dot in its colour, and the word for it said on the dot.
     /// </summary>
     /// <remarks>
-    /// The colour is this plugin's own — see <see cref="RorolalaColours"/> — and the line around the mark is a
+    /// The colour is this plugin's own, see <see cref="RorolalaColours"/>, and the line around the mark is a
     /// shade of it chosen by the ground, since a mark that is its own edge on one ground is a smudge on the
     /// other. The words are handed in rather than worked out here, because what a state means is the reading's
     /// to say and what it is drawn as is this mark's: one function answers a colour, the other a sentence.
@@ -250,7 +250,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// <remarks>
     /// One picture per state, and the two that are alike share one: a file that is only possibly renamed is
     /// renamed as far as what a reader does with it goes, and one that changed and one waiting to be joined
-    /// are both content on its way to a version — so the mark is the same and what tells them apart is the
+    /// are both content on its way to a version, so the mark is the same and what tells them apart is the
     /// words on it. The colours are the ones the dots are, since what a state is coloured is the state and not
     /// the shape it is drawn in.
     /// </remarks>

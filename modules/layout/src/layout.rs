@@ -2,28 +2,28 @@
 //!
 //! A layout is the one thing about a version control that is *not* immutable: everything else is
 //! content-addressed and never changes, while a layout says what the work is made of right now.
-//! So it is kept differently from everything else — as a log of changes appended to, replayed into
+//! So it is kept differently from everything else, as a log of changes appended to, replayed into
 //! memory, and answered from there.
 //!
 //! # How it is kept
 //!
 //! Changes are spread over a fixed number of **shards**, and the shard a change belongs to is
-//! decided by the `Uuid` it names. Everything about one `Uuid` — the path it is at and what it
-//! holds — is in that one shard, which is what lets a shard be written down on its own. Each shard
+//! decided by the `Uuid` it names. Everything about one `Uuid`, the path it is at and what it
+//! holds, is in that one shard, which is what lets a shard be written down on its own. Each shard
 //! is a log a change is appended to with a single write and then flushed, so a change is on disk by
-//! the time the call returns, and two writers — in one process or in several — appending at once
+//! the time the call returns, and two writers, in one process or in several, appending at once
 //! cannot tear each other's record. Nothing is locked across a write, and no writer waits for
 //! another except one appending to the same shard.
 //!
 //! Each shard also has a **snapshot**: everything it holds, written down whole, so the log that led
 //! to it can be dropped. [`Layout::compact`] reads what a shard's log still holds into the snapshot
-//! and empties the log, one shard at a time — a shard being compacted is the only one not being
+//! and empties the log, one shard at a time, a shard being compacted is the only one not being
 //! written, so a compaction never stops the others. Emptying a log leaves no reader safe to read on
 //! from where it had got to, so a compaction **ages** the log: a reader holding an offset into the
 //! age before it starts again from the beginning.
 //!
 //! Reads are answered from memory. Opening the layout reads every shard's snapshot and replays its
-//! log into memory, and [`Layout::refresh`] replays whatever has been appended since — so a reader
+//! log into memory, and [`Layout::refresh`] replays whatever has been appended since, so a reader
 //! that wants what another process has just written calls it, and a reader that does not pays
 //! nothing.
 
@@ -131,8 +131,8 @@ impl Layout {
 
     /// Opens the layout kept in `dir`, which has to be there already.
     ///
-    /// It is the open a *reader* makes of a layout it did not create — the read-only copy a fetch
-    /// leaves, say — and it makes nothing: a directory with none of the layout's own files in it is
+    /// It is the open a *reader* makes of a layout it did not create, the read-only copy a fetch
+    /// leaves, say, and it makes nothing: a directory with none of the layout's own files in it is
     /// [`LayoutError::Io`] with [`std::io::ErrorKind::NotFound`], not a layout holding nothing. That
     /// distinction is the whole of it: an open that made the sixteen logs would let an empty
     /// directory pass for a fetched copy, and a reading command would answer "the layout holds
@@ -148,7 +148,7 @@ impl Layout {
 
     /// Opens the layout kept in `dir`, making what is missing only where `create` says it may.
     ///
-    /// A shard is read as one whole — its snapshot and the log after it under one lock — because
+    /// A shard is read as one whole, its snapshot and the log after it under one lock, because
     /// the two are written by a compaction in the order that makes them a pair only together: a
     /// snapshot written down whole and the log emptied after it. Read apart, an open that fell
     /// between the two would answer a layout missing every change the compaction had just folded
@@ -203,8 +203,8 @@ impl Layout {
     /// therefore written as a snapshot holding all of it, with an empty log after it, which is a
     /// layout a reader opens without replaying anything.
     ///
-    /// What is written is a function of what the layout holds and nothing else — a shard's entries in
-    /// `Uuid` order — so one unchanged layout is the same bytes every time it is written. That is
+    /// What is written is a function of what the layout holds and nothing else, a shard's entries in
+    /// `Uuid` order, so one unchanged layout is the same bytes every time it is written. That is
     /// what lets a copy's own bytes say whether it is up to date with the layout it was taken from.
     ///
     /// # Errors
@@ -240,7 +240,7 @@ impl Layout {
     /// How many bytes the shards' logs and snapshots hold between them.
     ///
     /// It is one `metadata` per file rather than a read of them, so what it costs is a directory's
-    /// worth of lookups and not a layout's worth of bytes — which is what makes it cheap enough to
+    /// worth of lookups and not a layout's worth of bytes, which is what makes it cheap enough to
     /// ask before every change an action makes. A file that is not there counts as no bytes, since
     /// a compaction may be part of the way through emptying a log when this is asked.
     #[must_use]
@@ -261,7 +261,7 @@ impl Layout {
     /// Reads and applies every change appended since the last read.
     ///
     /// It is what makes a reader see what another writer has just written, and what opening does to
-    /// read the logs back. A record that is not all there — a write a crash cut short — stops the
+    /// read the logs back. A record that is not all there, a write a crash cut short, stops the
     /// read where it began rather than failing, so what was written whole is what is applied.
     ///
     /// # Errors
@@ -298,7 +298,7 @@ impl Layout {
     /// is passed over: it has nothing to fold into a snapshot, and what it costs to say so is a
     /// flush of a snapshot that would be what is already there.
     ///
-    /// A shard's log is locked exclusively for the whole of its compaction — reading what it still
+    /// A shard's log is locked exclusively for the whole of its compaction, reading what it still
     /// holds, writing the snapshot down, raising the age and emptying it. Appending locks the log
     /// too, so a writer in this process or another is held up only while the shard it is writing to
     /// is being compacted, never globally; and because what is still in the log is folded into the
@@ -447,7 +447,7 @@ impl Layout {
 
     /// Empties the layout: every entry is dropped, and every path stops naming anything.
     ///
-    /// It is what leaving a layout with nothing in it means — a place that is still there to be
+    /// It is what leaving a layout with nothing in it means, a place that is still there to be
     /// worked in rather than one that is gone. What it costs is a change per entry, since a log of
     /// changes takes something back one change at a time.
     ///
@@ -459,7 +459,7 @@ impl Layout {
             self.remove_entry(id)?;
         }
 
-        // A path that named no entry is not taken by dropping entries — nothing named it — so it
+        // A path that named no entry is not taken by dropping entries, nothing named it, so it
         // is cleared on its own, leaving nothing at all pointing at a place.
         for (path, _) in self.paths() {
             self.remove_path(&path)?;
@@ -473,7 +473,7 @@ impl Layout {
     /// A change on its own reads what others have written and flushes a write to the shard it
     /// names, and a run that records many files pays that for each of them. A batch reads what
     /// others wrote once and flushes one write per shard its changes fall in, and checks each
-    /// change against the layout and against the changes made in the same batch before it — so
+    /// change against the layout and against the changes made in the same batch before it, so
     /// the failures are the ones the single-change calls give, and a create is one record rather
     /// than two.
     ///
@@ -576,7 +576,7 @@ impl Layout {
     /// Appends `record` to the log of the shard its `Uuid` belongs to, and applies it.
     ///
     /// The append is what makes the change durable; applying it is what makes it visible here. A
-    /// change another process appended is not this call's to apply — [`refresh`](Self::refresh) is.
+    /// change another process appended is not this call's to apply, [`refresh`](Self::refresh) is.
     fn change(&self, record: &Record) -> Result<(), LayoutError> {
         lock_write(&self.shards[shard_of(record.id())])
             .log
@@ -587,8 +587,8 @@ impl Layout {
 
     /// Makes `record` true in memory.
     ///
-    /// Every kind of change is idempotent, so a record read back a second time — which happens when
-    /// a change this process wrote is met again on the next [`refresh`](Self::refresh) — does
+    /// Every kind of change is idempotent, so a record read back a second time, which happens when
+    /// a change this process wrote is met again on the next [`refresh`](Self::refresh), does
     /// nothing the second time.
     fn apply(&self, record: &Record) -> Result<(), LayoutError> {
         {
@@ -607,7 +607,7 @@ impl Layout {
 ///
 /// Each change is checked as it is made, against the layout and against the changes already in the
 /// batch, so what it refuses is what the single-change calls on [`Layout`] refuse. What the batch
-/// keeps for that is what it has changed — the entries it has set, and the bindings it has made —
+/// keeps for that is what it has changed (the entries it has set, and the bindings it has made)
 /// on top of what the layout holds.
 pub struct Batch<'a> {
     /// The layout being changed.
@@ -631,7 +631,7 @@ impl Batch<'_> {
     /// # Errors
     ///
     /// Returns [`LayoutError::AlreadyExists`] if `id` holds something or `path` already names a
-    /// `Uuid` — as the layout stands and as the batch has left it.
+    /// `Uuid`, as the layout stands and as the batch has left it.
     pub fn create_file(
         &mut self,
         id: Uuid,
@@ -695,7 +695,7 @@ impl Batch<'_> {
     ///
     /// # Errors
     ///
-    /// Returns [`LayoutError::NotFound`] if `id` holds nothing as the batch leaves it — which
+    /// Returns [`LayoutError::NotFound`] if `id` holds nothing as the batch leaves it, which
     /// includes one the batch has already removed.
     pub fn remove_entry(&mut self, id: Uuid) -> Result<(), LayoutError> {
         if !self.holds(id) {
@@ -785,8 +785,8 @@ impl Batch<'_> {
                 continue;
             }
 
-            // The records fall in one shard, so they are written by one append — one write and one
-            // flush — rather than one each.
+            // The records fall in one shard, so they are written by one append, one write and one
+            // flush, rather than one each.
             let mut bytes = Vec::new();
             for record in &records {
                 bytes.extend_from_slice(&record.encode());

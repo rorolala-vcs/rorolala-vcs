@@ -1,6 +1,6 @@
 //! Who holds what, as the fetched copy of a Vault's Layout remembers it.
 //!
-//! Ownership lives upstream — the Vault's Layout says who holds what — and a Workspace keeps only
+//! Ownership lives upstream, the Vault's Layout says who holds what, and a Workspace keeps only
 //! the copy a fetch wrote. That is enough for the one question a reading of the tree asks: which of
 //! the changes are not this account's to make.
 //!
@@ -25,7 +25,7 @@ pub fn tracked_vault(workspace: &Workspace) -> Option<String> {
 /// The fetched copy of the Vault's own Layout, when one is here to read.
 ///
 /// It is what upstream says about an entry: who holds it, and which version it is at. A Layout that
-/// tracks no Vault, and a copy that was never fetched, both answer nothing — opening a copy makes one
+/// tracks no Vault, and a copy that was never fetched, both answer nothing, opening a copy makes one
 /// where none is there, so what was not fetched is not a copy with nothing in it.
 #[must_use]
 pub fn vault_copy(workspace: &Workspace) -> Option<Layout> {
@@ -39,7 +39,7 @@ pub fn vault_copy(workspace: &Workspace) -> Option<Layout> {
 ///
 /// The changes counted are the ones the Layout names: a path that changed where it was, and the
 /// destination of a move that was edited as well. The latter is what the entry is known by *where
-/// it was* — a move is not recorded until the file is — so that is where its holder is read.
+/// it was*, a move is not recorded until the file is, so that is where its holder is read.
 ///
 /// A `Uuid` the copy does not name is one upstream does not hold yet, so nothing there is in the
 /// way of changing it; and a `Vault` or an account that is not there is nothing to judge by.

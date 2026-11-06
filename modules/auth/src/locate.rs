@@ -20,7 +20,7 @@ use crate::{Account, Accounts, KeyLocateRule, Member, Members};
 ///
 /// `local_roots` are where the keys of the Workspace and the Vault beside the caller sit,
 /// highest priority first. They are given rather than found here, so this crate need not
-/// know what a Workspace or a Vault is — the layer that does resolves them and passes
+/// know what a Workspace or a Vault is, the layer that does resolves them and passes
 /// their key directories in.
 ///
 /// The members cross as a set, read one index at a time; see [`Members`].
@@ -47,7 +47,7 @@ pub fn find_member(
 /// Every account whose private key `rule` finds, highest priority first.
 ///
 /// An account is named by a **private** key, which is not shared, so it is only ever
-/// looked for in `local_roots` — the keys beside the Workspace and the Vault. The other
+/// looked for in `local_roots`, the keys beside the Workspace and the Vault. The other
 /// scopes the rule turns on are places a public key can be shared from, never a private
 /// one, and are not searched however they are set.
 ///
@@ -211,8 +211,8 @@ fn files_in(dir: &Path, extension: &str) -> Vec<(String, PathBuf)> {
 
 /// Whether `name` is a name a key may be known by.
 ///
-/// A name is a file's stem — what [`Account`](crate::Account) and [`Member`](crate::Member) are
-/// named by — and it is joined onto a directory to reach the key file, so it is also what decides
+/// A name is a file's stem, what [`Account`](crate::Account) and [`Member`](crate::Member) are
+/// named by, and it is joined onto a directory to reach the key file, so it is also what decides
 /// *where* that file is looked for. Letters, digits, `_`, `-`, `@` and `.` are the whole of the
 /// character set; `.` and `..` are refused on their own, since they name directories rather than
 /// keys. A separator, a drive letter's colon or an empty string is therefore not a name, and a name
@@ -268,7 +268,7 @@ fn find_key<T>(
 /// This is the scope a generated pair is installed into, and the one a member is looked for
 /// in when the user scope is turned on: `~/.local/share/rola/keys` on a machine that follows
 /// the XDG layout. It is `None` when the machine does not say where that directory is, and when
-/// neither does the run — see [`data_home`].
+/// neither does the run, see [`data_home`].
 #[must_use]
 pub fn user_keys_dir() -> Option<PathBuf> {
     Some(data_home()?.join(USER_KEYS_DIR))
@@ -277,7 +277,7 @@ pub fn user_keys_dir() -> Option<PathBuf> {
 /// The directory keys are kept in under the filesystem root: `/.rola/keys` on Unix.
 ///
 /// It is the machine-wide scope, shared by every user of the machine, so what it holds is
-/// meant to be shared too. It is `None` when the current directory has no root — which is
+/// meant to be shared too. It is `None` when the current directory has no root, which is
 /// to say, never.
 #[must_use]
 pub fn global_keys_dir() -> Option<PathBuf> {
@@ -286,8 +286,8 @@ pub fn global_keys_dir() -> Option<PathBuf> {
 
 /// The directory keys are kept in under `ROLA_HOME`, if it names one.
 ///
-/// A set kept here is the caller's to point wherever it likes — a mounted share, a directory
-/// that is thrown away between runs — so it is looked for only when the environment names it.
+/// A set kept here is the caller's to point wherever it likes, a mounted share, a directory
+/// that is thrown away between runs, so it is looked for only when the environment names it.
 #[must_use]
 pub fn env_keys_dir() -> Option<PathBuf> {
     let home = std::env::var_os(HOME_ENV_VAR).filter(|value| !value.is_empty())?;
@@ -379,7 +379,7 @@ mod tests {
         .unwrap();
         private(&dir, "bob");
 
-        // Alice has a public key beside her private one — one that is not her own — so an
+        // Alice has a public key beside her private one, one that is not her own, so an
         // account named after her comes with a peer to hold; bob does not, so his has nothing
         // to hold a peer to.
         let alice =
@@ -520,7 +520,7 @@ mod tests {
             super::find_account("../alice", std::slice::from_ref(&keys), &local_only()).is_none()
         );
 
-        // The same name spelled as the plain stem is what reaches a key — inside the scope.
+        // The same name spelled as the plain stem is what reaches a key, inside the scope.
         public(&keys, "alice");
         assert!(super::find_member("alice", std::slice::from_ref(&keys), &local_only()).is_some());
     }

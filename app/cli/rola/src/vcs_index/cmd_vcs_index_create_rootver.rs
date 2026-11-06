@@ -1,6 +1,6 @@
 //! The `rola vcs-index create-rootver` command: put the root version into the index.
 //!
-//! The root version is the version before the first — numbered `u64::MAX` — and every chain starts
+//! The root version is the version before the first, numbered `u64::MAX`, and every chain starts
 //! from it: a file's first variant is based on it. It is the same object in every index, so this
 //! names nothing and, written when it is already there, changes nothing.
 
@@ -35,7 +35,7 @@ pub fn desc_vcs_index_create_rootver() -> Description {
 
 /// Puts the root version into the index, answering with its hash
 ///
-/// The root version is the version before the first — `u64::MAX` as a number — and every chain
+/// The root version is the version before the first, `u64::MAX` as a number, and every chain
 /// starts from it. It is the same object in every index, so writing it where it already is changes
 /// nothing; what comes back is what a first `write-variant` takes for `BASE_VERSION`.
 ///

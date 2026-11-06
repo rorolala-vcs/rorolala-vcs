@@ -8,8 +8,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The host writes its files under the platform's data directory. A test run must not touch the
-/// person's own, so <c>ROLA_DATA_HOME</c> — the name this project's own resolution reads on every
-/// platform — is set before anything reads it. The module initializer runs when this assembly is
+/// person's own, so <c>ROLA_DATA_HOME</c>, the name this project's own resolution reads on every
+/// platform, is set before anything reads it. The module initializer runs when this assembly is
 /// loaded, which is before any test body, and the root is removed when the run ends. The XDG name is
 /// set beside it for anything that reads the standard one.
 /// </remarks>

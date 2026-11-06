@@ -2,7 +2,7 @@
 //!
 //! A view does four things with a terminal: it reads the bytes the shell printed, writes the bytes a
 //! user typed, says how large it is, and closes it. Each is one export here, and the handle between
-//! them is opaque — what it holds, and how the child process is kept, is not a C caller's business.
+//! them is opaque, what it holds, and how the child process is kept, is not a C caller's business.
 //!
 //! # Why the reading is not a callback
 //!
@@ -291,7 +291,7 @@ pub unsafe extern "C" fn rola_desktop_pty_close(handle: *mut RolaDesktopPty) {
 
 /// Reads the terminal into the queue until it ends.
 ///
-/// The reader is the master side's own half, and the drop of `sender` — when this thread ends — is how
+/// The reader is the master side's own half, and the drop of `sender`, when this thread ends, is how
 /// the polling side learns that the shell is over.
 fn drain(mut reader: Box<dyn Read + Send>, sender: &std::sync::mpsc::Sender<Vec<u8>>) {
     let mut buffer = [0u8; 8192];
@@ -424,7 +424,7 @@ mod tests {
         rola_desktop_pty_write,
     };
 
-    /// A terminal is started, typed into, and read back — which is the whole exchange a view makes.
+    /// A terminal is started, typed into, and read back, which is the whole exchange a view makes.
     ///
     /// The shell is the platform's own, started with no arguments and driven by a line typed into it: what
     /// is checked is that a program in the pseudo-terminal takes its input and writes its answer, not what

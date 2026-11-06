@@ -13,7 +13,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The graph is the one reading this suite cannot stand in for: it is walked over the inverse index,
 /// which only a workspace with a recorded history has, and the entries, the merges and the texts are
 /// read beside it by the module that owns them. So the workspace is made by running the command line
-/// here — a file recorded twice, which is a chain of two variants — and what is checked is the reading
+/// here (a file recorded twice, which is a chain of two variants) and what is checked is the reading
 /// of it through the C ABI and the wrapper above it.
 /// </remarks>
 public sealed class VariantGraphTests

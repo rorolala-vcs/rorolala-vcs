@@ -6,7 +6,7 @@ The command line speaks through `rust-i18n`; its words live in YAML under `app/c
 one file per command or group of errors, each node a key and each leaf that key written in every
 language it has been written in. What the window says is written the same way, into files of the
 same shape, so that a person writing either one writes the other without a second set of rules to
-hold in mind — and so that a file stating words both of them say can be read by both.
+hold in mind, and so that a file stating words both of them say can be read by both.
 
 Nothing here is a second format. A file that `rust-i18n` reads is a file this reads.
 
@@ -24,7 +24,7 @@ error:
 
 - A file opens with `_version`, which is not a node and is not read.
 - A node is a mapping of locale to form, which is a mapping whose every value is written out.
-- A key is where a node sits in that nesting — `error.vault.err_not_bound`. Which file a node is
+- A key is where a node sits in that nesting, `error.vault.err_not_bound`. Which file a node is
   written in, and which directory that file sits under, says nothing about the key: the files under
   one directory are read together, so where a thing is filed is for whoever is filing it.
 - Every `*.yml` and `*.yaml` under the directory is read, however deep it sits.
@@ -61,7 +61,7 @@ directories and its language before anything is drawn.
 
 - **A key nothing states reads as the key.** So does a key written in no language the program
   speaks. What is wrong is then on the screen rather than hidden behind a blank, and finding it is
-  reading the key and looking for it — which is what `rust-i18n` does too.
+  reading the key and looking for it, which is what `rust-i18n` does too.
 - **A language with no form falls back to `en`**, the language the command line's own files fall
   back to.
 - **A form is trimmed.** A form written as a `|` block ends with a newline that belongs to the file
@@ -71,7 +71,7 @@ directories and its language before anything is drawn.
   written; a value left without a place is dropped. The form is what says how many values there
   are.
 - **A value is written the same in every language.** Numbers are written the way `rust-i18n` writes
-  them — without consulting the machine's language — so what a form says does not change with where
+  them, without consulting the machine's language, so what a form says does not change with where
   it is read.
 - **A language is named as a locale.** `zh-CN`, `zh_CN` and `zh_CN.UTF-8` are the same language, and
   the last two are read as the first.

@@ -214,7 +214,7 @@ public sealed class RolaVariantGraph
     /// <param name="directory">The directory the Workspace is searched upwards from.</param>
     /// <param name="request">What to read, or nothing for the work's own entries and their chains.</param>
     /// <returns>
-    /// The reading, or nothing when there is nothing to draw — no Workspace holds the directory, the
+    /// The reading, or nothing when there is nothing to draw, no Workspace holds the directory, the
     /// Workspace works in no Layout, or it holds no version control index.
     /// </returns>
     /// <exception cref="InvalidOperationException">

@@ -47,8 +47,8 @@ pub fn desc_vault_handshake() -> Description {
 /// `VAULT` names the Vault to reach: a name the Workspace has [bound](crate::vault::cmd_vault), or an
 /// ip and a port. Naming none reaches for the one the Workspace
 /// [reaches for by default](crate::vault::cmd_vault_set_default). The action runs as the
-/// account the work acts as — the one `rola account` names, which is the same choice every
-/// other command makes — and what it introduces itself with is that account's name, so the
+/// account the work acts as, the one `rola account` names, which is the same choice every
+/// other command makes, and what it introduces itself with is that account's name, so the
 /// call needs nothing else.
 ///
 /// The exchange is between the work and its remote, so it is spoken from inside a Workspace:

@@ -1,14 +1,14 @@
 //! The frozen yardsticks a strategy is measured against.
 //!
 //! These are the cuts the store falls back on: the ones it already had, unchanged and untuned. They
-//! are not selectable by name from the command line and they are not policies — a store reaches them
+//! are not selectable by name from the command line and they are not policies, a store reaches them
 //! through `/extension/nothing claims it`, not through a name. What makes them the yardsticks is
 //! exactly that: their numbers do not move when a strategy is written, so a score taken this year can
 //! be compared with one taken in three.
 //!
-//! The sizes are the ones a store's own constants use where there is one — `text` is
+//! The sizes are the ones a store's own constants use where there is one, `text` is
 //! `Chunking::Text { min: 1024, average: 4096, max: 16384 }`, because that is what a text write
-//! actually gets — and round powers of two elsewhere, so a reader can see what was measured.
+//! actually gets, and round powers of two elsewhere, so a reader can see what was measured.
 
 use rorolala_storage::{Cdc, Chunking};
 
@@ -71,7 +71,7 @@ pub fn all() -> Vec<Baseline> {
 
 /// The `Chunking` value that cuts the way `cdc` does.
 ///
-/// The two are the same cut said two ways — `Cdc` is the doing and `Chunking::Cdc` is the choice — and
+/// The two are the same cut said two ways, `Cdc` is the doing and `Chunking::Cdc` is the choice, and
 /// the store is written in terms of the choice, so this is the spelling that measures what a store
 /// would do.
 const fn chunking_of(cdc: Cdc) -> Chunking {

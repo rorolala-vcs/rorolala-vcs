@@ -1,7 +1,7 @@
 //! The `rola layout fetch` command: bring a Vault's Layout here to read.
 //!
 //! A Vault holds one Layout, and it is the truth about what the work is made of: which path names
-//! which `Uuid`, and who holds it. A Workspace cannot work in it — it is elsewhere — so what it
+//! which `Uuid`, and who holds it. A Workspace cannot work in it, it is elsewhere, so what it
 //! fetches is a copy, kept under the name the Vault was bound by and read rather than worked in.
 
 use librorolala::daemon::{action_fetch_ignore_rules, action_fetch_layout};

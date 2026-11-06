@@ -12,8 +12,8 @@ use crate::convert::{InputPtr, InputRef, InputType, ReturnPtr, ReturnType};
 
 /// Implements the four conversion traits for a scalar type, whose repr is itself.
 ///
-/// The items it emits carry no markers of their own — a comment in a macro body is dropped with
-/// the token stream — so each `unsafe fn` here states why its implementation is sound.
+/// The items it emits carry no markers of their own, a comment in a macro body is dropped with
+/// the token stream, so each `unsafe fn` here states why its implementation is sound.
 macro_rules! impl_scalar {
     ($($ty:ty),* $(,)?) => {
         $(
@@ -86,7 +86,7 @@ rorolala_utils_lazyffi_core::for_each_scalar!(impl_scalar);
 /// - **return allocates**: the caller owns the buffer and must release it with
 ///   [`crate::free_string`].
 ///
-/// The by-pointer conversions are deliberately not implemented — a pointer to a
+/// The by-pointer conversions are deliberately not implemented, a pointer to a
 /// pointer is meaningless for a C string.
 impl InputType for String {
     type From = *mut c_char;
@@ -119,7 +119,7 @@ impl ReturnType for String {
 /// A path is not text, though, so the bytes travel as the platform encodes them
 /// ([`OsStr::as_encoded_bytes`]): a path Rust hands out and C gives straight back
 /// comes back unchanged, including one that is not valid UTF-8. That holds wherever a
-/// path *is* bytes, which is everywhere but Windows — there a C string is read as
+/// path *is* bytes, which is everywhere but Windows, there a C string is read as
 /// UTF-8, lossily, exactly as [`String`] reads one, because the platform's encoding is
 /// what makes a byte sequence a valid path. Ownership moves in the usual C direction:
 ///
@@ -127,7 +127,7 @@ impl ReturnType for String {
 /// - **return allocates**: the caller owns the buffer and releases it with the very
 ///   same [`crate::free_string`] a [`String`] uses.
 ///
-/// The by-pointer conversions are deliberately not implemented — a pointer to a
+/// The by-pointer conversions are deliberately not implemented, a pointer to a
 /// pointer is meaningless for a C string.
 impl InputType for PathBuf {
     type From = *mut c_char;
@@ -145,7 +145,7 @@ impl InputType for PathBuf {
 
         // On Unix a path *is* its bytes, so anything a C string can hold is a valid
         // path. Elsewhere the platform's encoding is what makes bytes valid, and a
-        // C string is expected to be UTF-8 — so it is read the same way [`String`]
+        // C string is expected to be UTF-8, so it is read the same way [`String`]
         // reads one, lossily, rather than assumed.
         #[cfg(unix)]
         // SAFETY: the bytes neither come from `as_encoded_bytes` on another platform
@@ -155,7 +155,7 @@ impl InputType for PathBuf {
         #[cfg(not(unix))]
         // The lossy read is bound rather than inlined: it allocates only when the C
         // string is not UTF-8, so it hands out a `Cow` that borrows the C string, and
-        // `OsStr` borrows *that* — a temporary would be dropped at the end of the
+        // `OsStr` borrows *that*, a temporary would be dropped at the end of the
         // statement that made it, outliving neither.
         let lossy = c_str.to_string_lossy();
         #[cfg(not(unix))]

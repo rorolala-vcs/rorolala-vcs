@@ -26,7 +26,7 @@ internal sealed class DockInstance
     /// </summary>
     /// <remarks>
     /// A dock that answers <see cref="IDockTitle"/> names itself by where it is, and what it says is kept here so that
-    /// everything which draws a dock's name — its tab, the window it is in, the top of its tab's menu — reads one
+    /// everything which draws a dock's name (its tab, the window it is in, the top of its tab's menu) reads one
     /// answer rather than asking the view each time. What is written down is the dock's arrangement and not its name,
     /// which is why this is set rather than persisted.
     /// </remarks>
@@ -67,9 +67,9 @@ internal sealed class DockInstance
     /// </summary>
     /// <remarks>
     /// What a window closing means for the dock it holds. A dock that was moved into a window of its own came
-    /// out of the main window, and the main window is where it goes back to; a dock that was opened in one —
+    /// out of the main window, and the main window is where it goes back to; a dock that was opened in one,
     /// a directory asked for in a window of its own, which is what a dock asked for anew in its own window is
-    /// — was never in the main window, so closing that window is the end of it rather than a return. Without
+    ///, was never in the main window, so closing that window is the end of it rather than a return. Without
     /// the difference, closing a window that was opened onto one directory leaves a dock of that directory in
     /// the main window that nobody asked for.
     /// <para>

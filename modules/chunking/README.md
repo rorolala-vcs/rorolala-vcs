@@ -4,7 +4,7 @@ How content is cut into the pieces a store keeps, and the one value that says wh
 
 `Chunker` is the doing: content in, the ranges it is cut into out. `Chunking` is the choice: it says
 _which_ cut a write will use, and it is what a backend's algorithm choice carries. Both are here
-rather than in the store because a cut is a domain of its own — see [The boundary](#the-boundary).
+rather than in the store because a cut is a domain of its own, see [The boundary](#the-boundary).
 
 The general cuts are `Whole`, `Fixed`, `Cdc`, `Text` and `Zip`. They are the ones a store falls back
 on: `Whole` when nothing is asked for, `Text` and `Zip` when content says it is text or a packed
@@ -13,7 +13,7 @@ against them so that the measurement does not move when a strategy does.
 
 The strategies are beside them, one file each in `src/policies/`. Adding one is adding a file: the
 crate's build script reads the `impl Policy` blocks and writes the registry they are found through,
-so there is no list anybody has to edit — which is what lets several people write several formats
+so there is no list anybody has to edit, which is what lets several people write several formats
 without ever colliding. A policy's corpus and its score live in `corpus/`, and `dev/chunker-harness`
 is what takes the score; `corpus/.gitignore` is where the line between what is carried and what is
 kept locally is drawn.
@@ -21,7 +21,7 @@ kept locally is drawn.
 ## The boundary
 
 Nothing here is remembered by a store. What a chunked entry records is the ordered list of the chunks
-it was made of — the manifest — which says nothing about how the cuts were found. So content cut by
+it was made of, the manifest, which says nothing about how the cuts were found. So content cut by
 _any_ chunker reads back the same, and a chunker that was used to write yesterday's objects does not
 have to exist to read them.
 

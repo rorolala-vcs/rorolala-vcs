@@ -14,7 +14,7 @@ namespace RorolalaVCSPlugin;
 /// </summary>
 /// <remarks>
 /// None is drawn here: a picture contributed under a key is what the views stamp as a mask, and what
-/// this class holds is the reading of them out of the assembly they travel in — a plugin is discovered as
+/// this class holds is the reading of them out of the assembly they travel in, a plugin is discovered as
 /// one file, so a picture beside it would be a second thing to keep in step. The keys are the manifest's
 /// (`app/desktop/icons.toml`), written out by <c>cargo dev icons</c> rather than by hand.
 /// </remarks>

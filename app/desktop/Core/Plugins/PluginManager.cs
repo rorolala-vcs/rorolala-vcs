@@ -180,7 +180,7 @@ internal sealed class PluginManager
                 _problems.Add(
                     new PluginProblem(
                         planned.Id.Value,
-                        $"not loaded: it threw while starting — {error.Message}"
+                        $"not loaded: it threw while starting, {error.Message}"
                     )
                 );
             }

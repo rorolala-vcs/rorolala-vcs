@@ -1,7 +1,7 @@
 //! The `rola fs-ops mv` command: put a path at another.
 
-// What a move is about — the two paths, the Workspace each sits in, the entries it renames, and the
-// merge a variant file carries with it — is read in one place, so the order the two are kept in step
+// What a move is about, the two paths, the Workspace each sits in, the entries it renames, and the
+// merge a variant file carries with it, is read in one place, so the order the two are kept in step
 // reads off the handler rather than being assembled from helpers.
 #![allow(clippy::too_many_lines)]
 
@@ -130,7 +130,7 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv) -> Next {
     // The Workspace each path sits in, looked for from the paths themselves and never from where the
     // run was made: a run made outside any Workspace still keeps the tree its paths are in step. What
     // the move changes is the source's Layout, and the two being the same Workspace is what says the
-    // paths stay in it — so the entries are renamed rather than let go of.
+    // paths stay in it, so the entries are renamed rather than let go of.
     let source = cmd_fs_ops::workspace_of(&cwd, &from);
     let target = cmd_fs_ops::workspace_of(&cwd, &to);
     let same = source

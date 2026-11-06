@@ -11,17 +11,17 @@ namespace RorolalaVCSPlugin;
 /// <remarks>
 /// An entry is what this side and the Vault share, and the two name it at a path each: the work names it
 /// where the file sits here, and the Vault names the same entry where it sits there. The two are the same
-/// path until one side moves the file, which is what makes the column worth reading — a path that is not
+/// path until one side moves the file, which is what makes the column worth reading, a path that is not
 /// the one beside it is a file that moved in the work.
 /// <para>
 /// What is read is the copy the Workspace has fetched, through <see cref="OwnershipReadings"/>, which the
 /// Ownership column reads through too: nothing is reached for, so the column says what the Vault held when
 /// it was last fetched. The column sits beside the name rather than after the listing's own, because what
-/// it says is where the entry is — the other name of the same thing — and it is read with the name.
+/// it says is where the entry is, the other name of the same thing, and it is read with the name.
 /// </para>
 /// <para>
-/// A variant file is the one file of the work neither Layout names — it holds content waiting to be joined
-/// into a file the Layout does name — so what the column says about it is the variant it holds, in the
+/// A variant file is the one file of the work neither Layout names, it holds content waiting to be joined
+/// into a file the Layout does name, so what the column says about it is the variant it holds, in the
 /// amber of work under way. That is where a reader finds out that a file they cannot otherwise place is a
 /// merge waiting rather than something untracked, and it is said here because this is the column that names
 /// a file's other name (see <see cref="VariantFiles"/>).
@@ -97,8 +97,8 @@ internal sealed class RorolalaUpstream : IEntryColumnProvider
     /// What a variant file is named as: the variant it holds, in the amber of work under way.
     /// </summary>
     /// <remarks>
-    /// The colour is the one a merge is drawn in everywhere else — the state dot beside a name in a listing,
-    /// the pill of the Overview's own row — rather than the listing's ordinary ink, because what it says is
+    /// The colour is the one a merge is drawn in everywhere else, the state dot beside a name in a listing,
+    /// the pill of the Overview's own row, rather than the listing's ordinary ink, because what it says is
     /// the same thing those say: something is waiting to be joined. What the file is for is on the cell's own
     /// words, so nothing is said on hover: a column of values is read, and a value that has to be hovered for
     /// is a value the column did not hold.

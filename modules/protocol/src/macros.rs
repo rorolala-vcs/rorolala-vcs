@@ -3,7 +3,7 @@
 ///
 /// The closure's parameters name the [`OnlyWorkspace`](crate::OnlyWorkspace) values
 /// it reads; each is unwrapped inside, so the body works with the plain values. The
-/// closure runs only on the Workspace side — on the Vault the receiver is handed a
+/// closure runs only on the Workspace side, on the Vault the receiver is handed a
 /// [`only_workspace`](crate::ActionContext::only_workspace) that never calls it, and
 /// the result is empty until [`sync`](crate::ActionContext::sync) carries it over.
 ///

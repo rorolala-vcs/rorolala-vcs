@@ -30,8 +30,8 @@ text-format = "./icons/fallback-text.svg"
 # Rules are tried in the order written, before the fallback table. The first rule whose regex matches
 # the entry's name and whose `type` includes the entry's kind wins.
 #
-# `regex` is one pattern or an array of patterns. The entry's name is matched — the last part of the
-# path, not the whole path — and matching ignores case unless the pattern says `(?-i)`.
+# `regex` is one pattern or an array of patterns. The entry's name is matched, the last part of the
+# path, not the whole path, and matching ignores case unless the pattern says `(?-i)`.
 #
 # `type` is one kind or an array of kinds: "file", "directory", or both. Omit it to apply to both.
 #

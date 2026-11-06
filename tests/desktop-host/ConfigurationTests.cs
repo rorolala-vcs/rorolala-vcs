@@ -471,7 +471,7 @@ public sealed class ConfigurationTests
 
     /// <summary>
     /// A setting a plugin declared reads as its declared default until the user chooses another, and as the
-    /// choice once there is one — without the plugin repeating the default where it reads.
+    /// choice once there is one, without the plugin repeating the default where it reads.
     /// </summary>
     [Fact]
     public void ADeclaredSettingReadsAsItsDefaultUntilItIsChosen()
@@ -587,7 +587,7 @@ public sealed class ConfigurationTests
         settings.Declare(owner, preset);
 
         // The declared defaults are what the `posix` option names, so that is what is shown before anything
-        // is chosen — nothing is kept for the preset itself.
+        // is chosen, nothing is kept for the preset itself.
         Assert.Equal("posix", settings.Value(owner, preset));
         Assert.False(settings.Chosen(owner, preset.Id));
 
@@ -613,7 +613,7 @@ public sealed class ConfigurationTests
     /// <summary>
     /// A multi-choice setting with nothing stored is shown as every option, which is the default a list of
     /// options is declared with; ticking one keeps the list; and unticking the last keeps an empty list,
-    /// which is not the same as never having chosen — the default must not come back on its own.
+    /// which is not the same as never having chosen, the default must not come back on its own.
     /// </summary>
     [Fact]
     public void AMultiChoiceSettingWithNothingStoredIsShownAsEveryOption()
@@ -658,7 +658,7 @@ public sealed class ConfigurationTests
 
     /// <summary>
     /// The switch that shows what is hidden reads as off until the user turns it on, and keeps what they
-    /// chose — it is what decides whether a listing leaves the hidden entries out.
+    /// chose, it is what decides whether a listing leaves the hidden entries out.
     /// </summary>
     [Fact]
     public void TheShowHiddenSwitchReadsAsOffUntilItIsTurnedOn()

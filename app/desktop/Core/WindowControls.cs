@@ -15,14 +15,14 @@ namespace RorolalaDesktop;
 /// The window's own buttons: what they say, and what they are drawn as.
 /// </summary>
 /// <remarks>
-/// The buttons are the markup's — a button per role, on the same row as the menu — and what the toolkit
+/// The buttons are the markup's (a button per role, on the same row as the menu) and what the toolkit
 /// makes of them is the role each carries: a press on one closes, minimizes, or maximizes the window, and
 /// the state each is available in follows the window. What is left to this file is the part of a button
 /// that is neither markup nor toolkit: the words a reader hears it by, which are translated, and the
 /// picture it carries, which is the program's own rather than the desktop's.
 /// <para>
 /// The pictures are Material Design's, drawn from the pinned set and read out of the program's own
-/// assembly — see <see cref="Icons"/>. Each is drawn as an opacity mask over the ink of the button it sits
+/// assembly, see <see cref="Icons"/>. Each is drawn as an opacity mask over the ink of the button it sits
 /// in rather than as a picture, so that a button under the pointer, and the one that closes the window,
 /// take the colour the look gives them instead of one baked into the file.
 /// </para>
@@ -72,7 +72,7 @@ internal static class WindowControls
     /// </summary>
     /// <remarks>
     /// Nothing is answered rather than a failure raised: a picture is what a button is drawn as, and a
-    /// button drawn as nothing is still a button — one that closes or minimizes the window exactly as it
+    /// button drawn as nothing is still a button, one that closes or minimizes the window exactly as it
     /// would have. What must not happen is the window failing to open because a file it was drawn from
     /// was not beside the program.
     /// </remarks>
@@ -111,7 +111,7 @@ internal static class WindowControls
             OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
         };
 
-        // A picture is drawn at several times the size it is shown at — see `Icons.Picture` — so what is
+        // A picture is drawn at several times the size it is shown at, see `Icons.Picture`, so what is
         // scaled here is a large bitmap being reduced rather than a small one being enlarged, and a filter
         // that samples a few of its pixels leaves a glyph's thin strokes broken. The high one takes the
         // whole of what it covers.
@@ -121,7 +121,7 @@ internal static class WindowControls
         );
 
         // The holder is named rather than guessed at: what states the ink is the button, and what is
-        // between the two — the presenter a button puts its content in — states nothing of its own. A
+        // between the two, the presenter a button puts its content in, states nothing of its own. A
         // button is named rather than a content control, which is what everything that holds anything is.
         glyph.Bind(
             Border.BackgroundProperty,
@@ -166,7 +166,7 @@ internal static class WindowControls
     /// Gives a button the words it is read and reached by.
     /// </summary>
     /// <remarks>
-    /// A window's buttons carry no visible text, so the name is the only thing that says what one is —
+    /// A window's buttons carry no visible text, so the name is the only thing that says what one is,
     /// to a reader, to an automation client, and to whatever enumerates a window's controls.
     /// </remarks>
     /// <param name="button">The button to name.</param>

@@ -7,8 +7,8 @@ namespace RorolalaLauncher.Rola;
 /// </summary>
 /// <remarks>
 /// The process is kept rather than waited for and let go: what the wait is for is a window, and the program that
-/// ends when the window does may outlive this one by hours. Nothing here ends it — a wait that gives up is this
-/// window giving up rather than the other program being wrong — and <see cref="Dispose"/> is how this window
+/// ends when the window does may outlive this one by hours. Nothing here ends it, a wait that gives up is this
+/// window giving up rather than the other program being wrong, and <see cref="Dispose"/> is how this window
 /// lets go of it, which is taking the handles rather than the program.
 /// <para>
 /// Both of the streams are drained while it runs. The output is where the line the window writes arrives; the

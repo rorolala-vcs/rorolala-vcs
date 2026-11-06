@@ -1,7 +1,7 @@
 //! Reading and writing one entry, and the file-level cares that come with it.
 //!
 //! An entry is what a store lays down for one key: a frame and a payload. Getting one onto the disk
-//! is done the same way whatever it holds — written beside where it belongs and moved into place —
+//! is done the same way whatever it holds, written beside where it belongs and moved into place,
 //! and what holds a store together is that every one of them arrived whole.
 
 use std::collections::BTreeSet;
@@ -15,7 +15,7 @@ use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, TEMPORARY_SUFFIX};
 use crate::{Error, Frame, Key};
 
 impl RorolalaStorage {
-    /// Writes an entry — its frame and its payload — where `path` says.
+    /// Writes an entry, its frame and its payload, where `path` says.
     pub(super) async fn write_entry(
         &self,
         path: &Path,
@@ -30,15 +30,15 @@ impl RorolalaStorage {
         // Written beside where it belongs and moved into place, so a write that is cut short
         // leaves a store that is what it was rather than one holding half an entry. The temporary
         // name is one no other write is using, so two writers of one path never write through each
-        // other's file — see `temporary_beside`.
+        // other's file, see `temporary_beside`.
         //
         // The frame and the payload go down as two writes rather than into one buffer first: the
         // payload is the whole encoded content, and joining it to the frame would be a copy of a file
         // that may be a gigabyte for the sake of a header of a few dozen bytes.
         //
         // The flush is what makes the move below safe: a write that has been taken is not yet a
-        // write that has landed — tokio's file hands the last stretch to a blocking task and answers
-        // before it is done — so moving the temporary first can move a file that is still short. A
+        // write that has landed, tokio's file hands the last stretch to a blocking task and answers
+        // before it is done, so moving the temporary first can move a file that is still short. A
         // flush completes what is in flight, and is also what closes the handle before the rename,
         // which a platform that will not rename an open file depends on.
         let temporary = temporary_beside(path)?;
@@ -65,7 +65,7 @@ impl RorolalaStorage {
     ///
     /// A write lays its bytes down beside where they belong and moves them into place, so a run that
     /// stopped in the middle leaves a `.tmp` file nothing will ever read. Such a file costs space and
-    /// nothing else — it is not part of the store and no key names it — so taking it back is a
+    /// nothing else, it is not part of the store and no key names it, so taking it back is a
     /// caller's to do when it likes, and there is nowhere it has to be done.
     ///
     /// A temporary another write is still using is removed too, if it is removed while that write is
@@ -111,7 +111,7 @@ pub(super) fn verify(key: &Key, content: &[u8]) -> Result<(), Error> {
 /// An entry is a file, so a directory where one belongs is not one the store holds: answering that
 /// it is would let a write skip content the store cannot read back, and the directory would keep the
 /// entry's place for as long as the store lived. `metadata` follows a symlink, so a link to a file
-/// counts as the file it reaches — which is what a read does with it.
+/// counts as the file it reaches, which is what a read does with it.
 pub(super) async fn exists(path: &Path) -> Result<bool, Error> {
     match tokio::fs::metadata(path).await {
         Ok(metadata) => Ok(metadata.is_file()),
@@ -138,8 +138,8 @@ pub(super) async fn entries(directory: &Path) -> Result<Vec<PathBuf>, Error> {
 
 /// Every key named by a file under `directory`, which is laid out two levels deep by digest.
 ///
-/// Only the sharded files are read: what is directly under `directory` is not only shard directories —
-/// a manifest store keeps its packs' indexes there too — so anything that is not a directory is not
+/// Only the sharded files are read: what is directly under `directory` is not only shard directories,
+/// a manifest store keeps its packs' indexes there too, so anything that is not a directory is not
 /// descended into.
 pub(super) async fn collect(directory: &Path, keys: &mut BTreeSet<Key>) -> Result<(), Error> {
     for first in entries(directory).await? {
@@ -202,8 +202,8 @@ async fn sweep(directory: &Path, removed: &mut usize) -> Result<(), Error> {
 
 /// The temporary name a write to `path` is laid down under before it is moved into place.
 ///
-/// The name is unique among every write in this process, so two of them writing one path — two
-/// threads, two tasks, or one task's two writes — never write through each other's file rather than
+/// The name is unique among every write in this process, so two of them writing one path, two
+/// threads, two tasks, or one task's two writes, never write through each other's file rather than
 /// only across processes. It hangs off the whole name rather than replacing the extension, so a pack
 /// and the index beside it never share a temporary.
 fn temporary_beside(path: &Path) -> Result<PathBuf, Error> {
@@ -225,7 +225,7 @@ fn temporary_beside(path: &Path) -> Result<PathBuf, Error> {
 /// Writes `bytes` to `path` whole, and makes it outlive a crash before returning.
 ///
 /// The temporary is written, synced and moved into place, and the directory it landed in is synced
-/// too — a rename is durable only once its directory is, since the file's bytes may be on the disk
+/// too, a rename is durable only once its directory is, since the file's bytes may be on the disk
 /// while the name pointing at them is not. This is for the files whose loss would be the loss of
 /// content: a pack's index names a pack that may be the only copy of what it holds, so an index a
 /// reader can find after a crash has to name a pack that is all there.
@@ -247,7 +247,7 @@ pub(super) async fn write_whole_durably(path: &Path, bytes: &[u8]) -> Result<(),
 
 /// Writes `bytes` to `path` whole, laid down beside it and moved into place.
 ///
-/// This is for a caller's own file — what `extract_file` hands back — rather than for an entry the
+/// This is for a caller's own file, what `extract_file` hands back, rather than for an entry the
 /// store reads back afterwards, so nothing is synced and nothing is promised to outlive a crash.
 /// What is kept is the promise every write here keeps: the whole file or no file at all, and a
 /// directory that is not there made rather than complained about.
@@ -258,7 +258,7 @@ pub(super) async fn write_whole(path: &Path, bytes: &[u8]) -> Result<(), Error> 
     let temporary = temporary_beside(path)?;
     tokio::fs::write(&temporary, bytes).await?;
 
-    // A move that fails — the target is a directory, or on another filesystem — leaves the written
+    // A move that fails (the target is a directory, or on another filesystem) leaves the written
     // temporary beside it, which nothing will ever read. Dropping it keeps a failed extract from
     // costing space every time it is tried.
     if let Err(error) = tokio::fs::rename(&temporary, path).await {

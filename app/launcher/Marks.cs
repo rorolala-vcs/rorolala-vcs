@@ -8,8 +8,8 @@ namespace RorolalaLauncher;
 /// The one picture this program still draws for itself: the cog that opens what it may be told.
 /// </summary>
 /// <remarks>
-/// Everything else the program is drawn with is a picture from the pinned Material Design set — the three
-/// the toolbar wears and the two a window's frame carries — because those are the product's artwork and are
+/// Everything else the program is drawn with is a picture from the pinned Material Design set, the three
+/// the toolbar wears and the two a window's frame carries, because those are the product's artwork and are
 /// drawn from one manifest by <c>cargo dev icons</c>. The cog is the exception: the set this project pins has
 /// no settings picture, and a mark from another set would be a second artwork in a program drawn with one.
 /// </remarks>
@@ -35,7 +35,7 @@ internal static class Marks
     /// </summary>
     /// <remarks>
     /// Its room is the shape's own: a caret is wider than it is tall, and one given a square box would be
-    /// drawn in the top of it — which is a caret sitting above the line of the words it belongs to.
+    /// drawn in the top of it, which is a caret sitting above the line of the words it belongs to.
     /// </remarks>
     /// <param name="ink">What it is drawn in.</param>
     /// <param name="width">How wide it is drawn.</param>

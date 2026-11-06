@@ -2,8 +2,8 @@
 //!
 //! The colouring switch is one for the whole process, so a test that draws through it
 //! has to say which way it wants it rather than read whichever way it happens to be.
-//! The environment decides until something calls [`set_enabled`](crate::set_enabled) —
-//! `CLICOLOR_FORCE` exported in the shell a test run was started from is enough — and
+//! The environment decides until something calls [`set_enabled`](crate::set_enabled),
+//! `CLICOLOR_FORCE` exported in the shell a test run was started from is enough, and
 //! two tests sharing the switch would otherwise read each other's answer.
 
 use std::sync::Mutex;

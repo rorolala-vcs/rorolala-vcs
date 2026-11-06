@@ -2,21 +2,21 @@
 //!
 //! A store keeps the objects a Workspace or a Vault handed it and reads them back on request;
 //! two stores of the same kind can be pointed at each other to move a batch of them across.
-//! That the two ends are the same kind is not something the wire has to be asked about — the
-//! type says so — which is why the only thing exchanged before an object moves is
+//! That the two ends are the same kind is not something the wire has to be asked about, the
+//! type says so, which is why the only thing exchanged before an object moves is
 //! [`RorolalaStorage::PROTOCOL_MAGIC`](crate::TransferableBackend::PROTOCOL_MAGIC).
 //!
 //! What is here is the store itself: the type, where it is made, and the choices it writes with.
 //! Everything else is beside it in a file of its own, by what it is about:
 //!
-//! - [`consts`] — what the layout and the choices are named by.
-//! - `paths` — where the things a store keeps sit.
-//! - `choice` — how a store decides what to do with the content it is handed.
-//! - `config` — what the store is told by the file that makes it a store.
-//! - `entry` — reading and writing one entry, and the file-level cares that come with it.
-//! - `content` — what a store keeps, and how it decides to keep it.
-//! - `pack` — many objects in one file, and the index that says where each one sits.
-//! - `backend` — what the store answers a caller and a peer with, the two trait impls.
+//! - [`consts`], what the layout and the choices are named by.
+//! - `paths`, where the things a store keeps sit.
+//! - `choice`, how a store decides what to do with the content it is handed.
+//! - `config`, what the store is told by the file that makes it a store.
+//! - `entry`, reading and writing one entry, and the file-level cares that come with it.
+//! - `content`, what a store keeps, and how it decides to keep it.
+//! - `pack`, many objects in one file, and the index that says where each one sits.
+//! - `backend`, what the store answers a caller and a peer with, the two trait impls.
 
 mod backend;
 mod choice;
@@ -29,7 +29,7 @@ mod paths;
 
 // What a caller of a batch names: the run of entries it is writing into packs, handed back by
 // `begin_batch` and written into by `add`, `add_manifest` and `publish`. It is defined beside the
-// packing it does rather than here, so it is named here too — a type a caller cannot write down is
+// packing it does rather than here, so it is named here too, a type a caller cannot write down is
 // one it cannot keep in a field or hand to a function.
 pub use pack::Batch;
 
@@ -67,7 +67,7 @@ use consts::{DEFAULT_CODEC, MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR};
 /// <root>/manifest/packed_<n>.idx      where each manifest sits inside a manifest pack
 /// ```
 ///
-/// A pack holds one kind of entry — objects, or manifests — and a pack number names one pack: the
+/// A pack holds one kind of entry (objects, or manifests) and a pack number names one pack: the
 /// kinds are told apart by where their indexes sit, so an object and a manifest under one key are two
 /// entries in two packs, and the manifests can be read without reading every object.
 ///
@@ -81,7 +81,7 @@ pub struct RorolalaStorage {
     ///
     /// `None` is the ordinary store, which chooses per file: a claim from a policy, then what the
     /// content says about itself, then whole. A `Some` is a caller saying which strategy this write
-    /// is to use — `track` does that when a file's strategy is switched, and so does a test that
+    /// is to use, `track` does that when a file's strategy is switched, and so does a test that
     /// wants one particular cut. It is deliberately not a default: a default would be a third thing
     /// a file's cut could come from, and there are already three.
     cut: Option<Chunking>,
@@ -110,7 +110,7 @@ impl Lockable for RorolalaStorage {
     /// The lock sits at the store's root, beside the configuration that makes the directory one.
     ///
     /// A store is one place whether it is reached through a Workspace, a Vault, or on its own, so
-    /// there is one lock for it either way — the lock is not per-opener, and a run that holds it
+    /// there is one lock for it either way, the lock is not per-opener, and a run that holds it
     /// through a Vault holds it against a run that reached the same store directly.
     fn lock_path(&self) -> PathBuf {
         self.root.join(LOCK_FILE)
@@ -157,13 +157,13 @@ impl RorolalaStorage {
     ///
     /// The three directories are made with the store rather than as they fill up, so a store that
     /// exists is one with somewhere to put everything: an empty store is a store with nothing in
-    /// it, not one that is half there. What is under them is not guessed at — the sharded
+    /// it, not one that is half there. What is under them is not guessed at, the sharded
     /// directories under `obj/` and `manifest/` appear as objects are written into them, and the
     /// pack pairs under `packed/` when something is packed.
     ///
     /// What the configuration holds is not decided yet, so what is written is an empty one: what
     /// makes the directory a store is that the file is there at all. Making a store is best
-    /// effort — one that could not be made is still handed back, and what failed shows up on the
+    /// effort, one that could not be made is still handed back, and what failed shows up on the
     /// first read or write that needs it, where there is somewhere to report it.
     #[must_use]
     pub fn create(root: impl Into<PathBuf>) -> Self {

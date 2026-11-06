@@ -6,8 +6,8 @@
 //! [`sync_storage`] between two stores it makes, over a real encrypted session, and prints each
 //! phase rather than a total.
 //!
-//! What it is for is choosing between shapes of the primitive — one value per entry, or one packet
-//! per many; one file per entry on the receiving side, or one pack per run — and for knowing what a
+//! What it is for is choosing between shapes of the primitive, one value per entry, or one packet
+//! per many; one file per entry on the receiving side, or one pack per run, and for knowing what a
 //! machine charges for the parts a shape cannot change. A run says:
 //!
 //! ```text
@@ -19,7 +19,7 @@
 //! and moved into place is a number beside the store's; `--allocs` also prints what each phase
 //! allocated, which is where a copy shows up as a number rather than as a reading of the code;
 //! `--twice` syncs the same two stores again once everything has arrived, and checks that a run with
-//! nothing left to carry carries nothing and writes nothing — see [`again`].
+//! nothing left to carry carries nothing and writes nothing, see [`again`].
 //!
 //! This is a measurement harness, so a measurement whose conditions do not hold ends with a panic: a
 //! phase that did not run leaves no number, and a number taken over it would be read as what the
@@ -329,7 +329,7 @@ async fn rounds(source: &RorolalaStorage, keys: &[Key], setting: &Setting) -> La
 /// Syncs the same two stores again, over the session that carried the first sync.
 ///
 /// This is the idempotency check. The first sync left both sides holding everything, so the second
-/// one has nothing to carry and nothing to write — and what it does cost is a number this can name:
+/// one has nothing to carry and nothing to write, and what it does cost is a number this can name:
 /// the two presence answers, which are one byte per key each, and the value that says the run
 /// reached the other end. A byte more is a run that moved something it should not have.
 ///
@@ -545,8 +545,8 @@ async fn fill(store: &RorolalaStorage, setting: &Setting) -> Vec<Key> {
 
 /// Deterministic content that does not repeat, so every entry is one entry.
 ///
-/// Text is what a store cuts, so an entry of text arrives as a manifest and the chunks it names —
-/// which is the case a sync of many small entries is really about — while anything else is kept
+/// Text is what a store cuts, so an entry of text arrives as a manifest and the chunks it names,
+/// which is the case a sync of many small entries is really about, while anything else is kept
 /// whole and crosses as one entry of its own.
 fn body(at: usize, setting: &Setting) -> Vec<u8> {
     let mut content = vec![0_u8; setting.bytes];

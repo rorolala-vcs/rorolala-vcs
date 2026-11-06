@@ -14,7 +14,7 @@ namespace FileSystemPlugin;
 /// <para>
 /// A provider answers about an entry rather than about a path, because whether something is a file or
 /// a directory is what the listing already read and what a rule like "a dot-file" needs. What the
-/// answer costs — an attribute read, a command — is the provider's to keep cheap: it is asked at
+/// answer costs (an attribute read, a command) is the provider's to keep cheap: it is asked at
 /// staging time, and a listing that is staged again asks it again.
 /// </para>
 /// </remarks>
@@ -36,7 +36,7 @@ public interface IEntryHideProvider
     /// Whether this provider hides an entry.
     /// </summary>
     /// <remarks>
-    /// A provider that cannot answer — a command that is not installed, an item it may not inspect —
+    /// A provider that cannot answer (a command that is not installed, an item it may not inspect)
     /// says no rather than failing the listing: hiding something for not being answerable is the worse
     /// mistake, and the entry is shown.
     /// </remarks>
@@ -48,7 +48,7 @@ public interface IEntryHideProvider
     /// Whether this provider hides an entry, read against the place the view is rooted at.
     /// </summary>
     /// <remarks>
-    /// A rule that is about a repository — Git's — has to be read from somewhere, and the entry's own
+    /// A rule that is about a repository, Git's, has to be read from somewhere, and the entry's own
     /// directory is not always that somewhere: a tree is rooted at a base and reads the directories
     /// under it, so a rule read from each directory in turn would let a repository nested inside the
     /// base answer for itself. What is given is the place the view is rooted at, which is the base for
@@ -86,7 +86,7 @@ public interface IEntryHideProvider
     /// <remarks>
     /// The one thing a caller may do off the thread a view is drawn on: what is read here is not a row, and
     /// every question asked afterwards finds the answer waiting. It is said to a root rather than to an
-    /// entry because what a provider keeps is about a place — a repository, a Vault — and not about one of
+    /// entry because what a provider keeps is about a place (a repository, a Vault) and not about one of
     /// the things in it.
     /// <para>
     /// A provider with nothing to read answers nothing to this, which is what the default does.
@@ -100,8 +100,8 @@ public interface IEntryHideProvider
     /// </summary>
     /// <remarks>
     /// A rule that is about a repository is asked of a program once per repository and kept, since asking it
-    /// per entry would be a process per entry. The rules themselves are files, though — a <c>.gitignore</c>
-    /// is edited, a repository is set up in a directory that had none — so a kept answer can outlive what it
+    /// per entry would be a process per entry. The rules themselves are files, though, a <c>.gitignore</c>
+    /// is edited, a repository is set up in a directory that had none, so a kept answer can outlive what it
     /// was read from. A provider that keeps anything lets go of it here; one that reads afresh each time has
     /// nothing to do, which is what the default does.
     /// </remarks>
@@ -118,7 +118,7 @@ public interface IEntryHideProvider
 /// <para>
 /// The providers are offered to the user as one multi-choice setting, <c>Hides/providers</c>, whose
 /// options are the providers registered by the time the preference panel is drawn. A dependent plugin
-/// adds its provider during its own <c>Initialize</c>, which the host runs after this plugin's — so the
+/// adds its provider during its own <c>Initialize</c>, which the host runs after this plugin's, so the
 /// setting's options list is the live catalogue rather than a copy, and the option a dependent plugin
 /// adds is offered even though this plugin declared the setting first (the same shape
 /// <see cref="FileOperationPresets"/> uses for its presets).
@@ -134,7 +134,7 @@ public sealed class HideRegistry
     /// </summary>
     /// <remarks>
     /// One list for the whole run rather than one per registry, because a registry is made wherever a
-    /// setting is read — by the plugin, by a dock, by a dependent plugin adding its provider — and every one
+    /// setting is read (by the plugin, by a dock, by a dependent plugin adding its provider) and every one
     /// of them has to see the same catalogue: a dependent plugin's provider registered through one registry
     /// would otherwise be invisible to a listing staged through another. The options the setting is declared
     /// with are the same catalogue in the shape a setting takes, and are added to together.
@@ -166,7 +166,7 @@ public sealed class HideRegistry
     /// <summary>The options the setting offers, as a reader outside the plugin sees them.</summary>
     /// <remarks>
     /// The same list object the setting was declared with, so that a provider a dependent plugin registered
-    /// after that declaration is in it — which is the whole point of the catalogue being one list.
+    /// after that declaration is in it, which is the whole point of the catalogue being one list.
     /// </remarks>
     public static IReadOnlyList<SettingOption> Providers => Offer;
 
@@ -212,8 +212,8 @@ public sealed class HideRegistry
     /// </summary>
     /// <remarks>
     /// Every provider is in force until the user says otherwise, which is what is declared by stating no
-    /// default: a multi-choice setting that has never been chosen is worth every option it offers — see
-    /// <c>SettingRegistry.Value</c> — so a provider a dependent plugin has just added is in force without
+    /// default: a multi-choice setting that has never been chosen is worth every option it offers, see
+    /// <c>SettingRegistry.Value</c>, so a provider a dependent plugin has just added is in force without
     /// the user having to tick it.
     /// </remarks>
     /// <param name="host">The host, for declaring the setting.</param>
@@ -247,10 +247,10 @@ public sealed class HideRegistry
     /// <summary>Whether any provider in force hides an entry.</summary>
     /// <remarks>
     /// Asked of the list rather than of a provider, because the answer is "at least one" and the list is
-    /// what says which — an empty list is the answer "nothing hides it", which is not the same as no answer.
+    /// what says which, an empty list is the answer "nothing hides it", which is not the same as no answer.
     /// <para>
     /// Read against the directory holding the entry, which is where a rule about one entry is stated: a
-    /// reader that is looking at a directory asks about what it holds. A view rooted elsewhere — a tree —
+    /// reader that is looking at a directory asks about what it holds. A view rooted elsewhere, a tree,
     /// asks the other overload.
     /// </para>
     /// </remarks>
@@ -497,8 +497,8 @@ public sealed class WindowsHiddenFileHide : IEntryHideProvider
 /// </summary>
 /// <remarks>
 /// A name that is nothing but dots is not one: <c>.</c> and <c>..</c> are the listing's own steps rather
-/// than items it holds, and a name no filesystem allows is not worth treating as a name. What is left —
-/// <c>.gitignore</c>, <c>.git</c> — is what a dot-name is.
+/// than items it holds, and a name no filesystem allows is not worth treating as a name. What is left,
+/// <c>.gitignore</c>, <c>.git</c>, is what a dot-name is.
 /// </remarks>
 internal static class DottedNames
 {

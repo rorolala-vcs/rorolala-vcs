@@ -6,7 +6,7 @@ use rorolala_utils_lazyffi::lazyffi;
 /// The flags are independent: turning one off is how a caller narrows a search without
 /// knowing where the keys actually live.
 ///
-/// The three non-local flags name where a **public** key — and so a member — may be
+/// The three non-local flags name where a **public** key, and so a member, may be
 /// found. A private key is not shared, so an account is only ever looked for in the local
 /// scopes, whatever the others say.
 ///

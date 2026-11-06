@@ -1,7 +1,7 @@
 //! Hexadecimal, for the hashes written into structured output.
 //!
 //! A hash is thirty-two bytes and reads as sixty-four hex characters. In the JSON a `rola
-//! vcs-index` command writes, that is the string a hash is written as — the same string
+//! vcs-index` command writes, that is the string a hash is written as, the same string
 //! [`Key`](rorolala_storage::Key) is written as, without the name of the hash in front of it.
 
 use rorolala_storage::Blake3Hash;

@@ -104,14 +104,14 @@ const ARG_HELP: PickerArg<'static, Flag> = PickerArg::new(&["help"], Some('h'), 
 /// The options that take a value, so that one written last can be refused.
 ///
 /// `arg-picker` consumes the option's own word and then finds nothing after it, which answers "not
-/// given" — and a run that meant to measure one corpus would measure the default one instead. A
+/// given", and a run that meant to measure one corpus would measure the default one instead. A
 /// measurement of something other than what was asked for is the one thing this tool must not do, so
 /// the words are looked at as well as the picks.
 const WITH_VALUE: [&str; 2] = ["--corpus", "--generate"];
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    // UNWRAP: picking cannot fail — a positional or flag that is absent answers `None`/`Inactive`
+    // UNWRAP: picking cannot fail, a positional or flag that is absent answers `None`/`Inactive`
     // rather than an error, and a word no option claimed lands in `UNMATCHED` rather than in `Err`.
     let (corpus, generate, check, writing, through_store, help, unmatched) = Picker::from_args()
         .pick_or_default(ARG_CORPUS)

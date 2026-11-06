@@ -61,8 +61,8 @@ public enum BrokenKind
 
 /// <summary>What one path of the work is, as a reading says it in a word.</summary>
 /// <remarks>
-/// A reading reports lists of paths; a caller looking at one path — a file in a directory, a row of a table
-/// — has one question about it rather than six, and this is that question answered. Where a path is more
+/// A reading reports lists of paths; a caller looking at one path, a file in a directory, a row of a table
+///, has one question about it rather than six, and this is that question answered. Where a path is more
 /// than one of these at once, what is answered is the state a reader acts on first, so the answer is the one
 /// worth acting on rather than a summary of them all.
 /// </remarks>
@@ -99,12 +99,12 @@ public enum PathState
 /// <summary>A merge that cannot go on, and what the reason is about.</summary>
 /// <param name="Kind">Which reason it is.</param>
 /// <param name="What">
-/// The variant, as the hex it is named by, or the path the variant file lies at — whichever the
+/// The variant, as the hex it is named by, or the path the variant file lies at, whichever the
 /// reason is about. What the reason is *said* as is the caller's: the words belong to the program
 /// that shows them, and this side has no language.
 /// </param>
 /// <param name="Target">
-/// The file the variant is for, or an empty string when the Layout names none any more — which is one
+/// The file the variant is for, or an empty string when the Layout names none any more, which is one
 /// of the reasons a merge cannot go on, and the only one where there is nothing to name.
 /// </param>
 public sealed record BrokenReason(BrokenKind Kind, string What, string Target);
@@ -115,7 +115,7 @@ public sealed record BrokenReason(BrokenKind Kind, string What, string Target);
 /// <remarks>
 /// It is <see cref="PathState"/>'s shape and not its subject: a path's <em>state</em> is what is wrong with
 /// it, and its <em>standing</em> is how far it is from what the Vault has. A path may be in either without
-/// the other — one that is in step and one that was never recorded are both nothing to act on — so the two
+/// the other, one that is in step and one that was never recorded are both nothing to act on, so the two
 /// are asked separately.
 /// </remarks>
 public enum StandingRelation
@@ -130,7 +130,7 @@ public enum StandingRelation
     /// <remarks>
     /// This is also the answer when the version the Vault records is not in the index, which is the ordinary
     /// case: a fetch brings the Vault's Layout and never its versions. The direction is known from the version
-    /// having come from elsewhere, and how far is not — see <see cref="Standing.Distance"/>.
+    /// having come from elsewhere, and how far is not, see <see cref="Standing.Distance"/>.
     /// </remarks>
     Behind,
 
@@ -151,7 +151,7 @@ public enum StandingRelation
 /// <summary>How one path stands beside upstream, and how many versions apart the two are.</summary>
 /// <param name="Relation">Where the two stand.</param>
 /// <param name="Distance">
-/// How many versions apart they are, or nothing when the chain does not say — which includes both a standing
+/// How many versions apart they are, or nothing when the chain does not say, which includes both a standing
 /// that is <see cref="StandingRelation.Unknown"/> and one that is <see cref="StandingRelation.Apart"/>, where
 /// the two have moved on from each other and neither is a distance from the other. It is also nothing for the
 /// ordinary way of being behind: what the Vault is at is a version this side never fetched, so the direction
@@ -164,7 +164,7 @@ public sealed record Standing(StandingRelation Relation, ulong? Distance);
 /// </summary>
 /// <remarks>
 /// What <see cref="RolaStatus.StandingOf"/> answers, less the count: the count is what a column says, and this is
-/// what a plan would do about the path — a sync sends one that is ahead and brings one that is behind, and
+/// what a plan would do about the path, a sync sends one that is ahead and brings one that is behind, and
 /// <c>--force</c> is what sends one that is apart. The three are the relations a plan acts on; a version in step
 /// and a chain that cannot be read are <see cref="SyncStanding.None"/>.
 /// </remarks>
@@ -188,14 +188,14 @@ public enum SyncStanding
 /// </summary>
 /// <remarks>
 /// The same reading `rola status` makes with nothing named, and the same shape as
-/// <see cref="RolaOwnership"/>: absence — no Workspace holds the directory, or the Workspace works
-/// in no Layout — is <see langword="null"/> rather than a handle to remember to check, and the handle
+/// <see cref="RolaOwnership"/>: absence, no Workspace holds the directory, or the Workspace works
+/// in no Layout, is <see langword="null"/> rather than a handle to remember to check, and the handle
 /// is given back on <see cref="Dispose"/>.
 /// <para>
 /// It is a snapshot rather than a live view: a reading is what the tree held at one moment, so asking
 /// it again cannot answer anything newer. What it holds is read out in full when it is made, since a
-/// caller that wants the lists wants all of them; what one path is — a file of a listing, a row of a
-/// table — is asked of the reading itself, which is the one question the native side answers better
+/// caller that wants the lists wants all of them; what one path is, a file of a listing, a row of a
+/// table, is asked of the reading itself, which is the one question the native side answers better
 /// than a copy of its lists can.
 /// </para>
 /// </remarks>
@@ -329,7 +329,7 @@ public sealed class RolaStatus : IDisposable
     /// Where the Workspace this reading was made of is rooted, which the paths it reports are relative to.
     /// </summary>
     /// <remarks>
-    /// A caller that has paths of its own — a listing, which names files the way the system does — joins
+    /// A caller that has paths of its own (a listing, which names files the way the system does) joins
     /// them to this before <see cref="StateOf"/> can answer about one.
     /// </remarks>
     public string Root { get; }
@@ -344,7 +344,7 @@ public sealed class RolaStatus : IDisposable
     /// <remarks>
     /// They are not in <see cref="Untagged"/>: a reading reports the work, and what the rules cover
     /// is not work. What they are is what a reader shows when it is asked to show the ignored as
-    /// well — a view switches them on rather than being read twice.
+    /// well, a view switches them on rather than being read twice.
     /// </remarks>
     public IReadOnlyList<string> Ignored { get; }
 
@@ -368,8 +368,8 @@ public sealed class RolaStatus : IDisposable
     /// Paths whose content changed while the version recorded for them is not the one upstream is at.
     /// </summary>
     /// <remarks>
-    /// What is recorded for one of these would be based on a version the other side has moved past —
-    /// behind it, or apart from it — rather than on something both sides have. A version this side is
+    /// What is recorded for one of these would be based on a version the other side has moved past,
+    /// behind it, or apart from it, rather than on something both sides have. A version this side is
     /// <em>ahead</em> on is not one of them: holding work the other has not been told of is what working
     /// looks like. It is a subset of <see cref="Modified"/>, and a path is in it only where the index
     /// could say how the two versions stand.
@@ -380,7 +380,7 @@ public sealed class RolaStatus : IDisposable
     /// <remarks>
     /// The other side of <see cref="Behind"/>: a path ahead is ordinary work, so it is not a base gone wrong, and
     /// it is the one of the three standings that records nothing to act on but a sync. It is every path the
-    /// standings have, whether or not the tree changed it — the changes the tree made are <see cref="Modified"/>.
+    /// standings have, whether or not the tree changed it, the changes the tree made are <see cref="Modified"/>.
     /// </remarks>
     public IReadOnlyList<string> Ahead { get; }
 
@@ -428,7 +428,7 @@ public sealed class RolaStatus : IDisposable
     {
         ArgumentNullException.ThrowIfNull(directory);
 
-        // A path crosses as bytes, and the platform's own encoding is UTF-8 — which is what this
+        // A path crosses as bytes, and the platform's own encoding is UTF-8, which is what this
         // writes. The buffer is this side's to free, which is why it is in a `finally`: the reading
         // raising is no reason to lose it.
         var path = Marshal.StringToCoTaskMemUTF8(directory);
@@ -449,7 +449,7 @@ public sealed class RolaStatus : IDisposable
     /// What the reading says about the entry at a path, in one word.
     /// </summary>
     /// <remarks>
-    /// The path is one the caller names — a file of a listing, as the system spells it — and what the
+    /// The path is one the caller names (a file of a listing, as the system spells it) and what the
     /// reading names is relative to <see cref="Root"/>, so a path outside the Workspace it was made of is
     /// nothing this reading is about.
     /// </remarks>
@@ -527,8 +527,8 @@ public sealed class RolaStatus : IDisposable
     /// What a sync would do about the entry at a path: send it, bring it down, or only send it when forced.
     /// </summary>
     /// <remarks>
-    /// It is the path's standing read the way a plan reads it — ahead is a send, behind is a receive, and two
-    /// chains that have each moved on are sent only by <c>--force</c> — and it is read from the relation rather
+    /// It is the path's standing read the way a plan reads it, ahead is a send, behind is a receive, and two
+    /// chains that have each moved on are sent only by <c>--force</c>, and it is read from the relation rather
     /// than from <see cref="WrongBase"/>, because a base gone wrong is a <em>change</em> the tree has made while a
     /// version the Vault moved past is a receive whether or not the tree touched the file. Two things a run adds
     /// are not said here: a send is only where this account holds the entry, and bringing a version down where the
@@ -558,7 +558,7 @@ public sealed class RolaStatus : IDisposable
     /// <summary>Whether a path a reading named is the file at `path`.</summary>
     /// <remarks>
     /// A list of the reading's is relative to the Workspace it was made of, and a caller's path is whatever the
-    /// system names — so the two are joined and both made absolute before they are compared, which is the same
+    /// system names, so the two are joined and both made absolute before they are compared, which is the same
     /// comparison every reader of these lists makes (see the File System plugin's columns).
     /// </remarks>
     /// <param name="named">The path the reading named.</param>
@@ -665,7 +665,7 @@ public sealed class RolaStatus : IDisposable
         for (nuint index = 0; index < many; index++)
         {
             // A move is said by the path being there and not said at all by it being absent, so an
-            // empty answer is read as the absence it is rather than as a path of no characters —
+            // empty answer is read as the absence it is rather than as a path of no characters,
             // which is not a path a Layout could name in the first place.
             var moved = NativeText.Taken(RorolalaBinding.rola_status_merging_moved(handle, index));
 

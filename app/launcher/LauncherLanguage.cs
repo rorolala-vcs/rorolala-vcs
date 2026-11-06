@@ -44,7 +44,7 @@ internal static class LauncherLanguage
     /// </summary>
     /// <remarks>
     /// The region is dropped rather than compared: the files state <c>en</c> and <c>zh-CN</c>, and a machine
-    /// may hand over <c>en-GB</c> or <c>zh-Hans</c> for the same two languages — a menu that matched the
+    /// may hand over <c>en-GB</c> or <c>zh-Hans</c> for the same two languages, a menu that matched the
     /// whole name would mark neither of them as the one in force.
     /// </remarks>
     /// <param name="locale">The locale in force, or nothing.</param>
@@ -84,7 +84,7 @@ internal static class LauncherLanguage
     /// <remarks>
     /// The choice is the Desktop program's own file rather than a file of this program's: the two programs
     /// speak to one person, and a language chosen in one of them is a language the other should speak. What
-    /// the file holds besides the language — each plugin's own section — is read and written back as it was,
+    /// the file holds besides the language, each plugin's own section, is read and written back as it was,
     /// since this program understands none of it and must not be the thing that drops it.
     /// </remarks>
     /// <param name="locale">The locale chosen.</param>
@@ -102,7 +102,7 @@ internal static class LauncherLanguage
     /// A language as the files name one.
     /// </summary>
     /// <remarks>
-    /// A locale on a machine may carry the encoding it is written in — <c>zh_CN.UTF-8</c> — and separates the
+    /// A locale on a machine may carry the encoding it is written in, <c>zh_CN.UTF-8</c>, and separates the
     /// region with an underscore where the files use a hyphen, so neither is left in the name spoken by.
     /// </remarks>
     /// <param name="locale">The locale.</param>

@@ -88,8 +88,8 @@ impl Lockable for Vault {
 impl Vault {
     /// The Vault rooted at `current_dir`, which is taken to hold a configuration.
     ///
-    /// This builds a Vault out of a directory that is already known to be one — where a
-    /// search has just found its configuration, or where a registry named it — rather than
+    /// This builds a Vault out of a directory that is already known to be one, where a
+    /// search has just found its configuration, or where a registry named it, rather than
     /// looking for one, so it says nothing about whether `current_dir` is a Vault and takes the
     /// caller's word for it.
     #[must_use]

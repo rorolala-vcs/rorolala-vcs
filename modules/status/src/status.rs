@@ -2,8 +2,8 @@
 //!
 //! One reading, four answers about it: what the Layout names and the tree has lost, what the tree
 //! holds and the Layout does not name, what changed where it was, and what moved. Beside those sit
-//! the two things that are not the work's own — the changes the fetched copy of the Vault's Layout
-//! says another account holds, and the variants waiting to be joined into files — because a reader
+//! the two things that are not the work's own, the changes the fetched copy of the Vault's Layout
+//! says another account holds, and the variants waiting to be joined into files, because a reader
 //! that acted on the first would be acting past the one thing it is not to do, and one that missed
 //! the second would record a merge over work that is not finished.
 //!
@@ -32,8 +32,8 @@ const DEFAULT_ALIKE: f32 = 0.6;
 
 /// What one path of the work is, as a reading says it in a word.
 ///
-/// A reading reports lists of paths, and a reader looking at one path — a file in a directory, a row of a
-/// table — has one question about it rather than six. This is that question answered: the state the path is
+/// A reading reports lists of paths, and a reader looking at one path, a file in a directory, a row of a
+/// table, has one question about it rather than six. This is that question answered: the state the path is
 /// in, which is the state a reader acts on first when a path is more than one of them at once.
 ///
 /// # FFI
@@ -100,8 +100,8 @@ pub struct Merge {
 
 /// Why a merge in progress cannot go on.
 ///
-/// A record that does not stand is not dropped quietly — a merge that cannot be carried out is
-/// worse unseen — so it is answered as what it is rather than among the merges that are. What is
+/// A record that does not stand is not dropped quietly, a merge that cannot be carried out is
+/// worse unseen, so it is answered as what it is rather than among the merges that are. What is
 /// said here is the reason alone: the words for it belong to the program that shows it, and a
 /// library has no language.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,15 +190,15 @@ impl Broken {
 /// # FFI
 ///
 /// Opaque: C takes a pointer from `locate_rola_status` and gives it back with `free_rola_status`.
-/// What it holds — the four lists, the moves among them, and the merges — is read one entry at a
+/// What it holds (the four lists, the moves among them, and the merges) is read one entry at a
 /// time, by the accessors beside it.
 #[lazyffi(export = RolaStatus)]
 #[derive(Debug, Clone)]
 pub struct Status {
     /// Where the Workspace the reading was made of is rooted, normalised.
     ///
-    /// The paths reported here are relative to it, and a caller that has paths of its own — a listing,
-    /// which names files the way the system does — needs to know what they are relative to before it can
+    /// The paths reported here are relative to it, and a caller that has paths of its own, a listing,
+    /// which names files the way the system does, needs to know what they are relative to before it can
     /// ask about one.
     root: PathBuf,
 
@@ -211,7 +211,7 @@ pub struct Status {
     /// Paths the tree holds, the Layout does not name, and the ignore rules govern.
     ///
     /// They are held apart from [`untagged`](Self::untagged) rather than dropped, so that a reader
-    /// which wants to show what the rules cover — a window switching them on — has the list to
+    /// which wants to show what the rules cover, a window switching them on, has the list to
     /// show. A rule is not written against a path the Layout names, and a move the reading found is
     /// not the rules' to hide, so neither is here.
     pub ignored: Vec<String>,
@@ -234,8 +234,8 @@ pub struct Status {
 
     /// Paths whose content changed while the version recorded for them is not the one upstream is at.
     ///
-    /// These are the changes based on a version the other side has moved past — behind, or apart from
-    /// it — so what is recorded here would be based on something the Vault does not have. It is a subset
+    /// These are the changes based on a version the other side has moved past, behind, or apart from
+    /// it, so what is recorded here would be based on something the Vault does not have. It is a subset
     /// of [`modified`](Self::modified), and a path is in it only when the index could say how the two
     /// versions stand: a version this side never had is not a base known to be wrong.
     pub wrong_base: Vec<String>,
@@ -247,13 +247,13 @@ pub struct Status {
     /// whether a change is based on something wrong: a path that is ahead is ordinary work the other side
     /// has not been told of, and one that is behind is work it has not been given.
     ///
-    /// A path either side names without a version is not here — nothing was ever recorded for it, so there
+    /// A path either side names without a version is not here, nothing was ever recorded for it, so there
     /// is nothing to stand beside anything. A path this side records and upstream does not name is ahead:
     /// the other side has never been told of it, so a sync would send it. A reading
     /// made without the copy, the index or a runtime has nothing here, since the walk is what answers it.
     ///
     /// The distance is not always there: the version the Vault records is ordinarily one this side never
-    /// fetched, so a path that is behind upstream is a standing with a direction and no count — see
+    /// fetched, so a path that is behind upstream is a standing with a direction and no count, see
     /// [`base::compare`].
     standing: Vec<(String, base::Standing)>,
 }
@@ -269,13 +269,13 @@ impl Status {
     /// read and say what they can, and no base is called wrong.
     ///
     /// `rules` is the Workspace's ignore rule set: a path it ignores is one the tree did not gain,
-    /// as far as this reading says. What the Layout already names is not the rules' to hide — see
+    /// as far as this reading says. What the Layout already names is not the rules' to hide, see
     /// [`tree_diff`] for the exact jurisdiction.
     ///
     /// # Errors
     ///
-    /// Returns [`StatusError::Tree`] when the tree cannot be read against the Layout — a Layout
-    /// that cannot be read back, or a tree that cannot be walked — and [`StatusError::Layout`] when
+    /// Returns [`StatusError::Tree`] when the tree cannot be read against the Layout, a Layout
+    /// that cannot be read back, or a tree that cannot be walked, and [`StatusError::Layout`] when
     /// a fetched copy of the Vault's Layout that is there cannot be read.
     pub fn read(
         workspace: &Workspace,
@@ -379,11 +379,11 @@ impl Status {
     /// How the version recorded for `path` stands beside the one the Vault's copy records.
     ///
     /// The path is one a caller names, as [`state_of`](Self::state_of) takes it, and the answer is
-    /// [`Relation::Unknown`] with no distance for a path this reading holds no standing for — one it is not
+    /// [`Relation::Unknown`] with no distance for a path this reading holds no standing for, one it is not
     /// about, one nothing was ever recorded for, and one the copy could not be read for. A caller that cannot tell
     /// those apart from a path in step is asking for the distance beside it: in step is a distance of zero
     /// and nothing else is. Nor is a distance what a path the Vault is ahead on always has: what the Vault is
-    /// at is ordinarily a version this side never fetched, so being behind is answered without one — see
+    /// at is ordinarily a version this side never fetched, so being behind is answered without one, see
     /// [`Relation::Behind`](crate::base::Relation).
     #[must_use]
     pub fn standing_of(&self, path: &Path) -> (Relation, Option<u64>) {
@@ -412,14 +412,14 @@ impl Status {
 
     /// What the reading says about the entry at `path`, in one word.
     ///
-    /// The path is one a caller names — a file of a listing, an entry of a table, as the system spells it —
+    /// The path is one a caller names (a file of a listing, an entry of a table, as the system spells it)
     /// and what the reading names is a path relative to the Workspace it was made of, so the root is what
     /// joins the two: a path outside it is nothing this reading is about.
     ///
     /// The answer is the state a reader acts on first when a path is more than one of them at once: a change
     /// that must not be recorded comes before a merge waiting to be joined, which comes before a path the
-    /// tree has lost, which comes before one the Layout does not name, which comes before a move — a move is
-    /// a disagreement about where a file is, and that is read before what its content came to — which comes
+    /// tree has lost, which comes before one the Layout does not name, which comes before a move, a move is
+    /// a disagreement about where a file is, and that is read before what its content came to, which comes
     /// before a change of this account's own.
     #[must_use]
     pub fn state_of(&self, path: &Path) -> PathState {
@@ -472,7 +472,7 @@ impl Status {
     /// The path as the reading names it, or nothing when the reading is about no such path.
     ///
     /// Normalised on both sides, so a path spelled with a `.` or a `..`, or reached through the Workspace's
-    /// own root, is the same place rather than a second one — the same way the Vault's copy is asked about a
+    /// own root, is the same place rather than a second one, the same way the Vault's copy is asked about a
     /// path, and for the same reason.
     fn named(&self, path: &Path) -> Option<LayoutPath> {
         let path = normalize(path);
@@ -544,7 +544,7 @@ impl From<LayoutError> for StatusError {
 /// What the merge records say, read against the Layout, the tree and the index.
 ///
 /// A record is a merge only while all of it stands: the target is still named, the variant file is
-/// still there — or is found again where a move put it — the index still holds the variant and the
+/// still there, or is found again where a move put it, the index still holds the variant and the
 /// file still holds that variant's content. One that does not stand is answered as the reason it
 /// does not.
 ///
@@ -779,7 +779,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    /// What changed where it was is a content change, which is what `rola track` records — and the
+    /// What changed where it was is a content change, which is what `rola track` records, and the
     /// first reading of a file is what it agrees with, so a change is only a change after one.
     #[test]
     fn what_changed_where_it_was_is_a_content_change() {
@@ -839,12 +839,12 @@ mod tests {
         let status = read(&workspace);
 
         // What the tree holds and the Layout does not name, and what the Layout names and the tree has lost
-        // — the second of which a listing never asks about, and a caller that does is told what became of it.
+        //, the second of which a listing never asks about, and a caller that does is told what became of it.
         assert_eq!(status.state_of(&dir.join("new.txt")), PathState::Untagged);
         assert_eq!(status.state_of(&dir.join("gone.txt")), PathState::Lost);
 
-        // A path spelled through the root is the same place, which is what makes a listing's paths — named
-        // the way the system names them — answerable at all.
+        // A path spelled through the root is the same place, which is what makes a listing's paths, named
+        // the way the system names them, answerable at all.
         assert_eq!(
             status.state_of(&dir.join(".").join("new.txt")),
             PathState::Untagged
@@ -956,7 +956,7 @@ mod tests {
     /// A file that was changed and then moved is still a change, wherever it is now.
     ///
     /// What the Layout agrees with is the entry rather than the path it is named at, so a move carries that
-    /// agreement with it — which is what `rola fs-ops mv` writes down, since by the time a reading looks, the
+    /// agreement with it, which is what `rola fs-ops mv` writes down, since by the time a reading looks, the
     /// path that would tell it is gone. Written down as agreement with what the file holds now, a change made
     /// before a move would be a change no reading reports: what is checked here is the run that hid one.
     #[test]

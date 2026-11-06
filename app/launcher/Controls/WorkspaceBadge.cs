@@ -11,7 +11,7 @@ namespace RorolalaLauncher.Controls;
 /// </summary>
 /// <remarks>
 /// The colour is the directory's own rather than the look's: a hash of the whole path is read as a colour,
-/// its hue is taken, and that hue is drawn twice at two lightnesses — so a Workspace looks the same on every
+/// its hue is taken, and that hue is drawn twice at two lightnesses, so a Workspace looks the same on every
 /// machine it is listed on, and two Workspaces are told apart by colour before either name is read. The two
 /// are laid as a gradient from the top-left of the mark to its bottom-right, which is what stops it reading
 /// as a flat rectangle of some colour.

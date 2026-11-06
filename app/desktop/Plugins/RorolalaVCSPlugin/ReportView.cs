@@ -13,7 +13,7 @@ namespace RorolalaVCSPlugin;
 /// </summary>
 /// <remarks>
 /// A line a command reported is not only words: which of the three it is decides the shape it is read in. What
-/// went wrong is ordinary text with a mark in front of it — a mark in the ink of the words beside it, since what
+/// went wrong is ordinary text with a mark in front of it, a mark in the ink of the words beside it, since what
 /// is drawn is not an alarm but a label. What to be careful of stands in a box with the look's own amber edge and
 /// a wash of it behind, and what can be done about it in the same box in green, which is the shape a reader
 /// already knows from the alerts a markdown document is written with.

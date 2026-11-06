@@ -33,7 +33,7 @@ This article is available in multiple languages: [English](./README.md)|[中文]
 
 ## 🚀 Download & Install 🚀
 
-`ROLA` provides complete prebuilt versions on [GitHub](https://github.com/rorolala-vcs/rorolala-vcs) — you can directly [download the latest](https://github.com/rorolala-vcs/rorolala-vcs/releases/latest).
+`ROLA` provides complete prebuilt versions on [GitHub](https://github.com/rorolala-vcs/rorolala-vcs), you can directly [download the latest](https://github.com/rorolala-vcs/rorolala-vcs/releases/latest).
 
 Alternatively, you can view [all versions](https://github.com/rorolala-vcs/rorolala-vcs/releases).
 

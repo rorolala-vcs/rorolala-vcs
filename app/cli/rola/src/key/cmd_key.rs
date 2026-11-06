@@ -5,7 +5,7 @@
 //! name are the same list, read from the same place: what is printed is what can be completed.
 //!
 //! Making a pair is the other half of the namespace, [`key generate`](crate::key::cmd_key_generate),
-//! because both are about the same thing — the pair an account is made of.
+//! because both are about the same thing, the pair an account is made of.
 
 use std::path::PathBuf;
 
@@ -38,7 +38,7 @@ use crate::keys::{roots, scopes};
 /// the result, `paths`.
 const DEFAULT_FORMAT: &str = "{{ paths }}";
 
-/// Look for private keys — the accounts the work acts as — instead of public ones.
+/// Look for private keys, the accounts the work acts as, instead of public ones.
 const ARG_PEM: PickerArg<'static, Flag> = arg![pem: Flag];
 
 #[help(buffer)]
@@ -54,8 +54,8 @@ pub fn desc_key() -> Description {
 
 /// Lists the keys Rorolala can reach.
 ///
-/// Every scope is searched, highest priority first: the keys beside the work at hand first —
-/// the Workspace's, then the Vault's — and after them the user's own stores, under the local
+/// Every scope is searched, highest priority first: the keys beside the work at hand first,
+/// the Workspace's, then the Vault's, and after them the user's own stores, under the local
 /// data directory, the filesystem root and `ROLA_HOME`. A key found higher up shadows the
 /// same name below it, so that is the order a name would resolve in. By default the keys
 /// listed are public ones, the members a name can mean; with `--pem` they are private ones,
@@ -124,7 +124,7 @@ pub fn handle_key_list(
 /// Completes what `rola key` can be given next.
 ///
 /// The command takes no positional word of its own and its subcommands are offered by the
-/// dispatcher, so only a word that starts a flag is answered at all — and only with the flags
+/// dispatcher, so only a word that starts a flag is answered at all, and only with the flags
 /// that are not already on the line.
 #[completion(EntryKey)]
 pub fn complete_key(ctx: ShellContext) -> Suggest {

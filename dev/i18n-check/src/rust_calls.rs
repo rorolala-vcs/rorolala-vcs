@@ -1,7 +1,7 @@
 //! Finds the keys a Rust crate's `t!` calls name.
 //!
 //! The scan is over tokens rather than over the syntax tree, because a `t!` is almost always
-//! written inside another macro — `trd!(t!("…").trim())`, `r_eprintln!("{}", t!("…"))` — and a
+//! written inside another macro (`trd!(t!("…").trim())`, `r_eprintln!("{}", t!("…"))`) and a
 //! tree walk sees an outer macro's arguments as one opaque token run, so it never reaches the
 //! `t!` inside. Lexing the file and walking every group reaches a `t!` wherever it is written,
 //! and reaches none of the `t!`s that appear in doc comments or string literals, since those are

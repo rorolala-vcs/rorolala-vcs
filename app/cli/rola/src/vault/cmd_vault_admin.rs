@@ -2,8 +2,8 @@
 //!
 //! An administrator is named in the Vault's own configuration, under `[auth] admins`, so these
 //! commands work on the Vault the run is inside rather than reaching for a remote one: the list is
-//! the Vault's, and it is kept beside it. The first administrator is not named by a command — a
-//! Vault with none has nobody who may name one — so a Vault writes the first one by hand, and
+//! the Vault's, and it is kept beside it. The first administrator is not named by a command, a
+//! Vault with none has nobody who may name one, so a Vault writes the first one by hand, and
 //! these commands work from there.
 //!
 //! The configuration is a resource, so a change is written back once the program is done with it.
@@ -112,14 +112,14 @@ pub fn complete_vault_admin_add(
 
 /// Names a member an administrator of this Vault
 ///
-/// `NAME` is a member of the Vault — the stem of a public key the Vault admits — and naming one
+/// `NAME` is a member of the Vault, the stem of a public key the Vault admits, and naming one
 /// who is already named is not an error, only the same naming made again.
 ///
 /// # Errors
 ///
 /// Renders [`ErrorVaultNotExist`] when the run is not inside a Vault,
 /// [`ErrorVaultNameMissing`] when no name was given, [`ErrorVaultAdminMissing`] when the Vault
-/// names no administrator yet — the first one is written by hand — [`ErrorVaultNotAdmin`] when the
+/// names no administrator yet, the first one is written by hand, [`ErrorVaultNotAdmin`] when the
 /// account this run acts as is not one, and [`ErrorConfigUnreadable`] when the configuration could
 /// not be read.
 #[command(node = "vault.admin.add", entry = EntryVaultAdminAdd)]

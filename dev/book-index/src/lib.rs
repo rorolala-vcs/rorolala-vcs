@@ -2,7 +2,7 @@
 //!
 //! The articles are Markdown files with a YAML front matter block. This program walks them, takes
 //! the title, description and keywords out of the block, turns the body into the plain text the
-//! search reads, and writes the lot — articles and index — as one file with
+//! search reads, and writes the lot, articles and index, as one file with
 //! [`rorolala_book_search`]'s format. The file is what a program opens; nothing here is read at
 //! run time.
 //!
@@ -12,7 +12,7 @@
 //!
 //! What it writes is `build/docs/builtin.book`, which is where `cargo dev export` lays the file a
 //! package carries, and where the command line program and the Desktop program find it beside
-//! themselves. The two paths are stated once in this crate — [`BOOK_DIR`] and [`BOOK_IN_BUILD`] —
+//! themselves. The two paths are stated once in this crate, [`BOOK_DIR`] and [`BOOK_IN_BUILD`],
 //! and [`workspace_paths`] turns them into the ones a build uses, so the tool and the export cannot
 //! disagree about where the file goes.
 
@@ -60,7 +60,7 @@ pub struct Report {
 /// Builds the book under `book` into `output`.
 ///
 /// The articles are the `*.md` files under `book`, walked recursively, with a file or directory
-/// whose name begins with `__` left out — that is where this tree keeps a draft. An article's name
+/// whose name begins with `__` left out, that is where this tree keeps a draft. An article's name
 /// is its path under `book` with `/` between the directories and the `.md` extension taken off, so
 /// `getting-started/install.md` is the article `getting-started/install`.
 ///

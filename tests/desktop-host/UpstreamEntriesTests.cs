@@ -8,7 +8,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The upstream place: what one level of it holds, where a drop puts an entry, and the commands it runs.
 /// </summary>
 /// <remarks>
-/// The tree and the level are the pure half of the place — they read nothing and start nothing — so what is checked here
+/// The tree and the level are the pure half of the place, they read nothing and start nothing, so what is checked here
 /// is the judgement they make: which folders a Layout's paths come to, what stands at a prefix, and where a dropped
 /// entry would land. The commands are checked beside them as the arguments they are run with, which is the same
 /// division the retrack's own test makes.
@@ -166,8 +166,8 @@ public sealed class UpstreamEntriesTests
     /// A row's picture is the one the icon set in force draws for what it is called.
     /// </summary>
     /// <remarks>
-    /// What a place holds is not on disk, so the picture is chosen from the name — the extension, and whether it is a folder
-    /// — by the same look a directory listing uses, the system's own pictures included where the set says nothing.
+    /// What a place holds is not on disk, so the picture is chosen from the name, the extension, and whether it is a folder
+    ///, by the same look a directory listing uses, the system's own pictures included where the set says nothing.
     /// </remarks>
     [Fact]
     public void ARowsPictureIsChosenFromWhatItIsCalled()
@@ -400,7 +400,7 @@ public sealed class UpstreamEntriesTests
     /// <remarks>
     /// A refusal with no word is a drop the user cannot tell from one the drag never reached, so every way the place can
     /// refuse one is answered with a reason: a drag that is not the place's own, a list that is not a folder to drop into,
-    /// and a copy that is still being read. The words are the place's keys — nothing here states translations — which is
+    /// and a copy that is still being read. The words are the place's keys, nothing here states translations, which is
     /// what says the reason is the place's rather than the browser's.
     /// </remarks>
     [Fact]
@@ -426,7 +426,7 @@ public sealed class UpstreamEntriesTests
             place.Refusal(UpstreamPlace.Of(UpstreamPlace.Vaults), carrying)
         );
 
-        // Nothing has been read here — there is no `rola` to read it with — so there is nothing to move in.
+        // Nothing has been read here, there is no `rola` to read it with, so there is nothing to move in.
         Assert.Equal(
             "rorolala_vcs.place.refused_reading",
             place.Refusal(UpstreamPlace.Of(UpstreamPlace.Vaults, "origin"), carrying)
@@ -436,7 +436,7 @@ public sealed class UpstreamEntriesTests
     /// <summary>The upstream root is the Vault the work tracks, or the default one, or nothing.</summary>
     /// <remarks>
     /// What the root opens is one Vault, and which it is is the answer of a program: the one the Layout being worked in
-    /// tracks, the Workspace's default where it tracks none, and nothing at all where it has neither — which is said in a
+    /// tracks, the Workspace's default where it tracks none, and nothing at all where it has neither, which is said in a
     /// notification rather than opened as a list of Vaults, the list not being what the item is named for.
     /// </remarks>
     [Fact]

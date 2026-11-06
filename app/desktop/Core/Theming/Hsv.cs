@@ -6,7 +6,7 @@ namespace RorolalaDesktop.Theming;
 /// A colour as a hue, how much of it, and how light: what a plate is dragged over.
 /// </summary>
 /// <remarks>
-/// The look is drawn in red, green and blue, and a person choosing a colour thinks in these three — a place
+/// The look is drawn in red, green and blue, and a person choosing a colour thinks in these three, a place
 /// around the wheel, how much of that hue is in it, and how light it is. What is here is the way between the
 /// two, which is the whole of what a colour plate needs and the part of it that can be worked out without a
 /// screen: the plate itself is a square and a bar, and what they come to is this.

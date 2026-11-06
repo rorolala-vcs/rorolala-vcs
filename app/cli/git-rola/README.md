@@ -17,8 +17,8 @@ The work is done through `rola-git-support`: the project is a directory holding 
 materials it places are listed in `rola.lock`, and what is not in the working tree is kept under
 the project's `.rola/git/`. `update` is the one command that reaches a Vault: it resolves each
 mapping's pin to the version the Vault's Layout names (or a number in its chain), reads the content
-that version points at, brings it into the project's store — `.rola/storage/`, the store every
-other command reads from — and writes the lock. Nothing is written unless every mapping resolves.
+that version points at, brings it into the project's store, `.rola/storage/`, the store every
+other command reads from, and writes the lock. Nothing is written unless every mapping resolves.
 
 A repository's exclude file is the one file it keeps for all of its work trees, so this program acts
 in the repository's main work tree only. A linked work tree is refused by every command, by the

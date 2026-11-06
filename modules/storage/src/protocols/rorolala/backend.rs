@@ -1,7 +1,7 @@
 //! What a store answers a caller and a peer with.
 //!
-//! The two traits are the boundary — [`StorageBackend`] for a local caller and
-//! [`TransferableBackend`] for a peer — and this is where the store keeps them, so that what a
+//! The two traits are the boundary, [`StorageBackend`] for a local caller and
+//! [`TransferableBackend`] for a peer, and this is where the store keeps them, so that what a
 //! caller sees is one short file rather than the working of the store behind it.
 
 use std::collections::BTreeSet;
@@ -21,7 +21,7 @@ impl StorageBackend for RorolalaStorage {
 
     /// Chooses how `file` is written, from what the file in front of it says.
     ///
-    /// The choice itself is the store's own — see the `choice` module — and this is the boundary's
+    /// The choice itself is the store's own, see the `choice` module, and this is the boundary's
     /// way in, so that a caller reaches the same deciding whether it hands over a file or the bytes
     /// of one.
     fn choose_algorithm(&self, file: &Path) -> Self::AlgorithmChoice {
@@ -39,8 +39,8 @@ impl StorageBackend for RorolalaStorage {
     }
 
     async fn extract_file(&self, key: &Key, path: &Path) -> Result<(), Self::Error> {
-        // The content comes back checked against the key — `read_content` verifies the whole of it,
-        // whichever way it was laid down — so there is nothing left to verify here.
+        // The content comes back checked against the key, `read_content` verifies the whole of it,
+        // whichever way it was laid down, so there is nothing left to verify here.
         let content = self.read_content(key).await?;
 
         // Laid down beside the target and moved into place, and a directory that is not there is
@@ -54,8 +54,8 @@ impl StorageBackend for RorolalaStorage {
     async fn contains_keys(&self, keys: &[Key]) -> Result<Presence, Self::Error> {
         use futures::{StreamExt as _, TryStreamExt as _};
 
-        // A store is asked about a whole batch at once — a transfer asks about every key before it
-        // moves anything — and every key of it is at least one lookup, which is where the waiting
+        // A store is asked about a whole batch at once, a transfer asks about every key before it
+        // moves anything, and every key of it is at least one lookup, which is where the waiting
         // is. They run a few at a time rather than one after another, and a few rather than all at
         // once: see `HOLDS_AT_ONCE`.
         let held: Vec<bool> = futures::stream::iter(keys.iter().copied())
@@ -124,15 +124,15 @@ impl StorageBackend for RorolalaStorage {
     }
 
     async fn remove(&self, key: &Key) -> Result<(), Self::Error> {
-        // Dropping from a pack changes its index in place, which is what the lock is for — see
+        // Dropping from a pack changes its index in place, which is what the lock is for, see
         // `root_state`.
         let state = self.root_state();
         let _packing = state.packing.lock().await;
 
         // What is dropped is what the key names, and nothing is asked about who else might name it:
         // a chunk is an object like any other, so a key another manifest is speaking for would be
-        // dropped out from under it. Storage keeps no account of that — finding what is still
-        // spoken for is a cleanup's to do — so removing a key that is still wanted is the caller's
+        // dropped out from under it. Storage keeps no account of that, finding what is still
+        // spoken for is a cleanup's to do, so removing a key that is still wanted is the caller's
         // to know better than.
         //
         // A key may name an object, a manifest, or both, and the two are two entries in two kinds of
@@ -205,7 +205,7 @@ impl TransferableBackend for RorolalaStorage {
 
         // No extension to claim: what arrives from another store is content and a key, and a key
         // names no file. So a container arrives here cut by the rules that read its bytes rather than
-        // by the policy that would have claimed it on the sending side — which costs deduplication
+        // by the policy that would have claimed it on the sending side, which costs deduplication
         // between the two ends, never the content, because the key is the hash of what was sent.
         let choice = self.choose_for(magic, content.len(), None);
         self.write_content(&content, choice).await?;

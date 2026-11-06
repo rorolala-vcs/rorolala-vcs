@@ -60,8 +60,8 @@ fn default_language() -> String {
 
 /// An environment value as a locale `rust-i18n` knows.
 ///
-/// `LANG` and friends carry an encoding suffix and spell the territory with an underscore —
-/// `zh_CN.UTF-8` — and neither belongs in a locale name, so they become `zh-CN`. A value already in
+/// `LANG` and friends carry an encoding suffix and spell the territory with an underscore,
+/// `zh_CN.UTF-8`, and neither belongs in a locale name, so they become `zh-CN`. A value already in
 /// that shape passes through unchanged.
 fn locale_of(value: &str) -> String {
     value.split('.').next().unwrap_or(value).replace('_', "-")

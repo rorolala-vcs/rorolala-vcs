@@ -39,11 +39,11 @@ pub fn desc_inv_idx_rebuild() -> Description {
 /// Brings the inverse index up to date with the objects the index holds
 ///
 /// The records are added to: only the objects written since the last build are read, and a run
-/// whose records already describe the index reads nothing. What cannot be added to — the file is
-/// not there, does not read, or describes objects the index no longer holds — is built afresh from
+/// whose records already describe the index reads nothing. What cannot be added to, the file is
+/// not there, does not read, or describes objects the index no longer holds, is built afresh from
 /// every object.
 ///
-/// The run has to be somewhere an index can be found — inside a Vault or a Workspace.
+/// The run has to be somewhere an index can be found, inside a Vault or a Workspace.
 ///
 /// # Errors
 ///

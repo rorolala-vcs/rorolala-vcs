@@ -6,7 +6,7 @@ use crate::path::LayoutPath;
 /// What a shard keeps for one `Uuid`: where it is, and what it holds.
 ///
 /// The two are kept together so that everything about a `Uuid` is in one shard, which is what lets
-/// a shard be written down on its own — snapshotted and its log dropped — without touching another.
+/// a shard be written down on its own, snapshotted and its log dropped, without touching another.
 /// Either may be absent between the two changes a create is.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Slot {

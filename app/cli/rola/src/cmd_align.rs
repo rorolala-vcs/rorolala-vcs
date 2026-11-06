@@ -7,7 +7,7 @@
 //!
 //! `rola track` refuses to run while the Layout names a path the tree does not hold, since recording
 //! works on a tree that is settled; this is what settles it. A move, on the other hand, `track`
-//! confirms on its own — naming a path that moved records it where it is now.
+//! confirms on its own, naming a path that moved records it where it is now.
 
 // `#[chain]` copies the attributes of the function it is given onto the struct it generates, so a
 // lint allowed on the handler below is reported as defined twice. The allow lives here, where it
@@ -184,7 +184,7 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
 ///
 /// `PATH` is read where the run was made, as a shell would read it: `.` is the directory the run is
 /// in and everything under it, and a name that lands on a directory selects everything under it.
-/// A single path need not be there — a path the Layout names and the tree does not is exactly what
+/// A single path need not be there, a path the Layout names and the tree does not is exactly what
 /// `--delete` acts on.
 ///
 /// Exactly one of the modes is given. `--delete` confirms that a lost path is gone. `--rename`
@@ -199,7 +199,7 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
 /// three the path needs. A move that was edited as well is put back first, so it is left changed at
 /// its old path for `--restore-modify` to settle.
 ///
-/// A name that lands on a directory — `.` always does — and `--restore` are what act on many paths
+/// A name that lands on a directory, `.` always does, and `--restore` are what act on many paths
 /// at once: every path under it is put back by what it needs, one line each, and nothing under it
 /// is a failure. A move is settled first, so content is only put back once the file is where the
 /// Layout names it; a path the tree holds and no Layout names is left where it lies. Other modes
@@ -450,7 +450,7 @@ pub fn handle_align(
     };
 
     // What the ignore rules govern cannot be selected for settling: an entry the rules cover is
-    // refused — unless the Layout already names it, since the rules have no jurisdiction over what
+    // refused, unless the Layout already names it, since the rules have no jurisdiction over what
     // is tracked, or the reading found it to be where a tracked file moved, which is the work's own
     // and no rule's. `--include-ignored` is the run saying it means it.
     if !include_ignored {
@@ -565,7 +565,7 @@ enum Selector {
 ///
 /// What is written is a path where the run was made, as a shell would read it: `.` is the directory
 /// the run is in and everything under it, and `..` climbs from there. A name that lands on a
-/// directory — `.` always does — selects everything under it; anything else is the one path named.
+/// directory, `.` always does, selects everything under it; anything else is the one path named.
 ///
 /// # Errors
 ///
@@ -822,7 +822,7 @@ fn restore_variant(
 /// Confirms a move the reading found.
 ///
 /// The path the file is now at is one the Layout names, and what the Layout names there is the
-/// version the file held before it moved. A move that was edited is therefore left changed — and
+/// version the file held before it moved. A move that was edited is therefore left changed, and
 /// what the reading wrote down says the two agree, so the disagreement is written down here rather
 /// than left for a reading that would never find it.
 fn rename(
@@ -891,8 +891,8 @@ fn remember_rename(
 /// Takes back a move the reading guessed at, leaving the two paths a loss and a gain.
 ///
 /// The reading pairs two text files by how alike they are, and keeps that likeness in what it
-/// wrote down about the lost path; forgetting it leaves the digest — which is what the path is
-/// remembered by — and stops the two being paired. A move of two files that hold the same bytes is
+/// wrote down about the lost path; forgetting it leaves the digest, which is what the path is
+/// remembered by, and stops the two being paired. A move of two files that hold the same bytes is
 /// one the reading found by digest, not by likeness, and is a fact rather than a guess.
 fn take_back(layout: &Layout, diff: &TreeDiff, path: &LayoutPath, root: &Path) -> Next {
     let Some(pair) = rename_of(diff, path) else {
@@ -1011,9 +1011,9 @@ fn assert_move(
 /// Puts a moved file back where the Layout names it.
 ///
 /// The Layout still names the path the file was at, since the move was never confirmed, so putting
-/// the file back there undoes the move on disk. What the file holds is not touched — one that was
+/// the file back there undoes the move on disk. What the file holds is not touched, one that was
 /// edited as well as moved is left changed at its old path, which is then `--restore-modify`'s to
-/// settle — unless `completely`, which puts the version the Layout names back over it too, so the
+/// settle, unless `completely`, which puts the version the Layout names back over it too, so the
 /// move is undone in content as well as in place.
 fn restore_move(
     layout: &Layout,
@@ -1183,7 +1183,7 @@ fn variant_storage(
 /// Writes down that a path put back holds what the Layout names again.
 ///
 /// Putting a file back is what makes the two agree, so what the reading remembers of the path has to
-/// say so: a path left marked as disagreed — by a move that was edited and confirmed — would go on
+/// say so: a path left marked as disagreed, by a move that was edited and confirmed, would go on
 /// being reported as changed after its content was put back.
 fn remember_restored(layout: &Layout, root: &Path, path: &LayoutPath) -> Result<(), Next> {
     let disk = root.join(path.to_path_buf());
@@ -1204,8 +1204,8 @@ fn remember_restored(layout: &Layout, root: &Path, path: &LayoutPath) -> Result<
 /// Writes the version the Layout names for `path` over what is there, and remembers that it does.
 ///
 /// A file's content is put back by naming what the Layout holds for it and letting the store hand
-/// that version out at the path — whether the file is one that changed or one that is gone, since
-/// both want the same thing written — and remembering it is what stops the path being reported as
+/// that version out at the path, whether the file is one that changed or one that is gone, since
+/// both want the same thing written, and remembering it is what stops the path being reported as
 /// changed once it agrees again.
 fn put_version(
     layout: &Layout,
@@ -1267,8 +1267,8 @@ fn restore_whichever(
 /// Puts every path under a directory back to what the Layout names, each by what it needs.
 ///
 /// A move is settled first: its destination is not a path the Layout names, so content can only be
-/// put back once the file is where the Layout names it. What is left — a path the tree no longer
-/// holds, and one that changed where it is — is put back after. A path the tree holds and no Layout
+/// put back once the file is where the Layout names it. What is left, a path the tree no longer
+/// holds, and one that changed where it is, is put back after. A path the tree holds and no Layout
 /// names (`untagged`) is left where it lies, since there is nothing it is to be put back to.
 fn restore_all(
     layout: &Layout,

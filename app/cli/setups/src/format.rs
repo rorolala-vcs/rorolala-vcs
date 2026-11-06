@@ -2,13 +2,13 @@
 //!
 //! A query command publishes what it found into [`ResFormat`], under the key `--json` names it by,
 //! and the run is drawn through the template it ends with. That template is the user's `--format`,
-//! or the command's own default — which is why a query command is drawn through a template whether
+//! or the command's own default, which is why a query command is drawn through a template whether
 //! the user asked for one or not: a command always has a way to be read.
 //!
-//! How it is drawn turns on how many lists the command published. One list is the common case —
-//! `entries`, `accounts`, one array `--json` writes — and is drawn a row at a time, the template to
+//! How it is drawn turns on how many lists the command published. One list is the common case,
+//! `entries`, `accounts`, one array `--json` writes, and is drawn a row at a time, the template to
 //! a value, so `{{ entries.path }}` is a line per entry. A reading whose parts are lists of their
-//! own — `layout tree-diff` has five — has no single row, so every key is bound at once and the
+//! own, `layout tree-diff` has five, has no single row, so every key is bound at once and the
 //! template is drawn once: a reader writes `{{ lost | join('\n') }}` for the lines of one of them.
 //!
 //! [`ResFormat::default_template`] is what a command calls as it is reached to name its default,

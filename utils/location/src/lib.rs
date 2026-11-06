@@ -544,9 +544,9 @@ where
     ///
     /// # Examples
     ///
-    /// The link the example reads is made with `symlink`, Unix's spelling of it — Windows
+    /// The link the example reads is made with `symlink`, Unix's spelling of it, Windows
     /// spells the two kinds apart in `symlink_dir` and `symlink_file`, and asks a privilege
-    /// of either — so the example is drawn where a process may make one.
+    /// of either, so the example is drawn where a process may make one.
     ///
     /// ```
     /// use std::path::{Path, PathBuf};

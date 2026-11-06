@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# A workspace of its own — see the note in `dev/build/Cargo.toml` for why the tool that checks this
+# A workspace of its own, see the note in `dev/build/Cargo.toml` for why the tool that checks this
 # tree is not built as a member of it.
 [workspace]
 

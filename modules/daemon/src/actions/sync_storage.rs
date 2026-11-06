@@ -2,18 +2,18 @@
 //!
 //! This is a primitive rather than an [`Action`](rorolala_protocol::Action): what an action
 //! decides is what to ask for, and this is the asking itself, made of the protocol's own
-//! functions — a value is built on the side that holds it and carried with
-//! [`transfer`](ActionContext::transfer) — so an action can ask for a set of keys without
+//! functions, a value is built on the side that holds it and carried with
+//! [`transfer`](ActionContext::transfer), so an action can ask for a set of keys without
 //! knowing how a key moves.
 //!
 //! Nothing here is upload or download. Each side says which of the keys it holds, the two
 //! answers are exchanged, and then every key one side holds and the other does not is carried
-//! over — in the Workspace's direction first, then in the Vault's — so one pass leaves both
+//! over (in the Workspace's direction first, then in the Vault's) so one pass leaves both
 //! sides holding all of them, whichever way each one happened to travel.
 //!
 //! A key is more than one object: a content kept as chunks is a manifest that names them, and
-//! the chunks themselves, and what is carried for such a key is exactly that — the manifest and
-//! then each chunk it names — rather than the content, so the other store keeps the chunks it
+//! the chunks themselves, and what is carried for such a key is exactly that, the manifest and
+//! then each chunk it names, rather than the content, so the other store keeps the chunks it
 //! was given instead of cutting the whole thing again. What a store already holds is not written
 //! twice: see [`RorolalaStorage`]'s write, which passes over what is there.
 //!
@@ -21,23 +21,23 @@
 //!
 //! A store of small chunks is what this has to serve: a `.pptx` cut at its member boundaries, or
 //! text cut at its lines, arrives as thousands of entries of a few kilobytes. Carried one entry per
-//! value, each of them paid the whole of what crossing costs — a length value, a payload value, the
+//! value, each of them paid the whole of what crossing costs, a length value, a payload value, the
 //! records each of those becomes on an encrypted stream, a progress name, and a write of its own on
 //! the receiving side. None of that is about the bytes: it is about the number of entries, and it
 //! does not shrink when the entries do.
 //!
 //! So a value carries a *packet*: as many entries as fit, cut by the side that has them. Both ends
-//! do not have to agree on the cut — the side taking them learns what a packet holds from the packet
+//! do not have to agree on the cut, the side taking them learns what a packet holds from the packet
 //! itself, and knows a direction is over when a packet arrives holding nothing. What they do agree
 //! on, without being told, is which entries cross and in which direction: both read that from the
 //! two presence answers. The entries of a packet are written into the receiving store as one batch,
-//! which lays them down in packs rather than one file each — see
+//! which lays them down in packs rather than one file each, see
 //! [`begin_batch`](RorolalaStorage::begin_batch).
 //!
 //! A direction is not given a total in bytes: what it is about to carry is only known by reading
-//! what it holds, and that read is the carrying itself — it was over a third of a sync of small
+//! what it holds, and that read is the carrying itself, it was over a third of a sync of small
 //! entries, spent on one number before a byte moved. So the bar a direction draws is drawn from what
-//! crosses — a packet at a time, by the bytes it holds — while the run's own bar is counted in units,
+//! crosses (a packet at a time, by the bytes it holds) while the run's own bar is counted in units,
 //! which both ends know before anything moves.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -62,7 +62,7 @@ pub(crate) enum Side {
 
 /// How many bytes of a blob one value carries.
 ///
-/// A value crosses as one frame, and a frame carries at most [`MAX_FRAME`] bytes — so a content
+/// A value crosses as one frame, and a frame carries at most [`MAX_FRAME`] bytes, so a content
 /// bigger than that crosses as several values, and this is how much of it each of them takes. What
 /// is held back is the room the framing itself takes, so that a piece of this much always fits the
 /// frame it is put in, whatever the value is wrapped in on the way out.
@@ -75,7 +75,7 @@ const FRAMING: usize = 1024;
 ///
 /// A packet and the framing around it fit one record of the session: a record holds a plaintext of so
 /// many bytes, and the room a frame's length takes and the packet's own header are taken out of that
-/// first. One packet is then one record — one sealing, one write — rather than being cut across two.
+/// first. One packet is then one record (one sealing, one write) rather than being cut across two.
 const PACKET_BYTES: usize = MAX_PLAINTEXT - size_of::<u32>() - PACKET_HEADER;
 
 /// How many entries one packet holds, whatever their size.
@@ -106,8 +106,8 @@ const _: () = assert!(PACKET_BYTES + size_of::<u32>() + PACKET_HEADER <= MAX_PLA
 /// A store read waits on a disk through a thread that can block, so the work of one read is mostly
 /// the waiting; a few at a time is what turns that waiting into overlap. The number bounds what is
 /// held in memory rather than what is asked for: a content of thousands of chunks would otherwise be
-/// read into as many buffers at once as it has chunks. A caller that names its own — a run with
-/// `--concurrency`, or the window a Vault grants — replaces it.
+/// read into as many buffers at once as it has chunks. A caller that names its own, a run with
+/// `--concurrency`, or the window a Vault grants, replaces it.
 pub(crate) const DEFAULT_WINDOW: usize = 8;
 
 /// How much of what a key names one unit carries.
@@ -152,7 +152,7 @@ impl Unit {
 /// Makes two stores hold the same keys.
 ///
 /// `workspace` and `vault` are the stores each side works on: on the Workspace the first holds
-/// the store and the second is empty, and on the Vault the other way round — each side names the
+/// the store and the second is empty, and on the Vault the other way round, each side names the
 /// store it has, and the empty one is not mistaken for a store that holds nothing. `required_keys`
 /// are the keys both sides must end up holding, whatever they hold to begin with.
 ///
@@ -164,7 +164,7 @@ impl Unit {
 ///
 /// 1. each side says which of `required_keys` it holds, and the two answers cross, so both sides
 ///    know both;
-/// 2. a key neither side holds is reported as [`ActionError::MissingObject`] — there is nowhere
+/// 2. a key neither side holds is reported as [`ActionError::MissingObject`], there is nowhere
 ///    for it to come from, and moving the others would only hide that;
 /// 3. what the Workspace holds and the Vault does not is carried to the Vault, and then what the
 ///    Vault holds and the Workspace does not is carried to the Workspace.
@@ -203,7 +203,7 @@ pub async fn sync_storage(
 /// caller arranges. The presence each side reports is per unit, so a unit already held is passed over
 /// whichever way the content under its key is kept.
 ///
-/// `window` is how many reads of the sending side are kept in flight at once — see
+/// `window` is how many reads of the sending side are kept in flight at once, see
 /// [`DEFAULT_WINDOW`]. It is the side that sends a direction that reads, so it is that side's
 /// number: a caller asking a Vault to send it content asks with the same one, and the Vault holds it
 /// to what it serves.
@@ -299,7 +299,7 @@ pub(crate) async fn sync_units(
 
     // Both ends have carried everything they had to, and this is the point they reach once they
     // have. It is what a run waits on: the entries of a direction are written into the receiving
-    // store's packs, and a pack is not a store's until its index is published — which the side taking
+    // store's packs, and a pack is not a store's until its index is published, which the side taking
     // them does before it answers here. Waiting for the Vault to say it got here leaves the sync only
     // once both ends have nothing left to do.
     reach_the_other_end(ctx).await?;
@@ -311,9 +311,9 @@ pub(crate) async fn sync_units(
 ///
 /// Every unit is asked about at once where one call can ask: [`contains_keys`] answers a whole batch
 /// from a run of lookups kept going a few at a time, and asking it one key per call is asking it to
-/// start that run over for each — which for a content of thousands of chunks is what made a large
-/// sync slow before it moved a byte. A manifest unit asks a different question — whether a *manifest*
-/// is there, which is not the same as whether the content is — so those are asked one at a time,
+/// start that run over for each, which for a content of thousands of chunks is what made a large
+/// sync slow before it moved a byte. A manifest unit asks a different question, whether a *manifest*
+/// is there, which is not the same as whether the content is, so those are asked one at a time,
 /// and there are as many of them as the caller named manifest tokens.
 ///
 /// [`contains_keys`]: StorageBackend::contains_keys
@@ -358,7 +358,7 @@ async fn presence(local: &RorolalaStorage, units: &[Unit]) -> Result<Presence, A
 ///
 /// # Errors
 ///
-/// Returns what a store read, a store write and the exchange fail with — see [`ActionError`].
+/// Returns what a store read, a store write and the exchange fail with, see [`ActionError`].
 async fn carry_direction(
     ctx: &mut ActionContext<'_>,
     local: &RorolalaStorage,
@@ -556,7 +556,7 @@ async fn send_direction(
     }
 
     // A direction ends where its sender says it does. An empty packet is the one thing the two ends
-    // cannot mistake for entries — a packet holding none is one nothing was added to — so it is what
+    // cannot mistake for entries, a packet holding none is one nothing was added to, so it is what
     // says there is no more, whatever the two of them happen to have counted.
     //
     // It is sent even when the carrying failed: the side taking it is looking for the end of the
@@ -573,10 +573,10 @@ async fn send_direction(
 /// [batch](RorolalaStorage::begin_batch), which lays them down in packs and gives those packs their
 /// indexes once the direction is over. A store taking a thousand small chunks that way writes two
 /// files rather than a thousand, at the cost of what it holds not being findable until the direction
-/// ends — which is exactly when the side that sent them is told it may return.
+/// ends, which is exactly when the side that sent them is told it may return.
 ///
 /// What it answers is what the sender is told: which units it now holds, read from what it wrote
-/// rather than from a second reading of the store — see [`holds`].
+/// rather than from a second reading of the store, see [`holds`].
 async fn take_direction(
     ctx: &mut ActionContext<'_>,
     local: &RorolalaStorage,
@@ -614,7 +614,7 @@ async fn take_direction(
         let last = packet.carried.is_empty();
 
         // One name for a whole packet: what a reader is shown is the work in hand, and a packet is
-        // what is in hand — naming every entry of it would be a name per chunk, which is the chatter
+        // what is in hand, naming every entry of it would be a name per chunk, which is the chatter
         // this shape exists to be rid of.
         let named = packet
             .carried
@@ -625,7 +625,7 @@ async fn take_direction(
 
         for entry in &packet.carried {
             // An entry too big to be in the packet has its bytes after it, as the blob it has always
-            // been — a length and then pieces — so it is read either way: a side that stopped
+            // been, a length and then pieces, so it is read either way: a side that stopped
             // reading here would leave the other writing into a channel nobody drains.
             let followed;
             let bytes: &[u8] = if entry.lead.large() {
@@ -724,7 +724,7 @@ async fn take_direction(
 /// Whether this side holds everything `unit` names, read from what it has just written.
 ///
 /// The presence a direction opens with says which side has a unit, and the side that has it sends the
-/// whole of it — the manifest and every chunk it names, or the object. So "every entry of this unit
+/// whole of it, the manifest and every chunk it names, or the object. So "every entry of this unit
 /// was written" is the same question as "this side holds it", and it is answered from the packets
 /// rather than by a second reading of the store.
 ///
@@ -737,7 +737,7 @@ fn holds(unit: &Unit, objects: &BTreeSet<Key>, manifests: &BTreeMap<Key, Vec<Key
         UnitKind::Manifest => manifests.contains_key(&unit.key),
         UnitKind::Object => objects.contains(&unit.key),
         // The whole of what the key names: the object itself, or the manifest and every chunk the
-        // manifest names. A caller that does not know which it is — `Discover` — asked for the same
+        // manifest names. A caller that does not know which it is, `Discover`, asked for the same
         // whole, so it is answered the same way.
         UnitKind::Whole | UnitKind::Discover => {
             objects.contains(&unit.key)
@@ -757,7 +757,7 @@ pub(crate) fn packet_unread() -> ActionError {
 ///
 /// A packet is sent when it is full, which is a wait nothing about the disk asks for: the reads for
 /// the packet after it can already be in flight. A window filled once per content and taken in order
-/// does exactly that — one read is taken as each one is handed over, so the number in flight is the
+/// does exactly that, one read is taken as each one is handed over, so the number in flight is the
 /// window rather than the window on average.
 /// One chunk being read: the key it is for, and the read itself.
 type Reading = (Key, tokio::task::JoinHandle<Result<Vec<u8>, StoreError>>);
@@ -769,7 +769,7 @@ type Reading = (Key, tokio::task::JoinHandle<Result<Vec<u8>, StoreError>>);
 /// exactly that, so the number of reads in flight is the window rather than the window on average.
 ///
 /// The batch is what makes each of those reads cheap: the packs are opened once for the whole
-/// content, rather than opened, seeked into and read once per chunk — see
+/// content, rather than opened, seeked into and read once per chunk, see
 /// [`RorolalaStorage::open_objects`].
 struct Prefetch {
     /// The content's chunks, in the order the manifest names them, already planned and opened.
@@ -844,7 +844,7 @@ impl Prefetch {
 
 /// Adds the entries of one unit to the packet being built, sending it when it is full.
 ///
-/// `window` is how many of a cut content's chunks are read at once — see [`DEFAULT_WINDOW`].
+/// `window` is how many of a cut content's chunks are read at once, see [`DEFAULT_WINDOW`].
 async fn add_unit(
     ctx: &mut ActionContext<'_>,
     local: &RorolalaStorage,
@@ -887,7 +887,7 @@ async fn add_unit(
                 // The chunks are read with the window always full, and each read outlives the one
                 // in hand: a store read is a hand-over to a thread that blocks, and waiting for the
                 // whole of one window before beginning the next is a sync that spends the sending of
-                // a packet with the disk idle. What is sent is still in the manifest's order — the
+                // a packet with the disk idle. What is sent is still in the manifest's order, the
                 // reads are taken in the order they were begun, not the order they finish.
                 let keys: Vec<Key> = manifest.chunks().iter().map(Chunk::key).collect();
                 let mut prefetch = Prefetch::open(local.clone(), keys, window).await?;
@@ -928,7 +928,7 @@ async fn add_unit(
 /// Adds one entry to the packet being built, sending the packet first when it has no room left.
 ///
 /// An entry bigger than one value can hold does not go into a packet at all: it crosses as the blob
-/// it has always been — a length and then pieces of at most [`PIECE`] — with the packet naming it by
+/// it has always been, a length and then pieces of at most [`PIECE`], with the packet naming it by
 /// key and saying nothing else about it. A content kept whole can be any size at all, so one that is
 /// bigger than a frame is the case that piece-splitting exists for and this shape would otherwise
 /// lose.
@@ -983,8 +983,8 @@ async fn push_large(
 
 /// Sends what the packet being built holds, and starts another.
 ///
-/// The packet goes out as one frame made of the parts it already holds — its header, then each
-/// entry's header and bytes — so what crosses is not a buffer built to carry it. Only the side
+/// The packet goes out as one frame made of the parts it already holds, its header, then each
+/// entry's header and bytes, so what crosses is not a buffer built to carry it. Only the side
 /// sending a direction builds packets, which is why this writes a frame where a value would be
 /// carried: there is no direction for the other end to read here.
 pub(crate) async fn flush(
@@ -1077,7 +1077,7 @@ impl Outgoing {
 /// The header a packet crosses under: how many units of the direction are behind it, and how many
 /// entries it holds.
 ///
-/// The count is what tells a packet of no entries — the one that says a direction is over — from one
+/// The count is what tells a packet of no entries, the one that says a direction is over, from one
 /// nothing was added to, and it is also what a packet says before the bytes a corrupt one would aim
 /// at are trusted.
 const fn packet_header(finished: u32, count: u32) -> [u8; PACKET_HEADER] {
@@ -1098,7 +1098,7 @@ const fn packet_header(finished: u32, count: u32) -> [u8; PACKET_HEADER] {
 ///
 /// Two questions in one byte: whether the bytes are a manifest naming chunks or content of its own,
 /// and whether they are in the packet at all or follow it as a blob. The second is what a content
-/// kept whole and bigger than one value needs — see [`push`].
+/// kept whole and bigger than one value needs, see [`push`].
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Lead(u8);
 
@@ -1142,7 +1142,7 @@ pub(crate) struct Carried {
     /// The key and the kind are in here rather than beside it: a packet is what a frame is made of,
     /// and a frame of the parts a packet holds is one the packet does not have to be copied into.
     header: [u8; ENTRY_HEADER],
-    /// The bytes themselves: a manifest's encoding, or an object's content — and nothing at all for
+    /// The bytes themselves: a manifest's encoding, or an object's content, and nothing at all for
     /// an entry whose bytes are too many for one value and follow it as a blob.
     pub(crate) bytes: Vec<u8>,
 }
@@ -1186,7 +1186,7 @@ pub(crate) struct Received<'a> {
 /// The shape is written down here rather than derived, because what it is for is the number of
 /// entries: a format that states a length per entry in a fixed number of bytes is a few bytes per
 /// entry, and one that repeats itself in every entry is not. What a packet holds is read from the
-/// packet itself, so the two ends do not have to agree on how it was cut — only on the order, which
+/// packet itself, so the two ends do not have to agree on how it was cut, only on the order, which
 /// both read from the same two presence answers.
 pub(crate) struct Packet<'a> {
     /// How many units of the direction its sender had carried whole when it filled this packet.
@@ -1207,7 +1207,7 @@ impl<'a> Packet<'a> {
     ///
     /// `None` is bytes that are not a packet this build reads: a count the bytes left could not hold,
     /// a frame cut short, or bytes left over at the end. Nothing is reserved from a count the bytes do
-    /// not back — the frame the bytes came in is what bounds them, and a count is what a corrupt
+    /// not back, the frame the bytes came in is what bounds them, and a count is what a corrupt
     /// packet would aim at.
     pub(crate) fn decode(bytes: &'a [u8]) -> Option<Self> {
         let (finished, rest) = split_u32(bytes)?;
@@ -1258,7 +1258,7 @@ fn split_u32(bytes: &[u8]) -> Option<(u32, &[u8])> {
 /// Carries one run of bytes in the direction `to` names, and answers what arrived here.
 ///
 /// `bytes` is what *this* side holds: [`Some`] on the side that has it and [`None`] on the side taking
-/// it, which is [`carry_blob`]'s convention and for the same reason — both ends call this at the same
+/// it, which is [`carry_blob`]'s convention and for the same reason, both ends call this at the same
 /// place and each decides from what it holds whether it is sending or reading.
 ///
 /// `to` is not on the wire and does not pick the direction: the `Option` does. It is here to check
@@ -1273,7 +1273,7 @@ fn split_u32(bytes: &[u8]) -> Option<(u32, &[u8])> {
 /// # Errors
 ///
 /// Returns [`ActionError::MissingValue`] if the side holding the bytes is not the side that sends to
-/// `to`, and what the exchange fails with — see [`ActionError`].
+/// `to`, and what the exchange fails with, see [`ActionError`].
 pub(crate) async fn carry_frame(
     ctx: &mut ActionContext<'_>,
     to: Side,
@@ -1300,7 +1300,7 @@ pub(crate) async fn carry_frame(
 /// comes back is the blob when it arrived here and nothing when it left, so the same call reads the
 /// same way on both ends.
 ///
-/// A blob crosses as its length and then its bytes, in pieces of no more than [`PIECE`] — which is
+/// A blob crosses as its length and then its bytes, in pieces of no more than [`PIECE`], which is
 /// what lets a content bigger than a frame cross at all, since no one value is ever longer than that.
 /// A blob of no bytes is still a blob: what the length says is how many bytes come, so an empty
 /// content crosses as an empty content rather than as nothing at all.
@@ -1316,8 +1316,8 @@ pub(crate) async fn carry_blob(
 ///
 /// A blob longer than one frame crosses as several pieces, and a reader watching one long content
 /// wants to see it move while it moves: with a task, every piece moves the bar by as many bytes as
-/// it holds. That number is the same on both ends — the side sending knows it before the piece
-/// goes, and the side taking learns it as the piece arrives — so both ends move the same bar by the
+/// it holds. That number is the same on both ends, the side sending knows it before the piece
+/// goes, and the side taking learns it as the piece arrives, so both ends move the same bar by the
 /// same amount and neither runs ahead of the other.
 pub(crate) async fn carry_blob_moving(
     ctx: &mut ActionContext<'_>,
@@ -1415,12 +1415,12 @@ where
 /// A value crosses as frames that are written and read and never acknowledged, so a side that has
 /// sent everything knows only that it wrote it, not that the other side took it. Both ends call
 /// this after carrying, and it is the Vault's value the Workspace waits for: the Vault sends it
-/// where the Workspace receives it, so a Workspace that returns has been told the Vault got here — /// and the Vault gets here only once it has published what it was sent. What crosses is
+/// where the Workspace receives it, so a Workspace that returns has been told the Vault got here, /// and the Vault gets here only once it has published what it was sent. What crosses is
 /// nothing; where it is exchanged is the whole of it.
 ///
 /// # Errors
 ///
-/// Returns whatever the exchange fails with — see [`ActionError`].
+/// Returns whatever the exchange fails with, see [`ActionError`].
 pub(crate) async fn reach_the_other_end(ctx: &mut ActionContext<'_>) -> Result<(), ActionError> {
     carry_value(ctx, Side::Workspace, 0_u64).await.map(drop)
 }

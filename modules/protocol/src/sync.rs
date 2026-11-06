@@ -7,7 +7,7 @@ impl ActionContext<'_> {
     ///
     /// This side decides: on the Vault the closure runs and the wrapper holds its
     /// value, while on the Workspace the closure does not run and the wrapper is
-    /// empty — the value reaches the Workspace through [`sync`](Self::sync). The
+    /// empty, the value reaches the Workspace through [`sync`](Self::sync). The
     /// closure is handed this context, so what it builds can depend on the side.
     pub fn only_vault_with_context<Inner, F>(&mut self, f: F) -> OnlyVault<Inner>
     where
@@ -25,7 +25,7 @@ impl ActionContext<'_> {
     ///
     /// This side decides: on the Workspace the closure runs and the wrapper holds
     /// its value, while on the Vault the closure does not run and the wrapper is
-    /// empty — the value reaches the Vault through [`sync`](Self::sync). The closure
+    /// empty, the value reaches the Vault through [`sync`](Self::sync). The closure
     /// is handed this context, so what it builds can depend on the side.
     pub fn only_workspace_with_context<Inner, F>(&mut self, f: F) -> OnlyWorkspace<Inner>
     where
@@ -86,7 +86,7 @@ impl ActionContext<'_> {
     ///
     /// # Errors
     ///
-    /// Returns whatever the exchange fails with — see [`ActionError`]. In
+    /// Returns whatever the exchange fails with, see [`ActionError`]. In
     /// particular, a context with no channel reports
     /// [`NoChannel`](ActionError::NoChannel).
     ///
@@ -113,7 +113,7 @@ impl ActionContext<'_> {
     ///
     /// This is the shorthand for what an action wants most often from a value that belongs on
     /// the other side: [`sync`](Self::sync) it, so both sides hold it, and then keep it only
-    /// on the side it is to end up on — [`Both::only_vault`] for one going to the Vault,
+    /// on the side it is to end up on, [`Both::only_vault`] for one going to the Vault,
     /// [`Both::only_workspace`] for one coming back. What goes in is what one side holds; what
     /// comes back is the same value, held by the other.
     ///
@@ -122,7 +122,7 @@ impl ActionContext<'_> {
     ///
     /// # Errors
     ///
-    /// Returns whatever the exchange fails with — see [`ActionError`]. In particular, a
+    /// Returns whatever the exchange fails with, see [`ActionError`]. In particular, a
     /// context with no channel reports [`NoChannel`](ActionError::NoChannel).
     ///
     /// # Examples

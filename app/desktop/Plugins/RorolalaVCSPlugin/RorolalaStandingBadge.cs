@@ -12,8 +12,8 @@ namespace RorolalaVCSPlugin;
 /// A tile has no columns, so what the Standing column of a list says is worn on the icon instead: an arrow
 /// pointing the way the work would have to move for the two sides to be in step, in the same two colours the
 /// column writes its numbers in. It is the second badge of the arc, read after the lock's: who holds a file
-/// and how far its version has come are different questions about the same file — a file may be somebody
-/// else's and be behind — and neither answer may hide the other.
+/// and how far its version has come are different questions about the same file, a file may be somebody
+/// else's and be behind, and neither answer may hide the other.
 /// <para>
 /// It is read through the same <see cref="StatusReadings"/> the two list columns read through, so a
 /// directory that is listed twice is read once: a reading walks the version chain for every path that
@@ -51,8 +51,8 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
     /// <inheritdoc />
     public EntryMark Mark(Entry entry)
     {
-        // What a standing is about is a file of the work, so an entry that names no directory of its own —
-        // the way up, which is a step rather than a place — is nothing this speaks about.
+        // What a standing is about is a file of the work, so an entry that names no directory of its own,
+        // the way up, which is a step rather than a place, is nothing this speaks about.
         if (
             Path.GetDirectoryName(entry.Path) is not { Length: > 0 } directory
             || _readings.Reading(directory) is not { } status
@@ -73,13 +73,13 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
 
     /// <summary>
     /// What a standing is worn as: an arrow for the way the work would have to move, a fork where there is no
-    /// way, drawn the way the lock beside it is — and nothing at all where there is nothing to move.
+    /// way, drawn the way the lock beside it is, and nothing at all where there is nothing to move.
     /// </summary>
     /// <remarks>
     /// Worn on the dark ground the lock's badge wears: the two mark the same tile at once and are read one
     /// after the other, so a picture laid on the artwork and a badge the artwork carries would be two marks of
     /// two different kinds about one file. The ground is the badge's own dark whatever the look is, so the role
-    /// the picture is drawn in is read against that and not against the tile — which is why the picture is the
+    /// the picture is drawn in is read against that and not against the tile, which is why the picture is the
     /// ink and the ground the badge's.
     /// <para>
     /// Green up for work waiting to be sent and red down for work waiting to be fetched: the two are opposite
@@ -89,7 +89,7 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
     /// </para>
     /// <para>
     /// What it says on hover is the whole of what the count means and what to do about it, and it is the very
-    /// words the column's cell is hovered for — see <see cref="RorolalaStanding.Said"/> — because the two are one
+    /// words the column's cell is hovered for, see <see cref="RorolalaStanding.Said"/>, because the two are one
     /// answer about one file: a count on a badge would say how far and not which way, and a count in a cell would
     /// say how far and not what to do about it.
     /// </para>

@@ -11,7 +11,7 @@ namespace RorolalaDesktop;
 /// <remarks>
 /// The host reads it once and carries it, so no window costs a decode: the host's own windows take it
 /// from there, and a plugin's do too, through the contract. The file is embedded in this assembly by
-/// the project file — the path below is the one that file gives it — rather than read from beside the
+/// the project file, the path below is the one that file gives it, rather than read from beside the
 /// program, because what a program looks like is part of what it is: there is no copy of it to go
 /// missing.
 /// </remarks>

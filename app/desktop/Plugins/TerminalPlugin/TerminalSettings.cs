@@ -9,8 +9,8 @@ namespace TerminalPlugin;
 /// <remarks>
 /// They are settings rather than constants because a shell is the user's answer: a machine may have
 /// PowerShell, a POSIX shell or neither named the way this program guesses, and a user may want one started
-/// with a flag. What they are until they are changed is the system's own shell — the one Windows is opened
-/// with, and the one a Unix login says in <c>SHELL</c> — and a font that is monospaced, since a grid of one
+/// with a flag. What they are until they are changed is the system's own shell, the one Windows is opened
+/// with, and the one a Unix login says in <c>SHELL</c>, and a font that is monospaced, since a grid of one
 /// advance per cell is what a terminal draws on.
 /// </remarks>
 internal static class TerminalSettings
@@ -100,7 +100,7 @@ internal static class TerminalSettings
     /// </summary>
     /// <remarks>
     /// Whitespace separates the words, double quotes group them, and a backslash takes the meaning away from
-    /// the character after it — the three things an argument set in a preference needs. What it is not is a
+    /// the character after it, the three things an argument set in a preference needs. What it is not is a
     /// shell: there is no expanding, no variable and no pipeline, since the program is run directly and the
     /// arguments are handed to it as they are.
     /// </remarks>

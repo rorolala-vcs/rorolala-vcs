@@ -15,7 +15,7 @@ namespace RorolalaDesktop.CoreDocks;
 /// </summary>
 /// <remarks>
 /// A kernel dock, always available from <c>Window</c> and not disableable. It is a view over the
-/// host's log rather than a second logging system, so a plugin does not choose where its words go —
+/// host's log rather than a second logging system, so a plugin does not choose where its words go,
 /// they go where everything goes.
 /// </remarks>
 internal sealed class LogDock : IDockView
@@ -97,7 +97,7 @@ internal sealed class LogView : UserControl
 
         DockPanel.SetDock(head, Dock.Top);
 
-        // No card: the rows are read in the dock the way a listing's entries are read in one — the head over
+        // No card: the rows are read in the dock the way a listing's entries are read in one, the head over
         // the body, both of them the dock's own surface, with no second edge and no second pair of corners
         // drawn inside it. What fills a dock is the look's business, and a card here would be this file's
         // answer to a question the look already answers for every other list.

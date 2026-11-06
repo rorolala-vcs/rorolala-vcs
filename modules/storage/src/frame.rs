@@ -42,7 +42,7 @@ impl Layout {
 ///
 /// The frame is what makes storage able to answer "how was this written in?" without having to
 /// guess: it says how the payload is encoded and how it is laid out, and it is stored **as it
-/// is**, never encoded itself — so a reader learns how to read the payload without decoding
+/// is**, never encoded itself, so a reader learns how to read the payload without decoding
 /// anything first.
 ///
 /// What it does *not* say is what the content means. A frame describes the encoding, not the
@@ -84,7 +84,7 @@ impl Frame {
     /// # Errors
     ///
     /// Returns [`Error::Malformed`] if `bytes` does not start with a header this build
-    /// understands — the wrong magic, a version or a codec it does not know, or too few bytes to
+    /// understands, the wrong magic, a version or a codec it does not know, or too few bytes to
     /// hold one.
     pub fn decode(bytes: &[u8]) -> Result<(Self, usize), Error> {
         let header = bytes.get(..FRAME_HEADER_LEN).ok_or(Error::Malformed)?;

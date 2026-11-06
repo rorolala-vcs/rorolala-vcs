@@ -22,7 +22,7 @@ namespace RorolalaDesktop.Theming;
 /// load-bearing rather than tidy. Avalonia re-applies the whole list to every element that is already
 /// styled when the list grows, and on that second pass the base theme's setters win over the overlay's:
 /// a style added after the window exists silently stops applying to what is already on screen. Nothing
-/// may therefore be added to <c>Application.Styles</c> after this has run — which is why a colour
+/// may therefore be added to <c>Application.Styles</c> after this has run, which is why a colour
 /// changed while the program runs replaces a <em>resource</em> rather than a style.
 /// </para>
 /// </remarks>
@@ -64,7 +64,7 @@ internal sealed class ThemeService
     /// variants are the file's own; which of them is in force is the application's answer, and asking
     /// it here is what makes following the desktop work without a second mechanism.
     /// <para>
-    /// It is assigned once, right after the service is made, and never again — which is what lets it be
+    /// It is assigned once, right after the service is made, and never again, which is what lets it be
     /// a property with a private initializer rather than a field: the palette reads the service, so it
     /// cannot be handed over before the service exists, and it must not be possible to hand over a
     /// different one later and leave a plugin drawing from a palette nothing updates.

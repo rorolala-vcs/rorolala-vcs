@@ -1,7 +1,7 @@
 //! What a check leaves behind, so a run can be read as one page afterwards.
 //!
 //! The gate is a sequence of programs whose output goes to the terminal as it runs; what is left
-//! here is the *shape* of that run — which checks passed, which failed, and where — in the form
+//! here is the *shape* of that run (which checks passed, which failed, and where) in the form
 //! `report-collect` renders. A step that cannot be recorded does not stop the run: the report is a
 //! reading of a run, never a precondition for one.
 

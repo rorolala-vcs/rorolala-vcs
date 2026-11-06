@@ -58,7 +58,7 @@ internal sealed class UpstreamNode
 /// </summary>
 /// <remarks>
 /// A place is read a level at a time, so what this answers is what stands under one prefix: the folders its paths make,
-/// and the entries that are at it. A Layout has no directories — every folder here is the segments two paths share —
+/// and the entries that are at it. A Layout has no directories, every folder here is the segments two paths share,
 /// which is why the tree is made here rather than asked of the copy.
 /// <para>
 /// This is the pure half of the place on purpose: it reads nothing and starts nothing, so what a level holds and
@@ -88,8 +88,8 @@ internal sealed class UpstreamEntriesTree
     /// </summary>
     /// <remarks>
     /// An entry the Layout names at no path is left out: it is something the Layout holds and cannot lend, since a place
-    /// shows what is at a path and there is none to name. A path no tree can be drawn of — empty, starting or ending
-    /// with a separator, or with an empty segment — is left out too, because the command line would refuse it as a
+    /// shows what is at a path and there is none to name. A path no tree can be drawn of, empty, starting or ending
+    /// with a separator, or with an empty segment, is left out too, because the command line would refuse it as a
     /// name rather than write it.
     /// </remarks>
     /// <param name="upstream">What the copy holds.</param>

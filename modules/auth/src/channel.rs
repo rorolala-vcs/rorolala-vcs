@@ -3,22 +3,22 @@
 //! A [`SecureStream`] is the only thing the layer above sees, and it is a socket in every
 //! way that matters: it implements [`AsyncRead`] and [`AsyncWrite`], so `read_exact`,
 //! `write_all`, `split`, the `tokio_util` codecs and anything else generic over a stream
-//! work on it unchanged. The record layer underneath — the length-prefixed, sealed
-//! records, the counters, the rekeying — is invisible.
+//! work on it unchanged. The record layer underneath, the length-prefixed, sealed
+//! records, the counters, the rekeying, is invisible.
 //!
 //! One thing is not left to a caller's discipline: a read also puts out whatever a write
 //! left behind, so writing a request and then waiting for the reply cannot stall on a
 //! stream that stopped accepting the write part-way through it. A socket behaves that way
 //! because the kernel drains it; this has to say so itself.
 //!
-//! The handshake is *signed* Diffie–Hellman, not Noise's implicitly-authenticated one,
+//! The handshake is *signed* Diffie-Hellman, not Noise's implicitly-authenticated one,
 //! because an identity here is a **signature** key: a peer proves itself by signing the
 //! transcript, which is exactly what [`PublicKey::verify`] checks. Which identity that is,
-//! is the key's [fingerprint](crate::PublicKey::fingerprint) — a name is only a local
+//! is the key's [fingerprint](crate::PublicKey::fingerprint), a name is only a local
 //! label, so a peer can never claim an identity other than the key it holds.
 //!
 //! The exchange itself is hybrid: X25519 for forward secrecy *now*, and ML-KEM-768 for
-//! forward secrecy against a key that is only recovered *later* — the "store now, decrypt
+//! forward secrecy against a key that is only recovered *later*, the "store now, decrypt
 //! later" that a session recorded today would otherwise be open to.
 
 use std::io;
@@ -44,8 +44,8 @@ use crate::key::{KeyAlgorithm, PublicKey, Signature, SigningKey};
 /// The largest plaintext a single record carries.
 ///
 /// This is what turns a transfer into records: a megabyte is one record, one sealing and one write,
-/// where sixteen kilobytes was sixty-four of each. It is also what a session holds per stream —
-/// about this much being read and this much being written — so it is the number a machine's memory
+/// where sixteen kilobytes was sixty-four of each. It is also what a session holds per stream,
+/// about this much being read and this much being written, so it is the number a machine's memory
 /// pays for the sessions it serves.
 pub const MAX_PLAINTEXT: usize = 1 << 20;
 
@@ -251,8 +251,8 @@ impl<S> SecureStream<S> {
     /// Drops the bytes before the next record once they are worth moving.
     ///
     /// Nothing before [`Cursor::next`](Cursor::next) is read again, so the buffer would grow by a
-    /// record's worth per record without this. Moving is one `memcpy` of what is left — at most a
-    /// record and a bit — and it is done only when at least one whole record is behind, so it is
+    /// record's worth per record without this. Moving is one `memcpy` of what is left, at most a
+    /// record and a bit, and it is done only when at least one whole record is behind, so it is
     /// paid once per that many bytes rather than once per record.
     fn compact(&mut self) {
         if self.cursor.next < MAX_CIPHERTEXT {
@@ -316,7 +316,7 @@ impl<S: AsyncRead + Unpin> SecureStream<S> {
 /// Where in a [`SecureStream`]'s read buffer the two ends of what is unread are.
 ///
 /// The two do not overlap: `next` only moves past a whole record once that record has been opened,
-/// so `next..` is ciphertext that is not a record yet — possibly half of one.
+/// so `next..` is ciphertext that is not a record yet, possibly half of one.
 #[derive(Default)]
 struct Cursor {
     /// The plaintext opened and not yet handed out.
@@ -328,8 +328,8 @@ struct Cursor {
 impl<S: AsyncWrite + Unpin> SecureStream<S> {
     /// Writes `parts` as records, filling each record from as many parts as it takes.
     ///
-    /// A part boundary is not a record boundary: what a caller holds is a value made of parts — a
-    /// frame's length, and then the value — and the records under it are cut by size. A part smaller
+    /// A part boundary is not a record boundary: what a caller holds is a value made of parts, a
+    /// frame's length, and then the value, and the records under it are cut by size. A part smaller
     /// than a record is therefore joined with what follows it, and one larger is split, which is what
     /// lets a caller hand over what it already has rather than build one buffer of it first.
     ///
@@ -444,7 +444,7 @@ impl<S: AsyncWrite + Unpin> SecureStream<S> {
 impl<S: AsyncRead + AsyncWrite + Unpin> SecureStream<S> {
     /// Connects to a peer whose identity is already known, and proves our own.
     ///
-    /// `expected` is the identity the peer must turn out to hold — a key that was pinned,
+    /// `expected` is the identity the peer must turn out to hold, a key that was pinned,
     /// or looked up. A peer that proves anything else is rejected before a byte of
     /// session data is exchanged.
     ///
@@ -460,8 +460,8 @@ impl<S: AsyncRead + AsyncWrite + Unpin> SecureStream<S> {
 
     /// Connects to a peer that is not held to any particular identity, and proves our own.
     ///
-    /// The peer's proof is still verified — it must hold the private half of the key it
-    /// presented — but nothing says *which* key that must be. A caller with no key to hold
+    /// The peer's proof is still verified, it must hold the private half of the key it
+    /// presented, but nothing says *which* key that must be. A caller with no key to hold
     /// its peer to is challenged rather than challenging back: what answered is read from
     /// [`peer`](Self::peer), and what that is worth is the caller's to decide.
     ///
@@ -658,7 +658,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for SecureStream<S> {
             };
             match me.read_more(cx, want) {
                 Poll::Ready(Ok(false)) => {
-                    // Nothing read and nothing left is the end of the stream — unless half a record
+                    // Nothing read and nothing left is the end of the stream, unless half a record
                     // is already behind it, which is a stream that was cut short.
                     return if me.incoming.len() == me.cursor.next {
                         Poll::Ready(Ok(()))
@@ -701,7 +701,7 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for SecureStream<S> {
         }
         me.close_record()?;
 
-        // A `Pending` here is fine — the bytes are buffered, and a later write, flush or
+        // A `Pending` here is fine, the bytes are buffered, and a later write, flush or
         // read will drain them. A hard error is not: reporting it as a successful write
         // would lose it, since a caller may never write or flush again.
         if let Poll::Ready(Err(error)) = me.poll_drain(cx) {
@@ -824,7 +824,7 @@ impl Schedule {
 
 /// The running hash of the handshake, fed in the same order by both sides.
 ///
-/// Every field goes in — the suite included — and both proofs sign a digest of it, so a
+/// Every field goes in, the suite included, and both proofs sign a digest of it, so a
 /// peer that alters any of them, or talks one side down to a weaker suite, changes what
 /// the signature covers and is rejected.
 struct Transcript(Sha256);
@@ -1411,7 +1411,7 @@ mod tests {
         let accepting =
             tokio::spawn(async move { SecureStream::accept(server_io, &running).await });
 
-        // Nothing is pinned, so a server the client never named is accepted — it still has
+        // Nothing is pinned, so a server the client never named is accepted, it still has
         // to prove the key it presented, and it is read off the session afterwards.
         let mut client = SecureStream::connect_unpinned(client_io, &client_key)
             .await
@@ -1819,7 +1819,7 @@ mod tests {
         let stream = SecureStream::new(one, [1; 32], [2; 32], key(23).public_key());
 
         // Taking the stream back yields the same one that was handed in, so raw bytes written
-        // to it reach the peer unsealed — which is what makes releasing the session mean
+        // to it reach the peer unsealed, which is what makes releasing the session mean
         // anything.
         let mut inner = stream.into_inner();
         inner.write_all(b"raw").await.unwrap();

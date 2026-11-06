@@ -144,8 +144,8 @@ impl Workspace {
     /// The architecture a build is for, when one is named: `CARGO_BUILD_TARGET`, the variable cargo
     /// reads the same value from.
     ///
-    /// A build for the machine it runs on names no triple; one for another — a musl hand-off built on
-    /// a glibc machine, or the reverse — names the triple cargo then writes its output under. Reading
+    /// A build for the machine it runs on names no triple; one for another, a musl hand-off built on
+    /// a glibc machine, or the reverse, names the triple cargo then writes its output under. Reading
     /// cargo's own variable rather than a second one is what keeps the two from disagreeing about
     /// where an artifact is.
     #[must_use]
@@ -343,7 +343,7 @@ impl Workspace {
     /// The plugins that ship with the Desktop program.
     ///
     /// A plugin is a project under `Plugins/`, one directory to one plugin, and the name of the
-    /// directory is also the assembly's name — which is what says which files to take from the
+    /// directory is also the assembly's name, which is what says which files to take from the
     /// output it was built into. The tree is the one place a plugin is declared, so a directory
     /// added there is one a build lays down without being told about it.
     ///
@@ -435,7 +435,7 @@ impl Workspace {
     /// The script that builds the daemon's window, on the platform this build is for.
     ///
     /// It is a script rather than a cargo build because the window is a C program of its own: Win32
-    /// with a resource script on Windows, GTK 4 on Linux — see `app/daemon-win/README.md` and
+    /// with a resource script on Windows, GTK 4 on Linux, see `app/daemon-win/README.md` and
     /// `app/daemon-linux/README.md`.
     #[cfg(any(windows, target_os = "linux"))]
     #[must_use]
@@ -739,7 +739,7 @@ mod tests {
             Some(PathBuf::from("./out/here"))
         );
 
-        // What would reach outside it — or remove it — is refused.
+        // What would reach outside it, or remove it, is refused.
         for refused in ["..", "build/../../etc", "/tmp/rola", "."] {
             assert!(
                 checked_relative("BUILD_DIR", Some(refused), "build").is_err(),

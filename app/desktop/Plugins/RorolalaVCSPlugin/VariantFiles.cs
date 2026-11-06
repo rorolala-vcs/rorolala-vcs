@@ -6,11 +6,11 @@ namespace RorolalaVCSPlugin;
 /// The variant files a reading holds: which merge a file of the tree is the variant file of.
 /// </summary>
 /// <remarks>
-/// A merge in progress is a record of a target — the file the Layout names that the variant is to be joined
-/// into — and of a variant whose content is written beside it as a file of its own. The variant file is not
+/// A merge in progress is a record of a target, the file the Layout names that the variant is to be joined
+/// into, and of a variant whose content is written beside it as a file of its own. The variant file is not
 /// a path either Layout names, so it is the one thing about a merge that no path of the work answers: the
-/// listing shows it as a file nobody has heard of, and what makes it legible — its badge, the column that
-/// names it, and the button that ends the merge — is read from here.
+/// listing shows it as a file nobody has heard of, and what makes it legible, its badge, the column that
+/// names it, and the button that ends the merge, is read from here.
 /// <para>
 /// What the reading names is relative to the Workspace it was made of, and what a listing has is a path the
 /// system names, so the two are joined before they are compared: the same thing the reading itself does for

@@ -5,7 +5,7 @@ fetched from.
 
 A lock is what the git support reads to put a project's materials back. Each line names a path in
 the project and the content that belongs there, and the lines at the top name the Vaults that
-content can be fetched from. It is generated — `rola.toml` is the file a person writes — so its
+content can be fetched from. It is generated, `rola.toml` is the file a person writes, so its
 grammar is deliberately small: no patterns, no conditions, no inheritance, no quoting.
 
 ```text

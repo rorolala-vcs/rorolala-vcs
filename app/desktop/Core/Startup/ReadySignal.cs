@@ -5,12 +5,12 @@ namespace RorolalaDesktop;
 /// </summary>
 /// <remarks>
 /// A caller that starts the program to look at a window has nothing to watch while it starts: what it needs
-/// is the one thing it cannot work out for itself — that there is something on the screen now — and the
+/// is the one thing it cannot work out for itself, that there is something on the screen now, and the
 /// window saying so is the only statement of that. It is said on standard output, the stream a caller that
 /// ran <c>rola desktop</c> reads, and it is said once.
 /// <para>
-/// Asked for rather than always said: <c>--ready</c> is the run that asked, and a run started by a person — a
-/// double click, or <c>rola desktop</c> with nothing written — keeps the silence it had, because a line on a
+/// Asked for rather than always said: <c>--ready</c> is the run that asked, and a run started by a person, a
+/// double click, or <c>rola desktop</c> with nothing written, keeps the silence it had, because a line on a
 /// terminal is a line nobody asked for.
 /// </para>
 /// <para>

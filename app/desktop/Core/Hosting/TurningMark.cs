@@ -15,7 +15,7 @@ namespace RorolalaDesktop.Hosting;
 /// The ring is one fixed arc and what turns is the whole mark, around its own centre, rather than an arc drawn
 /// again at a new angle each frame. The two say the same thing when they are right, and the rotation cannot be
 /// wrong the way a redrawn arc can: the ends of an arc and its centre are not independent, and an arc asked for
-/// with the wrong of the two ways round — the long way when it was told short — is drawn on the other circle
+/// with the wrong of the two ways round, the long way when it was told short, is drawn on the other circle
 /// through the same ends, which orbits the centre it was meant to turn around. A short arc, and a rotation of
 /// the mark, leave that nothing to get wrong.
 /// </para>

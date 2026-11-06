@@ -62,7 +62,7 @@ public sealed class LauncherFilesTests
         Assert.Single(file.Paths);
     }
 
-    /// <summary>A file a person wrote — with a comment, and the list on one line — is read.</summary>
+    /// <summary>A file a person wrote (with a comment, and the list on one line) is read.</summary>
     [Fact]
     public void AHandWrittenFileIsRead()
     {

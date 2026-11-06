@@ -256,8 +256,8 @@ internal sealed partial class VersionGraphView : Control
 
     /// <summary>What waits for a change to stop being said before reading.</summary>
     /// <remarks>
-    /// A change arrives more than once — the browser says so, whoever made it says so, and both a click
-    /// and a touch follow one operation — and every reading walks the work. A quiet moment turns a burst
+    /// A change arrives more than once, the browser says so, whoever made it says so, and both a click
+    /// and a touch follow one operation, and every reading walks the work. A quiet moment turns a burst
     /// into the one read it means, and lets what the browser let go of be gone before the work is read
     /// again.
     /// </remarks>
@@ -886,7 +886,7 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>What the work says about the local entries of a reading: the drafts it holds.</summary>
     /// <remarks>
     /// A draft is not in the index, so it is never read from there: a local entry whose file holds a
-    /// change is one, and the state the reading gives says which of the two kinds it is — a track that
+    /// change is one, and the state the reading gives says which of the two kinds it is, a track that
     /// continues the file's record, or a change that would fork it. A Vault's newer version of the same
     /// path is carried beside the draft so the card can say which version the change should stand on.
     /// </remarks>

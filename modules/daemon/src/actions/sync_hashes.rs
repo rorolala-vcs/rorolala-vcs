@@ -1,6 +1,6 @@
 //! `sync-hashes`: making the two stores hold the same named keys.
 //!
-//! Where [`sync_all`](crate::sync_all) works out what to sync — everything either side holds — this
+//! Where [`sync_all`](crate::sync_all) works out what to sync, everything either side holds, this
 //! is told: the keys are the caller's, and the carrying both sides do afterwards is the very
 //! primitive a full sync uses. So a full sync is this with everything named, and this is a full sync
 //! narrowed to a list.
@@ -18,7 +18,7 @@ use super::sync_storage::{DEFAULT_WINDOW, Side, Unit, UnitKind, carry_blob, sync
 ///
 /// # Input
 ///
-/// The units, separated by whitespace — one a line, as a listing prints them. `m:<key>` carries only
+/// The units, separated by whitespace, one a line, as a listing prints them. `m:<key>` carries only
 /// the manifest a content was cut into, `o:<key>` only the object, `q:<key>` whichever of the two
 /// the sender holds, and a bare key the whole of what it names; a hash is read the way a key is
 /// anywhere else. A token `c:<n>` asks the Vault to read `n` at once where the asking happens, so a
@@ -43,7 +43,7 @@ impl Action for ActionSyncHashes {
     /// # Errors
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
-    /// Vault, and whatever the exchange fails with — see the sync primitive in
+    /// Vault, and whatever the exchange fails with, see the sync primitive in
     /// [`sync_storage`](crate::sync_storage).
     async fn process(
         input: OnlyWorkspace<Self::Input>,
@@ -84,7 +84,7 @@ impl Action for ActionSyncHashes {
 /// The reads the caller asks for at once, and the units it names.
 ///
 /// A token `c:<n>` is the ask and is taken out of the text; a caller that names none asks for the
-/// number this primitive reads at once by default — see [`DEFAULT_WINDOW`] — which is what a plain
+/// number this primitive reads at once by default, see [`DEFAULT_WINDOW`], which is what a plain
 /// listing of keys has always meant.
 fn split_ask(text: &str) -> (u32, String) {
     let mut asked = u32::try_from(DEFAULT_WINDOW).unwrap_or(1);
@@ -108,8 +108,8 @@ fn split_ask(text: &str) -> (u32, String) {
 
 /// Asks the Vault for `asked` reads at once and answers what it grants.
 ///
-/// The ask goes to the Vault, which holds it to what it is set to serve — the configuration's
-/// `max_concurrency` — and the grant comes back to the Workspace, which is the side that asks with
+/// The ask goes to the Vault, which holds it to what it is set to serve, the configuration's
+/// `max_concurrency`, and the grant comes back to the Workspace, which is the side that asks with
 /// it. A Vault that is set to no number serves what is asked for.
 async fn grant(ctx: &mut ActionContext<'_>, asked: u32) -> Result<u32, ActionError> {
     let ask: OnlyWorkspace<u32> = ctx.only_workspace(|| asked);
@@ -143,7 +143,7 @@ fn granted(asked: u32, cap: u32) -> u32 {
 /// The unit a token names.
 ///
 /// `m:<key>` carries only the manifest a content was cut into, `o:<key>` only the object, and
-/// `q:<key>` whichever of the two the other side holds — what a caller that does not know how a
+/// `q:<key>` whichever of the two the other side holds, what a caller that does not know how a
 /// content is kept asks for, learning from what arrives. A bare key carries the whole of what it
 /// names, which is what a caller that has no manifest of its own asks for and what the two ends
 /// expand. A token that names no key is passed over, as a listing's noise always has been.

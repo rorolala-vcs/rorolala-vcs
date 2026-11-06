@@ -20,12 +20,12 @@ namespace RorolalaVCSPlugin;
 /// A number is not always there to give. A fetch brings the Vault's Layout and never its versions, so the
 /// version the Vault is at is ordinarily one this side has never had: being behind is then a direction with no
 /// count, and two sides that have each moved on are not a distance from one another at all. The three answers
-/// are told apart by what the cell holds — a signed number, a bare sign, and a question mark — because what a
+/// are told apart by what the cell holds (a signed number, a bare sign, and a question mark) because what a
 /// reader does about them differs too.
 /// </para>
 /// <para>
-/// It is read from the work the same way the State mark beside it is, and through the same reading — see
-/// <see cref="StatusReadings"/> — so a directory is read once for both columns rather than once each.
+/// It is read from the work the same way the State mark beside it is, and through the same reading, see
+/// <see cref="StatusReadings"/>, so a directory is read once for both columns rather than once each.
 /// </para>
 /// <para>
 /// What it says is a value rather than a mark, because a distance is a number and not one of a handful: a
@@ -60,7 +60,7 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
     /// </summary>
     /// <remarks>
     /// How far a file is from upstream is read once what the entry is has been, alongside the listing's own
-    /// columns — the time it was written, its size — and it stands before them because it is Rorolala's answer
+    /// columns (the time it was written, its size) and it stands before them because it is Rorolala's answer
     /// about the file rather than a fact of the filesystem. What is read with the name is where the entry is
     /// named elsewhere, which is the Upstream column's business and not this one's.
     /// </remarks>
@@ -71,8 +71,8 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
     /// </summary>
     /// <remarks>
     /// A dash is what a file in step has, which is why this is not a column of marks: a column of marks says
-    /// nothing by having no mark, and the one thing a reader wants here — that there is nothing between the
-    /// two sides — would be the one thing it could not say.
+    /// nothing by having no mark, and the one thing a reader wants here, that there is nothing between the
+    /// two sides, would be the one thing it could not say.
     /// </remarks>
     public bool Marks => false;
 
@@ -82,8 +82,8 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
     /// <inheritdoc />
     public EntryColumnMark Value(Entry entry)
     {
-        // What a standing is about is a file of the work, so an entry that names no directory of its own —
-        // the way up, which is a step rather than a place — is nothing this speaks about.
+        // What a standing is about is a file of the work, so an entry that names no directory of its own,
+        // the way up, which is a step rather than a place, is nothing this speaks about.
         if (
             Path.GetDirectoryName(entry.Path) is not { Length: > 0 } directory
             || _readings.Reading(directory) is not { } status
@@ -107,7 +107,7 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
     /// what it means said on the cell.
     /// </summary>
     /// <remarks>
-    /// The colours are this plugin's own — see <see cref="RorolalaColours"/> — and they are the green and the
+    /// The colours are this plugin's own, see <see cref="RorolalaColours"/>, and they are the green and the
     /// red the plugin spends on the two sides of the same question everywhere else: green for work that is
     /// here and not recorded yet, which is what being ahead is, and red for what must not be recorded, which is
     /// what another side having moved on is.
@@ -115,7 +115,7 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
     /// The count is what the cell is for, and it is not always known: a fetch brings the Vault's Layout and
     /// never its versions, so the version the Vault is at is ordinarily one this side has never had, and the
     /// chain that would count the gap is the Vault's own. A standing whose count is not known says so by
-    /// holding no number at all, and one whose chains have parted says so with a question mark — which is the
+    /// holding no number at all, and one whose chains have parted says so with a question mark, which is the
     /// one thing a number cannot say, since there is no number of versions between two sides that are not on
     /// one chain.
     /// </para>
@@ -170,7 +170,7 @@ internal sealed class RorolalaStanding : IEntryColumnProvider
     /// </summary>
     /// <remarks>
     /// It is what the cell is hovered for and what the badge on a tile says, read from here by both: a count
-    /// beside a name is a fact a reader has to know how to act on, and a badge has no room for the number — so
+    /// beside a name is a fact a reader has to know how to act on, and a badge has no room for the number, so
     /// the sentence is where the two are one answer about one file rather than two halves of one.
     /// <para>
     /// Where the count is not known the sentence says the direction and stops: being behind is being behind, and

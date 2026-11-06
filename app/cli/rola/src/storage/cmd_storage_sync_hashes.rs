@@ -1,7 +1,7 @@
 //! The `rola storage sync-hashes` command: make the two stores hold the named keys.
 //!
 //! Where [`sync-all`](crate::storage::cmd_storage_sync_all) carries everything either end holds,
-//! this carries only the keys it is given — a full sync narrowed to a list. It is the same shape:
+//! this carries only the keys it is given, a full sync narrowed to a list. It is the same shape:
 //! a Vault is reached the way `sync-all` reaches one, and the keys are the caller's to name instead
 //! of the two ends working them out between them. Because what it changes is only what was named, it
 //! does not ask first.
@@ -73,7 +73,7 @@ pub fn complete_storage_sync_hashes(
 
 /// Makes the stores at both ends hold the keys named
 ///
-/// Each argument is a hash, read the way a key is read anywhere else — as hex, or with `blake3:` or
+/// Each argument is a hash, read the way a key is read anywhere else, as hex, or with `blake3:` or
 /// `manifest:` in front of it. What crosses is what only one end holds, in whichever direction that
 /// is, so a key named here is on both ends by the time the run returns; a key neither end holds is
 /// nothing to carry.
@@ -112,7 +112,7 @@ pub fn storage_sync_hashes(args: EntryStorageSyncHashes, offline: &ResOffline) -
 /// Splits the arguments into the hashes and the Vault, when one is named.
 ///
 /// The Vault comes last, and is told apart by not reading as a hash: a hash is hex, or the head of
-/// one, so a name or an address — which is what a Vault is named by — is not one, and a name that
+/// one, so a name or an address, which is what a Vault is named by, is not one, and a name that
 /// happened to be hex is the one case this cannot tell apart.
 fn with_vault(mut words: Vec<String>) -> (Option<String>, Vec<String>) {
     let vault = words.last().filter(|word| !looks_like_hash(word)).cloned();
@@ -156,8 +156,8 @@ pub fn handle_storage_sync_hashes(
     let account = account_named(&name, Some(held), None)?;
 
     // The hashes are read here, so a word that is not one is told apart from a hash before anything
-    // crosses. A head is resolved against what this side's store holds — the far side's own keys
-    // are not listed for it — and what the action is handed is the hex it reads the same way.
+    // crosses. A head is resolved against what this side's store holds, the far side's own keys
+    // are not listed for it, and what the action is handed is the hex it reads the same way.
     let stored = store_key_set(storage.get_ref().as_ref());
     let mut hashes = Vec::with_capacity(state.hashes.len());
     for hash in &state.hashes {
@@ -174,7 +174,7 @@ pub fn handle_storage_sync_hashes(
     }
 
     // The exchange is asynchronous and a command is not, so the two meet here: a runtime of this
-    // run's own waits for it, and the run's progress is said to a reader on a thread of its own —
+    // run's own waits for it, and the run's progress is said to a reader on a thread of its own,
     // the bar fills as the keys cross, the way `storage sync-all` says its own.
     let runtime = tokio::runtime::Runtime::new().map_err(|error| ActionError::Io(error.into()))?;
     let reporting = Reporting::start(*progress);

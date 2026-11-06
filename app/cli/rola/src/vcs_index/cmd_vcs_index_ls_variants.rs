@@ -1,8 +1,8 @@
 //! The `rola vcs-index ls-variants` command: list the variants an index holds.
 //!
 //! One line a variant: its hash, the base version's hash, and the joined variant's when it is a
-//! merge. The base version's number is not worked out here — that costs a trace of the chain for
-//! every variant — so it is left to [`vcs_index_read`](crate::vcs_index::cmd_vcs_index_read), which
+//! merge. The base version's number is not worked out here, that costs a trace of the chain for
+//! every variant, so it is left to [`vcs_index_read`](crate::vcs_index::cmd_vcs_index_read), which
 //! works it out for one.
 
 use librorolala::storage::Key;
@@ -31,7 +31,7 @@ use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexRead, hex, runtime, va
 ///
 /// One line a variant, which is what the command has always printed except that the colour is not
 /// in it: a template says nothing about a terminal. `hash` is the variant's own hash, which the
-/// index names it by and `--json` does not carry — the two are otherwise the same fields.
+/// index names it by and `--json` does not carry, the two are otherwise the same fields.
 const DEFAULT_FORMAT: &str = "{{ variants.hash }} -> {{ variants.variant.base_version }} (store:{{ variants.variant.storage_hash }}){% if variants.variant.join %} (join:{{ variants.variant.join }}){% endif %}";
 
 #[help(buffer)]
@@ -48,8 +48,8 @@ pub fn desc_vcs_index_ls_variants() -> Description {
 /// Lists the variants the index holds
 ///
 /// One per line: the variant's hash, the base version's hash, and the joined variant's hash when
-/// it is a merge. The base version's number is not worked out — that costs a trace of the chain
-/// for every variant — so it is not printed here; `rola vcs-index read` works it out for one.
+/// it is a merge. The base version's number is not worked out, that costs a trace of the chain
+/// for every variant, so it is not printed here; `rola vcs-index read` works it out for one.
 ///
 /// # Errors
 ///

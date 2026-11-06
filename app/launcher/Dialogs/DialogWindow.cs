@@ -102,7 +102,7 @@ internal abstract class DialogWindow : Window
     /// Changes what the window says it is about.
     /// </summary>
     /// <remarks>
-    /// The account window is two windows at once — a greeting and a question — and the strip at its top is the
+    /// The account window is two windows at once, a greeting and a question, and the strip at its top is the
     /// one thing on it that is not drawn again when the other is: what it is about is stated once, by the
     /// window, and stated again here when the window becomes the other of the two.
     /// </remarks>

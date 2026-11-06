@@ -5,7 +5,7 @@
 //! serves the Vault, and then works the commands these exist for.
 //!
 //! What is checked is that a fetch brings the Vault's Layout here as a copy rather than moving it,
-//! that the copy is what the reading commands answer from — including when there is no copy — and
+//! that the copy is what the reading commands answer from, including when there is no copy, and
 //! that taking and letting go of an entry is written on the Vault and in the copy beside it.
 
 use std::fs;
@@ -82,7 +82,7 @@ async fn main() {
     let mut checked = Checked::default();
 
     // Before anything is fetched there is no copy, and the reading commands say so rather than
-    // reaching for a Vault — the Vault is not even serving yet.
+    // reaching for a Vault, the Vault is not even serving yet.
     let said = run(&mut client(
         &workspace,
         &data,
@@ -668,7 +668,7 @@ async fn main() {
     );
 
     // What the Vault took was written into the fetched copy as it was taken, so a reading command
-    // sees the Vault as the run left it rather than as it found it — no fetch of its own needed.
+    // sees the Vault as the run left it rather than as it found it, no fetch of its own needed.
     let said = run(&mut client(
         &workspace,
         &data,
@@ -793,7 +793,7 @@ async fn main() {
 
     // A `Uuid` the Vault holds but this Layout does not is brought in by naming where it goes. In
     // the Layout that already holds it, that is refused; in a Workspace that never did, it is how
-    // the file arrives at all — content and all.
+    // the file arrives at all, content and all.
     let remote_path = "models/hero.psd";
 
     // The name a destination that is a directory takes the entry by: the leaf of the Vault's path.
@@ -821,7 +821,7 @@ async fn main() {
     Workspace::create(&other).expect("a second workspace");
 
     // The same account, so the Vault admits the run: the keys belong to the Workspace, so they are
-    // copied beside the new one rather than made again — a new pair would be a stranger.
+    // copied beside the new one rather than made again, a new pair would be a stranger.
     let auth = other.join(".rola/auth");
     fs::create_dir_all(&auth).expect("the second workspace's keys");
     for suffix in ["pem", "pub"] {
@@ -1147,7 +1147,7 @@ async fn main() {
     );
 
     // Several at once is judged whole before any of it is done, and `.` is the directory the run
-    // was made in — so running it inside one names that directory's files and not the whole work.
+    // was made in, so running it inside one names that directory's files and not the whole work.
     let first = Uuid::from_u128(0xba);
     let second = Uuid::from_u128(0xbb);
     let batch = workspace.join("batch");
@@ -1294,8 +1294,8 @@ async fn main() {
         ),
     );
 
-    // A lookback says what each version was — who made it and what it says, read from the variant
-    // the version points at — and `rola status` draws the same for whatever it is given.
+    // A lookback says what each version was, who made it and what it says, read from the variant
+    // the version points at, and `rola status` draws the same for whatever it is given.
     let version = Layout::open(workspace.join(".rola/layout"))
         .expect("the Layout being worked in")
         .entry(id)
@@ -1973,13 +1973,13 @@ async fn main() {
 
     // What the Vault's Layout holds, and the files it is kept in, is read before the run so that
     // what the run does to them can be seen afterwards. A run told to leave the Layout alone must
-    // write nothing at all — not even an empty append, since the only copy of what the Vault holds
+    // write nothing at all, not even an empty append, since the only copy of what the Vault holds
     // is the Vault's own, and another writer may be part of the way through one.
     let layout_before = vault_layout_state(&root);
 
     let said = run(&mut client(&workspace, &data, &["sync", "--no-layout"]));
 
-    // What a run with no plan moved is not the plan's count — there is no plan — so the run says
+    // What a run with no plan moved is not the plan's count, there is no plan, so the run says
     // what crossed: the index objects it asked the Vault for and the stored units it sent. A summary
     // of zeroes would be a run that reported doing nothing while it did the whole of its work.
     let drew = clean(&said.stdout);
@@ -2041,7 +2041,7 @@ async fn main() {
     }
 
     // A dry run of the same thing is not "nothing to do": it prints no count of a plan it did not
-    // make, and says what the run would move instead — the index and the store, which is what
+    // make, and says what the run would move instead, the index and the store, which is what
     // `--no-layout` does. A `--json` caller is told the same in a field, since a plan with no entries
     // and no plan at all are the same counts and different answers.
     let said = run(&mut client(
@@ -2267,7 +2267,7 @@ fn keys(said: &str) -> Vec<Key> {
 
 /// The text of `said` with any terminal escape sequences taken out.
 ///
-/// Output that has been piped is not read by a terminal, so what it holds is the line itself — but a
+/// Output that has been piped is not read by a terminal, so what it holds is the line itself, but a
 /// check that compares against it should not depend on that. This takes the escapes out either way.
 fn clean(said: &str) -> String {
     let mut clean = String::with_capacity(said.len());
@@ -2344,7 +2344,7 @@ fn vault_layout_state(root: &Path) -> LayoutState {
 /// compare equal whatever order the shards handed them back in.
 ///
 /// The files are named with their sizes. A Layout is written by appending to a log, so a size that
-/// did not move is a log nothing was appended to — which is the part a comparison of what the Layout
+/// did not move is a log nothing was appended to, which is the part a comparison of what the Layout
 /// *holds* would miss: an append that changed nothing still wrote.
 fn layout_state(dir: &Path) -> LayoutState {
     let layout = Layout::open(dir).expect("a Layout");
@@ -2399,7 +2399,7 @@ fn address(port: u16) -> String {
 /// The generation of `vault`'s fetched copy that a reader is to open.
 ///
 /// What a fetch writes is a generation of the copy rather than the copy itself, and which generation
-/// that is is the Workspace's to answer — see `LayoutCopy`. Reading one here means asking the same
+/// that is is the Workspace's to answer, see `LayoutCopy`. Reading one here means asking the same
 /// question a command does instead of naming a directory of the cache's own.
 fn fetched_copy(workspace: &Path, vault: &str) -> PathBuf {
     let held = locate_workspace(workspace).expect("the Workspace the run was made in");
@@ -2505,7 +2505,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

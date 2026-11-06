@@ -9,7 +9,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The two are different calls on purpose: a change is what makes every reader let go of what it answered, and a
-/// reading that has landed is what makes the views draw it. Saying the first for the second is a loop — each reader's
+/// reading that has landed is what makes the views draw it. Saying the first for the second is a loop, each reader's
 /// landing empties the other's answer, which reads it again, which lands, and so on for as long as the window is open.
 /// </remarks>
 public sealed class ChangeTests
@@ -44,7 +44,7 @@ public sealed class ChangeTests
         host.Files.Redraw();
 
         // Drawn, and said of nothing else: a changed base or a changed hiding restages every listing, and the files
-        // having changed reads every directory again — neither is what a landed reading means.
+        // having changed reads every directory again, neither is what a landed reading means.
         Assert.Equal(1, redrawn);
         Assert.Equal(0, restaged);
         Assert.Equal(0, touched);

@@ -1,12 +1,12 @@
 # rorolala-dev-bindgen
 
 Generates the C header for Rorolala's C surface: the `#[lazyffi]` exports, and the
-symbols the sources declare as their own — see [Raw exports](#raw-exports).
+symbols the sources declare as their own, see [Raw exports](#raw-exports).
 
 A general-purpose generator (cbindgen) cannot render `#[lazyffi]` output, because the
 generated signatures are written in terms of associated types
 (`<T as InputType>::From`) which it has no way to resolve. This generator knows the
-`#[lazyffi]` rules instead, so it works straight from the sources — no macro
+`#[lazyffi]` rules instead, so it works straight from the sources, no macro
 expansion, and no nightly toolchain.
 
 It is a build-dependency of the root package; see the `librorolala` repository root
@@ -21,7 +21,7 @@ The `export = <Name>` override is parsed both here and in
 `rorolala-utils-lazyffi-macros`, for items and for methods. An attribute macro
 receives its item with the `#[lazyffi]` attribute already stripped, so it can only
 read `export` from the attribute's argument tokens; this generator reads the sources
-and sees the attribute in place. The parsing shape therefore cannot be shared — only
+and sees the attribute in place. The parsing shape therefore cannot be shared, only
 the defaults are, and those come from `rorolala-utils-lazyffi-core`. **Adding a new
 attribute argument means teaching both parsers about it.**
 
@@ -79,8 +79,8 @@ mirrors it, since that is where a C reader looks.
 
 ### Opaque types
 
-An exported `struct` is emitted as an incomplete type — `typedef struct FFIVault
-FFIVault;` — with no fields and no layout. C is told the type exists and nothing else,
+An exported `struct` is emitted as an incomplete type, `typedef struct FFIVault
+FFIVault;`, with no fields and no layout. C is told the type exists and nothing else,
 so a value of one can only cross as a pointer:
 
 | Rust | header |
@@ -93,7 +93,7 @@ so a value of one can only cross as a pointer:
 
 Every opaque struct therefore also declares its release, `void free_<type>(FFIVault
 *value);`, which is what frees the pointers the exports hand out. This is also why a
-resource may hold values with no repr-C sibling at all — a `PathBuf`, a socket: its
+resource may hold values with no repr-C sibling at all, a `PathBuf`, a socket: its
 fields are never converted, so nothing has to map them to C.
 
 A shared reference is `const` because Rust only reads through it, which is also what
@@ -102,9 +102,9 @@ keeping apart:
 
 - a **by-value parameter** is the one sharp edge: the pointer it is spelled as is C's
 own storage, and the call moves the value out of it. C must treat the handle as given
-away — not used again, and not released;
+away, not used again, and not released;
 - a **`&`** takes nothing and writes nothing back, so C keeps the handle and may borrow
-it again — including from two calls at once.
+it again, including from two calls at once.
 
 An `enum` is *not* opaque: its tag and payload are its interface, and C has to be able
 to read them. A payload field whose type is opaque is spelled as a pointer, which is
@@ -123,7 +123,7 @@ thing without the copy being visible in Rust:
 | `&Path`, `&str` (or `PathBuf`, `String`) parameter | `const char *` |
 | `-> PathBuf`, `-> String` | `char *`, owned by the caller |
 
-A parameter is a position the callee only reads, so it is spelled `const` — which is
+A parameter is a position the callee only reads, so it is spelled `const`, which is
 what lets a C++ caller pass a string literal. A returned string is owned and is
 released with `free_string`, the same release a `String` uses.
 
@@ -138,7 +138,7 @@ so a return that has one gives null instead of truncating silently.
 ### Fallible returns
 
 A `Result<T, E>` return is rendered as `RorolalaResult`, the one result type every header
-declares — whether or not anything in it is fallible:
+declares, whether or not anything in it is fallible:
 
 ```c
 typedef struct RorolalaResult {
@@ -222,19 +222,19 @@ and checks that every type it names is declared.
 | Rust | header |
 | --- | --- |
 | `*const T`, `*mut T` | `const T *`, `T *` |
-| `i32`, `usize`, `bool`, `f64` … | `int32_t`, `uintptr_t`, `bool`, `double` … |
+| `i32`, `usize`, `bool`, `f64` and more | `int32_t`, `uintptr_t`, `bool`, `double` and more |
 | `*const c_char`, `*mut c_void` | `const char *`, `void *` |
 | no return, or `-> ()` | `void` |
 
 `c_char` is why the route has scalars of its own: C's `char` is a byte and Rust's `char` is a
-scalar, so a byte string is written `*const c_char` and comes out `const char *` — while Rust's
+scalar, so a byte string is written `*const c_char` and comes out `const char *`, while Rust's
 `char` stays `uint32_t`, as it is everywhere else.
 
 What the generator cannot know is what a pointer points at. A name this header defines is used
 as the header declares it; a name it does not is taken at its word and declared as an opaque
 struct above the declarations, leaving what the type means to the source. For a lock the header
-has no type for, the source declares one of its own —
-`pub type RolaVaultLocking = LockingGuard<Vault>;` — and names it in the signature:
+has no type for, the source declares one of its own,
+`pub type RolaVaultLocking = LockingGuard<Vault>;`: and names it in the signature:
 
 ```c
 typedef struct RolaVaultLocking RolaVaultLocking;
@@ -242,7 +242,7 @@ typedef struct RolaVaultLocking RolaVaultLocking;
 RolaVaultLocking * RolaVault_get_locking_guard(const RolaVault * vault);
 ```
 
-The alias is the source's to write, because its name is the whole of what C is told — and its
+The alias is the source's to write, because its name is the whole of what C is told, and its
 documentation is what the declaration carries, following the same rule as everything else: the
 first line, and the `# FFI` section. Write the explanation where the name is and the header
 repeats it. The lookup is deliberately local, though: an alias is read from the file the
@@ -252,9 +252,9 @@ bare, and a name in a signature that carries parameters of its own is reported, 
 nothing to fill them with.
 
 A name held **by value** is the one position that has to be a type C can lay out, so a name the
-header does not define is reported there — and so is an opaque type, an incomplete one having no
+header does not define is reported there, and so is an opaque type, an incomplete one having no
 layout, and a `c_void`, which is only ever what a pointer points at. A reference is reported
-too: a raw export writes what C names, and a `&str` is not a C string — it is a pointer and a
+too: a raw export writes what C names, and a `&str` is not a C string, it is a pointer and a
 length.
 
 A function named after a type the header defines is reported, because the two share one
@@ -273,7 +273,7 @@ rather than skipped.
 A name is a list of declarations, not one, and which is meant is decided by where it
 is written: the nearest declaration wins. Two declarations equally near are ambiguous.
 A **qualified** path breaks that tie, because the crate it names says which declaration
-is meant — `rorolala_vault::Config` is the `Config` of the crate named `rorolala-vault`,
+is meant, `rorolala_vault::Config` is the `Config` of the crate named `rorolala-vault`,
 even when a sibling crate's `Config` sits equally near. The crate ident comes from the
 `Cargo.toml` above the file that declares the type, so it is matched against a real
 crate name rather than a guess. `crate::` and `self::` name the crate the reference is

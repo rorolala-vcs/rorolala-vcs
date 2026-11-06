@@ -1,7 +1,7 @@
 //! The chain an index object sits at the top of, as a drawing reads it.
 //!
 //! The graph itself is [`crate::draw`]'s business; what this module does is walk the index and say
-//! what is there — one level a version, each with the variant its version points at and the
+//! what is there, one level a version, each with the variant its version points at and the
 //! variants merged in beside it, and the variant itself at the top when the object named one. Both
 //! `rola vcs-index lookback` and the Desktop's Version Graph read the chain this way, so the walk is
 //! kept here rather than in each of them.
@@ -80,8 +80,8 @@ pub struct Lookback {
     pub first: Option<VariantView>,
     /// The full hash of each version in the chain, by the version's number.
     ///
-    /// The drawing is by variant, but a caller that shows where a version itself stands — the
-    /// Desktop's Version Graph does — needs the hash the index names that version by.
+    /// The drawing is by variant, but a caller that shows where a version itself stands, the
+    /// Desktop's Version Graph does, needs the hash the index names that version by.
     pub version_hashes: HashMap<u64, String>,
 }
 
@@ -101,7 +101,7 @@ impl Lookback {
     ///
     /// The index is scanned rather than walked: a variant the chain draws nowhere is reached from no
     /// link in the chain. What the chain draws is its spine and the variants merged in beside it, so a
-    /// variant is unjoined when it is neither — and it belongs to this file when the version it is
+    /// variant is unjoined when it is neither, and it belongs to this file when the version it is
     /// based on is one the chain holds.
     ///
     /// # Errors
@@ -182,8 +182,8 @@ pub enum LookbackError {
 
 /// The chain a lookback draws, as [`crate::draw`] takes it.
 ///
-/// `has_first` says whether the oldest version's variant is held apart — see
-/// [`Lookback::first`] — because a chain that recorded nothing has no such variant and its highest
+/// `has_first` says whether the oldest version's variant is held apart, see
+/// [`Lookback::first`], because a chain that recorded nothing has no such variant and its highest
 /// number is one lower.
 #[must_use]
 pub fn chain_of(levels: &[LevelView], top_kind: TopKind, has_first: bool) -> Chain {
@@ -208,7 +208,7 @@ pub fn chain_of(levels: &[LevelView], top_kind: TopKind, has_first: bool) -> Cha
     }
 
     // The number the highest recorded version carries: one version is number 0, and every version
-    // over the oldest — a level of the drawing, or the head a chain was started from — adds one.
+    // over the oldest (a level of the drawing, or the head a chain was started from) adds one.
     let recorded = u64::try_from(levels.len())
         .unwrap_or(u64::MAX)
         .saturating_add(u64::from(has_first))
@@ -336,7 +336,7 @@ fn gather(
     });
 
     // The words of the oldest version come from the variant that made it, which is based on the root
-    // — a version that is never drawn — so it hangs from no level. It is kept apart here so that
+    //, a version that is never drawn, so it hangs from no level. It is kept apart here so that
     // version is drawn saying what it was, like every other.
     let first = variants.last().map(|variant| view(index, runtime, variant));
 
@@ -350,7 +350,7 @@ fn gather(
         spine.push((variant, level));
     }
 
-    // What to follow the joins of: the spine variants, and the head variant when there is one —
+    // What to follow the joins of: the spine variants, and the head variant when there is one,
     // it is the variant of the level above the spine.
     let mut queue = spine.clone();
     if let Some(head) = head {
@@ -359,7 +359,7 @@ fn gather(
     }
 
     // The variants merged in, reached by following each variant's `join`, and the level that merges
-    // each of them in — the latest merge sets where it stands.
+    // each of them in, the latest merge sets where it stands.
     let mut merged_at: HashMap<u64, Vec<Variant>> = HashMap::new();
     let mut merged_by: HashMap<[u8; 32], u64> = HashMap::new();
     while let Some((variant, level)) = queue.pop() {
@@ -371,7 +371,7 @@ fn gather(
             .and_modify(|highest| *highest = (*highest).max(level))
             .or_insert(level);
 
-        // A variant that is already drawn — a spine, the head, or one merged in before — is
+        // A variant that is already drawn (a spine, the head, or one merged in before) is
         // reached, not gathered a second time.
         if level_of.contains_key(join) {
             continue;
@@ -380,7 +380,7 @@ fn gather(
             continue;
         };
         // Its place is the level of its base version. A variant based on the root has no version
-        // above it to sit under, so it has no level and is left out — the root is never drawn.
+        // above it to sit under, so it has no level and is left out, the root is never drawn.
         let Some(&at) = number_of.get(merged.base_version()) else {
             continue;
         };
@@ -488,7 +488,7 @@ fn read_version(
 /// A variant names who made it and what it says by hash, so a drawing that says either has to read
 /// the object behind it. One the index does not hold is left empty rather than failing the drawing:
 /// what the chain is made of is what is being looked at, and the words beside it are what may be
-/// missing — a copy of an index that came over without them still has a chain to draw.
+/// missing, a copy of an index that came over without them still has a chain to draw.
 fn read_text(index: &VCSIndex, runtime: &tokio::runtime::Runtime, hash: &[u8; 32]) -> String {
     match runtime.block_on(index.read(Key::new(*hash))) {
         Ok(VCSIndexObject::Creator(creator)) => creator.read_to_string().to_owned(),

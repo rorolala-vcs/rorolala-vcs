@@ -17,7 +17,7 @@ namespace FileSystemPlugin;
 /// </summary>
 /// <remarks>
 /// What an entry is drawn as comes from the icon set the user chose, or from the system when the chosen set
-/// is the system's own — which is the default, and what a browser drew before sets existed. What a folder
+/// is the system's own, which is the default, and what a browser drew before sets existed. What a folder
 /// looks like is the desktop's business, and a browser that draws its own folder is a browser that looks
 /// wrong on every desktop but the one it was drawn for; a set is the user saying they want another look, so
 /// it is the set's picture rather than the desktop's.
@@ -25,13 +25,13 @@ namespace FileSystemPlugin;
 /// A set's pictures are drawn in the colours they were drawn with, not as masks over the listing's ink: the
 /// colours are the set's, and a set drawn in black stays black on the dark look even where that is hard to
 /// see. A picture recoloured by the program is a picture the set did not draw. The system's own icons are
-/// the same way — they are pictures, and a folder that lost its colour would stop looking like the desktop's
+/// the same way, they are pictures, and a folder that lost its colour would stop looking like the desktop's
 /// folder.
 /// </para>
 /// <para>
 /// The toolbar's own pictures are the program's: a switch that shows what the rules hide, and whether a dock
 /// follows the whole, are this program's own ideas, which no system has a picture for. They are drawn from the
-/// pinned Material Design set by <c>cargo dev icons</c> — the manifest is <c>app/desktop/icons.toml</c> — and
+/// pinned Material Design set by <c>cargo dev icons</c>, the manifest is <c>app/desktop/icons.toml</c>, and
 /// embedded in this assembly, so that what the host loads is the one file it found the plugin in. The keys they
 /// are handed over under are generated from that manifest into the other half of this class, so that no one
 /// writes them twice.
@@ -70,7 +70,7 @@ internal static partial class Icons
     /// The theme resource an icon of a tool that is not on is drawn in.
     /// </summary>
     /// <remarks>
-    /// What is drawn in it is a mark that is nobody's button — a menu item's — and is therefore read
+    /// What is drawn in it is a mark that is nobody's button, a menu item's, and is therefore read
     /// from the look rather than from the control that holds it. Which name that is belongs to the
     /// look, which is why it is not written here (see <see cref="PaletteKeys"/>).
     /// </remarks>
@@ -78,7 +78,7 @@ internal static partial class Icons
 
     /// <summary>How many pixels wide and tall a toolbar's icon is.</summary>
     /// <remarks>
-    /// A tool is a square hit area of its own — 28 pixels, which the look gives it — and the picture sits
+    /// A tool is a square hit area of its own (28 pixels, which the look gives it) and the picture sits
     /// inside it with room around it: a mark drawn to the edges of its target reads as a button with a picture
     /// for a background rather than as a picture with a button around it.
     /// </remarks>
@@ -114,8 +114,8 @@ internal static partial class Icons
     {
         var directory = entry.Kind == EntryKind.Directory;
 
-        // An icon set's picture is drawn as it was drawn. Its colours are not this plugin's to change —
-        // a black set stays black on the dark look — and the same is true of the system's own pictures.
+        // An icon set's picture is drawn as it was drawn. Its colours are not this plugin's to change,
+        // a black set stays black on the dark look, and the same is true of the system's own pictures.
         var picture =
             IconSets.Picture(entry, size)
             ?? (directory ? SysIcons.Directory(size) : SysIcons.File(entry.Path, size));
@@ -166,7 +166,7 @@ internal static partial class Icons
     /// <summary>How heavy the ring around a ball is.</summary>
     /// <remarks>
     /// Thicker than the hairline a control wears, because a ball is a few pixels across and a line thinner than
-    /// this disappears into the antialiasing at the smallest zoom — and thinner than the border a letter tag
+    /// this disappears into the antialiasing at the smallest zoom, and thinner than the border a letter tag
     /// wears, because at this size that would be a third of the ball.
     /// </remarks>
     private const double BallEdge = 1.5;
@@ -206,7 +206,7 @@ internal static partial class Icons
     /// </summary>
     /// <remarks>
     /// Every contribution that speaks for the entry is worn at once, numbered the way it was registered: two
-    /// badges say two different things — who holds the entry, and how far its version has come — and neither
+    /// badges say two different things (who holds the entry, and how far its version has come) and neither
     /// is the other's to replace.
     /// <para>
     /// The picture is drawn as a mask over a coloured ground rather than as a picture, so that it takes the
@@ -256,13 +256,13 @@ internal static partial class Icons
     /// </summary>
     /// <remarks>
     /// What it is drawn in is the role the contribution named, or its own colour where it named one: a
-    /// contribution that has a palette of its own — the states a work's files are in, which are the plugin's
-    /// answer and the user's to choose — says what its marks are coloured rather than which of the look's roles
+    /// contribution that has a palette of its own, the states a work's files are in, which are the plugin's
+    /// answer and the user's to choose, says what its marks are coloured rather than which of the look's roles
     /// they wear.
     /// <para>
     /// The two are one or the other and never both, and that is load-bearing rather than tidy: a resource a
     /// control carries is asked for when the control is attached to a tree, and what comes back is written over
-    /// what the property held — so a badge made with the look's role and then painted with the contribution's
+    /// what the property held, so a badge made with the look's role and then painted with the contribution's
     /// own colour is a badge that turns the look's grey the moment it is drawn.
     /// </para>
     /// </remarks>
@@ -305,7 +305,7 @@ internal static partial class Icons
             Painted(worn, Border.BorderBrushProperty, own, role);
 
             // The ink the badge is drawn in is the dark look's, whatever the program is drawn on: the ground
-            // is the dark one, so the colour that reads on it is the one the dark look holds — a mark that took
+            // is the dark one, so the colour that reads on it is the one the dark look holds, a mark that took
             // the light look's darker ink would be a dark lock on a dark badge. Asked for as a scope rather
             // than as a second set of colours, so that what the ink is stays the look's to say.
             drawn = new ThemeVariantScope
@@ -322,8 +322,8 @@ internal static partial class Icons
         }
 
         // What the badge stands for is said in words when the pointer rests on it: the badge is a picture, and
-        // who holds an entry is a name rather than a picture. Set on whatever was finally drawn — the ground
-        // when there is one — so that the whole of it answers rather than the glyph inside it.
+        // who holds an entry is a name rather than a picture. Set on whatever was finally drawn, the ground
+        // when there is one, so that the whole of it answers rather than the glyph inside it.
         if (badge.Mark.Hover() is { Length: > 0 } hover)
         {
             ToolTip.SetTip(drawn, hover);
@@ -368,8 +368,8 @@ internal static partial class Icons
     /// <remarks>
     /// The ink is named rather than written into the picture, so that a mark takes the colour the user is
     /// looking at: a picture carries whatever it was drawn with, and one drawn once per colour would be one per
-    /// theme. What is named here is a theme resource, which is what a mark that is not a button's — an entry's
-    /// lock, say — is drawn in; a mark that <em>is</em> a button's is [`Inked`], which takes the button's own.
+    /// theme. What is named here is a theme resource, which is what a mark that is not a button's, an entry's
+    /// lock, say, is drawn in; a mark that <em>is</em> a button's is [`Inked`], which takes the button's own.
     /// </remarks>
     /// <param name="picture">The picture to stamp.</param>
     /// <param name="ink">What it is drawn in, as the name of a theme resource.</param>
@@ -387,8 +387,8 @@ internal static partial class Icons
     /// A picture cut out and not yet coloured: the mask, with nothing painted through it.
     /// </summary>
     /// <remarks>
-    /// Nothing is painted here because what paints it is the caller's — the colour a contribution named, or the
-    /// look's role for it — and a picture made with one of them and then painted with the other carries both,
+    /// Nothing is painted here because what paints it is the caller's, the colour a contribution named, or the
+    /// look's role for it, and a picture made with one of them and then painted with the other carries both,
     /// of which the resource is the one that is answered last (see <see cref="Painted"/>).
     /// </remarks>
     /// <param name="picture">The picture to stamp.</param>
@@ -422,7 +422,7 @@ internal static partial class Icons
     /// <remarks>
     /// The ink is the button's own <c>Foreground</c> rather than a colour picked here, because what a button is
     /// filled with is not this plugin's to know: a tool that is on is filled with the primary, one under the
-    /// pointer with the sunken ground, and what is written on either is the look's answer — the ink the user
+    /// pointer with the sunken ground, and what is written on either is the look's answer, the ink the user
     /// chose, or black or white decided by how bright the fill turned out to be. A picture that picked its own
     /// ink would be a mark that vanished into the fill the day the primary was a colour it could not be read
     /// on.
@@ -436,8 +436,8 @@ internal static partial class Icons
     /// A picture drawn as a mask over the ink of the control it is in, which is the one named.
     /// </summary>
     /// <remarks>
-    /// The holder is named rather than guessed at because the ink is stated by whatever holds the picture — a
-    /// button states one, and so does a menu item — and what is between the two is a template that states
+    /// The holder is named rather than guessed at because the ink is stated by whatever holds the picture, a
+    /// button states one, and so does a menu item, and what is between the two is a template that states
     /// nothing of its own. A mark that read the ink of whatever it happened to sit in would take the ink of a
     /// grid or a presenter, which have none to give.
     /// </remarks>
@@ -517,7 +517,7 @@ internal static partial class Icons
     /// The toolbar's marks and what an entry's menu wears are read from this plugin's own assembly (see
     /// <see cref="Picture(string)"/>), because they are this plugin's furniture. A dock's registration is different: the host
     /// draws what it names, in the Window menu and at the left of the dock's tab, so a key it names has to be in the
-    /// host's library rather than only here — and that library is the one place a registration's picture can be read
+    /// host's library rather than only here, and that library is the one place a registration's picture can be read
     /// from.
     /// </remarks>
     /// <param name="library">The library to add them to.</param>
@@ -546,8 +546,8 @@ internal static partial class Icons
     /// </summary>
     /// <remarks>
     /// Read from this plugin's own assembly rather than contributed to the host's library, because it is this
-    /// plugin's own furniture: what the library is for is a picture offered to somebody else — the lock a
-    /// provider stamps on a listing, say — and a toolbar's own marks are nobody else's to ask for. The keys are
+    /// plugin's own furniture: what the library is for is a picture offered to somebody else, the lock a
+    /// provider stamps on a listing, say, and a toolbar's own marks are nobody else's to ask for. The keys are
     /// this plugin's too, so a second plugin reading one would be reading something it has no business with.
     /// <para>
     /// Read when it is first wanted rather than at start-up, which is what keeps a program with no window in it

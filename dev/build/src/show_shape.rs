@@ -1,6 +1,6 @@
 //! `show-shape`: what the build works out about the tree before it does anything.
 //!
-//! Every step reads where it works from one place — the workspace, its directories, the platform's
+//! Every step reads where it works from one place, the workspace, its directories, the platform's
 //! artifact names, the programs an export lays down. This prints that place, so a disagreement is
 //! seen as a value rather than met halfway through a build.
 

@@ -1,7 +1,7 @@
 //! `archive`: the newest open version, dated and sealed.
 //!
-//! What is sealed is the first version still marked `(Unreleased)` — the one a release is being made
-//! from — rather than a version looked up from the manifest. The two agree in the usual order, and
+//! What is sealed is the first version still marked `(Unreleased)`, the one a release is being made
+//! from, rather than a version looked up from the manifest. The two agree in the usual order, and
 //! sealing the section that is open is what makes a version bumped before its archive still
 //! releasable. The summary at the repository root is generated from the details in the same run.
 

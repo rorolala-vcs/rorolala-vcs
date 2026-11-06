@@ -2,7 +2,7 @@
 //!
 //! The writing is `rorolala-dev-book-index`'s: it owns the two paths the file is read from and
 //! written to, and it reads `BUILD_DIR` for the second so that the file lands in the export this
-//! run laid out. What this step does is run it, which is also what an export does — a person who
+//! run laid out. What this step does is run it, which is also what an export does, a person who
 //! runs `cargo dev book` and a package that carries the result are made by the same command.
 //!
 //! `refresh-book` is the same step under the name a person is more likely to reach for when what
@@ -49,7 +49,7 @@ pub struct StateBook;
 ///
 /// # Errors
 ///
-/// Reports whatever stopped the build — the tool failing to compile or to start, and the failure
+/// Reports whatever stopped the build, the tool failing to compile or to start, and the failure
 /// of the book itself, which says which article and what about it.
 pub fn build_book(workspace: &Workspace) -> Result<(), crate::Error> {
     Tool::cargo().run_in(

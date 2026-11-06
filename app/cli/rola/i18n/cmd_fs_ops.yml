@@ -3,7 +3,7 @@ _version: 2
 # What `rola fs-ops` and the three words under it say. These are the file operations the Desktop
 # program hands its work to, so what is written here is read both by a person at a terminal and by
 # that program through its agent: the words are short because the act is, and what is *meant* by an
-# operation — whether to replace, to skip or to rename — was settled before this is reached.
+# operation (whether to replace, to skip or to rename) was settled before this is reached.
 
 fs_ops:
   help:

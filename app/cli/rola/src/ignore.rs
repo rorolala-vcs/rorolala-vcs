@@ -1,6 +1,6 @@
 //! The ignore rules a run reads the Workspace's tree by.
 //!
-//! The rules themselves are the library's — see [`librorolala::ignore`] — and what lives here is
+//! The rules themselves are the library's, see [`librorolala::ignore`], and what lives here is
 //! the one flag every command that honours them takes, and the loading they all share: a run that
 //! was given `--include-ignored` reads with the empty set, which is the whole of what the flag
 //! asks for.
@@ -20,7 +20,7 @@ pub const ARG_INCLUDE_IGNORED: PickerArg<'static, Flag> = arg![include_ignored: 
 /// The rules `held` ignores by, or the empty set when the run was asked to include the ignored.
 ///
 /// A set that cannot be read is answered with the empty one and a word on stderr: the reading the
-/// run set out to make is the thing being answered, and the rules are a refinement of it — but a
+/// run set out to make is the thing being answered, and the rules are a refinement of it, but a
 /// refinement that failed is worth a mention, since its absence hides nothing.
 #[must_use]
 pub fn rules(held: &Workspace, include_ignored: bool) -> IgnoreRuleSet {

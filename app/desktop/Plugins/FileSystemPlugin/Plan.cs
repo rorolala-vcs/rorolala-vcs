@@ -13,7 +13,7 @@ internal enum Operation
     /// Move a source to the whole path it is to have, rather than into a directory.
     /// </summary>
     /// <remarks>
-    /// A rename is a move and nothing else — the same command carries it out — and what tells it apart is
+    /// A rename is a move and nothing else, the same command carries it out, and what tells it apart is
     /// that the target is named outright: a new name beside the old one, rather than a directory the old
     /// name is taken into.
     /// </remarks>
@@ -79,7 +79,7 @@ internal sealed class Item
     /// </summary>
     /// <remarks>
     /// What an in-place copy is: copying an entry into the directory it already sits in means putting a second
-    /// of it beside the first, so the name it would take is taken — by itself. Replacing is no answer to that,
+    /// of it beside the first, so the name it would take is taken, by itself. Replacing is no answer to that,
     /// since the target is the very thing being copied: a replace would take it away and leave nothing to copy.
     /// </remarks>
     public bool OntoItself { get; set; }
@@ -105,7 +105,7 @@ internal sealed class Plan
     /// </summary>
     /// <remarks>
     /// Everything that can be known before anything is touched is worked out here, so that the
-    /// conflict window can be answered for every conflict before the first command runs — which is
+    /// conflict window can be answered for every conflict before the first command runs, which is
     /// what makes calling the run off leave nothing done at all.
     /// </remarks>
     /// <param name="operation">What is being done to every item.</param>
@@ -191,7 +191,7 @@ internal sealed class Plan
         if (Pathing.Same(pair.From, target))
         {
             // An in-place copy wants a second of the same name beside the first, so the name it would take is
-            // taken — by itself. That is a conflict to answer rather than a transfer to refuse: the answer of
+            // taken, by itself. That is a conflict to answer rather than a transfer to refuse: the answer of
             // putting a second one beside it is exactly what a copy in place means. A move onto itself is
             // another matter and stays refused: there is nowhere to move it to.
             if (!copying)
@@ -236,8 +236,8 @@ internal sealed class Plan
     /// <summary>The reason a transfer is illegal, or empty when it is not.</summary>
     private static string Reject(string from, string target)
     {
-        // A directory copied or moved into its own subtree is never a copy — the destination is
-        // being written from inside itself — so it is refused before anything is touched.
+        // A directory copied or moved into its own subtree is never a copy, the destination is
+        // being written from inside itself, so it is refused before anything is touched.
         if (Directory.Exists(from) && Pathing.Inside(target, from))
         {
             return $"the directory `{from}` cannot be transferred into itself";

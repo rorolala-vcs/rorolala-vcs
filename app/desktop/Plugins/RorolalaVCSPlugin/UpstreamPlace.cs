@@ -85,7 +85,7 @@ internal static class UpstreamSpots
 
 /// <summary>What a drop of entries comes to: every entry under what was carried, in the order it was carried.</summary>
 /// <remarks>
-/// A folder is not an entry, so what a drop of one brings is what stands under it — the folder's own entry included,
+/// A folder is not an entry, so what a drop of one brings is what stands under it, the folder's own entry included,
 /// since a path may be both. A path the copy no longer names is dropped rather than guessed at: the copy moved under the
 /// drag, and what is not there is not something a checkin can name.
 /// </remarks>
@@ -94,7 +94,7 @@ internal static class UpstreamBringing
     /// <summary>Every entry a drag of these carries brings, deduplicated and in the order it was carried.</summary>
     /// <remarks>
     /// The walk a folder makes, and the one a checkin is planned from: a folder is not an entry, so what it brings is what
-    /// stands under it — its own entry included, since a path may be both. A uuid one carry already brought is not brought
+    /// stands under it, its own entry included, since a path may be both. A uuid one carry already brought is not brought
     /// again, because the command line would be naming it twice.
     /// </remarks>
     /// <param name="tree">The tree the Vault's copy was read to.</param>
@@ -156,30 +156,30 @@ internal static class UpstreamBringing
 }
 
 /// <summary>
-/// The work's upstream, offered to the browser as a place: <c>rola@DOMAIN/NAME/…</c>.
+/// The work's upstream, offered to the browser as a place: <c>rola@DOMAIN/NAME/...</c>.
 /// </summary>
 /// <remarks>
 /// The address is a path through what the work knows, and the first segment says which: <c>vaults</c> lists the Vaults
-/// the Workspace has bound and <c>layouts</c> the Layouts it works in. Under a Vault is that Vault's own Layout — what it
-/// is the upstream of is why the place exists — which is read from the copy the Workspace fetched, with nothing fetched
+/// the Workspace has bound and <c>layouts</c> the Layouts it works in. Under a Vault is that Vault's own Layout, what it
+/// is the upstream of is why the place exists, which is read from the copy the Workspace fetched, with nothing fetched
 /// for it. So <c>rola@vaults/origin/@/new</c> is the unplaced entries of the Vault called <c>origin</c>. Under
 /// <c>layouts</c> is one of the Workspace's own Layouts, read from the Layout itself, which is a different kind of level:
 /// its entries are this side's own record rather than a copy, so there is nothing to bring into it and nothing to fetch
 /// for it.
 /// <para>
 /// The base is read on every answer rather than carried in the address, so a place opened in a window of its own follows
-/// the work the browser is rooted in — the same base every other reading of the work is made from.
+/// the work the browser is rooted in, the same base every other reading of the work is made from.
 /// </para>
 /// <para>
 /// What is read is kept until the files are said to have changed: a provider is asked on the window's thread and asked
 /// often, and a run of three programs per answer would be a window that stopped. All of it is read on threads of its own
-/// for the same reason — the two name lists included, since a <c>vault ls</c> behind a hover is a window that stalls while
+/// for the same reason, the two name lists included, since a <c>vault ls</c> behind a hover is a window that stalls while
 /// the pointer moves.
 /// </para>
 /// <para>
 /// The actions are the command line's, as everywhere else in this plugin: bringing entries in is a checkin of their
 /// paths, and moving one is a <c>layout path move</c> against the Layout the level is of, made when the entry is
-/// dropped on a folder's row. A checkin is planned before it is run — see [`CheckinFlow`] — because the command line
+/// dropped on a folder's row. A checkin is planned before it is run, see [`CheckinFlow`], because the command line
 /// refuses a run whole for the first reference it will not take: a folder dragged in, a choice of rows cut out and
 /// pasted into a directory, and a row's own menu item all come to the same plan, and the same question where the plan
 /// does not fit. Moving one entry is still one run, because that is what a folder's row does.
@@ -285,7 +285,7 @@ internal sealed class UpstreamPlace
 
     /// <summary>The account the work acts as, which is who a row has to be held by to be this side's to name.</summary>
     /// <remarks>
-    /// An account is a private key and which one is in use is Rorolala's own answer, given by `rola account` — a run. A
+    /// An account is a private key and which one is in use is Rorolala's own answer, given by `rola account`, a run. A
     /// provider's answer is asked for on the window's thread, so the answer is read in the background and kept, the way the
     /// lists of Vaults and Layouts are.
     /// </remarks>
@@ -320,7 +320,7 @@ internal sealed class UpstreamPlace
 
         // What a place answers is a snapshot of the copies, so it is let go of when they may have moved: the files having
         // changed is every command of this plugin's own answer that they have, and the base moving is a different work.
-        // A reading that landed is not one of those — it says that an answer is at hand, and letting go of the answers
+        // A reading that landed is not one of those, it says that an answer is at hand, and letting go of the answers
         // for it would make every reader ask for what it has just been given (see `Drawn`).
         host.Files.Changed += Forget;
         BaseDirectory.Changed += Forget;
@@ -330,7 +330,7 @@ internal sealed class UpstreamPlace
     /// Offers the place to the browser, and the way into it from the work's own menus.
     /// </summary>
     /// <remarks>
-    /// A place is opened by its address, and an address is what the address bar takes — but a reader who has never typed
+    /// A place is opened by its address, and an address is what the address bar takes, but a reader who has never typed
     /// one has no way to know it exists. So the work's menu offers the three levels of it, and a directory's menu offers
     /// the whole of it: each opens the browser's own listing at an address, out of step with what it was following.
     /// </remarks>
@@ -428,7 +428,7 @@ internal sealed class UpstreamPlace
 
     /// <summary>The empty folders this place holds, which is what the checks read.</summary>
     /// <remarks>
-    /// A name is the place's own — the one it gave a folder, and the one a rename gave it — so a check that read it
+    /// A name is the place's own (the one it gave a folder, and the one a rename gave it) so a check that read it
     /// from a translation would be checking the words rather than the folders.
     /// </remarks>
     internal IReadOnlyCollection<string> DraftPaths => _drafts;
@@ -443,7 +443,7 @@ internal sealed class UpstreamPlace
     /// <remarks>
     /// Answered only for the place the folder was made in: a view of another place asks as it is built, and a hand-off
     /// read by it would be a name box put on a row in a dock the user is not looking at. A folder the work has named in
-    /// the meantime is not answered either — the copy has overtaken it, so the row is the work's and a box on it would
+    /// the meantime is not answered either, the copy has overtaken it, so the row is the work's and a box on it would
     /// rename the work itself.
     /// </remarks>
     /// <param name="address">The place it was made in.</param>
@@ -477,8 +477,8 @@ internal sealed class UpstreamPlace
     /// <inheritdoc />
     /// <remarks>
     /// Only a Vault's upstream holds folders of this side's: the Layouts under `layouts` are read from the work
-    /// itself, and a folder there would be a path this side made up about the work. The lists over them — a Vault's, a
-    /// Layout's — are read from the Vault rather than being a folder of it, so they hold none either.
+    /// itself, and a folder there would be a path this side made up about the work. The lists over them, a Vault's, a
+    /// Layout's, are read from the Vault rather than being a folder of it, so they hold none either.
     /// </remarks>
     public bool MakesFolders(LogicalAddress address)
     {
@@ -525,7 +525,7 @@ internal sealed class UpstreamPlace
     /// Only a Vault's copy holds suggestions of this side's, and only while the copy does not name the path: a path the
     /// work names is the work's, however long ago it was suggested, and a row of it must be moved rather than rewritten.
     /// <para>
-    /// A folder carries no entry of its own — a folder is the paths under it — so what tells a suggestion from a folder
+    /// A folder carries no entry of its own, a folder is the paths under it, so what tells a suggestion from a folder
     /// of the work's cannot be the entry alone: it is the copy naming the path.
     /// </para>
     /// </remarks>
@@ -762,7 +762,7 @@ internal sealed class UpstreamPlace
     /// </summary>
     /// <remarks>
     /// A drag of files is refused rather than guessed at: what it carries is where the files are on disk, and a place's
-    /// rows are paths a Layout names — the two are different questions, and a checkin of a file's content is not what
+    /// rows are paths a Layout names, the two are different questions, and a checkin of a file's content is not what
     /// dropping one on a row means. A drag from another Layout is refused too, since a move is one Layout's own.
     /// </remarks>
     /// <param name="address">The place being dropped on.</param>
@@ -783,7 +783,7 @@ internal sealed class UpstreamPlace
 
         // Several at once, because a drop of a choice is what a listing's drag is for: each entry is moved by a run of its
         // own, and the ones the Layout refuses are said beside the ones that landed. A folder moves as the tree it is, and
-        // one dropped inside itself — or back where it was — is not a move at all.
+        // one dropped inside itself, or back where it was, is not a move at all.
         return tree is not null
             && carrying.All(carry =>
                 string.Equals(carry.Source.Key, source.Key, StringComparison.Ordinal)
@@ -1067,7 +1067,7 @@ internal sealed class UpstreamPlace
     /// </summary>
     /// <remarks>
     /// Two columns and no colours: what an entry is held by is a fact about it rather than a state of the work, and a
-    /// colour would say that it is one to be acted on. A folder has neither, and neither is drawn — a column that repeated
+    /// colour would say that it is one to be acted on. A folder has neither, and neither is drawn, a column that repeated
     /// the row's emptiness is a column saying nothing.
     /// </remarks>
     /// <param name="address">The place being read.</param>
@@ -1097,12 +1097,12 @@ internal sealed class UpstreamPlace
     /// Whether a directory takes a drag of entries of this work's upstream.
     /// </summary>
     /// <remarks>
-    /// A checkin brings what the Layout being worked in tracks, so a drag from another Vault's copy — or from a Layout of
-    /// the Workspace's own, which is not an upstream at all — is not one a directory can take: there is no run that would
+    /// A checkin brings what the Layout being worked in tracks, so a drag from another Vault's copy, or from a Layout of
+    /// the Workspace's own, which is not an upstream at all, is not one a directory can take: there is no run that would
     /// name it. What is left is the work's own upstream, dropped on a directory of the work.
     /// <para>
     /// The Vault that is tracked is read in the background, so it may not be known yet: a drag judged before it lands is
-    /// refused rather than waited for, and the next one — the place having been drawn again — is judged with the answer.
+    /// refused rather than waited for, and the next one, the place having been drawn again, is judged with the answer.
     /// </para>
     /// </remarks>
     /// <param name="directory">The directory it is being dropped on.</param>
@@ -1132,7 +1132,7 @@ internal sealed class UpstreamPlace
 
     /// <summary>Takes the drag: what it carried is planned into a checkin, which is what the user is asked about.</summary>
     /// <remarks>
-    /// What is planned is every entry the drag comes to — a folder's rows included — and the planning is what leaves the
+    /// What is planned is every entry the drag comes to, a folder's rows included, and the planning is what leaves the
     /// ones that cannot come in for a question rather than for a run that refuses the lot.
     /// </remarks>
     /// <param name="directory">The directory it was dropped on.</param>
@@ -1368,7 +1368,7 @@ internal sealed class UpstreamPlace
         if (VaultNames() is not { } names)
         {
             // Nothing yet rather than a row: the read is going, and the draw it makes when it lands is what brings the
-            // names in. A read that failed has a row, and one that cannot be made at all — a window with no base — has the
+            // names in. A read that failed has a row, and one that cannot be made at all, a window with no base, has the
             // same one, since there is nothing to wait for either way.
             return _vaultsTried || BaseDirectory.Current is not { Length: > 0 }
                 ? [Failed(RolaI18N.Get("rorolala_vcs.place.vaults_failed"), _vaultsSaid, list: UpstreamList.Vaults)]
@@ -1524,8 +1524,8 @@ internal sealed class UpstreamPlace
     /// <summary>Whether a path is already something here, either the work's or this side's.</summary>
     /// <remarks>
     /// A copy that has not been read cannot say whether the work names the path, so a name that would be free in the
-    /// copy as it stands may still be one the work has come to use. That folder is not lost — the copy covers the
-    /// suggestion as soon as it is read (see <see cref="UpstreamDrafts"/>) — but this is why the work's answer is the
+    /// copy as it stands may still be one the work has come to use. That folder is not lost, the copy covers the
+    /// suggestion as soon as it is read (see <see cref="UpstreamDrafts"/>), but this is why the work's answer is the
     /// one that has to be consulted wherever it is here at all.
     /// </remarks>
     /// <param name="source">The Layout the path is in.</param>
@@ -1707,8 +1707,8 @@ internal sealed class UpstreamPlace
                     ),
                 }
                 : []),
-            // A checkin brings what the Layout being worked in *tracks*, so an entry of another Vault's copy — or of a
-            // Layout of the Workspace's own — is not something a checkin can name: what there is to do with it is read it,
+            // A checkin brings what the Layout being worked in *tracks*, so an entry of another Vault's copy, or of a
+            // Layout of the Workspace's own, is not something a checkin can name: what there is to do with it is read it,
             // and move it where it belongs.
             //
             // An entry this side already holds is offered the same item: the checkin is planned against what is here, and
@@ -1786,7 +1786,7 @@ internal sealed class UpstreamPlace
     /// <summary>A row that could not be read, with reading it again in its menu.</summary>
     /// <remarks>
     /// One item does both things a reader can want from a row like this: it says what the command line said, and it lets
-    /// go of the answer so that the drawing that follows asks again. Two items — one to read and one to say why — would
+    /// go of the answer so that the drawing that follows asks again. Two items, one to read and one to say why, would
     /// be a choice between two halves of one question.
     /// </remarks>
     /// <param name="said">What it says.</param>
@@ -1951,7 +1951,7 @@ internal sealed class UpstreamPlace
     /// <remarks>
     /// The list of Layouts is read in the background, so this is empty until it lands: a drop judged in that moment is
     /// refused rather than waited for, because waiting for it on the window's thread is the stall this is here to end.
-    /// Nothing is lost by it — the read is asked for as soon as the place is first drawn, and a touch draws it again.
+    /// Nothing is lost by it, the read is asked for as soon as the place is first drawn, and a touch draws it again.
     /// </remarks>
     /// <returns>The Vault, or an empty string when nothing says.</returns>
     private string Tracked()
@@ -1968,7 +1968,7 @@ internal sealed class UpstreamPlace
     /// Which account is in use is the command line's answer, so reading it is a run, and a provider is asked on the window's
     /// thread: an answer that took a run to make would take the window with it. The read is asked for once and kept until the
     /// files are said to have changed; until it lands, nothing is known to be held by anyone, which refuses a rename rather
-    /// than waiting for it — and the press after it is answered.
+    /// than waiting for it, and the press after it is answered.
     /// </remarks>
     /// <returns>The name, or an empty string while it is being read or when nothing says.</returns>
     private string Account()
@@ -2095,7 +2095,7 @@ internal sealed class UpstreamPlace
     /// </summary>
     /// <remarks>
     /// The tracked Vault is read from it, which is what a drop on a directory and a row's checkin item are judged by, so
-    /// the read is asked for as soon as anything wants either — not only when the list of Layouts is opened.
+    /// the read is asked for as soon as anything wants either, not only when the list of Layouts is opened.
     /// </remarks>
     /// <returns>The Layouts, or nothing while the read is going or when it failed.</returns>
     private IReadOnlyList<LayoutListing>? LayoutNames()
@@ -2160,7 +2160,7 @@ internal sealed class UpstreamPlace
     /// </summary>
     /// <remarks>
     /// A drawing and not a change: saying the files changed would have every other reader of the work give its answers
-    /// back, and one of those is what this place reads a level from — so the next drawing would read it again, and its
+    /// back, and one of those is what this place reads a level from, so the next drawing would read it again, and its
     /// landing would say the same thing to this one. Two readers taking turns emptying each other's answers is one
     /// `rola` and two walks of the whole tree per turn, for as long as the window is open.
     /// <para>
@@ -2236,7 +2236,7 @@ internal sealed class UpstreamPlace
     /// <remarks>
     /// The words a refusal is shown with are the command's own, and the entry it is about is named beside them: a reader who
     /// is told only that something failed has nothing to act on. What the command agreed to is written into the copy, so a
-    /// move the copy still names at its old path is read as a refusal whatever the run said about itself — a status of zero
+    /// move the copy still names at its old path is read as a refusal whatever the run said about itself, a status of zero
     /// is not the whole of the answer, and a drop that moved nothing cannot be left to say nothing.
     /// </remarks>
     /// <param name="source">The Layout they are moved in.</param>
@@ -2267,7 +2267,7 @@ internal sealed class UpstreamPlace
             List<(string From, string To, string Said, bool Done)> outcomes = [];
 
             // One run each, and not one for the lot: the command moves one Layout path at a time, and an entry the Vault
-            // refuses — a locked one, say — must not take the rest of the drop down with it.
+            // refuses (a locked one, say) must not take the rest of the drop down with it.
             foreach (var (from, to) in moves)
             {
                 var (done, said) = LayoutPathMoveCommand.Run(

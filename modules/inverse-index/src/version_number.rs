@@ -1,7 +1,7 @@
 //! The number of a version, as it crosses into C.
 //!
 //! A count crossing as a bare integer cannot be told from any other integer an export hands back,
-//! and a fallible export cannot hand one back at all — a `Result` carries a boxed payload, and a
+//! and a fallible export cannot hand one back at all, a `Result` carries a boxed payload, and a
 //! scalar is not one. So a number has a type of its own, read back through [`value`](VersionNumber::value).
 
 use rorolala_utils_lazyffi::lazyffi;

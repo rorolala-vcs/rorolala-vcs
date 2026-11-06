@@ -277,7 +277,7 @@ impl Workspace {
     /// Where a Vault's Layout copy is kept: the pointer, and a directory per generation.
     ///
     /// The cache is a directory per Vault and a directory per Layout under it, both named by what
-    /// the copy was fetched under. Inside that one is what [`LayoutCopy`] makes of it — see the
+    /// the copy was fetched under. Inside that one is what [`LayoutCopy`] makes of it, see the
     /// module it lives in for why a copy is kept in generations rather than replaced whole.
     #[must_use]
     pub fn readonly_layouts_dir(&self, vault: &str, layout: &str) -> PathBuf {
@@ -301,7 +301,7 @@ impl Workspace {
     /// A copy is here because a fetch brought it, so what is listed is what a reader can open now, in
     /// name order: a Vault that was bound but never fetched has nothing to read here. The cache is
     /// derived data, and a directory that cannot be read is answered as nothing rather than as a
-    /// failure — the same bargain [`readonly_layout_copy`](Self::readonly_layout_copy) makes for one
+    /// failure, the same bargain [`readonly_layout_copy`](Self::readonly_layout_copy) makes for one
     /// copy.
     #[must_use]
     pub fn readonly_layout_copies(&self) -> Vec<(String, String)> {

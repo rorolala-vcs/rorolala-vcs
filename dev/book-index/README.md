@@ -47,7 +47,7 @@ cargo run -p rorolala-dev-book-index -- <book-dir> <output-file>
 
 One file, holding the articles and the index over them, in the format
 [`modules/book-search`](../../modules/book-search) reads. What is indexed is the plain text of the
-article — Markdown syntax taken away and whitespace collapsed — and the raw Markdown is kept beside
+article, Markdown syntax taken away and whitespace collapsed, and the raw Markdown is kept beside
 it so a reader can draw the article as it was written.
 
 A file or directory whose name begins with `__` is left out: that is where this tree keeps a draft.

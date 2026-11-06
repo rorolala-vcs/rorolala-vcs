@@ -8,21 +8,21 @@ namespace RorolalaVCSPlugin;
 /// What a reading of the work says about the directories being listed, read once each and kept.
 /// </summary>
 /// <remarks>
-/// It is shared by the views read from the work — the two columns, the badges, and the Version Graph's
-/// edit — because a reading is not a cheap question: it walks the tree beside the Layout and, for every
+/// It is shared by the views read from the work, the two columns, the badges, and the Version Graph's
+/// edit, because a reading is not a cheap question: it walks the tree beside the Layout and, for every
 /// path that records a version, walks the version chain as well. One reading per directory between them
 /// is the difference between a listing that costs what it costs and one that costs it several times.
 /// <para>
 /// A directory both providers were asked about is read the first time and the same reading is handed over
 /// after that, which is what makes the sharing worth having. Nothing is reached for: a reading is a snapshot
-/// of what the tree held at one moment, and a snapshot is what a file operation makes stale — which is what
+/// of what the tree held at one moment, and a snapshot is what a file operation makes stale, which is what
 /// <see cref="Forget"/> is for.
 /// </para>
 /// <para>
 /// It is not read on the window's thread. A reading is a walk of the whole tree, and a listing asks about a
 /// directory while it draws: walking it there would stop the window for as long as the walk takes, on a
 /// directory nobody is waiting for. So the read is started on a thread of its own and nothing is answered until
-/// it lands — a listing drawn in that moment has no state marks, which is what a listing of a work nothing has
+/// it lands, a listing drawn in that moment has no state marks, which is what a listing of a work nothing has
 /// been read for looks like anyway. What lands is drawn again, and by a drawing rather than by a change: see
 /// <see cref="IFileChanges.Redrawn"/>.
 /// </para>
@@ -105,8 +105,8 @@ internal sealed class StatusReadings
     /// Whether a path a reading named is the file the program names at `path`.
     /// </summary>
     /// <remarks>
-    /// What a reading names is relative to the Workspace it was made of — a state, a standing and a merge are
-    /// all lists of such paths — and what a listing has is a path the system names, so the two are joined before
+    /// What a reading names is relative to the Workspace it was made of, a state, a standing and a merge are
+    /// all lists of such paths, and what a listing has is a path the system names, so the two are joined before
     /// they are compared. The reading itself does this for a state and a standing, which it is asked about one
     /// path at a time; a list it hands over whole is what a reader of those lists has to do it for.
     /// </remarks>
@@ -207,7 +207,7 @@ internal sealed class StatusReadings
             }
 
             // Drawn either way: what landed is drawn when it stands, and when it does not, the drawing is what asks
-            // for it again — the answer being one from before the change the drawing is following. It is a drawing and
+            // for it again, the answer being one from before the change the drawing is following. It is a drawing and
             // not a change, so nothing anyone else read is given back for it.
             _files.Redraw();
         });

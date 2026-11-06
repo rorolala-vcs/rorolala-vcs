@@ -80,8 +80,8 @@ internal sealed class Accounts(RolaRunner rola)
     /// Makes a key pair for an account and makes it the one the work acts as.
     /// </summary>
     /// <remarks>
-    /// The two commands are the whole of what an account is — <c>rola key generate --install</c> writes the
-    /// pair into the user's key directory, and <c>rola account</c> records which one is in use — so what is
+    /// The two commands are the whole of what an account is, <c>rola key generate --install</c> writes the
+    /// pair into the user's key directory, and <c>rola account</c> records which one is in use, so what is
     /// reported is what the first of them that failed said.
     /// </remarks>
     /// <param name="name">What the pair is known by.</param>

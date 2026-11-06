@@ -84,7 +84,7 @@ pub fn complete_layout_giveup_ownership(
 /// the `Uuid` of an entry to let go of, and they are let go of in the order they are named.
 ///
 /// An entry this account holds is named as nobody's. One another account holds is left alone, and
-/// the run is told who holds it — where that happens nothing after it is let go of, so a run that
+/// the run is told who holds it, where that happens nothing after it is let go of, so a run that
 /// names several stops at the first one it cannot let go of. One nobody holds is already what was
 /// asked for. The copy fetched here, when there is one, is changed to agree with the Vault; a run
 /// that never fetched is not refused for it.

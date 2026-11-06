@@ -9,7 +9,7 @@ namespace RorolalaVCSPlugin;
 /// It is the plan a sync would make, read one path at a time: <c>rola sync</c> sends a version this side is
 /// further on than, brings down one the Vault is further on than, and sends one whose two chains have each moved
 /// on only when it is forced. The four are the plan's own, and are told apart the way the plan tells
-/// them apart — see <see cref="RolaStatus.SyncOf"/> — so a row of the Overview and the run a reader presses are one
+/// them apart, see <see cref="RolaStatus.SyncOf"/>, so a row of the Overview and the run a reader presses are one
 /// answer about one file rather than two that have to agree.
 /// </remarks>
 internal enum SyncMove

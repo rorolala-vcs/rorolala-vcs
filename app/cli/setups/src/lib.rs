@@ -43,8 +43,8 @@ pub use workspace::*;
 /// Commands are deliberately not registered here: `gen_program!()` collects
 /// commands per crate, so a command must be declared in the crate that binds it.
 ///
-/// The setups that shape the output — the language it is written in, how it is drawn and how
-/// it reports what it is doing — come first, so that everything registered after them is
+/// The setups that shape the output, the language it is written in, how it is drawn and how
+/// it reports what it is doing, come first, so that everything registered after them is
 /// spoken, rendered and reported the way the run asked for.
 pub struct RorolalaSetup;
 

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// Top-level configuration for the Workspace
 ///
 /// A Workspace keeps its own settings beside the data it holds: where the Vaults it shares
-/// through are, and — as there comes to be more — whatever else the copy being worked in
+/// through are, and, as there comes to be more, whatever else the copy being worked in
 /// needs to remember.
 #[lazyffi(export = WorkspaceConfig)]
 #[derive(Debug, Default, Clone, Configure, Serialize, Deserialize)]
@@ -55,7 +55,7 @@ impl Config {
 
 /// What a Workspace reaches for when nothing else names anything.
 ///
-/// It is the same kind of thing a binding is — a name — but a choice among them rather than
+/// It is the same kind of thing a binding is, a name, but a choice among them rather than
 /// one of them: the name is meant to be one the Workspace knows, which is the caller's to
 /// check, and nothing else is kept here.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,9 +90,9 @@ impl DefaultConfig {
 
 /// The Vaults a Workspace knows, each under a name of its own.
 ///
-/// A name is how the Workspace talks about a Vault — `origin`, say — and the address is
+/// A name is how the Workspace talks about a Vault (`origin`, say) and the address is
 /// where that Vault answers: the daemon to knock at, and which Vault under it is meant. The
-/// address is kept as it was written, a link — `rola://<host>[:<port>]/<sub-vault>` — or the
+/// address is kept as it was written, a link, `rola://<host>[:<port>]/<sub-vault>`, or the
 /// bare address it is short for. Nothing here reads it: a Workspace writes down where to go,
 /// and whoever dials reads the address it wrote down.
 ///

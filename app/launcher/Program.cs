@@ -128,7 +128,7 @@ internal static class Program
     /// </summary>
     /// <remarks>
     /// The command line hands a Desktop window a language; the launcher is started by a person, so what it
-    /// speaks is the shared preference file — a choice made in the Desktop program and kept there — and,
+    /// speaks is the shared preference file, a choice made in the Desktop program and kept there, and,
     /// where nothing has been chosen yet, the language the machine is set to when the files speak it.
     /// </remarks>
     /// <param name="args">What the program was started with.</param>

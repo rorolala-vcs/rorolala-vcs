@@ -19,8 +19,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// when what they answered is let go of.
 /// </summary>
 /// <remarks>
-/// Nothing here draws — that needs a running Avalonia, and a column and its cells are built out of
-/// controls — so what is exercised is the catalogue and what the plugins contribute to it.
+/// Nothing here draws, that needs a running Avalonia, and a column and its cells are built out of
+/// controls, so what is exercised is the catalogue and what the plugins contribute to it.
 /// </remarks>
 public sealed class ColumnTests
 {
@@ -103,8 +103,8 @@ public sealed class ColumnTests
 
     /// <summary>What the providers answered is let go of when the files may have changed.</summary>
     /// <remarks>
-    /// What a provider answers is read from a tree a file operation changes — a Layout names each path by a
-    /// `Uuid`, and a move renames one — and a listing is read again for the same change. A listing read from
+    /// What a provider answers is read from a tree a file operation changes, a Layout names each path by a
+    /// `Uuid`, and a move renames one, and a listing is read again for the same change. A listing read from
     /// an answer that was not let go of is drawn from a tree that is gone, which is what this says cannot
     /// happen again.
     /// </remarks>
@@ -177,7 +177,7 @@ public sealed class ColumnTests
     /// <remarks>
     /// The mark is about the entry rather than a value of it, so it stands before everything, the picture
     /// included, where it is read first. It is headed by nothing: the listing heads a column from a key, and
-    /// there is no word that would fit over a column of dots — what the mark means is said on the mark.
+    /// there is no word that would fit over a column of dots, what the mark means is said on the mark.
     /// </remarks>
     [Fact]
     public void ThePluginContributesTheStateMarkAtTheLeft()
@@ -206,7 +206,7 @@ public sealed class ColumnTests
     /// What each state is drawn as is a role the listing resolves to the theme's resource for it: green for
     /// what appeared, the user's own colour for what changed, the error red for what must not be recorded,
     /// the second colour for what moved, and the one amber for what is waiting. A dot says nothing in a
-    /// column, since a cell holding both a dot and a word would be a dot drawn for nothing — what it means is
+    /// column, since a cell holding both a dot and a word would be a dot drawn for nothing, what it means is
     /// the word it is hovered for.
     /// </remarks>
     [Fact]
@@ -260,7 +260,7 @@ public sealed class ColumnTests
     /// <summary>A state says what the Overview says, which is one answer about one state.</summary>
     /// <remarks>
     /// The badge and the panel's pill are read by the same person about the same file, so a state that meant one
-    /// thing on a tile and another in the panel would be a state a reader had to learn twice — and whichever of
+    /// thing on a tile and another in the panel would be a state a reader had to learn twice, and whichever of
     /// the two they read last would be the one they believed. What is checked is that every state is said with
     /// the panel's own words, which is why the keys are the panel's: a correction to either is a correction to
     /// both.
@@ -309,7 +309,7 @@ public sealed class ColumnTests
     /// What the column is for is how far apart the two sides are, and that is a number only while the chain
     /// that counts is here: a fetch brings the Vault's Layout and never its versions, so being behind is
     /// ordinarily a direction without a count, and two sides that are not on one chain have no count at all.
-    /// The three are told apart because what a reader does about them differs — one is work to fetch, one is
+    /// The three are told apart because what a reader does about them differs, one is work to fetch, one is
     /// work to fetch by an unknown amount, and one cannot be settled by moving anything.
     /// </remarks>
     [Fact]
@@ -351,7 +351,7 @@ public sealed class ColumnTests
     /// <remarks>
     /// The badge is the one thing a tile has room for, so what it says is the direction the work would have to
     /// move: up for work waiting to be sent, down for work waiting to be fetched, and the fork where the two
-    /// sides have each moved on — which is the one standing no arrow can say.
+    /// sides have each moved on, which is the one standing no arrow can say.
     /// </remarks>
     [Fact]
     public void ATileWearsAnArrowForTheDirectionAndAForkWhereThereIsNone()
@@ -402,7 +402,7 @@ public sealed class ColumnTests
     /// <remarks>
     /// The dash is how the listing says what it does not know, and a dash where a mark would be is a mark of
     /// its own: a file that stands as it was recorded is a file the column has nothing to say about, and that
-    /// is said by drawing nothing — which is also the room the name beside it is read in.
+    /// is said by drawing nothing, which is also the room the name beside it is read in.
     /// </remarks>
     [Fact]
     public void AColumnOfMarksDrawsNothingWhereTheEntryHasNoMark()
@@ -428,7 +428,7 @@ public sealed class ColumnTests
 
     /// <summary>A state is worn on a tile as a picture in the colour the dot beside a name is.</summary>
     /// <remarks>
-    /// A tile has no column to draw a dot in, so the state is a badge there — and what a state is coloured is
+    /// A tile has no column to draw a dot in, so the state is a badge there, and what a state is coloured is
     /// the state, so the badge and the dot are the same colour. Two states share a picture where what a reader
     /// does about them is the same thing: a file that is only possibly renamed is renamed as far as that goes,
     /// and one that changed and one waiting to be joined are both content on its way to a version. What tells

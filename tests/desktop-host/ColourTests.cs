@@ -11,7 +11,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// <remarks>
 /// What is checked is the arithmetic and the geometry, which is the part of a plate that can be worked out
 /// without a screen: the pointer has to read as the colour under it, and a colour has to be found again where
-/// it was put — a plate that is off by a corner, or that reads the way down as darker the wrong way round,
+/// it was put, a plate that is off by a corner, or that reads the way down as darker the wrong way round,
 /// picks a colour the user did not point at.
 /// </remarks>
 public sealed class ColourTests

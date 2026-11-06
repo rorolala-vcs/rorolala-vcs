@@ -65,7 +65,7 @@ pub fn create(args: EntryCreate) -> Next {
 ///
 /// A path is the whole of what a creation is given: whether a Vault or a Workspace is what is
 /// made is asked for beside it, so this is the state every creation starts in, and the one a
-/// name for the current directory — `rola init` — reaches with as well.
+/// name for the current directory, `rola init`, reaches with as well.
 #[derive(Grouped, Wrap)]
 pub struct StateCreatePath {
     /// The directory expected to be created.
@@ -108,7 +108,7 @@ pub fn handle_create_workspace(
     // whose place to work is taken, and a target that already holds a Workspace does not need
     // making; leaving the second to `Workspace::create` would report the Layout that could not
     // be made instead of the Workspace that is already there. The target is read the way the
-    // library reads one — a directory holding a data directory — rather than by searching
+    // library reads one, a directory holding a data directory, rather than by searching
     // upwards, so a Workspace made inside another is still a Workspace.
     if workspace.get_ref().exist() || dir.join(DATA_DIR).is_dir() {
         return ErrorWorkspaceAlreadyExist.into();
@@ -128,12 +128,12 @@ pub fn handle_create_vault(
     // Being inside a Vault is not a reason to refuse: a Vault is what others sit inside, so one
     // asked for from within a Vault is a Vault inside it rather than a second of its own. What a
     // Vault holds are the directories under its `vaults/`, which is where `RootVault` reads them
-    // from — so it is also where they are made.
+    // from, so it is also where they are made.
     let Some(holding) = vault.get_ref().as_ref() else {
         // `Vault::create` is happy to write over a Vault that is already there, since what it
         // is handed is a configuration to write rather than a place that must be free. A run
         // that named an existing Vault asked to make one, not to have it rewritten, so it is
-        // told the Vault is there — the same answer a Vault inside another gives, read the
+        // told the Vault is there, the same answer a Vault inside another gives, read the
         // same way.
         if dir.join(CONFIG_PATH).is_file() {
             return ErrorVaultAlreadyExist.into();

@@ -46,7 +46,7 @@ impl RorolalaStorage {
     /// before a write is skipped: repairing damage here would mean paying for a read and a hash of
     /// every object the store already holds, on every write, for a case that a content-addressed
     /// store meets only once something else has damaged it. What is not taken as whole is a path
-    /// that is not a file — a directory where an object belongs is not the object — so the write
+    /// that is not a file, a directory where an object belongs is not the object, so the write
     /// goes ahead and fails loudly instead of reporting a success no read could open. Damage found
     /// later is [`Error::Corrupt`] on the read, and repairing it is a cleanup's job.
     ///
@@ -56,8 +56,8 @@ impl RorolalaStorage {
     pub async fn write_object(&self, plain: &[u8], codec: Codec) -> Result<Key, Error> {
         let key = key_of(plain);
 
-        // A key is the hash of what is under it, so an object that is already there — loose or in a
-        // pack — is the very content in hand. Writing it again would only put a loose copy beside a
+        // A key is the hash of what is under it, so an object that is already there, loose or in a
+        // pack, is the very content in hand. Writing it again would only put a loose copy beside a
         // packed one: the same bytes in two places, which is work packing would have to undo. A write
         // therefore writes what is not there, and nothing else.
         if self.holds_object(&key).await? {
@@ -79,7 +79,7 @@ impl RorolalaStorage {
 
     /// Plans a run of object reads as one batch: where each key is, and every pack opened once.
     ///
-    /// A read of a packed entry used to open the pack, seek to the entry and read it — three
+    /// A read of a packed entry used to open the pack, seek to the entry and read it, three
     /// hand-overs to a thread that blocks for every chunk of a content. A batch opens each pack it
     /// needs once and reads its entries where they lie, so a content of fifty thousand chunks is a
     /// handful of files opened and a read apiece.
@@ -101,7 +101,7 @@ impl RorolalaStorage {
             };
             let path = self.pack_path(index);
 
-            // The index was read and the pack taken away before it could be opened — what dropping a
+            // The index was read and the pack taken away before it could be opened, what dropping a
             // pack's last entry does. A pack that is not there holds nothing, which is the same answer
             // as an index that is not there.
             let file = match tokio::fs::File::open(&path).await {
@@ -174,7 +174,7 @@ impl RorolalaStorage {
         manifest: &Manifest,
         codec: Codec,
     ) -> Result<(), Error> {
-        // A manifest that is already held — loose or in a manifest pack — says how this content is put
+        // A manifest that is already held, loose or in a manifest pack, says how this content is put
         // back together, and the content under a key is the content the key names, so it is not written
         // again. Writing it again would only put a loose copy beside a packed one. A manifest that is
         // there but does not read is written over: what this leaves behind is one that reads.
@@ -222,15 +222,15 @@ impl RorolalaStorage {
     /// The content stored under `key`, put back together however it was laid down.
     ///
     /// A manifest is what a cut content has and an object is what a whole one has, and both may be
-    /// there at once — a chunk is an object, and a chunk's bytes may be the very content some key
+    /// there at once, a chunk is an object, and a chunk's bytes may be the very content some key
     /// names. The manifest is read first, so which of the two answers is never left to chance; but a
     /// manifest that does not *read* does not decide anything either, and the object under the same
     /// key is the same content, so it is answered with rather than the key being lost to a stray
     /// file beside it.
     ///
     /// The content a manifest makes is checked against the key before it is handed over: a manifest
-    /// is not covered by the key, so it may name the right chunks in the wrong order — or chunks of
-    /// something else — and what a key promises is the content, not the reading of a manifest.
+    /// is not covered by the key, so it may name the right chunks in the wrong order, or chunks of
+    /// something else, and what a key promises is the content, not the reading of a manifest.
     ///
     /// # Errors
     ///
@@ -253,16 +253,16 @@ impl RorolalaStorage {
         };
 
         match self.assemble(&manifest).await {
-            // Every chunk is whole in itself — `read_object` checked that — but the manifest that
+            // Every chunk is whole in itself, `read_object` checked that, but the manifest that
             // put them in order is not covered by the key, so the whole is checked on its own. A
             // per-chunk check that passed is not the check a key promises.
             Ok(content) if verify(key, &content).is_ok() => Ok(content),
             Ok(_) => self.whole_or_corrupt(key).await,
-            // The chunks cannot be put back together — one is gone, or longer than the manifest says.
+            // The chunks cannot be put back together, one is gone, or longer than the manifest says.
             // The whole content may still be under the key, beside the manifest (see `write_content`),
             // and a key is the hash of the whole content, so what is there is the same content the
             // manifest would have made. If it is not there, what went wrong with the manifest is what
-            // is reported — unless the fallback itself failed in a way that says more: a store that
+            // is reported, unless the fallback itself failed in a way that says more: a store that
             // cannot be read is not content that does not add up, and an object that does not hash is
             // not a manifest that reads wrong.
             Err(error) => match self.read_object(key).await {
@@ -278,7 +278,7 @@ impl RorolalaStorage {
     ///
     /// This is what a manifest that will not read is answered with. The object beside it is the same
     /// content, so a read that works answers the key; a read that fails for its own reason is the
-    /// better account of the store — an unreadable disk, or an object that does not hash — and only
+    /// better account of the store (an unreadable disk, or an object that does not hash) and only
     /// a key with no object under it leaves the manifest's failure as what is reported.
     async fn whole_or_malformed(&self, key: &Key) -> Result<Vec<u8>, Error> {
         match self.read_object(key).await {
@@ -292,7 +292,7 @@ impl RorolalaStorage {
     ///
     /// This is what a manifest that does not make the content the key names is answered with: the
     /// content may still be under the key as one object, and a whole write leaves it there beside a
-    /// manifest — see `write_content`. If it is not, what the key promises is not in the store, and
+    /// manifest, see `write_content`. If it is not, what the key promises is not in the store, and
     /// the key is corrupt rather than missing: a manifest for it is there, and says it was stored.
     async fn whole_or_corrupt(&self, key: &Key) -> Result<Vec<u8>, Error> {
         match self.read_object(key).await {
@@ -312,7 +312,7 @@ impl RorolalaStorage {
     async fn assemble(&self, manifest: &Manifest) -> Result<Vec<u8>, Error> {
         // Nothing is reserved from the total the manifest claims: a length is the manifest's to say
         // and this is not a number an allocator should be handed on trust. A manifest that reads is
-        // bounded by `MAX_CONTENT_LEN` — see `Manifest::decode` — and what grows the buffer here is
+        // bounded by `MAX_CONTENT_LEN`, see `Manifest::decode`, and what grows the buffer here is
         // the bytes that really came back, one chunk at a time.
         let mut content = Vec::new();
         for chunk in manifest.chunks() {
@@ -330,7 +330,7 @@ impl RorolalaStorage {
     /// Which of `keys` this store cannot produce again.
     ///
     /// This is what a side says when it is asked whether it holds what it was just given: a key is
-    /// confirmed only when the content under it reads back — a content kept as chunks is put back
+    /// confirmed only when the content under it reads back, a content kept as chunks is put back
     /// together, every chunk read, and the whole checked against its key. A manifest that reads
     /// while the chunks it names are gone is **not** confirmed: a manifest is how content is put
     /// back together, and content that cannot be put back together is what a sync carried nothing
@@ -353,8 +353,8 @@ impl RorolalaStorage {
                 // A store that cannot be read is not content that is not here: the first says the
                 // answer is not known, and reporting it as a missing key would say it is.
                 Err(Error::Io(error)) => return Err(Error::Io(error)),
-                // Anything else — nothing under the key, a manifest that will not read, a chunk that
-                // is gone, content that does not hash to its key — is a key this store cannot produce.
+                // Anything else, nothing under the key, a manifest that will not read, a chunk that
+                // is gone, content that does not hash to its key, is a key this store cannot produce.
                 Err(_) => missing.push(*key),
             }
         }
@@ -490,7 +490,7 @@ impl RorolalaStorage {
     /// The front of the entry of `kind` stored under `key`: enough of its frame to read its length.
     ///
     /// The entry is read loose where it is loose and out of a pack where it was packed, and only as
-    /// much of it as a frame takes — see [`FRAME_HEADER_LEN`] — so an object too small to hold one is
+    /// much of it as a frame takes, see [`FRAME_HEADER_LEN`], so an object too small to hold one is
     /// the whole of what is read.
     async fn entry_head(&self, kind: PackKind, key: &Key) -> Result<Option<Vec<u8>>, Error> {
         let path = self.entry_path(kind, key);
@@ -551,7 +551,7 @@ impl RorolalaStorage {
     /// A cut content is held when its chunks are, not when a file with its name is: what a key
     /// promises is the content, and the content is the chunks. A manifest that does not read, or one
     /// whose chunks are not all there, does not decide anything either, so what the key promises
-    /// rests on the object beside it — the same answer a read gives, and the same way round.
+    /// rests on the object beside it, the same answer a read gives, and the same way round.
     pub(super) async fn holds_content(&self, key: &Key) -> Result<bool, Error> {
         use futures::StreamExt as _;
 
@@ -566,7 +566,7 @@ impl RorolalaStorage {
         };
 
         // A content of many chunks is a run of lookups and nothing else, and this is the loop a
-        // large one spends its time in. They run a few at a time — see `HOLDS_AT_ONCE` — and a chunk
+        // large one spends its time in. They run a few at a time, see `HOLDS_AT_ONCE`, and a chunk
         // that is not there ends the run rather than waiting for the rest to be asked about.
         let mut checks = futures::stream::iter(manifest.chunks().iter().map(Chunk::key))
             .map(|chunk| async move { self.holds_object(&chunk).await })
@@ -598,7 +598,7 @@ impl RorolalaStorage {
     /// Whether the content stored under `key` is kept as a manifest of chunks.
     ///
     /// A manifest is what a cut content has and an object is what a whole one has, and the two are
-    /// stored apart — see [`Manifest`] — so this says which of the two a key is kept as. A manifest
+    /// stored apart, see [`Manifest`], so this says which of the two a key is kept as. A manifest
     /// that is there but does not read is not one anything can be put back together from, so it is
     /// answered as an object, the same way round a read takes the two.
     ///
@@ -647,7 +647,7 @@ impl RorolalaStorage {
 
     /// Every key the store keeps a manifest for, and nothing else.
     ///
-    /// A manifest is kept apart from the objects — see [`Manifest`] — so what is here is the whole of
+    /// A manifest is kept apart from the objects, see [`Manifest`], so what is here is the whole of
     /// what the store was told to cut, whether each manifest is loose or in a pack, and nothing of what
     /// it was told to keep whole. A manifest whose chunks have gone is still listed: it is still what
     /// the store was told to keep, and what is missing is found on the read that asks for it.
@@ -750,7 +750,7 @@ impl ObjectBatch {
 
                 match read {
                     Ok(bytes) => bytes,
-                    // The pack was taken away after the plan was made — what dropping a pack's last
+                    // The pack was taken away after the plan was made, what dropping a pack's last
                     // entry does. A key whose pack is gone has nothing under it, which is the same
                     // answer as a key the store never had.
                     Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {

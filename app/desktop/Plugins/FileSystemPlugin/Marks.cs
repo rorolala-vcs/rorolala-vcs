@@ -9,25 +9,25 @@ namespace FileSystemPlugin;
 /// How one entry is marked: the words for it, the picture for it, and the ink.
 /// </summary>
 /// <remarks>
-/// The words and the picture are told apart because the two views want different ones — a table has a
-/// column of text and a tile has a badge to draw — and a contribution says both so that neither view has to
+/// The words and the picture are told apart because the two views want different ones, a table has a
+/// column of text and a tile has a badge to draw, and a contribution says both so that neither view has to
 /// decide what a mark looks like. The picture is named by a key rather than carried, since what is drawn is
 /// the icon library's to hold and the key is how everything else in the contract names a picture.
 /// <para>
 /// They are drawn in two inks for the same reason they are two things: what a picture says by being
-/// coloured — the reader's own, which is the accent — is not always what the words want, which may be to
+/// coloured (the reader's own, which is the accent) is not always what the words want, which may be to
 /// read as any other text. A contribution that wants both the same says so twice.
 /// </para>
 /// <para>
 /// One record serves both places an entry is marked, because the two are one statement about one entry: a
 /// contribution asked twice would be one whose column and whose badge could disagree. What a mark with
-/// nothing in it means is the view's to read — nothing drawn on a badge, the dash the listing writes for
+/// nothing in it means is the view's to read, nothing drawn on a badge, the dash the listing writes for
 /// what it does not know in a column.
 /// </para>
 /// </remarks>
 /// <param name="TextKey">An i18n key for the words, when they are the contributor's own.</param>
 /// <param name="Text">
-/// The words themselves, when they are not a phrase — an account's name, which is data. Said, it
+/// The words themselves, when they are not a phrase, an account's name, which is data. Said, it
 /// wins over <paramref name="TextKey"/>.
 /// </param>
 /// <param name="IconKey">A key naming the picture in the icon library, or nothing for no picture.</param>
@@ -63,7 +63,7 @@ public sealed record EntryMark(
     /// <remarks>
     /// Read by the column and by what the badge says when the pointer rests on it, because the two are one
     /// answer: a mark that is a name in the column is that name on the badge as well. The literal comes first
-    /// because an account's name is data — a name that happens to read like a key is still what somebody is
+    /// because an account's name is data, a name that happens to read like a key is still what somebody is
     /// called.
     /// </remarks>
     /// <returns>What to write, or nothing when the mark says nothing at all.</returns>
@@ -79,7 +79,7 @@ public sealed record EntryMark(
     /// A phrase of its own rather than the words the column is read for, because the two are read in different
     /// places: a column beside a name says only the name, while a badge that is a picture of a lock says nothing
     /// about who holds it until it is given the words. The mark's own words are the argument, so a phrase can be
-    /// written around a name without the renderer having to know which part of it is the name — and one place in
+    /// written around a name without the renderer having to know which part of it is the name, and one place in
     /// a phrase is all the translation formatter takes.
     /// </remarks>
     /// <returns>What to say, which is the mark's own words when it names no phrase of its own.</returns>
@@ -96,7 +96,7 @@ public sealed record EntryMark(
 /// This is the extension point, reached by depending on this plugin: a manifest that names
 /// <c>rorolala.file_system</c> in its dependencies is started after it, and its <c>Initialize</c> may hand
 /// one of these to <see cref="EntryMarkProviders.Register"/>. What is contributed is a badge of an entry's
-/// icon in a grid, and what the contribution is about is its own — the listing knows how to lay the badges
+/// icon in a grid, and what the contribution is about is its own, the listing knows how to lay the badges
 /// out and never what one means.
 /// <para>
 /// Every provider that speaks for a directory is asked, and the order they were registered in is the order
@@ -120,7 +120,7 @@ public interface IEntryMarkProvider
     /// <remarks>
     /// Asked once for the directory a listing is of, not once per entry: it is what decides whether an answer
     /// is looked for at all, and a badge that appeared and disappeared row by row would not be a badge. A
-    /// provider that cannot answer — a directory it may not inspect — says no rather than failing the
+    /// provider that cannot answer, a directory it may not inspect, says no rather than failing the
     /// listing.
     /// </remarks>
     /// <param name="directory">The directory being listed.</param>
@@ -132,8 +132,8 @@ public interface IEntryMarkProvider
     /// </summary>
     /// <remarks>
     /// A mark with nothing in it says the provider has nothing to say about the entry, and nothing is drawn
-    /// for it. It is an answer rather than an absence so that a provider which says nothing about an entry —
-    /// a directory, which no Layout names — has no second way of saying it.
+    /// for it. It is an answer rather than an absence so that a provider which says nothing about an entry,
+    /// a directory, which no Layout names, has no second way of saying it.
     /// </remarks>
     /// <param name="entry">The entry to consider.</param>
     /// <returns>The mark to draw.</returns>
@@ -206,7 +206,7 @@ public static class EntryMarkProviders
     /// </summary>
     /// <remarks>
     /// Said to all of them rather than to the ones a directory is answered by: what is read again is not
-    /// known here, and what a provider is holding is its own business — one with nothing to let go of
+    /// known here, and what a provider is holding is its own business, one with nothing to let go of
     /// answers nothing to it.
     /// </remarks>
     public static void Forget()

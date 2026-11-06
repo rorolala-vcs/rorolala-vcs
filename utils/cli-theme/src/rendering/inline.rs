@@ -13,8 +13,8 @@ const ESCAPABLE: [char; 4] = ['*', '_', '~', '\\'];
 
 /// Renders the styles `text` asks for, starting from `base`.
 ///
-/// `base` is the style the line is drawn in before it is read — grey inside a
-/// quotation, the alert's colour inside an alert — so that what the line asks for
+/// `base` is the style the line is drawn in before it is read, grey inside a
+/// quotation, the alert's colour inside an alert, so that what the line asks for
 /// overrides it rather than nesting inside it.
 #[must_use]
 pub(super) fn render<'a>(text: &'a str, base: StyleState<'a>, options: RenderOptions) -> String {
@@ -38,9 +38,9 @@ pub(super) fn render<'a>(text: &'a str, base: StyleState<'a>, options: RenderOpt
 /// meant to be taken literally.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Wrapper {
-    /// `` ` `` — a span of literal text.
+    /// `` ` ``, a span of literal text.
     Code,
-    /// `<` … `>` — a flag.
+    /// `<` to `>`, a flag.
     Flag,
 }
 
@@ -203,8 +203,8 @@ impl<'a> Parser<'a> {
                 break;
             };
             // What a code span holds is meant to be taken literally: a path or a name is written
-            // this way so that it arrives as itself, and reading `\_` as an escaped underscore — or
-            // `__pycache__` as an underlined word — would hand the reader something other than what
+            // this way so that it arrives as itself, and reading `\_` as an escaped underscore, or
+            // `__pycache__` as an underlined word, would hand the reader something other than what
             // the message was about. What a span still reads is what closes it, and a directive.
             let literal = self.in_code();
             if rest.starts_with('\\') {
@@ -428,7 +428,7 @@ fn color(text: &str) -> Option<Color> {
 /// and `\u{2764}`, which is as many as the character needs.
 ///
 /// A character outside the Basic Multilingual Plane comes out of anything that speaks
-/// UTF-16 as a pair — `\udb82\udce3` is one `NerdFont` glyph, not two — so a high
+/// UTF-16 as a pair (`\udb82\udce3` is one `NerdFont` glyph, not two) so a high
 /// surrogate is read together with the low surrogate that has to follow it. Half of a
 /// pair on its own is not a character, and is left as it is written.
 fn unicode_escape(rest: &str) -> Option<(char, usize)> {

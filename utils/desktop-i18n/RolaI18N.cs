@@ -6,7 +6,7 @@ namespace RorolalaDesktop.I18n;
 /// <remarks>
 /// The files are the ones <c>rust-i18n</c> reads, and they are read the same way: YAML, where each
 /// node is a key and each leaf is that key written in every language it has been written in. A form
-/// leaves places for values as <c>%{name}</c>, and the values go in by order rather than by name —
+/// leaves places for values as <c>%{name}</c>, and the values go in by order rather than by name,
 /// see <see cref="Get(string, object?)"/>.
 /// <para>
 /// Several directories may be read together, which is how the host and each of its plugins state
@@ -18,8 +18,8 @@ namespace RorolalaDesktop.I18n;
 /// <para>
 /// Where the files are read from and which language is spoken are both set before anything asks for
 /// a form: <see cref="SetTranslationDirectory"/> and <see cref="SetLocale"/>. What they were set to
-/// is readable back, so a program that has been handed both — the way the Desktop program is handed
-/// the language the command line chose — can say what it is speaking.
+/// is readable back, so a program that has been handed both, the way the Desktop program is handed
+/// the language the command line chose, can say what it is speaking.
 /// </para>
 /// <para>
 /// A key that is in no file, and a key written in no language the program speaks, both read as the
@@ -35,7 +35,7 @@ public static class RolaI18N
     /// <summary>The directories the translation files are read from, in registration order.</summary>
     private static readonly List<string> Directories = [];
 
-    /// <summary>The language the program speaks in, as the files name it — <c>zh-CN</c>.</summary>
+    /// <summary>The language the program speaks in, as the files name it, <c>zh-CN</c>.</summary>
     public static string? Locale { get; private set; }
 
     /// <summary>Guards what is read, so two threads setting it up do not read it twice.</summary>
@@ -63,8 +63,8 @@ public static class RolaI18N
     /// <remarks>
     /// The files are not read here: they are read the first time a form is asked for, and again
     /// whenever this names a directory other than the one they were read from. A program that
-    /// knows where its translations are before it starts — which is what looking beside itself is
-    /// — can say so before anything is drawn.
+    /// knows where its translations are before it starts, which is what looking beside itself is
+    ///, can say so before anything is drawn.
     /// </remarks>
     /// <param name="directory">The directory every translation file sits under, however deep.</param>
     /// <exception cref="ArgumentException"><paramref name="directory"/> is empty.</exception>
@@ -86,7 +86,7 @@ public static class RolaI18N
     /// </summary>
     /// <remarks>
     /// The directories are read in registration order and a key an earlier directory states is not
-    /// replaced by a later one — first registration wins. The host registers its own directory
+    /// replaced by a later one, first registration wins. The host registers its own directory
     /// before the plugins register theirs, so a plugin cannot overwrite what the host says, and a
     /// plugin loaded first is not overwritten by one loaded after it.
     /// <para>
@@ -132,7 +132,7 @@ public static class RolaI18N
     /// <summary>
     /// The form a node is written in, in the language the program speaks.
     /// </summary>
-    /// <param name="node">The key of the node, as the files nest it — <c>pack.help</c>.</param>
+    /// <param name="node">The key of the node, as the files nest it, <c>pack.help</c>.</param>
     /// <returns>
     /// What the node says, or <paramref name="node"/> itself when the files state no such node, or
     /// state one in no language the program has.
@@ -151,7 +151,7 @@ public static class RolaI18N
     /// whoever reads the file. A place with no value left for it is left as it was written, and a
     /// value with no place left for it is dropped.
     /// </remarks>
-    /// <param name="node">The key of the node, as the files nest it — <c>pack.help</c>.</param>
+    /// <param name="node">The key of the node, as the files nest it, <c>pack.help</c>.</param>
     /// <param name="first">The value for the first place the form leaves.</param>
     /// <returns>
     /// What the node says with the values in it, or <paramref name="node"/> itself when the files
@@ -389,7 +389,7 @@ public static class RolaI18N
     /// A language as the files name it, so that what the machine calls a locale is one.
     /// </summary>
     /// <remarks>
-    /// A locale on a machine may carry the encoding it is written in — <c>zh_CN.UTF-8</c> — and
+    /// A locale on a machine may carry the encoding it is written in, <c>zh_CN.UTF-8</c>, and
     /// separates the region with an underscore where the files use a hyphen, so neither is left in
     /// the name this speaks by.
     /// </remarks>

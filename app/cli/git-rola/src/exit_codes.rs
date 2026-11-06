@@ -2,7 +2,7 @@
 //!
 //! They follow git's own reading of a status: nothing to report is zero, a command that could not
 //! be made is 128, a command line that is not one this program reads is 129, and a command that
-//! reports a difference rather than a failure — `check` — answers one.
+//! reports a difference rather than a failure, `check`, answers one.
 
 /// The command did what it was asked.
 pub const EC_OK: i32 = 0;

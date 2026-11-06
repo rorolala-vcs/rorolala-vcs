@@ -7,10 +7,10 @@ namespace FileSystemPlugin;
 /// Where one is, where it has been, and what is there.
 /// </summary>
 /// <remarks>
-/// The plugin has one of these and every dock is a view onto it — unless the dock has been taken out of
+/// The plugin has one of these and every dock is a view onto it, unless the dock has been taken out of
 /// step, in which case it is given one of its own and looks at a directory of its own. How the
 /// entries are laid out differs from dock to dock, and so may the directory; what every one of them agrees
-/// on — where the tree is rooted, and whether hidden entries are shown — is not here but in
+/// on (where the tree is rooted, and whether hidden entries are shown) is not here but in
 /// <see cref="Shared"/>.
 /// <para>
 /// The rest of the state is the location's own, kept by the plugin rather than the host: what a directory
@@ -32,8 +32,8 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// Windows has no path that names every drive at once, so the one place that is not a directory is
-    /// held as the empty path, which no directory can be. Unix has no such place — its root is a
-    /// directory — so this is reached there by nothing at all.
+    /// held as the empty path, which no directory can be. Unix has no such place, its root is a
+    /// directory, so this is reached there by nothing at all.
     /// </remarks>
     public const string Computer = "";
 
@@ -43,8 +43,8 @@ internal sealed class Browser : IDisposable
     /// <remarks>
     /// A name no directory can have, which is why it can stand for the step out of the listing: the entries
     /// around it are named by their own last part, and one of them being called <c>..</c> would be a
-    /// directory the filesystem does not allow. It carries no path of its own — where it leads is the
-    /// listing's parent rather than anything written down on it — so what handles it must ask rather than
+    /// directory the filesystem does not allow. It carries no path of its own, where it leads is the
+    /// listing's parent rather than anything written down on it, so what handles it must ask rather than
     /// resolve it.
     /// </remarks>
     public const string UpName = "..";
@@ -73,7 +73,7 @@ internal sealed class Browser : IDisposable
     /// <remarks>
     /// One location or the other, never both: where a browser is is either a path the filesystem answers or an
     /// address a plugin answers, and a listing is drawn from whichever it is. Keeping the two on one location
-    /// rather than giving logical views a browser of their own is what keeps one history and one way to move —
+    /// rather than giving logical views a browser of their own is what keeps one history and one way to move,
     /// back, forward and the address switch between a directory and a place as freely as between two directories.
     /// </remarks>
     private LogicalPlace? _logical;
@@ -98,7 +98,7 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// A provider that throws, or one whose program is not installed, leaves <see cref="HideRegistry.Ready"/> saying no
-    /// for as long as it is asked — and asking again on every staging would be a drawing that starts a read which
+    /// for as long as it is asked, and asking again on every staging would be a drawing that starts a read which
     /// cannot finish. What was asked is therefore asked again only when the files are said to have changed, which is
     /// when a rule or a repository may have appeared.
     /// </remarks>
@@ -108,7 +108,7 @@ internal sealed class Browser : IDisposable
     /// <param name="log">Where a read of the directory is said.</param>
     /// <param name="shared">The answers every location shares.</param>
     /// <param name="directory">
-    /// The directory to look at, or the address of a place to open instead — which is what a dock taken out of
+    /// The directory to look at, or the address of a place to open instead, which is what a dock taken out of
     /// step is given when it was out of step at a logical address.
     /// </param>
     /// <param name="views">What answers the prefixes of the addresses this location may be given.</param>
@@ -132,7 +132,7 @@ internal sealed class Browser : IDisposable
         }
 
         // A listing follows the shared answers wherever it is, so this location has to be told when they
-        // change — and that is why a location given to a dock out of step is let go of rather than dropped.
+        // change, and that is why a location given to a dock out of step is let go of rather than dropped.
         // The two things told apart: an answer changing is a listing to make again out of what was read, where
         // the files changing is the directory to read again. A read that landed is neither: it is this very listing
         // drawn again, out of answers the readers already hold.
@@ -163,7 +163,7 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// The address is the one place a shell-like path is typed, and <c>~</c> is what a hand reaches for to
-    /// name home. Only a <c>~</c> that names a step of its own is expanded — <c>~</c> alone, or <c>~/</c> and
+    /// name home. Only a <c>~</c> that names a step of its own is expanded, <c>~</c> alone, or <c>~/</c> and
     /// what follows it; anywhere else it is an ordinary name that begins with a tilde, and naming one is left
     /// to <c>./~</c>, which is how a shell reads it too.
     /// <para>
@@ -203,7 +203,7 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// The one place a directory is read, so that the tree and the listings agree about what is in one
-    /// — including the computer, whose entries are the drives and are read by nothing else.
+    ///, including the computer, whose entries are the drives and are read by nothing else.
     /// </remarks>
     /// <param name="directory">The directory to read, or the computer.</param>
     public static IReadOnlyList<Entry> Read(string directory)
@@ -219,7 +219,7 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// Apart from <see cref="Changed"/>, which also says where the browser went: a tree is rooted at the base and
-    /// is not rearranged by a step, but what lies under the steps it has read may have moved — which is a thing
+    /// is not rearranged by a step, but what lies under the steps it has read may have moved, which is a thing
     /// only a view that draws more than the one directory has to read again for.
     /// </remarks>
     public event Action? Reread;
@@ -258,7 +258,7 @@ internal sealed class Browser : IDisposable
     /// What is over where this location is looking: the directory holding a directory, or the address over a place.
     /// </summary>
     /// <remarks>
-    /// A place has no directory over it — an address is not a path — so what is over one is the plugin's answer
+    /// A place has no directory over it, an address is not a path, so what is over one is the plugin's answer
     /// rather than this one's (<see cref="ILogicalViewProvider.Parent"/>), and nothing when the plugin says there
     /// is no step up. Either way it is one string, which is what makes the way up one button that goes somewhere.
     /// </remarks>
@@ -281,7 +281,7 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// One answer for the whole plugin rather than for this location (see <see cref="Shared"/>), reached
-    /// through a location because a location is what a view holds — and because the completions an address
+    /// through a location because a location is what a view holds, and because the completions an address
     /// offers keep the same entries out, a path that cannot be reached by typing it not being an address.
     /// <para>
     /// Asked rather than kept on the entry, because the answer changes with a switch the user turns and must
@@ -297,7 +297,7 @@ internal sealed class Browser : IDisposable
     /// Whether a provider in force hides an entry, read against a view's root.
     /// </summary>
     /// <remarks>
-    /// A view that reads more than the one directory — the tree — is rooted somewhere, and a rule about
+    /// A view that reads more than the one directory, the tree, is rooted somewhere, and a rule about
     /// a repository is read from there rather than from each directory it walks into (see
     /// <see cref="IEntryHideProvider.Hides(Entry, string)"/>).
     /// </remarks>
@@ -322,7 +322,7 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// The completions offer what the listing offers, so a path that is not in the listing is not offered by
-    /// typing it either — and a path the listing is showing is one that can be reached.
+    /// typing it either, and a path the listing is showing is one that can be reached.
     /// </remarks>
     public bool ShowHidden => _shared.ShowHidden;
 
@@ -331,7 +331,7 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// The way up is one of the listing's entries rather than a row of the view's own, so that it is laid
-    /// out, selected and scrolled with the rest of them — and so that a grid, which is not rows at all,
+    /// out, selected and scrolled with the rest of them, and so that a grid, which is not rows at all,
     /// does not have to say how a row is drawn. It is staged here rather than in each view because both
     /// views show the same listing, and a second one staging its own would eventually stage something else.
     /// </remarks>
@@ -434,7 +434,7 @@ internal sealed class Browser : IDisposable
         // Setting the base moves this location as well, because the two are one act to whoever asked: a user
         // who roots the tree at a directory is working in it. A dock that has been taken out of step roots the
         // tree for everybody and moves only itself, so the base and where the whole is looking
-        // may then come apart — which is what being out of step means.
+        // may then come apart, which is what being out of step means.
         _shared.BaseDir = _current;
 
         return true;
@@ -524,11 +524,11 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// A reading that a plugin worked out is drawn when it lands, and drawing it is all that is owed: nothing on disk
-    /// changed, so nothing is read again — not the directory, and not what a hide rule makes of it.
+    /// changed, so nothing is read again, not the directory, and not what a hide rule makes of it.
     /// <para>
     /// A place is the exception, and it is the reason this is not one line: what a location holds of a place is the
     /// answer read when the address was entered, so a reading that landed is not in it yet. The address is asked again
-    /// — which answers from what the provider has just read and starts nothing — and the listing that follows is the
+    ///, which answers from what the provider has just read and starts nothing, and the listing that follows is the
     /// one the landing was waiting for. Without it a place whose first read is still going would stay empty for as
     /// long as it was open.
     /// </para>
@@ -555,7 +555,7 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// The directory has not changed; what a listing makes of it has. Both shared answers are read while a
-    /// listing is staged, so one of them changing is a listing to make again — and the tree, which is rooted
+    /// listing is staged, so one of them changing is a listing to make again, and the tree, which is rooted
     /// at one of them, is told by the same raising rather than by a second one of its own.
     /// <para>
     /// A place is not staged from a directory, so there is nothing here for a shared answer to make again: what
@@ -604,7 +604,7 @@ internal sealed class Browser : IDisposable
     private void Move(string directory)
     {
         // A history holds what was written rather than what a place was read as, so a step back into an address
-        // is the address asked for again — which is the same read the address itself would have made.
+        // is the address asked for again, which is the same read the address itself would have made.
         if (LogicalAddress.TryRead(directory, out _))
         {
             Enter(directory);
@@ -628,7 +628,7 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// The address is kept as it was written and the place is read afresh, so that the title, the entries and
-    /// whatever answers a drag are one answer about one address — and an address nobody answers is kept the same
+    /// whatever answers a drag are one answer about one address, and an address nobody answers is kept the same
     /// way, since saying so is the dock's business rather than this one's.
     /// </remarks>
     /// <param name="written">The address, as it was written.</param>
@@ -645,7 +645,7 @@ internal sealed class Browser : IDisposable
     /// </summary>
     /// <remarks>
     /// There is nowhere further up at the base as well as at the top of the platform: the base is the place
-    /// a user works in, and a listing that offered a step out of it would offer a step out of the work — which
+    /// a user works in, and a listing that offered a step out of it would offer a step out of the work, which
     /// is what the base is for preventing. Going above it is still possible by the other ways the location
     /// changes; what the listing does not do is make one of them.
     /// <para>
@@ -659,8 +659,8 @@ internal sealed class Browser : IDisposable
     private IReadOnlyList<Entry> Stage(string directory, IReadOnlyList<Entry> entries)
     {
         // A rule that would run a program is not run here: the window's thread is where a listing is staged, and a
-        // program behind it is the window that stops. Until every rule can answer, everything is shown — a listing
-        // missing a column for a moment is better than one that stops the window — and the rules are read on a thread
+        // program behind it is the window that stops. Until every rule can answer, everything is shown, a listing
+        // missing a column for a moment is better than one that stops the window, and the rules are read on a thread
         // of their own, which draws the listing again when they are in.
         var rules = !_shared.ShowHidden && HideRegistry.Ready(directory);
 

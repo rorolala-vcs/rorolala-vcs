@@ -2,7 +2,7 @@
 //!
 //! A record is kept under the key it is about and holds the objects that point at that key, each
 //! with the role it points by. A version's number is the one derived value here; it stands beside
-//! the records because the question it answers — what number is this version — is asked of the same
+//! the records because the question it answers, what number is this version, is asked of the same
 //! index, and because the records are what make filling it cheap.
 
 use std::collections::{BTreeMap, BTreeSet};

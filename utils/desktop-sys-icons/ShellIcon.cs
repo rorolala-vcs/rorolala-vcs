@@ -17,7 +17,7 @@ namespace RorolalaDesktop.SysIcons;
 /// answer with the icon for a folder as such and for the kind of file the name's extension says: nothing
 /// has to exist on disk, and every file of one kind gets the same picture, which is what an icon for a
 /// kind of thing is. The name is still the file's own name rather than a made-up <c>file.txt</c>, because
-/// the shell reads the extension from it — a fixed name would make every file a text file.
+/// the shell reads the extension from it, a fixed name would make every file a text file.
 /// </para>
 /// <para>
 /// The shell keeps that picture at four sizes and the one wanted is read from the list that holds it,
@@ -26,7 +26,7 @@ namespace RorolalaDesktop.SysIcons;
 /// keep is scaled at all.
 /// </para>
 /// <para>
-/// This cannot be run where it is written — it is Windows-only code on a machine that has no Windows —
+/// This cannot be run where it is written, it is Windows-only code on a machine that has no Windows,
 /// and it is written so that being wrong costs a placeholder icon rather than a broken listing. What
 /// it is written on is said by the attribute below rather than by a comment, so that the compiler
 /// checks it holds of every caller.
@@ -72,7 +72,7 @@ internal static class ShellIcon
     /// </summary>
     /// <remarks>
     /// The directory part is taken off first because the shell is asked about a kind of thing rather than
-    /// about a path — a path would make it look at the disk when the attributes are not used, and the
+    /// about a path, a path would make it look at the disk when the attributes are not used, and the
     /// answer does not depend on where the file sits. A name that is empty is asked as <c>file</c>, which
     /// is the shell's own word for a file that is nothing in particular.
     /// </remarks>
@@ -90,8 +90,8 @@ internal static class ShellIcon
     /// size, or nothing when the shell will not give it.
     /// </summary>
     /// <remarks>
-    /// The four lists hold the same icons, one size each — 16, 32, 48 and 256 pixels, measured rather
-    /// than remembered — so the index one is named by is the index in all of them. What is asked for
+    /// The four lists hold the same icons, one size each, 16, 32, 48 and 256 pixels, measured rather
+    /// than remembered, so the index one is named by is the index in all of them. What is asked for
     /// is the smallest list that is not smaller than the size wanted, since a picture enlarged is a
     /// picture the shell could have given better, and the shell keeps nothing between 48 and 256: a
     /// size in between is read at 256 and drawn smaller, which is what the grid's larger zooms are.
@@ -323,7 +323,7 @@ internal static class ShellIcon
     /// </summary>
     /// <remarks>
     /// The values are the shell's own, and they are not in size order: the large list is the first one
-    /// and the small one the second. What each actually holds — 32, 16, 48 and 256 — is what asking it
+    /// and the small one the second. What each actually holds (32, 16, 48 and 256) is what asking it
     /// answers with, which is not something the names say.
     /// </remarks>
     private enum List

@@ -6,7 +6,7 @@ namespace RorolalaVCSPlugin;
 /// A command's failure, shown as the notification its report was written to become.
 /// </summary>
 /// <remarks>
-/// The command is asked for the form a program reads — see <c>--theme-choice=desktop-friendly</c> — and what
+/// The command is asked for the form a program reads, see <c>--theme-choice=desktop-friendly</c>, and what
 /// comes back is read into the shapes its lines mean rather than put in a window of its own. The notification
 /// stack is where anything that is said rather than asked belongs, and a failure is exactly that: it has no
 /// answer to give, only something to read.

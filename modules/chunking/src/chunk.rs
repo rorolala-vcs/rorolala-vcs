@@ -3,7 +3,7 @@ use std::ops::Range;
 /// How content is cut into chunks before it is written.
 ///
 /// Cutting is a **write-time** choice and nothing else. What a chunked entry records is the
-/// ordered list of the chunks it was made of — the manifest a store keeps — which says nothing
+/// ordered list of the chunks it was made of, the manifest a store keeps, which says nothing
 /// about how the cuts were found. So content cut by *any* chunker reads back the same:
 /// a fixed-size one, a content-defined one, or one that does not exist yet. That is what makes
 /// the boundary algorithm free to change, and free to be chosen later.
@@ -23,7 +23,7 @@ pub trait Chunker: Send + Sync {
     ///
     /// The ranges are in order, do not overlap, and cover all of `content`, so concatenating the
     /// pieces they name gives `content` back exactly. Content that is empty is covered by
-    /// nothing, so an empty content may cut into no chunks at all — which a store lays down as an
+    /// nothing, so an empty content may cut into no chunks at all, which a store lays down as an
     /// empty object, exactly as it lays down any content that is not cut.
     fn split(&self, content: &[u8]) -> Vec<Range<usize>>;
 }
@@ -31,7 +31,7 @@ pub trait Chunker: Send + Sync {
 /// A chunker that never cuts: the whole content is one chunk.
 ///
 /// One chunk is what an entry that was not cut is made of, and a store lays that down as a single
-/// object rather than a manifest — so this is also the answer to "cut nothing".
+/// object rather than a manifest, so this is also the answer to "cut nothing".
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Whole;
 
@@ -46,7 +46,7 @@ impl Chunker for Whole {
 /// Cutting by position is the cheapest cut there is, and it is often enough for content that is
 /// written once and read whole. It is also the cut that ages worst: inserting a byte in the
 /// middle of a file shifts everything after it, so every later chunk is a chunk that was not
-/// there before — see [`Cdc`] for the cut that does not.
+/// there before, see [`Cdc`] for the cut that does not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fixed {
     /// How many bytes each chunk holds, bar the last.
@@ -89,8 +89,8 @@ impl Chunker for Fixed {
 /// where a [`Fixed`] one is not.
 ///
 /// `average` is the size a chunk tends towards; `min` and `max` bound how small and how large a
-/// chunk may get. None of them is written down anywhere — a reader reassembles from the
-/// manifest — so they may be tuned, or the whole algorithm replaced, without a store having to be
+/// chunk may get. None of them is written down anywhere, a reader reassembles from the
+/// manifest, so they may be tuned, or the whole algorithm replaced, without a store having to be
 /// rewritten.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cdc {
@@ -169,11 +169,11 @@ impl Chunker for Cdc {
 
 /// A chunker that cuts text at the ends of its lines.
 ///
-/// The cuts are found the way [`Cdc`] finds them — a rolling hash over the bytes — but each one is
+/// The cuts are found the way [`Cdc`] finds them, a rolling hash over the bytes, but each one is
 /// moved on to the next end of line, so what a chunk holds is whole lines. That is what makes a
 /// chunk the thing an edit actually moves: lines are added, changed and dropped whole, so the lines
 /// either side of an edit are the same lines, and therefore the same bytes, and therefore the same
-/// chunk — in this version of the file, in another one, or in another file altogether.
+/// chunk, in this version of the file, in another one, or in another file altogether.
 ///
 /// Text is also where a small cut pays for itself: a few lines changed in a large file costs the
 /// chunks those lines fall in rather than the file, which is why the sizes below are small.
@@ -261,7 +261,7 @@ fn line_end_after(content: &[u8], from: usize) -> usize {
 /// The mask that makes a cut land about every `average` bytes.
 ///
 /// A rolling hash is as likely to end in any bit pattern, so cutting wherever the low bits are
-/// zero cuts once every `2^n` bytes — which is the power of two nearest `average`.
+/// zero cuts once every `2^n` bytes, which is the power of two nearest `average`.
 fn mask_for(average: u32) -> u64 {
     u64::from(average).max(1).next_power_of_two() - 1
 }
@@ -284,7 +284,7 @@ fn gear(byte: u8) -> u64 {
 ///
 /// This is the choice, where [`Chunker`] is the doing: it says *which* cut a write will use, and
 /// it is what a backend's algorithm choice carries. Since the boundary algorithm is never
-/// recorded — a reader reassembles from the manifest alone — adding one is adding a variant here
+/// recorded, a reader reassembles from the manifest alone, adding one is adding a variant here
 /// and nothing else, and nothing already written changes.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -308,7 +308,7 @@ pub enum Chunking {
     },
     /// The content is cut at the ends of its lines, so that what a chunk holds is whole lines.
     ///
-    /// This is the cut for text — see [`Text`](crate::Text) — and it is what makes an edit to a
+    /// This is the cut for text, see [`Text`](crate::Text), and it is what makes an edit to a
     /// few lines cost those lines rather than the file: the lines around them are the same bytes
     /// they were, so they are chunks the store already has.
     Text {
@@ -321,8 +321,8 @@ pub enum Chunking {
     },
     /// The content is cut at the boundaries of the members it is packed of.
     ///
-    /// This is the cut for content that is a container of other content — a `.zip`, and what
-    /// `.docx`, `.pptx`, `.xlsx`, `.odt`, `.jar` and `.apk` are — see [`Zip`](crate::Zip). Cutting
+    /// This is the cut for content that is a container of other content, a `.zip`, and what
+    /// `.docx`, `.pptx`, `.xlsx`, `.odt`, `.jar` and `.apk` are, see [`Zip`](crate::Zip). Cutting
     /// there rather than on content is what makes an edit to one member leave every member it did
     /// not touch exactly as it was: a member the writer did not rewrite is a chunk the store
     /// already has, so the edit adds one chunk rather than the whole container.
@@ -335,7 +335,7 @@ pub enum Chunking {
     ///
     /// What is carried is the name and not the cut. A chunker answers with ranges and has nothing to
     /// serialise, so naming one keeps this a `Copy` value, and the table it names is resolved when
-    /// the cut is made — see [`policy`](crate::policy).
+    /// the cut is made, see [`policy`](crate::policy).
     ///
     /// A name that names nothing is cut whole rather than refused: `split` answers with ranges and
     /// cannot fail, so it is total. Every path that *chooses* a policy resolves the name through the

@@ -2,9 +2,9 @@
 //!
 //! Recording is not always something a caller can say in one argument: a message covers a group of
 //! files and each file may want its own words about itself, and a run that was told neither has to
-//! be asked. What is asked is written down as a file and opened in an editor — the same way the
+//! be asked. What is asked is written down as a file and opened in an editor, the same way the
 //! language and the account are read, from a global argument and then the environment, and at the
-//! last from the `rola-edit` beside `rola` — so what a run asks for is a program to open, and
+//! last from the `rola-edit` beside `rola`, so what a run asks for is a program to open, and
 //! everything after that is the caller's.
 
 use std::env;
@@ -43,7 +43,7 @@ pub const GLOBAL_ARG_EDITOR: PickerArg<'static, String> = arg![editor: String];
 /// ships is one path and takes the file alone.
 #[derive(Debug, Clone)]
 pub enum Editor {
-    /// A command line — a program and any arguments of its own — as a run or its environment wrote
+    /// A command line, a program and any arguments of its own, as a run or its environment wrote
     /// one, e.g. `code --wait`.
     Named(String),
     /// The `rola-edit` this project ships, sitting beside this program.
@@ -149,7 +149,7 @@ pub fn render_error_editor_failed(error: ErrorEditorFailed, ec: &mut ResExitCode
 /// A [`ProgramSetup`] that turns `--editor`, the environment and the built-in editor into
 /// [`ResEditor`].
 ///
-/// `--editor` comes first — including when it names emptiness, which is a run saying it has none —
+/// `--editor` comes first (including when it names emptiness, which is a run saying it has none)
 /// and the environment is consulted only when the argument is absent, so a run that names an editor
 /// is never overridden by one the shell happens to carry. When neither names one, the `rola-edit`
 /// this project ships beside this program is used, so a machine with nothing else to edit with still
@@ -187,7 +187,7 @@ fn named_by_environment() -> Option<Editor> {
 /// The editor this project ships, beside this program, when it is laid down there.
 ///
 /// `rola-edit` is exported beside `rola` (see `cargo dev export`), which is the place a word of this
-/// program's reaches a program next to it — `rola edit` runs it the same way. A run that named no
+/// program's reaches a program next to it, `rola edit` runs it the same way. A run that named no
 /// editor anywhere falls back here rather than refusing, so a machine with nothing else to edit with
 /// still has this.
 fn built_in() -> Option<Editor> {
@@ -201,8 +201,8 @@ fn built_in() -> Option<Editor> {
 
 /// Opens `editor` on `path`, waiting for it to end.
 ///
-/// A command line is named the way a shell would write one — a program and any arguments of its own
-/// — so what is split is words, and `path` is handed on after them. The built-in editor is one path
+/// A command line is named the way a shell would write one, a program and any arguments of its own
+///, so what is split is words, and `path` is handed on after them. The built-in editor is one path
 /// and is not split, because a directory it sits in may have a space in its name. An editor that
 /// ends having failed, or that cannot be started at all, is a run that did not get what it asked
 /// for.

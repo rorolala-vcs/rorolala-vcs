@@ -56,7 +56,7 @@ internal sealed class SyncWatcher
     /// <summary>Whether there is work to carry, which is what the three buttons are pressable for.</summary>
     /// <remarks>
     /// It is the last plan's answer and nothing more: false says the plan found nothing to move, and says
-    /// nothing about whether a plan could be made at all — that is <see cref="Why"/>, which is stated where
+    /// nothing about whether a plan could be made at all, that is <see cref="Why"/>, which is stated where
     /// the command or its answer could not be read.
     /// </remarks>
     public bool Ready { get; private set; }
@@ -70,7 +70,7 @@ internal sealed class SyncWatcher
     /// <summary>Whether a reading of the work itself says there is something to send or bring down.</summary>
     /// <remarks>
     /// It is the other hand of <see cref="Ready"/>: the plan is the command line's answer about everything a
-    /// run may move — including a local entry the Vault does not name — while a reading of the work names only
+    /// run may move, including a local entry the Vault does not name, while a reading of the work names only
     /// where the Layout's versions stand. A reading that says one side is ahead of, behind, or apart from the
     /// other is work whatever a plan could or could not say about it, so the buttons are not left unpressable
     /// while the table beside them says there is something to carry.
@@ -80,7 +80,7 @@ internal sealed class SyncWatcher
     /// <summary>Whether a sync may be begun at all.</summary>
     /// <remarks>
     /// A plan that could not be made is not a plan that found nothing: the command may still have work to
-    /// carry, and a button that refused to ask it would hide the only thing the reader can be told — why the
+    /// carry, and a button that refused to ask it would hide the only thing the reader can be told, why the
     /// plan was not made. So an answer that is not known is drawn pressable and says its reason on hover;
     /// only a run's going, or both a plan and a reading that found nothing, leaves the buttons unpressable.
     /// </remarks>
@@ -312,7 +312,7 @@ internal sealed class SyncWatcher
         Changed?.Invoke(this, EventArgs.Empty);
 
         // The run's card is opened before the work is handed off, so that the panel has a card to draw for it the
-        // moment the run is said to be going — see the hub for why the runs are gathered there rather than here.
+        // moment the run is said to be going, see the hub for why the runs are gathered there rather than here.
         var run = _hub.Begin(TitleKey);
 
         _ = Task.Run(() =>

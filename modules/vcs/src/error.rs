@@ -45,7 +45,7 @@ impl core::error::Error for ParseVCSIndexObjectError {}
 
 /// What a Creator or a Message could not be made from
 ///
-/// A Creator and a Message are short text — a name and a message — and what makes one is checked
+/// A Creator and a Message are short text, a name and a message, and what makes one is checked
 /// once, when it is made: it may be at most 256 bytes, and it must be UTF-8.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextError {
@@ -89,8 +89,8 @@ impl From<TextError> for VCSIndexError {
 
 /// What the index's own store failed with.
 ///
-/// This is the error the store answers the two storage traits with — [`StorageBackend`] and,
-/// through it, [`TransferableBackend`] — and what a read or a write is worked out from. It is
+/// This is the error the store answers the two storage traits with, [`StorageBackend`] and,
+/// through it, [`TransferableBackend`], and what a read or a write is worked out from. It is
 /// told in keys rather than in the text a caller reads, which is what the reading and writing
 /// errors are for: this one is the store's own account of what happened.
 ///

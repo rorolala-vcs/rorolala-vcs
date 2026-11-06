@@ -1,7 +1,7 @@
 //! Identity primitives: what a key is, and what it proves.
 //!
 //! A key here is an **identity**, not a session secret. The public half is what a peer is
-//! known by — and, since a name is only a local label, the [fingerprint](PublicKey::fingerprint)
+//! known by, and, since a name is only a local label, the [fingerprint](PublicKey::fingerprint)
 //! is what says whether two identities are the same. The private half proves the
 //! correspondence by [signing](SigningKey::sign) a transcript that both sides derive the
 //! same way.
@@ -71,7 +71,7 @@ impl KeyAlgorithm {
 /// What an identity is keyed by: a hash of its algorithm and its public key, and nothing
 /// else.
 ///
-/// A name is a local label — two peers can each call the same key something different —
+/// A name is a local label, two peers can each call the same key something different,
 /// so the fingerprint is what a member table is looked up by, and what makes "I am Alice"
 /// mean the key that is Alice rather than a word a peer chose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

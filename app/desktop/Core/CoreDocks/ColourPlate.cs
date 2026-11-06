@@ -13,7 +13,7 @@ namespace RorolalaDesktop.CoreDocks;
 /// <remarks>
 /// Six digits are not how everyone thinks of a colour, so the panel does not offer only those: the plate is
 /// the space itself, with a ring standing where in it the colour is. What it says while the pointer is down is
-/// the colour it is over — so that what is being chosen is seen before it is kept — and what it says when the
+/// the colour it is over, so that what is being chosen is seen before it is kept, and what it says when the
 /// pointer comes up is that the choice is settled, which is when it is worth writing down.
 /// <para>
 /// Nothing here is a colour of the look's: a hue is every colour there is, a saturation is white to that hue,

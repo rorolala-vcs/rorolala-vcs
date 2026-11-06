@@ -91,7 +91,7 @@ internal static class DockTree
     /// Every group of the tree, in the order the tree states them.
     /// </summary>
     /// <remarks>
-    /// Document order — first before second, depth first — rather than any order the runtime made the groups
+    /// Document order (first before second, depth first) rather than any order the runtime made the groups
     /// in. It is what a snapshot writes in, and what a comparison of two trees is about: the same
     /// arrangement read back is the same groups in the same places.
     /// </remarks>
@@ -136,7 +136,7 @@ internal static class DockTree
     /// <remarks>
     /// A <see cref="DockSide.Center"/> target inserts among the target group's tabs; an edge makes a new
     /// group holding only this dock and splits the target group beside itself with it. A target that names no
-    /// group — the tree is empty, or the group was pruned while the pointer was in flight — falls back to the
+    /// group (the tree is empty, or the group was pruned while the pointer was in flight) falls back to the
     /// active group, and then to the first one, rather than losing the dock.
     /// </remarks>
     /// <param name="layout">The layout to change.</param>
@@ -291,7 +291,7 @@ internal static class DockTree
     /// </summary>
     /// <remarks>
     /// A file is a file: it may have been edited by hand, written by an older build, or left half-written by
-    /// a machine that stopped. What can be repaired is repaired rather than refused — a dock of a name or an
+    /// a machine that stopped. What can be repaired is repaired rather than refused, a dock of a name or an
     /// ordinal that is not a dock is dropped, so is a second copy of one, an empty group is collapsed, a ratio
     /// is brought in from the ends, a chain is flattened, an id that is not one is renamed, and the active tab
     /// and group are pointed at what is there. What cannot be repaired never reaches here: it failed to read.
@@ -578,9 +578,9 @@ internal static class DockTree
     /// Rewrites a split whose first child is a split of the same axis so that the chain nests to the right.
     /// </summary>
     /// <remarks>
-    /// The rewrite is <c>split(p, split(q, A, B), C)</c> into <c>split(p·q, A, split(s, B, C))</c>, with
-    /// <c>s = p(1−q)/(1−p·q)</c>: A and B keep the shares they had, and the seam between them moves into the
-    /// right-hand split. A chain of three columns cannot be one split — a split has two children — so nesting
+    /// The rewrite is <c>split(p, split(q, A, B), C)</c> into <c>split(p*q, A, split(s, B, C))</c>, with
+    /// <c>s = p(1 - q)/(1 - p * q)</c>: A and B keep the shares they had, and the seam between them moves into the
+    /// right-hand split. A chain of three columns cannot be one split, a split has two children, so nesting
     /// is the only form there is; what the rewrite buys is one canonical form, so a tree built by hand and a
     /// tree built by dragging come out the same shape.
     /// </remarks>

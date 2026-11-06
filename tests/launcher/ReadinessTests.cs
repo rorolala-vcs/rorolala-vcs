@@ -6,8 +6,8 @@ namespace RolalalaLauncher.IntegrationTests;
 /// What a start of the Desktop program is taken to have come to.
 /// </summary>
 /// <remarks>
-/// The two programs agree on two things by hand — the line the window writes and the exit code a start that
-/// found the program already going ends with — so what is checked here is that reading of them, which is the
+/// The two programs agree on two things by hand, the line the window writes and the exit code a start that
+/// found the program already going ends with, so what is checked here is that reading of them, which is the
 /// whole of the wait this program does that can be practiced without starting a program.
 /// </remarks>
 public sealed class ReadinessTests

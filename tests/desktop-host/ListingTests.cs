@@ -11,7 +11,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The plugin's own location is made over a scratch directory and the listing it staged is read: what a rule
 /// does to what is on screen is not visible from outside the plugin, and it is the one thing a wrong default
 /// gets wrong. A fresh run has every rule in force and the switch that shows what is hidden on, so the first
-/// thing a user sees is the whole directory with the hidden entries faded — a rule that hides with no switch
+/// thing a user sees is the whole directory with the hidden entries faded, a rule that hides with no switch
 /// to bring the entries back is what would leave them with an empty browser.
 /// </remarks>
 public sealed class ListingTests
@@ -26,7 +26,7 @@ public sealed class ListingTests
     /// <summary>
     /// A directory with a plain file, a dot-file and a dot-directory: every entry is listed to begin with,
     /// the switch takes the hidden ones out and puts them back, and a rule that is turned off stops leaving
-    /// anything out — unless it is the last one, whose empty choice hides nothing at all.
+    /// anything out, unless it is the last one, whose empty choice hides nothing at all.
     /// </summary>
     [Fact]
     public void AListingShowsEverythingUntilTheSwitchIsTurnedOff()
@@ -63,13 +63,13 @@ public sealed class ListingTests
             }
         };
 
-        // A fresh run: every rule is in force and the switch is on, so every entry is listed — the hidden
+        // A fresh run: every rule is in force and the switch is on, so every entry is listed, the hidden
         // ones faded rather than left out. This is the answer that must not be an empty listing.
         Assert.True(shared.ShowHidden);
         Assert.Equal([".hidden-dir", ".hidden.txt", "kept.txt"], Names(browser));
 
-        // Turning a rule off is a staging with the entries exactly as they were — the dot-file is shown
-        // either way while the switch is on — and the list is a new one all the same, which is what a dock
+        // Turning a rule off is a staging with the entries exactly as they were, the dot-file is shown
+        // either way while the switch is on, and the list is a new one all the same, which is what a dock
         // holds to tell a listing staged again from one it has not drawn again.
         var staged = browser.Shown;
         var names = Names(browser);

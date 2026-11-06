@@ -2,9 +2,9 @@
 //!
 //! The channel is up, but neither side yet knows what the other wants. The Workspace
 //! speaks first: it names the action it wants run, the account it acts as, and which Vault
-//! under the daemon it is reached with — one daemon may serve several, so the Vault is not
+//! under the daemon it is reached with, one daemon may serve several, so the Vault is not
 //! the daemon's to assume. The Vault answers with two bytes that echo the action's id,
-//! which is what tells the Workspace the Vault read the same request — and only then do
+//! which is what tells the Workspace the Vault read the same request, and only then do
 //! both sides start the action itself.
 //!
 //! The request is framed the way a synced value is: a four-byte length, then the encoding.
@@ -42,7 +42,7 @@ pub(crate) struct Request {
 /// The two bytes that confirm an action id: its low two, in big-endian order.
 ///
 /// An id travels in four bytes; what comes back is the half that fits, which is enough to
-/// tell one action from another for as long as ids stay small — which the registry, laid
+/// tell one action from another for as long as ids stay small, which the registry, laid
 /// out by id, already assumes.
 #[must_use]
 pub(crate) const fn confirmation(id: u32) -> [u8; 2] {

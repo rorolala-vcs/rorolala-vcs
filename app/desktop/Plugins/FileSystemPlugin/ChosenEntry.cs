@@ -7,12 +7,12 @@ namespace FileSystemPlugin;
 /// </summary>
 /// <remarks>
 /// The listing is this plugin's, and a view of one file's history is another plugin's: what crosses
-/// is the one answer both can agree on — which file the most recent click was on. A click on a
+/// is the one answer both can agree on, which file the most recent click was on. A click on a
 /// directory says nothing here, since a version chain hangs from a file and not from a place, and
 /// the file clicked before it stays the answer.
 /// <para>
-/// It is a catalogue rather than a member of a control because there are several listings — every
-/// directory dock, and every one taken out of step — and the most recent click between them is one
+/// It is a catalogue rather than a member of a control because there are several listings, every
+/// directory dock, and every one taken out of step, and the most recent click between them is one
 /// answer for the program.
 /// </para>
 /// </remarks>
@@ -73,8 +73,8 @@ public static class ChosenEntry
 /// The directory the user last clicked in a directory listing.
 /// </summary>
 /// <remarks>
-/// A click on a file says nothing here: what this is for is a choice of a place, which some actions —
-/// recording every untracked entry under it, say — act on as a whole. It is kept apart from
+/// A click on a file says nothing here: what this is for is a choice of a place, which some actions,
+/// recording every untracked entry under it, say, act on as a whole. It is kept apart from
 /// <see cref="ChosenEntry"/> and <see cref="ChosenFiles"/> because neither of those can name a
 /// directory: a version chain hangs from a file, and a multi-file choice leaves places out.
 /// </remarks>
@@ -130,8 +130,8 @@ public static class ChosenDirectory
 /// </summary>
 /// <remarks>
 /// <see cref="ChosenEntry"/> is the one file clicked most recently and is what a view of one
-/// file's history follows; a choice may be several files, and what is done with the choice — the
-/// track a Version Graph offers, say — is about all of them at once. The two are catalogues apart
+/// file's history follows; a choice may be several files, and what is done with the choice, the
+/// track a Version Graph offers, say, is about all of them at once. The two are catalogues apart
 /// because they answer different questions: the last click stays the file the graph is of even
 /// when the choice beside it is empty, and the choice is nothing when the user clicks the space
 /// around the entries without changing what was clicked.
@@ -189,7 +189,7 @@ public static class ChosenFiles
         var place = chosen.FirstOrDefault(entry => entry.Kind == EntryKind.Directory);
 
         // A directory chosen is what the click was about, and it is kept beside the file choice
-        // because it answers a different question — an action over a place rather than over one
+        // because it answers a different question, an action over a place rather than over one
         // file. A choice of files takes the place's meaning away.
         if (place is not null)
         {

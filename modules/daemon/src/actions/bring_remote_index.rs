@@ -1,9 +1,9 @@
 //! `bring-remote-index`: the chain under a version this index does not hold, brought here whole.
 //!
 //! A retrack may move the pointer to a version the Vault holds and this side never fetched. What is
-//! needed for such a version to be readable here is the chain it is the top of — the version, the
+//! needed for such a version to be readable here is the chain it is the top of, the version, the
 //! variant that produced it, the words they are named by, and so on down to a version this index
-//! already holds — and reading it one object per exchange is a connection and a handshake per object.
+//! already holds, and reading it one object per exchange is a connection and a handshake per object.
 //!
 //! It is one exchange instead: the Workspace sends the hash it wants the chain of and everything it
 //! already holds, the Vault walks down until it meets something the Workspace has, and what it found
@@ -20,7 +20,7 @@
 //! What became of it, as JSON: the chain was brought and written, the Vault holds an object under that
 //! hash that is not a version, the object under a hash the chain needs is not the variant the version
 //! above it names, or the Vault holds nothing under a hash the chain needs. It crosses as text for the
-//! reason an ownership outcome does — see `request-ownership`.
+//! reason an ownership outcome does, see `request-ownership`.
 
 use std::collections::BTreeSet;
 use std::str::FromStr as _;
@@ -58,8 +58,8 @@ impl Action for ActionBringRemoteIndex {
     ) -> Result<Self::Output, ActionError> {
         let local = local_index(&ctx)?;
 
-        // The chain is one ask and one answer — what the Workspace holds, and the pack the Vault
-        // walks back — and both are exchanges a reader waits on: the bar moves once as the ask goes
+        // The chain is one ask and one answer, what the Workspace holds, and the pack the Vault
+        // walks back, and both are exchanges a reader waits on: the bar moves once as the ask goes
         // and once as the pack arrives, so a retrack of a version never fetched is not a capsule
         // that sits at nothing until it is over.
         let mut task = ctx.progress().begin("", Some(2));
@@ -147,7 +147,7 @@ pub enum Chain {
 /// What the Vault found while walking a chain.
 ///
 /// It crosses back whole rather than object by object: the walk is one exchange, so what it came to is
-/// one value — the objects it brings or the hash it stopped at.
+/// one value, the objects it brings or the hash it stopped at.
 #[derive(Debug, Serialize, Deserialize)]
 enum Found {
     /// The objects the chain is made of, as the canonical encoding of each.
@@ -199,7 +199,7 @@ impl Found {
 /// Walks the chain under `start` down to a version `held` already names.
 ///
 /// What is gathered is what a version a reader is moved to is drawn with: the version, the variant
-/// that produced it, the words the variant names, and the same for each version below it — as far down
+/// that produced it, the words the variant names, and the same for each version below it, as far down
 /// as the run has to go, which is the first version this side already holds.
 ///
 /// # Errors
@@ -426,7 +426,7 @@ mod tests {
         let index = index("chain-held");
         let chain = chain(&index);
 
-        // The side holds the root version, so what is brought is everything above it and no more —
+        // The side holds the root version, so what is brought is everything above it and no more,
         // and a version above it is drawn with its variant and the words it names.
         let held: BTreeSet<Blake3Hash> = BTreeSet::from([chain.root]);
         let found = run(chain_under(&index, Key::new(chain.top), &held)).unwrap();

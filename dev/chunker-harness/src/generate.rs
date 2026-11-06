@@ -4,7 +4,7 @@
 //! ways this harness judges a cut: a large first version, an equal-length rewrite in the middle, a
 //! body kept while the header moves, the same bytes written again, and one body shared by two paths.
 //!
-//! It exists so that the yardstick can be shown to work — and, in the test beside [`measure`], so
+//! It exists so that the yardstick can be shown to work, and, in the test beside [`measure`], so
 //! that the model of the store can be shown to agree with the store byte for byte. It is **not** a
 //! corpus to judge a format policy by: a policy's corpus is captured from the tool that writes that
 //! format, because a synthetic Maya file would only measure this generator's opinion of Maya.
@@ -67,7 +67,7 @@ pub fn synthetic(root: &Path, name: &str, scale: Scale) -> Result<(), Box<dyn st
     //
     // The regions are deliberately not aligned to any power of two. An edit that began and ended on
     // a 64 KiB boundary would cost a positional cut exactly one chunk, which is a property of the
-    // arithmetic rather than of the strategy — the corpus must not hand one kind of cut a win.
+    // arithmetic rather than of the strategy, the corpus must not hand one kind of cut a win.
     let original = body("edit", unit);
     let mut first = original.clone();
     let mut second = original.clone();
@@ -108,7 +108,7 @@ pub fn synthetic(root: &Path, name: &str, scale: Scale) -> Result<(), Box<dyn st
     Ok(())
 }
 
-/// Writes `versions` into `directory` as `000.<container>`, `001.<container>`, …
+/// Writes `versions` into `directory` as `000.<container>`, `001.<container>`, and so on
 fn write(directory: &Path, versions: &[Vec<u8>]) -> std::io::Result<()> {
     fs::create_dir_all(directory)?;
 

@@ -3,7 +3,7 @@
 What a long run says about itself while it runs.
 
 A crate of one half: the **saying**. A [`Progress`] is a handle a work hands down to what it
-starts, and a [`Task`] is one thing being done — begun, moved, and ended. What is said goes
+starts, and a [`Task`] is one thing being done, begun, moved, and ended. What is said goes
 down a [`Transmitter`] and out of the crate entirely, so nothing here knows or decides how a
 terminal is drawn on: a reader may draw bars, write the signals out as records, or ignore
 them, and a run that wants no progress at all says nothing with [`Progress::silent`].
@@ -28,6 +28,6 @@ assert!(receiver.try_recv().is_ok());
 ```
 
 A signal names the work it is about by an id and, where it is part of another task, the id of
-that one — so a task that works through many things is one line the whole way, with the name
+that one, so a task that works through many things is one line the whole way, with the name
 of the thing being worked on changing as it goes. Saying is never allowed to hold up the work:
 a reader that has fallen behind is left behind.

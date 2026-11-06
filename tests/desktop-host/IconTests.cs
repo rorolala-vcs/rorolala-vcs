@@ -13,8 +13,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The pictures a plugin draws for its own furniture: that what the manifest names reached the assembly.
 /// </summary>
 /// <remarks>
-/// What is checked is the link between the three things a picture passes through — the manifest, the run that
-/// draws it, and the assembly the plugin is built as — because a break in any of them is a window that opens
+/// What is checked is the link between the three things a picture passes through, the manifest, the run that
+/// draws it, and the assembly the plugin is built as, because a break in any of them is a window that opens
 /// with a hole in its toolbar and nothing said. What is not checked is the drawing: that needs a renderer, and
 /// it is <c>cargo dev icons</c> that runs one.
 /// </remarks>
@@ -41,7 +41,7 @@ public sealed class IconTests
     /// <summary>Every picture a menu item is meant to wear is one this plugin draws.</summary>
     /// <remarks>
     /// What a menu item wears is looked up by the words it is named with, so a picture named there that the
-    /// manifest does not hold is an item that draws its icon and finds nothing — which is a menu where one
+    /// manifest does not hold is an item that draws its icon and finds nothing, which is a menu where one
     /// entry is a word where its neighbours are a mark and a word. The lookup itself cannot be exercised here,
     /// because what it makes is a picture and a picture needs a screen to be made on.
     /// </remarks>
@@ -57,8 +57,8 @@ public sealed class IconTests
     /// <summary>Badges stand on an arc about the icon's top right corner, and never past a quarter turn.</summary>
     /// <remarks>
     /// The arrangement is checked as geometry rather than as a drawing, because a drawing needs a renderer
-    /// and this suite has none: what is here is the whole of what places a badge — the ring it stands on, the
-    /// direction a lone one stands in, the order the numbers run, and the arc's own limit — and a badge drawn
+    /// and this suite has none: what is here is the whole of what places a badge, the ring it stands on, the
+    /// direction a lone one stands in, the order the numbers run, and the arc's own limit, and a badge drawn
     /// anywhere else is a badge off the arc it was asked to stand on.
     /// </remarks>
     [Fact]
@@ -67,7 +67,7 @@ public sealed class IconTests
         const int size = 64;
 
         // The ring is centred on the icon's top right quarter, and it stands between that quarter's inscribed
-        // and circumscribed circles — inside the mean of the two, which is what keeps a badge from reaching
+        // and circumscribed circles, inside the mean of the two, which is what keeps a badge from reaching
         // past the corner by more than the mark it is.
         var quarter = new Point(size * 3 / 4, size / 4);
         var radius = BadgeArc.Radius(size);
@@ -130,8 +130,8 @@ public sealed class IconTests
 
     /// <summary>A badge a contribution coloured itself is painted in that colour, ring and picture alike.</summary>
     /// <remarks>
-    /// A contribution that has a palette of its own — the states a work's files are in, which the plugin owns
-    /// and the user chooses — names a colour rather than one of the look's roles, and what it names is the whole
+    /// A contribution that has a palette of its own, the states a work's files are in, which the plugin owns
+    /// and the user chooses, names a colour rather than one of the look's roles, and what it names is the whole
     /// of the badge: the picture is a mask over the colour and the ring is the ground's edge, so a picture drawn
     /// in the role and a ring drawn in the contribution's colour is one mark in two colours, which reads as two
     /// marks laid over each other rather than as a state.
@@ -139,7 +139,7 @@ public sealed class IconTests
     /// It is drawn inside a window, with the look's own resources over it, and that is the point rather than
     /// ceremony: a resource a control carries is asked for when the control is attached to a tree and is
     /// answered last, so a badge that named a role beside the contribution's colour came out in the look's grey
-    /// the moment it reached the screen — a fault that no windowless test can see.
+    /// the moment it reached the screen, a fault that no windowless test can see.
     /// </para>
     /// </remarks>
     [Fact]
@@ -177,7 +177,7 @@ public sealed class IconTests
         var both = Assert.IsType<StackPanel>(window.Content);
 
         // The ground the badge is worn on is the mark's own rather than the look's, and the picture and the ring
-        // drawn on it are the contribution's colour — the look's resources being in reach and all.
+        // drawn on it are the contribution's colour, the look's resources being in reach and all.
         var (ball, glyph) = Worn(Assert.IsType<Grid>(both.Children[0]));
 
         Assert.Equal(Colors.Lime, Assert.IsType<SolidColorBrush>(ball.BorderBrush).Color);
@@ -229,7 +229,7 @@ public sealed class IconTests
 
         // What is arranged is snapped to whole pixels, because that is what the toolkit does with everything
         // it lays out: a badge lands within a pixel of the ring rather than on it to the last digit. What is
-        // checked is that it lands there at all — a panel that arranged its children the way a panel
+        // checked is that it lands there at all, a panel that arranged its children the way a panel
         // ordinarily does would put all three in one place, which is many pixels from two of them.
         const double slack = 1.0;
 

@@ -38,7 +38,7 @@ internal sealed record ReportBlock(ReportKind Kind, IReadOnlyList<string> Lines)
 /// A command's own report, read the way the command wrote it.
 /// </summary>
 /// <remarks>
-/// The command is asked for the form a program reads — see <c>--theme-choice</c> in the command line — and what
+/// The command is asked for the form a program reads, see <c>--theme-choice</c> in the command line, and what
 /// comes back is read here: the level of a reported line is a word at the head of it, and what it says follows
 /// in the same colour language and markdown the terminal is drawn from. Nothing is rewritten on the way: what
 /// the command said is what the window says.
@@ -60,7 +60,7 @@ internal static class ReportLines
     /// <remarks>
     /// Lines of one kind that follow each other are one thing said: the command marks every line of a message
     /// with the level, since a line is all it knows at the time, and it is here that they are known to belong
-    /// together. A line of another kind between two of a kind is what parts them, blank lines included — a blank
+    /// together. A line of another kind between two of a kind is what parts them, blank lines included, a blank
     /// line is not nothing, it is the space somebody put between two paragraphs.
     /// </remarks>
     /// <param name="said">What the command wrote, both streams together.</param>
@@ -106,8 +106,8 @@ internal static class ReportLines
     /// <remarks>
     /// A part of what the terminal renderer does, for the marks a command's report is written with: a colour or a
     /// link, bold or italic, a code span or a fenced block, and a backslash that takes the meaning away from the
-    /// character after it. What a report is not read for — a heading, a quotation, a rule, a table, a named alert
-    /// — is drawn as it was written, which is what a reader sees rather than nothing.
+    /// character after it. What a report is not read for, a heading, a quotation, a rule, a table, a named alert
+    ///, is drawn as it was written, which is what a reader sees rather than nothing.
     /// <para>
     /// A code span is drawn as the words inside it on a pill rather than with its backticks on screen: the window
     /// already says what the marks mean by drawing it, and a pair of backticks beside a surface of its own would

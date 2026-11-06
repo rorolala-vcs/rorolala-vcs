@@ -26,8 +26,8 @@ internal sealed record ConnectionReport(ConnectionState State, string Reason)
 /// Checks that a Vault can be reached, by speaking the handshake to it.
 /// </summary>
 /// <remarks>
-/// The exchange between the work and its Vault is spoken from inside a Workspace — that is what says which
-/// Vault is reached and whose key an account comes from — and a creation is checked before there is a
+/// The exchange between the work and its Vault is spoken from inside a Workspace, that is what says which
+/// Vault is reached and whose key an account comes from, and a creation is checked before there is a
 /// Workspace to speak from. So the check is made from one of this program's own: a Workspace with no work
 /// in it, made once and kept, which exists to be a place to stand for the length of a handshake.
 /// <para>
@@ -59,7 +59,7 @@ internal sealed class Connection(RolaRunner rola, Accounts accounts, string prob
         if (spoke.Current is null)
         {
             // Said before anything is reached: a handshake is made as someone, and a machine with no
-            // account has nobody to make it as — which is a different thing to say than "it did not work".
+            // account has nobody to make it as, which is a different thing to say than "it did not work".
             return new ConnectionReport(ConnectionState.NoAccount, string.Empty);
         }
 

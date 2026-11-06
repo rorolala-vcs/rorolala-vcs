@@ -83,12 +83,12 @@ impl Config {
 /// Who may act as an administrator of a Vault.
 ///
 /// It is written under `[auth]` in the Vault's configuration. A member named here may move any
-/// file in the Vault's Layout — putting a new file where it belongs, or marking one deprecated —
+/// file in the Vault's Layout (putting a new file where it belongs, or marking one deprecated)
 /// where a member not named here may move only what it holds.
 ///
 /// The first administrator is not named by a command: a Vault with no administrator has nobody
 /// who may name one, so the file is edited by hand once, and the commands work from there. That
-/// is also why the last administrator cannot be removed by a command — a Vault with none has no
+/// is also why the last administrator cannot be removed by a command, a Vault with none has no
 /// way back but the same hand edit.
 #[derive(Debug, Default, Clone, Configure, Serialize, Deserialize)]
 #[serde(default)]
@@ -138,7 +138,7 @@ impl AuthConfig {
 ///
 /// A name is written with letters, digits, the symbols `( ) , . _ -`, and the space between
 /// its words; anything else in what was written is dropped. A new Vault is named after the
-/// directory it is made in, converted to that shape — see [`vault_name_of`] — and says it is
+/// directory it is made in, converted to that shape, see [`vault_name_of`], and says it is
 /// new until someone says otherwise.
 ///
 /// The name goes through [`standardized`] on the way in and on the way out, so a name is the
@@ -214,7 +214,7 @@ impl MetaConfig {
 ///
 /// A directory names the Vault made in it, converted to the shape a name is written in:
 /// `my-vault` becomes `My Vault`, and `vault2` becomes `Vault2`. A directory whose own name is
-/// nothing a name can be made of — all punctuation, or none of it a letter or digit — leaves
+/// nothing a name can be made of (all punctuation, or none of it a letter or digit) leaves
 /// nothing to convert, and the Vault falls back to the `Unnamed Vault` a Vault with no name of
 /// its own has.
 #[must_use]
@@ -233,7 +233,7 @@ pub fn vault_name_of(dir: &Path) -> String {
 ///
 /// What a name is made of is letters, digits, the symbols `( ) , . _ -`, and the space between
 /// its words. Everything else in what was written is dropped, runs of space are collapsed to
-/// one, and the space around it is taken off — so `  My  (Rola)  Vault!!  ` and
+/// one, and the space around it is taken off, so `  My  (Rola)  Vault!!  ` and
 /// `My (Rola) Vault` are one name, and neither a reader nor a writer of the file has to repair
 /// it.
 #[must_use]
@@ -289,7 +289,7 @@ where
 
 /// Where a daemon looks for the keys of the members it admits, when its configuration says
 /// nothing: the Vault's own keys, the ones its root keeps, the user's own store, and the keys
-/// `ROLA_HOME` names — nearest first.
+/// `ROLA_HOME` names, nearest first.
 const DEFAULT_KEY_DISCOVERY: &[KeyDiscovery] = &[
     KeyDiscovery::Vault,
     KeyDiscovery::RootVault,
@@ -301,8 +301,8 @@ const DEFAULT_KEY_DISCOVERY: &[KeyDiscovery] = &[
 ///
 /// The default is deliberately larger than the `--concurrency` a run asks for on its own: a daemon
 /// serves several clients, and a cap is what keeps one caller from spending the whole machine. What
-/// it bounds in memory is a few megabytes a session — a stream holds about a record being read and
-/// one being written, and the side sending a direction holds the packet it is building — so sixteen
+/// it bounds in memory is a few megabytes a session, a stream holds about a record being read and
+/// one being written, and the side sending a direction holds the packet it is building, so sixteen
 /// at once is some tens of megabytes rather than some.
 pub const VAULT_DEFAULT_MAX_CONCURRENCY: u16 = 16;
 

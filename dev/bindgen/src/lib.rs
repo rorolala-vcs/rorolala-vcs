@@ -3,7 +3,7 @@
 //! A generic generator cannot render `#[lazyffi]` output: the generated
 //! signatures are written in terms of associated types (`<T as InputType>::From`),
 //! which it has no way to resolve. This generator knows the `#[lazyffi]` rules
-//! instead, so it works straight from the sources — no macro expansion, and no
+//! instead, so it works straight from the sources, no macro expansion, and no
 //! nightly toolchain.
 //!
 //! The rules themselves come from `rorolala-utils-lazyffi-core`, the same crate
@@ -21,7 +21,7 @@
 //! `#[lazyffi]` attribute **already stripped**, so the macro can only read `export`
 //! from the attribute's own argument tokens; this generator reads the sources, so
 //! it sees `#[lazyffi(export = ...)]` in place and parses it out of the item's
-//! attributes. There is no shared shape to factor out — only the *defaults* are,
+//! attributes. There is no shared shape to factor out, only the *defaults* are,
 //! and those do live in `rorolala-utils-lazyffi-core`.
 //!
 //! What must not drift is therefore the naming rule (`ffi_<snake>` /
@@ -42,8 +42,8 @@
 //! Only two parts of an item's Rust docs reach the header, so C readers get a
 //! summary instead of a Rust manual: the first line, and the section under a
 //! `# FFI` heading (the heading itself is dropped, and the section ends at the
-//! next heading). Generated machinery — the tag enum, the payload union, the
-//! companion structs — carries no comment of its own; what belongs to a variant
+//! next heading). Generated machinery, the tag enum, the payload union, the
+//! companion structs, carries no comment of its own; what belongs to a variant
 //! or a field is documented on the member that mirrors it, since that is where a
 //! C reader looks.
 //!
@@ -56,7 +56,7 @@
 //!
 //! What cannot be known is what a pointer points at. A name this header defines is used as
 //! the header declares it; a name it does not is taken at its word and declared as an opaque
-//! struct, leaving what the type means to the source — and documented by the alias beside the
+//! struct, leaving what the type means to the source, and documented by the alias beside the
 //! signature that named it, so the header can say what the name is for. A name **held by
 //! value** is the exception, since C has to be able to lay it out: one the header does not
 //! define, or one that is opaque, or one carrying parameters of its own, is reported rather
@@ -72,7 +72,7 @@
 //! when a sibling crate's `Config` sits equally near. That is still deliberately
 //! weaker than name resolution: an aliased import does not resolve, and what cannot
 //! be decided is reported as an error rather than guessed at. Two definitions that
-//! would claim the same C name — the usual symptom of such a clash — are rejected
+//! would claim the same C name, the usual symptom of such a clash, are rejected
 //! outright.
 //!
 //! A qualified path is matched against real crate names, read from the manifest above
@@ -130,7 +130,7 @@ const INCLUDE_GUARD: &str = "ROROLALA_FFI_H";
 /// C spelling of a string in a position Rust only reads.
 ///
 /// A parameter is always such a position: the callee copies out of the C string and
-/// the caller keeps its buffer, so the string is spelled `const` — which is also what
+/// the caller keeps its buffer, so the string is spelled `const`, which is also what
 /// lets a C++ caller pass a string literal.
 const READ_ONLY_STRING: &str = "const char *";
 
@@ -169,7 +169,7 @@ fn preamble() -> String {
 
 /// The result type every header declares, whether or not anything uses it.
 ///
-/// A `Result<T, E>` return cannot cross as a repr generated for it — one C layout
+/// A `Result<T, E>` return cannot cross as a repr generated for it, one C layout
 /// cannot name two payload types, and a type per `(T, E)` pair would collide the moment
 /// two exports returned the same one. So there is one result type for the whole
 /// surface, declared once here the way the string release is, and the layout below is
@@ -314,7 +314,7 @@ pub fn generate(config: &Config<'_>) -> Result<PathBuf, Error> {
 
     // Written only when it differs, for the reason the C# binding is: a generated file whose bytes
     // are already there is left alone, so a build that changed nothing leaves the timestamps of the
-    // tree where they were — and a timestamp that moved is what makes the next build recompile what
+    // tree where they were, and a timestamp that moved is what makes the next build recompile what
     // reads it.
     if !fs::read(&path).is_ok_and(|written| written == header.as_bytes()) {
         fs::write(&path, header).map_err(|source| Error::Io {
@@ -361,7 +361,7 @@ struct Exports {
     ///
     /// A raw export is free to point at a name this header knows nothing about, and the alias
     /// beside it is where that name is explained; see [`render_raw`]. The alias's own type is
-    /// never read — this generator does not expand one, and nothing else here has a use for it.
+    /// never read, this generator does not expand one, and nothing else here has a use for it.
     aliases: Vec<(ItemType, Origin)>,
 }
 
@@ -559,7 +559,7 @@ struct Reprs {
     /// A list rather than one entry per name, because a name is not a declaration: two
     /// modules can each declare a `Config` and export it under a name of its own. Which
     /// one is meant is decided by where the name is written and by the crate a qualified
-    /// path names — see [`Reprs::nearest`] — and which one a declaration is rendered as
+    /// path names, see [`Reprs::nearest`], and which one a declaration is rendered as
     /// is decided by [`Reprs::declared_in`].
     claims: BTreeMap<String, Vec<Claim>>,
     /// The crate ident of each file, memoised so a manifest is read at most once.
@@ -572,7 +572,7 @@ struct Reprs {
     /// The release each type was given, keyed by its repr-C name.
     ///
     /// Kept for the same reason the repr is: the release mirrors the name C knows the
-    /// type by, which is its `export` where it has one — see [`release_name`] — and a
+    /// type by, which is its `export` where it has one, see [`release_name`], and a
     /// signature that hands one out has to name the release that matches.
     releases: BTreeMap<String, String>,
     /// Repr-C names of the types that are opaque to C.
@@ -633,7 +633,7 @@ impl Reprs {
     ///
     /// A qualified path is narrower: `rorolala_vault::Config` can only mean a `Config`
     /// declared in `rorolala-vault`, which is what tells two equally near declarations
-    /// apart. A built-in is still a candidate — it belongs to no crate — but everything
+    /// apart. A built-in is still a candidate, it belongs to no crate, but everything
     /// else the qualifier rules out is dropped.
     fn nearest(&self, name: &str, file: &Path, krate: Option<&str>) -> Option<String> {
         let mut ranked: Vec<(usize, &str)> = self
@@ -690,7 +690,7 @@ fn shared_depth(one: &Path, other: &Path) -> usize {
 /// The crate ident a source file belongs to.
 ///
 /// Found by walking up to the nearest `Cargo.toml` and normalising its package name the
-/// way `rustc` does — `rorolala-vault` becomes `rorolala_vault` — so that
+/// way `rustc` does, `rorolala-vault` becomes `rorolala_vault`, so that
 /// `modules/vault/src/config.rs` belongs to the crate a signature spells
 /// `rorolala_vault::Config` with. A file with no manifest above it belongs to no crate:
 /// a built-in, or a test's bare `src/`.
@@ -800,18 +800,18 @@ fn reprs(exports: &Exports) -> Reprs {
 /// sibling crate, which is the normal shape of this workspace.
 ///
 /// What the segment does not say is *which* declaration is meant when two of them
-/// share a name — `vault` and `workspace` each declare a `CreationError`. That is
+/// share a name, `vault` and `workspace` each declare a `CreationError`. That is
 /// decided by where the name is written, the nearest declaration winning; see
 /// [`Reprs::nearest`].
 ///
 /// Two consequences worth knowing:
 ///
 /// - an alias (`use rorolala_auth::Token as Seal;`) does not resolve, because no
-///   `Seal` is defined here — it is reported, not skipped;
+///   `Seal` is defined here, it is reported, not skipped;
 /// - two declarations that are equally near a name resolve to neither, and the
 ///   reference is reported rather than guessed at.
 ///
-/// `Self` has no entry in any table either — it only appears inside an `impl`,
+/// `Self` has no entry in any table either, it only appears inside an `impl`,
 /// where it stands for the target type; [`Resolution::self_repr`] carries that.
 fn repr_of(ty: &Type, resolution: &Resolution<'_>) -> Option<String> {
     if let Type::Path(path) = ty
@@ -926,7 +926,7 @@ fn scalar_c_type(rust: &str) -> Option<&'static str> {
 /// They are `std::ffi`'s, and they exist in a signature only because that signature is a C
 /// one: C's `char` is a byte and Rust's `char` is not, so a byte string a raw export takes is
 /// written `*const c_char` and comes out `const char *`, while Rust's own `char` stays the
-/// scalar it is — see [`scalar_c_type`].
+/// scalar it is, see [`scalar_c_type`].
 fn c_only_type(rust: &str) -> Option<&'static str> {
     Some(match rust {
         "c_char" => "char",
@@ -977,7 +977,7 @@ fn field_docs(variant: &syn::Variant, field_name: &str) -> Vec<String> {
 }
 
 /// The name/type pairs of a variant's payload, sharing the macro's naming: tuple
-/// fields are `_0`, `_1`, … and braced fields keep their names.
+/// fields are `_0`, `_1`, and so on, and braced fields keep their names.
 fn payload_fields(fields: &Fields) -> Vec<(String, &Type)> {
     match fields {
         Fields::Unit => Vec::new(),
@@ -1134,7 +1134,7 @@ fn is_doc_heading(line: &str) -> bool {
 
 /// One line of documentation with its marker removed.
 ///
-/// Exactly one leading space goes away — the one a `///` comment is written with.
+/// Exactly one leading space goes away, the one a `///` comment is written with.
 /// Anything beyond that is deliberate indentation and is kept.
 fn doc_line_text(line: &str) -> String {
     let line = line.trim_end();
@@ -1205,8 +1205,8 @@ fn report_missing(
 
 /// Whether a parameter is a string Rust only reads, whatever shape it arrives in.
 ///
-/// That is a `String` or `PathBuf` by value — the callee copies out of the C string
-/// and the caller keeps its buffer — and a borrowed `&str` or `&Path`, which is the
+/// That is a `String` or `PathBuf` by value, the callee copies out of the C string
+/// and the caller keeps its buffer, and a borrowed `&str` or `&Path`, which is the
 /// same thing with the copy made explicit.
 fn read_only_string(ty: &Type, resolution: &Resolution<'_>) -> bool {
     let repr = match ty {
@@ -1466,7 +1466,7 @@ fn render_payload(
 /// Nothing else catches this: two `#[lazyffi]` types with the same name in
 /// different crates both map to the same repr, and two different `export =`
 /// overrides can collide. C would reject the result, but only once a user tried to
-/// compile it — so the build stops here instead.
+/// compile it, so the build stops here instead.
 fn duplicates(definitions: &[Definition]) -> Vec<Diagnostic> {
     let mut seen: BTreeMap<&str, &Definition> = BTreeMap::new();
     let mut diagnostics = Vec::new();
@@ -1739,7 +1739,7 @@ fn render_impl(
     }
 
     // The `impl`'s own `export` is a prefix rather than a name: every method begins with it,
-    // and a method that names itself is left alone — the same rule the macro applies.
+    // and a method that names itself is left alone, the same rule the macro applies.
     let prefix = export_override(&item.attrs).unwrap_or_else(|| DEFAULT_METHOD_PREFIX.to_owned());
 
     let Some(self_name) = simple_type_name(&item.self_ty) else {
@@ -1817,7 +1817,7 @@ fn render_impl(
 /// The names the preamble declares, before anything the sources hold.
 ///
 /// They are the two the surface needs whether or not a source mentions them: the string
-/// release, and the one result type. A raw export naming one of them has nothing to add — see
+/// release, and the one result type. A raw export naming one of them has nothing to add, see
 /// [`render_raw`].
 fn preamble_names() -> BTreeSet<String> {
     BTreeSet::from([
@@ -1831,7 +1831,7 @@ fn preamble_names() -> BTreeSet<String> {
 ///
 /// A name a raw export points at is explained where that name is declared, which is the file
 /// the signature is written in: aliases are read for their words and for nothing else, so this
-/// is a lookup and not a resolution — one file's aliases, keyed by name. An alias somewhere
+/// is a lookup and not a resolution, one file's aliases, keyed by name. An alias somewhere
 /// else is missed on purpose, and a name with no alias anywhere is declared bare; see
 /// [`render_raw`].
 fn alias_docs<'a>(
@@ -1849,7 +1849,7 @@ fn alias_docs<'a>(
 ///
 /// These are not `#[lazyffi]` wrappers: their Rust name is the symbol and their Rust signature
 /// is the C one, so there is nothing to convert and no repr to look up. What is left is
-/// spelling the signature in C and making sure every type it names is declared — the header's
+/// spelling the signature in C and making sure every type it names is declared, the header's
 /// own types as the header declares them, and anything else as an opaque struct left for the
 /// source to mean something by.
 ///
@@ -1869,7 +1869,7 @@ fn render_raw(
     }
 
     // The words each file's aliases carry, so that a name a signature points at can be
-    // documented by the alias beside it — see `alias_docs`.
+    // documented by the alias beside it, see `alias_docs`.
     let mut aliases_by_file: BTreeMap<&Path, BTreeMap<String, Vec<String>>> = BTreeMap::new();
     for (item, origin) in aliases {
         aliases_by_file
@@ -1926,7 +1926,7 @@ fn render_raw(
 
         // Whatever the signature referred to and the header does not define becomes a
         // declaration of its own here. One already collected keeps its words; one that is new
-        // takes the alias's — and two signatures naming one type are documented once, by
+        // takes the alias's, and two signatures naming one type are documented once, by
         // whichever of them has an alias to hand.
         for name in named {
             let held = forward.entry(name.clone()).or_default();
@@ -1954,7 +1954,7 @@ fn render_raw(
 
     for (name, docs) in &forward {
         // A typedef rather than a bare `struct`, since that is the name the signatures are
-        // written with — and the shape every other opaque type in this header has.
+        // written with, and the shape every other opaque type in this header has.
         out.push_str(&render_doc(docs, ""));
         let _ = writeln!(out, "typedef struct {name} {name};\n");
     }
@@ -2009,7 +2009,7 @@ fn render_raw_signature(
 
         // A parameter that cannot be spelled is reported and left out rather than ending the
         // pass: one run then names every parameter it could not read. What comes out is not a
-        // declaration anything takes, and it is not written — a diagnostic is enough to stop
+        // declaration anything takes, and it is not written, a diagnostic is enough to stop
         // the header being produced at all.
         match raw_c_type(&pat_type.ty, reporting, reprs, named, true, &name) {
             Some(spelling) => params.push(format!("{spelling} {}", pat_ident.ident)),
@@ -2283,8 +2283,8 @@ fn option_return(sig: &Signature) -> Option<&Type> {
 /// The doc lines a fallible return contributes: what each side of the tag holds, and
 /// which release frees it.
 ///
-/// They go into the function's own doc block because the payload is a `void *` — one C
-/// layout cannot name two types — so the header is the only place that can tell a
+/// They go into the function's own doc block because the payload is a `void *`, one C
+/// layout cannot name two types, so the header is the only place that can tell a
 /// caller what to cast it to.
 fn result_doc_lines(
     sig: &Signature,
@@ -2311,7 +2311,7 @@ fn result_doc_lines(
 /// value when there is one.
 ///
 /// A nullable return is read as a pointer whose null is the whole of `None`, which is
-/// not something the Rust source can say — so, like a result payload, it is written down
+/// not something the Rust source can say, so, like a result payload, it is written down
 /// where the caller reads the signature.
 fn option_doc_lines(sig: &Signature, resolution: &Resolution<'_>) -> Vec<String> {
     let Some(inner) = option_return(sig) else {
@@ -2410,7 +2410,7 @@ fn nullable_release(inner: &Type, resolution: &Resolution<'_>) -> Option<(String
 /// standing for `None`.
 ///
 /// A type that cannot be absent is reported rather than given a pointer it does not
-/// have, since the alternative — boxing it for the return alone — would spell the same
+/// have, since the alternative, boxing it for the return alone, would spell the same
 /// Rust type two ways depending on how it is returned.
 fn nullable_return_c_type(
     inner: &Type,
@@ -2502,7 +2502,7 @@ fn render_signature(
                     }
 
                     // A pointer to the repr itself, `const` when Rust only reads
-                    // through it — which is also what lets a C++ caller pass what it
+                    // through it, which is also what lets a C++ caller pass what it
                     // holds as `const`.
                     let constness = if reference.mutability.is_none() {
                         "const "
@@ -2612,7 +2612,7 @@ mod tests {
     ///
     /// The generator's input is a directory, so a test has to build one. What it
     /// asserts on is the header, which is the artifact the build script hands out and
-    /// the only thing a C caller ever sees — the Rust side is not what can be wrong.
+    /// the only thing a C caller ever sees, the Rust side is not what can be wrong.
     fn header_for(source: &str) -> String {
         header_for_each(&[("lib.rs", source)])
     }
@@ -2634,7 +2634,7 @@ mod tests {
     /// Renders the header for a source tree described by relative paths.
     ///
     /// Unlike [`header_for_each`], each entry carries its own path, so a test can lay
-    /// out whole crates — a `Cargo.toml` and a `src/` apiece — which is what a
+    /// out whole crates, a `Cargo.toml` and a `src/` apiece, which is what a
     /// qualified path is resolved against.
     fn header_for_tree(entries: &[(&str, &str)]) -> String {
         let root = write_tree(entries);
@@ -2727,7 +2727,7 @@ mod tests {
     #[test]
     fn a_qualified_path_picks_the_crate_it_names() {
         // `vault` and `workspace` each declare a `Config`, and both sit equally far from
-        // the crate that references one — so the bare name is ambiguous and only the
+        // the crate that references one, so the bare name is ambiguous and only the
         // qualifier can say which is meant.
         let header = header_for_tree(&[
             (
@@ -2826,7 +2826,7 @@ pub const fn total(counter: &Counter) -> i64 { 0 }
     fn a_shared_reference_is_a_const_pointer() {
         let header = header_for(REFERENCES);
 
-        // Rust only reads through these, so C is told so — which is also what lets a
+        // Rust only reads through these, so C is told so, which is also what lets a
         // C++ caller hand over something it holds as `const`.
         assert!(
             header.contains("int64_t ffi_total(const FFICounter * counter);"),
@@ -2937,7 +2937,7 @@ pub const fn total(value: i32) -> i32 { value }
         let header = header_for(FALLIBLE);
 
         // The payload is a `void *`, so the header is the only place a caller can
-        // learn what to cast it to — and with what to release it.
+        // learn what to cast it to, and with what to release it.
         assert!(
             header.contains("- `Ok`: `char *`, owned; release it with `free_string`"),
             "{header}"
@@ -2954,7 +2954,7 @@ pub const fn total(value: i32) -> i32 { value }
     }
 
     /// A vault, a lock on one C has no type for, and the three calls that are the whole of
-    /// what it does with one — which is the shape a raw export exists for.
+    /// what it does with one, which is the shape a raw export exists for.
     const RAW: &str = r#"
 /// A vault.
 #[lazyffi(export = RolaVault)]
@@ -3013,7 +3013,7 @@ pub unsafe extern "C" fn RolaVault_drop_locking_guard(guard: *mut RolaVaultLocki
         assert!(declared < pointed, "{header}");
 
         // The vault is a type the header already declares, so it is not declared a second
-        // time — and the one it declares is the one the signature points at.
+        // time, and the one it declares is the one the signature points at.
         assert_eq!(
             header
                 .matches("typedef struct RolaVault RolaVault;")
@@ -3106,7 +3106,7 @@ pub unsafe extern "C" fn take(held: Vault, count: &usize) { todo!() }
     #[test]
     fn a_raw_export_holding_an_opaque_type_by_value_is_reported() {
         // An exported `struct` is an incomplete type in C, so a pointer to one is the only
-        // way it can appear — including here.
+        // way it can appear, including here.
         let error = error_for(
             r#"
 /// A vault.
@@ -3125,7 +3125,7 @@ pub unsafe extern "C" fn take(vault: RolaVault) { todo!() }
     #[test]
     fn an_opaque_name_is_documented_by_the_alias_beside_it() {
         // The name a raw signature points at is explained where that name is declared, and
-        // only the two parts of the alias's docs a C reader wants travel — the same rule every
+        // only the two parts of the alias's docs a C reader wants travel, the same rule every
         // other export follows.
         let documented = header_for(
             r#"

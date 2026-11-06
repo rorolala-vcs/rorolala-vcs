@@ -26,7 +26,7 @@ namespace RorolalaVCSPlugin;
 /// <para>
 /// The choice may be several files. What the graph hides then, this row is what that choice is acted
 /// on through: every chosen file whose content changed is recorded in one run, and the entries that
-/// need no recording — the unchanged, the lost, the ones waiting to be merged — are left out rather
+/// need no recording (the unchanged, the lost, the ones waiting to be merged) are left out rather
 /// than sent to a command that would skip them anyway.
 /// </para>
 /// <para>
@@ -381,7 +381,7 @@ internal sealed class VersionGraphTrackBar : Border
                 }
 
                 // What was written is now a version, so the field starts again empty and every view of
-                // the work — the graph among them — is told that the files may have changed.
+                // the work, the graph among them, is told that the files may have changed.
                 _message.Text = string.Empty;
                 _files.Touch();
                 Paint();
@@ -440,7 +440,7 @@ internal sealed class VersionGraphTrackBar : Border
                 var state = status.StateOf(entry.Path);
 
                 // A change either account may record, a file the Layout does not name yet, and a file
-                // waiting for a variant to be joined into it — recording the last one is what ends the
+                // waiting for a variant to be joined into it, recording the last one is what ends the
                 // merge. The merge itself is not a change: only a file the tree changed while it waits
                 // has something to record, and the command line would record nothing for one that did
                 // not. A change against a base upstream moved past is recordable too, and that is the
@@ -488,8 +488,8 @@ internal sealed class VersionGraphTrackBar : Border
     /// reading names is relative to the Workspace, so the place is made absolute here before the
     /// entries are sifted by it.
     /// <para>
-    /// What is considered is the reading's own lists — the untracked, the modified, the wrong-based,
-    /// and the files a merge is waiting for — rather than every file under the directory: a directory
+    /// What is considered is the reading's own lists, the untracked, the modified, the wrong-based,
+    /// and the files a merge is waiting for, rather than every file under the directory: a directory
     /// of a thousand files with one edit is one track, and walking the tree to find the edit is work
     /// the reading has already done. What each candidate then means is the same answer a listing's
     /// row is acted on by, so a directory and a file choice cannot disagree about what may be recorded.
@@ -646,12 +646,12 @@ internal sealed class VersionGraphTrackBar : Border
 
         if (_shifted)
         {
-            tip = $"{tip} — {RolaI18N.Get("rorolala_vcs.version_graph.track_force_hint")}";
+            tip = $"{tip}, {RolaI18N.Get("rorolala_vcs.version_graph.track_force_hint")}";
         }
 
         if (targets.Any(target => target.Diverged))
         {
-            tip = $"{tip} — {RolaI18N.Get("rorolala_vcs.version_graph.track_diverged")}";
+            tip = $"{tip}, {RolaI18N.Get("rorolala_vcs.version_graph.track_diverged")}";
         }
 
         ToolTip.SetTip(_track, tip);

@@ -30,13 +30,13 @@ namespace RorolalaDesktop;
 /// A window of the program: the row its menu and its own buttons share, and the dock area below it.
 /// </summary>
 /// <remarks>
-/// Both are filled from what was registered — the kernel's own entries and the plugins' — and a
+/// Both are filled from what was registered, the kernel's own entries and the plugins', and a
 /// plugin registers during initialization, which is before this window is made, so the menu is built
 /// once here and the area is kept in step by the dock manager.
 /// <para>
 /// There is one window class for the whole program, because the main window and a window a dock was moved
 /// into are the same window: the same row, the same frame, the same buttons. What tells them apart is the
-/// dock the window is for, and nothing else — a window with no such dock is the main one, and shows
+/// dock the window is for, and nothing else, a window with no such dock is the main one, and shows
 /// everything; a window that is for a dock belongs to that dock's plugin, and shows that plugin's own
 /// menus. What follows from that is the dock area, which draws the docks that are in this window whichever
 /// window it is.
@@ -44,7 +44,7 @@ namespace RorolalaDesktop;
 /// <para>
 /// No title bar of the desktop's is drawn: the row above the dock area is the window's whole frame for
 /// as much of it as is seen, and what the toolkit takes from it is said in the markup. What is left
-/// here is the part of it the host owns — the buttons' words and their pictures — which is why the
+/// here is the part of it the host owns, the buttons' words and their pictures, which is why the
 /// window is the one that says them.
 /// </para>
 /// </remarks>
@@ -89,7 +89,7 @@ public partial class MainWindow : Window
     /// <remarks>
     /// A window that is for a dock belongs to that dock's plugin, and its row is that plugin's own: what a
     /// window of one dock is for is that dock, and a menu about a tree has nothing to say in a window that
-    /// holds a browser. The kernel's own menus are shown either way — the Window menu is where the docks and
+    /// holds a browser. The kernel's own menus are shown either way, the Window menu is where the docks and
     /// the way back to the main window are, in every window there is.
     /// </remarks>
     private readonly PluginId? _scope;
@@ -116,8 +116,8 @@ public partial class MainWindow : Window
     /// This window's frame, which is what draws its own buttons.
     /// </summary>
     /// <remarks>
-    /// Made by the window rather than named as a resource, because every other window of the program — a
-    /// plugin's question, a notice — is a card with a title bar of the desktop's. It is held because the
+    /// Made by the window rather than named as a resource, because every other window of the program, a
+    /// plugin's question, a notice, is a card with a title bar of the desktop's. It is held because the
     /// buttons it builds are the ones this window has to say the words and the pictures of.
     /// </remarks>
     private readonly RorolalaTheme.Frame _frame;
@@ -184,8 +184,8 @@ public partial class MainWindow : Window
         Icon = services.ProgramIcon;
 
         // The window is named where every other word is, so changing what it is called is a change
-        // to a translation rather than to this file. A window built with no translations to read —
-        // which is what the designer builds — keeps the name the markup gives it.
+        // to a translation rather than to this file. A window built with no translations to read,
+        // which is what the designer builds, keeps the name the markup gives it.
         if (RolaI18N.TranslationDirectory is not null)
         {
             // The main window is the program; a window that is one dock is that dock, and says which: what a
@@ -208,13 +208,13 @@ public partial class MainWindow : Window
 
         // There is no title bar of the desktop's left to move the window, so the row this program draws
         // in its place does it: a press on the row that no menu and no button claimed is a press on the
-        // window, and the second click of a double click is what maximizes or restores it — the two
+        // window, and the second click of a double click is what maximizes or restores it, the two
         // gestures a title bar of the desktop's would have answered by itself. A press on a menu's own row
         // is the menu's and is left to it (see `MoveOrMaximize`).
         //
         // One press, one listener, and it is the row's own surface rather than the menu bar over it: the
         // menu is inside the row, so a press on the one passes through the other, and two listeners would
-        // answer the same double click twice — maximizing the window and restoring it again. Taken on the
+        // answer the same double click twice, maximizing the window and restoring it again. Taken on the
         // way down so that the window is asked to move before the menu reads the press, which is the order
         // the paragraph above is about; the press is left unhandled, so a menu still opens under it.
         //
@@ -227,8 +227,8 @@ public partial class MainWindow : Window
             RoutingStrategies.Tunnel
         );
 
-        // What each of the window's buttons says and what it is drawn as. The buttons are the frame's —
-        // see the look, which builds them out of the program's own pictures — and what is said here is the
+        // What each of the window's buttons says and what it is drawn as. The buttons are the frame's,
+        // see the look, which builds them out of the program's own pictures, and what is said here is the
         // part of them the host owns: the words a reader hears them by, which are translated, and the
         // picture that says what the one that maximizes will do next.
         //
@@ -243,8 +243,8 @@ public partial class MainWindow : Window
         // The button that maximizes says what it will do next rather than what it did, so what it carries
         // follows the state the window is in: a press leaves the window maximized, and the same button then
         // has to offer the way back. The state is watched rather than the click answered to, because a
-        // window can be maximized without this button at all — a double click on the row, the window
-        // manager's own key — and a button still offering to maximize an already maximized window lies.
+        // window can be maximized without this button at all, a double click on the row, the window
+        // manager's own key, and a button still offering to maximize an already maximized window lies.
         PropertyChanged += (_, change) =>
         {
             if (change.Property == WindowStateProperty)
@@ -294,7 +294,7 @@ public partial class MainWindow : Window
         }
 
         // A dock can be closed, opened, or dragged to another region by hand as well as from the
-        // menu, so the checks are refreshed and the layout written whenever the docks change — a
+        // menu, so the checks are refreshed and the layout written whenever the docks change, a
         // dock moved by hand is remembered from then on, not only if the run ends tidily.
         _services.Docks.Changed += DocksChanged;
 
@@ -329,7 +329,7 @@ public partial class MainWindow : Window
         };
 
         // And a window that has gone stops being told about the docks: it has no regions to keep in step, and
-        // what is left of it needs no waking — a window that kept listening would be one the dock manager
+        // what is left of it needs no waking, a window that kept listening would be one the dock manager
         // holds for the rest of the run, and one that answered a change by rebuilding a row nobody can see.
         Closed += (_, _) =>
         {
@@ -374,7 +374,7 @@ public partial class MainWindow : Window
     /// </summary>
     /// <remarks>
     /// A window of one dock has no strip of tabs, so the name the dock's tab would have carried has nowhere
-    /// to be but the row the desktop's title bar would have drawn — and the row is the only part of the
+    /// to be but the row the desktop's title bar would have drawn, and the row is the only part of the
     /// window that is not the dock itself. The drag begins on that name rather than on the row, because the
     /// row is also what moves the window: what a press landed on is what tells the two gestures apart, and a
     /// row that did both would do one of them by accident.
@@ -424,7 +424,7 @@ public partial class MainWindow : Window
     /// manager's own move and dragging it out by arithmetic would lose the snap to a screen edge and the
     /// bounds a maximized window restores to. A press that landed on a menu, on one of the window's own
     /// buttons, or on the name of the dock this window holds is left alone rather than moved, because each
-    /// of the three is a part of the row that answers a press itself — a menu answers the release of one, a
+    /// of the three is a part of the row that answers a press itself, a menu answers the release of one, a
     /// button is the toolkit's, and the name begins a drag of the dock.
     /// <para>
     /// The press is left unhandled, because a menu still has to open under a press that landed on one of
@@ -443,7 +443,7 @@ public partial class MainWindow : Window
 
         // Nothing has taken a press on a menu's row yet, though, and nothing will before this: a menu
         // answers the *release*, and the handler that opens it is subscribed when the menu is attached to
-        // the visual tree — which is after this window was built, and so after this handler. Moving the
+        // the visual tree, which is after this window was built, and so after this handler. Moving the
         // window here takes that release away with it: the submenu opens under a window being moved, the
         // items in it cannot be clicked, and the second click of a double click maximizes the window. The
         // name of the dock this window holds is the same question asked of the other part of the row: it
@@ -469,8 +469,8 @@ public partial class MainWindow : Window
     /// The menu item a press landed in, or nothing when it landed elsewhere on the row.
     /// </summary>
     /// <remarks>
-    /// The same question the toolkit asks itself about a press it handles — its
-    /// <c>DefaultMenuInteractionHandler</c> walks the parents the same way — and answered the same way,
+    /// The same question the toolkit asks itself about a press it handles, its
+    /// <c>DefaultMenuInteractionHandler</c> walks the parents the same way, and answered the same way,
     /// because what the pointer hit is a part of the item's own template rather than the item.
     /// </remarks>
     /// <param name="pressed">What the press landed on.</param>
@@ -493,7 +493,7 @@ public partial class MainWindow : Window
     /// </summary>
     /// <remarks>
     /// The picture follows the window's state rather than the press, because a window can be maximized
-    /// without this button — a double click on the row, the window manager's own shortcut — and a button
+    /// without this button (a double click on the row, the window manager's own shortcut) and a button
     /// still offering to maximize a maximized window is a button that lies. The words follow it for the
     /// same reason: what a reader is told the button does has to be what pressing it does.
     /// </remarks>
@@ -560,12 +560,12 @@ public partial class MainWindow : Window
     /// </summary>
     /// <remarks>
     /// A window that is for a dock shows that dock's plugin's menus and the kernel's own, and a window that
-    /// is for nothing — the main one — shows every menu there is. What a window of one dock is for is that
+    /// is for nothing, the main one, shows every menu there is. What a window of one dock is for is that
     /// dock, so a menu about a tree has nothing to say in a window that holds a browser; what the program
     /// itself has to say, which is the Window menu and the way back to the main window, is said everywhere.
     /// <para>
     /// A question about what was registered and nothing about a window, so that what a window's row is made
-    /// of can be asked without making one — and answered here rather than in the loop below, so that the
+    /// of can be asked without making one, and answered here rather than in the loop below, so that the
     /// answer and what is drawn cannot come apart.
     /// </para>
     /// </remarks>
@@ -588,8 +588,8 @@ public partial class MainWindow : Window
     /// <remarks>
     /// The bar was built when the window was made, which is before the plugins have registered the menus they
     /// contribute; this puts theirs in once there are any. It is safe to call again because the bar is built
-    /// from the registries rather than added to — see <see cref="BuildMenu"/>, which takes the old one down
-    /// first — and it is what a main window made before the plugins were initialized needs.
+    /// from the registries rather than added to, see <see cref="BuildMenu"/>, which takes the old one down
+    /// first, and it is what a main window made before the plugins were initialized needs.
     /// </remarks>
     internal void RebuildMenu() => BuildMenu();
 
@@ -597,8 +597,8 @@ public partial class MainWindow : Window
     /// Ends the covering this window was made with, once the work behind it is done.
     /// </summary>
     /// <remarks>
-    /// A window made without one — a dock's own, or the main window opened again over a host that is already
-    /// assembled — has nothing to end. A second call is answered by the covering itself, which goes once.
+    /// A window made without one, a dock's own, or the main window opened again over a host that is already
+    /// assembled, has nothing to end. A second call is answered by the covering itself, which goes once.
     /// </remarks>
     internal void CompleteLoading()
     {
@@ -625,7 +625,7 @@ public partial class MainWindow : Window
     /// <remarks>
     /// A dock's picture is sixteen pixels tall, and a menu's line is shorter than that: it is centred on the line and
     /// the pixel it takes past it above and below is drawn into the item's own padding, so that an item with a picture
-    /// is the height of an item without one. What the height itself is, is the look's — a menu's word is not set at the
+    /// is the height of an item without one. What the height itself is, is the look's, a menu's word is not set at the
     /// size the program's words are, and this is that size's line.
     /// </remarks>
     private const double MenuLine = 14.0;
@@ -640,7 +640,7 @@ public partial class MainWindow : Window
     /// every other item of a menu has, since the picture is fitted to the line the word stands on.
     /// <para>
     /// The word is an <see cref="AccessText"/>, which is what the base theme draws a menu's own header as: it is set at
-    /// the size a menu's words are set at, and a plain text block would be set at the program's size instead — larger
+    /// the size a menu's words are set at, and a plain text block would be set at the program's size instead, larger
     /// than every other item of a menu, which is what makes a row of those look as if it belonged in another program.
     /// </para>
     /// </remarks>
@@ -741,7 +741,7 @@ public partial class MainWindow : Window
         }
 
         // A menu entry is a word and an action, so what a dock's header carries as a strip is represented here by
-        // the one command the strip offered in its place — the reading again, for this dock — and by nothing
+        // the one command the strip offered in its place (the reading again, for this dock) and by nothing
         // where it offered none: a window of one dock has no strip to put a control in.
         var commands = instance
             .View.Header.Select(item =>
@@ -898,7 +898,7 @@ public partial class MainWindow : Window
     private void ShowPopups()
     {
         // A window that is not shown has nowhere to put a card, so what is waiting is left for the window
-        // that is up — this one once it is opened.
+        // that is up, this one once it is opened.
         if (_notifications is null || !IsVisible)
         {
             return;

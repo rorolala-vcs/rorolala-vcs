@@ -20,7 +20,7 @@ pub const GLOBAL_ARG_WORKSPACE_DIR: PickerArg<'static, PathBuf> = arg![workspace
 /// Resource representing the Workspace's configuration
 ///
 /// The configuration is read from the file the Workspace keeps it in, and written back to
-/// the same file once the program is done with it — so a change made through
+/// the same file once the program is done with it, so a change made through
 /// [`config_mut`](Self::config_mut) is kept without the command having to say how.
 #[derive(Debug, Default, Clone)]
 pub enum ResWorkspaceConfig {
@@ -84,12 +84,12 @@ impl ResWorkspaceConfig {
 /// The Vault a run reaches for, as the Workspace beside it names it.
 ///
 /// A command that reaches for a Vault has two questions to answer: which one the caller
-/// named, and — when they named none — which one the Workspace reaches for. Both answers come
+/// named, and, when they named none, which one the Workspace reaches for. Both answers come
 /// out of the Workspace's configuration, so they are read together and handed over as an
 /// address, which saves the command from loading the configuration and working them out.
 ///
 /// The Vault is deliberately not a resource of its own here: reaching for one is dialling it,
-/// and a run inside a Workspace holds no Vault to hand — the one it reaches for is elsewhere.
+/// and a run inside a Workspace holds no Vault to hand, the one it reaches for is elsewhere.
 #[derive(Debug, Default, Clone)]
 pub struct ResCurrentRemoteVault {
     /// What the Workspace says, when this run is inside one at all.
@@ -311,7 +311,7 @@ fn address_of(name: &str, config: &WorkspaceConfig) -> Result<VaultAddress, Erro
 /// Whether `name` is one path component and nothing else.
 ///
 /// A Vault's name is kept under the Workspace's cache as a directory of its own, so a name that
-/// names a path — or climbs, or is a drive — would be kept outside it, and a name that is not one
+/// names a path (or climbs, or is a drive) would be kept outside it, and a name that is not one
 /// name is not one the Workspace could have meant as a Vault's own.
 fn is_plain_name(name: &str) -> bool {
     let mut components = Path::new(name).components();
@@ -479,7 +479,7 @@ fn read_current_remote_vault(dir: &Path) -> ResCurrentRemoteVault {
 /// This runs when the program is done with the resource, and only for a configuration that
 /// was actually read and then changed: a Workspace that was not found, one whose file would
 /// not parse, and one that was only read have nothing to write back. A drop has nowhere to
-/// report to, so a write that fails is lost with it — the file is left as it was read.
+/// report to, so a write that fails is lost with it, the file is left as it was read.
 fn save_workspace_config(resource: ResWorkspaceConfig) {
     if let ResWorkspaceConfig::Read {
         path,
@@ -496,7 +496,7 @@ mod tests {
     use super::is_plain_name;
 
     /// A Vault's name is kept as a directory under the Workspace's cache, so anything that names
-    /// more than one component — or climbs, or is a drive — is not one.
+    /// more than one component (or climbs, or is a drive) is not one.
     ///
     /// What is a separator is the platform's, so the spellings that are only separators somewhere
     /// are not listed here: on Windows `C:` is a prefix and `a\b` is two names, and on Unix both

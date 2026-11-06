@@ -2,19 +2,19 @@
 //!
 //! A Workspace, a Vault and the store either of them keeps are each a place one run changes and
 //! another must not, and what holds them apart is a file: a place is locked while its lock file
-//! is there, and unlocked while it is not. The file is the whole of the lock — nothing reads its
-//! contents, and nothing consults anything else — which is what lets a person see the lock, and
+//! is there, and unlocked while it is not. The file is the whole of the lock, nothing reads its
+//! contents, and nothing consults anything else, which is what lets a person see the lock, and
 //! take it away, without a tool.
 //!
 //! What a caller holds while it works is a [`LockingGuard`], and it is the guard holding the
 //! lock that says so: the lock is taken when the guard is made and given back when the guard
 //! goes, so a change that is made through a guard is made under the lock, and one made without
-//! one cannot be. What is held is the change itself — the store's packs, say — so a guard is
+//! one cannot be. What is held is the change itself (the store's packs, say) so a guard is
 //! also where a change that must not be made twice at once is put rather than on the place.
 //!
 //! A lock is not a lease: it is held until it is given back, and a run that dies holding one
 //! leaves the place locked. That is deliberate. The alternative is a lock that times out, which
-//! means a change that is still going is one another run may start over — and a change cut short
+//! means a change that is still going is one another run may start over, and a change cut short
 //! by another run is worse than a place a person has to unlock by hand.
 
 use std::fmt;
@@ -66,7 +66,7 @@ impl From<io::Error> for LockError {
 ///
 /// The lock is the lock file being there, so making one is what the guard does and taking it away
 /// is what dropping it does. Until then the place is locked, whether or not anything is done with
-/// it — a guard held for no reason still holds the lock.
+/// it, a guard held for no reason still holds the lock.
 ///
 /// It reads as the place it is held over, so what a caller has while it works is the place
 /// itself, and the lock is something it never has to name.
@@ -88,7 +88,7 @@ impl<T> LockingGuard<T> {
     /// # Errors
     ///
     /// Returns [`LockError::Locked`] when the place is locked already, and [`LockError::Io`] when
-    /// the lock file cannot be made — a directory that is not there, or one that is not writable.
+    /// the lock file cannot be made, a directory that is not there, or one that is not writable.
     pub async fn acquire(held: T, lock: impl Into<PathBuf>) -> Result<Self, LockError> {
         let lock = lock.into();
 
@@ -131,7 +131,7 @@ impl<T> Drop for LockingGuard<T> {
         // about it: a `drop` has nowhere to report to, and what a failure means is that the lock
         // file is still there while nothing holds it. That leaves the place locked until someone
         // takes the file away by hand, which is the same state a run that died holding the lock
-        // leaves behind — see the [module docs](self).
+        // leaves behind, see the [module docs](self).
         let _ = std::fs::remove_file(&self.lock);
     }
 }
@@ -139,8 +139,8 @@ impl<T> Drop for LockingGuard<T> {
 /// A place that can be locked, so that what changes it does so one run at a time.
 ///
 /// A place is locked for as long as a [`LockingGuard`] over it lives, and what is asked of an
-/// implementor is only where its lock file sits: everything else — how the lock is taken, what
-/// taking it fails with, what holding it looks like — is the same for every place, and is here.
+/// implementor is only where its lock file sits: everything else, how the lock is taken, what
+/// taking it fails with, what holding it looks like, is the same for every place, and is here.
 pub trait Lockable: Sized + Clone {
     /// The file whose presence says this place is locked.
     fn lock_path(&self) -> PathBuf;
@@ -159,7 +159,7 @@ pub trait Lockable: Sized + Clone {
     ///
     /// The place is copied out rather than borrowed, so that the guard is a value a caller may
     /// keep, hand over, or hold across an await without saying how long it lives. All three
-    /// places in Rorolala are cheap to copy — a directory, or a directory and two choices.
+    /// places in Rorolala are cheap to copy, a directory, or a directory and two choices.
     ///
     /// # Errors
     ///
@@ -222,7 +222,7 @@ mod tests {
         let guard = place.lock().await.unwrap();
 
         // The lock is the file, so a place a guard is held over is one anything else sees as
-        // locked — the guard holds it by being the one that has the file.
+        // locked, the guard holds it by being the one that has the file.
         assert!(place.is_locking());
         assert!(place.lock_path().is_file());
         assert_eq!(guard.lock_path(), place.lock_path().as_path());
@@ -251,7 +251,7 @@ mod tests {
 
         drop(held);
 
-        // A lock left behind by a run that did not finish is a lock the way any other is — what
+        // A lock left behind by a run that did not finish is a lock the way any other is, what
         // says a place is locked is the file, not who made it.
         fs::write(place.lock_path(), b"").unwrap();
 
@@ -266,7 +266,7 @@ mod tests {
         let (parent, _) = place("unwritable");
 
         // A lock is a file where the place says it is, so a place whose directory is gone cannot be
-        // locked — as a failure of its own rather than as a lock that is held.
+        // locked, as a failure of its own rather than as a lock that is held.
         let absent = Place {
             lock: parent.join("gone").join("lock"),
         };

@@ -46,7 +46,7 @@ track:
           --include-ignored        连被忽略规则管辖的文件一并记录
 
   # What a recording says it is doing while it does it, one line each: the three parts of the run in the
-  # order it goes through them. They are said both to a person watching — on a bar — and to a program
+  # order it goes through them. They are said both to a person watching, on a bar, and to a program
   # reading, so they are plain words rather than a bar's drawing.
   enumerating:
     en: Enumerating entries to track

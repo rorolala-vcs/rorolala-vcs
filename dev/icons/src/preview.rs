@@ -5,8 +5,8 @@
 //! right when it is what the pinned commit holds. It is written next to the clone rather than into it, so
 //! that the clone stays exactly what the pin holds and `git status` in it says nothing.
 //!
-//! Being generated, it can carry the set's own index — a page opened from disk may not fetch the set's
-//! `data.json` for itself — so it is also the one file of this tool that no one has to serve.
+//! Being generated, it can carry the set's own index, a page opened from disk may not fetch the set's
+//! `data.json` for itself, so it is also the one file of this tool that no one has to serve.
 
 use std::fs;
 use std::path::{Path, PathBuf};

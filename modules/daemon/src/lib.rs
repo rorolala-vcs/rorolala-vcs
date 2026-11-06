@@ -58,8 +58,8 @@ pub use preference::*;
 pub fn daemon_begin(registry: &Path, port: u16) -> DaemonExit {
     // UNWRAP: `daemon_begin` is the FFI-facing entry, and it answers with `DaemonExit` rather
     // than a `Result`: there is no exit code for a runtime that will not build, so the failure is
-    // one it has no shape to report. What `build()` reads is this process itself — its threads and
-    // its I/O driver — and a daemon without a runtime has nothing to serve.
+    // one it has no shape to report. What `build()` reads is this process itself, its threads and
+    // its I/O driver, and a daemon without a runtime has nothing to serve.
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -134,7 +134,7 @@ pub fn daemon_begin_with(registry: &Path, port: u16, max_concurrency: Option<u16
     // UNWRAP: `daemon_begin_with` is the entry `--concurrency` reaches, and it answers with
     // `DaemonExit` rather than a `Result`: there is no exit code for a runtime that will not
     // build, so the failure is one it has no shape to report. What `build()` reads is this process
-    // itself — its threads and its I/O driver — and a daemon without a runtime has nothing to serve.
+    // itself, its threads and its I/O driver, and a daemon without a runtime has nothing to serve.
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -145,7 +145,7 @@ pub fn daemon_begin_with(registry: &Path, port: u16, max_concurrency: Option<u16
 /// Serves one connection over this process's standard streams, and stops when it ends.
 ///
 /// It is what a daemon behind an SSH session is: the far side runs `rola-daemon serve <path>`,
-/// and the two standard streams of that process are the connection — no port is bound and
+/// and the two standard streams of that process are the connection, no port is bound and
 /// nothing is listened on. The process serves one connection and ends, so what a caller pays for
 /// is one session per action.
 ///
@@ -169,7 +169,7 @@ pub fn daemon_serve_vault(path: &Path, max_concurrency: Option<u16>) -> DaemonEx
     // UNWRAP: this is the entry a program's `serve` command reaches, and it answers with
     // `DaemonExit` rather than a `Result`: there is no exit code for a runtime that will not build,
     // so the failure is one it has no shape to report. What `build()` reads is this process itself
-    // — its threads and its I/O driver — and a session without a runtime has nothing to serve.
+    //, its threads and its I/O driver, and a session without a runtime has nothing to serve.
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()

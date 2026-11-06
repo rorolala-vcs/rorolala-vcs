@@ -8,8 +8,8 @@ namespace RorolalaDesktop.Docking;
 /// The docks: what is registered, what is open, and where in the main window's tree each one is.
 /// </summary>
 /// <remarks>
-/// Registration and the live instances are kept together because the two are read together — the
-/// <c>Window</c> menu is built from the registrations, and the area from the instances — and because the layout
+/// Registration and the live instances are kept together because the two are read together, the
+/// <c>Window</c> menu is built from the registrations, and the area from the instances, and because the layout
 /// is written from one and restored into the other.
 /// <para>
 /// The manager owns one <see cref="DockLayout"/>, which is the single truth about where a dock in the main
@@ -53,8 +53,8 @@ internal sealed class DockManager
     /// </summary>
     /// <remarks>
     /// The focus says where the user is now; this says where they were in a dock of a kind. A press inside a dock
-    /// moves the focus to it, so a plugin that acts from another dock — the Overview asking for a file to be shown
-    /// in a browser — needs the browser the user left behind rather than the one that asked. One entry per name,
+    /// moves the focus to it, so a plugin that acts from another dock, the Overview asking for a file to be shown
+    /// in a browser, needs the browser the user left behind rather than the one that asked. One entry per name,
     /// because that is the question a caller asks: a browser, a tree, a graph.
     /// </remarks>
     private readonly Dictionary<string, DockInstance> _recent = new(StringComparer.Ordinal);
@@ -163,7 +163,7 @@ internal sealed class DockManager
     /// <remarks>
     /// Told apart from <see cref="Changed"/> because the two are answered differently: a change to the docks is
     /// a change to the area, which is rebuilt, where what a dock remembers about itself and which tab or group
-    /// is active are nothing the area redraws from scratch — only the layout file has to hear about them.
+    /// is active are nothing the area redraws from scratch, only the layout file has to hear about them.
     /// </remarks>
     public event Action? StateChanged;
 
@@ -176,7 +176,7 @@ internal sealed class DockManager
     /// <remarks>
     /// Told apart from <see cref="Changed"/> and <see cref="StateChanged"/> because the three are answered by different
     /// work: a change to the docks rebuilds the area, and what a dock keeps about itself or which tab is chosen is
-    /// only written down — while a dock's name is a word in the tab, the window it is in and the top of its menu, and
+    /// only written down, while a dock's name is a word in the tab, the window it is in and the top of its menu, and
     /// what has to happen is those three being said again. A rebuild for it would be a window rearranged for a word.
     /// </remarks>
     public event Action<DockInstance>? Renamed;
@@ -251,7 +251,7 @@ internal sealed class DockManager
     /// <remarks>
     /// The side is applied to the active group: <see cref="DockSide.Center"/> puts the dock among that group's
     /// tabs and an edge splits it. A main window holding no docks has no active group, so the dock makes the
-    /// root group and the side says nothing — there is no group to be beside.
+    /// root group and the side says nothing, there is no group to be beside.
     /// </remarks>
     /// <param name="registration">The dock.</param>
     /// <param name="side">Where in the active group to put it.</param>
@@ -438,7 +438,7 @@ internal sealed class DockManager
     /// The registered name is what a dock that says nothing is called, which is every dock with one instance: a name
     /// that is a kind and not a place is the whole of what such a dock has to say. What a dock does say is kept here
     /// rather than asked of it each time something draws it, because a tab is drawn again for reasons the dock knows
-    /// nothing about — a window resize, a splitter, a group rearranged — and asking a view for its name on each of
+    /// nothing about (a window resize, a splitter, a group rearranged) and asking a view for its name on each of
     /// those would be asking it on every layout pass.
     /// </remarks>
     /// <param name="instance">The dock.</param>
@@ -545,8 +545,8 @@ internal sealed class DockManager
     /// </summary>
     /// <remarks>
     /// The view is let go of here, which is the moment a dock stops being a dock: it is held apart from every
-    /// window it was drawn in — a dock closed from a window of its own is one whose control has already left
-    /// the tree — and what it holds of the plugin's would otherwise outlive it.
+    /// window it was drawn in, a dock closed from a window of its own is one whose control has already left
+    /// the tree, and what it holds of the plugin's would otherwise outlive it.
     /// </remarks>
     /// <param name="instance">The dock that has stopped being one.</param>
     private void LetGo(DockInstance instance)
@@ -561,7 +561,7 @@ internal sealed class DockManager
     /// </summary>
     /// <remarks>
     /// It goes back to the group it came from, since that is what a window of its own was a leave of absence
-    /// from; if that group has been pruned in the meantime — its last dock may have been the one torn out —
+    /// from; if that group has been pruned in the meantime, its last dock may have been the one torn out,
     /// it goes into the active group, or makes the root group when there is none.
     /// <para>
     /// Nothing is raised: this is said by the one that is closing a window, in the middle of closing it, and a
@@ -612,8 +612,8 @@ internal sealed class DockManager
     /// <remarks>
     /// The chosen tab is written into the arrangement and the area rebuilt, because that is what the area settles a
     /// region from: saying it anywhere else would leave two answers to which tab is shown. A dock in a window of its
-    /// own has no tab to choose — the window that holds it is what is brought forward, and the caller is what knows
-    /// which of the host's windows that is — so what is done here is naming it.
+    /// own has no tab to choose, the window that holds it is what is brought forward, and the caller is what knows
+    /// which of the host's windows that is, so what is done here is naming it.
     /// </remarks>
     /// <param name="instance">The dock to bring forward.</param>
     public void Bring(DockInstance instance)
@@ -659,7 +659,7 @@ internal sealed class DockManager
     /// </summary>
     /// <remarks>
     /// A hidden dock is one that is still there, so showing it again is showing the same instance rather than
-    /// making another — which is what a dock with a single instance of its own is, and why asking for one of
+    /// making another, which is what a dock with a single instance of its own is, and why asking for one of
     /// those to be shown where it is already open gives back the one there is.
     /// </remarks>
     /// <param name="instance">The dock to show.</param>
@@ -746,8 +746,8 @@ internal sealed class DockManager
     /// </summary>
     /// <remarks>
     /// The group is remembered rather than forgotten, so that the window closing gives the dock back to where
-    /// it was taken from. It may not still be there when it returns — taking the last dock of a group out
-    /// prunes the group — and then the active group is the fallback (see <see cref="Rehome"/>).
+    /// it was taken from. It may not still be there when it returns, taking the last dock of a group out
+    /// prunes the group, and then the active group is the fallback (see <see cref="Rehome"/>).
     /// </remarks>
     /// <param name="instance">The dock to move.</param>
     /// <param name="key">The window it is moved into.</param>
@@ -800,8 +800,8 @@ internal sealed class DockManager
     /// Writes which tab of a group is being shown, and makes that group the active one.
     /// </summary>
     /// <remarks>
-    /// The selected tab is part of the arrangement that survives a restart — which view of a place a person
-    /// left open is the same kind of fact as where the place is — so it is written where the layout is, not
+    /// The selected tab is part of the arrangement that survives a restart, which view of a place a person
+    /// left open is the same kind of fact as where the place is, so it is written where the layout is, not
     /// only where the area draws it.
     /// </remarks>
     /// <param name="groupId">The group whose tab was chosen.</param>
@@ -894,7 +894,7 @@ internal sealed class DockManager
         // Nothing a dock keeps about itself is written down while this runs, and that is not a nicety: what
         // would be written is a snapshot of the docks that happen to be open yet, which is a layout with every
         // dock further down the file dropped from it. A dock that keeps something while it is being restored
-        // keeps it in memory, and the next write — of anything — takes it with it.
+        // keeps it in memory, and the next write, of anything, takes it with it.
         _restoring = true;
 
         try
@@ -947,7 +947,7 @@ internal sealed class DockManager
     /// <remarks>
     /// Walked in document order, groups as the tree states them and docks as their tabs are ordered, because
     /// that order is what comes back: a snapshot sorted by name lost both the tab order and the chosen tab. A
-    /// dock in a window of its own is left out — the layout states what the main window's tree is, and a dock
+    /// dock in a window of its own is left out, the layout states what the main window's tree is, and a dock
     /// that is somewhere else has no group in it. A hidden toggle is left out as well, since what a run starts
     /// with is the docks that were open.
     /// </remarks>
@@ -1102,8 +1102,8 @@ internal sealed class DockManager
     /// Passes the focus on when the dock that had it is gone, and lets go of it where nothing is left.
     /// </summary>
     /// <remarks>
-    /// The dock that takes its place is the one beside it first — the sibling tab of its group, or the dock its
-    /// group was split with — and otherwise any dock still open in the window it was in. The remembered dock of a
+    /// The dock that takes its place is the one beside it first, the sibling tab of its group, or the dock its
+    /// group was split with, and otherwise any dock still open in the window it was in. The remembered dock of a
     /// kind is moved the same way, because a caller asking for a browser is asking for one that is there rather than
     /// a name whose only instance has just been closed.
     /// </remarks>

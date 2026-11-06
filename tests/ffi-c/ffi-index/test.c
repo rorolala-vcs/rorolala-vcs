@@ -1,7 +1,7 @@
 /*
  * The index across the ABI: located, and the inverse index rebuilt over it.
  *
- * An index is reached the way a Vault and a Workspace are — an owned handle, or nothing — and the
+ * An index is reached the way a Vault and a Workspace are (an owned handle, or nothing) and the
  * inverse index of one is reached from a directory in the same way. What is worth meeting here is
  * the other shape of a fallible export: a rebuild answers with a report rather than with nothing,
  * so the payload is a struct the caller reads through accessors and frees itself.

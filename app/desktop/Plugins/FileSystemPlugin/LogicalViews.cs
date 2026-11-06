@@ -16,7 +16,7 @@ namespace FileSystemPlugin;
 /// The other side of <see cref="Listing{TItem}"/> from <see cref="Files"/>, and deliberately a small one: a view
 /// already knows the card, the row height, the icons and the zoom, so all a place has to say is what its entries
 /// are called, what picture they wear, where opening one goes, and what its menu offers. That is the whole of the
-/// logical-view point — a plugin's place read exactly as a directory is, without a second set of views to drift.
+/// logical-view point, a plugin's place read exactly as a directory is, without a second set of views to drift.
 /// <para>
 /// What a place adds over a directory is the provider's rather than this listing's: the columns beside the name, the
 /// way into a folder row, the drag an entry may be taken out as, and what a paste of one means. All of it is asked
@@ -41,7 +41,7 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <remarks>
     /// The box is put on the row of the listing built after the folder was made, because making one reads the place
     /// again: that listing's entries are the place's answer as the folder is in it, and this listing's are the answer
-    /// from before it. This is what says so — the listing that made the folder does not claim the name (see
+    /// from before it. This is what says so, the listing that made the folder does not claim the name (see
     /// <see cref="NewFolder"/>).
     /// </remarks>
     private bool _made;
@@ -78,8 +78,8 @@ internal sealed class Places : Listing<LogicalEntry>
 
     /// <summary>What the provider says about each entry, laid out beside the name or after the values.</summary>
     /// <remarks>
-    /// A column read with the name is a second name of the entry — where a layout names it, which uuid it is known by
-    /// — and one read after the values is a fact about it: who holds it. That is the provider's answer rather than
+    /// A column read with the name is a second name of the entry, where a layout names it, which uuid it is known by
+    ///, and one read after the values is a fact about it: who holds it. That is the provider's answer rather than
     /// this table's, so the cell is drawn from the entry each time a row is built.
     /// </remarks>
     public override IReadOnlyList<Column<LogicalEntry>> Columns => _columns;
@@ -129,7 +129,7 @@ internal sealed class Places : Listing<LogicalEntry>
             return null;
         }
 
-        // The name is the place's own — `@/new/Photos` names a folder `Photos` — and the row is one of the place's
+        // The name is the place's own, `@/new/Photos` names a folder `Photos`, and the row is one of the place's
         // entries, which is the same record instance the listing draws, so it is found rather than made again.
         return Named(_place.Entries, made[(made.LastIndexOf('/') + 1)..]);
     }
@@ -215,7 +215,7 @@ internal sealed class Places : Listing<LogicalEntry>
     /// </summary>
     /// <remarks>
     /// The entry itself, which is a record: what a provider gives back for one address is what says which entry
-    /// is which, and nothing here reads a name as one — two entries of a place may share a name, and a name is the
+    /// is which, and nothing here reads a name as one, two entries of a place may share a name, and a name is the
     /// provider's to repeat.
     /// </remarks>
     /// <param name="item">The entry.</param>
@@ -229,7 +229,7 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <remarks>
     /// Chosen the way the file browser chooses it, because the accident it avoids is the same one: typing over
     /// the whole of <c>hero.psd</c> takes the extension with it, and a place's rows are named exactly as a
-    /// directory's are. A row a place opens is a folder, and one it does not is a file — a place names no other
+    /// directory's are. A row a place opens is a folder, and one it does not is a file, a place names no other
     /// kind of thing.
     /// </remarks>
     /// <param name="item">The entry being renamed.</param>
@@ -568,8 +568,8 @@ internal sealed class Places : Listing<LogicalEntry>
 
     /// <summary>What one entry's picture is, at the size the view asked for.</summary>
     /// <remarks>
-    /// A maker the provider supplied is asked first, because a picture chosen from the entry's name — which is what an
-    /// extension is — cannot be looked up by a key. A key is then a picture the library holds, and neither is the folder
+    /// A maker the provider supplied is asked first, because a picture chosen from the entry's name, which is what an
+    /// extension is, cannot be looked up by a key. A key is then a picture the library holds, and neither is the folder
     /// the icon set in force draws: a row drawn as nothing is a row a reader has to read rather than see.
     /// </remarks>
     /// <param name="item">The entry to draw.</param>

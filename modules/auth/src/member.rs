@@ -8,10 +8,10 @@ use crate::{Error, PublicKey};
 
 /// A member, as identified by the public key it is known by.
 ///
-/// A member *is* its public key — a `.pub` file: the name is the file's stem, and the
+/// A member *is* its public key, a `.pub` file: the name is the file's stem, and the
 /// path is where that file was found. A public key is meant to be shared, so a member can
 /// be found in any scope a search covers, and nothing about a Vault's own record of a
-/// member is kept here — the Vault is asked for that. A `.pub` that names no member yet
+/// member is kept here, the Vault is asked for that. A `.pub` that names no member yet
 /// is therefore not an error, and a member can be found before one is made of it.
 ///
 /// A member is read-only: it says where its public key is, and changing that would change
@@ -58,7 +58,7 @@ impl Member {
     /// Where the member's public key file was found.
     ///
     /// The path is the one the search reached, so it says *which* directory a key came
-    /// from — which is how a caller tells a local member from a user or global one.
+    /// from, which is how a caller tells a local member from a user or global one.
     #[must_use]
     pub fn key_path(&self) -> PathBuf {
         self.key_path.clone()
@@ -109,7 +109,7 @@ impl Members {
     /// The member at `index`, counting from zero.
     ///
     /// The handle is a copy of the member the set holds, so releasing it releases only
-    /// that copy — the set is read again for the next one.
+    /// that copy, the set is read again for the next one.
     #[must_use]
     #[lazyffi(export = read_rola_members_by_index)]
     pub fn at(&self, index: usize) -> Option<Member> {

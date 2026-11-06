@@ -21,7 +21,7 @@ pub fn account_path() -> Option<PathBuf> {
 /// The account the work acts as, or nothing when none is named.
 ///
 /// What cannot be read is not a failure: a file that is missing, or one that cannot be read at
-/// all, is a run that acts as nobody — the same answer a file naming nothing gives, since a name
+/// all, is a run that acts as nobody, the same answer a file naming nothing gives, since a name
 /// of whitespace is no name.
 #[must_use]
 pub fn current_account() -> Option<String> {

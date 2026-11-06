@@ -3,12 +3,12 @@
 //! A Windows program's icon is a resource linked into it rather than something it draws, so the
 //! script beside the generated icon is compiled here and linked in by the directive the resource
 //! crate adds. Nowhere else is there such a resource or a compiler for one, so nowhere else is
-//! there anything to do — which is why this is decided by the host rather than by the target.
+//! there anything to do, which is why this is decided by the host rather than by the target.
 
 /// The resource script naming the program's icon, relative to the manifest directory.
 ///
 /// The script belongs beside the icon it names, which the workspace build script makes from the
-/// description beside it — `res/icons/rola-cli.png.toml` — and names it bare, because the resource
+/// description beside it, `res/icons/rola-cli.png.toml`, and names it bare, because the resource
 /// compiler reads a name in a script relative to the script rather than to where it was run from.
 #[cfg(windows)]
 const ICON_SCRIPT: &str = "../../../res/icons/rola-cli.rc";
@@ -26,8 +26,8 @@ fn main() {
         println!("cargo:rerun-if-changed={ICON_SCRIPT}");
         println!("cargo:rerun-if-changed={ICON}");
 
-        // UNWRAP: a build script that cannot link the icon has no artifact to carry on with — the
-        // program would be built without the icon its Windows resources are for — so aborting here
+        // UNWRAP: a build script that cannot link the icon has no artifact to carry on with, the
+        // program would be built without the icon its Windows resources are for, so aborting here
         // is the answer rather than letting the build finish and hand out an iconless executable.
         embed_resource::compile(ICON_SCRIPT, embed_resource::NONE)
             .manifest_optional()

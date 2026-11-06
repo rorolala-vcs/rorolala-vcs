@@ -33,7 +33,7 @@ internal sealed class DockFocus : IDockFocus
     /// <summary>Makes a dock the one being worked in, or says there is none.</summary>
     /// <remarks>
     /// Saying the same dock twice says nothing: what a reader of the record wants is where the user went, and a
-    /// rebuild of the same dock is not a move. Nothing here checks whether the dock is still open — the manager
+    /// rebuild of the same dock is not a move. Nothing here checks whether the dock is still open, the manager
     /// is what knows the docks, and it is the manager that passes a remaining one on when the focused one goes.
     /// </remarks>
     /// <param name="dock">The dock, or nothing for none.</param>

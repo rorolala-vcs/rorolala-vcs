@@ -15,8 +15,8 @@ namespace FileSystemPlugin;
 /// <remarks>
 /// This is where being a <em>file</em> is said, and it is the only place that says it. A view arrangement
 /// (<see cref="ListBrowser{TItem}"/>, <see cref="GridBrowser{TItem}"/>) knows how to lay entries out and nothing
-/// about what they are; what a plugin's place adds over a directory — a provider's picture, a provider's menu, a
-/// drop the provider answers — is its own listing on the other side of <see cref="Listing{TItem}"/>. The two meet
+/// about what they are; what a plugin's place adds over a directory, a provider's picture, a provider's menu, a
+/// drop the provider answers, is its own listing on the other side of <see cref="Listing{TItem}"/>. The two meet
 /// in the views, which is what makes a place as well read as a directory without being read twice.
 /// </remarks>
 internal sealed class Files : Listing<Entry>
@@ -110,7 +110,7 @@ internal sealed class Files : Listing<Entry>
     /// <summary>An entry's icon, with what every contributor marked worn around its top right corner.</summary>
     /// <remarks>
     /// Every provider that speaks for the directory is asked, rather than one of them: two badges say two
-    /// different things — who holds the entry and how far its version has come — and neither is the other's to
+    /// different things, who holds the entry and how far its version has come, and neither is the other's to
     /// replace. A picture is looked up rather than carried, and a key that names nothing draws nothing: a
     /// provider that contributed a mark but no picture is a listing without a badge on it, not a listing that
     /// fails to be drawn.
@@ -218,7 +218,7 @@ internal sealed class Files : Listing<Entry>
     /// <para>
     /// What is hidden is asked of the providers rather than carried on the entry, so a row drawn while a provider
     /// was switched off is faded again the moment it is switched on. A provider that cannot answer without reading
-    /// something — a repository's rules are a program run — is not asked here: nothing is faded until what it says
+    /// something, a repository's rules are a program run, is not asked here: nothing is faded until what it says
     /// is in, which is drawn again for that very reason (see <see cref="Browser"/>).
     /// </para>
     /// </remarks>
@@ -328,13 +328,13 @@ internal sealed class Files : Listing<Entry>
     /// Where a drag would land, or nothing where it may not land here at all.
     /// </summary>
     /// <remarks>
-    /// A directory entry is a place to let go into, and so is the way up — which is not a directory of its own but
+    /// A directory entry is a place to let go into, and so is the way up, which is not a directory of its own but
     /// the one holding the listing, so what it lands in is asked of the browser. A file and the computer are not,
     /// and neither is a drag carrying no file. The space around the entries is the directory being looked at.
     /// <para>
     /// A drag that is not files is a place's own object, and what a directory does with one is not this listing's to
     /// decide: it is offered to what was registered, and a directory nothing takes is a directory the drop is not
-    /// offered on. Only a directory row or the space around them is a place to let go into — an entry of the listing
+    /// offered on. Only a directory row or the space around them is a place to let go into, an entry of the listing
     /// is not, which is the same rule the file drags follow.
     /// </para>
     /// <para>
@@ -389,7 +389,7 @@ internal sealed class Files : Listing<Entry>
     /// </summary>
     /// <remarks>
     /// A place's drag is a copy whichever key is held: what it brings is not the files the source holds, and nothing
-    /// is moved out of anywhere by taking it — so the answer is the one that leaves the source where it is.
+    /// is moved out of anywhere by taking it, so the answer is the one that leaves the source where it is.
     /// </remarks>
     /// <param name="land">Where it would land.</param>
     /// <param name="e">The drag.</param>
@@ -476,7 +476,7 @@ internal sealed class Files : Listing<Entry>
     /// </summary>
     /// <remarks>
     /// The value in it is the provider's to write and is not read from the entry's metadata, which is why the
-    /// column draws its own cell: what a lock looks like — its words, and the ink they are written in — is what the
+    /// column draws its own cell: what a lock looks like (its words, and the ink they are written in) is what the
     /// provider answered, and none of it is in <see cref="Facts"/>.
     /// <para>
     /// What it says stands on the right, which is where a column of short answers is read from: the holder's name

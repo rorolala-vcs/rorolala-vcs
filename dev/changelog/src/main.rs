@@ -2,7 +2,7 @@
 //!
 //! Everything the program can do is declared in the library beside this file, one command to one
 //! module; this is only what starts it. `DefaultSetup` is the arrangement the rest of the tree's
-//! programs use — help, the exit code a command asks for, and the environment resources — and
+//! programs use (help, the exit code a command asks for, and the environment resources) and
 //! [`rola_changelog::AllowDirtySetup`] consumes `--allow-dirty` before any command sees its words.
 
 #![deny(warnings)]

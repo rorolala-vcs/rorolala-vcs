@@ -12,7 +12,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// <remarks>
 /// The two real plugins are started here, in process, rather than through the load context the program
 /// uses. What that leaves out is the loading; what it checks is the part the load context exists to make
-/// work — that a plugin reaching into another's static catalogue reaches the same one, and that what it
+/// work, that a plugin reaching into another's static catalogue reaches the same one, and that what it
 /// adds is offered by the setting the other declared.
 /// </remarks>
 public sealed class PluginCatalogTests
@@ -30,7 +30,7 @@ public sealed class PluginCatalogTests
     /// </summary>
     /// <remarks>
     /// The catalogue is static and the two plugins are started in process, so it is emptied before this
-    /// starts — what is checked is the three this plugin brings, in the order it brings them, and Git's
+    /// starts, what is checked is the three this plugin brings, in the order it brings them, and Git's
     /// added after them rather than instead of one.
     /// </remarks>
     [Fact]
@@ -52,7 +52,7 @@ public sealed class PluginCatalogTests
         );
 
         // The Git plugin's provider is in the catalogue the setting was declared with, and the plugin's own
-        // label key is what names it — the File System plugin knows nothing about Git.
+        // label key is what names it, the File System plugin knows nothing about Git.
         var git = Assert.Single(HideRegistry.Providers, option => option.Value == "git_ignored");
         Assert.Equal("rorolala_file_system.hides.git_ignored", git.LabelKey);
 

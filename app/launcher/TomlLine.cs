@@ -6,7 +6,7 @@ namespace RorolalaLauncher;
 /// The little of TOML this program reads and writes, spread over lines.
 /// </summary>
 /// <remarks>
-/// The files this program keeps are two keys wide — a list of paths and one style name — so they are read
+/// The files this program keeps are two keys wide, a list of paths and one style name, so they are read
 /// a line at a time rather than by a parser of the whole language. What is written is written by
 /// <see cref="Quote"/>, which asks the JSON serializer for the spelling, since a JSON string literal is
 /// also a TOML basic string: one escape rule serves both, and no character a path may hold is lost.

@@ -1,7 +1,7 @@
 //! Laying the index's objects out in a pack.
 //!
 //! A pack is many objects in one file, and the index beside it says where each one sits; the
-//! bytes an entry holds are the very bytes it sat loose as — the frame and all — so packing
+//! bytes an entry holds are the very bytes it sat loose as, the frame and all, so packing
 //! changes where an object lives and nothing else. The index keeps one pack rather than as many
 //! as a size limit allows: what it holds are the small, fixed objects the version control logic
 //! works in, so there is nothing to weigh one pack against another for.
@@ -111,7 +111,7 @@ impl VCSIndex {
     /// A pack's index is read again for every lookup that walks past it, which for a presence check
     /// over a whole batch is the same file decoded again and again. What is kept is the decoded
     /// index together with how the file looked when it was read: a file that has not changed is not
-    /// read again, and one that has is. The stamp is the file's length and modification time — an
+    /// read again, and one that has is. The stamp is the file's length and modification time, an
     /// index is rewritten to name another set of entries rather than appended to, so a stamp that is
     /// the same is the file that was read.
     ///
@@ -181,8 +181,8 @@ impl VCSIndex {
 
     /// The packs whose index does not read.
     ///
-    /// A listing skips a pack it cannot read rather than failing whole — what `list_object_keys`
-    /// does — which is the right answer for a reader and a poor one for whoever looks after the
+    /// A listing skips a pack it cannot read rather than failing whole, what `list_object_keys`
+    /// does, which is the right answer for a reader and a poor one for whoever looks after the
     /// index: nothing on the ordinary path says the pack is there at all. This is where that is
     /// asked, and it reads each index for itself rather than being answered from a memory a lookup
     /// kept.
@@ -212,8 +212,8 @@ impl VCSIndex {
     ///
     /// A pack whose index does not read is passed over rather than failing the lookup: nothing can be
     /// found through it, and one bad index answering for every pack is what a store with a hundred of
-    /// them must not do. It is not passed over in silence — [`broken_packs`](Self::broken_packs) names
-    /// it — and a pack taken away between the scan and the read is the same answer as an index that
+    /// them must not do. It is not passed over in silence, [`broken_packs`](Self::broken_packs) names
+    /// it, and a pack taken away between the scan and the read is the same answer as an index that
     /// was never there.
     pub(crate) async fn find_packed(&self, key: &Hash) -> Result<Option<Source>, VCSIndexError> {
         for index in self.packs().await? {
@@ -286,7 +286,7 @@ impl VCSIndex {
 
     /// Lays every object the index holds out in one pack, answering whether anything changed.
     ///
-    /// Everything is gathered up — the entries of every pack, and every loose object — and written
+    /// Everything is gathered up (the entries of every pack, and every loose object) and written
     /// again: what was many packs and a scattering of loose files becomes one pack. What each
     /// object *is* does not change, so every read that worked before works after. An index already
     /// holding one pack and nothing loose is left alone and answered with `false`.
@@ -308,7 +308,7 @@ impl VCSIndex {
 
         // Everything the index holds, under the key it is held by: a loose file, or the place in
         // a pack it sits at. A key both loose and packed is one entry here, and the loose copy is
-        // the one read — the two are the same bytes.
+        // the one read, the two are the same bytes.
         let mut sources: BTreeMap<Hash, Source> = BTreeMap::new();
         for index in &packs {
             // A pack whose index is gone holds nothing that can be found, so nothing of it is
@@ -344,7 +344,7 @@ impl VCSIndex {
 
         // The pack is claimed under a number nothing else is writing, and the one it replaces is
         // dropped only once it is whole: a reader that arrives in the middle finds every object in
-        // the packs it already knew. The number is not moved back to nothing afterwards — a pack
+        // the packs it already knew. The number is not moved back to nothing afterwards, a pack
         // number is a name, and moving one is renaming a file another writer may be claiming.
         let fresh = self.claim_pack().await?;
         tokio::fs::write(self.pack_path(fresh), &framed).await?;
@@ -374,7 +374,7 @@ impl VCSIndex {
     /// A run of this index writes its objects as one pack already, so what gathers between packings
     /// is a pack per run rather than a loose object per object: what that costs is a walk of one more
     /// pack for every lookup, which a handful is worth and a hundred is not. So a run packs when the
-    /// loose objects it has left number `loose`, or when it has left more than `packs` packs behind —
+    /// loose objects it has left number `loose`, or when it has left more than `packs` packs behind,
     /// whichever comes first; until then what it wrote is valid where it is, and a later run or
     /// `rola pack` settles it.
     ///
@@ -432,11 +432,11 @@ impl VCSIndex {
 /// A run of objects being written as one pack.
 ///
 /// A sync takes many objects at once, and writing each one loose is a file made, a rename and a
-/// directory entry of its own — where one pack is one file and one index for the whole run. Nothing
+/// directory entry of its own, where one pack is one file and one index for the whole run. Nothing
 /// the batch takes is visible until [`publish`](Self::publish): a pack is found by its index, and the
 /// index is written after the pack it names.
 ///
-/// What it takes is what a transfer takes — an object checked against the key it arrived under — or
+/// What it takes is what a transfer takes, an object checked against the key it arrived under, or
 /// an object this index made, which is keyed by itself already.
 pub struct VCSIndexBatch {
     /// The index the pack is written into.
@@ -466,7 +466,7 @@ impl VCSIndex {
 
     /// The number of the next pack nothing else is writing: claimed by creating its file.
     ///
-    /// Claiming is creating, so two writers — in this process or in another — never take one number
+    /// Claiming is creating, so two writers, in this process or in another, never take one number
     /// for two packs: the second to try is told the file is there and takes the one after. What is
     /// claimed is an empty file until the caller writes it, and nothing finds it until the index
     /// beside it is written, since a pack is found by its index.
@@ -518,7 +518,7 @@ impl VCSIndexBatch {
     ///
     /// It is what [`accept`](rorolala_storage::TransferableBackend::accept) does with one object,
     /// done for a run of them: what arrived is decoded, held to the key it came under, and written
-    /// as its canonical encoding — a key names one meaning, so one spelling of it is what is kept.
+    /// as its canonical encoding, a key names one meaning, so one spelling of it is what is kept.
     ///
     /// # Errors
     ///
@@ -665,7 +665,7 @@ async fn write_whole_durably(path: &std::path::Path, bytes: &[u8]) -> Result<(),
 
 /// Writes `bytes` to `path` whole, beside it and moved into place, making the directory it is in.
 ///
-/// This is for a caller's own file — what `extract_file` hands back — rather than for an entry the
+/// This is for a caller's own file, what `extract_file` hands back, rather than for an entry the
 /// index reads back, so nothing is promised to outlive a crash. What is kept is that a failed write
 /// leaves the target as it was rather than half written.
 pub(super) async fn write_whole(path: &std::path::Path, bytes: &[u8]) -> Result<(), VCSIndexError> {
@@ -675,7 +675,7 @@ pub(super) async fn write_whole(path: &std::path::Path, bytes: &[u8]) -> Result<
     let temporary = super::temporary_beside(path)?;
     tokio::fs::write(&temporary, bytes).await?;
 
-    // A move that fails — the target is a directory, or on another filesystem — leaves the written
+    // A move that fails (the target is a directory, or on another filesystem) leaves the written
     // temporary beside it, which nothing will ever read. Dropping it keeps a failed extract from
     // costing space every time it is tried.
     if let Err(error) = tokio::fs::rename(&temporary, path).await {
@@ -708,8 +708,8 @@ async fn prune_empty_directories(directory: &std::path::Path) {
 
 /// What this process keeps for one index root, shared by every index of it.
 ///
-/// It is by root rather than by index because an index is handed out freely — `at`, `create` and
-/// `locate` each make one for a directory — and two of them still describe one set of packs, so they
+/// It is by root rather than by index because an index is handed out freely, `at`, `create` and
+/// `locate` each make one for a directory, and two of them still describe one set of packs, so they
 /// have to share one view of what has been read. A running daemon reaches the same Workspace's index
 /// from one connection to the next, which is where a lookup that is answered from here stops paying
 /// for the same file again.

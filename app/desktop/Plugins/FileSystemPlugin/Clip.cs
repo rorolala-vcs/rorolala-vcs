@@ -14,7 +14,7 @@ namespace FileSystemPlugin;
 /// The paths go on the <em>system</em> clipboard rather than into a list of this plugin's own, so that the
 /// browser is one program among several: a copy made here is a copy another file manager can paste, and a
 /// copy taken there is one this can paste. What the system clipboard cannot say is whether a copy is a cut,
-/// so that one thing <em>is</em> this plugin's — the set of paths that are on their way out — and it is what
+/// so that one thing <em>is</em> this plugin's, the set of paths that are on their way out, and it is what
 /// fades those entries until the paste that moves them.
 /// <para>
 /// The paths are also kept here, because a paste must work even where the system clipboard does not carry
@@ -65,7 +65,7 @@ internal sealed class Clip
     /// The same answer through an instance, for the views that hold a file clipboard.
     /// </summary>
     /// <remarks>
-    /// A control's own <c>Clip</c> — the geometry one draws with — is what the name <c>Clip</c> means there, so a
+    /// A control's own <c>Clip</c>, the geometry one draws with, is what the name <c>Clip</c> means there, so a
     /// view cannot reach the constant by the type's name: it reads it through the clipboard instance it holds,
     /// which is why this stays a member of one.
     /// </remarks>
@@ -242,8 +242,8 @@ internal sealed class Clip
     /// </summary>
     /// <remarks>
     /// Both, because the two answer different readers: a file manager takes the files, and a text field or a
-    /// script takes the text. A path that the system will not turn into a file — one that has gone since the
-    /// listing was read — is left out of the files rather than stopping the copy, since the text still names
+    /// script takes the text. A path that the system will not turn into a file, one that has gone since the
+    /// listing was read, is left out of the files rather than stopping the copy, since the text still names
     /// it and the rest of the copy is still worth making.
     /// </remarks>
     /// <param name="from">A control in the tree the clipboard is reached through.</param>
@@ -330,7 +330,7 @@ internal sealed class Clip
 /// <remarks>
 /// A place's entries are not files, so what a copy of them is cannot be the system clipboard: there is nothing a file
 /// manager could do with one, and no path to hand a program. What it is instead is what the same views read a drag
-/// under, kept until a paste takes it — a cut fades the rows it holds for the same reason a cut file does, so that it
+/// under, kept until a paste takes it, a cut fades the rows it holds for the same reason a cut file does, so that it
 /// reads as on its way out.
 /// <para>
 /// One of these belongs to the plugin rather than to a dock, for the same reason the file clipboard does: a cut made in
@@ -378,7 +378,7 @@ internal sealed class LogicalClip
     /// <remarks>
     /// Read before anything is done with it, because whether a paste means something is the place's answer: a paste
     /// into somewhere that refuses it is a paste that did nothing, and a cut that was taken away by it would be lost
-    /// with no word — the rows would come back unfaded and the entries would be nowhere.
+    /// with no word, the rows would come back unfaded and the entries would be nowhere.
     /// </remarks>
     /// <returns>What was kept, or nothing when nothing is.</returns>
     public IReadOnlyList<object>? Peek() => _kept.Count == 0 ? null : [.. _kept];

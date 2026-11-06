@@ -1,9 +1,9 @@
 //! The `rola pack` command: lay a store's objects out in as few packs as its size limit allows.
 //!
-//! It is packing on its own, with nothing else around it: everything the store in hand holds — the
-//! entries of every pack, and every loose object — is written again, so that what was many packs and
+//! It is packing on its own, with nothing else around it: everything the store in hand holds, the
+//! entries of every pack, and every loose object, is written again, so that what was many packs and
 //! a scattering of loose files becomes as few packs as the store's `max_pack_size` allows. What each
-//! object *is* does not change — a pack holds the entries exactly as they sat loose — so this is a way
+//! object *is* does not change, a pack holds the entries exactly as they sat loose, so this is a way
 //! to keep the same objects in fewer files, not a step a reader has to know happened.
 
 use librorolala::storage::Lockable as _;
@@ -70,7 +70,7 @@ pub fn complete_pack(ctx: ShellContext) -> Suggest {
 /// Lays the objects a store and an index hold out in packs.
 ///
 /// Everything the store holds is written again: the entries of every pack are gathered up with the
-/// loose objects, and the whole of it is laid down as one pack — or as several, once one would pass
+/// loose objects, and the whole of it is laid down as one pack, or as several, once one would pass
 /// the store's `max_pack_size`, which is `[storage] max_pack_size` in the store's configuration and
 /// two gibibytes when that says nothing. The index the run is inside is laid out the same way, as
 /// one pack. What each object *is* does not change: a pack holds its entries exactly as they sat
@@ -85,9 +85,9 @@ pub fn complete_pack(ctx: ShellContext) -> Suggest {
 /// happened.
 ///
 /// Each is locked for the whole of the work, so a run packing one is the only run packing it. One
-/// another run holds the lock of is not waited for — the run is told, and nothing is changed.
+/// another run holds the lock of is not waited for, the run is told, and nothing is changed.
 ///
-/// The run has to be somewhere a store or an index can be found — inside one, or inside a Vault or
+/// The run has to be somewhere a store or an index can be found, inside one, or inside a Vault or
 /// Workspace that keeps one.
 ///
 /// # Errors
@@ -158,7 +158,7 @@ pub fn handle_pack(
 
     // The store and the index are asynchronous and a command is not, so the two meet here: the
     // objects are read and the packs written by each, and a runtime of this run's own is what waits
-    // for them — see `cmd_storage_write_file`.
+    // for them, see `cmd_storage_write_file`.
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -172,7 +172,7 @@ pub fn handle_pack(
     let mut changed = false;
 
     // Which objects there are and how they are laid out is each side's own to say: this hands over
-    // nothing and asks for the whole of it to be laid out afresh — under the lock of that side, so
+    // nothing and asks for the whole of it to be laid out afresh, under the lock of that side, so
     // that nothing else is packing it while it happens.
     if let Some(store) = store {
         let guard = match runtime.block_on(store.lock()) {

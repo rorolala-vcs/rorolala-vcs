@@ -10,7 +10,7 @@ use rorolala_utils_lazyffi::lazyffi;
 /// The Workspace's data directory, inside the workspace root
 ///
 /// A directory is a Workspace once it holds one, and everything the Workspace keeps for
-/// itself sits under it — the configuration and the keys alike.
+/// itself sits under it, the configuration and the keys alike.
 #[lazyffi(export = ROLA_WORKSPACE_DATA_DIR)]
 pub const WORKSPACE_DATA_DIR: &str = "./.rola/";
 
@@ -21,7 +21,7 @@ pub const WORKSPACE_CONFIG_PATH: &str = "./.rola/workspace.toml";
 /// Path, inside the Workspace's data directory, where its keys are kept
 ///
 /// A key kept here belongs to the Workspace it was set up in, so it is one of the two
-/// directories a local key search covers — the other being the Vault's.
+/// directories a local key search covers, the other being the Vault's.
 #[lazyffi(export = ROLA_WORKSPACE_KEYS_DIR)]
 pub const WORKSPACE_KEYS_DIR: &str = "./.rola/auth/";
 
@@ -34,8 +34,8 @@ pub const WORKSPACE_LAYOUT_DIR: &str = "./.rola/layout/";
 
 /// Path to the file a run opens in an editor to write what it is recording
 ///
-/// A message is written where it can be edited as text — the whole of what a run records, the group
-/// it applies to and what each file did — so the editor writes one file the run then reads back. It
+/// A message is written where it can be edited as text, the whole of what a run records, the group
+/// it applies to and what each file did, so the editor writes one file the run then reads back. It
 /// lives in the Workspace's data directory, beside the rest of what the Workspace keeps for itself,
 /// since it is not part of the work.
 #[lazyffi(export = ROLA_WORKSPACE_EDITING_PATH)]
@@ -44,7 +44,7 @@ pub const WORKSPACE_EDITING_PATH: &str = "./.rola/EDITING.md";
 /// Path, inside the Workspace's data directory, where what a Layout's analysis is kept
 ///
 /// The tree a Layout describes is read back against the files a Workspace holds, and what was
-/// found — each file's time, size and fingerprint — is kept here so the next reading can skip
+/// found (each file's time, size and fingerprint) is kept here so the next reading can skip
 /// what has not changed.
 #[lazyffi(export = ROLA_WORKSPACE_CACHE_DIR)]
 pub const WORKSPACE_CACHE_DIR: &str = "./.rola/cache/";
@@ -63,7 +63,7 @@ pub const WORKSPACE_READONLY_LAYOUTS_DIR: &str = "./.rola/cache/readonly-layouts
 /// The rules are managed rather than scattered through the tree the way a `.gitignore` is: one
 /// directory holds them all, a file per rule set, and a Workspace reads none of them from the
 /// work itself. What a Vault hands down lands under [`IGNORE_RULES_VAULTS_DIR`] inside it, so a
-/// rule of the Workspace's own always sits shallower — and therefore decides over — one that was
+/// rule of the Workspace's own always sits shallower, and therefore decides over, one that was
 /// fetched.
 #[lazyffi(export = ROLA_WORKSPACE_IGNORE_RULES_DIR)]
 pub const WORKSPACE_IGNORE_RULES_DIR: &str = "./.rola/info/ignore/";
@@ -76,7 +76,7 @@ pub const IGNORE_RULES_VAULTS_DIR: &str = "vaults";
 
 /// Path, inside the Vault's root, where the ignore rules it hands down are kept
 ///
-/// The same shape as a Workspace's — one directory, a file per rule set — read by a fetch rather
+/// The same shape as a Workspace's (one directory, a file per rule set) read by a fetch rather
 /// than by the Vault itself: a Vault has no tree of work for the rules to be read against.
 #[lazyffi(export = ROLA_VAULT_IGNORE_RULES_DIR)]
 pub const VAULT_IGNORE_RULES_DIR: &str = "./info/ignore/";
@@ -111,7 +111,7 @@ pub const VAULT_LAYOUT_NAME: &str = "truth";
 
 /// Path to a directory's lock file, besides whatever names the directory
 ///
-/// A place is locked while this file is there, and unlocked while it is not — so a lock is
+/// A place is locked while this file is there, and unlocked while it is not, so a lock is
 /// something a person can see, and take away, without a tool.
 pub const LOCK_FILE: &str = "lock";
 
@@ -128,7 +128,7 @@ pub const VAULT_CONFIG_PATH: &str = "./vault.toml";
 /// Path, inside the Vault, where its keys are kept
 ///
 /// A key kept here belongs to the Vault it sits in, so it is one of the two directories a
-/// local key search covers — the other being the Workspace's.
+/// local key search covers, the other being the Workspace's.
 #[lazyffi(export = ROLA_VAULT_KEYS_DIR)]
 pub const VAULT_KEYS_DIR: &str = "./keys/";
 
@@ -242,8 +242,8 @@ pub const USER_LASTEC_FILE: &str = "lastec";
 ///
 /// What it names is the directory [`USER_DATA_DIR`] sits in, which is the same thing a machine
 /// that follows the XDG layout means by `XDG_DATA_HOME`. It is for a run that must keep its files
-/// somewhere other than the user's — an integration suite, which would otherwise read and write
-/// the machine's — rather than for a person to set: a sandbox built on `XDG_DATA_HOME` alone is a
+/// somewhere other than the user's, an integration suite, which would otherwise read and write
+/// the machine's, rather than for a person to set: a sandbox built on `XDG_DATA_HOME` alone is a
 /// sandbox on Unix, since Windows has no such variable to read.
 #[lazyffi(export = ROLA_DATA_HOME_ENV_VAR)]
 pub const DATA_HOME_ENV_VAR: &str = "ROLA_DATA_HOME";

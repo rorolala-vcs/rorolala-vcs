@@ -5,7 +5,7 @@
 //! misunderstood, so the words are named and the run is refused.
 //!
 //! What is drawn is the command as it was written, with each word that picked nothing marked
-//! under it: the frame — the `-->` that heads it and the `|` beside every line — in bright blue,
+//! under it: the frame, the `-->` that heads it and the `|` beside every line, in bright blue,
 //! the words the command did use and the heading in white, and the words it did not, the carets
 //! under them and what those carets say in bright magenta. Those are the colours a drawing of
 //! this program is made of.
@@ -187,7 +187,7 @@ fn painted(rendered: &str, original: &[String], unmatched: &UnmatchedArgs, label
 
 /// Refuses the run whose command was left with words it does not know.
 ///
-/// `command` is the command as `--help` is asked of it — `layout new` — so that the way out the
+/// `command` is the command as `--help` is asked of it, `layout new`, so that the way out the
 /// drawing names is the one the words were given to. A command with no word left is answered with
 /// nothing, and the run goes on.
 #[must_use]
@@ -298,7 +298,7 @@ mod tests {
         assert!(drawn.contains(&format!("{white}alice")), "{drawn:?}");
         assert!(drawn.contains(&format!("{magenta}unused")), "{drawn:?}");
 
-        // The carets — and what they say — are the mark, beside a gutter that stays frame.
+        // The carets, and what they say, are the mark, beside a gutter that stays frame.
         assert!(
             drawn.contains(&format!("{blue}  |{plain}{magenta}")),
             "{drawn:?}"

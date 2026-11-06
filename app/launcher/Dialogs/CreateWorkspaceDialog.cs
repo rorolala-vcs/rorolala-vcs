@@ -17,7 +17,7 @@ namespace RorolalaLauncher.Dialogs;
 /// <remarks>
 /// What is checked here is checked twice over, because a creation is not something to find out about
 /// afterwards: the address is read as an address as it is typed, the directory is read as one that may be
-/// created as it is typed, and the address is reached once — by a handshake spoken as the account in use —
+/// created as it is typed, and the address is reached once, by a handshake spoken as the account in use,
 /// before the button that makes anything is allowed to be pressed. Editing the address takes the check back,
 /// since a check is about the words that were checked.
 /// <para>
@@ -52,8 +52,8 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
     /// What the last thing this window did came to, which is the check of the connection or the creation.
     /// </summary>
     /// <remarks>
-    /// One line rather than two: the two are never said at once — a creation began after a check that
-    /// answered — and a window this short has room for one line at the bottom, not a stack of them.
+    /// One line rather than two: the two are never said at once, a creation began after a check that
+    /// answered, and a window this short has room for one line at the bottom, not a stack of them.
     /// </remarks>
     private readonly TextBlock _status;
 
@@ -97,8 +97,8 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
         _status = Says(skin, alarm: false);
 
         // The window is a fixed 280 tall, so every line in it is one line tall: a field that says what is
-        // wrong with it says it to the width it has, and the line at the bottom — which is where a reason the
-        // command line gave goes — has two lines and then an ellipsis. A window that grew as it was filled in
+        // wrong with it says it to the width it has, and the line at the bottom, which is where a reason the
+        // command line gave goes, has two lines and then an ellipsis. A window that grew as it was filled in
         // would be a window that moved the buttons under the hand that was reaching for them.
         _addressSays.TextWrapping = TextWrapping.NoWrap;
         _addressSays.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -263,7 +263,7 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
         }
 
         // What the platform answered is asked for as a local path first, and as the path it holds when the
-        // platform does not call it local — a portal that hands back a path it will not name otherwise is a
+        // platform does not call it local, a portal that hands back a path it will not name otherwise is a
         // directory the window can still work in.
         var picked = folders[0].TryGetLocalPath() ?? folders[0].Path.LocalPath;
 

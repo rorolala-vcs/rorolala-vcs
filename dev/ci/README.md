@@ -4,22 +4,22 @@ What rola is checked with.
 
 This is the gate: one program, one command per check, one exit status. It is reached as
 `cargo ci <command>`, through the alias in `.cargo/config.toml`. What _produces_ the artifacts is
-`rola-build` (`cargo dev`), which this crate depends on as a library — a check that needs an artifact
+`rola-build` (`cargo dev`), which this crate depends on as a library, a check that needs an artifact
 is run against the same code that produces it, so the two cannot disagree about where it is.
 
 Like `rola-build`, it is a workspace of its own (see that crate's README for why).
 
 ## What is where
 
-- `src/task/` — one module per check, in the order the gate runs them: `fmt`, `fmt-check`, `clippy`,
+- `src/task/`: one module per check, in the order the gate runs them: `fmt`, `fmt-check`, `clippy`,
   `test`, `doc`, `doc-open`, `i18n`, `generated`, `integration-test`, `dotnet-check`, `dotnet-lint`,
   `dotnet-integration-test`. `check` (also reached as `all`) runs them in that order and stops at
   the first failure.
-- `src/cmd/` — the commands that are about a run rather than about the tree: `report-collect`,
+- `src/cmd/`: the commands that are about a run rather than about the tree: `report-collect`,
   `report-clean`, and the optional `git-lock`/`git-unlock`.
-- `src/reporter.rs` — what a run leaves behind in `.cache/reports/`, and how it is rendered as one
+- `src/reporter.rs`: what a run leaves behind in `.cache/reports/`, and how it is rendered as one
   page.
-- `src/git.rs` — the mechanics of the optional lock and unlock.
+- `src/git.rs`: the mechanics of the optional lock and unlock.
 
 ## What the gate does
 

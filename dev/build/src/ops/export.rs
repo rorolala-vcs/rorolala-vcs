@@ -9,12 +9,12 @@
 //! | `librorolala.so`/`.dylib`    | `build/lib/rorolala.so`/`.dylib`  |
 //! | `rorolala.dll`               | `build/lib/rorolala.dll`          |
 //! | `rorolala.dll.lib`           | `build/lib/rorolala.dll.lib`      |
-//! | `rola[.exe]` …               | `build/bin/rola[.exe]` …          |
+//! | `rola[.exe]` and more        | `build/bin/rola[.exe]` and more   |
 //! | `ffi_bindings/rorolala_ffi.h`| `build/lib/rorolala.h`/`.hpp`     |
 //! | `mingling/<program>_comp.*`  | `build/scripts/<program>/*`       |
 //!
 //! Windows and Linux each have one artifact that is not cargo's at all: the window over the daemon,
-//! built from C by the script beside it after the programs are laid down — Win32 on Windows, GTK 4 on
+//! built from C by the script beside it after the programs are laid down, Win32 on Windows, GTK 4 on
 //! Linux. Each looks for `rola-daemon` beside itself, so what it is built beside has to be there
 //! first.
 
@@ -80,7 +80,7 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
 
     let release = workspace.release_dir()?;
 
-    // A build that has no shared library — a musl one, see `library.rs` — hands over the static one
+    // A build that has no shared library (a musl one, see `library.rs`) hands over the static one
     // alone rather than a shared library that is not there. The header beside it is the same.
     let shared = release.join(platform.cargo_shared());
     if shared.is_file() {
@@ -97,14 +97,14 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
         fs::copy_file(&release.join(cargo), &library.join(exported))?;
     }
 
-    // The header is C and C++ at once — its declarations sit in an `extern "C"` block — so it is
+    // The header is C and C++ at once, its declarations sit in an `extern "C"` block, so it is
     // handed over under both names.
     let header = workspace.header()?;
     fs::copy_file(&header, &library.join("rorolala.h"))?;
     fs::copy_file(&header, &library.join("rorolala.hpp"))?;
 
     // Every program is laid down beside the others, so that a word of `rola`'s reaches the program
-    // it names — `rola jj` is `rola-jj`.
+    // it names, `rola jj` is `rola-jj`.
     for program in PROGRAMS.into_iter().chain(PROGRAMS_WITHOUT_COMPLETIONS) {
         let name = format!("{program}{}", platform.exe_suffix());
         fs::copy_file(&release.join(&name), &programs.join(&name))?;
@@ -168,7 +168,7 @@ pub fn handle_export(_state: StateExport, ec: &mut ResExitCode) -> Next {
 /// Stops the programs a build is about to write, on Windows.
 ///
 /// A running program holds its own executable open, and Windows refuses to replace it or to remove the
-/// directory it is in — which is what an export does to the layout a previous export left. The three
+/// directory it is in, which is what an export does to the layout a previous export left. The three
 /// are the programs of an export that are started by hand and left running; the Desktop program is
 /// not among them, because it is opened through the launcher rather than from the layout.
 ///
@@ -222,7 +222,7 @@ fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
 /// The export tree is handed to whoever runs it, so it is given the integrity level that lets it
 /// run rather than being left at whatever the tree was checked out with: a program marked low
 /// starts at low in every session it is started from, and a low process may not write to the
-/// medium-level places a run works in — a Workspace under `%LOCALAPPDATA%`, a project's cache.
+/// medium-level places a run works in, a Workspace under `%LOCALAPPDATA%`, a project's cache.
 ///
 /// The label is set on the tree rather than on each program so that a file added to it later is
 /// covered by inheritance, and `/C` keeps one unreadable file from leaving the rest unmarked.

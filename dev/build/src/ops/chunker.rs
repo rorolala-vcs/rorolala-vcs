@@ -1,6 +1,6 @@
 //! `chunker`: the chunking harness, run over a corpus.
 //!
-//! The options this takes are the harness's own — its corpus, its weights, its kinds of report — and
+//! The options this takes are the harness's own (its corpus, its weights, its kinds of report) and
 //! they are printed by the harness itself. Re-describing them here would be a second copy of a
 //! surface that already exists, and the copy is the one that would drift, so the command is a
 //! pass-through: [`passthrough`] hands the words after `chunker` to the harness unchanged.

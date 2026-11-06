@@ -3,8 +3,8 @@
 #
 # What a Unix is handed is a tree and a script rather than a package: the layout `cargo dev export` lays down
 # is what is installed, and this is the script that puts it there. It does the four things that make a
-# program reachable rather than merely present — copies the tree, writes a `bin` directory into the path, lays
-# the completion scripts where the shell sources them, and registers a desktop entry — and each of them is
+# program reachable rather than merely present, copies the tree, writes a `bin` directory into the path, lays
+# the completion scripts where the shell sources them, and registers a desktop entry, and each of them is
 # written conservatively, so that removing it removes what this script wrote and nothing else.
 #
 #   install.sh [--prefix DIR] [--uninstall] [--no-path] [--no-completions] [--no-desktop-entry]

@@ -2,8 +2,8 @@
 //!
 //! Everything the program can do is declared in the library beside this file, one check to one
 //! module; this is only what starts it. `DefaultSetup` is the arrangement the rest of the tree's
-//! programs use — help, quiet, verbose, the exit code a check asks for, and the environment
-//! resources — so a check exits the way it reports.
+//! programs use, help, quiet, verbose, the exit code a check asks for, and the environment
+//! resources, so a check exits the way it reports.
 
 #![deny(warnings)]
 #![deny(rust_2018_idioms)]

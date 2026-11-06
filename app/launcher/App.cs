@@ -13,8 +13,8 @@ namespace RorolalaLauncher;
 /// <remarks>
 /// On a desktop that draws its own frame the window is opened as a dialog over a window that is not seen:
 /// a tiling window manager does not tile a dialog, and a launcher tiled into a corner would have a list
-/// it cannot show. Under a tiling window manager the launcher is a window in its own right instead — the
-/// manager tiles that one and keeps no hidden companion behind it — and the window is made resizable so
+/// it cannot show. Under a tiling window manager the launcher is a window in its own right instead, the
+/// manager tiles that one and keeps no hidden companion behind it, and the window is made resizable so
 /// the manager can place it like any other window. The banner inside it is sized from the window's width
 /// and the picture's own ratio, so both arrangements show the picture at its own shape.
 /// </remarks>

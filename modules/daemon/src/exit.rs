@@ -5,8 +5,8 @@ use rorolala_utils_lazyffi::lazyffi;
 /// Why the daemon stopped.
 ///
 /// A daemon is started to serve and stopped by hand, so `0` is the ordinary end. Anything else
-/// is a reason it could not serve at all, which is what a caller that started it — rather than a
-/// person who pressed Ctrl-C — has to branch on.
+/// is a reason it could not serve at all, which is what a caller that started it, rather than a
+/// person who pressed Ctrl-C, has to branch on.
 pub const STOPPED: u8 = 0;
 
 /// The daemon found no account to prove itself with.

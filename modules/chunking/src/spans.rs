@@ -1,7 +1,7 @@
 //! Cutting a file into the spans that are worth keeping apart from the rest.
 //!
 //! A format-aware cut is nearly always the same shape: find the spans of the container that are the
-//! container's *contents* — a ZIP's member, a PNG's chunk payload — and cut those out whole, letting
+//! container's *contents* (a ZIP's member, a PNG's chunk payload) and cut those out whole, letting
 //! everything between them be ranges of its own. That is what makes an edit to one member leave every
 //! member it did not touch a chunk the store already has.
 //!

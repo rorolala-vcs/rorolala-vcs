@@ -25,7 +25,7 @@ pub use token::Term;
 ///
 /// It is one file for the whole book: the articles, the text each of them is searched by, and the
 /// index the search walks. The path is relative to the directory the documentation is laid in,
-/// which is the parent of the directory the programs are laid in — see [`BookSearch::locate`].
+/// which is the parent of the directory the programs are laid in, see [`BookSearch::locate`].
 pub const BOOK_FILE_NAME: &str = "builtin.book";
 
 /// The path the book is read from, relative to the root a program is installed under.

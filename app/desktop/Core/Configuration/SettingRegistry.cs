@@ -14,7 +14,7 @@ namespace RorolalaDesktop.Configuration;
 /// the declared default without repeating it.
 /// <para>
 /// A declaration's identity is <c>Group/Key</c>, and that whole identity is the key it is kept under in
-/// its owner's own section — so the name a reader sees in the panel and the name the file holds are one
+/// its owner's own section, so the name a reader sees in the panel and the name the file holds are one
 /// name, and neither has to be translated to find the other.
 /// </para>
 /// <para>
@@ -39,7 +39,7 @@ internal sealed class SettingRegistry
     /// </summary>
     /// <remarks>
     /// Declaration order is load order, the kernel first, because the kernel declares before any plugin
-    /// is started — which is the same order the panel wants to list them in.
+    /// is started, which is the same order the panel wants to list them in.
     /// </remarks>
     public IReadOnlyList<PluginId> Owners => [.. _declared.Keys];
 
@@ -53,7 +53,7 @@ internal sealed class SettingRegistry
     /// </summary>
     /// <remarks>
     /// A second declaration of an identity already declared is ignored rather than replacing the first, so
-    /// that a plugin initializing twice — or two plugins claiming one name — cannot change what the panel
+    /// that a plugin initializing twice, or two plugins claiming one name, cannot change what the panel
     /// shows after it has shown it.
     /// </remarks>
     /// <param name="owner">The owner declaring it.</param>
@@ -113,8 +113,8 @@ internal sealed class SettingRegistry
     /// nothing.
     /// </summary>
     /// <remarks>
-    /// Nothing is kept for the preset itself — it stands for other settings and has no value of its own
-    /// — so choosing writes them and the choice is then read back from what they are worth.
+    /// Nothing is kept for the preset itself, it stands for other settings and has no value of its own
+    ///, so choosing writes them and the choice is then read back from what they are worth.
     /// </remarks>
     /// <param name="owner">The owner of the setting.</param>
     /// <param name="setting">The preset.</param>
@@ -332,7 +332,7 @@ internal sealed class SettingRegistry
     /// </summary>
     /// <remarks>
     /// An empty text is no values at all rather than one empty value, because taking every value away is
-    /// one of the states the setting has — and the one that reads as the default.
+    /// one of the states the setting has, and the one that reads as the default.
     /// </remarks>
     /// <param name="text">The values, comma-separated.</param>
     private static string[] Chosen(string text) =>

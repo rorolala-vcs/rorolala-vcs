@@ -9,14 +9,14 @@ namespace RorolalaVCSPlugin;
 /// </summary>
 /// <remarks>
 /// The rules are Rorolala's to read and are not reimplemented here: the syntax is gitignore's, the
-/// order the rule files apply in — deeper weaker than shallower, and a later name over an earlier one —
+/// order the rule files apply in (deeper weaker than shallower, and a later name over an earlier one)
 /// is the loader's, and a second implementation would be a second answer to what the command line
 /// ignores by. So the set is loaded through the C ABI, once per Workspace rather than once per
 /// directory, and kept until <see cref="Forget"/> says the files may have changed.
 /// <para>
 /// What is answered is the rules and only the rules: an entry they match is hidden whether or not the
-/// Layout already records it. The reading `rola status` makes is finer — it keeps what the Layout names
-/// out of the rules' jurisdiction — so a rule matching a recorded path hides it here and shows it there.
+/// Layout already records it. The reading `rola status` makes is finer, it keeps what the Layout names
+/// out of the rules' jurisdiction, so a rule matching a recorded path hides it here and shows it there.
 /// That is the one place the two can disagree, and it is stated rather than papered over: telling a
 /// recorded path from an unrecorded one needs the reading, which is a walk of the tree this provider is
 /// asked about one row at a time.
@@ -87,8 +87,8 @@ public sealed class RolaIgnored : IEntryHideProvider
 /// <remarks>
 /// One set per Workspace rather than one per directory, because the rules are the Workspace's: a view
 /// that reads a tree a step at a time asks about one directory per step, and one load per directory
-/// would be one walk of the rules per step. The load itself is cheap against the walk a reading makes —
-/// a handful of small files — but it is kept all the same, since the rule files do not change between
+/// would be one walk of the rules per step. The load itself is cheap against the walk a reading makes,
+/// a handful of small files, but it is kept all the same, since the rule files do not change between
 /// two rows of one drawing.
 /// </remarks>
 internal static class RolaIgnores
@@ -96,7 +96,7 @@ internal static class RolaIgnores
     /// <summary>The Workspace each root was found to be in, so the walk up is made once per root.</summary>
     /// <remarks>
     /// Nothing is kept for the Workspace's own sake: what it is for is the answer a root outside every
-    /// one gives, which is that nothing is hidden — and that answer is asked once per root rather than
+    /// one gives, which is that nothing is hidden, and that answer is asked once per root rather than
     /// once per row.
     /// </remarks>
     private static readonly Dictionary<string, string?> Workspaces = new(StringComparer.Ordinal);
@@ -106,7 +106,7 @@ internal static class RolaIgnores
     /// </summary>
     /// <remarks>
     /// Kept as a <see cref="Lazy{T}"/> rather than as the set itself, because loading is a native call
-    /// that reads files and two threads may ask at once — a view priming a Workspace off the window's
+    /// that reads files and two threads may ask at once, a view priming a Workspace off the window's
     /// thread while the window's thread asks about a row. One of them loads and the other waits for that
     /// load rather than starting a second of its own.
     /// </remarks>
@@ -120,7 +120,7 @@ internal static class RolaIgnores
     /// </summary>
     /// <remarks>
     /// It is spelled here rather than read from the native side's constants because it is a fact about
-    /// where a file sits — the same kind of fact as the data directory's own name — and a listing must be
+    /// where a file sits, the same kind of fact as the data directory's own name, and a listing must be
     /// able to find it without a call per root.
     /// </remarks>
     private static readonly string[] RulesTail = ["info", "ignore"];
@@ -131,7 +131,7 @@ internal static class RolaIgnores
     /// <remarks>
     /// Said when the files may have changed, and the rules are files: one fetched with a Vault, one
     /// edited by hand, one a run wrote. A kept set outliving that is a listing hiding by rules nobody
-    /// states any more — and the cache is what makes loading once per Workspace worth it, so it is
+    /// states any more, and the cache is what makes loading once per Workspace worth it, so it is
     /// cleared rather than never kept.
     /// </remarks>
     public static void Forget()
@@ -182,7 +182,7 @@ internal static class RolaIgnores
     /// Whether an entry is one the rules of the Workspace holding it leave out.
     /// </summary>
     /// <remarks>
-    /// Read against the directory holding it, which is where a rule about one entry is stated — the
+    /// Read against the directory holding it, which is where a rule about one entry is stated, the
     /// answer a listing asks for about what it is showing.
     /// </remarks>
     /// <param name="entry">The entry to consider.</param>
@@ -191,7 +191,7 @@ internal static class RolaIgnores
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        // UNWRAP: an entry is a path the system named, and a path has a directory — the root itself is the
+        // UNWRAP: an entry is a path the system named, and a path has a directory, the root itself is the
         // one that answers with its own path.
         var holder = Path.GetDirectoryName(entry.Path) is { Length: > 0 } parent ? parent : entry.Path;
 
@@ -203,7 +203,7 @@ internal static class RolaIgnores
     /// </summary>
     /// <remarks>
     /// The Workspace is looked for upwards from <c>root</c> and not from the entry: a tree is rooted at
-    /// a base, and a base no Workspace holds is a view under which nothing is hidden — whatever the
+    /// a base, and a base no Workspace holds is a view under which nothing is hidden, whatever the
     /// directories under it happen to hold. The other way, a Workspace nested under the base would
     /// answer for itself, and one tree would be read by two sets of rules.
     /// </remarks>

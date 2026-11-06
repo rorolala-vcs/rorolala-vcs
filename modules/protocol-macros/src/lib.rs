@@ -32,7 +32,7 @@ mod internal_repeat;
 /// Internal call signature: `internal_repeat!(1..=12 => { template })`. Inside the
 /// template, `$` is the current number, `$-` is that number minus one, `$+` is that
 /// number plus one, `^$` is the range's end and `$^` is its start; an identifier
-/// followed by `$` gains the current number as a suffix (`T$-` becomes `T0`, `T1`, …).
+/// followed by `$` gains the current number as a suffix (`T$-` becomes `T0`, `T1`, and so on).
 /// A parenthesized group whose last token is `+` repeats once per number, with the
 /// separator that precedes the `+` between the copies; a `^` after the closing paren
 /// makes it repeat as many times as the range's end is away from the current number,

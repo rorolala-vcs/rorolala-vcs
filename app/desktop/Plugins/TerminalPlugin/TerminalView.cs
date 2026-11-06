@@ -16,8 +16,8 @@ namespace TerminalPlugin;
 /// </summary>
 /// <remarks>
 /// What is drawn is the cell grid <see cref="TerminalScreen"/> keeps, grouped into runs of one style so that
-/// a line of text is one drawing rather than one per character. The bytes come from a pseudo-terminal — see
-/// <see cref="RolaDesktopPty"/> — and are polled on the window's own timer: reading is a question with an
+/// a line of text is one drawing rather than one per character. The bytes come from a pseudo-terminal, see
+/// <see cref="RolaDesktopPty"/>, and are polled on the window's own timer: reading is a question with an
 /// answer that is already there, so there is no thread and no lock between the two halves.
 /// <para>
 /// The font is monospaced and every cell is one advance wide, which is what makes a run drawable at its
@@ -189,8 +189,8 @@ internal sealed class TerminalView : Control, IDisposable
     /// Ends the shell and stops drawing, which is what closing the dock comes to.
     /// </summary>
     /// <remarks>
-    /// The host lets go of a dock's own view when the dock stops being one — closed by the user, or by the
-    /// shell ending — so this is where the process is ended rather than left until the garbage collector
+    /// The host lets go of a dock's own view when the dock stops being one, closed by the user, or by the
+    /// shell ending, so this is where the process is ended rather than left until the garbage collector
     /// finds it: a terminal whose dock is gone has no reason to keep a shell running.
     /// </remarks>
     public void Dispose()
@@ -475,7 +475,7 @@ internal sealed class TerminalView : Control, IDisposable
     /// </summary>
     /// <remarks>
     /// Both are resolved here rather than at the cell, because a cell holds what the program asked for and
-    /// what is drawn is that plus the terminal's own default — and a reversed cell asks for the two
+    /// what is drawn is that plus the terminal's own default, and a reversed cell asks for the two
     /// exchanged, which is a pair and not a colour.
     /// </remarks>
     /// <param name="cell">The cell.</param>
@@ -539,7 +539,7 @@ internal sealed class TerminalView : Control, IDisposable
                 _timer.Stop();
 
                 // The dock closes after the turn rather than inside it: this runs from the timer's own
-                // tick, and closing a dock takes its view out of the tree — the control being ticked.
+                // tick, and closing a dock takes its view out of the tree, the control being ticked.
                 Dispatcher.UIThread.Post(Closed);
 
                 break;

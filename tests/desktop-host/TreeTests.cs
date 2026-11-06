@@ -19,7 +19,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The two are one gesture apart and used to be one gesture: a press on a row that toggled closed on its second
 /// press made walking into a directory a press that took the tree a step back, so closing a step is its chevron's
 /// to do. Checked through presses rather than by reading the handlers, because a press is what the toolkit routes
-/// — the chevron and the row are separate controls in the row's template, and which of them a press reaches is
+///, the chevron and the row are separate controls in the row's template, and which of them a press reaches is
 /// the whole question.
 /// </remarks>
 public sealed class TreeTests
@@ -31,7 +31,7 @@ public sealed class TreeTests
     /// The providers that hide entries are the run's rather than a view's (see
     /// <see cref="global::FileSystemPlugin.HideRegistry"/>), so a test that drove a listing before this one may
     /// have left a rule in force that hides the whole of a scratch directory. A tree with nothing under it is a
-    /// tree with no chevron and nothing to open, which is a test of nothing at all — and it reads from the
+    /// tree with no chevron and nothing to open, which is a test of nothing at all, and it reads from the
     /// outside exactly like a press that did not work.
     /// </remarks>
     public TreeTests()
@@ -82,7 +82,7 @@ public sealed class TreeTests
     /// A row that closed on a second press is a row that undoes the walk a user is making: the place under the
     /// pointer is the place they are in, and a press there is never a request to put it away. Going to the place
     /// the location is already in reads the directory again, which builds the tree again, so what is checked is
-    /// the tree as it is drawn after the press rather than the row that was pressed — the two are not always the
+    /// the tree as it is drawn after the press rather than the row that was pressed, the two are not always the
     /// same row, and the one the user goes on looking at is the drawn one.
     /// </remarks>
     [Fact]
@@ -206,8 +206,8 @@ public sealed class TreeTests
     /// The word for an empty base is about what the base holds now, not about what it held when the tree was made.
     /// </summary>
     /// <remarks>
-    /// A base that was empty is a base that can be given something while the tree is looking at it — a sync, a
-    /// fetch, a file made by another program — and the word drawn over the tree has to go when it is. A tree read
+    /// A base that was empty is a base that can be given something while the tree is looking at it, a sync, a
+    /// fetch, a file made by another program, and the word drawn over the tree has to go when it is. A tree read
     /// again is the same view, so a word decided once where the tree was made would be a word about a base that is
     /// no longer there: what is checked is the word after the base is given something, and again after the
     /// something is taken away.
@@ -366,7 +366,7 @@ public sealed class TreeTests
     /// </summary>
     /// <remarks>
     /// Asked after every press rather than kept from before it: going to the place the location is already in
-    /// reads the directory again, and the tree that is drawn after it is another one with other rows — a row kept
+    /// reads the directory again, and the tree that is drawn after it is another one with other rows, a row kept
     /// from before it is a row that is no longer drawn anywhere.
     /// </remarks>
     /// <param name="window">The window the tree is in.</param>

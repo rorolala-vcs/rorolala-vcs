@@ -5,7 +5,7 @@
 //! Being deeper than the Workspace's own files is what makes a fetched rule yield to one written
 //! here: the Workspace's `!*.mb` stands over the Vault's `*.mb` because it is applied after it.
 //!
-//! What crosses is the directory written out whole — every rule file's name and bytes — rather
+//! What crosses is the directory written out whole, every rule file's name and bytes, rather
 //! than a diff of it: a rule set is small, and a whole copy is what makes a rule the Vault
 //! deleted vanish here on the next fetch without either side keeping a list of what used to be.
 //! The copy replaces what was here as one swap, staged beside it first, so a reader either sees
@@ -28,7 +28,7 @@ use super::sync_storage::{Side, carry_blob};
 ///
 /// # Input
 ///
-/// The name the Workspace keeps this Vault's rules under — the name it bound the Vault by. It
+/// The name the Workspace keeps this Vault's rules under, the name it bound the Vault by. It
 /// belongs to the Workspace and is read there; the Vault is handed it and has no use for it,
 /// since which Vault is reached is the address's to say.
 ///
@@ -52,7 +52,7 @@ impl Action for ActionFetchIgnoreRules {
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
     /// Vault, [`ActionError::Store`] if the Vault's rule directory could not be read or sent a
     /// name that is not one, and [`ActionError::LocalFile`] if the copy could not be written here
-    /// — besides whatever the exchange fails with.
+    ///, besides whatever the exchange fails with.
     async fn process(
         input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
@@ -266,15 +266,15 @@ fn write_rules(
 /// Refuses a path a Vault sent that is not one to write under the copy.
 ///
 /// What a Vault sends is written under the copy by the path it was sent under, so a path that
-/// climbs — an absolute one, a `..`, a drive — would write outside the one directory the fetch
+/// climbs (an absolute one, a `..`, a drive) would write outside the one directory the fetch
 /// is for.
 ///
 /// # Errors
 ///
 /// Returns [`ActionError::Store`] naming the path that is not a relative file path.
 fn check_path(path: &str) -> Result<(), ActionError> {
-    // A name the sending system allowed and this one reads as a separator — a backslash, which a
-    // Unix Vault can keep in a name and a Windows Workspace would descend into — is refused with
+    // A name the sending system allowed and this one reads as a separator, a backslash, which a
+    // Unix Vault can keep in a name and a Windows Workspace would descend into, is refused with
     // the climbing ones.
     let ok = !path.is_empty()
         && !path.contains('\\')

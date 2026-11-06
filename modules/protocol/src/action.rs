@@ -13,7 +13,7 @@ use crate::{ActionContext, ActionError, Encodable, OnlyWorkspace};
 /// is built with [`only_workspace`](ActionContext::only_workspace) or
 /// [`on_vault`](crate::on_vault), and whatever the two sides have to agree on
 /// crosses between them through [`sync`](ActionContext::sync) over the encrypted
-/// channel — so an action never assumes it holds what the other side holds.
+/// channel, so an action never assumes it holds what the other side holds.
 ///
 /// An action describes *what* to do. Which side it is talking to is read from the
 /// context, never passed beside it.
@@ -57,9 +57,9 @@ pub trait Action {
 
     /// Carries the action out on `input` against `ctx`.
     ///
-    /// This runs on both sides. Which one it is follows from `ctx` — see
+    /// This runs on both sides. Which one it is follows from `ctx`, see
     /// [`is_workspace`](ActionContext::is_workspace) and
-    /// [`is_vault`](ActionContext::is_vault) — and the two sides keep in step by
+    /// [`is_vault`](ActionContext::is_vault), and the two sides keep in step by
     /// calling [`sync`](ActionContext::sync) for the same values at the same
     /// time.
     ///

@@ -8,13 +8,13 @@ namespace FileSystemPlugin;
 /// The File System plugin: the location, and the docks that show it.
 /// </summary>
 /// <remarks>
-/// It is a plugin like any other — the host discovers it, checks its contract and Avalonia versions,
-/// and starts it — but it ships with the program and is enabled by default, because a browser is
+/// It is a plugin like any other, the host discovers it, checks its contract and Avalonia versions,
+/// and starts it, but it ships with the program and is enabled by default, because a browser is
 /// what the shell is for.
 /// <para>
 /// What it owns is deliberately more than a dock: the location every dock looks at until one is taken out of
-/// step, the answers that stay everybody's either way — where the tree is rooted, and whether hidden entries
-/// are shown — the entries at a location, their icons, the menus opened on them, and the navigation that
+/// step, the answers that stay everybody's either way, where the tree is rooted, and whether hidden entries
+/// are shown, the entries at a location, their icons, the menus opened on them, and the navigation that
 /// switches where one is. The host is the shell around it.
 /// </para>
 /// </remarks>
@@ -24,7 +24,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
     /// This plugin's identity, which a plugin depending on it names in its manifest.
     /// </summary>
     /// <remarks>
-    /// It is public so that a dependent plugin — Rorolala's own among them — need not spell the string
+    /// It is public so that a dependent plugin, Rorolala's own among them, need not spell the string
     /// again: a dependency that disagreed with this would be one the host could not satisfy.
     /// </remarks>
     public const string Identity = "rorolala.file_system";
@@ -80,12 +80,12 @@ public sealed class FileSystemPlugin : IRolaPlugin
 
         // The commands the file operations are carried out with, and the reading of them. They are
         // settings rather than constants because the tool that does the work is another program's, and a
-        // system may keep it elsewhere — or a user may prefer another. What they are until they are changed
+        // system may keep it elsewhere, or a user may prefer another. What they are until they are changed
         // is the system's own tools, chosen for the platform this is running on, and the preset above the
-        // four is the way to fill all of them at once — or the way a dependent plugin, Rorolala's own
+        // four is the way to fill all of them at once, or the way a dependent plugin, Rorolala's own
         // among them, offers a set of its own (see FileOperationPresets).
-        // The host's own picture goes in with them: the one window this plugin shows — the question a
-        // conflict puts — is drawn as the program rather than as something of its own. So does the
+        // The host's own picture goes in with them: the one window this plugin shows, the question a
+        // conflict puts, is drawn as the program rather than as something of its own. So does the
         // host's windows for the same reason: what a command said when it refused is put over the
         // window the run was started from rather than left in a log.
         FileOps.Configure(host.Config, host.ProgramIcon, host.Dialogs);
@@ -147,8 +147,8 @@ public sealed class FileSystemPlugin : IRolaPlugin
         }
 
         // One location for the whole plugin, and one set of answers every location shares. Every dock is a
-        // view onto the location — the browser docks differ in layout and in nothing else, and the navigation
-        // dock has one address and one history to show — unless a dock has been taken out of step, in which
+        // view onto the location, the browser docks differ in layout and in nothing else, and the navigation
+        // dock has one address and one history to show, unless a dock has been taken out of step, in which
         // case it is given a location of its own and only the answers stay everybody's. The
         // clipboard is shared the same way: a copy made in one directory dock is a copy the other can paste.
         var at = Start();
@@ -167,7 +167,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
 
         // A menu of its own, because what is under it is about the File System as one thing rather than about
         // a location: the switch that shows what the hide rules hide is the plugin's own answer, and it is the
-        // same one a listing's corner carries — so the two places it can be turned are one answer.
+        // same one a listing's corner carries, so the two places it can be turned are one answer.
         host.Menu.AddTopLevel("rorolala_file_system.menu.operations", 50);
         host.Menu.AddItem(
             "rorolala_file_system.menu.operations",
@@ -176,7 +176,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
 
         // Either setting changes what is shown rather than what is there: every location stages its listing
         // again out of what was read, and no directory is read a second time. Choosing another icon set is the
-        // same kind of change — the entries are the same entries, drawn differently — so it is staged again
+        // same kind of change (the entries are the same entries, drawn differently) so it is staged again
         // rather than read again.
         host.Config.Changed += setting =>
         {

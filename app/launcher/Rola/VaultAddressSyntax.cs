@@ -10,7 +10,7 @@ namespace RorolalaLauncher.Rola;
 /// <remarks>
 /// An address is read by the command line when it runs, and a window that is being edited has to say
 /// whether what is typed is one before anything is run. This is that reading, stated again for a caller
-/// that has no command to run yet — and it is deliberately the same reading, because two answers to "is
+/// that has no command to run yet, and it is deliberately the same reading, because two answers to "is
 /// this an address" would be a window that accepts what the command then refuses.
 /// <para>
 /// What is accepted, and what each is taken to mean:
@@ -101,7 +101,7 @@ internal static partial class VaultAddressSyntax
     /// Whether an SSH address names a session: the account, the host, an optional port, and a path.
     /// </summary>
     /// <remarks>
-    /// The path is the Vault's own and is not read here — it is the far side's to resolve — so what is
+    /// The path is the Vault's own and is not read here, it is the far side's to resolve, so what is
     /// checked is that it is a path rather than anything that would end the command it is handed to.
     /// </remarks>
     /// <param name="text">What was written.</param>
@@ -210,7 +210,7 @@ internal static partial class VaultAddressSyntax
     /// </summary>
     /// <remarks>
     /// It is handed to the far side as an argument to a command, so it cannot carry what would end that
-    /// command — a colon, and the newlines — and it cannot start with a hyphen, which the far side's
+    /// command (a colon, and the newlines) and it cannot start with a hyphen, which the far side's
     /// program would read as a flag.
     /// </remarks>
     /// <param name="path">What was written after the host, or after the port.</param>

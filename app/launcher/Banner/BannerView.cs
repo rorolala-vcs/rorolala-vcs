@@ -18,7 +18,7 @@ namespace RorolalaLauncher.Banner;
 /// picture: the area is sized to the picture's own ratio, so the picture is drawn at that ratio rather
 /// than stretched to whatever the window happens to be. A pixel picture is drawn with the hard
 /// interpolation that keeps a pixel a square, and a picture that is taller than a pixel picture would
-/// sensibly be — where a smoother interpolation is what the plan asks for — is drawn with the smoother one.
+/// sensibly be, where a smoother interpolation is what the plan asks for, is drawn with the smoother one.
 /// <para>
 /// A double click asks for a replacement rather than opening anything itself: choosing a file is a window
 /// over this one, and the window is what knows how to put one up.
@@ -187,7 +187,7 @@ internal sealed class BannerView : UserControl
         if (e.ClickCount == 2)
         {
             // UNWRAP: a double click is two presses, and the second is the one that asks for another
-            // picture — the first has already been given to the window to move by.
+            // picture, the first has already been given to the window to move by.
             e.Handled = true;
             ReplacementAsked?.Invoke(this, EventArgs.Empty);
 

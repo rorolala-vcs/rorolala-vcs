@@ -61,7 +61,7 @@ internal sealed class DirectoryDock : IDockView, IDockOpened, IDockTitle
     /// <remarks>
     /// A dock is told what to show at most a second time: once when it is made, where a place of the caller's choosing
     /// is this window's own place and the dock is taken out of step to be there, and again whenever a view asks for a
-    /// place to be shown in the dock the user is working in — which is a step inside the dock's own work, and so moves
+    /// place to be shown in the dock the user is working in, which is a step inside the dock's own work, and so moves
     /// the whole where the dock follows it rather than making a place of its own. The two answers are
     /// <see cref="DirectoryControl.OpenAt"/> and <see cref="DirectoryControl.Reveal"/>.
     /// </remarks>
@@ -89,7 +89,7 @@ internal sealed class DirectoryDock : IDockView, IDockOpened, IDockTitle
     /// Whether this dock has already been told what to show, which tells an opening from a showing.
     /// </summary>
     /// <remarks>
-    /// A dock opened with nothing in particular — restored from the layout, or asked for from the Window menu — is
+    /// A dock opened with nothing in particular (restored from the layout, or asked for from the Window menu) is
     /// told once and about nothing, and what follows it is a showing rather than an opening: this is what says so.
     /// </remarks>
     private bool _told;
@@ -101,7 +101,7 @@ internal sealed class DirectoryDock : IDockView, IDockOpened, IDockTitle
 /// <remarks>
 /// Neither navigation nor the tree is here: back, forward, up, refresh and the address are a dock of
 /// their own, and so is the tree. What is here is one directory, read at a size, and the size
-/// is the one thing about this dock that is its own by default — the directory is every dock's, until this
+/// is the one thing about this dock that is its own by default, the directory is every dock's, until this
 /// one is taken out of step and given a location of its own.
 /// <para>
 /// The arrangement is not a second choice beside the size: entries read too small to be tiles are read as
@@ -201,13 +201,13 @@ internal sealed class DirectoryControl : UserControl
     /// </summary>
     /// <remarks>
     /// Two controls because they answer two questions: the switch is whether the user is looking at what is
-    /// hidden — the entries then shown faded — and the dropdown is what is hidden in the first place. Both
+    /// hidden, the entries then shown faded, and the dropdown is what is hidden in the first place. Both
     /// write the plugin's own settings rather than the dock's state, so one switch serves every dock and the
     /// choice outlives the dock it was made in.
     /// <para>
     /// The switch is a tool with a picture rather than a word: an open eye while the hidden entries are shown,
-    /// a struck-through one while they are not, and the primary — the colour the program says a thing chosen is
-    /// — behind it while it is on. Its word is the tooltip's, because a picture says what a picture says and
+    /// a struck-through one while they are not, and the primary, the colour the program says a thing chosen is
+    ///, behind it while it is on. Its word is the tooltip's, because a picture says what a picture says and
     /// the name of the choice is still worth having.
     /// </para>
     /// </remarks>
@@ -262,7 +262,7 @@ internal sealed class DirectoryControl : UserControl
     /// <remarks>
     /// The one row this dock draws above its entries. There is none below them: the zoom is the dock's own
     /// state, turned with the wheel and kept, and a band at the foot holding a slider for it was a band the
-    /// entries could not be read in — the listing is what a dock is for, so it takes the whole of it.
+    /// entries could not be read in, the listing is what a dock is for, so it takes the whole of it.
     /// </remarks>
     private readonly NavigationBar _bar;
 
@@ -277,7 +277,7 @@ internal sealed class DirectoryControl : UserControl
     /// </summary>
     /// <remarks>
     /// One or the other of this and <see cref="_view"/> is what is being read. Both are views of the very same
-    /// arrangements — a place is read by the rows and the tiles a directory is — over a different listing
+    /// arrangements, a place is read by the rows and the tiles a directory is, over a different listing
     /// (<see cref="Places"/> rather than <see cref="Files"/>), so which of them there is follows from what the
     /// location says, and how it is drawn does not.
     /// </remarks>
@@ -309,10 +309,10 @@ internal sealed class DirectoryControl : UserControl
     /// What this dock is looking at, which is what its tab and its window are called.
     /// </summary>
     /// <remarks>
-    /// The registered name — "Directories" — says what kind of dock this is and not which place it is showing, so two
+    /// The registered name, "Directories", says what kind of dock this is and not which place it is showing, so two
     /// of them are two tabs called the same. What is said here is the place itself: the real path of the directory, the
     /// address of a place a plugin answers for, and "This PC" where there is no path at all. The whole of it is kept
-    /// beside as the detail, which is what a tab's tip and the top of its menu carry — and it is the same string, since
+    /// beside as the detail, which is what a tab's tip and the top of its menu carry, and it is the same string, since
     /// a path is already the whole answer and a shorter name would be a second name to keep in step.
     /// </remarks>
     public string? Title { get; private set; }
@@ -366,7 +366,7 @@ internal sealed class DirectoryControl : UserControl
     /// What this dock is looking at now.
     /// </summary>
     /// <remarks>
-    /// Its own location once it has been taken out of step, and the whole's until then — which is why nothing
+    /// Its own location once it has been taken out of step, and the whole's until then, which is why nothing
     /// here reads the whole directly but this: a dock out of step that went on reading the whole would go on
     /// following it, and not following it is what being out of step means.
     /// </remarks>
@@ -434,7 +434,7 @@ internal sealed class DirectoryControl : UserControl
 
         // A dock is a place the keyboard can be put, which is how the shell hands it to the thing being read: what
         // this dock answers is answered at the top of itself, so the shell putting the keyboard here is what makes
-        // the keys work after this dock is chosen — the keyboard was on the tab that was clicked, and that tab
+        // the keys work after this dock is chosen, the keyboard was on the tab that was clicked, and that tab
         // belongs to the shell's strip rather than to the dock.
         Focusable = true;
         GotFocus += (_, e) =>
@@ -469,7 +469,7 @@ internal sealed class DirectoryControl : UserControl
     /// <remarks>
     /// The switch is turned over and the dock taken out of step, rather than the whole location being sent
     /// somewhere: a dock opened onto a directory is one window onto that place, and moving the whole would
-    /// take every other dock with it — including the one the user was working in when they asked for this.
+    /// take every other dock with it, including the one the user was working in when they asked for this.
     /// <para>
     /// The location is made here rather than by the toolbar, because what the switch does is start from where
     /// the whole is and this starts from a directory that was named. The two are the same state either way,
@@ -502,7 +502,7 @@ internal sealed class DirectoryControl : UserControl
         );
 
         // What is done to an entry is done in the directory this dock is looking at, so the actions are made over
-        // the location again here: left as they were, a menu would act on the whole's directory — opening a folder
+        // the location again here: left as they were, a menu would act on the whole's directory, opening a folder
         // from here would send the docks beside this one there and leave this one where it is, which is the one
         // thing a dock out of step must not do. Asked of `Location` rather than of `_own`, since the two are one
         // answer (see `Location`), and made here as it is in `InStep` because this is the same state reached by
@@ -521,8 +521,8 @@ internal sealed class DirectoryControl : UserControl
     /// Shows a place in this dock: the directory holding a path, and the path itself where it is a file of it.
     /// </summary>
     /// <remarks>
-    /// The dock navigates as the user's own steps do — the whole where it follows the whole, and itself where it is
-    /// out of step — rather than taking a place of its own as being opened onto a directory does (see
+    /// The dock navigates as the user's own steps do, the whole where it follows the whole, and itself where it is
+    /// out of step, rather than taking a place of its own as being opened onto a directory does (see
     /// <see cref="OpenAt"/>). A path shown from elsewhere is a step inside the dock's own work, and a showing that
     /// made the dock stop following the work would be a navigation that changed what the dock is.
     /// <para>
@@ -603,7 +603,7 @@ internal sealed class DirectoryControl : UserControl
         }
 
         // And for the same reason again: a dock left out of step comes back out of step, at a directory of its
-        // own that nothing keeps — the location is not written into the layout — rather than
+        // own that nothing keeps, the location is not written into the layout, rather than
         // being drawn in step and switching under the first frame.
         if (bool.TryParse(state.Read(SyncKey), out var inStep))
         {
@@ -618,7 +618,7 @@ internal sealed class DirectoryControl : UserControl
     /// </summary>
     /// <remarks>
     /// Both are the plugin's rather than the dock's: they write the settings every dock and the preference
-    /// panel read, so a switch turned here is turned in the next dock as well — and a dock that kept either
+    /// panel read, so a switch turned here is turned in the next dock as well, and a dock that kept either
     /// to itself would list something the next one did not.
     /// </remarks>
     private void FillHidden()
@@ -635,7 +635,7 @@ internal sealed class DirectoryControl : UserControl
         _show.Content = _showGlyph;
 
         // Written rather than read here: a dock attached to the tree is the one that drew the rows, so it is
-        // the one the shell tells to look again — a dock in a region nobody can see has no rows to redraw.
+        // the one the shell tells to look again, a dock in a region nobody can see has no rows to redraw.
         _show.Click += (_, _) => _shared.ShowHidden = !_shared.ShowHidden;
 
         _rules.VerticalAlignment = VerticalAlignment.Center;
@@ -772,7 +772,7 @@ internal sealed class DirectoryControl : UserControl
 
         // In step until it is said otherwise, which is what a dock opened fresh is: the whole is where a run
         // starts, and a dock that opened somewhere of its own would be a second place to find on the first
-        // frame. Only what the switch says is set here — the toolbar this would otherwise reach for is not
+        // frame. Only what the switch says is set here, the toolbar this would otherwise reach for is not
         // made yet.
         Follows(true);
     }
@@ -891,7 +891,7 @@ internal sealed class DirectoryControl : UserControl
     /// <remarks>
     /// Set rather than assigned where anything wants another zoom, and written down as soon as it is: what a
     /// dock kept is the host's to save, and a zoom turned with the wheel is the dock keeping something. The
-    /// redraw is here for the same reason it was on the slider — the arrangement is what the zoom amounts to,
+    /// redraw is here for the same reason it was on the slider, the arrangement is what the zoom amounts to,
     /// so a step across the line between rows and tiles is a listing drawn again. A zoom that is already the
     /// one asked for draws nothing, which is what keeps a dock being restored from drawing its listing twice.
     /// </remarks>
@@ -929,7 +929,7 @@ internal sealed class DirectoryControl : UserControl
     /// <remarks>
     /// The listing and not the dock itself: the keys are taken at the top of the dock and handed to the view being
     /// read, so a view that is not focused is a view that never receives one. Deferred to the next turn of the
-    /// loop, because the listing it goes into has just been made and has not been laid out yet — a keyboard asked
+    /// loop, because the listing it goes into has just been made and has not been laid out yet, a keyboard asked
     /// of a control that is not arranged yet is a keyboard it forgets, the same reason the address defers its own
     /// selection.
     /// </remarks>
@@ -949,11 +949,11 @@ internal sealed class DirectoryControl : UserControl
     /// </summary>
     /// <remarks>
     /// Read again on <c>F5</c>, which is the dock's own key, and the three the clipboard answers, which are
-    /// taken here rather than by the listing so that they are answered wherever the keyboard is in the dock —
+    /// taken here rather than by the listing so that they are answered wherever the keyboard is in the dock,
     /// after the zoom was turned as much as after an entry was clicked.
     /// <para>
     /// Nothing is answered while a row's name is being typed, whether or not the box has the keyboard: the box is
-    /// this dock's own edit, and a key meant for the name — <c>Delete</c>, <c>F2</c>, the next folder — answered by
+    /// this dock's own edit, and a key meant for the name (<c>Delete</c>, <c>F2</c>, the next folder) answered by
     /// the listing because the box lost the keyboard is a row deleted, a second box or a second folder, and none of
     /// them is what the hand reaching for the name meant.
     /// </para>
@@ -995,7 +995,7 @@ internal sealed class DirectoryControl : UserControl
 
         // A place answers the clipboard keys too, and with its own offer: what is copied there is a place's entry and
         // not a file, so the two clipboards are two offers rather than one. What may be named or removed there is the
-        // place's to say — a folder of its own is the case it exists for — and a row it does not answer for is left alone.
+        // place's to say, a folder of its own is the case it exists for, and a row it does not answer for is left alone.
         if (_logical is { } place)
         {
             if (Keys.Forget(e, place.Delete, _host.Log) || Keys.Rename(e, place.Rename, _host.Log))
@@ -1042,13 +1042,13 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>Draws the entries again when they are not the ones it drew.</summary>
     /// <remarks>
     /// Every read of a directory is a new list, so one list being another is what a step, a refresh
-    /// and a change of base all look like from here. Two changes are not that — switching what is shown, and
-    /// switching a rule that matches nothing in this directory — and they are the ones the rows are drawn
+    /// and a change of base all look like from here. Two changes are not that, switching what is shown, and
+    /// switching a rule that matches nothing in this directory, and they are the ones the rows are drawn
     /// again for: the entries are the same ones, and how they are drawn is not.
     /// <para>
     /// A place is told from a step by the answer itself, and by neither the list nor the address: the same address
     /// read again is a new answer of the same shape, which is a listing to draw again, while a step to another
-    /// place is a different answer entirely — and a step between a place and a directory is the same question
+    /// place is a different answer entirely, and a step between a place and a directory is the same question
     /// asked of the two modes.
     /// </para>
     /// </remarks>
@@ -1097,7 +1097,7 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>Draws what was owed while a row's name was being typed, once the row is no longer an edit.</summary>
     /// <remarks>
     /// Asked of the dock rather than drawn by the view: what was read while the name was being typed is the dock's to
-    /// read, and drawing it is the dock's to do — the view that told this one has no idea what the location is worth
+    /// read, and drawing it is the dock's to do, the view that told this one has no idea what the location is worth
     /// now, and one view cannot put another in the dock.
     /// <para>
     /// Drawn rather than read again and compared, because what was owed need not be a change of what the location
@@ -1126,7 +1126,7 @@ internal sealed class DirectoryControl : UserControl
 
         // Whether the keyboard is inside the view about to be replaced. It matters because replacing the view is
         // what a step and a zoom change both do, and the control that had the keyboard is then no longer in the
-        // tree — so every key after walking into another directory would go unanswered, with nothing anywhere
+        // tree, so every key after walking into another directory would go unanswered, with nothing anywhere
         // saying why. A view replaced while the keyboard was somewhere else (the zoom, say) leaves it there.
         var on = Keys.On(this);
         var seating = ((Control?)_view ?? _logical) is { } was && Keys.Holds(on, was);
@@ -1169,7 +1169,7 @@ internal sealed class DirectoryControl : UserControl
 
         // What was chosen goes with it, for the same reason the tree keeps what was open: a read that found the
         // files it found before is not a reason to stop working with them. Only within one
-        // directory — stepping elsewhere is a different listing, and its choice starts empty.
+        // directory, stepping elsewhere is a different listing, and its choice starts empty.
         var chosen = _drawnAt == Location.Current ? _view?.Chosen() ?? [] : [];
 
         EntryView<Entry> drawn = Zoom > GridAbove
@@ -1229,7 +1229,7 @@ internal sealed class DirectoryControl : UserControl
     /// </summary>
     /// <remarks>
     /// Read and let go of here rather than kept: a showing is one navigation and one choice, and a path left over would
-    /// be chosen again in the next drawing of the same directory — a step back to where the user was, say, silently
+    /// be chosen again in the next drawing of the same directory, a step back to where the user was, say, silently
     /// moving their choice.
     /// </remarks>
     /// <param name="drawn">The listing that was just drawn.</param>
@@ -1295,7 +1295,7 @@ internal sealed class DirectoryControl : UserControl
     /// <remarks>
     /// Taken as the listing is drawn rather than as the location changes, because the drawing is when the place is read:
     /// a place's title is the provider's answer for the address being read, and a dock told where to look is drawn
-    /// again for it. Nothing is said when nothing changed — a dock drawn again for a file change is the same dock in
+    /// again for it. Nothing is said when nothing changed, a dock drawn again for a file change is the same dock in
     /// the same place, and a tab said again for it would be a tab redrawn in the middle of a file operation.
     /// </remarks>
     private void Retitled()
@@ -1318,8 +1318,8 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>What this dock is called, and where that is in full.</summary>
     /// <remarks>
     /// The place itself in both views: the real path of a directory, and the address of a place a plugin answers for. A
-    /// name that is shorter than that would be a name the reader has to translate back into where the dock is — a part
-    /// below a base, or a provider's own words — and a tab is read to know where it goes.
+    /// name that is shorter than that would be a name the reader has to translate back into where the dock is, a part
+    /// below a base, or a provider's own words, and a tab is read to know where it goes.
     /// </remarks>
     /// <returns>The title and the detail.</returns>
     private (string Title, string Detail) Where()
@@ -1355,7 +1355,7 @@ internal sealed class DirectoryControl : UserControl
     /// <remarks>
     /// The words the location is written in rather than a directory: an address is not a path, and a dock left at one
     /// would otherwise come back at whatever directory the whole happens to be looking at. Empty while the dock follows
-    /// the whole — where it is, then, is where the whole is — so that a dock that was taken back into step does not go
+    /// the whole (where it is, then, is where the whole is) so that a dock that was taken back into step does not go
     /// on restoring the place it left.
     /// </remarks>
     private void KeepLocation() => _state?.Write(LocationKey, _own is null ? string.Empty : Location.Current);

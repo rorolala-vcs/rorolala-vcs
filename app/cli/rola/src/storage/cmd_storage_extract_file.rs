@@ -71,11 +71,11 @@ pub fn complete_storage_extract_file(
 ///
 /// `HASH` is what [`rola storage write-file`](crate::storage::cmd_storage_write_file) printed: written
 /// as a digest in hex, with or without the hash's name in front of it. The content is written
-/// under that digest, in `DIR` — or in the current directory when none is named.
+/// under that digest, in `DIR`, or in the current directory when none is named.
 ///
 /// `DIR` is made if it is not there yet, so a path into somewhere new is a request to write
-/// there rather than a mistake. A file already under the name — the same content written twice
-/// into one place — is *not* written over: it is reported, so that what is there is never lost
+/// there rather than a mistake. A file already under the name, the same content written twice
+/// into one place, is *not* written over: it is reported, so that what is there is never lost
 /// to what was asked for.
 ///
 /// # Errors
@@ -105,7 +105,7 @@ pub fn storage_extract_file(args: EntryStorageExtractFile) -> Next {
 
 /// The state of taking content back out of the store.
 ///
-/// What is asked for is a hash, and where it is asked to land is a directory — or the current
+/// What is asked for is a hash, and where it is asked to land is a directory, or the current
 /// one, when none is named.
 #[derive(Grouped)]
 pub struct StateStorageExtractFile {
@@ -154,7 +154,7 @@ pub fn handle_storage_extract_file(
         .into();
     }
 
-    // The store is asynchronous and a command is not, so the two meet here — see `storage_write_file`.
+    // The store is asynchronous and a command is not, so the two meet here, see `storage_write_file`.
     let extracted = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime.block_on(store.extract_file(&key, &path)),
         Err(error) => Err(StorageError::Io(error)),

@@ -2,8 +2,8 @@
 //!
 //! The listing half of an index exchange, where [`sync_index`](crate::sync_index) is the carrying
 //! half: a Workspace asks, the Vault answers with what its own index holds, and nothing but the
-//! listing moves. Which listing is asked for is the caller's word — the variants, the versions, or
-//! the text objects — and what is answered is the hashes, one a line, so a hash read here is one to
+//! listing moves. Which listing is asked for is the caller's word, the variants, the versions, or
+//! the text objects, and what is answered is the hashes, one a line, so a hash read here is one to
 //! hand to [`read_remote_index`](crate::read_remote_index).
 
 use rorolala_errors::Failure as _;
@@ -23,7 +23,7 @@ use super::sync_storage::{Side, carry_blob};
 ///
 /// # Output
 ///
-/// The hashes, as a listing prints them — each as hex, one a line. It is the Workspace's answer that
+/// The hashes, as a listing prints them, each as hex, one a line. It is the Workspace's answer that
 /// is read, the Vault's listing handed back, since the Workspace is where the caller is. The listing
 /// travels as one string rather than a run of keys because that is what crosses the C ABI whole; a
 /// caller that wants hashes apart reads it the way it was written, a line at a time.
@@ -50,7 +50,7 @@ impl Action for ActionListRemoteIndex {
         let local = local_index(&ctx)?;
 
         // What listing is wanted is the caller's word, so it belongs to the Workspace and crosses to
-        // the Vault first — the Vault is the side with an index of its own to answer with.
+        // the Vault first, the Vault is the side with an index of its own to answer with.
         let here = input.into_inner();
         let to_vault = here.clone().map(String::into_bytes);
         let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;
@@ -78,7 +78,7 @@ impl Action for ActionListRemoteIndex {
 /// What a listing is made of is the index's keys, and the keys alone are the answer unless a kind was
 /// asked for: every object read whole to be filtered is a read, a decode and a hash check apiece for
 /// an answer the keys already gave. When a kind was asked for, the one byte behind each object's frame
-/// is what tells it apart — see [`VCSIndex::kind_of`].
+/// is what tells it apart, see [`VCSIndex::kind_of`].
 async fn listed(local: &VCSIndex, which: &str) -> Result<String, ActionError> {
     let keys = local
         .object_keys()
@@ -107,7 +107,7 @@ async fn listed(local: &VCSIndex, which: &str) -> Result<String, ActionError> {
 /// Whether the word `which` asks for a kind rather than for every object.
 ///
 /// A word that names no kind names every one, which is what a caller that asked for nothing in
-/// particular is answered with — and it is what lets a listing answer without reading an object.
+/// particular is answered with, and it is what lets a listing answer without reading an object.
 fn asks_for_kind(which: &str) -> bool {
     matches!(which.trim(), "variants" | "versions" | "str")
 }

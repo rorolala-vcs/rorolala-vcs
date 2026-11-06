@@ -3,8 +3,8 @@ _version: 2
 # What the Rorolala plugin says. What it adds to the browser is one preset to the File System
 # plugin's settings and one column to its listing, and what it shows of its own is its three docks;
 # its words are the plugin's name, that preset's name, what a lock reads as, what each of the docks
-# is called, and every line the Overview draws — which is the reading `rola status` makes, said in
-# that command's own words. Every key is namespaced by the plugin's identity — the id with dots
+# is called, and every line the Overview draws, which is the reading `rola status` makes, said in
+# that command's own words. Every key is namespaced by the plugin's identity, the id with dots
 # underscored.
 
 rorolala_vcs:
@@ -329,7 +329,7 @@ rorolala_vcs:
       zh-CN: 未能删除变更
 
     # What a right-click on a variant drawn as work under way offers: ending the merge that variant is
-    # waiting for. Both end it the same way — the variant file goes and the record with it — and differ
+    # waiting for. Both end it the same way, the variant file goes and the record with it, and differ
     # in what the main file is left holding: the plain one puts it back to the version the Layout names,
     # the other leaves the work as it is. The variant file is the merge's, not the file's, so the
     # question names the main file the reader right-clicked beside.
@@ -381,8 +381,8 @@ rorolala_vcs:
   # command line's only in what it found, not in how it is said.
   #
   # The panel is one table of the changes: a row is one thing the reading says about one path, and the
-  # three columns are what each path's state is — the kind of change it is and what became of its
-  # content, one pill each — where it comes from, and where it goes. A cell is empty where there is
+  # three columns are what each path's state is, the kind of change it is and what became of its
+  # content, one pill each, where it comes from, and where it goes. A cell is empty where there is
   # nothing on that side of the change, which is what makes a lost path and an untagged one read apart:
   # the one comes from somewhere and goes nowhere, and the other the reverse.
   #
@@ -394,7 +394,7 @@ rorolala_vcs:
       zh-CN: 没有要确认的内容
 
     # What the command in the dock's own strip offers: read the work again now, rather than wait for the
-    # reading the dock makes by itself — which is what a reader wants after saving in another program. What it
+    # reading the dock makes by itself, which is what a reader wants after saving in another program. What it
     # brings first is the Vault's Layout, so that what it reads is what upstream holds now.
     refresh:
       en: Refresh
@@ -411,8 +411,8 @@ rorolala_vcs:
       en: Hide the entries the ignore rules govern
       zh-CN: 隐藏被忽略规则管辖的条目
 
-    # What the columns are called, which is the band over the rows. The first is what each path's state is —
-    # the kind of change it is and what became of its content, one pill each — and the other two are the
+    # What the columns are called, which is the band over the rows. The first is what each path's state is,
+    # the kind of change it is and what became of its content, one pill each, and the other two are the
     # paths a change is between, one of which is empty where the change has no such side.
     column_state:
       en: State
@@ -494,7 +494,7 @@ rorolala_vcs:
       zh-CN: 文件内容产生了变化，但是它的基准版本并不匹配。
 
     # What a merge says in the last column: why a merge cannot go on. A merge has no content change of its
-    # own — what settles it is the two files being joined — so the column carries what the row would
+    # own, what settles it is the two files being joined, so the column carries what the row would
     # otherwise have to leave out. Where the variant file moved to is not among these, because the row's
     # own columns say where the two files are: a variant file is read from where the tree holds it.
     merge_broken:
@@ -553,7 +553,7 @@ rorolala_vcs:
         zh-CN: 状态：被命名在别处
 
   # What the hide provider is called where the File System plugin offers its hiding rules. The key is
-  # namespaced as this plugin's, since the option is the provider this plugin registers — the File
+  # namespaced as this plugin's, since the option is the provider this plugin registers, the File
   # System plugin offers it without knowing that Rorolala exists.
   hides:
     rola_ignored:
@@ -568,14 +568,14 @@ rorolala_vcs:
 
   # What the Upstream column is headed: where the Vault names the entry the work names here. The
   # column is only there where Rorolala answers, and it says nothing about an entry the Vault's copy
-  # does not name — one this side has never told it of.
+  # does not name, one this side has never told it of.
   column_upstream:
     en: Upstream
     zh-CN: 上游
 
   # What the Standing column is headed: how far the version recorded for the entry is from the one the Vault
-  # records. It is a number rather than a word — `+2` for two versions this side has that upstream has not
-  # been told of, `-1` for one upstream has that this side has not fetched — so what the sign means is said
+  # records. It is a number rather than a word, `+2` for two versions this side has that upstream has not
+  # been told of, `-1` for one upstream has that this side has not fetched, so what the sign means is said
   # here rather than in the column.
   column_standing:
     en: Standing
@@ -588,7 +588,7 @@ rorolala_vcs:
   #
   # The count is not always there: a fetch brings the Vault's Layout and never its versions, so being behind is
   # ordinarily a direction with no distance, and what is said is the direction alone. Being behind is being
-  # behind — how far is added to the sentence when the count is known, rather than a note about what is not.
+  # behind, how far is added to the sentence when the count is known, rather than a note about what is not.
   # Being ahead always has one, since the chain that says so is this side's own.
   standing:
     ahead:
@@ -605,7 +605,7 @@ rorolala_vcs:
       zh-CN: 该文件的当前版本基线和上游不一致
 
   # What one file of the work is, and what is said when the pointer rests on the mark that says it. The words
-  # are the Overview's own — see `status` above — because the two are one answer about one state, and a reader
+  # are the Overview's own, see `status` above, because the two are one answer about one state, and a reader
   # who has learnt what a badge means has learnt what the panel's pill means too. What is left here is the one
   # thing the panel knows and a state does not: which of the two ways a change is wrong is read from the lists
   # the reading holds, and this is the answer for a change whose reason is neither of them.
@@ -615,7 +615,7 @@ rorolala_vcs:
       zh-CN: 错误修改
 
   # What a variant file is called, and what is said about it. A variant file is one the Layout does not
-  # name — it holds content waiting to be joined into a file the Layout does name — so it has no name of
+  # name, it holds content waiting to be joined into a file the Layout does name, so it has no name of
   # its own in either Layout, and what names it is the variant it holds.
   variant:
     # What the Upstream column says where the file is one: a column that would name the path the Vault
@@ -684,7 +684,7 @@ rorolala_vcs:
 
     # What is said before a sync that leaves something out, one line per way of leaving it out and per
     # direction: what is left behind still gets written, and which part it was decides what becomes
-    # inconsistent — a version the index does not hold, content the storage does not, a Layout that does not
+    # inconsistent, a version the index does not hold, content the storage does not, a Layout that does not
     # say which of them a version belongs to. The ways that leave the Layout out say one thing whichever way
     # the run goes, since nothing about the Vault's Layout moves either way.
     warn_no_index_up:
@@ -736,7 +736,7 @@ rorolala_vcs:
       zh-CN: 未能取回保险库布局
 
   # What the work's own menu offers: the upstream as a place, which is not a dock of this plugin's but an address the
-  # browser opens. The root is the Layout of the Vault the work tracks — what this work is the upstream of — and the
+  # browser opens. The root is the Layout of the Vault the work tracks, what this work is the upstream of, and the
   # two lists are a step away, so a work that tracks nothing still has somewhere to go.
   menu:
     workspace:
@@ -755,8 +755,8 @@ rorolala_vcs:
       en: Upstream entries
       zh-CN: 上游条目
 
-  # What the upstream place says. It is read a level at a time — the Vaults the Workspace knows, the Layouts it works
-  # in, and one Layout's entries — so the title says where in the address the reader is, and a level that cannot be
+  # What the upstream place says. It is read a level at a time, the Vaults the Workspace knows, the Layouts it works
+  # in, and one Layout's entries, so the title says where in the address the reader is, and a level that cannot be
   # read says which of the ways it could not be. The commands are the command line's, and what it said is shown as it
   # said it: the words of a failure are the one thing this side does not know better.
   place:
@@ -812,7 +812,7 @@ rorolala_vcs:
       en: The checkin from `%{vault}` did not finish
       zh-CN: 来自 `%{vault}` 的签入未能完成
     # What a checkin asks when not everything it was given can come in as it stands: what is in the way, and what may
-    # be done about it. The counts are the plan's — one line per kind of thing in the way, so a drag of nine rows says
+    # be done about it. The counts are the plan's, one line per kind of thing in the way, so a drag of nine rows says
     # how many are already here under another name and how many cannot land at all.
     checkin_question:
       en: Some of this checkin does not fit
@@ -925,8 +925,8 @@ rorolala_vcs:
       en: Nothing here answers for `%{segment}`
       zh-CN: 没有插件应答 `%{segment}`
 
-    # What a drop that moved nothing says, in this place's own words: the reasons are the Layout's — already there, a
-    # path taken, a copy still being read — and none of them is something the browser could work out. The row that was
+    # What a drop that moved nothing says, in this place's own words: the reasons are the Layout's, already there, a
+    # path taken, a copy still being read, and none of them is something the browser could work out. The row that was
     # dropped on is the one whose answer it is, and the words are shown the moment the drag is let go.
     refused_not_a_drag:
       en: This is not something the upstream place can take
@@ -963,7 +963,7 @@ rorolala_vcs:
 
   # What the Overview's progress panel says of the commands this plugin runs: a card per command, named for
   # what the command does, and a bar per task the command reports. A task that names itself is read by that
-  # name, and one that does not is read by the direction its work moves — or as simply working.
+  # name, and one that does not is read by the direction its work moves, or as simply working.
   progress:
     checkin:
       en: Bringing entries in
@@ -1021,7 +1021,7 @@ rorolala_vcs:
       zh-CN: 等待前序
 
   # The Accounts dock: which account the work acts as, and what may be done about them. The rows are the
-  # accounts `rola account` lists, and what a row offers is a run of `rola` — naming the account the work acts
+  # accounts `rola account` lists, and what a row offers is a run of `rola`, naming the account the work acts
   # as, making a pair, exporting a public key, taking a pair away. The two names `rola account` reads as its own
   # words cannot be an account, which is why making a pair under one of them is refused.
   accounts:
@@ -1088,7 +1088,7 @@ rorolala_vcs:
 
   # What the Overview offers to do about a row, one line each: what a button says and what it is hovered for
   # are the same words, since a button's label is what it does. Every one of them is a mode of `rola align`,
-  # except taking ownership, which is `rola hold` — the same command the grid's own menu runs, so that the two
+  # except taking ownership, which is `rola hold`, the same command the grid's own menu runs, so that the two
   # ways into it do one thing rather than two.
   operations:
     rebuild:
@@ -1117,12 +1117,12 @@ rorolala_vcs:
       zh-CN: 取消该合并
 
     # What the two sides of a connection say while one is being made, in place of what they do. The button that
-    # began it is waiting, and each one it could be finished on is an answer: three dots rather than a word,
-    # because there is nothing to say yet, and 「组合」 rather than 「连接至」 again, because the second press is
-    # not asking the same question as the first.
+    # began it is waiting, and each one it could be finished on is an answer: the word for making the
+    # connection rather than a word about the connection, and 「组合」 rather than 「连接至」 again, because the
+    # second press is not asking the same question as the first.
     connecting:
-      en: "..."
-      zh-CN: "..."
+      en: Connecting
+      zh-CN: 连接中
     pair:
       en: Pair
       zh-CN: 组合
@@ -1157,7 +1157,7 @@ rorolala_vcs:
 
     # What the badge of a lock says when the pointer rests on it, which is the whole of what holding a file
     # means to the person reading it: whether they may edit it, and on whose word. The words the column holds
-    # are a name or nothing, so the sentence is the badge's own — and the column and the badge are two views of
+    # are a name or nothing, so the sentence is the badge's own, and the column and the badge are two views of
     # one answer, which is why what they say is stated here rather than in the column's cell.
     #
     # The holder's name is the one value the phrase leaves a place for, and the phrase for the reader's own
@@ -1171,7 +1171,7 @@ rorolala_vcs:
       zh-CN: 该文件由 %{holder} 持有，无法编辑
 
   # What an entry's menu offers about who holds it. What is claimed is one file, or everything under a
-  # directory — the command line takes a directory recursively — so the two are said apart. The forced
+  # directory, the command line takes a directory recursively, so the two are said apart. The forced
   # pair is shown while Shift is held: what it does is past the checks the plain pair makes, which is
   # worth saying twice, in the words and in the red the look gives it.
   ownership_menu:

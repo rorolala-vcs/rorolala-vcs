@@ -81,7 +81,7 @@ internal static class ColumnCells
     /// <remarks>
     /// The ink is the contribution's to name and this plugin's to resolve: a column drawn in a colour the
     /// contribution picked for itself would be a colour the look does not hold, which is a column that vanishes
-    /// somewhere the theme is another — unless the contribution has a palette of its own, which is what a colour
+    /// somewhere the theme is another, unless the contribution has a palette of its own, which is what a colour
     /// of its own says, and then it is drawn in that.
     /// </remarks>
     /// <param name="mark">What the contribution answered.</param>
@@ -126,7 +126,7 @@ internal static class ColumnCells
     /// <remarks>
     /// A dot rather than a word, because what it stands for is one of a handful of states and the colour is read
     /// at a glance: a column of the same few words repeated is a column of text where a mark would do, and the
-    /// words are still there — said when the pointer rests on the mark, which is where a reader who wants them is
+    /// words are still there, said when the pointer rests on the mark, which is where a reader who wants them is
     /// already looking.
     /// </remarks>
     /// <param name="mark">What the contribution answered.</param>

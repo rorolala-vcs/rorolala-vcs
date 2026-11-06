@@ -49,7 +49,7 @@ giveup:
 ownership:
   # What a claim or a release says it is doing while it does it: the bar that is drawn while the Vault
   # is asked about each entry, one at a time over the one connection. The words are this crate's
-  # because the action is the daemon's and holds no language of its own — the name crosses with the
+  # because the action is the daemon's and holds no language of its own, the name crosses with the
   # entries so that the bar is not drawn without one.
   holding:
     en: Claiming ownership

@@ -2,12 +2,12 @@
 //!
 //! Each constant states a number and carries the `i18n/exit_codes.yml` key that says what
 //! it means, written above it. `build.rs` reads the keys and generates `explain.rs` beside
-//! this file, which is what turns a number back into words — so the words live in the
+//! this file, which is what turns a number back into words, so the words live in the
 //! locale files and the keys live here, and neither is written twice.
 //!
 //! The numbers are laid out a block to a subject, ten apart, in the order a run meets them:
-//! what ended without doing anything wrong first, then the shapes of a run — where it is,
-//! who it is, what it reaches — then the content it moves, then the version control
+//! what ended without doing anything wrong first, then the shapes of a run, where it is,
+//! who it is, what it reaches, then the content it moves, then the version control
 //! surfaces, then the machinery and tools. A block is held whole rather than packed against
 //! the one before it, so a subject grows by taking the next number in its own block instead
 //! of pushing every block after it along.
@@ -16,7 +16,7 @@ mod explain;
 
 pub use explain::*;
 
-// Informational — a run that ended without doing anything wrong
+// Informational, a run that ended without doing anything wrong
 
 /// `exit_codes.help`
 pub const EC_HELP: i32 = 2;
@@ -56,7 +56,7 @@ pub const EC_ERR_CREATION_VAULT: i32 = 21;
 /// `exit_codes.creation_argument`
 pub const EC_ERR_CREATION_ARGUMENT: i32 = 22;
 
-// Placement — where a run has to be
+// Placement, where a run has to be
 
 /// `exit_codes.should_in_workspace`
 pub const EC_ERR_SHOULD_IN_WORKSPACE: i32 = 30;
@@ -111,7 +111,7 @@ pub const EC_ERR_VAULT_NOT_BOUND: i32 = 71;
 /// `exit_codes.vault_not_admin`
 pub const EC_ERR_VAULT_NOT_ADMIN: i32 = 72;
 
-// Storage — writing, reading back, and listing what a store holds
+// Storage, writing, reading back, and listing what a store holds
 
 /// `exit_codes.storage_write_file_argument`
 pub const EC_ERR_STORAGE_WRITE_FILE_ARGUMENT: i32 = 80;
@@ -219,7 +219,7 @@ pub const EC_ERR_INV_IDX_NOT_FOUND: i32 = 133;
 /// `exit_codes.inv_idx_kind`
 pub const EC_ERR_INV_IDX_KIND: i32 = 134;
 
-// Actions — what the exchange between two ends fails with
+// Actions, what the exchange between two ends fails with
 
 /// `exit_codes.action_no_channel`
 pub const EC_ERR_ACTION_NO_CHANNEL: i32 = 140;
@@ -262,8 +262,8 @@ pub const EC_ERR_ACTION_STORE: i32 = 150;
 pub const EC_ERR_ACTION_LOCAL_FILE: i32 = 151;
 
 // The connection to a Vault is the subject after it, and the number is the first one left: 152 is
-// where a leg that could not be reached — no `ssh` here, no `rola-daemon` there, a session the far
-// side refused — is told apart from an exchange that failed once it was open.
+// where a leg that could not be reached, no `ssh` here, no `rola-daemon` there, a session the far
+// side refused, is told apart from an exchange that failed once it was open.
 
 /// `exit_codes.action_transport`
 pub const EC_ERR_ACTION_TRANSPORT: i32 = 152;
@@ -305,12 +305,12 @@ pub const EC_ERR_DESKTOP_QUERY_STYLE: i32 = 175;
 /// `exit_codes.desktop_query_ready`
 pub const EC_ERR_DESKTOP_QUERY_READY: i32 = 176;
 
-// Output — how a result is drawn when it is written
+// Output, how a result is drawn when it is written
 
 /// `exit_codes.format`
 pub const EC_ERR_FORMAT: i32 = 180;
 
-// Layouts — the places a Workspace or a Vault works in
+// Layouts, the places a Workspace or a Vault works in
 
 /// `exit_codes.layout`
 pub const EC_ERR_LAYOUT: i32 = 190;
@@ -327,7 +327,7 @@ pub const EC_ERR_LAYOUT_OWNERSHIP: i32 = 193;
 /// `exit_codes.layout_no_current`
 pub const EC_ERR_LAYOUT_NO_CURRENT: i32 = 194;
 
-// Tracking — writing content and recording it in a Layout
+// Tracking, writing content and recording it in a Layout
 
 /// `exit_codes.track`
 pub const EC_ERR_TRACK: i32 = 200;
@@ -338,7 +338,7 @@ pub const EC_ERR_TRACK_ARGUMENT: i32 = 201;
 /// `exit_codes.track_ownership`
 pub const EC_ERR_TRACK_OWNERSHIP: i32 = 202;
 
-// Editing — a message a run cannot be told in one argument
+// Editing, a message a run cannot be told in one argument
 
 /// `exit_codes.editor`
 pub const EC_ERR_EDITOR: i32 = 210;
@@ -346,7 +346,7 @@ pub const EC_ERR_EDITOR: i32 = 210;
 /// `exit_codes.abort`
 pub const EC_ABORT: i32 = 211;
 
-// Aligning — bringing the tree and the Layout back into agreement
+// Aligning, bringing the tree and the Layout back into agreement
 
 /// `exit_codes.align`
 pub const EC_ERR_ALIGN: i32 = 220;
@@ -354,7 +354,7 @@ pub const EC_ERR_ALIGN: i32 = 220;
 /// `exit_codes.align_argument`
 pub const EC_ERR_ALIGN_ARGUMENT: i32 = 221;
 
-// Syncing — moving a Layout's work to and from the Vault it tracks
+// Syncing, moving a Layout's work to and from the Vault it tracks
 
 /// `exit_codes.sync`
 pub const EC_ERR_SYNC: i32 = 230;
@@ -362,7 +362,7 @@ pub const EC_ERR_SYNC: i32 = 230;
 /// `exit_codes.sync_argument`
 pub const EC_ERR_SYNC_ARGUMENT: i32 = 231;
 
-// Checking in — bringing what the Vault holds into the Layout being worked in
+// Checking in, bringing what the Vault holds into the Layout being worked in
 
 /// `exit_codes.checkin`
 pub const EC_ERR_CHECKIN: i32 = 240;
@@ -370,7 +370,7 @@ pub const EC_ERR_CHECKIN: i32 = 240;
 /// `exit_codes.checkin_argument`
 pub const EC_ERR_CHECKIN_ARGUMENT: i32 = 241;
 
-// Retracking — moving a file's version pointer back
+// Retracking, moving a file's version pointer back
 
 /// `exit_codes.retrack`
 pub const EC_ERR_RETRACK: i32 = 250;
@@ -381,7 +381,7 @@ pub const EC_ERR_RETRACK_ARGUMENT: i32 = 251;
 /// `exit_codes.retrack_dirty`
 pub const EC_ERR_RETRACK_DIRTY: i32 = 253;
 
-// Offline — a run that may not reach the Vault
+// Offline, a run that may not reach the Vault
 
 // The decade this block would have had is past the byte an exit status is: 260 is read as 4 by
 // everything that reads a status, so the block takes the next number there is instead.
@@ -389,7 +389,7 @@ pub const EC_ERR_RETRACK_DIRTY: i32 = 253;
 /// `exit_codes.offline`
 pub const EC_ERR_OFFLINE: i32 = 252;
 
-// Docs — the built-in book, read or searched
+// Docs, the built-in book, read or searched
 
 // The subject after offline would have had a block of its own, but the byte an exit status is has
 // two numbers left and no more: 254 is the book or the article, and 255 the words a run wrote that

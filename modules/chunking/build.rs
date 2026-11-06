@@ -70,8 +70,8 @@ fn main() {
     );
     let directory = manifest.join(POLICIES_DIR);
 
-    // Made rather than expected. A fresh clone may hold no policy at all — the crate builds with an
-    // empty table — and git does not carry a directory with nothing in it, so refusing a missing one
+    // Made rather than expected. A fresh clone may hold no policy at all, the crate builds with an
+    // empty table, and git does not carry a directory with nothing in it, so refusing a missing one
     // would make the first policy the only way to compile.
     if let Err(error) = fs::create_dir_all(&directory) {
         fail(&format!("making {}: {error}", directory.display()));
@@ -99,8 +99,8 @@ fn main() {
     let mut modules = Vec::new();
     for path in files {
         // Every file under the policies directory is a module of it, whether or not it declares a
-        // policy: what the policy side needs that is not a policy lives beside them — a parser, a
-        // table of a format's block kinds — and declaring it is what lets it be reached. Only a
+        // policy: what the policy side needs that is not a policy lives beside them, a parser, a
+        // table of a format's block kinds, and declaring it is what lets it be reached. Only a
         // policy gets a row, so a file that declares none contributes nothing to the table.
         let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
             fail(&format!("{}: the file name is not text", path.display()));
@@ -159,7 +159,7 @@ fn policies_in(path: &Path) -> Result<Vec<Declared>, String> {
 
 /// The policy one item declares, if the item is an `impl Policy for ...`.
 ///
-/// An item that is not an impl of `Policy` — an impl of another trait, a function, a type — yields
+/// An item that is not an impl of `Policy` (an impl of another trait, a function, a type) yields
 /// `None`, so a file can hold whatever else it likes. An `impl Policy` that cannot be read is an
 /// error instead: leaving it out would leave a policy out of the table without saying so.
 fn policy_of(item: &Item, module: &str) -> Result<Option<Declared>, String> {

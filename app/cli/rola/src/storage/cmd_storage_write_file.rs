@@ -2,7 +2,7 @@
 //!
 //! It is a write with nothing else around it: a path is named, its content goes into the store a
 //! run works on, and the hash it is kept under is printed. What that hash is worth printing is
-//! that it is the whole of what is needed to ask for the content back — see
+//! that it is the whole of what is needed to ask for the content back, see
 //! [`storage_extract_file`](crate::storage::cmd_storage_extract_file).
 
 use std::path::PathBuf;
@@ -66,7 +66,7 @@ pub fn complete_storage_write_file(ctx: ShellContext) -> Suggest {
 /// Stores the content of `FILE`, and prints the hash it is kept under.
 ///
 /// `FILE` names a file, not a directory: what is stored is content, and a directory is not
-/// content. How the content is kept — whether it is compressed, whether it is cut into chunks —
+/// content. How the content is kept (whether it is compressed, whether it is cut into chunks)
 /// is the store's own decision, made from the content itself, so what a caller says is a path
 /// and nothing else.
 ///
@@ -75,7 +75,7 @@ pub fn complete_storage_write_file(ctx: ShellContext) -> Suggest {
 /// as `manifest:<digest>` rather than `blake3:<digest>`, since how it is kept is part of what the
 /// line says; either name is read back by `storage extract-file`.
 ///
-/// The run has to be somewhere a store can be found — inside one, or inside a Vault or Workspace
+/// The run has to be somewhere a store can be found, inside one, or inside a Vault or Workspace
 /// that keeps one.
 ///
 /// # Errors
@@ -122,8 +122,8 @@ pub fn handle_storage_write_file(
         return ErrorWriteNoStorage.into();
     };
 
-    // What is stored is a file's content, so a path that is not a file — one that is not there,
-    // or one that names a directory — is not something there is content to take.
+    // What is stored is a file's content, so a path that is not a file, one that is not there,
+    // or one that names a directory, is not something there is content to take.
     if !file.is_file() {
         return ErrorNotAFile { path: file }.into();
     }

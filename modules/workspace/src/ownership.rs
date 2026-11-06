@@ -2,7 +2,7 @@
 //!
 //! Ownership is not a thing of its own: it is the `owner` a Layout keeps for one entry, and the
 //! Vault's Layout is where it changes. A Workspace holds a read-only copy of that Layout under its
-//! cache, and what is read here is that copy — nothing is reached for, so what is answered says
+//! cache, and what is read here is that copy, nothing is reached for, so what is answered says
 //! what the Vault held when it was last fetched.
 //!
 //! Reading it is three lookups: the path the file sits at names a `Uuid` in the Layout the
@@ -49,7 +49,7 @@ pub enum EntryLock {
 /// # FFI
 ///
 /// Opaque: C takes a pointer from `locate_rola_ownership` and gives it back with
-/// `free_rola_ownership`. What it holds — the two Layouts, the account and the root — is never read
+/// `free_rola_ownership`. What it holds (the two Layouts, the account and the root) is never read
 /// from outside.
 #[lazyffi(export = RolaOwnership)]
 pub struct Ownership {
@@ -73,7 +73,7 @@ impl Ownership {
     /// Answers nothing when the Workspace works in no Layout, when that Layout tracks no Vault, or
     /// when the Layout cannot be read: ownership is about an entry of the Vault the work goes to,
     /// and a Workspace without one has none to give. A Vault's copy that was never fetched is not
-    /// one of those — the Workspace still has answers, and they say that nothing is known yet.
+    /// one of those, the Workspace still has answers, and they say that nothing is known yet.
     #[must_use]
     pub fn open(workspace: &Workspace, me: Option<String>) -> Option<Self> {
         let local = workspace.layout_if_there().ok().flatten()?;
@@ -136,8 +136,8 @@ impl Ownership {
     /// The two are the same path until one side moves the file: the Layout the Workspace works in names
     /// the entry at the path it sits at here, and the Vault's copy names the same entry at the path it
     /// sits at there. What is answered is where upstream holds it, which is what tells a file that moved
-    /// here from one that moved there. An empty string is the copy saying nothing — no such entry, or
-    /// nothing fetched yet — rather than a path of its own.
+    /// here from one that moved there. An empty string is the copy saying nothing, no such entry, or
+    /// nothing fetched yet, rather than a path of its own.
     ///
     /// # FFI
     ///

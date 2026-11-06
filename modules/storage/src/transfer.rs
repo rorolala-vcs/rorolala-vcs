@@ -2,7 +2,7 @@
 //!
 //! The exchange is one round of asking and one of sending, over any stream that reads and writes
 //! bytes. One end brings a list of keys and speaks first; the other is told them. Each says which of
-//! them it holds, and each sends the ones the other does not — so one pass leaves both ends holding
+//! them it holds, and each sends the ones the other does not, so one pass leaves both ends holding
 //! all of them, and neither end has to know in advance which way the content will actually move.
 //!
 //! ```text
@@ -16,8 +16,8 @@
 //! ```
 //!
 //! The password is exchanged before anything else, so a peer speaking another protocol is turned
-//! away before a key is named. The two ends write their presence in that order — the one that spoke
-//! first writes before it reads, the other reads before it writes — so neither has to drain its own
+//! away before a key is named. The two ends write their presence in that order, the one that spoke
+//! first writes before it reads, the other reads before it writes, so neither has to drain its own
 //! write buffer while the other waits to write, which is what a pair of large writes would ask of
 //! it. Each key then crosses in one direction only, which the two ends agree on from the two
 //! presences, so the pass is the same sequence of moves on both sides.
@@ -34,7 +34,7 @@ use crate::{
 /// How many bytes of content one frame may carry.
 ///
 /// A frame's length is written by the peer, and a peer is only as trustworthy as the password it
-/// gave — which is a check against a mistake, not against an enemy. This bounds what a reader is
+/// gave, which is a check against a mistake, not against an enemy. This bounds what a reader is
 /// asked to hold on the word of what it has read, and it is checked on the way out as well as the
 /// way in, so content too large to cross is refused where it is known rather than by a peer that
 /// then reads a frame it will not take.

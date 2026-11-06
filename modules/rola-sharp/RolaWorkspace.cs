@@ -9,7 +9,7 @@ namespace RolaSharp;
 /// A hand-written wrapper over the generated bindings, <see cref="RorolalaBinding"/>, which are the
 /// private half of this assembly: pointers, plain values and nothing that names what they mean. What
 /// this adds is the shape a caller wants instead. A workspace is found from a directory rather than
-/// built from a pointer; absence — no workspace holds the directory — is <see langword="null"/> rather
+/// built from a pointer; absence, no workspace holds the directory, is <see langword="null"/> rather
 /// than a pointer to remember to check; and the native workspace is owned while this lives and given
 /// back on <see cref="Dispose"/>, so a caller holds one the way it holds any other resource.
 /// <para>
@@ -35,7 +35,7 @@ public sealed class RolaWorkspace : IDisposable
     {
         ArgumentNullException.ThrowIfNull(directory);
 
-        // A path crosses as bytes, and the platform's own encoding is UTF-8 — which is what this
+        // A path crosses as bytes, and the platform's own encoding is UTF-8, which is what this
         // writes. The buffer is this side's to free, which is why it is in a `finally`: the search
         // raising is no reason to lose it.
         var path = Marshal.StringToCoTaskMemUTF8(directory);

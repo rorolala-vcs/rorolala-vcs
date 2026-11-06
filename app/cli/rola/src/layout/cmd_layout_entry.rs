@@ -2,8 +2,8 @@
 //!
 //! These write a Layout's content the way the library's own `Layout` does, one operation at a time:
 //! an entry is a `Uuid` and the data it holds, and what is here is the three ways that data
-//! changes. Nothing is checked beyond what the Layout itself checks — an entry that is already
-//! there is refused by `create` and an entry that is not is refused by `update` — since this is the
+//! changes. Nothing is checked beyond what the Layout itself checks, an entry that is already
+//! there is refused by `create` and an entry that is not is refused by `update`, since this is the
 //! layer for writing content by hand.
 
 use std::str::FromStr as _;
@@ -177,7 +177,7 @@ fn entry_uuids(ctx: &ShellContext, workspace: &ResWorkspace, vault: &ResVault) -
 
 /// Makes an entry hold data
 ///
-/// `UUID` is how the file is known upstream, `VERSION` the version it is at — written as
+/// `UUID` is how the file is known upstream, `VERSION` the version it is at, written as
 /// `blake3:<hex>` or as the digest alone. `--owner` names the account that holds it, `--description`
 /// what it says about itself; leaving either out leaves it holding none and saying nothing.
 ///

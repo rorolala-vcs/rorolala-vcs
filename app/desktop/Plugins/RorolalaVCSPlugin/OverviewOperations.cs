@@ -6,7 +6,7 @@ using RorolalaDesktop.I18n;
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// What may be done about one state of a row, which is a mode of <c>rola align</c> apiece — except cancelling
+/// What may be done about one state of a row, which is a mode of <c>rola align</c> apiece, except cancelling
 /// a merge, which is a file taken away and a record confirmed after it.
 /// </summary>
 /// <remarks>
@@ -53,8 +53,8 @@ internal enum Operation
     /// Assert that a lost path moved to the file it is paired with, which is what connecting two rows does.
     /// </summary>
     /// <remarks>
-    /// The one operation that is not one row's own: it is made of two paths — the one the Layout names and the
-    /// one the tree holds — and neither is a whole answer without the other. That is why it is the one button
+    /// The one operation that is not one row's own: it is made of two paths, the one the Layout names and the
+    /// one the tree holds, and neither is a whole answer without the other. That is why it is the one button
     /// that waits for a second click rather than running when it is pressed.
     /// </remarks>
     Connect,
@@ -77,7 +77,7 @@ internal enum Operation
 /// <remarks>
 /// The operations are the row's rather than the state's, because a row may be in more than one state at once:
 /// a file that moved and was edited is a move and a change of content, and what a reader has to do about it is
-/// both — so the buttons of both states are on the one row, in the order the states are read in. Two states
+/// both, so the buttons of both states are on the one row, in the order the states are read in. Two states
 /// that want the same operation want it once, which is what the deduplication is for.
 /// </remarks>
 internal static class OverviewOperations
@@ -174,8 +174,8 @@ internal static class OverviewOperations
     /// </summary>
     /// <remarks>
     /// Asked rather than written twice, since what waits is one of the six and the three places that care about
-    /// it — which button begins it, which buttons stay pressable while it is on, and which side of it a row may
-    /// be — all have to agree about which one it is.
+    /// it, which button begins it, which buttons stay pressable while it is on, and which side of it a row may
+    /// be, all have to agree about which one it is.
     /// </remarks>
     /// <param name="operation">The operation.</param>
     /// <returns>Whether it is <see cref="Operation.Connect"/>.</returns>
@@ -187,7 +187,7 @@ internal static class OverviewOperations
     /// <remarks>
     /// A connection is a loss on one side and a gain on the other, and the command line insists on which is
     /// which: <c>--move</c> names the file a <em>lost</em> path moved to, and that file must be one the Layout
-    /// does not know — which is exactly an untagged one. So a lost row pairs with an untagged row and no other
+    /// does not know, which is exactly an untagged one. So a lost row pairs with an untagged row and no other
     /// way round: two losses have nowhere to go, and two gains have nothing that went.
     /// </remarks>
     /// <param name="mine">The states of the row being clicked.</param>
@@ -308,7 +308,7 @@ internal static class OverviewOperations
             }
             finally
             {
-                // The table is held for as long as the run is, so it is let go of however the run ended — a mode
+                // The table is held for as long as the run is, so it is let go of however the run ended, a mode
                 // that failed has still stopped being one that is going.
                 finished();
             }
@@ -321,8 +321,8 @@ internal static class OverviewOperations
     /// <remarks>
     /// The file first and the record second, which is the order the command line insists on: `rola align
     /// --delete` ends a merge whose variant file is gone and refuses while it is still there, so a run that
-    /// wants the record ended takes the file away first. A file already gone — a merge the reading calls
-    /// broken, which is most of them — is nothing to remove, and the record is ended either way.
+    /// wants the record ended takes the file away first. A file already gone, a merge the reading calls
+    /// broken, which is most of them, is nothing to remove, and the record is ended either way.
     /// <para>
     /// Two runs are two chances to fail, and what the second says is what is reported: a removal that failed
     /// has left the merge as it was, and the record that follows would refuse for a reason the first run's
@@ -420,7 +420,7 @@ internal static class OverviewOperations
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            // The words are `rola`'s own, and `rola` writes UTF-8 — as every stream this project's programs
+            // The words are `rola`'s own, and `rola` writes UTF-8, as every stream this project's programs
             // write is. Left unstated, a redirected stream is decoded in the machine's codepage, which on a
             // Chinese Windows is GBK, and every word of the message comes out as mojibake.
             StandardOutputEncoding = Encoding.UTF8,

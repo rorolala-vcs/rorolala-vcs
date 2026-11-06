@@ -5,8 +5,8 @@
 //! the table fills the terminal instead of stopping at the last word of the widest row. There are
 //! no borders: the header is bold and underlined, and the columns are separated by two spaces.
 //!
-//! A cell is a sequence of runs, so a caller can draw part of it another way — the word a search
-//! matched, say — without handing this module a colour language to parse. Widths are terminal
+//! A cell is a sequence of runs, so a caller can draw part of it another way, the word a search
+//! matched, say, without handing this module a colour language to parse. Widths are terminal
 //! columns: a character that takes two on screen counts as two, so a table of Chinese text lines
 //! up the same way one of Latin text does.
 //!
@@ -196,7 +196,7 @@ impl Table {
 
     /// The table drawn across the terminal this program is writing to.
     ///
-    /// A terminal that will not say how wide it is — a pipe, a file — is drawn 100 columns wide.
+    /// A terminal that will not say how wide it is (a pipe, a file) is drawn 100 columns wide.
     #[must_use]
     pub fn render(&self) -> String {
         let width = console::Term::stdout()

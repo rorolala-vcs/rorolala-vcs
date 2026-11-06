@@ -17,8 +17,8 @@ use crate::exit_codes::{
 // here from a command, and what names the entry it routes to.
 import_type!(ErrorAction = librorolala::protocol::ActionError);
 
-// What the failure is written as when a run is read rather than watched is the library's own —
-// it is where the failure is known — but the registration is this program's, since that is
+// What the failure is written as when a run is read rather than watched is the library's own,
+// it is where the failure is known, but the registration is this program's, since that is
 // where a program's types are registered. Without it the failure would be read as nothing at
 // all, which is what a run asked for `--json` would print where the failure was.
 ::mingling::macros::structural!(ErrorAction);
@@ -157,8 +157,8 @@ pub fn render_error_action(err: ErrorAction, ec: &mut ResExitCode) {
             ec.exit_code = EC_ERR_ACTION_TRANSPORT;
         }
         // A key the other side took but cannot produce again. It is told apart from the words of
-        // `MissingObject` because a reader acts on it differently — there the object was nowhere to
-        // begin with, here it was written and did not land — while what a caller can do about it is
+        // `MissingObject` because a reader acts on it differently, there the object was nowhere to
+        // begin with, here it was written and did not land, while what a caller can do about it is
         // the same, which is why it is the same exit code rather than a subject of its own.
         ActionError::NotConfirmed(key) => {
             r_eprintln!("{}", err_line!(t!("error.action.err_not_confirmed").trim()));

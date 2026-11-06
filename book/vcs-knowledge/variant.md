@@ -114,7 +114,7 @@ A progressive variant is **130 bytes**, a merge variant **162 bytes**. The index
 
 ## Creator and Message
 
-The creator and the message are **not free-text fields** but two separate index objects:
+The creator and the message are **two separate index objects**:
 
 | Object    | Content              | Hash                   |
 | --------- | -------------------- | ---------------------- |

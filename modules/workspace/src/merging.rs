@@ -6,8 +6,8 @@
 //! is [`MERGING`](Merging::path), a plain file under the Workspace's own data directory: while it is
 //! there and holds a line, the Workspace is in a merge.
 //!
-//! A variant file is not a path the Layout names — the Layout is what the work is, and a variant
-//! file is something waiting to become part of it — so the reading of the tree has to be told which
+//! A variant file is not a path the Layout names, the Layout is what the work is, and a variant
+//! file is something waiting to become part of it, so the reading of the tree has to be told which
 //! paths to leave out, which is what [`Merging::ignored`] answers. Its path is a convention rather
 //! than a record: it lies beside the file it is for, named after it with the variant's short hash in
 //! it, so a move of the target carries the variant file along without the record saying where it is.
@@ -16,8 +16,8 @@
 //!
 //! Keeping the state here rather than in the Layout is deliberate: a merge is work in this tree and
 //! nowhere else, so it travels with nothing and changing it changes no format. A record that cannot
-//! be carried out — the target no longer named, the variant no longer held, the file gone or changed
-//! underneath — is left where it is for a reading to report, rather than dropped quietly.
+//! be carried out, the target no longer named, the variant no longer held, the file gone or changed
+//! underneath, is left where it is for a reading to report, rather than dropped quietly.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -288,12 +288,12 @@ impl Merging {
     /// Whether the place `at`, read from `target`'s directory, is a path inside the Workspace.
     ///
     /// It is the check a run that is told where to put a variant file makes. A place that climbs out
-    /// of the Workspace is not one a record can hold — though a place that becomes one later, because
+    /// of the Workspace is not one a record can hold, though a place that becomes one later, because
     /// the target moved shallower, is held at the root rather than refused, which is what
     /// [`Merging::variant_path`] does.
     ///
     /// A place that is *rooted* is refused rather than one that is absolute: `/models/x.psd` is not
-    /// absolute on Windows — it names a path from the root of whatever drive the run is on — and
+    /// absolute on Windows, it names a path from the root of whatever drive the run is on, and
     /// joining it onto the target's directory would hold a path no Layout names.
     #[must_use]
     pub fn place_holds(target: &LayoutPath, at: &Path) -> bool {
@@ -378,14 +378,14 @@ impl Merging {
 
 /// The path a variant file lies at: where the run said, or beside its target under the convention.
 ///
-/// The convention is the target's name with the variant's short hash in it — `hero.1a2b3c4.psd`
+/// The convention is the target's name with the variant's short hash in it, `hero.1a2b3c4.psd`
 /// where the target is `hero.psd`, and `README_1a2b3c4` where it has no suffix, since a suffix a
 /// file did not have is not one to give it. The hash is there so the name says which variant it is
 /// without anything being read, and the target's directory is there so both move together.
 ///
 /// A place of the run's own is read from the target's directory. A target that moves to a shallower
-/// directory can leave such a place climbing past the root — `../x` read from `a/` is `x`, and read
-/// from the root it is nothing — and it is then held at the root rather than refused: the file is
+/// directory can leave such a place climbing past the root, `../x` read from `a/` is `x`, and read
+/// from the root it is nothing, and it is then held at the root rather than refused: the file is
 /// where it is, and a merge that lost it because its target moved would be a tracking lost for no
 /// reason. What a run may *say* is still checked on the way in, by [`Merging::place_holds`].
 fn variant_path(

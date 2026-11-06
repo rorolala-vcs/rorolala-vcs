@@ -7,12 +7,12 @@ namespace RorolalaVCSPlugin;
 /// </summary>
 /// <remarks>
 /// The shape is <c>{"name": ..., "reason": ...}</c>: the name is what the failure is, untranslated, and the reason
-/// is what it says. It is not a result — nothing in it names what was asked for — so a caller that reads results
+/// is what it says. It is not a result, nothing in it names what was asked for, so a caller that reads results
 /// reads this one first.
 /// <para>
 /// A status is how a run's failure is usually known, and it is what the plugin reads: a command that failed says so
-/// with its status and its error stream. This exists for the case where neither says it — a failure written as data
-/// instead, which is what asking a run for <c>--json</c> makes of one — so that a run which answered with a failure
+/// with its status and its error stream. This exists for the case where neither says it, a failure written as data
+/// instead, which is what asking a run for <c>--json</c> makes of one, so that a run which answered with a failure
 /// is not read as a run that answered with nothing.
 /// </para>
 /// </remarks>
@@ -33,7 +33,7 @@ internal sealed record FailureReport(string Name, string Reason)
     /// <summary>What `output` says the failure was, or nothing when it does not say one.</summary>
     /// <remarks>
     /// The two fields together are what the shape is recognized by. Every result this plugin reads carries a member
-    /// of its own — <c>entries</c>, <c>layouts</c>, <c>vaults</c>, a plan's <c>layout</c> — and no result carries both
+    /// of its own (<c>entries</c>, <c>layouts</c>, <c>vaults</c>, a plan's <c>layout</c>) and no result carries both
     /// of these, so a document holding both is a failure and one holding either is not.
     /// </remarks>
     /// <param name="output">What the command wrote on its output stream.</param>

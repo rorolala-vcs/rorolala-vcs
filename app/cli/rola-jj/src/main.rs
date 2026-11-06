@@ -13,8 +13,8 @@ mod backend;
 
 /// How much stack the command line is given, in bytes.
 ///
-/// jj's command line is deep — clap's tree, the configuration, and the asynchronous futures under
-/// both — and at `opt-level = 0` it needs more than the mebibyte a thread is given by default: jj
+/// jj's command line is deep, clap's tree, the configuration, and the asynchronous futures under
+/// both, and at `opt-level = 0` it needs more than the mebibyte a thread is given by default: jj
 /// asks its linker for these eight mebibytes in its own `.cargo/config.toml`, for exactly that
 /// reason. The same eight are asked for here, and in a place that travels with the program rather
 /// than with the build, because a `rola-jj` an export laid down was built somewhere else entirely.
@@ -28,8 +28,8 @@ const PANIC: u8 = 101;
 ///
 /// The command line is jj-cli's whole: the commands, their arguments and their help are the ones
 /// `jj` answers with, so nothing about them is written here. What is this program's is the store
-/// they are run over — [`store_factories`] hands the runner rola's backend, which the runner merges
-/// into jj's own factories — and the name and version it is drawn as.
+/// they are run over, [`store_factories`] hands the runner rola's backend, which the runner merges
+/// into jj's own factories, and the name and version it is drawn as.
 ///
 /// The version is this program's own, and deliberately not jj's: jj's is baked into `jj-cli` at its
 /// own build time and is not handed on to a crate that embeds it, and a program that reported the
@@ -37,7 +37,7 @@ const PANIC: u8 = 101;
 /// `Cargo.toml`.
 fn main() -> std::process::ExitCode {
     // UNWRAP: without that thread there is no command line to run at all, and the only way the
-    // spawn fails is this process's own resource exhaustion — nothing is left to report but the
+    // spawn fails is this process's own resource exhaustion, nothing is left to report but the
     // panic, which is the one answer that does not pretend a command line ran.
     let run = std::thread::Builder::new()
         .name("rola jj".to_owned())

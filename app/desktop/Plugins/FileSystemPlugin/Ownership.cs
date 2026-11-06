@@ -51,7 +51,7 @@ public enum MarkInk
 /// This is the extension point, reached by depending on this plugin: a manifest that names
 /// <c>rorolala.file_system</c> in its dependencies is started after it, and its <c>Initialize</c> may hand
 /// one of these to <see cref="EntryLockProviders.Register"/>. What is contributed is the Ownership column
-/// of a directory dock's list, and — through <see cref="IEntryMarkProvider"/>, which this is — the badge a
+/// of a directory dock's list, and (through <see cref="IEntryMarkProvider"/>, which this is) the badge a
 /// tile wears in its grid.
 /// <para>
 /// A provider answers about a directory as much as about an entry, because whether an entry has a lock at
@@ -119,7 +119,7 @@ public static class EntryLockProviders
     /// </summary>
     /// <remarks>
     /// Said to all of them rather than to the one a directory is answered by: what is read again is not
-    /// known here, and what a provider is holding is its own business — one with nothing to let go of
+    /// known here, and what a provider is holding is its own business, one with nothing to let go of
     /// answers nothing to it.
     /// </remarks>
     public static void Forget()

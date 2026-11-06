@@ -306,8 +306,8 @@ async fn what_is_already_held_is_not_written_again() {
         assert!(!store.object_path(chunk).is_file());
     }
 
-    // Writing the same content again is writing nothing: a chunk that is held — packed as much as
-    // loose — is not written a second time. Without that, this would leave a loose copy of every
+    // Writing the same content again is writing nothing: a chunk that is held, packed as much as
+    // loose, is not written a second time. Without that, this would leave a loose copy of every
     // packed chunk behind, which is the same bytes in two places.
     let again = store.write_file(&file, choice).await.unwrap();
     assert_eq!(again, key);
@@ -380,7 +380,7 @@ async fn a_manifest_can_be_carried_to_another_store() {
         .await
         .unwrap();
 
-    // What a caller has to hand on is the manifest and the chunks it names, and nothing else — the
+    // What a caller has to hand on is the manifest and the chunks it names, and nothing else, the
     // content is put back together on the other side from those.
     let manifest = from.manifest_of(&key).await.unwrap().unwrap();
     to.put_manifest(&key, &manifest).await.unwrap();
@@ -458,7 +458,7 @@ async fn a_key_a_pack_names_is_held_though_the_pack_file_is_gone() {
     assert!(store.pack(&[key]).await.unwrap());
 
     // The index is what a lookup reads, and it still names the key; the pack file is what a read
-    // opens. Held is the index's answer, so the key is held and not producible — which is the case a
+    // opens. Held is the index's answer, so the key is held and not producible, which is the case a
     // transfer answers with "nothing to send" rather than by failing.
     let (pack, index) = store.pack_paths(0);
     fs::remove_file(&pack).unwrap();
@@ -580,7 +580,7 @@ async fn a_manifest_whose_chunks_are_gone_does_not_hide_the_object() {
         .await
         .unwrap();
 
-    // The whole content is under the key as well — a write of it lands at the same key — and a
+    // The whole content is under the key as well, a write of it lands at the same key, and a
     // chunk of the manifest is then taken away, so the manifest is one nothing can be put back
     // together from while the content itself is still there.
     store.write_object(&content, Codec::Raw).await.unwrap();
@@ -675,7 +675,7 @@ async fn a_directory_where_an_object_belongs_is_not_an_object() {
     let key = Key::new(*blake3::hash(content).as_bytes());
 
     // Something that is not a file where the object belongs. It is not held, so the write goes
-    // ahead rather than answering `Ok` over something no read could ever open — and it fails,
+    // ahead rather than answering `Ok` over something no read could ever open, and it fails,
     // because a file cannot be moved over a directory.
     fs::create_dir_all(store.object_path(&key)).unwrap();
     assert!(!holds(&store, &key).await);
@@ -731,7 +731,7 @@ async fn the_choice_is_a_container_taken_apart_or_the_content_itself() {
 
     // What a store was told to write is what it writes, and what it was told applies to content of
     // any kind: a signature or a policy's claim is not allowed to overrule a caller who named the
-    // strategy. What it does *not* change is how the content is encoded — a cut is a cut, and text
+    // strategy. What it does *not* change is how the content is encoded, a cut is a cut, and text
     // is still text.
     let told = store
         .clone()
@@ -874,7 +874,7 @@ async fn a_store_that_cannot_read_the_whole_is_not_content_that_does_not_add_up(
         .await
         .unwrap();
 
-    // The chunks cannot be put back together, so the whole object is asked for — and what is at its
+    // The chunks cannot be put back together, so the whole object is asked for, and what is at its
     // path is not an object that can be read. The failure of that read is a disk's, not a manifest's.
     let manifest = store.read_manifest(&key).await.unwrap().unwrap();
     store.remove(&manifest.chunks()[0].key()).await.unwrap();
@@ -1011,7 +1011,7 @@ async fn a_key_a_pack_names_but_cannot_produce_does_not_stall_an_exchange() {
     assert!(from.pack(&[key]).await.unwrap());
 
     // The index still names the key and the pack file is gone: this end answers that it holds it,
-    // and cannot produce it. The exchange says "nothing here" for it and ends — the case the empty
+    // and cannot produce it. The exchange says "nothing here" for it and ends, the case the empty
     // frame in `send` exists for.
     let (pack, _) = from.pack_paths(0);
     fs::remove_file(&pack).unwrap();

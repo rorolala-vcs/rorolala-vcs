@@ -427,7 +427,7 @@ impl ResultDocsEntry {
 pub struct ResultDocsSnippet {
     /// The field the fragment was cut from.
     field: String,
-    /// The fragment's text, with `…` where it was cut.
+    /// The fragment's text, with `...` where it was cut.
     text: String,
     /// The matched words inside the text, in characters.
     ranges: Vec<ResultDocsRange>,

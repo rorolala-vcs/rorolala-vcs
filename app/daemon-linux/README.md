@@ -36,20 +36,20 @@ same override `cargo dev` honours.
 
 ## The four tabs
 
-- **Daemon** — starts the `rola-daemon` beside the window, appending its stdout and stderr to the
+- **Daemon**: starts the `rola-daemon` beside the window, appending its stdout and stderr to the
   log below and showing its exit code. `Stop` sends `SIGTERM` and falls back to `SIGKILL`, because
   `rola-daemon` has no stop subcommand. Closing the window stops a daemon it started and leaves one
   it did not.
-- **Registry** — `$XDG_DATA_HOME/rola/daemon/registry.toml` through `list`, `check`, `register` and
+- **Registry**: `$XDG_DATA_HOME/rola/daemon/registry.toml` through `list`, `check`, `register` and
   `remove`, with the full path of the selected entry at the bottom. The table is sorted by
   namespace, so there is no reordering. A namespace that is already taken is refused by `register`,
   and the window shows that answer; `Edit` rewrites a line by removing it and registering it again,
   and puts the old one back when the new one is refused.
-- **Keys** — `$XDG_DATA_HOME/rola/keys`, listed through `rola key`. Importing is the one action that
+- **Keys**: `$XDG_DATA_HOME/rola/keys`, listed through `rola key`. Importing is the one action that
   does not go through a command, because the CLI generates keys and does not import them: each
   chosen `.pem` or `.pub` is checked for its extension, its stem and its PEM header, and an existing
   file is overwritten only when the overwrite is confirmed one at a time.
-- **Admins** — the `[auth] admins` of the registered Vaults, through `rola vault admin`. The last
+- **Admins**: the `[auth] admins` of the registered Vaults, through `rola vault admin`. The last
   administrator is refused by the CLI and the window shows that answer as it came; the first one is
   written into `vault.toml` by hand, since a Vault with no administrator has nobody who may name one.
 
@@ -68,5 +68,5 @@ $XDG_DATA_HOME/rola/daemon/registry.toml  namespace to Vault path
 <vault>/vault.toml                        the `[auth] admins` of a Vault
 ```
 
-`$XDG_DATA_HOME` falls back to `~/.local/share`, and `ROLA_DATA_HOME` overrides both — the same
+`$XDG_DATA_HOME` falls back to `~/.local/share`, and `ROLA_DATA_HOME` overrides both, the same
 variable the integration suites use to keep their files away from the machine's.

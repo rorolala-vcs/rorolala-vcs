@@ -14,7 +14,7 @@ use crate::signal::{Direction, Signal};
 /// What a run says its progress to.
 ///
 /// A sink is told about work and decides what becomes of it: drawn, written down, or dropped.
-/// Nothing about a sink may hold the work up — the work is the point and the progress is about
+/// Nothing about a sink may hold the work up, the work is the point and the progress is about
 /// it, so a sink that cannot keep up is left behind rather than waited for.
 pub trait Signals: Send + Sync {
     /// Takes one thing said about the work.
@@ -71,8 +71,8 @@ impl Progress {
 
     /// Begins a task called `what`, which is `total` long when that is known already.
     ///
-    /// The task is over when it is dropped, so a work that ends early — by returning, by a
-    /// `?`, or by being given up on — ends the task it began rather than leaving a reader
+    /// The task is over when it is dropped, so a work that ends early, by returning, by a
+    /// `?`, or by being given up on, ends the task it began rather than leaving a reader
     /// watching something that will never finish.
     #[must_use]
     pub fn begin(&self, what: impl Into<String>, total: Option<u64>) -> Task {
@@ -121,7 +121,7 @@ impl Task {
 
     /// Names the piece of this task being done right now.
     ///
-    /// A task that works through many things — a store key by key — is one line the whole way,
+    /// A task that works through many things, a store key by key, is one line the whole way,
     /// and this is what changes on it: the marker lasts as long as it is held, so a reader
     /// shows the thing being worked on and moves on when the work does. It moves nothing
     /// itself, and so carries no direction and no length.

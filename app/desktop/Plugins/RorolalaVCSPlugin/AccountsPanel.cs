@@ -17,8 +17,8 @@ namespace RorolalaVCSPlugin;
 /// The accounts on this machine: which one the work acts as, and what may be done about them.
 /// </summary>
 /// <remarks>
-/// A table of the accounts the command line lists, one row each — its name, whether it is the one in use, and
-/// what may be done about it: name it, export its public key, take it away — with a field above for making a
+/// A table of the accounts the command line lists, one row each, its name, whether it is the one in use, and
+/// what may be done about it: name it, export its public key, take it away, with a field above for making a
 /// new one. What each row does is a run of `rola`, so the dock answers what the command line would answer and
 /// nothing here is a second account of the same work.
 /// <para>
@@ -71,7 +71,7 @@ internal sealed class AccountsPanel : UserControl
     /// <summary>Every button of the table, with whether it answers when no run is going.</summary>
     /// <remarks>
     /// The two are kept together because holding the table and restoring it are one answer each: a button that
-    /// is not offered — the one naming the account the work already acts as — must be let go of as pressed-up
+    /// is not offered, the one naming the account the work already acts as, must be let go of as pressed-up
     /// as it was, and a list of buttons alone would answer it as free again the moment the table was restored.
     /// </remarks>
     private readonly List<(Button Button, bool Free)> _buttons = [];
@@ -367,8 +367,8 @@ internal sealed class AccountsPanel : UserControl
 
     /// <summary>Asks about taking an account away, and takes it when the answer is yes.</summary>
     /// <remarks>
-    /// A pair is the identity the work acts as, and what it proves cannot be got back — a new pair is a new
-    /// identity — so it is asked about rather than deleted. The command line has no word for this, so what is
+    /// A pair is the identity the work acts as, and what it proves cannot be got back, a new pair is a new
+    /// identity, so it is asked about rather than deleted. The command line has no word for this, so what is
     /// taken away are the two files the pair is: the private key the account is, and the public one beside it.
     /// </remarks>
     /// <param name="name">The account.</param>
@@ -463,8 +463,8 @@ internal sealed class AccountsPanel : UserControl
     /// Saves an account's public key where the user says, through the platform's own picker.
     /// </summary>
     /// <remarks>
-    /// The picker is the platform's, reached through the window this dock is in. A platform that offers none —
-    /// a headless one, or one with no desktop portal — is answered with a report rather than with a second
+    /// The picker is the platform's, reached through the window this dock is in. A platform that offers none,
+    /// a headless one, or one with no desktop portal, is answered with a report rather than with a second
     /// picker of this plugin's own: what to save and where is the host's to ask, and a plugin with a window of
     /// its own would be one the reader has to be told about twice.
     /// </remarks>
@@ -579,8 +579,8 @@ internal sealed class AccountsPanel : UserControl
 
     /// <summary>Where the runs are made, which is the base the browser is rooted at.</summary>
     /// <remarks>
-    /// The scopes a key is looked for in follow the run's directory — a Workspace's keys and the Vault's come
-    /// first — so a run made where the work is lists what a run of the command line there would.
+    /// The scopes a key is looked for in follow the run's directory, a Workspace's keys and the Vault's come
+    /// first, so a run made where the work is lists what a run of the command line there would.
     /// </remarks>
     /// <returns>The directory to run in.</returns>
     private static string Directory() =>

@@ -2,7 +2,7 @@
 //!
 //! These write a Layout's content the way the library's own `Layout` does: a path names a `Uuid`,
 //! and what is here is the three ways that naming changes. Nothing is checked beyond what the
-//! Layout itself checks — binding a path to an entry that holds nothing is allowed — since this is
+//! Layout itself checks, binding a path to an entry that holds nothing is allowed, since this is
 //! the layer for writing content by hand.
 
 use librorolala::daemon::{

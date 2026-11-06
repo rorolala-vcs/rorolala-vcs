@@ -31,7 +31,7 @@ const REMOVED_PREFIX: &str = "@/removed/";
 /// where the work holds it rather than in a staging area of the Vault's own. When that name is
 /// taken, the parent, the stem, the `Uuid` in short form, and the extension: `art/hero.psd` becomes
 /// `art/hero@1a2b3c4.psd`. The short form grows a character at a time while even that name is taken,
-/// so two files submitted under one path stay two names — the whole `Uuid` last, which no
+/// so two files submitted under one path stay two names, the whole `Uuid` last, which no
 /// `Uuid`-carrying name can share.
 ///
 /// `None` when even the whole `Uuid` leaves the name taken, which cannot happen for a real one.
@@ -324,7 +324,7 @@ const fn kind_name(kind: EntryKind) -> &'static str {
 
 /// What the Vault holds and this Layout does not.
 ///
-/// It is not the sync's to bring — a `Uuid` enters a Layout by `checkin` — so these are named
+/// It is not the sync's to bring, a `Uuid` enters a Layout by `checkin`, so these are named
 /// rather than planned.
 fn remote_only(local: &Layout, remote: &Layout, direction: Direction) -> Vec<Entry> {
     if !kept(Kind::RemoteOnly, direction) {
@@ -431,7 +431,7 @@ struct Relations<'a> {
     /// What the index holds under a version digest, or nothing when it holds none.
     versions: HashMap<Blake3Hash, Option<Version>>,
 
-    /// The version below a version — its variant's base — or nothing when it is the root.
+    /// The version below a version, its variant's base, or nothing when it is the root.
     parents: HashMap<Blake3Hash, Option<Blake3Hash>>,
 
     /// Whether one version is on the chain below another, by the pair of digests.
@@ -570,7 +570,7 @@ pub async fn store_of(index: &VCSIndex, digest: &[u8; 32]) -> Result<Option<Key>
 /// named only the top of a chain left every version below it a name in the Layout with no content
 /// behind it: the version crossed, nothing it stored did, and nothing said so.
 ///
-/// A version the index does not hold ends the walk — a chain the index cannot read is one it cannot
+/// A version the index does not hold ends the walk, a chain the index cannot read is one it cannot
 /// name content for, and guessing past it would name content no version is known to want.
 ///
 /// # Errors

@@ -11,7 +11,7 @@
   -->
   <PropertyGroup>
     <!-- The root every project's output sits under, said once so a project that has to name another
-         project's output — the integration suites naming the Desktop program — can do so without
+         project's output, the integration suites naming the Desktop program, can do so without
          repeating the layout. -->
     <CsTargetRoot>$(MSBuildThisFileDirectory).cache/cs-target</CsTargetRoot>
     <CsTargetDir>$(CsTargetRoot)/$(MSBuildProjectName)</CsTargetDir>
@@ -23,10 +23,10 @@
     The C# side is held to the same standard as the Rust side, where every crate denies `warnings`: a
     warning is a mistake that has not been fixed yet, so it fails the build wherever it is raised
     rather than being read past. This is said once here rather than in each project, because it is a
-    property of the workspace and not of any one program in it — the Desktop program was the one that
+    property of the workspace and not of any one program in it, the Desktop program was the one that
     had been left out of it.
 
-    The stricter analyzer tier — every rule rather than the recommended ones — is asked for by the
+    The stricter analyzer tier, every rule rather than the recommended ones, is asked for by the
     `dotnet-lint` gate rather than here, so that an ordinary build is held to what the compiler says
     and the gate to the whole of what the analyzers say. See the `dotnet-lint` command of `dev/ci` and the
     root `.editorconfig`.

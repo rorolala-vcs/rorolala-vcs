@@ -70,7 +70,7 @@ fn parse_range(tokens: &[TokenTree]) -> (usize, usize, usize) {
             }
         }
     } else {
-        // No `..` found — fallback to simple count
+        // No `..` found, fallback to simple count
         let count = parse_usize_tokens(&before);
         (1, count, body_start)
     }
@@ -115,7 +115,7 @@ fn expand_body(tokens: &[TokenTree], current: usize, min: usize, max: usize) -> 
             continue;
         }
 
-        // `^$` — max value
+        // `^$`: max value
         if let TokenTree::Punct(p) = &tokens[i]
             && p.as_char() == '^'
             && i + 1 < tokens.len()
@@ -234,16 +234,16 @@ fn expand_body_vec(stream: &TokenStream, current: usize, min: usize, max: usize)
 /// Try to expand a repetition group.
 ///
 /// New syntax (repetition marker `+` is the LAST token INSIDE the parens):
-/// - `(group,+)`    — repeat `*` times (current), `,` is the separator
-/// - `(group,+)`    — repeat `*` times, `,` is the separator
-/// - `(group,+)`    — repeat `*` times, `;` is the separator
-/// - `(group +)`    — repeat `*` times, no separator
-/// - `(group,+)+`   — repeat `*+1` times (with separator)
-/// - `(group,+)--`   — repeat `*-1` times (with separator) [not yet used]
-/// - `(group,+)^`   — repeat `max - *` times (with separator); the complement,
+/// - `(group,+)`: repeat `*` times (current), `,` is the separator
+/// - `(group,+)`: repeat `*` times, `,` is the separator
+/// - `(group,+)`: repeat `*` times, `;` is the separator
+/// - `(group +)`: repeat `*` times, no separator
+/// - `(group,+)+`: repeat `*+1` times (with separator)
+/// - `(group,+)--`: repeat `*-1` times (with separator) [not yet used]
+/// - `(group,+)^`: repeat `max - *` times (with separator); the complement,
 ///   used to pad a fixed-length list with the items `*` does not produce.
 ///
-/// The `*` is the current counter value. An optional `+`, `-` or `^` immediately
+/// The `*` is the current counter value. An optional `+`: `-` or `^` immediately
 /// after the closing paren shifts the repeat count up/down by one, or makes it
 /// the complement of `max`.
 fn try_expand_paren_group(
@@ -261,15 +261,15 @@ fn try_expand_paren_group(
     let stream: Vec<TokenTree> = group.stream().into_iter().collect();
 
     // Repetition syntax: the LAST token inside the parens MUST be `+`.
-    //   `(content,+)`      — repeat * times, `,` separator
-    //   `(content;+)`      — repeat * times, `;` separator
-    //   `(content,+)`      — repeat * times, no separator
-    //   `(content,+)+`     — repeat *+1 times
-    //   `(content,+)-`     — repeat *-1 times
+    //   `(content,+)`: repeat * times, `,` separator
+    //   `(content;+)`: repeat * times, `;` separator
+    //   `(content,+)`: repeat * times, no separator
+    //   `(content,+)+`: repeat *+1 times
+    //   `(content,+)-`: repeat *-1 times
     // An optional `+` / `-` right after `)` shifts the count by ±1.
     //
     // Any `+` tokens inside `content` are treated as regular Rust syntax
-    // (trait bounds, etc.) — the repetition marker is ONLY the final `+`.
+    // (trait bounds, etc.), the repetition marker is ONLY the final `+`.
 
     let last_is_plus = stream
         .last()
@@ -284,7 +284,7 @@ fn try_expand_paren_group(
             let sep_idx = stream.len() - 2;
             match &stream[sep_idx] {
                 TokenTree::Punct(p) if p.as_char() == ',' => {
-                    // (...,content,+) — inner is everything before the last `,`
+                    // (...,content,+), inner is everything before the last `,`
                     let content: Vec<TokenTree> = stream[..sep_idx].into();
                     (content, ",")
                 }
@@ -293,13 +293,13 @@ fn try_expand_paren_group(
                     (content, ";")
                 }
                 _ => {
-                    // (content+) — no separator, the `+` is the only special token
+                    // (content+), no separator, the `+` is the only special token
                     let content: Vec<TokenTree> = stream[..stream.len() - 1].into();
                     (content, "")
                 }
             }
         } else {
-            // (+) — bare repetition marker, empty content
+            // (+), bare repetition marker, empty content
             (vec![], "")
         }
     };
@@ -309,7 +309,7 @@ fn try_expand_paren_group(
     let (repeat_count, consumed) = match rest.first() {
         Some(TokenTree::Punct(p)) if p.as_char() == '+' => (current + 1, 2),
         Some(TokenTree::Punct(p)) if p.as_char() == '-' => (current.saturating_sub(1), 2),
-        // `^` — repeat `max - current` times. Used to pad a fixed-length
+        // `^`: repeat `max - current` times. Used to pad a fixed-length
         // parameter list with the parameters not consumed by this arity.
         Some(TokenTree::Punct(p)) if p.as_char() == '^' => (max.saturating_sub(current), 2),
         _ => (current, 1),

@@ -3,22 +3,22 @@
 //!
 //! A Vault does not reach out; it waits. Every connection is answered on its own, so one
 //! Workspace that fails to prove itself, or asks for something the machine does not serve,
-//! never holds up the ones behind it. What a connection needs that does not change — the
-//! daemon's identity and the actions it serves — is resolved once, as the daemon starts, and
+//! never holds up the ones behind it. What a connection needs that does not change, the
+//! daemon's identity and the actions it serves, is resolved once, as the daemon starts, and
 //! shared from there.
 //!
 //! # Two ways to be reached
 //!
 //! A daemon listens on a port, and a connection to it is a stream like any other. It may also be
-//! reached over a session whose standard streams *are* the connection — what `rola-daemon serve
-//! <path>` is — which needs no port at all and needs nothing of the network beyond `ssh` itself.
+//! reached over a session whose standard streams *are* the connection, what `rola-daemon serve
+//! <path>` is, which needs no port at all and needs nothing of the network beyond `ssh` itself.
 //! The two share everything an ear and a mouth share: the identity, the actions, the order in
 //! which a caller is proved and admitted. What they do not share is where the Vault comes from.
 //!
 //! A listening daemon is told which Vault a request names, and looks that name up in the table of
 //! namespaces. A session was given a path on its command line, and serves that Vault and no other:
 //! the request it reads may not name one, since the address that started it already did. Nothing
-//! that arrives over the connection ever becomes a path in either case — a namespace is looked up
+//! that arrives over the connection ever becomes a path in either case, a namespace is looked up
 //! in a table, and a path was decided before the connection existed.
 //!
 //! # Identity
@@ -26,7 +26,7 @@
 //! The daemon proves itself before it reads which Vault a caller wants, so there is one identity
 //! for the machine rather than one per Vault: the account the user keeps in their own key
 //! directory. A Vault's members are still checked against that Vault's own configuration, which is
-//! what decides who may act on it — and, for a session, what may be written into its keys when a
+//! what decides who may act on it, and, for a session, what may be written into its keys when a
 //! name is there for the first time.
 
 use std::collections::HashMap;
@@ -162,7 +162,7 @@ struct Registry {
 /// How a connection is served: where its Vault comes from, and what may be done for it.
 enum Resolution {
     /// A connection to a listening daemon: the request names a namespace, and the table says
-    /// which Vault that is. Nothing is registered for one — a port is not a door that proves a
+    /// which Vault that is. Nothing is registered for one, a port is not a door that proves a
     /// person, so it is not one that may name itself a member.
     Namespaces(Arc<Registry>),
     /// A connection over a session: the command named the Vault, and the machine's preferences
@@ -271,7 +271,7 @@ fn in_ssh_session() -> bool {
 
 /// The two streams this process was handed, as one connection.
 ///
-/// A session is the same session the listening daemon serves a socket over — the two differ in
+/// A session is the same session the listening daemon serves a socket over, the two differ in
 /// where the stream comes from and in nothing else, which is why there is one `serve` and not a
 /// second implementation of the exchange for a shell.
 struct Stdio {
@@ -327,7 +327,7 @@ impl AsyncWrite for Stdio {
 
 /// The directories a member is looked for in, and the rule they are searched under.
 ///
-/// The Vault's configuration names the places — see [`KeyDiscovery`] — and each one is a
+/// The Vault's configuration names the places, see [`KeyDiscovery`], and each one is a
 /// directory handed to the search, so the rule is the one that searches what it is handed and
 /// nothing else: a scope turned on in the rule as well would name its directory a second time.
 /// A place with no directory yet is still named, since a scope that is not set up is not an
@@ -403,7 +403,7 @@ fn identity_in(roots: &[PathBuf]) -> Option<SigningKey> {
         eprintln!(
             "{}",
             help_line!(
-                "Please give the user an account — `rola key generate <name> --install` writes one into the user's key directory"
+                "Please give the user an account, `rola key generate <name> --install` writes one into the user's key directory"
             )
         );
         return None;
@@ -623,7 +623,7 @@ where
 ///
 /// Registering is safe because of what the handshake already did: the key is one the far side
 /// proved it holds, so a name cannot be claimed for a key nobody has. What it is *not* is
-/// revocation-aware — a deleted key is written again on the next connection — which is why the
+/// revocation-aware, a deleted key is written again on the next connection, which is why the
 /// switch defaults to off and why the rules below are read before anything is written.
 fn member_for(
     served: &Served,
@@ -678,7 +678,7 @@ static STAGED: AtomicUsize = AtomicUsize::new(0);
 /// What is written is never a file that is already there: a name registered to one key is not
 /// registered again to another, and a connection that arrives while another is registering the
 /// same name either finds the same key already written or is refused. That is what makes the
-/// first-come rule the only rule — nothing here overwrites.
+/// first-come rule the only rule, nothing here overwrites.
 fn register_member_key(keys: &Path, name: &str, key: &PublicKey) -> Result<(), SessionError> {
     let target = keys.join(format!("{name}.{PUBLIC_KEY_EXTENSION}"));
 
@@ -691,8 +691,8 @@ fn register_member_key(keys: &Path, name: &str, key: &PublicKey) -> Result<(), S
 
     // What is written is written beside the name and then given to it, so that the name is either
     // absent or whole: a reader that arrives mid-write sees no file rather than half of one. The
-    // number is what keeps two registrations in one process — a daemon serves one connection, but a
-    // test or an embedder may serve several — from writing the same scratch name.
+    // number is what keeps two registrations in one process, a daemon serves one connection, but a
+    // test or an embedder may serve several, from writing the same scratch name.
     let staged = keys.join(format!(
         ".{name}.{PUBLIC_KEY_EXTENSION}.{}.{}.tmp",
         std::process::id(),
@@ -704,7 +704,7 @@ fn register_member_key(keys: &Path, name: &str, key: &PublicKey) -> Result<(), S
     let made = match std::fs::hard_link(&staged, &target) {
         Ok(()) => true,
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
-        // A filesystem that cannot link two names to one file — FAT, and some network shares — is
+        // A filesystem that cannot link two names to one file (FAT, and some network shares) is
         // one that cannot make the name atomically either, so the fallback makes the name
         // exclusively instead. It is the closest thing such a filesystem has, and its one known
         // gap is recorded: what a concurrent reader could see in between is a name that exists and
@@ -784,7 +784,7 @@ fn announce(name: &str, key: &PublicKey) {
 ///
 /// A request names a Vault, and what that comes to is this: the Vault itself, what its file is
 /// configured with, the root above it, and where its members are looked for. It is kept by the daemon
-/// beside the files it was read from — see [`KeptServed`] — and held by a connection for as long as the
+/// beside the files it was read from, see [`KeptServed`], and held by a connection for as long as the
 /// action it serves runs, so what that action is served with is one whole however many requests arrive
 /// after it.
 struct Served {
@@ -807,8 +807,8 @@ impl Served {
     ///
     /// The path names the root of a Vault exactly, the way registering one does: a directory that
     /// merely lies inside a Vault is not one, so what is served is what was named rather than what
-    /// was nearest. Nothing here reads the table of namespaces — a session is told where its Vault
-    /// is — which is what lets a machine with nothing registered serve one.
+    /// was nearest. Nothing here reads the table of namespaces, a session is told where its Vault
+    /// is, which is what lets a machine with nothing registered serve one.
     fn from_path(path: &Path, max_concurrency: Option<u16>) -> Option<Self> {
         let absolute = std::path::absolute(path).ok()?;
 
@@ -926,7 +926,7 @@ impl Registry {
     ///
     /// `sub` is a namespace, or a namespace and the Vault below it: the first segment picks the
     /// entry out of the namespace table, and what follows is resolved under the Vault that entry
-    /// names — by the path it sits at or by the name it is held under. A namespace that is not
+    /// names, by the path it sits at or by the name it is held under. A namespace that is not
     /// registered, or a Vault that is no longer there, is a request this daemon cannot answer.
     async fn resolve(&self, host: &Host, sub: &str) -> Option<Served> {
         let (namespace, under) = split_namespace(sub);

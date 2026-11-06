@@ -8,7 +8,7 @@ keywords: example, template
 
 This article explains how to write ROLA books. Books can be queried and read in the GUI, CLI, and Web.
 
-When writing a ROLA book, you don't need to use Markdown format—just place md files directly into the `book/` directory.
+When writing a ROLA book, you don't need to use Markdown format. Just place md files directly into the `book/` directory.
 Every md file needs to include the following metadata at the top:
 
 ```yaml

@@ -25,18 +25,18 @@ internal readonly record struct Start(bool IsFirst, bool Called);
 /// <remarks>
 /// There is one program per user, not one per start: a second start is a caller asking for the window rather
 /// than a second window, so it hands over where it was made and ends. What it ends with says which of the two
-/// happened — it was the first and the program is now its own, or it was a call and the program that was
-/// already up has been brought forward — because a caller that waits for a program is entitled to its answer.
+/// happened, it was the first and the program is now its own, or it was a call and the program that was
+/// already up has been brought forward, because a caller that waits for a program is entitled to its answer.
 /// <para>
 /// Two things are needed for that, and they are told apart because they do different work: a mutex says
 /// whether a run is already going, which is the question that cannot be raced, and a channel carries what the
-/// second run has to say — where it was made — to the first. What is carried is a directory and nothing else,
+/// second run has to say, where it was made, to the first. What is carried is a directory and nothing else,
 /// because a directory is the whole of what a window opened there is about.
 /// </para>
 /// <para>
 /// The channel itself is the platform's: a named pipe on Windows, and a socket with a path on a Unix, which
 /// are two different kinds of thing rather than one thing asked for two ways. What the two have in common is
-/// only what this file uses — something to wait on, and a stream of bytes to read — and that is all the
+/// only what this file uses (something to wait on, and a stream of bytes to read) and that is all the
 /// abstraction here is.
 /// </para>
 /// </remarks>
@@ -207,7 +207,7 @@ internal static class SingleInstance
     /// Tried more than once, because the run that holds the name may still be starting: the mutex is taken
     /// before Avalonia is started and the channel is listened on after, so there is a moment in which the
     /// program is the one running and cannot yet be reached. What is waited for is that moment, and not a
-    /// program that is going away — one that is going away is not reached by waiting either.
+    /// program that is going away, one that is going away is not reached by waiting either.
     /// </remarks>
     /// <param name="directory">Where this run was made, or nothing.</param>
     /// <returns>Whether the run that is going was reached.</returns>

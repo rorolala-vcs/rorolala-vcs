@@ -7,7 +7,7 @@ namespace RorolalaDesktop.Contract;
 /// </summary>
 /// <remarks>
 /// An instance is handed to one plugin and remembers which plugin that is, so what the plugin
-/// registers is attributed to it — for ordering against the plugins that registered before it, and
+/// registers is attributed to it, for ordering against the plugins that registered before it, and
 /// for naming it in a report when something it did fails.
 /// </remarks>
 public interface IPluginHost

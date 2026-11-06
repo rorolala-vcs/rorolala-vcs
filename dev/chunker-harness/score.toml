@@ -5,7 +5,7 @@
 # should be able to have with the numbers, and an argument made by editing a file leaves a diff.
 #
 # `version` is the number a score is taken under. A score is only comparable with one that names the
-# same version, the same corpus digest and the same weights — which is why the report prints all three.
+# same version, the same corpus digest and the same weights, which is why the report prints all three.
 # Moving any weight means moving this.
 
 version = 1

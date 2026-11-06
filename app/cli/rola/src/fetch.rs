@@ -1,7 +1,7 @@
 //! Content a run brings from the Vaults it can reach, at the moment it is needed.
 //!
 //! A Layout names versions, and a version is only a meaning once the store holds what it stored.
-//! Which is what a run that writes a version's content back — a pull, a restore, a checkin — has to
+//! Which is what a run that writes a version's content back (a pull, a restore, a checkin) has to
 //! have in front of it, and what it should not pay for until then: a Vault is reached for one
 //! object that is not here, not for a whole store that mostly is.
 //!
@@ -12,8 +12,8 @@
 //! and what it cannot cover is asked of the others.
 //!
 //! Asking costs a connection, so the asking is planned: each candidate is asked *what it holds* once
-//! — [`action_list_remote`](librorolala::daemon::action_list_remote_async), the same listing
-//! `storage ls-remote-storaged` prints — and what is left is taken from whichever candidate covers
+//!, [`action_list_remote`](librorolala::daemon::action_list_remote_async), the same listing
+//! `storage ls-remote-storaged` prints, and what is left is taken from whichever candidate covers
 //! the most of it, so the fewest Vaults are reached. A candidate that cannot be reached, or that
 //! answers with none of what is left, is passed over rather than waited on.
 //!
@@ -69,8 +69,8 @@ pub fn primary(
 /// The Vaults a run may bring content from, and what it has to say about doing so.
 ///
 /// What the fetches come to is kept behind a [`RefCell`], since a run consults the same sources from
-/// wherever it happens to read content — a restore writes many files through one borrow, a sync
-/// reads one object per entry — and the asking is the same cache to all of them.
+/// wherever it happens to read content, a restore writes many files through one borrow, a sync
+/// reads one object per entry, and the asking is the same cache to all of them.
 pub struct Sources<'a> {
     /// The Workspace the exchange is spoken from.
     workspace: &'a Workspace,
@@ -83,7 +83,7 @@ pub struct Sources<'a> {
     /// What asking them has come to.
     asked: RefCell<Vec<Asked>>,
     /// What the exchanges say about themselves while they run, which is nothing unless a caller
-    /// hands one in — see [`reporting`](Sources::reporting).
+    /// hands one in, see [`reporting`](Sources::reporting).
     progress: Progress,
     /// The runtime the exchanges are waited on: a command is not asynchronous, and this one is made
     /// where the fetches are rather than borrowed, since a command that fetches has no other.
@@ -103,7 +103,7 @@ struct Candidate {
 /// What asking one candidate has come to.
 #[derive(Default, Clone)]
 struct Asked {
-    /// What it was found to hold: `None` until it is asked, and what its listing said after — an
+    /// What it was found to hold: `None` until it is asked, and what its listing said after, an
     /// empty set for a Vault that could not be reached, which is a Vault holding nothing as far as
     /// this run is concerned.
     held: Option<HashSet<Key>>,
@@ -197,10 +197,10 @@ impl<'a> Sources<'a> {
     /// A key that is already here is not asked about, and nothing at all is asked when the run is
     /// offline: what is missing stays missing, and the read that wanted it fails in its own words.
     /// A Vault that cannot be reached is passed over, so a fetch that cannot be made is not a
-    /// failure of the run — it is one more thing that was not brought.
+    /// failure of the run, it is one more thing that was not brought.
     ///
     /// What is answered is the keys that were wanted and are still not here, so that a caller which
-    /// needs them — a checkin handing over a version — says so rather than leaving a version behind
+    /// needs them, a checkin handing over a version, says so rather than leaving a version behind
     /// that nothing can produce.
     pub fn bring(&self, store: &RorolalaStorage, keys: &[Key]) -> Vec<Key> {
         if self.offline || self.candidates.is_empty() || keys.is_empty() {
@@ -386,8 +386,8 @@ impl<'a> Sources<'a> {
 
     /// Asks a candidate for the named keys, and marks it as used.
     ///
-    /// A bare key is the whole of what it names — the manifest and the chunks it names, or the object
-    /// — and the side holding it is the one that expands it. So one pass brings a content kept as
+    /// A bare key is the whole of what it names, the manifest and the chunks it names, or the object
+    ///, and the side holding it is the one that expands it. So one pass brings a content kept as
     /// chunks as readily as one kept whole, and what the Vault keeps is not something this side has
     /// to learn first.
     ///

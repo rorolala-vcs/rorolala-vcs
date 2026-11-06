@@ -4,7 +4,7 @@ namespace RorolalaVCSPlugin;
 
 /// <summary>What one read of the two sides of the work came to.</summary>
 /// <remarks>
-/// The states are told apart because what the place has to say — and what it can offer — is different for each: a copy
+/// The states are told apart because what the place has to say, and what it can offer, is different for each: a copy
 /// that was never fetched is a fetch to offer, and one that cannot be read is a report.
 /// </remarks>
 internal enum UpstreamState
@@ -58,7 +58,7 @@ internal sealed record UpstreamReading(
 /// Reading one Layout beside what the Layout being worked in holds.
 /// </summary>
 /// <remarks>
-/// A Vault's copy is read from what the Workspace fetched — <c>--layout truth@VAULT</c> — and the Layout being worked in
+/// A Vault's copy is read from what the Workspace fetched, <c>--layout truth@VAULT</c>, and the Layout being worked in
 /// is read beside it, which is what tells an entry that is already here from one to bring in. The Vault is named by the
 /// place rather than resolved from what the Layout tracks: a place is the upstream of one Vault, and which Vault that is
 /// is what the address says.

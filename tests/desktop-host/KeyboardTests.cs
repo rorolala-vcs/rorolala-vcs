@@ -14,7 +14,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// <summary>What the keyboard does in a directory dock, which is where the dock's keys are answered from.</summary>
 /// <remarks>
 /// A dock answers Ctrl+C, Ctrl+V, F2 and F5 at the top of itself and passes them down to whichever view is being read,
-/// so a keyboard that is nowhere in the dock is a press nothing answers — which reads from the outside exactly like a
+/// so a keyboard that is nowhere in the dock is a press nothing answers, which reads from the outside exactly like a
 /// key that arrived and did nothing. The listing is the control that takes the keyboard, and the space around the rows
 /// is a place a press lands with no row to focus: the two facts checked here are that the listing can take the keyboard
 /// at all, and that a key the clipboard answers reaches the dock once it has.

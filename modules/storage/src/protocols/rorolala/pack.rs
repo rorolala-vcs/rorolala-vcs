@@ -1,12 +1,12 @@
 //! Packs: many entries in one file, and the index that says where each one sits.
 //!
 //! A pack is a place entries live rather than a thing a caller knows about, so it holds them exactly
-//! as they sat loose and is found — and committed — by its index. The work here is keeping that true
+//! as they sat loose and is found, and committed, by its index. The work here is keeping that true
 //! when packs are written, read, and taken apart again.
 //!
 //! A pack holds one [kind](PackKind) of entry: objects, which are the content itself, or manifests,
-//! which say how a chunked content was cut. A pack number names one pack of one kind — the kinds are
-//! told apart by where their indexes sit, and by nothing else — so an object and a manifest under one
+//! which say how a chunked content was cut. A pack number names one pack of one kind, the kinds are
+//! told apart by where their indexes sit, and by nothing else, so an object and a manifest under one
 //! key are two entries in two packs, and neither is mistaken for the other.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -33,17 +33,17 @@ impl LockingGuard<RorolalaStorage> {
     /// This is packing with the store's lock held, and the lock is what this is for: a pack is read,
     /// changed and written back, so two runs doing that at once would each write a pack that had
     /// forgotten the other's. The guard holds the lock for the whole of the packing, so a run with a
-    /// guard is the only one packing — a run that would rather not wait for another finds the store
+    /// guard is the only one packing, a run that would rather not wait for another finds the store
     /// locked and is told so.
     ///
-    /// What a pack holds is each entry exactly as it sat loose — the frame and all — so an entry that
+    /// What a pack holds is each entry exactly as it sat loose, the frame and all, so an entry that
     /// moves into a pack is the same bytes in a different place, and every read that worked before it
     /// moved works after. This is the whole of why packing is safe to do at any time and safe to leave
     /// undone: nothing about an entry depends on how many of them share a file.
     ///
     /// A key may be loose as an object, as a manifest, or as both, and the two are different entries:
     /// each is packed unless a pack of its own kind already names it. What is written goes into as many
-    /// packs as the store's `max_pack_size` allows — one kind of entry to a pack — so a batch larger
+    /// packs as the store's `max_pack_size` allows, one kind of entry to a pack, so a batch larger
     /// than that limit is laid down as several packs rather than one file no bound holds. A batch with
     /// nothing loose among it makes no pack at all.
     ///
@@ -68,7 +68,7 @@ impl LockingGuard<RorolalaStorage> {
     /// cannot take the lock is told rather than left to write over another's work.
     ///
     /// Where packing puts the loose entries of a batch into packs, this takes the whole of what the
-    /// store holds — the entries of every pack, and every loose entry, of either kind — and writes it
+    /// store holds (the entries of every pack, and every loose entry, of either kind) and writes it
     /// again, merging the packs there are into one wherever they fit under the store's `max_pack_size`
     /// and starting another where they do not. What each entry *is* does not change: an entry is
     /// written byte for byte as it was, so every read that worked before works after, whatever packs
@@ -105,18 +105,18 @@ impl RorolalaStorage {
     ///
     /// Packs the loose entries stored under `keys`, of either kind, into packs of their own.
     ///
-    /// What a pack holds is each entry exactly as it sat loose — the frame and all — so an entry that
+    /// What a pack holds is each entry exactly as it sat loose, the frame and all, so an entry that
     /// moves into a pack is the same bytes in a different place, and every read that worked before it
     /// moved works after. This is the whole of why packing is safe to do at any time and safe to leave
     /// undone: nothing about an entry depends on how many of them share a file.
     ///
     /// A key may be loose as an object, as a manifest, or as both, and the two are different entries:
     /// each is packed unless a pack of its own kind already names it. What is written goes into as many
-    /// packs as the store's [`max_pack_size`](Self::max_pack_size) allows — one kind of entry to a pack
-    /// — so a batch larger than that limit is laid down as several packs rather than one file no bound
+    /// packs as the store's [`max_pack_size`](Self::max_pack_size) allows, one kind of entry to a pack
+    ///, so a batch larger than that limit is laid down as several packs rather than one file no bound
     /// holds. A batch with nothing loose among it makes no pack at all.
     ///
-    /// Packs are changed under one lock in this process — see `root_state` — so two packings here
+    /// Packs are changed under one lock in this process, see `root_state`, so two packings here
     /// cannot both take one key. Keeping two *processes* apart is the caller's side of it, which is
     /// what [`LockingGuard::pack`] is: what holds a store together when an entry is taken away while
     /// another run reads is [`remove`](crate::StorageBackend::remove), which asks every pack that
@@ -197,7 +197,7 @@ impl RorolalaStorage {
     /// Lays the store's entries out afresh, so that as few packs hold them as the size limit allows.
     ///
     /// Where [`pack`](Self::pack) puts the loose entries of a batch into packs, this takes the whole of
-    /// what the store holds — the entries of every pack, and every loose entry, of either kind — and
+    /// what the store holds (the entries of every pack, and every loose entry, of either kind) and
     /// writes it again, merging the packs there are into one wherever they fit under
     /// [`max_pack_size`](Self::max_pack_size) and starting another where they do not. What each entry
     /// *is* does not change: an entry is written byte for byte as it was, so every read that worked
@@ -213,7 +213,7 @@ impl RorolalaStorage {
     /// last, their indexes first. A store interrupted here is a store holding a pack too many rather
     /// than one holding an entry too few.
     ///
-    /// What the store is left with is numbered from nothing and without a gap — see `renumber` — so
+    /// What the store is left with is numbered from nothing and without a gap, see `renumber`, so
     /// packing a store over and over does not climb a number that says how often it was packed. The
     /// directories the loose entries sat in, empty once they moved, go as well.
     ///
@@ -222,7 +222,7 @@ impl RorolalaStorage {
     /// Returns [`Error::Io`] if an entry cannot be read or a pack or index cannot be written, and
     /// [`Error::Malformed`] if a path it needs cannot be named.
     pub(crate) async fn repack(&self) -> Result<bool, Error> {
-        // Packs are changed one at a time within this process, the same as any other change to them —
+        // Packs are changed one at a time within this process, the same as any other change to them,
         // see `root_state`.
         let state = self.root_state();
         let _packing = state.packing.lock().await;
@@ -279,7 +279,7 @@ impl RorolalaStorage {
             .collect();
 
         // What the store would look like written afresh, against what it looks like now: a store that is
-        // already that — every pack a group of this plan, and nothing loose — is left alone rather than
+        // already that (every pack a group of this plan, and nothing loose) is left alone rather than
         // written over as it stands.
         let mut planned = planned_groups(&ordered, self.max_pack_size().await);
         let mut current: Vec<Vec<Key>> = existing
@@ -298,7 +298,7 @@ impl RorolalaStorage {
 
         let written = self.write_packs(&ordered).await?;
 
-        // Nothing could be read to write again — every source was gone between being listed and being
+        // Nothing could be read to write again, every source was gone between being listed and being
         // read. The store is left as it is rather than having packs dropped that what is here could not
         // rebuild.
         if written.is_empty() {
@@ -325,8 +325,8 @@ impl RorolalaStorage {
         // store has been packed rather than what it holds.
         self.renumber(&state, &written).await?;
 
-        // What the packing left behind is the shape of what the store used to hold — directories with
-        // nothing left in them — so those go with it.
+        // What the packing left behind is the shape of what the store used to hold, directories with
+        // nothing left in them, so those go with it.
         self.prune_empty_directories().await?;
 
         Ok(true)
@@ -374,7 +374,7 @@ impl RorolalaStorage {
     /// shaped like what it used to hold.
     ///
     /// Only what is under the layout's own directories is taken: those stay, since a store is one with
-    /// somewhere to put everything — see `create`.
+    /// somewhere to put everything, see `create`.
     async fn prune_empty_directories(&self) -> Result<(), Error> {
         for directory in [OBJECTS_DIR, MANIFEST_DIR, PACKED_DIR] {
             self.prune_empty_under(&self.root.join(directory)).await?;
@@ -407,7 +407,7 @@ impl RorolalaStorage {
     /// `entries` is in kind then key order, which is what makes each kind one run.
     ///
     /// A pack's number is claimed by creating its file before a byte is written, so nothing else can
-    /// take it while this pack is being written, and no reader can reach a pack that is not finished —
+    /// take it while this pack is being written, and no reader can reach a pack that is not finished,
     /// a pack is found by its index, which is written last.
     ///
     /// What is answered is each pack that was written, its kind, and the keys it holds, in the order
@@ -501,15 +501,15 @@ impl RorolalaStorage {
     ///
     /// What a batch is for is the case one file per entry cannot serve: a sync of many small
     /// contents arrives as thousands of entries, and each one laid down as a loose object costs a
-    /// file of its own — a create, a write and a rename per chunk, which is where a store of small
+    /// file of its own, a create, a write and a rename per chunk, which is where a store of small
     /// chunks spends nearly all of a sync's time. A batch writes them into the packs they would have
     /// been moved into anyway, and gives those packs their indexes once, at the end.
     ///
     /// Nothing a batch writes is visible to a lookup until it is
     /// [published](Batch::publish): a pack is found by its index, so entries written but not
     /// published are, to every reader, a pack that is not there. A batch dropped unpublished
-    /// therefore leaves `.pack` files no reader can reach — the same garbage a write cut short
-    /// leaves — rather than a store holding half of something.
+    /// therefore leaves `.pack` files no reader can reach, the same garbage a write cut short
+    /// leaves, rather than a store holding half of something.
     ///
     /// A batch is not a transaction against what the store already holds: it is the caller's
     /// [`contains_keys`](crate::StorageBackend::contains_keys) that says what is worth writing, and
@@ -560,7 +560,7 @@ impl RorolalaStorage {
 
     /// Drops the pack of `index`: its index first, then the pack.
     ///
-    /// The index is what a pack is found by, so it goes before the pack does — a crash between the two
+    /// The index is what a pack is found by, so it goes before the pack does, a crash between the two
     /// leaves a `.pack` no reader reaches rather than an index naming a pack that is not there.
     async fn drop_pack(&self, state: &RootState, kind: PackKind, index: u64) -> Result<(), Error> {
         let pack_path = self.pack_path(index);
@@ -579,12 +579,12 @@ impl RorolalaStorage {
     /// The number is taken by **creating the pack file**, which succeeds for one writer and fails with
     /// [`AlreadyExists`](io::ErrorKind::AlreadyExists) for the rest, who move on to the next number. A
     /// number reached by a directory scan alone would be a number two ends could both reach, and the
-    /// second pack would write over the first — losing every entry the first one moved, since by then
+    /// second pack would write over the first, losing every entry the first one moved, since by then
     /// its loose copies are gone.
     ///
     /// The file is handed back open for writing and as empty as it was created: the caller streams the
     /// pack into it rather than holding the whole of it to write in one go. Nothing is written beside it
-    /// and moved into place, because a pack no index names is a pack no reader can reach — a write cut
+    /// and moved into place, because a pack no index names is a pack no reader can reach, a write cut
     /// short leaves an unreachable file rather than a reachable one that is half there, and the index
     /// the caller writes afterwards is what makes it a pack.
     async fn claim_pack(&self) -> Result<(u64, tokio::fs::File), Error> {
@@ -614,12 +614,12 @@ impl RorolalaStorage {
     ///
     /// The list is one this process remembers: a lookup walks every pack of its kind, so a store
     /// whose entries are packed was listing the directory once per entry read. What is kept goes with
-    /// the directory's stamp, the way a pack's index goes with the file's — a pack is begun by
+    /// the directory's stamp, the way a pack's index goes with the file's, a pack is begun by
     /// creating its file here and finished by renaming its index into here, so a directory that has
     /// not changed still names the packs it named, and one that has is listed again.
     ///
     /// The state is passed in rather than looked up here, so that a lookup walking over many
-    /// packs asks for it once rather than once a pack — looking one up means resolving the store's
+    /// packs asks for it once rather than once a pack, looking one up means resolving the store's
     /// root, which is a walk of the path rather than a read of anything.
     ///
     /// # Errors
@@ -699,7 +699,7 @@ impl RorolalaStorage {
 
     /// Every pack this store holds, of either kind, lowest index first.
     ///
-    /// This is the numbering a new pack is given a number past — see `next_pack_index` — so it is one
+    /// This is the numbering a new pack is given a number past, see `next_pack_index`, so it is one
     /// sequence over both kinds: a number names one pack of one kind, and a pack file is one file.
     ///
     /// # Errors
@@ -730,10 +730,10 @@ impl RorolalaStorage {
     /// The packs whose index does not read, of either kind.
     ///
     /// A lookup answers "not found" for a pack whose index does not read, so that one index gone wrong
-    /// does not hide every other pack — see `pack_index`. That is the right answer for a read and a poor
+    /// does not hide every other pack, see `pack_index`. That is the right answer for a read and a poor
     /// one for anyone looking after the store: nothing on the ordinary path says the pack is there at
     /// all. This is where that is asked, and it is asked of every pack in the store rather than of one
-    /// lookup's — and it reads each index for itself rather than being answered from what a lookup
+    /// lookup's, and it reads each index for itself rather than being answered from what a lookup
     /// remembered, since a check that can be answered from a memory is not one.
     ///
     /// # Errors
@@ -774,7 +774,7 @@ impl RorolalaStorage {
     ///
     /// Only the pack's index is rewritten: the entry is dropped from it, and the bytes it occupied are
     /// left where they are. A pack and its index are two files, and a reader reads the index to find out
-    /// where the pack's bytes are — so rewriting the pack as well would leave a window in which the
+    /// where the pack's bytes are, so rewriting the pack as well would leave a window in which the
     /// index describes a pack that is already another one, and every entry in it would be read wrong.
     /// Dropping the entry from the index is the whole removal: nothing reaches the bytes afterwards.
     ///
@@ -782,7 +782,7 @@ impl RorolalaStorage {
     /// still as large as it was; [`repack`](RorolalaStorage::repack) is what writes packs afresh and
     /// retires the old ones.
     ///
-    /// A pack left holding nothing is dropped whole, the index first — a pack is found by its index, so
+    /// A pack left holding nothing is dropped whole, the index first, a pack is found by its index, so
     /// a pack without one is a pack no reader reaches, and a `.pack` left behind by a write cut short is
     /// garbage rather than a store that does not hold together.
     pub(super) async fn remove_from_pack(
@@ -808,7 +808,7 @@ impl RorolalaStorage {
         );
 
         if kept.is_empty() {
-            // The index goes first, since it is what a pack is found by — and what was read of it goes
+            // The index goes first, since it is what a pack is found by, and what was read of it goes
             // with it, so that the number it frees is not answered with it. See `forget_pack_index`.
             forget_pack_index(state, kind, index);
             self.drop_entry(&index_path).await?;
@@ -853,7 +853,7 @@ impl RorolalaStorage {
 
                 match read_range(&pack_path, entry.offset(), entry.len()).await {
                     Ok(bytes) => return Ok(Some(bytes)),
-                    // The index was read and the pack taken away before it was opened — what dropping a
+                    // The index was read and the pack taken away before it was opened, what dropping a
                     // pack's last entry does. A pack that is not there holds nothing, which is the same
                     // answer as an index that is not there.
                     Err(Error::Io(error)) if error.kind() == io::ErrorKind::NotFound => {}
@@ -946,7 +946,7 @@ impl RorolalaStorage {
     /// `create` each hand back a store of their own for one directory.
     ///
     /// It reaches no further than this process. Two processes working one store are not made to take
-    /// turns — the design keeps no cross-process lock — and what holds there is the pack *number* being
+    /// turns, the design keeps no cross-process lock, and what holds there is the pack *number* being
     /// claimed by creating its file, which is what stops two packings from writing one pack.
     pub(super) fn root_state(&self) -> Arc<RootState> {
         let root = self.root_key();
@@ -960,7 +960,7 @@ impl RorolalaStorage {
     /// The key a root is known by when this process is deciding which stores describe one directory.
     ///
     /// `canonicalize` makes two spellings of one directory one key, and needs the directory to be there
-    /// to do it. A store that is not on disk yet — or one rooted at `""` — is keyed by where it would be
+    /// to do it. A store that is not on disk yet, or one rooted at `""`, is keyed by where it would be
     /// instead, which is lexical and so never needs the disk to be readable for two stores of one
     /// directory to agree.
     fn root_key(&self) -> PathBuf {
@@ -979,7 +979,7 @@ impl RorolalaStorage {
     /// that is the same.
     ///
     /// `None` is a pack that holds nothing: there is no index, or what is there does not read. Both are
-    /// the same answer to a lookup, and neither is kept — a pack that comes back is read afresh.
+    /// the same answer to a lookup, and neither is kept, a pack that comes back is read afresh.
     ///
     /// The state is passed in rather than looked up here, so that a lookup walking over many packs asks
     /// for it once rather than once a pack.
@@ -1019,7 +1019,7 @@ impl RorolalaStorage {
 
         let bytes = match tokio::fs::read(&index_path).await {
             Ok(bytes) => bytes,
-            // The index was statted and then taken away before it was read — what dropping a pack's last
+            // The index was statted and then taken away before it was read, what dropping a pack's last
             // entry does. A pack that is not there is a pack that holds nothing, which is the same answer
             // as an index that is not there.
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -1061,8 +1061,8 @@ impl RorolalaStorage {
 
     /// The directory the loose entries of `kind` are kept in.
     ///
-    /// A manifest pack keeps its index beside the loose manifests rather than beside the packs — see
-    /// [`index_path`](RorolalaStorage::index_path) — so for a manifest this and
+    /// A manifest pack keeps its index beside the loose manifests rather than beside the packs, see
+    /// [`index_path`](RorolalaStorage::index_path), so for a manifest this and
     /// [`index_directory`](RorolalaStorage::index_directory) are one directory, and for an object they
     /// are two.
     fn loose_directory(&self, kind: PackKind) -> PathBuf {
@@ -1085,7 +1085,7 @@ impl RorolalaStorage {
 ///
 /// It is what [`RorolalaStorage::begin_batch`] hands back, and what a sync of many small contents
 /// writes what arrived through. The entries of one kind share a pack, and the pack is closed once the
-/// next entry would take it over the size the store allows — the same bound
+/// next entry would take it over the size the store allows, the same bound
 /// [`pack`](LockingGuard::pack) keeps, so a store filled by batches is one packing is not surprised by.
 ///
 /// What is written is what a loose entry would have been, frame and all: packing changes where an
@@ -1101,7 +1101,7 @@ pub struct Batch {
     /// Every entry this batch has already written, as its kind and its key.
     ///
     /// One key has one entry *per kind*: an object and a manifest under the same key are two
-    /// entries — a chunk whose bytes are the very content some key names is exactly that case — and
+    /// entries, a chunk whose bytes are the very content some key names is exactly that case, and
     /// a key this batch was handed twice would otherwise have the pack name it twice, which an index
     /// refuses.
     written: BTreeSet<(PackKind, Key)>,
@@ -1116,7 +1116,7 @@ pub struct Batch {
 impl Batch {
     /// Writes `plain` as the object kept under `key`.
     ///
-    /// The key must be the hash of `plain` — what a caller of a batch has is a key and the bytes it
+    /// The key must be the hash of `plain`, what a caller of a batch has is a key and the bytes it
     /// arrived with, so hashing again would be a hash of every byte that crosses for the sake of
     /// what the caller already knew.
     ///
@@ -1143,7 +1143,7 @@ impl Batch {
     ///
     /// The object pack is published before the manifest pack: a manifest names chunks, and a manifest
     /// a reader can find before the chunks it names is a content the store claims and cannot put back
-    /// together, while chunks with no manifest are objects nothing refers to — which a store may hold
+    /// together, while chunks with no manifest are objects nothing refers to, which a store may hold
     /// as readily as any other object.
     ///
     /// What is answered is how many entries were written.
@@ -1204,7 +1204,7 @@ impl Batch {
 
         // A pack is closed once the next entry would take it over the size the store allows. An
         // entry larger than that is a pack of its own, since a limit cannot be met by an entry that
-        // is over it — the same rule `pack_ranges` keeps.
+        // is over it, the same rule `pack_ranges` keeps.
         let reached = self.slot(kind).is_some_and(|packing| {
             !packing.directory.is_empty() && packing.held().saturating_add(len) > self.max
         });
@@ -1247,7 +1247,7 @@ impl Batch {
             *self.slot_mut(kind) = Some(packing);
         }
 
-        // UNWRAP: the pack was just begun when there was none, so there is one to write into — a
+        // UNWRAP: the pack was just begun when there was none, so there is one to write into, a
         // caller only reaches here having inserted above or found one already there.
         self.slot_mut(kind).as_mut().ok_or(Error::Malformed)
     }
@@ -1347,7 +1347,7 @@ const STAGING_BYTES: usize = 1 << 20;
 
 /// Where the entries of one kind begin and end.
 ///
-/// A pack holds one kind — see [`write_packs`](RorolalaStorage::write_packs) — so what is written as
+/// A pack holds one kind, see [`write_packs`](RorolalaStorage::write_packs), so what is written as
 /// one kind's packs is one run of `entries`. This is those runs, which `entries` being in kind then key
 /// order is what makes them.
 fn kind_runs(entries: &[Planned]) -> Vec<Range<usize>> {
@@ -1370,7 +1370,7 @@ fn kind_runs(entries: &[Planned]) -> Vec<Range<usize>> {
 
 /// Where the packs of `entries` begin and end, one pack each.
 ///
-/// The entries are taken in the order they are given — which is key order — and a pack is closed once
+/// The entries are taken in the order they are given, which is key order, and a pack is closed once
 /// the next entry would take it over `max`. An entry larger than `max` is a pack of its own, since a
 /// limit cannot be met by a single entry that is over it.
 fn pack_ranges(entries: &[Planned], max: u64) -> Vec<Range<usize>> {
@@ -1416,7 +1416,7 @@ fn planned_groups(entries: &[Planned], max: u64) -> Vec<Vec<Key>> {
 /// What this process keeps for one store root, shared by every store of it.
 #[derive(Default)]
 pub(super) struct RootState {
-    /// The lock the packs' mutations are held under — see `root_state`.
+    /// The lock the packs' mutations are held under, see `root_state`.
     pub(super) packing: AsyncMutex<()>,
     /// The pack indexes that have been read, by kind and pack number.
     pub(super) indices: StdMutex<HashMap<(PackKind, u64), KeptIndex>>,
@@ -1429,7 +1429,7 @@ pub(super) struct RootState {
 /// A lookup walks every pack of its kind, so a store whose entries are packed pays for the list of
 /// them on every read: listing a directory is a walk, and it was being walked once per entry read.
 /// The list is kept with the directory's stamp, in the same way a pack's index is kept with the
-/// file's — a pack begins by creating its file and ends by renaming its index into this directory, so
+/// file's, a pack begins by creating its file and ends by renaming its index into this directory, so
 /// a directory that has not changed names the packs it named before.
 pub(super) struct KeptPacks {
     /// The directory's length and modification time, which is how a changed one is told.
@@ -1463,7 +1463,7 @@ struct Stamp {
 ///
 /// What was read is dropped whenever the index is gone, so that a pack number later given to another
 /// pack is not answered with what the last one held. A number is given out as one past the highest
-/// there is, so emptying a pack frees its number for the next packing — and an index read as a stale
+/// there is, so emptying a pack frees its number for the next packing, and an index read as a stale
 /// one would name entries at offsets that no longer mean them.
 fn forget_pack_index(state: &RootState, kind: PackKind, index: u64) {
     state
@@ -1475,8 +1475,8 @@ fn forget_pack_index(state: &RootState, kind: PackKind, index: u64) {
 
 /// The state this process keeps for each store root, by the root it is for.
 ///
-/// It is by root rather than by store because a store is handed out freely — `at`, `create` and `locate`
-/// each make a new one for one directory — and two of them still describe one set of packs, and so have
+/// It is by root rather than by store because a store is handed out freely, `at`, `create` and `locate`
+/// each make a new one for one directory, and two of them still describe one set of packs, and so have
 /// to share one lock and one view of what has been read.
 ///
 /// An entry is kept for the life of the process once it is handed out, so the map grows with the number

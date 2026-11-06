@@ -1,7 +1,7 @@
 //! A store's own layout, for the tests and tools that have to see it.
 //!
-//! A caller hands over content and keys, and *where* the store puts them — which object sits at which
-//! path, how a cut content is laid down, where a pack's index sits — is the store's own business.
+//! A caller hands over content and keys, and *where* the store puts them, which object sits at which
+//! path, how a cut content is laid down, where a pack's index sits, is the store's own business.
 //! What is here is that business, and it is here at all because a test that checks the placing has to
 //! look at it. It is not the boundary: what a caller wants is [`StorageBackend`](crate::StorageBackend)
 //! and [`TransferableBackend`](crate::TransferableBackend).

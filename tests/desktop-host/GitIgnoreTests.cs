@@ -13,7 +13,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// <remarks>
 /// A real repository is made in a scratch directory and the real <c>git</c> program is asked, so what is
 /// checked is the answer a listing gets rather than a stand-in for it. The program is the whole point of
-/// the provider — the rules are Git's and are not reimplemented — so a test that did not run it would test
+/// the provider, the rules are Git's and are not reimplemented, so a test that did not run it would test
 /// nothing that matters.
 /// </remarks>
 public sealed class GitIgnoreTests
@@ -27,7 +27,7 @@ public sealed class GitIgnoreTests
 
     /// <summary>
     /// What <c>.gitignore</c> leaves out is ignored, what it does not is not, and a directory no repository
-    /// holds is asked of no program — so nothing is ignored there.
+    /// holds is asked of no program, so nothing is ignored there.
     /// </summary>
     [Fact]
     public void GitIgnoresWhatARepositoryIgnores()
@@ -123,7 +123,7 @@ public sealed class GitIgnoreTests
     /// <remarks>
     /// The rules are Git's and are asked of the program once per directory and kept, so the keeping is what
     /// makes asking worthwhile and also what goes stale: a <c>.gitignore</c> is a file, and editing one is a
-    /// change no answer read before it can know about. What is checked is the whole of the way back — the
+    /// change no answer read before it can know about. What is checked is the whole of the way back, the
     /// listing's own `Shared` is what says the files may have changed, and the provider in force is what has
     /// to let go of its answer.
     /// </remarks>
@@ -150,7 +150,7 @@ public sealed class GitIgnoreTests
         Assert.False(shared.Hides(entry));
 
         // The rule now covers the file: what was asked is kept, so the listing goes on saying it is not
-        // ignored — which is the staleness, stated.
+        // ignored, which is the staleness, stated.
         File.WriteAllText(Path.Combine(repository, ".gitignore"), "*.txt\n");
         Assert.False(shared.Hides(entry));
 

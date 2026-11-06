@@ -20,7 +20,7 @@ namespace RorolalaDesktop.Hosting;
 /// <para>
 /// A window is closed by the user, by the dock it holds being closed, or by the program ending; the three
 /// are told apart here. What the program ends on is the set of windows being empty rather than any one
-/// window being closed — the main window among them — which is why nothing here ends the program until
+/// window being closed, the main window among them, which is why nothing here ends the program until
 /// there is nothing left to draw in.
 /// </para>
 /// </remarks>
@@ -62,7 +62,7 @@ internal sealed class DockWindows : IWindows
     /// <remarks>
     /// Handed over rather than written here so that this service can be exercised without a platform: what
     /// it does is decide which windows there are, and making one is the toolkit's business. A host with no
-    /// way of making a window — a test — answers requests as if nothing had been asked for rather than
+    /// way of making a window, a test, answers requests as if nothing had been asked for rather than
     /// failing, since what it is being asked for is something it was never given.
     /// <para>
     /// Written after the services are made rather than handed in, because the window it makes is made over
@@ -133,7 +133,7 @@ internal sealed class DockWindows : IWindows
     /// </summary>
     /// <remarks>
     /// Written by the program once the services exist, since what a window is made over is those services
-    /// and the object they are held in is this one. Nothing where there is no program to write it — a test —
+    /// and the object they are held in is this one. Nothing where there is no program to write it, a test,
     /// and then a request to open a window is answered as nothing having been asked for.
     /// </remarks>
     public Func<string?, DockInstance?, Window>? Make
@@ -167,7 +167,7 @@ internal sealed class DockWindows : IWindows
     /// <remarks>
     /// What a drag that ended in no drop is read as: a drag the host last heard of over a dock area was one that
     /// ended without a drop there, which is a drag called off rather than let go of, while one it last heard of
-    /// nowhere was let go of in the open — and a dock let go of in the open is a dock the user pulled out of
+    /// nowhere was let go of in the open, and a dock let go of in the open is a dock the user pulled out of
     /// the window it was in. The platform says the same thing about both, since neither landed anywhere, so
     /// the last thing an area heard is what tells them apart. Written by whichever area hears the drag, which
     /// is why it is here and not in the drag itself.
@@ -179,7 +179,7 @@ internal sealed class DockWindows : IWindows
     /// </summary>
     /// <remarks>
     /// The platform reports a drag called off with Esc as one that applied no effect, which is the same thing it
-    /// reports for a drag let go of where there was nothing to take it — so the two cannot be told apart by what
+    /// reports for a drag let go of where there was nothing to take it, so the two cannot be told apart by what
     /// the drag returns. This is the other half: while a drag is in flight the window it was picked up in is heard
     /// for Esc, and an area that sees this set offers no place to land and takes none.
     /// </remarks>
@@ -190,7 +190,7 @@ internal sealed class DockWindows : IWindows
     /// </summary>
     /// <remarks>
     /// Told apart from <see cref="OverArea"/>, which is where the pointer was last heard of: the platform says a drop
-    /// was delivered by delivering it, so an area that took a drop — even one with no place to put the dock — says
+    /// was delivered by delivering it, so an area that took a drop, even one with no place to put the dock, says
     /// the release was there. That matters because a released drag is followed by the platform's own
     /// <c>DragLeave</c>, which would otherwise leave the record reading "last heard of nowhere" for a drag that was
     /// very much let go of over a dock area.
@@ -245,7 +245,7 @@ internal sealed class DockWindows : IWindows
     /// </summary>
     /// <remarks>
     /// Handed over by the program rather than reached for here, because what ends a run is the lifetime and
-    /// not the windows. Nothing where there is no lifetime — a test — and then no window that closes ends
+    /// not the windows. Nothing where there is no lifetime, a test, and then no window that closes ends
     /// anything.
     /// </remarks>
     public Action? End { get; set; }
@@ -262,7 +262,7 @@ internal sealed class DockWindows : IWindows
 
         // Made with nothing to name it by, which is the main window: it is the one window a dock is not
         // what it is for. What is remembered is the window rather than the fact that it is up, because the
-        // two questions it answers — is there one, and which one is it — are one question.
+        // two questions it answers (is there one, and which one is it) are one question.
         _main = Add(null, null);
 
         if (_main is { } opened)
@@ -353,7 +353,7 @@ internal sealed class DockWindows : IWindows
 
         // The group it came from is kept as its home rather than replaced by the centre of its new window:
         // pulling a dock out of a group is about where it is shown, and being in a window of its own is a
-        // change of window and not of group — a dock taken out of the bottom band comes back to it. The main
+        // change of window and not of group, a dock taken out of the bottom band comes back to it. The main
         // window is left standing even where this was the last dock in it (see `Settle`).
         _docks.DetachToWindow(instance, key);
 
@@ -368,7 +368,7 @@ internal sealed class DockWindows : IWindows
     /// </summary>
     /// <remarks>
     /// A drag that no dock area took is a dock the user pulled out of the window it was in, so it becomes a window
-    /// of its own — which is the whole of what letting go of a header away from every area means. A dock in a
+    /// of its own, which is the whole of what letting go of a header away from every area means. A dock in a
     /// window of its own has nothing to tear out of: the window it is in is already its own, so a drag of it that
     /// lands nowhere leaves it where it is.
     /// <para>
@@ -379,10 +379,10 @@ internal sealed class DockWindows : IWindows
     /// Esc is the third way a drag can end, and the one the platform does not report differently: a drag called off
     /// with Esc is returned as having applied no effect, exactly as a drag let go of where there is nothing to take
     /// it. So the window the dock was picked up in is heard for Esc for as long as the platform owns the gesture,
-    /// and a drag that heard one is not a drag let go of in the open — it is one the user called off.
+    /// and a drag that heard one is not a drag let go of in the open, it is one the user called off.
     /// </para>
     /// <para>
-    /// A platform that will not carry a drag at all — a toolkit given no drag of its own — leaves the dock where it
+    /// A platform that will not carry a drag at all, a toolkit given no drag of its own, leaves the dock where it
     /// was as well: the gesture never reached anything, and a window nobody asked for is worse than a drag that did
     /// nothing.
     /// </para>
@@ -450,8 +450,8 @@ internal sealed class DockWindows : IWindows
             return;
         }
 
-        // A dock that is no longer one of the manager's — closed from its tab, or by its view, while the
-        // pointer was still holding it — has no window to be torn into: what would be made is a window of a
+        // A dock that is no longer one of the manager's, closed from its tab, or by its view, while the
+        // pointer was still holding it, has no window to be torn into: what would be made is a window of a
         // dock that is gone.
         if (!_docks.Instances.Contains(instance))
         {
@@ -500,7 +500,7 @@ internal sealed class DockWindows : IWindows
     /// <remarks>
     /// The same judgement <see cref="MoveToMain"/> makes, because a dock dropped on the main window is the same
     /// thing asked for with the hand: a dock that keeps one instance of its own, where that window already
-    /// shows it, is not moved in — the dock is already there, so what is let go of is the instance that was
+    /// shows it, is not moved in, the dock is already there, so what is let go of is the instance that was
     /// being dragged, and the window it came from goes with it.
     /// <para>
     /// A drag let go of where it already was is not a move at all, which is <see cref="DockManager.Move"/>'s own
@@ -529,13 +529,13 @@ internal sealed class DockWindows : IWindows
     /// Brings a dock back to the main window, which is what a window of its own offers.
     /// </summary>
     /// <remarks>
-    /// The main window is where a dock of its own came from, so it is what it goes back to — and it is opened
+    /// The main window is where a dock of its own came from, so it is what it goes back to, and it is opened
     /// first where it is not up, because a dock brought back to a window that is not there would be no better
     /// off than it was.
     /// <para>
     /// A dock that keeps one instance of its own, where the main window already shows that dock, is the one
     /// thing this cannot do: the two are one dock, and moving this instance in would leave two of a name that
-    /// may have one. What is let go of is the instance in the window of its own, and that window with it —
+    /// may have one. What is let go of is the instance in the window of its own, and that window with it,
     /// what the user asked for is already the case, and a window of a dock the main window already holds is
     /// the only thing left over.
     /// </para>
@@ -560,7 +560,7 @@ internal sealed class DockWindows : IWindows
         }
 
         // The group it came from is the group it goes back to, which is what a dock taken out of a band and
-        // brought back finds again — or the active group where that one has been pruned since (see
+        // brought back finds again, or the active group where that one has been pruned since (see
         // `DockManager.Rehome`).
         _docks.ReturnToMain(instance);
     }
@@ -655,14 +655,14 @@ internal sealed class DockWindows : IWindows
     /// Shows a place in a dock the user is already working in, or in one made for it when there is none.
     /// </summary>
     /// <remarks>
-    /// The dock is the one the user worked in last of that name — a browser over another dock, say — rather than the
+    /// The dock is the one the user worked in last of that name (a browser over another dock, say) rather than the
     /// first one the manager happens to hold: a dock that may be made again is a dock with several instances, and the
     /// one the user was working in is the one a place shown from elsewhere belongs in. No second instance is made
     /// beside it, since what was asked for is a place to look at; a dock that is not open at all is made, in the main
     /// window, which is where a dock asked for without a window goes.
     /// <para>
-    /// What is delivered is the request the dock is told about — the same one an opening delivers, since a dock that
-    /// is shown a place is being asked to open onto it again — and the dock's own answer is what decides whether a
+    /// What is delivered is the request the dock is told about, the same one an opening delivers, since a dock that
+    /// is shown a place is being asked to open onto it again, and the dock's own answer is what decides whether a
     /// path is a step, a choice, or a place nobody answers.
     /// </para>
     /// </remarks>
@@ -750,8 +750,8 @@ internal sealed class DockWindows : IWindows
     /// Brings back the docks that are in a window which is no longer there.
     /// </summary>
     /// <remarks>
-    /// The belt to the braces of <see cref="Gone"/>: a dock whose window went away without saying so — one
-    /// that was made before this service knew about it, or one whose window was taken down another way —
+    /// The belt to the braces of <see cref="Gone"/>: a dock whose window went away without saying so, one
+    /// that was made before this service knew about it, or one whose window was taken down another way,
     /// would otherwise be a dock nobody can show. Asked at the two moments a dock is about to be placed,
     /// because that is when a stale window reference first does harm, and asked as a question about the set
     /// of windows rather than by remembering anything, so that what it answers cannot drift from what there
@@ -816,15 +816,15 @@ internal sealed class DockWindows : IWindows
     /// </summary>
     /// <remarks>
     /// A dock that was moved into the window is brought back to the main one here, whether it was on show or
-    /// not: a dock left naming a window that is gone is a dock nothing can draw — the next time it is asked
+    /// not: a dock left naming a window that is gone is a dock nothing can draw, the next time it is asked
     /// for, there is no window to ask, and it stays invisible for the rest of the run. Bringing it back is
     /// what keeps a dock a dock, and it is deliberately not said through <see cref="Changed"/>: this runs on
     /// the way out of a window closing, and a rebuild started from there would be work for a window that is
     /// already gone, and would run it for every dock that was in it.
     /// <para>
     /// A dock that was <em>opened</em> in the window is the other case, and it is let go of instead: it was
-    /// asked for as a window of its own — a directory in a window of its own, which is what the File System's
-    /// own item asks for — so it was never in the main window, and a dock appearing there when the window it
+    /// asked for as a window of its own, a directory in a window of its own, which is what the File System's
+    /// own item asks for, so it was never in the main window, and a dock appearing there when the window it
     /// was asked for is closed is a dock nobody asked for. A toggle is rehomed though it was opened there,
     /// since a toggle is one dock looked for by name and the main window's <c>Window</c> menu is where it is
     /// looked for from.
@@ -936,7 +936,7 @@ internal sealed class DockWindows : IWindows
         window.Show();
 
         // Said once more after the window is up, since a window that is shown is not always one that is heard
-        // being activated — and a window of a dock's own is made for that dock.
+        // being activated, and a window of a dock's own is made for that dock.
         _docks.ActivateWindow(instance);
 
         return window;
@@ -972,14 +972,14 @@ internal sealed class DockWindows : IWindows
     /// <remarks>
     /// A window of a dock's own is a window of that dock: a dock that was closed from its tab, or closed
     /// from the window's own button, leaves a window with nothing to draw in, and the window goes with it.
-    /// So does a dock that left for another window — one brought back to the main window, or landed in a
-    /// region of it — since what a window of one dock draws is that dock and nothing else, and a window left
+    /// So does a dock that left for another window, one brought back to the main window, or landed in a
+    /// region of it, since what a window of one dock draws is that dock and nothing else, and a window left
     /// standing would be a frame around a dock that is drawn somewhere else. A window whose dock is merely
     /// hidden is not closed either, since a hidden dock is one that is still there.
     /// <para>
     /// The main window is not closed here when it holds nothing, and that is deliberate rather than left out:
-    /// it is not a window of any one dock but the program's own window — its <c>Window</c> menu is where a dock
-    /// is asked for again, and it is what a dock in a window of its own is brought back to — and it is the one
+    /// it is not a window of any one dock but the program's own window, its <c>Window</c> menu is where a dock
+    /// is asked for again, and it is what a dock in a window of its own is brought back to, and it is the one
     /// window a first run has, holding the one dock the starting layout names. Closing it as that dock is torn
     /// out would end the run, because what ends a run is every window being gone: the drag would take the
     /// program with it, and the dock with the window it was being moved out of. An empty main window is what is

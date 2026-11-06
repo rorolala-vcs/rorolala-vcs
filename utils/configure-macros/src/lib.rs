@@ -15,7 +15,7 @@ use syn::{DeriveInput, parse_macro_input};
 /// the point of a derive here is that being a configuration is *opt-in*, rather than a
 /// blanket implementation that would quietly cover every type serde can handle.
 ///
-/// The type must also be serializable both ways — `Serialize` and `Deserialize` — for
+/// The type must also be serializable both ways, `Serialize` and `Deserialize`, for
 /// the implementation to be accepted; if it is not, the missing bound is what the
 /// compiler names.
 ///

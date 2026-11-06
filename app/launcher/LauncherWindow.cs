@@ -198,7 +198,7 @@ internal sealed class LauncherWindow : Window
 
         // What the machine draws is not known yet and is not waited for before the window. Until it has been
         // asked, the frame a choice does not name is drawn the way an unchosen frame would be if the machine
-        // said nothing — which is what the window is rebuilt with once its work has been read.
+        // said nothing, which is what the window is rebuilt with once its work has been read.
         _machine = WindowStyle.Windows;
         _frame = settings.Frame ?? _machine;
         _skin = theme.Skin;
@@ -694,12 +694,12 @@ internal sealed class LauncherWindow : Window
     /// <remarks>
     /// It is the one screen that is read before anything is done, so each of its parts is one thing: the name
     /// at the top, the line written under it, and then what the machine can do. The buttons are here as well
-    /// as in the strip at the bottom because this is the screen that offers them — what a person meets first
+    /// as in the strip at the bottom because this is the screen that offers them, what a person meets first
     /// should not have to be found in a row of marks.
     /// <para>
     /// A machine with no account is shown the one thing such a machine can do, and it is shown it in the
     /// middle of the window: there is no work yet, and the account is what the work would be done as. Once
-    /// there is an account the greeting is not said again — the window is not being met for the first time
+    /// there is an account the greeting is not said again, the window is not being met for the first time
     /// any more, and what it has to offer is the look and the work.
     /// </para>
     /// </remarks>

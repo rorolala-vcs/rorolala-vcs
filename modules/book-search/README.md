@@ -14,7 +14,7 @@ A query is cut into the same terms the book was indexed by:
 
 - text separated by spaces is cut into words, lowercased and compatibility-normalized, so `Rola`
   and `ＲＯＬＡ` are the same term;
-- Chinese-style text — Han, kana, hangul — is cut into each character and each adjacent pair,
+- Chinese-style text (Han, kana, hangul) is cut into each character and each adjacent pair,
   because it is written without spaces. The characters let a one-character query find its line;
   the pairs let a longer query find its phrase.
 
@@ -25,7 +25,7 @@ places. A query that is all punctuation has no terms and finds nothing.
 
 A Latin term is also looked up by the fragments of the words it could be part of: every word of a
 spaced script is indexed, at build time, as its runs of two and three characters, so a query that
-is a prefix or a substring of a word — `inst` or `stall` of `install` — finds the word too. The
+is a prefix or a substring of a word, `inst` or `stall` of `install`, finds the word too. The
 build pays for the extra index; a query pays only for the fragments it asks about. A term found
 whole ranks above one found through its fragments, and the fragments are verified against the
 article's own text before the article is answered, so a query whose fragments landed in two
@@ -38,8 +38,8 @@ tie, so the same query over the same book answers in the same order every time.
 ## What a hit carries
 
 Each hit is the article's name, title and description, a score, and at most
-[`MAX_SNIPPETS_PER_HIT`] fragment. A fragment is cut from the first field that matched — the
-content if the word is in the body, and the description or title when the word is only there — and
+[`MAX_SNIPPETS_PER_HIT`] fragment. A fragment is cut from the first field that matched, the
+content if the word is in the body, and the description or title when the word is only there, and
 ranges say which characters of the fragment matched:
 
 ```rust,no_run
@@ -59,7 +59,7 @@ for hit in &hits {
 
 Ranges are counted in characters and include the start but not the end, so a caller can split the
 text into styled and unstyled runs whatever encoding it holds the text in. A fragment cut shorter
-than its field carries `…` at the ends it was cut from, and the ranges count from the marked text.
+than its field carries `...` at the ends it was cut from, and the ranges count from the marked text.
 A range may cover part of a word rather than all of it, which is what a prefix or a substring
 query is marked by.
 
@@ -103,7 +103,7 @@ every machine.
 
 The second index is the fragments: every word of a spaced script cut into runs of two and three
 characters, so a prefix or a substring of a word is found without the book being read. It is larger
-than the term index — the build pays for that, once, and every search then answers from memory.
+than the term index, the build pays for that, once, and every search then answers from memory.
 
 ## The C ABI
 

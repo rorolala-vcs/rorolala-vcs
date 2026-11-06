@@ -10,7 +10,7 @@ use crate::{Error, PublicKey, SigningKey};
 ///
 /// An account *is* a private key: the name is the `.pem` file's stem, and the path is
 /// where that file sits. A private key is not shared, so an account is only ever looked
-/// for beside the work at hand — a Workspace or a Vault — and never in a scope a public
+/// for beside the work at hand, a Workspace or a Vault, and never in a scope a public
 /// key could come from.
 ///
 /// A `.pem` is required of an account; a `.pub` beside it is not. When one is there, a
@@ -111,7 +111,7 @@ impl Account {
     /// Where the account's private key file was found.
     ///
     /// The path is the one the search reached, so it says *which* local scope the key
-    /// came from — the Workspace's or the Vault's.
+    /// came from, the Workspace's or the Vault's.
     #[must_use]
     pub fn key_path(&self) -> PathBuf {
         self.key_path.clone()
@@ -162,7 +162,7 @@ impl Accounts {
     /// The account at `index`, counting from zero.
     ///
     /// The handle is a copy of the account the set holds, so releasing it releases only
-    /// that copy — the set is read again for the next one.
+    /// that copy, the set is read again for the next one.
     #[must_use]
     #[lazyffi(export = read_rola_accounts_by_index)]
     pub fn at(&self, index: usize) -> Option<Account> {

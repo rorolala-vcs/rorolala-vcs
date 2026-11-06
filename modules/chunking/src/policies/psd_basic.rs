@@ -1,7 +1,7 @@
 //! A strategy that cuts a Photoshop document at the boundaries of what it holds.
 //!
 //! A PSD is one file holding several things side by side: a colour mode block, image resources, the
-//! layer and mask block — layer records, then each layer's channel bytes — and the composite image.
+//! layer and mask block (layer records, then each layer's channel bytes) and the composite image.
 //! A save rewrites the file from its first byte, so a cut by position moves everything after the
 //! first edit. A cut at these inner boundaries keeps what the save did not touch: the channel bytes
 //! an edit to one layer leaves alone, the composite a metadata change leaves alone. Those are the
@@ -43,7 +43,7 @@ const LAYERS_PER_CHUNK: usize = 16;
 /// A strategy that cuts a Photoshop document at the boundaries of what it holds.
 ///
 /// The spans it keeps apart are the colour mode data, the image resources, the layer records, the
-/// channel data of each run of `LAYERS_PER_CHUNK` layers — and the composite image.
+/// channel data of each run of `LAYERS_PER_CHUNK` layers, and the composite image.
 /// Everything else is a header, a length or padding, and falls between them as a range of its own.
 ///
 /// The records are one span, not one per layer. A save writes the modification time of every layer
@@ -105,7 +105,7 @@ fn section(content: &[u8], at: usize, spans: &mut Vec<(usize, usize)>) -> Option
 
 /// Reads the layer and mask section: every layer record, then every layer's channels.
 ///
-/// What follows the last channel — the global layer mask and the additional information blocks — is
+/// What follows the last channel, the global layer mask and the additional information blocks, is
 /// not taken apart. It is small and it belongs to no layer, so it falls between the channel spans
 /// and the composite image as a range of its own.
 fn layers(content: &[u8], at: usize, spans: &mut Vec<(usize, usize)>) -> Option<usize> {
@@ -179,8 +179,8 @@ fn layer_info(
 
 /// Reads one layer record, returning where it ends and how long each of its channels is.
 ///
-/// Only the fixed fields before the extra data are read. What the extra data holds — the layer name,
-/// its mask, its blending ranges, its own information blocks — is skipped by the length that says
+/// Only the fixed fields before the extra data are read. What the extra data holds, the layer name,
+/// its mask, its blending ranges, its own information blocks, is skipped by the length that says
 /// how much of it there is, because none of it says where the next record or the channel data begins.
 fn record(content: &[u8], at: usize, limit: usize) -> Option<(usize, Vec<usize>)> {
     let channel_count = read_u16(content, at.checked_add(16)?)?;
@@ -411,7 +411,7 @@ mod tests {
         let after = chunks(&document(&layers, b"the composite"));
 
         // What the edit did not touch is the bytes it already was, so it is a chunk the store
-        // already has — which is the whole reason to cut a document at its channels.
+        // already has, which is the whole reason to cut a document at its channels.
         let mut untouched = Vec::new();
         for index in 0..LAYERS_PER_CHUNK {
             untouched.extend_from_slice(&data(index));

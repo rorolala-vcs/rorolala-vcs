@@ -23,8 +23,8 @@ pub use serde as __serde;
 /// One variant per [`io::ErrorKind`], and named after it, so nothing a caller could
 /// branch on has to be read out of a message. `std` marks [`io::ErrorKind`] as
 /// non-exhaustive, and gates a few of its variants behind unstable features, so this
-/// stands for the kinds stable code can name: whatever is left over — a kind `std` adds
-/// later, or one it does not let stable code spell — arrives as [`Other`](Self::Other).
+/// stands for the kinds stable code can name: whatever is left over, a kind `std` adds
+/// later, or one it does not let stable code spell, arrives as [`Other`](Self::Other).
 #[lazyffi(export = RolaIoErrorKind)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IoErrorKind {
@@ -264,8 +264,8 @@ impl From<IoError> for io::Error {
 /// A failure to encode or decode a value, as it crosses the C ABI.
 ///
 /// As [`IoError`], [`bincode2::Error`] is foreign and has no repr-C sibling, so what
-/// crosses is the message it carried. It is also not a type of its own — it is
-/// `Box<ErrorKind>` — so going back cannot be a [`From`] impl: neither the box nor the
+/// crosses is the message it carried. It is also not a type of its own, it is
+/// `Box<ErrorKind>`, so going back cannot be a [`From`] impl: neither the box nor the
 /// kind is this crate's to implement [`From`] for. It is
 /// [`into_bincode`](BincodeError::into_bincode) instead, which builds the
 /// [`Custom`](bincode2::ErrorKind::Custom) kind out of the message.
@@ -317,7 +317,7 @@ impl From<bincode2::Error> for BincodeError {
 /// A failure to turn a value into JSON, as it crosses the C ABI.
 ///
 /// As [`BincodeError`], `serde_json`'s error is foreign and has no repr-C sibling, so
-/// what crosses is what it said *and where* — a line and a column, which is what a
+/// what crosses is what it said *and where*, a line and a column, which is what a
 /// caller needs to find the value that would not encode. Going back is
 /// [`into_json`](JsonError::into_json): `serde_json` hands out no way to rebuild the
 /// syntax error it describes, so what comes back is an I/O one carrying the message.
@@ -385,7 +385,7 @@ impl std::error::Error for JsonError {}
 /// [`AddrParseError`](std::net::AddrParseError) is foreign, carries nothing, and says the
 /// same sentence whatever was wrong with the address, so what crosses is the target
 /// itself: it is the one thing that says which address to go and look at. There is no
-/// conversion back, for the reason [`JsonError`] has none either — `std` hands out no way
+/// conversion back, for the reason [`JsonError`] has none either, `std` hands out no way
 /// to build the error it describes.
 #[lazyffi(export = RolaAddrError)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -436,7 +436,7 @@ mod tests {
     ///
     /// Kept as one table so both directions are checked over the whole list at once: an arm
     /// that was swapped, dropped, or pointed at the wrong sibling shows up as a mismatch.
-    /// `Other` is deliberately left out — it is where anything *not* listed lands, not a
+    /// `Other` is deliberately left out, it is where anything *not* listed lands, not a
     /// kind `std` names on the way in.
     const NAMED_KINDS: [(IoErrorKind, StdKind); 38] = [
         (IoErrorKind::NotFound, StdKind::NotFound),

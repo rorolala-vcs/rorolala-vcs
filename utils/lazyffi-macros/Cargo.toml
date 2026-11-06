@@ -13,7 +13,7 @@ proc-macro2.workspace = true
 quote.workspace = true
 syn.workspace = true
 
-# `rorolala-utils-lazyffi` re-exports this crate, so depending on it is a cycle —
+# `rorolala-utils-lazyffi` re-exports this crate, so depending on it is a cycle,
 # which cargo allows for a dev-dependency, and which is what lets the example on the
 # attribute itself be compiled rather than ignored.
 [dev-dependencies]

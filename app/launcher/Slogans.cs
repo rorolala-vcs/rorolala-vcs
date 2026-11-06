@@ -18,6 +18,9 @@ internal static class Slogans
     /// <summary>The most of a line the window has room for, which is where a longer one is cut.</summary>
     private const int Most = 96;
 
+    /// <summary>The mark a slogan too long for <see cref="Most"/> ends with.</summary>
+    private const string Cut = "...";
+
     /// <summary>
     /// The lines a file states.
     /// </summary>
@@ -52,7 +55,7 @@ internal static class Slogans
                 continue;
             }
 
-            said.Add(text.Length <= Most ? text : $"{text[..Most].TrimEnd()}…");
+            said.Add(text.Length <= Most ? text : $"{text[..(Most - Cut.Length)].TrimEnd()}{Cut}");
         }
 
         return said;

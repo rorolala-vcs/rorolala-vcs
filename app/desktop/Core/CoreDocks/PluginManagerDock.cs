@@ -53,8 +53,8 @@ internal sealed class PluginManagerDock : IDockView
 /// The order is the user's and the cards are where it is made. A card can be picked up and put
 /// anywhere in the column; the cards around it step aside as the pointer nears a gap, and the card
 /// settles where it was let go of. Nothing is decided for the user behind their back, so an order
-/// that leaves a plugin unable to load is shown red on the cards it affects — while the card is
-/// still in hand, and after it is dropped — rather than being silently rearranged.
+/// that leaves a plugin unable to load is shown red on the cards it affects, while the card is
+/// still in hand, and after it is dropped, rather than being silently rearranged.
 /// <para>
 /// A press is not a drag: what separates the two is how far the pointer travels first, the way the
 /// shell treats a dock's header. Only the vertical travel matters, because a card has one column to
@@ -97,8 +97,8 @@ internal sealed class PluginManagerView : UserControl
     /// Where the card in hand sat in the layout when it was picked up.
     /// </summary>
     /// <remarks>
-    /// The layout moves under a drag whenever something above changes its height — a name that
-    /// rewraps, the pane resized, a scrollbar arriving — and a card held by the pointer must not go
+    /// The layout moves under a drag whenever something above changes its height, a name that
+    /// rewraps, the pane resized, a scrollbar arriving, and a card held by the pointer must not go
     /// with it. The anchor is what lets the shift be the pointer's travel net of that movement rather
     /// than of the layout's.
     /// </remarks>
@@ -158,7 +158,7 @@ internal sealed class PluginManagerView : UserControl
             _list.Children.Add(card.Root);
         }
 
-        // The layout can move under a drag — a name rewrapping, the pane resized — and the room made
+        // The layout can move under a drag (a name rewrapping, the pane resized) and the room made
         // for the card in hand, and the card itself, have to stay right as it does.
         _list.LayoutUpdated += (_, _) => Regap();
 
@@ -443,7 +443,7 @@ internal sealed class PluginManagerView : UserControl
         root.PointerReleased += (_, e) => Release(card, e);
         root.PointerCaptureLost += (_, _) => Cancel();
 
-        // A card's own layout is the surest sign it was laid out again — text reflow is per card —
+        // A card's own layout is the surest sign it was laid out again, text reflow is per card,
         // and the list's is there for a change no single card accounts for.
         root.LayoutUpdated += (_, _) => Regap();
         root.PointerEntered += (_, _) =>
@@ -654,7 +654,7 @@ internal sealed class PluginManagerView : UserControl
     /// <summary>Puts the room made for the card in hand back in step with the layout.</summary>
     /// <remarks>
     /// The offsets that clear a place for the card in hand are measured against the layout, and the
-    /// layout can move under a drag — a name that rewraps, the pane resized, a scrollbar arriving.
+    /// layout can move under a drag, a name that rewraps, the pane resized, a scrollbar arriving.
     /// The layout pass is the only place that is known, so the offsets are answered for there rather
     /// than only when the target changed.
     /// <para>
@@ -852,7 +852,7 @@ internal sealed class PluginManagerView : UserControl
 /// </summary>
 /// <remarks>
 /// The class names are here rather than in the look, so that the look addresses a card by what the
-/// card says it is — the same way a dock says which of its parts is which.
+/// card says it is, the same way a dock says which of its parts is which.
 /// </remarks>
 internal sealed class PluginCard
 {

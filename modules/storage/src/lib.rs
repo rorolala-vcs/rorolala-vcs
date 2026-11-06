@@ -11,7 +11,7 @@ pub use algorithm::*;
 mod backend;
 pub use backend::*;
 
-// Cutting is a domain of its own: the cut a write makes, its general forms, and — in time — the
+// Cutting is a domain of its own: the cut a write makes, its general forms, and, in time, the
 // per-format policies that claim content by extension. It lives in its own crate because the policy
 // registry has to be read by the store, while a policy must be able to implement the trait without
 // depending on the store; with both here that is a cycle. It is re-exported rather than named by a
@@ -43,7 +43,7 @@ mod pack;
 pub use pack::*;
 
 // The paths a store lays its objects down at are the store's own business, not part of what a
-// caller asks of it — see `internals`.
+// caller asks of it, see `internals`.
 pub mod internals;
 
 mod presence;
@@ -55,7 +55,7 @@ pub mod transfer;
 
 /// Reads the first eight bytes of `bytes` as a big-endian number, and the rest after them.
 ///
-/// Three formats this crate writes — a manifest, a pack index and a transfer's key list — lead with a
+/// Three formats this crate writes (a manifest, a pack index and a transfer's key list) lead with a
 /// count and then read a run of fixed-width fields, so the one way to take a number off the front of
 /// a byte string is kept here rather than written three times.
 pub(crate) fn split_u64(bytes: &[u8]) -> Option<(u64, &[u8])> {

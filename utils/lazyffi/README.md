@@ -8,7 +8,7 @@ and inherent `impl` blocks. The C header for everything it exports is generated 
 `rorolala-dev-bindgen`.
 
 `String` and `PathBuf` cross as C strings, and `&str` and `&Path` are accepted as
-parameters — the two references that name something a C string carries, so one is built
+parameters, the two references that name something a C string carries, so one is built
 from the C string and the call borrows the result.
 
 A `&T` parameter or a `&self` receiver is a read-only borrow of a value C already has:
@@ -38,8 +38,8 @@ releases it with that type's own `free_*`.
 `T` and `E` must each own a pointer of their own: an exported `struct` (whose repr
 already is one), a `String` or `PathBuf`, an exported `enum` (boxed, and released with
 the `free_<type>` that comes with it), or `()`, which is the `Ok` of the common
-`Result<(), E>` and crosses as a null payload. A scalar is rejected — it has no pointer
-of its own — and so is a `String` error: an error is a case the caller switches on.
+`Result<(), E>` and crosses as a null payload. A scalar is rejected, it has no pointer
+of its own, and so is a `String` error: an error is a case the caller switches on.
 
 ```rust
 use rorolala_utils_lazyffi::{InputRef, ReturnType, lazyffi};
@@ -59,7 +59,7 @@ fn main() {
     assert_eq!(borrowed.value, 7);
 
     // Nothing was taken, so the same storage still holds the value and can be
-    // borrowed again — which is the whole difference from a by-value parameter.
+    // borrowed again, which is the whole difference from a by-value parameter.
     assert_eq!(unsafe { Counter::input_ref(handle) }.value, 7);
 
     // SAFETY: `handle` came from `return_self` and has not been released yet.
@@ -108,7 +108,7 @@ null on a string it cannot carry; `Option<i32>` therefore does not compile.
   lies, `&mut` borrows it to be written back, a by-value parameter takes ownership of
   it, and a return hands out an owning pointer that C releases with `free_<type>`.
   Its fields are never converted, which is what lets a resource hold ordinary Rust
-  values — a `PathBuf`, a socket — without giving them a repr-C sibling first.
+  values (a `PathBuf`, a socket) without giving them a repr-C sibling first.
 - An exported **`enum` is transparent**: its tag and payload *are* its interface, so
   C has to be able to read them. That is also why an enum has no `&` of its own: its
   repr is not the value in place, so there would be nothing to borrow.
@@ -119,7 +119,7 @@ header generator live in `rorolala-utils-lazyffi-core`.
 
 ## What the docs show
 
-Everything the attribute generates — the repr-C types, the `extern "C"` wrappers, the
-release function, and the conversions between a type and its repr — is `#[doc(hidden)]`.
+Everything the attribute generates, the repr-C types, the `extern "C"` wrappers, the
+release function, and the conversions between a type and its repr, is `#[doc(hidden)]`.
 `cargo doc` therefore shows the types and functions you wrote, and nothing else: the
 generated surface is C's interface, and the header is where it is documented.

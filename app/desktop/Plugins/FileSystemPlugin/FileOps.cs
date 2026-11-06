@@ -10,8 +10,8 @@ namespace FileSystemPlugin;
 /// the command run over each.
 /// </summary>
 /// <remarks>
-/// The work is not this program's: an operation is carried out by a command of the user's own — the
-/// system's own tools until they say otherwise, or Rorolala's once that plugin is in — and what is
+/// The work is not this program's: an operation is carried out by a command of the user's own, the
+/// system's own tools until they say otherwise, or Rorolala's once that plugin is in, and what is
 /// settled here is what happens where a name is already taken, which is a question only a person can
 /// answer. The command is a template naming where the two paths go as <c>{{from}}</c> and <c>{{to}}</c>.
 /// <para>
@@ -39,8 +39,8 @@ internal static class FileOps
 
     /// <summary>The commands a Windows system carries the operations out with.</summary>
     /// <remarks>
-    /// Every one of them is a word the command interpreter owns rather than a program of its own — there
-    /// is no <c>copy.exe</c> — so each is reached through <c>cmd /c</c>. Note that <c>copy</c> handles a
+    /// Every one of them is a word the command interpreter owns rather than a program of its own, there
+    /// is no <c>copy.exe</c>, so each is reached through <c>cmd /c</c>. Note that <c>copy</c> handles a
     /// file and not a directory, so a default that transfers a directory is the user's to change; the
     /// presets are a starting point, not a guarantee.
     /// </remarks>
@@ -55,7 +55,7 @@ internal static class FileOps
     /// <remarks>
     /// Named by their bare names rather than by the paths they were found at, so that what is written
     /// down is what a reader would type: the word is the same wherever the program is installed, and it is
-    /// the path — which differs from one installation to the next — that would be the odd thing to keep.
+    /// the path, which differs from one installation to the next, that would be the odd thing to keep.
     /// </remarks>
     internal static readonly FileOperationCommands Unix = new(
         "cp -r {{from}} {{to}}",
@@ -90,7 +90,7 @@ internal static class FileOps
     /// <remarks>
     /// Set once, during initialization, and read on every operation rather than kept: a command the user
     /// changes takes effect on the next operation instead of on the next start, which is what a command is
-    /// — nothing about it survives the operation it carried out.
+    ///, nothing about it survives the operation it carried out.
     /// </remarks>
     private static IPluginConfig? _config;
 
@@ -138,7 +138,7 @@ internal static class FileOps
     /// </summary>
     /// <remarks>
     /// This exists because of one bug that is worth not having again: a path that came from a drag is read
-    /// from a URI, and a directory's URI ends in a separator — so the name taken from it is the empty string,
+    /// from a URI, and a directory's URI ends in a separator, so the name taken from it is the empty string,
     /// a "directory" of no name is the directory it sits in, that directory always exists, and the entry was
     /// therefore renamed instead of arriving under its own name. Bare the path before asking anything of it.
     /// </remarks>
@@ -183,7 +183,7 @@ internal static class FileOps
     /// </summary>
     /// <remarks>
     /// Directories and files are one call each, because the operation names which of the two it is removing
-    /// — the command that removes a file does not remove a directory, and the two are told apart here so that
+    ///, the command that removes a file does not remove a directory, and the two are told apart here so that
     /// they need not be told apart again once the run is made.
     /// </remarks>
     /// <param name="entries">What to remove.</param>
@@ -228,7 +228,7 @@ internal static class FileOps
         }
 
         // One batch rather than one call per item, so that a question about a taken name is asked once for
-        // the whole of it — offering "the same for the rest" — instead of once per item.
+        // the whole of it, offering "the same for the rest", instead of once per item.
         return await Ask(operation, command, [.. sources.Select(source => new Pair(source, into))], failed);
     }
 
@@ -244,10 +244,10 @@ internal static class FileOps
     /// Plans one call, asks about any conflict, and runs the command over every item.
     /// </summary>
     /// <remarks>
-    /// A command the operation cannot be run with — one that names no program, or no path, or a target a
-    /// removal has none of — is refused before anything is planned, so that the reason names the command
+    /// A command the operation cannot be run with, one that names no program, or no path, or a target a
+    /// removal has none of, is refused before anything is planned, so that the reason names the command
     /// rather than an item. The plan is made first, so that every conflict is answered before the first
-    /// command runs — which is what makes calling the run off leave nothing done at all.
+    /// command runs, which is what makes calling the run off leave nothing done at all.
     /// </remarks>
     /// <param name="operation">What is being done to every item.</param>
     /// <param name="command">The command template that carries it out.</param>
@@ -257,8 +257,8 @@ internal static class FileOps
     private static async Task<bool> Ask(Operation operation, string command, IReadOnlyList<Pair> pairs, Action<string> failed)
     {
         // The command is a template: it names where the two paths go as `{{from}}` and `{{to}}`, and the
-        // runner expands it per item. What can be told about it before anything is planned — that it names
-        // a program and the paths its operation needs — is told here, so the reason names the command
+        // runner expands it per item. What can be told about it before anything is planned, that it names
+        // a program and the paths its operation needs, is told here, so the reason names the command
         // rather than an item.
         if (Executor.Validate(operation, command) is { } problem)
         {

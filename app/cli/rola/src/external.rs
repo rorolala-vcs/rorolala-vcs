@@ -1,7 +1,7 @@
 //! Running a program beside this one for a word that names no command.
 //!
 //! `rola daemon` is `rola-daemon`: what a run writes after this program's name may be the rest of
-//! another program's, and the two are exported together — see `cargo dev export`. The word is used
+//! another program's, and the two are exported together, see `cargo dev export`. The word is used
 //! as it was written, so a program whose own name has hyphens in it is reached the same way `rola
 //! aa-bb-cc` is `rola-aa-bb-cc`. It is one word and not several: `rola aa bb` looks for `rola-aa`
 //! and hands it `bb`.
@@ -15,10 +15,10 @@
 //! program's own flags are not among them: they were taken out of the run before its words were
 //! matched, and a flag of this program's is not known to be a flag of the program beside it. A run
 //! that asked for help is the one case with something to say about that, and it is answered where
-//! help is answered — see [`tell_help`].
+//! help is answered, see [`tell_help`].
 //!
-//! The program's own output is the terminal's — nothing here reads it, and nothing of this
-//! program's is drawn beside it — and this run ends with the code that program ended with, which is
+//! The program's own output is the terminal's, nothing here reads it, and nothing of this
+//! program's is drawn beside it, and this run ends with the code that program ended with, which is
 //! what naming a word of this program's means too.
 
 use std::path::{Component, Path, PathBuf};
@@ -106,12 +106,12 @@ pub fn tell_help(words: &[String], ec: &mut ResExitCode) -> bool {
 ///
 /// The program's own streams are the terminal's: nothing here reads them, and nothing of this
 /// program's is written beside them. What is written here is the one failure that never reaches the
-/// program — one that will not start — and it is written to the error stream rather than into a
+/// program, one that will not start, and it is written to the error stream rather than into a
 /// render buffer, because the run that meets it may have no buffer at all: a word naming a program
 /// is answered before anything is rendered.
 ///
 /// A program a signal ended has no code of its own, and is one that did not end well, which is what
-/// this run says in its place — the judgement `rola desktop` makes about the window it waits for.
+/// this run says in its place, the judgement `rola desktop` makes about the window it waits for.
 fn hand_over(program: &Path, arguments: &[String]) -> i32 {
     match Command::new(program).args(arguments).status() {
         Ok(status) => status.code().unwrap_or(EC_ERR_EXTERNAL_FAILED),
@@ -184,8 +184,8 @@ fn help_flag() -> String {
 /// Whether a word could be the part of another program's name.
 ///
 /// A word beginning with a hyphen is a flag, and one beginning with an underscore is this
-/// program's own — the completion the framework reaches through one begins with two, and a version
-/// request is rewritten to one before the words are matched — so neither names a program beside
+/// program's own, the completion the framework reaches through one begins with two, and a version
+/// request is rewritten to one before the words are matched, so neither names a program beside
 /// this one.
 ///
 /// What is left has to be one name: a word carrying a step (`..`) or a separator is a path rather

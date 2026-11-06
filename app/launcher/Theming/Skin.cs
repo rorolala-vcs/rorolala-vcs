@@ -9,8 +9,8 @@ namespace RorolalaLauncher.Theming;
 /// <remarks>
 /// The palette is the one <c>theme.json</c> states, so the two programs are drawn from one choice: the
 /// variant in force and the seven colours are read there, and this only turns them into the brushes a
-/// control is given. What is added is what a picture needs and a palette does not name — a muted ink, a
-/// hovered surface, an ink that can be read on the primary — and each is worked out from the palette
+/// control is given. What is added is what a picture needs and a palette does not name, a muted ink, a
+/// hovered surface, an ink that can be read on the primary, and each is worked out from the palette
 /// rather than written down, so that a colour the user chooses does not bring a second colour with it.
 /// </remarks>
 internal sealed class Skin

@@ -3,7 +3,7 @@
 //! What locks a Workspace is a guard being held, and a guard is a value rather than a name, so what
 //! crosses the ABI is a pointer to one. It is opaque in both directions: C takes one from
 //! `RolaWorkspace_get_locking_guard` and gives it back to `RolaWorkspace_drop_locking_guard`, and
-//! nothing about the guard — what it holds, how it releases the lock, how long it must live — is
+//! nothing about the guard (what it holds, how it releases the lock, how long it must live) is
 //! readable from outside. Holding the pointer is holding the lock, and giving it back is giving the
 //! lock back, so a consumer that leaks one leaves the Workspace locked.
 
@@ -57,7 +57,7 @@ pub unsafe extern "C" fn RolaWorkspace_is_locking(workspace: *const RolaWorkspac
 /// # FFI
 ///
 /// Returns a pointer the caller releases with `RolaWorkspace_drop_locking_guard`, and null when
-/// nothing was locked. The lock is held until then — a caller that keeps the pointer keeps the lock,
+/// nothing was locked. The lock is held until then, a caller that keeps the pointer keeps the lock,
 /// whatever else it does.
 ///
 /// A Workspace that is locked already is not waited for: nothing is handed back and it is the

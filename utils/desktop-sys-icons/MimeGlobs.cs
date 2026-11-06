@@ -6,7 +6,7 @@ namespace RorolalaDesktop.SysIcons;
 /// The MIME type a freedesktop system says a file name has.
 /// </summary>
 /// <remarks>
-/// The system's own glob table — <c>globs2</c> under the MIME directory — is the authority on which name
+/// The system's own glob table, <c>globs2</c> under the MIME directory, is the authority on which name
 /// is which kind: it is the file <c>xdg-mime</c> and every file manager read, and reading it costs no
 /// process per row. The user's table is read after the system's, so what a user added or corrected wins.
 /// <para>
@@ -32,7 +32,7 @@ internal static class MimeGlobs
         /// <summary>What each extension says, without its leading dot.</summary>
         private readonly Dictionary<string, Entry> _extensions = new(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>What each whole name says, for a file whose name is its kind — a Makefile.</summary>
+        /// <summary>What each whole name says, for a file whose name is its kind, a Makefile.</summary>
         private readonly Dictionary<string, Entry> _names = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Adds what one extension says, or corrects it when this table is the later one.</summary>

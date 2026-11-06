@@ -1,7 +1,7 @@
 //! The Layout a Vault-side action works on, and what became of an ownership change.
 //!
 //! Ownership is not a thing of its own: it is the `owner` a Layout keeps for one entry, and it
-//! changes the way everything else about an entry changes — through the Layout's own log. So the
+//! changes the way everything else about an entry changes, through the Layout's own log. So the
 //! actions here reach the Vault's Layout through this module rather than opening one each, and
 //! what they answer is one [`Ownership`], so the two ends of an exchange read the same three
 //! outcomes without either being told a second time.
@@ -25,7 +25,7 @@ use super::sync_storage::{Side, carry_blob};
 /// A path is normally where the file belongs. A marker path says what state the file is in instead:
 /// `new` is how an entry an older run submitted before it was placed reads, and moving a file under
 /// `removed` is how it is deprecated. Both are states rather than places, so `@` is reserved for
-/// them and a located path does not start with one — and `@` rather than `#`, which a shell reads as
+/// them and a located path does not start with one, and `@` rather than `#`, which a shell reads as
 /// the start of a comment.
 const MARKERS: &[&str] = &["new", "removed"];
 
@@ -34,7 +34,7 @@ const MARKERS: &[&str] = &["new", "removed"];
 /// A compaction writes every shard's snapshot down and raises the age beside each log, so what it
 /// costs is a flush per shard rather than a flush per change. Reading a log costs far less than
 /// writing a snapshot, so a layout whose history is short is left alone: below this a log is many
-/// thousands of changes, and replaying them is cheaper than folding them — and a layout that small
+/// thousands of changes, and replaying them is cheaper than folding them, and a layout that small
 /// is one whose open is a few milliseconds either way.
 const COMPACT_AT: u64 = 1024 * 1024;
 
@@ -44,7 +44,7 @@ const COMPACT_AT: u64 = 1024 * 1024;
 /// same kind of cost once the log is longer: a log shorter than the snapshots beside it adds less to
 /// an open than the snapshots do, and one that is longer is most of it. A log no longer than them is
 /// where the fold is worth its flush: at twenty thousand entries a snapshot is about a mebibyte, so
-/// the log is folded back to that every eighteen thousand changes or so — a compaction of under a
+/// the log is folded back to that every eighteen thousand changes or so, a compaction of under a
 /// tenth of a second, spread over changes that each cost microseconds.
 const LOG_PER_SNAPSHOT: u64 = 1;
 
@@ -66,7 +66,7 @@ pub enum Ownership {
 /// The Vault's own Layout, made if the Vault has not one yet.
 ///
 /// Which Vault that is follows from where this runs: an action served by a Vault works on the
-/// Vault's Layout, and a Workspace side has none — so a context that is not a Vault is not one an
+/// Vault's Layout, and a Workspace side has none, so a context that is not a Vault is not one an
 /// ownership change can run on.
 ///
 /// A Layout that could not be opened is [`ActionError::LocalFile`] when the operating system
@@ -106,7 +106,7 @@ pub(crate) fn local_layout(ctx: &ActionContext<'_>) -> Result<Layout, ActionErro
 ///
 /// A failure here is left to the next action rather than failing this one: a compaction is
 /// maintenance the action did not ask for, and what a bad one costs is an open that replays what it
-/// could not fold — the change that follows is still the change that was asked for. What it may not
+/// could not fold, the change that follows is still the change that was asked for. What it may not
 /// do is fail where the action would otherwise succeed, which is why nothing is returned.
 fn compact_if_stale(layout: &Layout) {
     let sizes = layout.sizes();
@@ -123,7 +123,7 @@ fn compact_if_stale(layout: &Layout) {
 ///
 /// The whole list crosses at once rather than one `Uuid` per exchange: the Workspace already holds
 /// it, and the changes are written by one batch, so the Vault has to make every decision before it
-/// writes any of them — a `Uuid` read between two writes would be read from a layout a commit is
+/// writes any of them, a `Uuid` read between two writes would be read from a layout a commit is
 /// part of the way through. What comes back is one outcome per `Uuid`, in the order they were named.
 ///
 /// Which change it is is `decide`'s to make, as it was for one entry: it is handed the batch the
@@ -145,7 +145,7 @@ pub(crate) async fn ownership_batch(
     input: OnlyWorkspace<String>,
     decide: impl Fn(&mut Batch<'_>, Uuid, &str) -> Result<Ownership, ActionError>,
 ) -> Result<Vec<Ownership>, ActionError> {
-    // What to change crosses as JSON — the name the bar is drawn under, and the `Uuid`s — because a
+    // What to change crosses as JSON (the name the bar is drawn under, and the `Uuid`s) because a
     // list is not a thing the C ABI can hand over, and JSON is how the other batched action carries
     // its own. The Workspace holds it; the Vault is told the list as one value.
     let (name, ids) = match input.into_inner() {
@@ -284,7 +284,7 @@ pub(crate) fn batched<Output>(
 /// Layout's log holds: the version and what it says are read back as they were and written
 /// unchanged, so naming an owner changes nothing else about the entry.
 ///
-/// What it writes is a change of `batch`, which is committed with whatever else the run collected —
+/// What it writes is a change of `batch`, which is committed with whatever else the run collected,
 /// see [`ownership_batch`]. The entry it reads is the batch's, so a `Uuid` the run named twice is
 /// decided against the first change rather than against what the layout held before it.
 ///
@@ -464,7 +464,7 @@ pub enum EntryRemove {
 ///
 /// Removing is not a move: a move keeps what is at the path and changes where it is, while this is
 /// the entry going. The content the entry's version names stays in the store, and the version and
-/// the objects under it stay in the index — what is removed is the Vault's Layout naming it, which
+/// the objects under it stay in the index, what is removed is the Vault's Layout naming it, which
 /// is what makes it a file of the Vault's at all.
 ///
 /// Who may remove is the account that holds it, or one that administrates the Vault: an entry is a
@@ -536,7 +536,7 @@ where
 /// Runs one exchange against the Vault: the input there, the answer of `decide` back.
 ///
 /// It is [`remote_write`] with the answer left to the caller, so an action that writes more than
-/// one thing — a sync's batch — carries them all in one exchange rather than one connection and
+/// one thing, a sync's batch, carries them all in one exchange rather than one connection and
 /// handshake per entry.
 ///
 /// # Errors

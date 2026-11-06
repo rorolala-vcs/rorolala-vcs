@@ -3,7 +3,7 @@
 //! It is [`read`](crate::vcs_index::cmd_vcs_index_read) asked of the other end of an exchange:
 //! where that reads the index the run is inside, this reaches the Vault and reads what *its* index
 //! holds. A Creator or a Message is printed as its text. A Variant is printed the way `ls-variants`
-//! prints it, and a Version the way `ls-versions` prints it — its number traced on the Vault, since
+//! prints it, and a Version the way `ls-versions` prints it, its number traced on the Vault, since
 //! the chain is there and not here.
 
 use librorolala::protocol::ActionError;
@@ -81,8 +81,8 @@ pub fn complete_vcs_index_read_remote(
 /// # Errors
 ///
 /// Renders [`ErrorVcsIndexHash`](crate::vcs_index::ErrorVcsIndexHash) when the hash does not read, [`ErrorVcsIndexNotFound`] when no
-/// object is held under it, and — as
-/// [`vcs-index ls-remote-variants`](crate::vcs_index::cmd_vcs_index_ls_remote_variants) — whatever
+/// object is held under it, and, as
+/// [`vcs-index ls-remote-variants`](crate::vcs_index::cmd_vcs_index_ls_remote_variants), whatever
 /// the exchange reports.
 #[command(node = "vcs-index.read-remote", entry = EntryVcsIndexReadRemote)]
 pub fn vcs_index_read_remote(
@@ -112,7 +112,7 @@ pub fn vcs_index_read_remote(
 
 /// The hash and the Vault to reach, from the words a run gave.
 ///
-/// A hash reads as one and a Vault does not, so the last word is the Vault when it is not a hash —
+/// A hash reads as one and a Vault does not, so the last word is the Vault when it is not a hash,
 /// the same reading [`storage sync-hashes`](crate::storage::cmd_storage_sync_hashes) gives its
 /// trailing Vault, so the two are named the same way. A head of a hash counts as a hash here, so a
 /// Vault named in hex is the one name this cannot tell apart.
@@ -144,8 +144,8 @@ pub fn handle_vcs_index_read_remote(
     current: &mut LazyRes<ResCurrentAccount>,
     format: &mut ResFormat,
 ) -> Next {
-    // The hash is resolved here, against the index this side holds — which a sync keeps to the
-    // hashes the Vault has — so that what crosses is a whole hash whichever way it was written.
+    // The hash is resolved here, against the index this side holds, which a sync keeps to the
+    // hashes the Vault has, so that what crosses is a whole hash whichever way it was written.
     // A whole hash needs no index and is taken as it is, which is how a run reaches an object the
     // index here does not hold yet.
     let key = match hash_of(&state.hash, || {

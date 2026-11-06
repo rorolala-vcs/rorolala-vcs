@@ -1,9 +1,9 @@
-# The pictures the product draws — the Desktop program's, its plugins', and the launcher's — which is the
+# The pictures the product draws (the Desktop program's, its plugins', and the launcher's) which is the
 # one file adding one means editing.
 #
 # What is drawn is Google's Material Design icons, from the maintained mirror of the set. The set is not
 # vendored: it is a shallow clone under `THIRD-PARTY/`, which git ignores, and every picture is drawn from
-# that clone by `cargo dev icons` — so what is drawn is what the pinned commit holds, and another picture is
+# that clone by `cargo dev icons`, so what is drawn is what the pinned commit holds, and another picture is
 # another name below rather than another file copied into a plugin.
 #
 # The pictures are committed, so a build needs neither the clone nor a renderer: only drawing them does, and
@@ -15,10 +15,10 @@
 url = "https://github.com/material-icons/material-icons"
 
 # The whole of what "the icon set" means here: there is no history to travel, so another set is another
-# clone, and the upstream is archived — this is expected to stay where it is.
+# clone, and the upstream is archived, this is expected to stay where it is.
 commit = "af0ed9c0e1276bad43c4d6ca8e8aaa283e425195"
 
-# One set per project, which is also where the pictures are drawn — the project's own `icons/` — and the
+# One set per project, which is also where the pictures are drawn, the project's own `icons/`, and the
 # namespace the keys are generated into.
 #
 # `key` is what a picture is handed over under, and the icon library is one namespace of them: a plugin's
@@ -32,7 +32,7 @@ plugin = "FileSystemPlugin"
 key = "rorolala_file_system"
 
 # The toolbar's own pictures. `visibility` and `visibility_off` are the switch that shows what the rules
-# hide — an eye, and an eye struck through — and `link` and `link_off` are whether a dock follows the whole
+# hide (an eye, and an eye struck through) and `link` and `link_off` are whether a dock follows the whole
 # or looks at a directory of its own; `arrow_back`, `arrow_forward`, `arrow_upward` and `refresh` are the
 # four ways a browser moves, and `home` is the way back to the top of the platform, which is a place and
 # not a direction: it is offered by the menu rather than by the toolbar, and a house is what the set draws
@@ -70,8 +70,8 @@ plugin = "RorolalaVCSPlugin"
 key = "rorolala_vcs"
 
 # What an entry's lock is drawn with, and what taking and letting go of one is: `lock` is somebody else
-# holding it and is also what claiming it wears, `lock_open` is letting go of it, and `create` — the set's
-# pencil — is the reader holding it, since holding it is what makes it theirs to change.
+# holding it and is also what claiming it wears, `lock_open` is letting go of it, and `create`, the set's
+# pencil, is the reader holding it, since holding it is what makes it theirs to change.
 # `lock` and `lock_open` are what taking ownership and letting it go wear in an entry's menu, `create` is
 # the pencil that marks the reader's own, and the last three are how a command's own report is read: what it
 # said went wrong, what it said to be careful of, and what it said could be done about it. `refresh` is what
@@ -81,23 +81,23 @@ key = "rorolala_vcs"
 #
 # `upload` and `download` are how a file stands beside upstream: the version recorded for it is ahead of
 # what the Vault was told of, or behind it, and the arrows say which way the work would have to move to be
-# in step — nothing is uploaded or downloaded by them, so the mark is of a direction rather than of an
+# in step, nothing is uploaded or downloaded by them, so the mark is of a direction rather than of an
 # action. `call_split` is the third answer: the two sides have each moved on, so neither is based on the
 # other and there is no direction the work could move in to settle it.
 #
 # `merge` is what a variant file waiting to be joined wears: the set draws two lines coming together into
-# one, which is what the file is for — its content is to become part of the file beside it.
+# one, which is what the file is for, its content is to become part of the file beside it.
 #
 # The last four are what a file's own state is worn as on a tile, where there is no column to draw a dot in:
 # `add` for a file the Layout does not name, `edit_note` for one whose content has changed or is waiting to
-# be joined — a pencil over lines, which is the nearest this set has to an edited line, since its `edit` is
-# the very picture `create` is and that one is already the lock's — `arrow_right_alt` for one that moved,
+# be joined, a pencil over lines, which is the nearest this set has to an edited line, since its `edit` is
+# the very picture `create` is and that one is already the lock's, `arrow_right_alt` for one that moved,
 # and `priority_high` for a change that must not be recorded.
 #
 # `cloud_upload`, `cloud_download` and `sync` are the three sync buttons in the Overview's strip, and they
 # are the cloud's own arrows rather than the `upload`/`download` above so that the two are told apart at a
 # glance: what stands beside a file is a direction, and what is pressed is an exchange with the Vault that
-# carries data both ways. The order they are read in is the command line's — up, then down, then both — and
+# carries data both ways. The order they are read in is the command line's (up, then down, then both) and
 # `sync` is the two arrows that turn into each other, which is what both is.
 #
 # `more_vert` is the button that opens what the three of them are told to leave out: three vertical beads,
@@ -107,7 +107,7 @@ key = "rorolala_vcs"
 # which is the set's mark for copying something and the same picture the browser's own copy uses.
 #
 # `visibility` and `visibility_off` are the switch in the Overview's strip that shows what the ignore
-# rules govern — an eye, and an eye struck through — which is the browser's own pair for showing what
+# rules govern (an eye, and an eye struck through) which is the browser's own pair for showing what
 # its rules hide, drawn again here so that each plugin's keys stay its own.
 icons = [
     "lock",
@@ -133,8 +133,8 @@ icons = [
     "more_vert",
     "content_copy",
     # The pictures the docks this plugin registers are drawn as, which is what the Window menu lists each of
-    # them by and what the left of its tab wears: the Overview is a checklist with its last line ticked — a
-    # reading of the work that is done rather than a task — the Workspace is the work as a case, the Version
+    # them by and what the left of its tab wears: the Overview is a checklist with its last line ticked, a
+    # reading of the work that is done rather than a task, the Workspace is the work as a case, the Version
     # Graph is the way a change comes round again through one file rather than a chart, and the Accounts are the
     # person the work acts as.
     "task_alt",
@@ -152,13 +152,13 @@ key = "rorolala"
 # pictures rather than the desktop's, because the title bar they sit in is the program's too.
 #
 # `minimize` is the set's bar, `close` its cross, `crop_square` the hollow square a window is drawn as
-# while it is not maximized, and `filter_none` the two squares — one behind the other — that say pressing
+# while it is not maximized, and `filter_none` the two squares, one behind the other, that say pressing
 # it puts the window back the size it was. Nothing here is `fullscreen` or `open_in_full`: this window
 # has no full-screen button, and a picture for one would be a picture nothing wears.
 #
 # The last three are the kernel's own docks, the ones the program itself registers rather than a plugin: the
 # Plugin Manager is a puzzle piece, the Log is a list of lines, and the Preferences are a machine's own cog. They
-# are the program's pictures for the same reason the buttons above are — the docks are the kernel's — and each is
+# are the program's pictures for the same reason the buttons above are, the docks are the kernel's, and each is
 # worn by the item that opens its dock in the Window menu and at the left of the dock's tab.
 icons = [
     "minimize",
@@ -184,8 +184,8 @@ source = "app/launcher"
 key = "rola_launcher"
 
 # The launcher's own pictures, which are the buttons its window offers: the account it greets a person by,
-# the Workspace it makes, the one it imports — a folder being opened, which is what choosing a directory that
-# already holds a Workspace is — and the language its text is read in.
+# the Workspace it makes, the one it imports, a folder being opened, which is what choosing a directory that
+# already holds a Workspace is, and the language its text is read in.
 #
 # The window's frame is the Desktop program's own, so the marks on it are that set's and are not stated
 # again here: what is drawn for this project is only what its own window offers.

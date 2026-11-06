@@ -288,8 +288,8 @@ fn move_file(source: &Path, target: &Path) -> Result<(), Error> {
     match fs::rename(source, target) {
         Ok(()) => Ok(()),
         Err(rename_error) => {
-            // WORKAROUND: a staging area and a working tree can be on different volumes — a project
-            // spread over mounts — where a rename is not one operation. The copy is the fallback,
+            // WORKAROUND: a staging area and a working tree can be on different volumes, a project
+            // spread over mounts, where a rename is not one operation. The copy is the fallback,
             // and the original goes only once the copy is whole; a copy that cannot be made either
             // is the rename's failure as it was met.
             match fs::copy(source, target) {

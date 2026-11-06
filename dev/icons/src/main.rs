@@ -1,9 +1,9 @@
 //! Draws the Desktop's own pictures from the pinned Material Design icon set.
 //!
 //! What is drawn is what `app/desktop/icons.toml` names: the commit to draw from, and the pictures each
-//! project wears — a plugin of the program's, and the host itself. What is written beside them is what a
-//! directory of pictures has to say for itself — the license the artwork is under, where it came from, and
-//! how to draw it again — and the C# keys the project reads them by. Adding a picture is therefore a line
+//! project wears, a plugin of the program's, and the host itself. What is written beside them is what a
+//! directory of pictures has to say for itself, the license the artwork is under, where it came from, and
+//! how to draw it again, and the C# keys the project reads them by. Adding a picture is therefore a line
 //! in the manifest rather than an edit in four places.
 //!
 //! A page written beside the clone lets the whole set be looked through, which is how a picture is chosen
@@ -36,14 +36,14 @@ const PLUGINS: &str = "app/desktop/Plugins";
 
 /// Where a project is looked for when the manifest does not say, from the root of the tree.
 ///
-/// A set is named by its `source`, and what the manifest was written for — the plugins — is what it means
+/// A set is named by its `source`, and what the manifest was written for, the plugins, is what it means
 /// when nothing is said. The host is not a plugin, so its set says where it is.
 const SOURCES: &str = PLUGINS;
 
 /// What a picture is drawn in, and how many pixels wide and tall it is.
 ///
 /// The ink is white and the ground transparent, because a plugin draws a picture as a mask over a colour it
-/// takes from the theme: white is opaque under either reading of a mask — its alpha, and its luminance — so
+/// takes from the theme: white is opaque under either reading of a mask (its alpha, and its luminance) so
 /// the mark takes the colour the user is looking at rather than one baked into the file. The size is four
 /// times the set's own 24-unit grid, which is as large as a tile's icon ever gets.
 const INK: &str = "#FFFFFF";
@@ -51,8 +51,8 @@ const SIZE: u32 = 96;
 
 /// How wide a picture is, as the number a transform is scaled by.
 ///
-/// `SIZE` is small enough to be a float exactly — a picture is drawn at whole pixels and scaled by a fraction
-/// of the grid it was drawn on — so the lossy-looking cast is the whole of what is wanted.
+/// `SIZE` is small enough to be a float exactly, a picture is drawn at whole pixels and scaled by a fraction
+/// of the grid it was drawn on, so the lossy-looking cast is the whole of what is wanted.
 const fn wide() -> f32 {
     #[allow(clippy::cast_precision_loss)]
     let wide = SIZE as f32;
@@ -65,8 +65,8 @@ const fn wide() -> f32 {
 struct Set {
     /// The project, as the directory holding it and as the namespace of its keys.
     ///
-    /// A plugin's is the same name twice — its directory under `app/desktop/Plugins` and its C# namespace
-    /// are one word — and the host's is its own namespace, `RorolalaDesktop`.
+    /// A plugin's is the same name twice, its directory under `app/desktop/Plugins` and its C# namespace
+    /// are one word, and the host's is its own namespace, `RorolalaDesktop`.
     plugin: String,
     /// Where the project sits, from the root of the tree, when it is not a plugin.
     ///
@@ -282,8 +282,8 @@ fn said(material: &Material, set: &Set) -> String {
          The pictures the `{}` project draws: {}.\n\
          \n\
          They are Google's Material Design icons, taken from the maintained mirror of the set,\n\
-         [material-icons/material-icons]({}) — the same artwork as\n\
-         [google/material-design-icons](https://github.com/google/material-design-icons) — under the\n\
+         [material-icons/material-icons]({}), the same artwork as\n\
+         [google/material-design-icons](https://github.com/google/material-design-icons), under the\n\
          [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). The license itself is\n\
          `LICENSE`, copied from the commit below.\n\
          \n\
@@ -300,8 +300,8 @@ fn said(material: &Material, set: &Set) -> String {
          \n\
          **Why white.** A picture is not drawn as a picture: what wears it draws it as an opacity mask over a\n\
          ground it colours from the theme, so the mark takes the ink the user is looking at rather than a\n\
-         colour baked into the file. White is opaque under either reading of a mask — its alpha, and its\n\
-         luminance — so the picture works whichever one the toolkit does.\n\
+         colour baked into the file. White is opaque under either reading of a mask, its alpha, and its\n\
+         luminance, so the picture works whichever one the toolkit does.\n\
          \n\
          **Why raster rather than linked.** Nothing at runtime draws an SVG: the toolkit would need another\n\
          package for it, and a plugin is discovered as a single assembly. The pictures are drawn at {SIZE}\n\
@@ -334,7 +334,7 @@ fn keys_of(set: &Set) -> String {
         "// Generated by `rorolala-dev-icons` from `app/desktop/icons.toml`.\n\
          //\n\
          // Do not edit: what this holds is what the manifest says, and a change made here is a change made\n\
-         // nowhere — the next `cargo dev icons` would take it away again.\n\
+         // nowhere, the next `cargo dev icons` would take it away again.\n\
          \n\
          namespace {};\n\
          \n\

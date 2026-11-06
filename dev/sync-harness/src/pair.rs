@@ -1,7 +1,7 @@
 //! The channel a sync crosses, and how many bytes cross it.
 //!
-//! A sync crosses an encrypted session and nothing else — a plain stream has no way into an
-//! [`ActionContext`](rorolala_protocol::ActionContext) — so what the harness measures is a handshaken
+//! A sync crosses an encrypted session and nothing else, a plain stream has no way into an
+//! [`ActionContext`](rorolala_protocol::ActionContext), so what the harness measures is a handshaken
 //! [`SecureStream`] over a pair of buffers in this process. That leaves
 //! out what a network would add and leaves in what the session costs: the records, the sealing and
 //! the wake-ups each value becomes.

@@ -8,7 +8,7 @@ namespace FileSystemPlugin;
 /// </summary>
 /// <remarks>
 /// The badges stand on an arc whose centre is the middle of the icon's top right quarter and whose radius is
-/// between that quarter's inscribed and circumscribed circles, a little inside the mean of the two — see
+/// between that quarter's inscribed and circumscribed circles, a little inside the mean of the two, see
 /// [`Radius`]. That is the ring a corner reads as holding: nearer than the inscribed circle the badges crowd
 /// the middle of the picture, and further than the circumscribed one they have left the corner altogether. The
 /// whole arc is at most a quarter turn and the middle of it points at the icon's own top right corner, so one
@@ -44,7 +44,7 @@ internal sealed class BadgeArc : Panel
     /// <summary>How much of the icon's width one badge takes.</summary>
     /// <remarks>
     /// A share rather than a size, because an icon follows the zoom: a badge of a fixed size is a blob on the
-    /// smallest icon and a speck on the largest. The share is the one the design was drawn at — a badge
+    /// smallest icon and a speck on the largest. The share is the one the design was drawn at, a badge
     /// 34/160ths of the square it stands on.
     /// </remarks>
     private const double BadgeShare = 34.0 / 160.0;
@@ -69,7 +69,7 @@ internal sealed class BadgeArc : Panel
     /// </summary>
     /// <remarks>
     /// Half of the way is the mean of the two, which is where the design was first drawn: the ring is pulled in
-    /// from it so that a badge reaches the icon's own corner by no more than the mark it is — see
+    /// from it so that a badge reaches the icon's own corner by no more than the mark it is, see
     /// <see cref="Radius"/>.
     /// </remarks>
     private const double Between = 0.3;
@@ -84,13 +84,13 @@ internal sealed class BadgeArc : Panel
     /// </summary>
     /// <remarks>
     /// The quarter's inscribed circle has half its edge as a radius and its circumscribed one has
-    /// <c>halfSize·√2/2</c>; the ring is drawn between the two, at <see cref="Between"/> of the way from the
+    /// <c>halfSize*√2/2</c>; the ring is drawn between the two, at <see cref="Between"/> of the way from the
     /// first to the second rather than at the mean of them.
     /// <para>
     /// The mean is where the design was first drawn and it is a little too far out: a badge standing there
     /// reaches past the icon's own corner by more than a mark worn on the tile reads as, and the whole arc
     /// ends up looking laid against the edge rather than on the corner. Pulling the ring in towards the
-    /// inscribed circle brings a full arc back onto the picture without crowding the middle of it — the arc
+    /// inscribed circle brings a full arc back onto the picture without crowding the middle of it, the arc
     /// still spreads about the corner, since it is the angle that says where a badge stands and not the ring.
     /// </para>
     /// </remarks>
@@ -141,8 +141,8 @@ internal sealed class BadgeArc : Panel
         // middles and the ring's own centre: half the chord they subtend is the badge's radius, and the
         // angle it subtends is twice the arcsine of that over the ring's radius.
         //
-        // A badge wider than the ring is one whose whole arc cannot hold it — the smallest an icon is, at the
-        // smallest zoom — and there is no angle to take an arcsine of past that. Held at a half turn each,
+        // A badge wider than the ring is one whose whole arc cannot hold it, the smallest an icon is, at the
+        // smallest zoom, and there is no angle to take an arcsine of past that. Held at a half turn each,
         // which is what the arc's own limit then answers with, the badges crowd as tightly as the limit
         // allows rather than being placed by a number that is not a direction.
         var wanted = 2 * Math.Asin(Math.Min(1, Extent(size) / 2 / radius));

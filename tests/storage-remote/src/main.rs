@@ -4,8 +4,8 @@
 //! makes a place to work in, keeps an account, binds a Vault, puts something in each store, serves
 //! the Vault, and then asks the two questions these commands exist for.
 //!
-//! What is checked is two things. A listing is *the other end's*, not the run's own — the keys the
-//! Vault holds are named, and the ones only the Workspace holds are not — and it changes nothing. And
+//! What is checked is two things. A listing is *the other end's*, not the run's own, the keys the
+//! Vault holds are named, and the ones only the Workspace holds are not, and it changes nothing. And
 //! a named sync carries only what it is told to: a key only the Workspace holds crosses to the Vault,
 //! a key only the Vault holds crosses back, a key that was not named stays where it was, and a
 //! content kept as chunks crosses whole, manifest and all.
@@ -62,7 +62,7 @@ async fn main() {
     let workspace_store = store_of_workspace(&workspace);
 
     // What the Vault holds and the Workspace does not: one object written whole, and one content big
-    // enough to be kept as chunks — so the Vault has both an object and a manifest to list.
+    // enough to be kept as chunks, so the Vault has both an object and a manifest to list.
     let only_in_the_vault = vault_store
         .write_object(
             b"what only the Vault wrote",
@@ -193,7 +193,7 @@ async fn main() {
         "a key that was not named crossed the other way",
     );
 
-    // The cut content, named as a manifest, crosses whole — the manifest and the chunks it names —
+    // The cut content, named as a manifest, crosses whole, the manifest and the chunks it names,
     // and crosses back the way it was kept rather than being cut over again.
     let said = run(&mut client(
         &workspace,
@@ -407,7 +407,7 @@ fn pair(dir: &Path, name: &str) {
 ///
 /// The daemon belongs to the machine, so it is told where it sits through the user's own data
 /// directory: the sandbox's `ROLA_DATA_HOME` holds both the table and the account it proves
-/// itself with — the variable a Windows machine reads, where `XDG_DATA_HOME` names nothing.
+/// itself with, the variable a Windows machine reads, where `XDG_DATA_HOME` names nothing.
 fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
     register(data, dir);
 
@@ -450,7 +450,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

@@ -21,7 +21,7 @@ const ZSTD_LEVEL: i32 = 3;
 ///
 /// A codec is lossless by construction: what [`decode`](Self::decode) gives back is what
 /// [`encode`](Self::encode) was handed, byte for byte. Storage promises nothing less, and it is
-/// the codec's whole job to keep that promise — which is also why a payload whose encoding
+/// the codec's whole job to keep that promise, which is also why a payload whose encoding
 /// cannot be undone is a bug, never a state a store is allowed to be in.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -108,7 +108,7 @@ impl Codec {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Malformed`] when `encoded` does not decode to `plain_len` bytes — the
+    /// Returns [`Error::Malformed`] when `encoded` does not decode to `plain_len` bytes, the
     /// frame said how long the content was, so anything else is a store that does not hold
     /// together rather than a value to be guessed at.
     pub fn decode(self, encoded: &[u8], plain_len: usize) -> Result<Vec<u8>, Error> {

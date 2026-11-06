@@ -3,8 +3,8 @@
 The pictures the `RorolalaDesktop` project draws: `minimize`, `crop_square`, `filter_none`, `close`, `extension`, `list_alt`, `settings`.
 
 They are Google's Material Design icons, taken from the maintained mirror of the set,
-[material-icons/material-icons](https://github.com/material-icons/material-icons) — the same artwork as
-[google/material-design-icons](https://github.com/google/material-design-icons) — under the
+[material-icons/material-icons](https://github.com/material-icons/material-icons), the same artwork as
+[google/material-design-icons](https://github.com/google/material-design-icons), under the
 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). The license itself is
 `LICENSE`, copied from the commit below.
 
@@ -21,8 +21,8 @@ writes; a change made here is a change made nowhere.
 
 **Why white.** A picture is not drawn as a picture: what wears it draws it as an opacity mask over a
 ground it colours from the theme, so the mark takes the ink the user is looking at rather than a
-colour baked into the file. White is opaque under either reading of a mask — its alpha, and its
-luminance — so the picture works whichever one the toolkit does.
+colour baked into the file. White is opaque under either reading of a mask, its alpha, and its
+luminance, so the picture works whichever one the toolkit does.
 
 **Why raster rather than linked.** Nothing at runtime draws an SVG: the toolkit would need another
 package for it, and a plugin is discovered as a single assembly. The pictures are drawn at 96

@@ -91,7 +91,7 @@ pub fn render_fallback(_args: EntryFallback, ec: &mut ResExitCode) {
 /// Prints the help a run asks for.
 ///
 /// git's own help is a usage line and a list of what the program can do, so that is what is said
-/// here — the list is the program's, not a page of prose. It goes to stdout and ends the run with
+/// here, the list is the program's, not a page of prose. It goes to stdout and ends the run with
 /// success, the way `git help` does.
 #[help(buffer)]
 pub fn help_fallback(_: EntryFallback, ec: &mut ResExitCode) {

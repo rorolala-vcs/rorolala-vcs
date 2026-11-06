@@ -19,15 +19,15 @@ namespace RorolalaDesktop.Docking;
 /// group, and the dragging that moves a dock from one group to another, or into a window of its own.
 /// </summary>
 /// <remarks>
-/// The area draws the main window's layout tree. Every leaf of it is a <see cref="Region"/> — one group of
-/// tabs — and every split is a two-cell grid with a splitter between the cells, recursively, so any group may
+/// The area draws the main window's layout tree. Every leaf of it is a <see cref="Region"/>, one group of
+/// tabs, and every split is a two-cell grid with a splitter between the cells, recursively, so any group may
 /// be split again and the geometry follows the window rather than the other way round. Where a column seam
 /// and a row seam cross, the two lines are drawn as one grip so that a single drag resizes every panel around
 /// the crossing: the four of a two-by-two arrangement move together rather than a seam at a time.
 /// <para>
 /// A region keeps every dock it was given and shows one of them at a time, rather than being rebuilt when the
 /// set of open docks changes. That is not an optimisation: a control has one parent, and a view moved from one
-/// container into another can be caught mid-move — which is what <c>The control … already has a visual
+/// container into another can be caught mid-move, which is what <c>The control ... already has a visual
 /// parent</c> is. A dock is put in its region once, when it is made; taken out once, when it is closed for
 /// good; and shown, hidden, or made the region's own in between. The one deliberate move is a drag, and that
 /// move is done by taking the dock out of one region and putting it in another, in that order.
@@ -40,9 +40,9 @@ namespace RorolalaDesktop.Docking;
 /// <para>
 /// A header press becomes the toolkit's own drag (<see cref="DockDrag"/>), which is what lets a dock leave the
 /// window it was picked up in. The area a drag is carried over answers in two steps: carried anywhere into a
-/// group, the group is <em>approached</em> and the five points a dock may be put on are drawn — four isosceles
+/// group, the group is <em>approached</em> and the five points a dock may be put on are drawn, four isosceles
 /// trapezoids around a centre rectangle, filling the group, one for each way it may be split and one for joining
-/// its tabs — and the pointer is always on one of them once it is in the group, so the release is what decides.
+/// its tabs, and the pointer is always on one of them once it is in the group, so the release is what decides.
 /// The points are what a drop would do; the release is what does it.
 /// </para>
 /// </remarks>
@@ -52,7 +52,7 @@ internal sealed class DockArea : UserControl
     /// The class a region's header strip carries, for a theme to address it by.
     /// </summary>
     /// <remarks>
-    /// The shell marks the surfaces it owns so that a theme — this host's, or a plugin's — can style them
+    /// The shell marks the surfaces it owns so that a theme (this host's, or a plugin's) can style them
     /// without knowing what a dock is. The names are fixed, since a plugin's theme has to write them as
     /// literals.
     /// </remarks>
@@ -75,7 +75,7 @@ internal sealed class DockArea : UserControl
     /// The class the first header a region is showing carries.
     /// </summary>
     /// <remarks>
-    /// The edge a tab strip is drawn with is the one between two tabs, so the first tab has none on its left —
+    /// The edge a tab strip is drawn with is the one between two tabs, so the first tab has none on its left,
     /// and which that is is the first the region is <em>showing</em>, not the first it was given: a dock whose
     /// header is hidden by being closed is not one a strip starts with. A class rather than a weight, because
     /// what a leading tab looks like is the theme's to decide.
@@ -89,7 +89,7 @@ internal sealed class DockArea : UserControl
     /// The other end of the same row, and marked for the same reason in reverse: the row of tabs is a surface
     /// of its own, and the edge that ends it is the one between it and the room the strip keeps beside it. What
     /// is between two tabs is one tab's left edge, so the last of them carries nothing on its right unless it
-    /// is the last — and a strip of one tab is a row with no edge on its left and this one on its right.
+    /// is the last, and a strip of one tab is a row with no edge on its left and this one on its right.
     /// </remarks>
     public const string TrailingClass = "dock-title-trailing";
 
@@ -123,7 +123,7 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// The answer to a drag is the points themselves and nothing else: they fill the group, so the group around them
-    /// is not outlined or washed — a second box over the same rectangle would be a second shape saying the same
+    /// is not outlined or washed, a second box over the same rectangle would be a second shape saying the same
     /// thing, and two translucent surfaces over one another are a darker rectangle rather than a clearer answer.
     /// Each point also carries the class of what it would do (<see cref="DockPointLeftClass"/> and the rest), so
     /// that the look can draw the five of them as one cluster and still tell them apart.
@@ -160,7 +160,7 @@ internal sealed class DockArea : UserControl
 
     /// <summary>How many characters of a dock's name a tab says before its front is left out.</summary>
     /// <remarks>
-    /// A dock named by where it is — a browser, whose name is a path — would otherwise make a tab as long as the path
+    /// A dock named by where it is (a browser, whose name is a path) would otherwise make a tab as long as the path
     /// and take the strip from every dock beside it. What is kept is the tail, because a path's last segments are the
     /// place and its first are only the drive it begins on.
     /// </remarks>
@@ -172,7 +172,7 @@ internal sealed class DockArea : UserControl
     /// <summary>The class the area of a window that is one dock carries.</summary>
     /// <remarks>
     /// What a window of one dock is drawn as: the dock's own content under the window's row, with none of the
-    /// chrome a region has — no strip, no tabs, no splitter, no commands. The class is how the look knows to
+    /// chrome a region has, no strip, no tabs, no splitter, no commands. The class is how the look knows to
     /// leave the strip's ground and line off, since a surface that is not there is not drawn.
     /// </remarks>
     public const string AloneClass = "dock-area-alone";
@@ -182,8 +182,8 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// The strip, the menu bar and a toolbar are one height, so that the window reads as a stack of bands of
-    /// the same weight. A window of one dock has no strip at all — what it draws is the dock itself, under the
-    /// window's own row — so its row is the menu bar's height and this one
+    /// the same weight. A window of one dock has no strip at all, what it draws is the dock itself, under the
+    /// window's own row, so its row is the menu bar's height and this one
     /// (<see cref="MainWindow.TitleBarHeight"/>) is not drawn there.
     /// </remarks>
     private const double StripHeight = 36;
@@ -194,8 +194,8 @@ internal sealed class DockArea : UserControl
     /// <remarks>
     /// The five points fill the group: the four trapezoids are the band along its edges and the centre rectangle is
     /// what is left, so a group bigger than its band is a rectangle inside a ring of four answers. A band rather than
-    /// a share because what a pointer has to reach is a distance rather than a proportion — the edge of a large group
-    /// is as far from its middle as the edge of any other — and because a centre that keeps the group's own shape is
+    /// a share because what a pointer has to reach is a distance rather than a proportion, the edge of a large group
+    /// is as far from its middle as the edge of any other, and because a centre that keeps the group's own shape is
     /// the "among these tabs" target rather than a place of its own.
     /// <para>
     /// A group too small to give its centre a third of itself shrinks the band with it, so the centre is never lost:
@@ -212,7 +212,7 @@ internal sealed class DockArea : UserControl
     /// <remarks>
     /// Published, because a theme draws a line through the middle of one: the width it is drawn in is this,
     /// and a line of another width would not be centred in it. It is the room a hand has to take hold of rather
-    /// than the room the line takes — the line is one pixel of it, and the rest is the ground either side — so
+    /// than the room the line takes (the line is one pixel of it, and the rest is the ground either side) so
     /// two docks read as one divider apart and still resize from five. It is the tree's own number, which is
     /// what the least a split may be is measured with.
     /// </remarks>
@@ -297,8 +297,8 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// Drawn over the docks rather than laid around one, because a border that took part in the layout would take a
-    /// pixel from what it outlines every time the focus moved. It marks the whole of the dock's area — the strip its
-    /// tab stands in and the view under it — since that is the room the work goes into, and a ring around the view
+    /// pixel from what it outlines every time the focus moved. It marks the whole of the dock's area, the strip its
+    /// tab stands in and the view under it, since that is the room the work goes into, and a ring around the view
     /// alone would sit a few pixels inside the strip's own edge.
     /// </remarks>
     private readonly Border _ring = new()
@@ -319,7 +319,7 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// A window of its own does not put its dock through a region, so the wiring a region's docks get in
-    /// <see cref="Make"/> is done for it here — once, since the handlers would otherwise be added again on every
+    /// <see cref="Make"/> is done for it here, once, since the handlers would otherwise be added again on every
     /// rebuild of a window that draws the same dock.
     /// </remarks>
     private DockInstance? _wired;
@@ -369,8 +369,8 @@ internal sealed class DockArea : UserControl
     /// Whether this area is following the docks, which is while it is on a tree.
     /// </summary>
     /// <remarks>
-    /// Held rather than asked of the toolkit, because attaching and detaching arrive more than once — a dock
-    /// dragged to another group is taken off the tree and put back — and a subscription made twice would be a
+    /// Held rather than asked of the toolkit, because attaching and detaching arrive more than once, a dock
+    /// dragged to another group is taken off the tree and put back, and a subscription made twice would be a
     /// rebuild run twice for one change.
     /// </remarks>
     private bool _listening;
@@ -408,13 +408,13 @@ internal sealed class DockArea : UserControl
         );
         AddHandler(InputElement.PointerCaptureLostEvent, (_, _) => Cancel());
 
-        // The ring is the look's primary rather than a colour of the host's, so a theme — or a primary the user
-        // chose — is what the ring is drawn in, and changing it reaches the ring without the ring being told.
+        // The ring is the look's primary rather than a colour of the host's, so a theme, or a primary the user
+        // chose, is what the ring is drawn in, and changing it reaches the ring without the ring being told.
         _ring[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Primary);
         _ring.Classes.Add(FocusClass);
         _ringLayer.Children.Add(_ring);
 
-        // A dock lands in a group, so a window that has groups takes a drag of one — and a window that is one
+        // A dock lands in a group, so a window that has groups takes a drag of one, and a window that is one
         // dock does not: what it draws is the one dock it was made for, and there is no group in it to put
         // another. Nothing is read here beyond where the drag is: what it carries, and whether the dock it
         // carries may land, is asked where it arrives.
@@ -456,7 +456,7 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// A window that is closed takes its area off the tree and keeps nothing: this area is the one that holds a
-    /// dock's control — in a region of it, or in the border a window of one dock draws its dock in — and a
+    /// dock's control (in a region of it, or in the border a window of one dock draws its dock in) and a
     /// control held by a window that is gone is a control that can never be put in another: the toolkit refuses
     /// to give it a second parent, and the dock is stuck in a window nobody can see. That is what an area still
     /// holding a dock for a closed window does the next time that dock is shown anywhere, which is what a dock
@@ -485,7 +485,7 @@ internal sealed class DockArea : UserControl
 
         // A window of one dock places nothing: what it draws is the one dock it was made for, put straight into
         // the border that holds it, and the letting go of that is here rather than in the loop below because it
-        // is not a placement — there is no group to take it out of.
+        // is not a placement, there is no group to take it out of.
         if (Alone)
         {
             _alone.Child = null;
@@ -513,14 +513,14 @@ internal sealed class DockArea : UserControl
         _manager.Focus.Changed += Ring;
         _manager.Renamed += Retitled;
 
-        // A drag that ends by being called off — Esc, or a release nowhere — leaves this area with the points it
+        // A drag that ends by being called off (Esc, or a release nowhere) leaves this area with the points it
         // drew and no event left to take them down, since a cancelled drag has no drop to be told about.
         _windows.DragEnded += Clear;
 
         // A dock may be in this window, in another one, or in none: what makes an instance this window's is the
         // window it names, which is not a question about the control. So the layer is brought in step as soon
-        // as there is one, so that a dock put into an area that is not on a tree yet — the main window while the
-        // layout is being restored, a window of a dock's own before it is shown — still lands somewhere, and the
+        // as there is one, so that a dock put into an area that is not on a tree yet, the main window while the
+        // layout is being restored, a window of a dock's own before it is shown, still lands somewhere, and the
         // work is taken up again from there.
         Rebuild();
     }
@@ -727,7 +727,7 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// The first of the two decisions a drop makes. A group is <em>approached</em> as soon as the pointer is
-    /// anywhere in it — the whole of the leaf is the near zone — and what the drag then offers is where in that
+    /// anywhere in it, the whole of the leaf is the near zone, and what the drag then offers is where in that
     /// group the dock would go. A root holding nothing, or one whose docks are all hidden, is drawn as no group
     /// at all, so the whole area is approached instead: a dock put there makes the group or joins the active
     /// one, since there is nothing to be beside.
@@ -745,7 +745,7 @@ internal sealed class DockArea : UserControl
     private void Build()
     {
         // A window of one dock has no groups to lay out: what it is drawn as is the dock itself, under the
-        // window's own row, and everything below this is about putting one view beside another — a strip to
+        // window's own row, and everything below this is about putting one view beside another, a strip to
         // choose between them, a splitter to resize one against the other, and boxes to drop a third into. None
         // of that has anything to say in a window that holds one dock, and drawing it would be chrome around a
         // view that nothing can be put beside.
@@ -803,8 +803,8 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// Which dock that is, is the dock that names this window: the window was made for it, and it is the only one
-    /// there is. A dock that is closed is drawn too, and hidden — the same as a region does with a dock that is
-    /// not the one it is showing — so that opening it again is showing the control that is already there rather
+    /// there is. A dock that is closed is drawn too, and hidden, the same as a region does with a dock that is
+    /// not the one it is showing, so that opening it again is showing the control that is already there rather
     /// than one that has to be put back.
     /// </remarks>
     private void Only()
@@ -821,8 +821,8 @@ internal sealed class DockArea : UserControl
         {
             shown.View.View.IsVisible = shown.IsOpen;
 
-            // The one dock of a window of its own is worked in on the same two moments as any dock — a press
-            // landing in it and the keyboard reaching it — and there is no region here to have done it (see
+            // The one dock of a window of its own is worked in on the same two moments as any dock, a press
+            // landing in it and the keyboard reaching it, and there is no region here to have done it (see
             // `Make`). Wired once: a rebuild of the same window draws the same dock, and a handler added again
             // would say the same thing twice for the life of the window.
             if (!ReferenceEquals(_wired, shown))
@@ -895,8 +895,8 @@ internal sealed class DockArea : UserControl
     /// The room the dock being worked in takes in this area, or nothing when this window does not hold it.
     /// </summary>
     /// <remarks>
-    /// The whole of the dock's area, which for a dock in a region is that region — its strip and the view under
-    /// it — rather than the view alone. A dock in a window of its own has the whole of the window's room below
+    /// The whole of the dock's area, which for a dock in a region is that region, its strip and the view under
+    /// it, rather than the view alone. A dock in a window of its own has the whole of the window's room below
     /// the row, and the question of which dock it is has one answer there.
     /// </remarks>
     /// <returns>The rectangle, in the area's own coordinates, or nothing.</returns>
@@ -945,7 +945,7 @@ internal sealed class DockArea : UserControl
     /// <remarks>
     /// The regions are reused for as long as the group is: a group's docks stay in the control that draws them,
     /// and it is the control that moves between grids when the tree is arranged differently. A group that is
-    /// gone takes its region with it, and the docks that were in it were detached in <see cref="Forget"/> —
+    /// gone takes its region with it, and the docks that were in it were detached in <see cref="Forget"/>,
     /// a group is only pruned once it holds nothing.
     /// </remarks>
     private void Sync()
@@ -1038,7 +1038,7 @@ internal sealed class DockArea : UserControl
     private Placed Make(DockInstance instance, Region region)
     {
         // The room the tab keeps either side of its name: one number, because the close is a strip of the tab's own
-        // right side — that room wide and as tall as the tab — and the name keeps as much again on its right so that it
+        // right side, that room wide and as tall as the tab, and the name keeps as much again on its right so that it
         // stays in the middle of the tab rather than in the middle of what the close left of it. It has to be room
         // enough for the cross and the room the cross keeps from the tab's end both, or the cross is pressed against
         // the name it is drawn beside.
@@ -1046,7 +1046,7 @@ internal sealed class DockArea : UserControl
 
         // What the left of a tab is made of where it carries the dock's picture: the room between the tab's edge and the
         // picture, the picture, and the room between the picture and the word. Only the first is the room widened for the
-        // picture — the word keeps as much from the picture as it kept from the tab's edge before there was one — and the
+        // picture, the word keeps as much from the picture as it kept from the tab's edge before there was one, and the
         // whole is kept whether or not the dock has a picture so that two tabs side by side begin their words in the same
         // place.
         const double PictureRoom = 18.0;
@@ -1078,7 +1078,7 @@ internal sealed class DockArea : UserControl
         };
 
         // Stopped here rather than left to bubble: a button's click is a bubbling event, and the tab the close
-        // sits in answers one of its own by selecting the dock — so closing a dock would also select it, and the
+        // sits in answers one of its own by selecting the dock, so closing a dock would also select it, and the
         // manager would be asked to show what it has just been asked to close.
         close.Click += (_, e) =>
         {
@@ -1093,8 +1093,8 @@ internal sealed class DockArea : UserControl
             : null;
 
         // Three columns: the room on the left, the name, and the close itself. The first holds the dock's picture where
-        // it has one and is empty where it has not — a box of two would centre the name in what is left of the close
-        // instead of in the tab, which moves the title every time the pointer crosses it — and the picture stands at the
+        // it has one and is empty where it has not, a box of two would centre the name in what is left of the close
+        // instead of in the tab, which moves the title every time the pointer crosses it, and the picture stands at the
         // tab's own edge in that room's first part, with only a little between it and the word that follows.
         var box = new Grid
         {
@@ -1118,7 +1118,7 @@ internal sealed class DockArea : UserControl
         box.Children.Add(close);
 
         // The tab's own geometry, where the generic header's is for a command: a tab fills the strip it sits in
-        // — no padding, no margin, as tall as the strip — because the tabs *are* the strip. What it holds is
+        // (no padding, no margin, as tall as the strip) because the tabs *are* the strip. What it holds is
         // stretched rather than centred, so that the close reaches the tab's own ends, and the name is kept in
         // the middle by the column it was put in.
         var title = new Button
@@ -1144,7 +1144,7 @@ internal sealed class DockArea : UserControl
 
         // Taken on the way down. A button answers for its own press, and marks it handled while doing so, so an
         // ordinary handler here would never be called: the press is over before it reaches one. A tunnelling
-        // handler is reached first, which is the only way in — and a press on the close is the close's rather
+        // handler is reached first, which is the only way in, and a press on the close is the close's rather
         // than the tab's, or closing a dock would drag it instead.
         title.AddHandler(
             InputElement.PointerPressedEvent,
@@ -1169,7 +1169,7 @@ internal sealed class DockArea : UserControl
         };
 
         // A dock that the keyboard comes to is the dock being worked in, which is what says where the next dock
-        // opened without a place of its own goes — and it is the dock the ring is drawn around. Told to the manager
+        // opened without a place of its own goes, and it is the dock the ring is drawn around. Told to the manager
         // rather than kept here, because it is part of the arrangement and is written down with it.
         placed.View.GotFocus += (_, _) =>
         {
@@ -1268,7 +1268,7 @@ internal sealed class DockArea : UserControl
     /// <summary>Whether a press landed on the close a header carries.</summary>
     /// <remarks>
     /// Walked rather than compared, because what the pointer hits is a part of the button's own template rather
-    /// than the button — the same reason the tab's own press is taken on the way down.
+    /// than the button, the same reason the tab's own press is taken on the way down.
     /// </remarks>
     /// <param name="pressed">What the press landed on.</param>
     /// <returns>Whether it is the header's close.</returns>
@@ -1420,7 +1420,7 @@ internal sealed class DockArea : UserControl
         }
 
         // The children first and the splitter last: a grip hangs over both of the docks it separates, so it has
-        // to be drawn — and hit — above them rather than under the one that follows it in the grid.
+        // to be drawn, and hit, above them rather than under the one that follows it in the grid.
         grid.Children.Add(first);
         grid.Children.Add(second);
         grid.Children.Add(handle);
@@ -1443,7 +1443,7 @@ internal sealed class DockArea : UserControl
 
         // The grip is wider than the room the layout gives it, and hangs over the seam it resizes: what two docks
         // are separated by is the one pixel the theme draws through the middle of this, and the rest of the grip
-        // is drawn over the docks themselves rather than as a band of the window's ground between them — a band
+        // is drawn over the docks themselves rather than as a band of the window's ground between them, a band
         // is what a five-pixel column of nothing looks like, and it reads as a black gap with a line inside it
         // rather than as a join. Half hangs either side, so the line lands on the seam.
         var overhang = (SplitterSize - 1) / 2;
@@ -1506,8 +1506,8 @@ internal sealed class DockArea : UserControl
     /// Every crossing is a column split and a row split whose grips overlap once the layout has given them their
     /// room: a grip is wider than its seam and hangs over both sides, so a point where the two are over one
     /// another is a place the pointer can be told is the four panels rather than one seam. A layout where two
-    /// row splitters meet one column splitter a few pixels apart — a two-by-two grid, where the two sides may not
-    /// stand at the same ratio — is one crossing rather than two, since the grips overlap and the drag is about
+    /// row splitters meet one column splitter a few pixels apart, a two-by-two grid, where the two sides may not
+    /// stand at the same ratio, is one crossing rather than two, since the grips overlap and the drag is about
     /// the same four panels.
     /// </remarks>
     private void Crosses()
@@ -1818,7 +1818,7 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// A region draws the docks it was given in the order it was given them, and that order is the order they were
-    /// created in — which is not the tab order once a dock has been moved among them. The tree's order is the
+    /// created in, which is not the tab order once a dock has been moved among them. The tree's order is the
     /// truth, so the children are reordered to it rather than the tree being read in creation order. Reordering
     /// moves the controls within the panel they are already in, so no view changes parent.
     /// </remarks>
@@ -2043,7 +2043,7 @@ internal sealed class DockArea : UserControl
         Ring();
 
         // Choosing a dock gives it the keyboard: the keyboard was on the tab that was clicked, and that tab
-        // belongs to this strip rather than to the dock — while a dock answers its own keys inside itself, so
+        // belongs to this strip rather than to the dock, while a dock answers its own keys inside itself, so
         // choosing one and then typing would otherwise say nothing at all.
         instance.View.View.Focus();
     }
@@ -2056,11 +2056,11 @@ internal sealed class DockArea : UserControl
     /// why nothing is done here but writing down where it started.
     /// <para>
     /// Which button asked for the gesture is settled when the pointer moves rather than here. What a pointer
-    /// event says about its own buttons at the moment of the press is not to be trusted — reading it there is
-    /// what kept the drag from starting at all — and the move knows what is held without having to be told.
+    /// event says about its own buttons at the moment of the press is not to be trusted, reading it there is
+    /// what kept the drag from starting at all, and the move knows what is held without having to be told.
     /// </para>
     /// <para>
-    /// The dock is the one named by the header that was pressed, or — from the strip's drag area — whichever the
+    /// The dock is the one named by the header that was pressed, or, from the strip's drag area, whichever the
     /// region is showing at that moment.
     /// </para>
     /// </remarks>
@@ -2084,7 +2084,7 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// Nothing is drawn here: what a drag looks like over this area is said by the drag itself, which asks the
-    /// area it is over where it would land — including, for a dock picked up here, the area it was picked up in.
+    /// area it is over where it would land, including, for a dock picked up here, the area it was picked up in.
     /// </remarks>
     /// <param name="sender">The area.</param>
     /// <param name="e">The move.</param>
@@ -2115,12 +2115,12 @@ internal sealed class DockArea : UserControl
     /// <remarks>
     /// A drag is answered in two steps. Carried anywhere into a group, the drag <em>approaches</em> it: the group is
     /// outlined and the five points a dock could be put on are drawn. The second step is the pointer being over one
-    /// of those points, which is the only place a drop can land — so what the area says is "may be dropped" only
+    /// of those points, which is the only place a drop can land, so what the area says is "may be dropped" only
     /// when the pointer is on an answer, and merely "still here" while it is only near one.
     /// <para>
     /// A drag this area did not begin is answered here as much as one it did: a dock is carried out of one window
     /// and let go of in another, and the window it arrives in is the one that has to say where it goes. A drag
-    /// carrying something else — files, paths, another program's data — is left unanswered, so that what is under
+    /// carrying something else (files, paths, another program's data) is left unanswered, so that what is under
     /// the pointer answers it instead: a listing reads text as paths, and one that is being dragged over is a
     /// listing's to light up.
     /// </para>
@@ -2183,7 +2183,7 @@ internal sealed class DockArea : UserControl
     /// </summary>
     /// <remarks>
     /// The release is the second half of the two-step gesture: hovering a point only says what would happen, and
-    /// this is where the layout is written. A release in a group without a point is a release with no answer — it
+    /// this is where the layout is written. A release in a group without a point is a release with no answer, it
     /// does nothing rather than guessing, and it is still a release the area took: what the host does with a drag
     /// whose drop landed nowhere is decided by where the release was, and a drop delivered here was delivered over
     /// this area.
@@ -2319,7 +2319,7 @@ internal sealed class DockArea : UserControl
             return new DockTarget(group.Id, side, group.Docks.Count);
         }
 
-        // No group drawn: the dock makes the root group, or — a root whose docks are all hidden — joins the group
+        // No group drawn: the dock makes the root group, or, a root whose docks are all hidden, joins the group
         // that would be the active one, which is the same answer opening a dock gives.
         var active =
             Layout.ActiveGroup is { } id && DockTree.Find(Layout, id) is { } named
@@ -2347,7 +2347,7 @@ internal sealed class DockArea : UserControl
     /// <remarks>
     /// The points are only drawn for the group under the pointer, since a drag is over one group at a time: a second
     /// group's points would be a second answer to a question that has one. What is being aimed at is said by the
-    /// point itself — the five fill the group, so a lit point is the whole of where the dock would go and no second
+    /// point itself, the five fill the group, so a lit point is the whole of where the dock would go and no second
     /// box is drawn over it, which would be one more surface over a shape that already said it.
     /// </remarks>
     /// <param name="approach">What the drag has come to, or nothing.</param>
@@ -2412,8 +2412,8 @@ internal sealed class DockArea : UserControl
     /// <remarks>
     /// The group is the target, so the five points are the whole of it: each trapezoid's long side is one of the
     /// group's edges and its short side is the centre rectangle, so the shape itself says which way the dock goes,
-    /// and every point of the group is on exactly one of them. A binary split has two children — a column split and
-    /// a row split — so left and right are the two ways to split a group into columns and top and bottom are the two
+    /// and every point of the group is on exactly one of them. A binary split has two children, a column split and
+    /// a row split, so left and right are the two ways to split a group into columns and top and bottom are the two
     /// ways to split it into rows.
     /// <para>
     /// The trapezoids are a band of <see cref="DockPointEdge"/> along the edges and the centre is what they leave,
@@ -2578,7 +2578,7 @@ internal sealed class DockArea : UserControl
             return title;
         }
 
-        return string.Concat("…".AsSpan(), title.AsSpan(title.Length - (TabWordLength - 1)));
+        return string.Concat("...".AsSpan(), title.AsSpan(title.Length - (TabWordLength - 3)));
     }
 
     /// <summary>A header: a small button that names, commands, or closes a dock.</summary>

@@ -13,7 +13,7 @@ namespace RorolalaLauncher.Dialogs;
 /// </summary>
 /// <remarks>
 /// It is not the Desktop program's accounts dock: that one lists every key on the machine, chooses among
-/// them and takes them away, and this asks one question — who the person on this machine is — because a
+/// them and takes them away, and this asks one question, who the person on this machine is, because a
 /// launcher is the first thing they meet and an account is what a Workspace is worked as.
 /// <para>
 /// A name is not a password: it is the label on a key, it is what other people are shown, and it is not
@@ -71,7 +71,7 @@ internal sealed class AccountDialog : DialogWindow
         _spoke = accounts.List(files.Root);
 
         // The window is as tall as what it holds: the greeting is a line and a button, and the question is a
-        // field and its warnings — one height for both would either crowd the question or leave the greeting
+        // field and its warnings, one height for both would either crowd the question or leave the greeting
         // standing over a band of nothing.
         Height = double.NaN;
         SizeToContent = SizeToContent.Height;
@@ -134,8 +134,8 @@ internal sealed class AccountDialog : DialogWindow
 
     /// <summary>Asks for a name, on a machine that has no account.</summary>
     /// <remarks>
-    /// The name is asked for and nothing else: what it will mean to have that name — that a Vault told it will
-    /// be hard to tell otherwise — is said in the window that asks whether to go ahead with it, because a
+    /// The name is asked for and nothing else: what it will mean to have that name, that a Vault told it will
+    /// be hard to tell otherwise, is said in the window that asks whether to go ahead with it, because a
     /// sentence that was already standing there when the name was typed is a sentence the eye has gone past.
     /// </remarks>
     private void Ask()

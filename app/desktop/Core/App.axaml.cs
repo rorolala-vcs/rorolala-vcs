@@ -38,7 +38,7 @@ public partial class App : Application
             // What ends the program is every window being gone rather than a particular one closing, and the
             // main window is one of the windows rather than the one that decides: it can be closed while a
             // dock lives on in a window of its own, and opened again from the Window menu. The toolkit's own
-            // rules are all about one named window — the last one, or the main one — so none of them is what
+            // rules are all about one named window (the last one, or the main one) so none of them is what
             // this program means, and the ending is asked for by name instead.
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
@@ -50,7 +50,7 @@ public partial class App : Application
 
                 // The one dock a called run opens is the file browser, which is what a directory is looked
                 // at in: the host does not know that, and the plugin that owns the dock does not hear about a
-                // call until it is asked — so what is asked for is stated here, by the name the run that
+                // call until it is asked, so what is asked for is stated here, by the name the run that
                 // opened the window over it would have opened it by.
                 // A caller is answered with a window being opened or brought forward, which only the
                 // window's thread may do; `SingleInstance` hands it over there. Subscribed before the window

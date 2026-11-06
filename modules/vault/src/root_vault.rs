@@ -3,7 +3,7 @@
 //! A [`Vault`] is the one found at the nearest configuration above a directory; a [`RootVault`]
 //! is the outermost one. Which of the two a caller wants is a question of standpoint: the
 //! nearest Vault is the one the caller is *in*, while the outermost is the one that *holds* it
-//! — and what a root holds is written down, as the directories under its [`VAULTS_DIR`].
+//!, and what a root holds is written down, as the directories under its [`VAULTS_DIR`].
 //!
 //! So with `vault/vault.toml` and `vault/code/vault.toml`, a search from `vault/code` finds
 //! `vault/code` as a [`Vault`] and `vault` as a [`RootVault`]. Naming and listing what a root
@@ -30,7 +30,7 @@ use crate::{CONFIG_PATH, VAULTS_DIR, Vault};
 /// wanted. What it adds is the view from outside: the Vaults under its [`VAULTS_DIR`] are the
 /// ones it holds, listed and reached by the methods below.
 ///
-/// A root is not a kind of Vault that is marked as one — there is nothing in a configuration
+/// A root is not a kind of Vault that is marked as one, there is nothing in a configuration
 /// saying "this holds others". It is the Vault that happens to be outermost, and the Vaults it
 /// holds are the directories that happen to sit under it.
 #[derive(Default, Clone)]
@@ -42,7 +42,7 @@ pub struct RootVault {
 /// Locates the outermost [`Vault`] above the given directory.
 ///
 /// Starting at `vault_dir`, this walks all the way up the directory tree and keeps the last
-/// directory holding a Vault configuration ([`CONFIG_PATH`]) — the Vault that holds every other
+/// directory holding a Vault configuration ([`CONFIG_PATH`]), the Vault that holds every other
 /// Vault the directory sits inside. Returns `None` if no Vault could be found.
 ///
 /// The nearest configuration is [`Vault::locate`]'s: that answers where a caller is, while this
@@ -107,7 +107,7 @@ impl From<RootVault> for Vault {
 }
 
 impl Lockable for RootVault {
-    /// The lock sits at the root's own root — the outermost Vault's, not the one a run is in.
+    /// The lock sits at the root's own root, the outermost Vault's, not the one a run is in.
     ///
     /// A root reads through to a [`Vault`], so without this a lock taken through the root would be
     /// the *nearest* Vault's and one run could hold the root while another changed the same Vault
@@ -160,8 +160,8 @@ impl RootVault {
     ///
     /// `path` is relative to the root, and reaches anywhere under it rather than only into
     /// [`VAULTS_DIR`]: `vaults/alpha` and `code` are both paths, and either names a Vault only
-    /// if a configuration sits at the end of it. A path that names the root itself — nothing,
-    /// `.`, or `./` — names the root, which is a Vault, and hands back the one this was located
+    /// if a configuration sits at the end of it. A path that names the root itself, nothing,
+    /// `.`, or `./`, names the root, which is a Vault, and hands back the one this was located
     /// as.
     ///
     /// # Escaping
@@ -175,19 +175,19 @@ impl RootVault {
     /// A **symlink** is a different matter, and is deliberately followed: the path is known here
     /// only as text, so a link under the root that points elsewhere is followed elsewhere, and
     /// the Vault returned may be one the root does not hold at all. A root that must not be left
-    /// through is one that must keep symlinks out of itself — nothing here will.
+    /// through is one that must keep symlinks out of itself, nothing here will.
     #[must_use]
     pub async fn get_vault_by_path(&self, path: impl Into<String>) -> Option<Vault> {
         let normalized = fmt_path_str(path.into()).ok()?;
         // What `fmt_path_str` leaves is relative to whatever it is joined onto, so a path that
-        // is still absolute — an input that came in as one — is read as the relative path it
+        // is still absolute, an input that came in as one, is read as the relative path it
         // names instead: `join` would otherwise let an absolute path replace the root outright.
         //
         // Two spellings of absolute have to be taken off. A leading separator is one, and a drive
         // letter is the other: `fmt_path_str` unifies separators to `/` but keeps the `C:` of a
         // Windows path, and `join` reads `C:/...` as absolute and replaces the root with it. The
         // prefix is stripped over the *text* rather than with `Path::strip_prefix`, whose
-        // `Prefix` component exists on Windows only — the rule would then hold on one platform
+        // `Prefix` component exists on Windows only, the rule would then hold on one platform
         // and not the other, which is the failure this is here to stop.
         let relative = Self::strip_drive_prefix(normalized.trim_start_matches('/'));
 
@@ -213,8 +213,8 @@ impl RootVault {
     /// The path without the drive prefix a Windows absolute path carries, if it has one.
     ///
     /// A prefix is one letter, a colon, and a separator that may be absent: `fmt_path_str` writes
-    /// `C:/a` for both `C:\a` and `C:/a`, and a bare `C:` names the drive itself. Anything else —
-    /// `server/share` from a UNC path, `vaults/alpha`, a path with no colon — is handed back as
+    /// `C:/a` for both `C:\a` and `C:/a`, and a bare `C:` names the drive itself. Anything else,
+    /// `server/share` from a UNC path, `vaults/alpha`, a path with no colon, is handed back as
     /// it stands.
     fn strip_drive_prefix(path: &str) -> &str {
         // The prefix is ASCII, so looking at the first bytes cannot split a character; a path
@@ -228,7 +228,7 @@ impl RootVault {
 
         // What the colon is followed by decides: the separator belongs to the prefix, nothing
         // means the path named the drive itself, and anything else is a relative path that
-        // happens to carry a colon — `vaults/a:b`, say — and was never a prefix at all.
+        // happens to carry a colon (`vaults/a:b`, say) and was never a prefix at all.
         match bytes.get(2) {
             Some(b'/') => &path[3..],
             None => "",
@@ -241,7 +241,7 @@ impl RootVault {
     ///
     /// This is where *holds* is decided, so both listing methods read the same thing: the
     /// entries of [`VAULTS_DIR`], kept when a configuration sits directly inside them. What
-    /// cannot be read is left out rather than reported — see [`list_vaults`](Self::list_vaults).
+    /// cannot be read is left out rather than reported, see [`list_vaults`](Self::list_vaults).
     async fn held_vaults(&self) -> Vec<(String, PathBuf)> {
         let directory = self.get_root().join(VAULTS_DIR);
         let mut held = Vec::new();
@@ -339,7 +339,7 @@ mod tests {
         );
 
         // The Windows spelling is checked on every platform rather than only the one it belongs
-        // to: the rule is over the text, so a drive prefix is taken off here as it is there —
+        // to: the rule is over the text, so a drive prefix is taken off here as it is there,
         // which is what the failure this guards against did not do.
         assert!(
             root.get_vault_by_path("C:/elsewhere/../elsewhere")

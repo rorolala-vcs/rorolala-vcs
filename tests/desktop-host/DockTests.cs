@@ -12,7 +12,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// Nothing here draws. What is exercised is the bookkeeping the dock area and the <c>Window</c> menu are built
-/// from, with views that have no control — and the layout tree itself, which is pure and is what all of that
+/// from, with views that have no control, and the layout tree itself, which is pure and is what all of that
 /// bookkeeping writes.
 /// </remarks>
 public sealed class DockTests
@@ -193,7 +193,7 @@ public sealed class DockTests
     /// </summary>
     /// <remarks>
     /// A hand-edited file, or a drop, can leave a column split inside a column split. Two splits of one axis
-    /// cannot be one split — a split has two children — so what normalization does is give the chain one shape:
+    /// cannot be one split, a split has two children, so what normalization does is give the chain one shape:
     /// the seam between the first two moves into the right-hand split, and the shares are recomputed so the
     /// groups are drawn where they were.
     /// </remarks>

@@ -5,14 +5,14 @@ The C# bindings to Rorolala's C ABI: `RolaSharp.dll`.
 ## What is here
 
 `RorolalaBinding.cs` is generated, not written. Every build of this project runs
-`rorolala-dev-rsharp-bindgen` over the C header the Rust side produces, and the file is rewritten —
+`rorolala-dev-rsharp-bindgen` over the C header the Rust side produces, and the file is rewritten,
 so it is never stale against the header, and never edited by hand: an edit is lost with the next
 build. It lists every export the header declares as a `[DllImport]` on
 `RolaSharp.RorolalaBinding`, along with the enums and structs they name, and every member is
 `internal`.
 
-The public shape — the more OOP layer a caller is meant to use, which owns the marshalling and the
-releases the raw surface leaves open — is hand-written over these bindings, one file per thing it is
+The public shape, the more OOP layer a caller is meant to use, which owns the marshalling and the
+releases the raw surface leaves open, is hand-written over these bindings, one file per thing it is
 about: `RolaWorkspace`, `RolaOwnership`, `RolaUser`, `RolaStatus`, `RolaVersionGraph`, `RolaIgnoreRules`
 and `RolaBookSearch`.
 

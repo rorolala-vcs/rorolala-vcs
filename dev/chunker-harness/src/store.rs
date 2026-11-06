@@ -5,7 +5,7 @@
 //! written, read back and compared with the file it came from, and then the store's own `obj/` and
 //! `manifest/` directories are measured.
 //!
-//! It is slower than the model by an order of magnitude — every byte goes through a file twice — which
+//! It is slower than the model by an order of magnitude, every byte goes through a file twice, which
 //! is why it is a flag and not the default. What it buys is that the numbers in a report are the
 //! store's, and the model behind them has been shown to agree.
 

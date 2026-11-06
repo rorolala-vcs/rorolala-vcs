@@ -13,7 +13,7 @@ namespace GitVCSPlugin;
 /// a history of its own (negations, directory-only rules, the repository's own exclusion file, the
 /// global one), and a second implementation would be a second answer to what Git does. So the answer is
 /// asked of the <c>git</c> program, once per repository rather than once per directory: the rules are the
-/// repository's, and a view that reads a tree a step at a time asks about one directory per step — which,
+/// repository's, and a view that reads a tree a step at a time asks about one directory per step, which,
 /// asked per directory, is one program run per directory walked into.
 /// </remarks>
 public sealed class GitIgnored : IEntryHideProvider
@@ -82,7 +82,7 @@ public sealed class GitIgnored : IEntryHideProvider
 /// One answer per repository rather than one per directory, because the rules are the repository's:
 /// <c>git ls-files --others --ignored --exclude-standard --directory</c> names every path they leave out,
 /// with a whole ignored directory named once instead of walked into, and one program answers for the whole
-/// of what any view is showing. The listing that used to ask per directory cost one program per directory —
+/// of what any view is showing. The listing that used to ask per directory cost one program per directory,
 /// which a directory's own listing paid once, and a tree paid once per step under the one being opened.
 /// <para>
 /// The answer is read when a repository is first asked about and kept until the files may have changed
@@ -101,7 +101,7 @@ public static class GitIgnores
     /// <summary>How long the program is given before it is treated as having nothing to say.</summary>
     /// <remarks>
     /// A directory being listed is on screen and waits for this, so a repository that makes the program
-    /// hang — a filesystem that stopped answering, a rule that asks about a network share — must not hang
+    /// hang (a filesystem that stopped answering, a rule that asks about a network share) must not hang
     /// the browser with it. Nothing ignored is the answer that shows the entries.
     /// </remarks>
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(5);
@@ -111,7 +111,7 @@ public static class GitIgnores
     /// </summary>
     /// <remarks>
     /// Kept as a <see cref="Lazy{T}"/> rather than as the set itself, because the read is a program run and
-    /// two threads may ask at once — a view priming a repository off the window's thread while the window's
+    /// two threads may ask at once, a view priming a repository off the window's thread while the window's
     /// thread asks about a row. One of them reads and the other waits for that reading rather than starting a
     /// second program of its own, and the lock is held for the lookup alone so that the waiting is on the
     /// answer rather than on this class.
@@ -121,7 +121,7 @@ public static class GitIgnores
     /// <summary>The repository each root was found to be in, so the walk up is made once per root.</summary>
     /// <remarks>
     /// Nothing is kept for the repository's own sake: it is what says whether there is a repository at
-    /// all, which is the answer a root outside every one gives — and the answer a tree rooted outside
+    /// all, which is the answer a root outside every one gives, and the answer a tree rooted outside
     /// every one is read by, so the walk is worth making once rather than per directory walked into.
     /// </remarks>
     private static readonly Dictionary<string, string?> Repositories = new(StringComparer.Ordinal);
@@ -147,7 +147,7 @@ public static class GitIgnores
     /// <remarks>
     /// Said when the files may have changed, and the rules are files: a <c>.gitignore</c> edited, a
     /// repository set up in a directory that had none, a copy of one fetched. A kept answer outliving that
-    /// is a listing hiding by rules nobody states any more — and the cache is what makes asking once per
+    /// is a listing hiding by rules nobody states any more, and the cache is what makes asking once per
     /// repository worth it, so it is cleared rather than never kept.
     /// </remarks>
     public static void Forget()
@@ -200,7 +200,7 @@ public static class GitIgnores
     /// Whether a path is one Git ignores.
     /// </summary>
     /// <remarks>
-    /// Read against the directory holding it, which is where a rule about one entry is stated — the
+    /// Read against the directory holding it, which is where a rule about one entry is stated, the
     /// answer a listing asks for about what it is showing. A view rooted elsewhere asks the other
     /// overload.
     /// </remarks>
@@ -218,7 +218,7 @@ public static class GitIgnores
     /// </summary>
     /// <remarks>
     /// The repository is looked for upwards from <c>root</c> and not from the path: a tree is rooted at a
-    /// base, and a base no repository holds is a view under which nothing is ignored — whatever the
+    /// base, and a base no repository holds is a view under which nothing is ignored, whatever the
     /// directories under it happen to hold. The other way, a repository a directory under the base is
     /// inside would answer for itself, and one tree would be read by two sets of rules.
     /// <para>
@@ -243,7 +243,7 @@ public static class GitIgnores
     /// <remarks>
     /// The directories holding it are asked about as well, because the program is asked for whole ignored
     /// directories rather than for every file under them: what is inside one is not named on its own, and a
-    /// path that was typed rather than listed — or one drawn while the hidden entries are shown — is still
+    /// path that was typed rather than listed, or one drawn while the hidden entries are shown, is still
     /// inside a directory the rules leave out.
     /// </remarks>
     /// <param name="ignored">What the repository's rules leave out.</param>
@@ -332,7 +332,7 @@ public static class GitIgnores
             asking.ArgumentList.Add("--directory");
 
             // NUL-terminated rather than one path per line, because a name that is not plain ASCII is
-            // escaped and quoted in the line-separated form — which would be a set of paths that match
+            // escaped and quoted in the line-separated form, which would be a set of paths that match
             // nothing, and a rule that silently hides nothing at all in a work named in another script.
             asking.ArgumentList.Add("-z");
 
@@ -406,8 +406,8 @@ public static class GitIgnores
     private static string? Repository(string root)
     {
         // The computer is a place with no path at all, and no repository either: what is looked for here is where to
-        // start looking, and nothing is not a place to start from. Asked for by every listing staged for the computer —
-        // the drives — since a rule that runs a program is read for the root of whatever is being read.
+        // start looking, and nothing is not a place to start from. Asked for by every listing staged for the computer,
+        // the drives, since a rule that runs a program is read for the root of whatever is being read.
         if (root.Length == 0)
         {
             return null;

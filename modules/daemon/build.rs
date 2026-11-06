@@ -7,15 +7,15 @@
 //! one file.
 //!
 //! The impls are read with `syn`, which sees exactly what a reader sees: `type Input`
-//! and `type Output` are taken as written, and every other shape — generics, an
-//! `impl` that is not of `Action` — is left alone rather than guessed at.
+//! and `type Output` are taken as written, and every other shape, generics, an
+//! `impl` that is not of `Action`, is left alone rather than guessed at.
 //!
 //! An input that is a tuple is spread over one parameter per element, because that is what
 //! a caller would have written out by hand: `type Input = (String, i32)` gives
 //! `name: String, value: i32`. The names come from the input's own doc comments, one list
-//! item per parameter — `- name: String` — and fall back to `p0`, `p1`, … where there is
+//! item per parameter, `- name: String`, and fall back to `p0`, `p1`, and so on where there is
 //! none. A single value takes its name from the action's own `process`, which already named
-//! it — `name` in `async fn process(name: OnlyWorkspace<Self::Input>, …)` — because that is
+//! it (`name` in `async fn process(name: OnlyWorkspace<Self::Input>, ...)`) because that is
 //! the name the action uses for it everywhere else; a method that does not name it plainly
 //! falls back to `input`.
 //!
@@ -29,7 +29,7 @@
 //! first one belongs to `Result`, the other three open the parameter.
 //!
 //! The file is written into the source tree, as `src/actions/action_func.rs`, and not
-//! into `OUT_DIR`. The C header is generated from the sources — it expands no macros —
+//! into `OUT_DIR`. The C header is generated from the sources, it expands no macros,
 //! so an export the header generator cannot read is an export the header does not have.
 
 use std::collections::HashMap;
@@ -126,8 +126,8 @@ fn main() {
             fail(&format!("{}: the file name is not text", path.display()));
         };
         // Every file under the actions directory is a module of it, whether or not it declares an
-        // action: what the action side needs that is not an action lives beside them — a primitive
-        // an action is built from, say — and declaring it is what lets it be reached. Only an
+        // action: what the action side needs that is not an action lives beside them, a primitive
+        // an action is built from, say, and declaring it is what lets it be reached. Only an
         // action gets entry points, so a file that declares none contributes nothing to the two
         // generated files.
         modules.push(stem.to_owned());
@@ -164,7 +164,7 @@ struct Action {
     params: String,
     /// What the entry points hand on for that input: the parameter, or a tuple of them.
     argument: String,
-    /// The same, spelled as the arguments of a call — the names alone, since a call that
+    /// The same, spelled as the arguments of a call, the names alone, since a call that
     /// takes the parameters one by one is handed the names and not a tuple.
     call_args: String,
     /// What the action yields, as written.
@@ -200,8 +200,8 @@ fn actions_in(path: &Path) -> Result<Vec<Action>, String> {
 
 /// The action one item declares, if the item is an `impl Action for ...`.
 ///
-/// An item that is not an `impl` of `Action` — an impl of another trait, a function, a
-/// type — yields `None`, so a file can hold whatever else it likes. An `impl Action` that
+/// An item that is not an `impl` of `Action`, an impl of another trait, a function, a
+/// type, yields `None`, so a file can hold whatever else it likes. An `impl Action` that
 /// cannot be read is an error instead: leaving it out would leave an action out of the
 /// registry without saying so.
 fn action_of(item: &Item) -> Result<Option<Action>, String> {
@@ -266,8 +266,8 @@ fn action_of(item: &Item) -> Result<Option<Action>, String> {
 /// pass on, and the same value spelled as the arguments of a call.
 ///
 /// A tuple of two or more is spread over one parameter per element, so a caller names each
-/// part rather than building a tuple to hand over. A single value — and a one-element tuple,
-/// which is one value wearing brackets — takes one parameter holding the whole input. The
+/// part rather than building a tuple to hand over. A single value, and a one-element tuple,
+/// which is one value wearing brackets, takes one parameter holding the whole input. The
 /// names are the ones the input's doc comments hint at, then the action's own name for it
 /// (`named`), and the fallbacks otherwise.
 fn input_parameters(
@@ -309,7 +309,7 @@ fn input_parameters(
 
 /// The name an action's `process` gives its input, if it names it.
 ///
-/// The first parameter is the input — the trait spells it so — and an action that names it
+/// The first parameter is the input, the trait spells it so, and an action that names it
 /// names it for a caller too. A parameter that is not the wrapped input, or not a plain name,
 /// says nothing, and the fallback stands.
 fn process_input_name(method: &ImplItemFn) -> Option<String> {
@@ -341,7 +341,7 @@ fn wraps_input(ty: &Type) -> bool {
 
 /// The parameter names an input's doc comments hint at, in order.
 ///
-/// Only a list item says anything — a line that is `- name: Type` — and only the name half is
+/// Only a list item says anything, a line that is `- name: Type`, and only the name half is
 /// read: what a parameter *is* comes from the tuple itself, and a hint that disagreed with it
 /// could only mislead. The prose around the list is ignored, so a description can be written
 /// the usual way.
@@ -493,7 +493,7 @@ fn render_path(path: &syn::Path) -> Result<String, String> {
 /// Renders one generated file from its template, with one arm per action.
 ///
 /// Each arm is handed the action's four names, so the template decides where they go;
-/// a template that cannot expand — its blocks do not pair up — stops the build rather
+/// a template that cannot expand, its blocks do not pair up, stops the build rather
 /// than writing out a file that is only half generated.
 fn render(manifest: &Path, template: &str, actions: &[Action]) -> String {
     let path = manifest.join(template);

@@ -1,14 +1,14 @@
 //! `storage-sync`: what `rola storage sync-all` does to a Workspace's store and a Vault's.
 //!
 //! A program rather than a set of tests cargo runs, for the same reason the rest of them are: what
-//! it does is what a person does with a terminal — make a place to work in, keep an account, bind a
-//! Vault, put something in each store, serve the Vault, ask for a sync — and what it checks is what
+//! it does is what a person does with a terminal, make a place to work in, keep an account, bind a
+//! Vault, put something in each store, serve the Vault, ask for a sync, and what it checks is what
 //! the two stores hold afterwards.
 //!
 //! What is checked is that a sync is not an upload or a download: the Vault holds a key the
 //! Workspace has never seen and the Workspace holds two the Vault has not, and one run leaves each
 //! of them holding all three. One of the Workspace's is a content big enough to be kept as chunks,
-//! so what crosses for it is a manifest and the chunks the manifest names — and the manifest that
+//! so what crosses for it is a manifest and the chunks the manifest names, and the manifest that
 //! arrives is the one that was sent, rather than the content being cut over again at the far end.
 //! Another is a content larger than one value carries, which crosses as several.
 
@@ -65,7 +65,7 @@ async fn main() {
     .expect_success();
 
     // What each store holds to begin with: the Vault one key the Workspace has never seen, the
-    // Workspace two — one written whole, and one written as a file big enough to be cut.
+    // Workspace two, one written whole, and one written as a file big enough to be cut.
     let vault_store = store_of_vault(&root);
     let workspace_store = store_of_workspace(&workspace);
 
@@ -195,7 +195,7 @@ async fn main() {
         "the two stores cut the same content differently",
     );
 
-    // Asking again is asking two stores that already agree — except for this: a content larger than
+    // Asking again is asking two stores that already agree, except for this: a content larger than
     // one frame, which is what a value that was too long to frame used to stop from crossing at all.
     let big: Vec<u8> = (0..20 * 1024 * 1024_u32)
         .map(|at| (at % 251) as u8)
@@ -360,7 +360,7 @@ fn pair(dir: &Path, name: &str) {
 ///
 /// The daemon belongs to the machine, so it is told where it sits through the user's own data
 /// directory: the sandbox's `ROLA_DATA_HOME` holds both the table and the account it proves
-/// itself with — the variable a Windows machine reads, where `XDG_DATA_HOME` names nothing.
+/// itself with, the variable a Windows machine reads, where `XDG_DATA_HOME` names nothing.
 fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
     register(data, dir);
 
@@ -403,7 +403,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

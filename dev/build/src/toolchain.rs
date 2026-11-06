@@ -50,7 +50,7 @@ impl Tool {
 
     /// A program at a known path, with no words of its own.
     ///
-    /// It is for a tool a step has found rather than one the machine names — the pinned packager a
+    /// It is for a tool a step has found rather than one the machine names, the pinned packager a
     /// package is built with, which is looked for under the project's cache before the path.
     #[must_use]
     pub fn at(program: impl Into<OsString>) -> Self {
@@ -81,7 +81,7 @@ impl Tool {
     /// Where a program named `name` is on this machine's path, if it is.
     ///
     /// It is the lookup a Unix tool prefers over a pinned copy: a program already installed is not made
-    /// to be laid down a second time. The name is a file name, not a command name — no extension is
+    /// to be laid down a second time. The name is a file name, not a command name, no extension is
     /// guessed, since the platforms that guess one are not the ones this is for.
     pub(crate) fn on_path(name: &str) -> Option<PathBuf> {
         let path = std::env::var_os("PATH")?;
@@ -127,8 +127,8 @@ impl Tool {
     /// # Errors
     ///
     /// Reports [`Error::Tool`] when the program cannot be started at all. A status that is not a
-    /// success is the caller's to read: a step that tolerates a failure — the offline-first restore
-    /// does — is where that is decided.
+    /// success is the caller's to read: a step that tolerates a failure, the offline-first restore
+    /// does, is where that is decided.
     pub fn status<I>(&self, args: I) -> Result<ExitStatus, Error>
     where
         I: IntoIterator,

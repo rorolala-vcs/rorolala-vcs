@@ -2,7 +2,7 @@
 //!
 //! What is checked is the whole leg a caller meets: an address written `user@host:path`, a
 //! Workspace bound to it, `rola` starting `ssh` for the exchange, the far side running
-//! `rola-daemon serve <path>`, and the answer coming back through the two standard streams — no
+//! `rola-daemon serve <path>`, and the answer coming back through the two standard streams, no
 //! port bound anywhere. The stand-in for `ssh` is this program itself: started with the arguments
 //! `ssh` is started with, it records them and hands the far side's command to a shell, which is
 //! what proves the quoting the client writes arrives as one word.
@@ -15,8 +15,8 @@
 //! A program rather than a `#[test]` for the same reason the other suites are: it runs the built
 //! programs the way a caller meets them.
 
-// A Windows machine runs no session of its own here, so what the suite uses only on Unix — the
-// report, the sandbox helpers — is allowed to sit unused there rather than be gated twice.
+// A Windows machine runs no session of its own here, so what the suite uses only on Unix, the
+// report, the sandbox helpers, is allowed to sit unused there rather than be gated twice.
 #![cfg_attr(not(unix), allow(dead_code, unused_imports))]
 
 use std::fs;
@@ -598,7 +598,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

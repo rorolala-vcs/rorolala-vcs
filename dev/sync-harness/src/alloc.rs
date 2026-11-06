@@ -21,7 +21,7 @@ static BYTES: AtomicU64 = AtomicU64::new(0);
 /// The allocator that counts what goes through it.
 pub struct Counting;
 
-// SAFETY: every method forwards to `System` — the same allocator the process would have used — and
+// SAFETY: every method forwards to `System`, the same allocator the process would have used, and
 // records the layout around the call. A request whose pointer comes back null is not counted, because
 // nothing was allocated. `dealloc` is only ever called by the allocator on a pointer one of the other
 // three methods produced.

@@ -2,11 +2,11 @@
 //!
 //! A digest is long enough that a person reads and writes only its head, so a command that takes a
 //! hash reads either the whole thing or enough of the front that only one object the run can reach
-//! starts with it. Which objects those are is the command's own question — a `vcs-index` write
-//! names a version where a `storage` read names a key — so the candidates are handed in.
+//! starts with it. Which objects those are is the command's own question, a `vcs-index` write
+//! names a version where a `storage` read names a key, so the candidates are handed in.
 //!
 //! A whole hash is read on its own and never looked up: a command that takes a hash it need not
-//! have — `vcs-index write-variant` records one it never checked — must go on taking it. Only a
+//! have, `vcs-index write-variant` records one it never checked, must go on taking it. Only a
 //! head is resolved, and only against what the run can list.
 
 use std::str::FromStr as _;
@@ -60,7 +60,7 @@ impl HashMiss {
 /// Whether `text` is shaped like a hash or the head of one, rather than like a name or a path.
 ///
 /// A command that tells a hash from a Vault's name by shape asks this: a head is as much a hash as
-/// a whole one, so a name of four hex digits is read as a hash — the price of naming a hash by its
+/// a whole one, so a name of four hex digits is read as a hash, the price of naming a hash by its
 /// head without a marker in front of it.
 #[must_use]
 pub fn looks_like_hash(text: &str) -> bool {
@@ -86,7 +86,7 @@ pub fn resolve(text: &str, candidates: impl FnOnce() -> Vec<Key>) -> Result<Key,
 
 /// Reads `text` as `resolve` does, with the candidates already in hand.
 ///
-/// It is [`resolve`] for a caller that has the listing already — a command resolving several words
+/// It is [`resolve`] for a caller that has the listing already, a command resolving several words
 /// against one listing lists once. A whole hash is still read on its own: resolving it against a
 /// listing would refuse a hash the run does not hold, which a sync of one is allowed to name.
 ///

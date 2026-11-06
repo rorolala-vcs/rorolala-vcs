@@ -10,7 +10,7 @@ namespace FileSystemPlugin;
 /// </summary>
 /// <remarks>
 /// Opening here is the operating system's, not the host's pipeline. The open is put on the
-/// host, but the contract gives a plugin no way to ask for one — <c>IPluginHost</c> has a registry
+/// host, but the contract gives a plugin no way to ask for one, <c>IPluginHost</c> has a registry
 /// for hooks and nothing to raise a request through. Until that is settled in the contract, the
 /// browser opens directly, which is visible behaviour and not a thing to leave unsaid.
 /// </remarks>

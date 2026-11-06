@@ -17,12 +17,12 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// <remarks>
 /// The fill of such a button is not known until the user picks a colour, so what is written on it is not a
 /// colour this theme can write down once: each state that fills with the primary names the ink that goes with
-/// it, and the ink the look derives is black or white — whichever stands out from the fill — so a state that
+/// it, and the ink the look derives is black or white, whichever stands out from the fill, so a state that
 /// forgot to name one would be words the same colour as what they are written on.
 /// <para>
 /// What is checked is therefore the list of states that fill with the primary and name no ink of their own.
-/// A state belongs on it for a reason — its ink comes from a state it is a variation of, or the fill holds a
-/// mark rather than words — and a state added later that belongs to neither is a failure with its own selector
+/// A state belongs on it for a reason, its ink comes from a state it is a variation of, or the fill holds a
+/// mark rather than words, and a state added later that belongs to neither is a failure with its own selector
 /// in it, which is the whole of what this is for.
 /// </para>
 /// </remarks>

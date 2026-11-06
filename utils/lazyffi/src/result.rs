@@ -1,7 +1,7 @@
 //! The one result type every fallible export hands back.
 //!
 //! `Result<T, E>` cannot cross as itself: C has to be told a concrete layout, and one
-//! layout per `(T, E)` pair would mean a generated type per export — and, worse, a
+//! layout per `(T, E)` pair would mean a generated type per export, and, worse, a
 //! `ReturnType` implementation per pair, which would collide the moment two exports
 //! return the same one. So there is a single [`RorolalaResult`] instead, and everything
 //! about it is fixed: the tag, the layout, and the rule for reading the payload.
@@ -17,7 +17,7 @@
 //! A payload is only ever something that has an owning pointer of its own: an exported
 //! `struct` (whose repr is already a pointer), a `String` or `PathBuf` (a `char *`), an
 //! exported `enum` (a value, so it is boxed), or `()` for the `Ok` that carries nothing
-//! — which is the common `Result<(), E>`, where the `Ok` payload is simply null.
+//!, which is the common `Result<(), E>`, where the `Ok` payload is simply null.
 //!
 //! A scalar has no owning pointer and is deliberately not a payload: `Result<bool, E>`
 //! does not compile, rather than inventing an allocation and a release for a number.
@@ -126,7 +126,7 @@ impl<T: ResultPayload, E: ResultPayload> ReturnType for Result<T, E> {
     type Target = RorolalaResult;
 
     /// One conversion per `Result<T, E>`, for every `T` and `E` that can be a payload
-    /// — which is what a single fixed result type buys, and what a repr per pair could
+    ///, which is what a single fixed result type buys, and what a repr per pair could
     /// not have.
     fn return_self(self) -> Self::Target {
         match self {

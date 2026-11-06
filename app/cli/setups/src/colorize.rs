@@ -19,8 +19,8 @@ pub const GLOBAL_ARG_THEME_CHOICE: PickerArg<'static, ThemeChoice> =
 
 /// A [`ProgramSetup`] implementation that decides how output is drawn
 ///
-/// Both the flags it reads are the same kind of request — how the program is to appear
-/// — and both are about the same small decision, so they are registered together.
+/// Both the flags it reads are the same kind of request, how the program is to appear
+///, and both are about the same small decision, so they are registered together.
 ///
 /// Absent either flag, nothing is decided: the environment keeps its say over coloring
 /// and the terminal over the theme. Asking takes that decision over, which is what an

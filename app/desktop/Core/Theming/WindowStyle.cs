@@ -4,8 +4,8 @@ namespace RorolalaDesktop.Theming;
 /// How a window draws its own frame: which buttons it carries, and where they sit.
 /// </summary>
 /// <remarks>
-/// The window is the program's own on every platform — it draws the row the menu sits in, and the row's
-/// buttons with it — and the three ways of drawing those buttons are the three a user meets:
+/// The window is the program's own on every platform, it draws the row the menu sits in, and the row's
+/// buttons with it, and the three ways of drawing those buttons are the three a user meets:
 /// the marks at the right that Windows puts there, the three lights at the left that macOS puts there, and
 /// none at all, which is what a window under a tiling window manager should draw, the window manager
 /// outside being the frame already.
@@ -38,7 +38,7 @@ internal static class WindowStyles
     /// </summary>
     /// <remarks>
     /// Windows and macOS answer for themselves: each has one way of drawing a frame, and the window draws
-    /// that way. Everything else is a Unix whose window manager may or may not draw a frame of its own — a
+    /// that way. Everything else is a Unix whose window manager may or may not draw a frame of its own, a
     /// tiling one does not, and a window there draws none either; anything else gets the three marks, which
     /// is the shape this program has always been drawn with.
     /// </remarks>
@@ -53,8 +53,8 @@ internal static class WindowStyles
     /// The style a written name is read as, or nothing when it names none of them.
     /// </summary>
     /// <remarks>
-    /// Read without regard to case, because the two spellings one name has — the command line's
-    /// <c>tillingwm</c> and this program's own <c>TillingWM</c> — are one name to whoever wrote it.
+    /// Read without regard to case, because the two spellings one name has, the command line's
+    /// <c>tillingwm</c> and this program's own <c>TillingWM</c>, are one name to whoever wrote it.
     /// </remarks>
     /// <param name="name">What was written.</param>
     /// <returns>The style, or nothing when the name is not one of the three.</returns>
@@ -87,7 +87,7 @@ internal static class WindowStyles
     /// Recognized by what the four this program knows about leave behind rather than by asking the session,
     /// which is a conversation a program with no window yet has no way to have: three of them publish the
     /// socket they may be spoken to on as an environment variable of their own, and all four are named by
-    /// the session when it names itself. It is a simple read on purpose — a window manager that is none of
+    /// the session when it names itself. It is a simple read on purpose, a window manager that is none of
     /// these is given the three marks, which is a frame drawn where one was already there rather than a
     /// window with nothing left to close it by.
     /// </remarks>

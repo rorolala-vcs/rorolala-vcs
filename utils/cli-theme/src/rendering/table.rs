@@ -237,14 +237,14 @@ fn aligned(content: &str, width: usize, alignment: Alignment) -> String {
 /// Gives every cell in a column the same number of escape sequences.
 ///
 /// `prettytable` measures a column by the widest cell in it, and it measures a cell by
-/// taking the payload of each `ESC [ ... m` off the width — but leaving the `ESC`
+/// taking the payload of each `ESC [ ... m` off the width, but leaving the `ESC`
 /// itself, which `unicode-width` counts as one column. A cell drawn in a colour is
 /// therefore measured one column too wide for every sequence it holds, and the padding
 /// a row gets is short by the difference between its cells.
 ///
 /// A cell has no width to set, so what is evened out is the count: every cell is given
 /// as many sequences as the widest count in its column, the extras being [`NOTHING`].
-/// Each cell then measures as its own width plus the column's largest count — the same
+/// Each cell then measures as its own width plus the column's largest count, the same
 /// number for the whole column, so it cancels out of the padding, and every row ends up
 /// as wide as the column with its cells in the right places. What is left over is the
 /// rules, which are drawn from the measurement itself; [`redraw_rules`] takes those.
@@ -270,7 +270,7 @@ fn even_out(rows: &mut [Vec<Drawn>]) {
 /// The other half of [`even_out`]: a rule is drawn as wide as the column was *measured*,
 /// and a column that holds escape sequences measured wider than it is, so every rule
 /// comes out wider than the rows under it and the corners do not line up. The rows are
-/// the authority now — they are even, and their widths are known — so the rules are
+/// the authority now (they are even, and their widths are known) so the rules are
 /// drawn from those widths instead.
 fn redraw_rules(rendered: &mut [String], widths: &[usize], frame: Frame) {
     let rules: Vec<usize> = rendered
@@ -329,7 +329,7 @@ struct Frame {
     column: char,
     /// The character a rule is made of.
     line: char,
-    /// What a rule draws at the left border, at a column and at the right border —
+    /// What a rule draws at the left border, at a column and at the right border,
     /// above the table, between two rows, and below it.
     above: [char; 3],
     /// Between two rows.

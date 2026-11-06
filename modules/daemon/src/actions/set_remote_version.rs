@@ -1,7 +1,7 @@
 //! `set-remote-version`: moving the version the Vault's Layout holds for a `Uuid` on.
 //!
 //! A version goes up only from the side that holds the entry, so which account is asking decides
-//! whether it is written at all — and an administrator of the Vault may write one it does not
+//! whether it is written at all, and an administrator of the Vault may write one it does not
 //! hold. What a version change touches is the version and nothing else: the path a reader sees and
 //! the holder stay as they were.
 
@@ -20,7 +20,7 @@ use super::layout_remote::{batched, remote_write, set_remote};
 ///
 /// What became of it, as JSON: the version is set, the Vault holds no such entry, the account may
 /// not write it, or something could not be read. It crosses as text for the reason an ownership
-/// outcome does — see `request-ownership`.
+/// outcome does, see `request-ownership`.
 pub struct ActionSetRemoteVersion;
 
 impl Action for ActionSetRemoteVersion {

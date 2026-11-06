@@ -12,7 +12,7 @@ namespace RorolalaDesktop.Contract;
 /// <c>theme.json</c> states, with the defaults filled in.
 /// <para>
 /// It is a value rather than a live reader on purpose: what a caller holds is the colours a look was
-/// built with, and a colour changed later is a look built again — which is what the service does and
+/// built with, and a colour changed later is a look built again, which is what the service does and
 /// what raises the change. What a plugin asks for as it draws is <see cref="IPalette"/>, which is the
 /// one set in force and is answered afresh every time.
 /// </para>
@@ -28,7 +28,7 @@ public readonly record struct ThemePalette
     /// What the primary is when nothing states one.
     /// </summary>
     /// <remarks>
-    /// A blue: the colour the program is known by, and one light enough that white on it can be read —
+    /// A blue: the colour the program is known by, and one light enough that white on it can be read,
     /// which is what the look works out for it, since this primary ships with no ink of its own named.
     /// </remarks>
     public static readonly Color DefaultPrimary = Color.FromRgb(0x44, 0x6D, 0xD6);
@@ -37,7 +37,7 @@ public readonly record struct ThemePalette
     /// What the accent is when nothing states one.
     /// </summary>
     /// <remarks>
-    /// A warm pink, and spent only on the marks a drag draws — never on a selection, so that a mark can
+    /// A warm pink, and spent only on the marks a drag draws, never on a selection, so that a mark can
     /// always be told from a choice.
     /// </remarks>
     public static readonly Color DefaultAccent = Color.FromRgb(0xFF, 0x7E, 0xA2);
@@ -83,7 +83,7 @@ public readonly record struct ThemePalette
     /// <summary>The ground itself: what the program is drawn on where nothing stands on anything.</summary>
     public required Color Mid { get; init; }
 
-    /// <summary>The hollow: what a surface that sits in the ground — an input, a well — is filled with.</summary>
+    /// <summary>The hollow: what a surface that sits in the ground (an input, a well) is filled with.</summary>
     public required Color Dark { get; init; }
 
     /// <summary>The ink: what is written on the three of them.</summary>

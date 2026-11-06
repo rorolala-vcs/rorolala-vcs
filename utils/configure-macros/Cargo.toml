@@ -11,7 +11,7 @@ proc-macro2.workspace = true
 quote.workspace = true
 syn.workspace = true
 
-# The crate below re-exports this one, so the dependency is a cycle — which cargo
+# The crate below re-exports this one, so the dependency is a cycle, which cargo
 # allows for dev-dependencies, and which is what lets the example above compile.
 [dev-dependencies]
 rorolala-utils-configure.workspace = true

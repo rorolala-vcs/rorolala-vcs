@@ -21,11 +21,11 @@ namespace FileSystemPlugin;
 /// <remarks>
 /// It is a control rather than a dock, because navigation is not a place of its own: the arrows and the
 /// address act on the one browser, and they belong at the top of the view whose entries they act on. A dock
-/// that could be put anywhere is the wrong home for them — and the dock reading them hands in whatever else
+/// that could be put anywhere is the wrong home for them, and the dock reading them hands in whatever else
 /// it keeps, so the toolbar does not have to know what a dock remembers.
 /// <para>
 /// The address is two things in one place, the way an address bar is: a line of crumbs that says where the
-/// browser is, and — once the crumb of the place being looked at is clicked — a field with the whole path in
+/// browser is, and, once the crumb of the place being looked at is clicked, a field with the whole path in
 /// it, chosen, that can be typed over. A crumb before the last goes to the directory it names. Nothing is
 /// typed into until it is asked for, so the path is read rather than edited by accident.
 /// </para>
@@ -184,7 +184,7 @@ internal sealed class NavigationBar : UserControl
     /// <remarks>
     /// Set by the dock that makes the bar, because the bar does not know what is being read under it. It matters
     /// because a dock answers its keys at the top of itself, which is only reached while the keyboard is
-    /// somewhere inside it — and this bar hides its field when an edit ends, so a keyboard left in that field
+    /// somewhere inside it, and this bar hides its field when an edit ends, so a keyboard left in that field
     /// would be a keyboard in nothing, with every key after it going unanswered.
     /// </remarks>
     public Action? Left { get; set; }
@@ -406,8 +406,8 @@ internal sealed class NavigationBar : UserControl
     /// the address text: a path is not a string to be split, and a drive, a root and a step are not the same
     /// shape on every system.
     /// <para>
-    /// A crumb before the last goes to the directory it names. The last — the one being looked at, which is set
-    /// heavier so that where we are is where the eye lands — opens the address for editing instead: a click on
+    /// A crumb before the last goes to the directory it names. The last, the one being looked at, which is set
+    /// heavier so that where we are is where the eye lands, opens the address for editing instead: a click on
     /// the place you are already in can only mean that what you want is to write somewhere else.
     /// </para>
     /// <para>
@@ -496,8 +496,8 @@ internal sealed class NavigationBar : UserControl
     /// </summary>
     /// <remarks>
     /// A button like a crumb, and for the same reason: it is what is pressed to write somewhere else. An address
-    /// no plugin claimed is still an address, so it is named as such — the prefix, because that is what a plugin
-    /// would have claimed — and it opens the field just the same, since the point of saying nobody answers it is
+    /// no plugin claimed is still an address, so it is named as such, the prefix, because that is what a plugin
+    /// would have claimed, and it opens the field just the same, since the point of saying nobody answers it is
     /// that the user is to type another.
     /// </remarks>
     /// <param name="place">The place being looked at.</param>
@@ -525,7 +525,7 @@ internal sealed class NavigationBar : UserControl
     /// </summary>
     /// <remarks>
     /// A button rather than a line of text, because a step is a target: it is what is pressed, and it wears the
-    /// design's own quiet button — nothing of it until the pointer is on it.
+    /// design's own quiet button, nothing of it until the pointer is on it.
     /// </remarks>
     /// <param name="name">What the step is called.</param>
     /// <param name="path">The directory it names.</param>
@@ -664,7 +664,7 @@ internal sealed class NavigationBar : UserControl
     /// <remarks>
     /// A path that ends with a separator has no name in it yet, so the whole of it is the directory; anything
     /// else is split at the last separator. What has no directory in front of it is read against the one being
-    /// looked at, which is what makes a relative address complete at all — and a directory that is not one
+    /// looked at, which is what makes a relative address complete at all, and a directory that is not one
     /// completes nothing, since there is nothing to list.
     /// </remarks>
     /// <param name="typed">What is in the field.</param>
@@ -780,7 +780,7 @@ internal sealed class NavigationBar : UserControl
     /// What the address says a location is.
     /// </summary>
     /// <remarks>
-    /// The computer is the one place that has no path to type, so it is named instead — and the name
+    /// The computer is the one place that has no path to type, so it is named instead, and the name
     /// is read back in <see cref="Go"/>, which is what a field that shows a word has to do.
     /// </remarks>
     private static string Address(string directory) =>

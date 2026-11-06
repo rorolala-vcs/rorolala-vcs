@@ -45,12 +45,12 @@ The new `rorolala-tree` crate holds what a tree is: a canonical structure object
 `rola layout path remove <PATH> --layout truth@VAULT` drops the entry the path names from the
 Vault's own Layout, and the path with it. Only the account that holds the entry, or one that
 administrates the Vault, may remove it: another account's refusal names the holder, and an entry
-nobody holds is an administrator's to remove. The local form is unchanged — `rola layout path
+nobody holds is an administrator's to remove. The local form is unchanged, `rola layout path
 remove <PATH>` still only unbinds the path, leaving the entry the work's.
 
 The write is the Vault's own: a new daemon action, `remove-remote-path` (id 19), carries the path
 and the Vault answers with what became of it, so an offline run is refused rather than answered
-locally, and what the Vault agreed to is written into the fetched copy as well — a reading command
+locally, and what the Vault agreed to is written into the fetched copy as well, a reading command
 sees the entry gone without a fetch of its own. What the entry's version names stays in the store,
 and the version and the objects under it stay in the index: what is removed is the file as a thing
 the Vault holds.
@@ -74,21 +74,21 @@ The `--until` flag is gone, and so is the `--change-upstream` flag a earlier dra
 had: both are what `TARGET` says. One version back is what naming no target does.
 
 A version target moves the entry's pointer as `--until` did: `~N` N versions back, `N` the version
-numbered N, or a version's hash — a hash off the way back is a jump, and a jump is what a retrack
+numbered N, or a version's hash, a hash off the way back is a jump, and a jump is what a retrack
 makes unless it is asked not to. `--only-index` leaves the file alone. A step count is a word, so it
 is written `~N` rather than `-1`, which the command line reads as a flag; a run that writes one
 anyway is told the spelling that reads. A Vault's name is no longer a target: what a target names is
 a version, a `Uuid`, or a path of the Vault's own Layout.
 
-An entry target - a `Uuid`, or a path of the Vault's own Layout - records that entry for the path in
+An entry target (a `Uuid`, or a path of the Vault's own Layout) records that entry for the path in
 place of the one it recorded, dropping that entry. What it holds is read from the fetched copy of
 the Vault's Layout, or from this Layout when the `Uuid` is one it holds at no path; the entry must
 hold no path of its own and must record a version. What happens to the file follows how the two
 versions stand: the same version, or one the path's version is ahead of, is a change of identity
 only and keeps the file as it is; a version behind it has that version's content written over the
-file, since what decides whether a file may be written is the file's own state and not the flag —
+file, since what decides whether a file may be written is the file's own state and not the flag,
 changes that were never recorded are what `--force` discards, and `--only-index` records the entry
-and leaves the file alone. Two chains are a jump, which a run makes unless `--deny-jump` refuses it —
+and leaves the file alone. Two chains are a jump, which a run makes unless `--deny-jump` refuses it,
 the flag the version target's jump is refused with as well. `--fork` still records a fresh `Uuid`
 with what the path records now, and cannot be given with a target.
 
@@ -113,13 +113,13 @@ The Vault side accepts any path a remote Layout may name, so no prefix is requir
 
 What an older version submitted under `@/new/` is unchanged: such an entry is still read, moved and
 deprecated as before, and a path under the marker is still a name a new entry may be made under.
-There is no migration — a layout that holds both spellings is what one built across the change
+There is no migration, a layout that holds both spellings is what one built across the change
 looks like, and `layout path move` is what takes an old entry out of the marker.
 
 ### 4. **\[BREAKING!\]** [`modules`] [`daemon`] [`move-remote-path`] Move a path in a Vault's Layout without holding the entry
 
-Moving a path in the Vault's Layout — locating an entry out of `@/new/`, deprecating one under
-`@/removed/`, renaming or regrouping one anywhere — no longer requires the account that asks to
+Moving a path in the Vault's Layout, locating an entry out of `@/new/`, deprecating one under
+`@/removed/`, renaming or regrouping one anywhere, no longer requires the account that asks to
 hold the entry, or to administer the Vault. A move changes where an entry is rather than who holds
 it, so any account the Vault lets write its Layout may make one. `rola layout path move` therefore
 no longer renders a refusal for an entry another account holds, and `rola req-ownership` /
@@ -130,7 +130,7 @@ longer offered only when all of its entries are the acting account's.
 
 `rola layout path move` still refuses a path that names nothing, a path that is already taken, and
 a path a remote Layout may not name. Two moves racing are answered by the Layout's log rather than
-by a holder check — the last write is the path the entry has — which is what a move always left
+by a holder check, the last write is the path the entry has, which is what a move always left
 behind; what a caller that read a path and then moves it finds taken is answered as taken rather
 than overwritten.
 
@@ -157,7 +157,7 @@ with `objects_read` and `versions_numbered` beside the counts it already had.
 
 `rola layout path change-uuid <PATH> <UUID>` makes a path name another entry: the entry the path named
 is dropped and the one given takes its place, holding the data the Layout already held for it. The
-`Uuid` has to be one the Layout holds at no path, since an entry is at one path — another path naming
+`Uuid` has to be one the Layout holds at no path, since an entry is at one path, another path naming
 it is refused, and `rola layout path remove` is what lets it go first.
 
 `rola layout path new-uuid <PATH>` drops the entry the path names and makes it again under a new
@@ -202,20 +202,20 @@ each of their pills. The entry at a chosen file's path on another side is the re
 and its pill is drawn in the accent in both its border and its words. The graph stands on
 the files chosen in a directory listing, or on the whole work when none is chosen, and a Vault's
 fetched copy stands on the same lanes as the work. A merge that was recorded is a plain edge; a merge
-still waiting is the amber broken one — both leave and arrive at the points the chain's own edges
+still waiting is the amber broken one, both leave and arrive at the points the chain's own edges
 use, at a card's middle, rather than hanging off its top or bottom. An edge says what it is by its
 colour, its arrow and the cards it joins, rather than by a label over it. A file the work says is changed but not tracked stands as a
-draft card — in the accent when a track would continue its record, red when the change is based on an older
-version — and a base version the index
+draft card, in the accent when a track would continue its record, red when the change is based on an older
+version, and a base version the index
 does not hold is a broken node beside the card naming it.
 
 Hovering a card's message, a pill or the creator's name fills a table in the graph's corner with what
-that thing says — the whole hash, the Uuid, the path, the owner, the reason a state is worn — and the
+that thing says (the whole hash, the Uuid, the path, the owner, the reason a state is worn) and the
 switch beside it turns the table on and off. A value wider than its column ends in an ellipsis, and a
 right-click on the thing copies the whole of it; a right-click on a variant's hash also offers
 retracking the chosen file to that version and joining the variant into it, and a right-click on
 another side's entry offers switching the chosen file's record to that entry's Uuid, either moving the
-record alone or letting the content follow it — an edited file is asked about before its content is
+record alone or letting the content follow it, an edited file is asked about before its content is
 written over. A right-click on the work's own entry offers forking its path into a new Uuid, holding
 what it held, which is how a file stops following an entry it was following. Pressing a local entry's
 pill asks the browser to show the file it names. A card and the hash pill under it name one variant
@@ -223,8 +223,8 @@ and offer one menu: copying its hashes, joining it, ending a merge, and retracki
 its version. A right-click on the card still offers the retrack,
 join, cancel-merge and delete-changes runs the old graph offered. A press on a card brings it to the
 middle of the dock, enlarged to 130% when the drawing reads smaller than that and left at its scale
-otherwise, and a press on the empty ground takes the choice away — the
-listing's rows and the graph's chains both — while a drag across the ground moves the drawing. The
+otherwise, and a press on the empty ground takes the choice away, the
+listing's rows and the graph's chains both, while a drag across the ground moves the drawing. The
 choice's emphasis goes with it, but the cards stay where they are until another file is chosen, so a
 click that chose nothing does not replace the drawing with every variant of the work. The
 scale and place ease into view rather than snapping, and the wheel likewise. The drawing stands on a
@@ -237,9 +237,9 @@ drawing, and only the cards and edges the viewport holds are drawn.
 
 The inverse index can now be read as a snapshot: every variant by its key with the version it is
 based on, the variant it merges in, and the content, creator and message it names; every version by
-its key with the variant it fixes and its number. What a walk asks of the records — which versions
+its key with the variant it fixes and its number. What a walk asks of the records, which versions
 fix a variant, which variants are based on a version, which merge one in, which were made of one
-content — is answered from that inversion rather than by reading the records again per step.
+content, is answered from that inversion rather than by reading the records again per step.
 
 A snapshot also cuts a window of the variant graph: `Snapshot::graph` takes a focus, how far back
 towards the root and forward away from it to walk, whether to follow merges and branches, and a cap
@@ -254,7 +254,7 @@ is read from the objects and nothing is fetched: a version or variant the index 
 as missing.
 
 A rebuild is now incremental. The keys the records cover are compared with the keys the index lists,
-and only the difference is read; the file is built afresh only when it cannot be added to — it is
+and only the difference is read; the file is built afresh only when it cannot be added to, it is
 absent, does not read, or covers an object the index no longer holds. Versions are numbered by
 filling outwards from the versions already numbered, so a version whose base was not written yet is
 numbered by a later rebuild when the link arrives. The report now says which of the three happened
@@ -266,8 +266,8 @@ them in incrementally; `Edge::Join` gains the `join_dependents` question the oth
 
 `rorolala-status` gains `locate_variant_graph_json`, which reads the variant graph around the entries
 a request names and answers with one JSON document: the graph, the entries that name it, the merges
-in progress and the texts. The window is the one the inverse index walks — a focus of entries, each a
-side and a path, how far back, forward and into merges to look, and a cap — and every node carries a
+in progress and the texts. The window is the one the inverse index walks, a focus of entries, each a
+side and a path, how far back, forward and into merges to look, and a cap, and every node carries a
 `frontier` saying which way the window stopped short, so a drawing that reaches the edge asks again
 from the node it reached. A side is `local` for the Layout being worked in, or the name of a Vault
 whose copy was fetched. The records are rebuilt first when they do not describe the index, which is
@@ -281,7 +281,7 @@ holds it, and whether it was moved under the deprecated marker; a merge in progr
 waiting, the entry it joins into and where its variant file lies.
 
 The C ABI exposes the same reading as `locate_rola_variant_graph_json`, whose answer is an owned
-string and whose failures are a `RolaVariantGraphError` — nothing to draw, which is no Workspace, no
+string and whose failures are a `RolaVariantGraphError`, nothing to draw, which is no Workspace, no
 Layout or no index, told apart from a request or an index that could not be read. `modules/rola-sharp`
 gains `RolaVariantGraph`, which asks for a window with a `VariantGraphRequest` and reads the answer
 into records, and `modules/workspace` gains `Workspace::readonly_layout_copies`, which names the
@@ -310,8 +310,8 @@ can address. A Vault keeps its one Layout as before.
 
 The commands that managed the set are gone: `rola layout new`, `rola layout cp`, `rola layout rm`
 and `rola layout force-switch` are commands the program does not have. `rola bind` is what puts a
-fresh Workspace to work — it binds the Vault and points the Layout at it when the Layout tracks
-nothing — and `rola layout set-track <VAULT>` and `rola layout un-track` change what it tracks
+fresh Workspace to work, it binds the Vault and points the Layout at it when the Layout tracks
+nothing, and `rola layout set-track <VAULT>` and `rola layout un-track` change what it tracks
 without taking a Layout's name. `rola layout ls` lists the one Layout under the label `main`, and
 `--layout` accepts `main` or a fetched Vault's `truth@VAULT`.
 
@@ -339,8 +339,8 @@ an agent driving the command line and one that hangs on it.
 ### 2. [`app`] [`ROLALauncher`] Wait for the Desktop window before leaving the launcher
 
 Opening a Workspace no longer closes the launcher as soon as the Desktop program is started. The
-chosen card turns a mark and the rest of the window — the other cards, the buttons and the language
-menu — is put out of reach while `rola desktop --ready` is waited for, and the launcher closes only
+chosen card turns a mark and the rest of the window, the other cards, the buttons and the language
+menu, is put out of reach while `rola desktop --ready` is waited for, and the launcher closes only
 once the window has said it is up, so the two programs read as one. A launcher that is waiting also
 refuses to leave: Escape and its own close button do nothing until the wait is over, which keeps the
 start it made from being a process nobody is waiting on.
@@ -348,13 +348,13 @@ start it made from being a process nobody is waiting on.
 A start that ends before its window opens is reported with its exit code, and one that has said
 nothing after thirty seconds is reported as a timeout. The launcher then comes back rather than
 ending a start that may still arrive, and the Desktop process is left going, because a process
-ended for being slow is a window lost. A start that found the Desktop program already running —
-exit code 174 — is answered as a window, since the run that was already up was asked to come
+ended for being slow is a window lost. A start that found the Desktop program already running,
+exit code 174, is answered as a window, since the run that was already up was asked to come
 forward.
 
 ### 3. [`app`] [`RorolalaDesktop`] [`plugins`] Fix renaming a row in the desktop's upstream view
 
-Renaming a folder in the upstream view — a place the Rorolala plugin answers for, `rola@…` — now renames the work's
+Renaming a folder in the upstream view (a place the Rorolala plugin answers for, `rola@…`) now renames the work's
 paths. A folder that the copy of the Vault's Layout names is the work's, however long ago this side suggested it, so the
 rename moves its entries to the new prefix instead of rewriting a suggestion and leaving the work where it was; the
 empty folder at the new name, which was the suggestion left behind, no longer appears. A suggestion the copy has used
@@ -363,12 +363,12 @@ the copy does not name is still moved by rewriting it.
 
 The row a new folder makes is named the moment it is drawn. The hand-off is claimed by the listing built after the
 place is read again, from the entries that have the folder in them, rather than by the view that asked for it, whose
-rows are from before the making — and only by a view the user can see, so two docks over one place put the box in the
+rows are from before the making, and only by a view the user can see, so two docks over one place put the box in the
 one on screen and not in a dock behind a tab.
 
 A name being typed is no longer taken out from under the user: a read that lands while the box is up is drawn after
 the edit rather than through it, the dock's own keys answer nothing while a row is an edit, and the name is put back
-where the box was when the edit ends — a rename the place refuses therefore leaves the row showing the name it has
+where the box was when the edit ends, a rename the place refuses therefore leaves the row showing the name it has
 rather than a field nothing answers in. Removing a row from a place asks first unless Shift says not to, and the menu
 on a row a place lets this side edit offers naming and removing it, so neither depends on a key.
 
@@ -378,7 +378,7 @@ the view that asked for it, which is not the view its row is drawn in.
 ### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Squeeze the directory dock's columns instead of cutting them off
 
 The directory dock's table kept every column at the width it was given, so a dock narrowed
-below the table's own width put the right-hand columns past its edge — scrollable to, at best,
+below the table's own width put the right-hand columns past its edge, scrollable to, at best,
 and the list's horizontal scrollbar made sure the rows kept that width however narrow the dock
 was. The table is now drawn at the width it has: its columns keep the widths they are wanted at
 while there is room, and squeeze in proportion when there is not, so the whole table stays inside
@@ -392,7 +392,7 @@ measures its rows at the width they ask for, which is the width the squeeze woul
 
 The Overview's table stopped at its last row: the band and the rows were as tall as the rows came
 to, and the rest of the dock under them was empty ground. The table now takes the whole of the
-column the reading is drawn in — the band at its top and the rows filling the rest — and the rows
+column the reading is drawn in, the band at its top and the rows filling the rest, and the rows
 scroll inside the table when there are more of them than there is room for, rather than the whole
 reading scrolling as one. What stands in the table's place when there is nothing to show is
 unchanged.
@@ -411,8 +411,8 @@ ordinary text.
 
 ### 1. [`app`] [`ROLALauncher`] Open the launcher before reading what it shows
 
-The launcher window is shown at once, holding a turning mark, and what it shows — the Workspaces
-list, the account, how the machine draws a frame, and the welcome's lines — is read after it is up.
+The launcher window is shown at once, holding a turning mark, and what it shows, the Workspaces
+list, the account, how the machine draws a frame, and the welcome's lines, is read after it is up.
 How a frame is drawn and what accounts exist are both answered by running the command line program,
 and the window used to wait for those answers before it appeared. Now it appears first and is built
 when the answers arrive, so that a launcher is something to look at while it finds out what to show.
@@ -424,9 +424,9 @@ has drawn it.
 ### 2. [`app`] [`RorolalaDesktop`] Show the Desktop window before its plugins are assembled
 
 The main window is now made and shown once the kernel's docks and menus, the look and the saved
-layout are ready, and before the plugins are initialized. What is left of the host — the plugins and
+layout are ready, and before the plugins are initialized. What is left of the host, the plugins and
 the menus they register, the single-instance listener, the dock-state subscription and the layout
-restore, and the report — runs afterwards, one step per turn of the window's thread, under a black
+restore, and the report, runs afterwards, one step per turn of the window's thread, under a black
 covering with a turning mark. The covering fades once the last step has returned, so the first frame
 is the window rather than a half-made shell, and a slow plugin no longer holds the window back.
 
@@ -440,21 +440,21 @@ a window opened again after the assembly has finished is made without a covering
 ### 1. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`docking`] Show which dock the user is working in
 
 The dock the user is working in is marked: a one-pixel ring in the look's primary is drawn around the whole of its area
-— the strip its tab stands in and the view under it — over the docks rather than laid around one, so the ring takes no
+, the strip its tab stands in and the view under it, over the docks rather than laid around one, so the ring takes no
 room from what it outlines and cannot be pressed by mistake. The ring follows the work: a press anywhere in a dock, the
 keyboard going into one, a tab being chosen and a dock being opened all name that dock as the one being worked in, a
 window coming forward names the dock it holds, and a dock moved into another group or window keeps the mark. When the
-dock that had it closes, the mark passes to the one beside it — the other tab of its group, or a dock still open in the
-window — and is let go when the last one that had it is gone, so it is never left around a dock that is not there. The
+dock that had it closes, the mark passes to the one beside it, the other tab of its group, or a dock still open in the
+window, and is let go when the last one that had it is gone, so it is never left around a dock that is not there. The
 mark is drawn from the primary the look publishes rather than from a colour read when it was made, so a primary the
 user changes reaches it with nothing further.
 
-A plugin reads the same answer: `IDockFocus` says which dock is being worked in — the dock's stable name and which
-instance of it — and is raised as it moves. That is what a dock's own keys are meant to be read against as they are
+A plugin reads the same answer: `IDockFocus` says which dock is being worked in, the dock's stable name and which
+instance of it, and is raised as it moves. That is what a dock's own keys are meant to be read against as they are
 folded into the focus rather than bound over the whole program; the folding itself is not in this change.
 
 **Breaking:** the plugin contract is 0.14.0. It gained the focus a plugin reads, the reveal a view asks the browser
-with, the name a dock may answer for itself, and the picture a dock may be drawn by — each described in its own entry.
+with, the name a dock may answer for itself, and the picture a dock may be drawn by, each described in its own entry.
 
 ### 2. [`app`] [`rola`] [`desktop`] Ask the Desktop window to say when it is up
 
@@ -462,7 +462,7 @@ with, the name a dock may answer for itself, and the picture a dock may be drawn
 once it is on the screen. It changes nothing else about the run: the command still waits for the
 window to close and still ends with the window's own exit code, and a run that did not write the
 flag keeps the silence it had. It is meant for a caller that starts the command and has no window of
-its own to watch — the launcher — which otherwise has to guess when there is something to look at.
+its own to watch, the launcher, which otherwise has to guess when there is something to look at.
 
 `--ready` asks for a window, and `--query-window-style` asks how one is drawn and opens none, so the
 two are refused together: the refusal is `ErrorDesktopQueryWithReady`, printed with its help line,
@@ -473,31 +473,31 @@ and exit code 176. The flag is offered by completion.
 `rola docs <TEXT>` reads one article of the built-in book by its exact name and prints it as it
 was written, through the program's own Markdown rendering. `rola docs --search <TEXT>...` searches
 the book instead: the words are read as one query and an article is found when every term of it is
-in it, the answer is drawn across the terminal the way `gh issue list` draws a listing — no
+in it, the answer is drawn across the terminal the way `gh issue list` draws a listing, no
 borders, the header bold and underlined, the article's name as wide as the names that matched, its
 description in a fixed column, and the matched fragment filling the rest of the width, the matched
-words red and bold — and a Latin query is also found as a prefix or a substring of a word, which
+words red and bold, and a Latin query is also found as a prefix or a substring of a word, which
 the book's build indexes every word for.
 
 `--limit <N>` caps how many search answers are shown, twelve by default and only meaningful with
 `--search`. A search that finds one article, or one a run limited to a single answer, is answered
-with that article rather than the table. `--raw` prints the article as it was written — Markdown
-markers and all — rather than drawing it, and a `--raw` run is never handed to a pager. A `--json`
+with that article rather than the table. `--raw` prints the article as it was written, Markdown
+markers and all, rather than drawing it, and a `--raw` run is never handed to a pager. A `--json`
 run is answered with the same result as fields: an article is its `title`,
 `description`, `keywords` and `content`, and a search is its `entries`, each with the article's
 name, title, description, score and fragments, and each fragment with its field, its text and the
 ranges that matched. The global `--no-pager` is honoured like it is everywhere else, and a run
 that names neither an article nor a query is shown the command's help.
 
-The book is found beside the program an export or an install puts it beside, or — for a run made
-from a checkout — above the directory it was run in, under `build/`; a checkout that has not run
+The book is found beside the program an export or an install puts it beside, or, for a run made
+from a checkout, above the directory it was run in, under `build/`; a checkout that has not run
 `cargo dev book` is told the book is missing rather than answered with nothing.
 
 ### 4. [`app`] [`RorolalaDesktop`] [`docking`] Mark a dock by its picture in the Window menu and in its tab
 
 A dock now says what it is with a picture as well as a name. The item that opens it in the Window menu draws that
-picture in its own header, after the check that says whether the dock is open — the base theme keeps an item's check and
-its picture in one slot, so the picture would otherwise be drawn over the tick — and its word is set the way a menu's
+picture in its own header, after the check that says whether the dock is open, the base theme keeps an item's check and
+its picture in one slot, so the picture would otherwise be drawn over the tick, and its word is set the way a menu's
 other words are, so that its row is the height of every other item of the menu. The left of the dock's tab wears the
 picture too, in the ink of whatever it is drawn in: a strip of tabs says what is in a window by shape before it is read,
 and a menu that lists a program's docks beside a file manager's is one a picture makes a row of rather than a list of.
@@ -514,15 +514,15 @@ followed the tab's own edge before there was one. The word in a tab is set at th
 and the tab being read is not set heavier than the rest: the strip is a row of labels rather than of actions, and the one
 being read is told apart by the ground it is drawn on.
 
-A plugin says what its docks look like through the contract's newest field, a key into the icon library — the same
-library a menu item's mark and an entry's badge are read from — so a registration carries a key and the picture travels
+A plugin says what its docks look like through the contract's newest field, a key into the icon library, the same
+library a menu item's mark and an entry's badge are read from, so a registration carries a key and the picture travels
 with the plugin that draws it.
 
 ### 5. [`app`] [`RorolalaDesktop`] [`docking`] Name a dock by the place it is looking at
 
 A dock's tab now says where the dock is looking rather than only what kind of dock it is: a browser is one dock made
 again for every place, so a strip of tabs all called "Directories" was a strip nobody could tell apart. What the tab
-says is the real path of the place — the whole path of a directory, the whole address of a place a plugin answers for,
+says is the real path of the place, the whole path of a directory, the whole address of a place a plugin answers for,
 the drive where there is no name, and "This PC" where there is no path at all. The name is said again as the browser
 steps, goes back or forward, is sent to an address, or has its base moved.
 
@@ -533,15 +533,15 @@ that dock: it is named by the same title, renamed with it as it goes, cuts it of
 carries the whole place on its tip. The Window menu still names the kind, since its item asks for another dock of that
 kind rather than for the one a tab holds.
 
-The computer is a place a browser can be in, so it is named too — and a rule that runs a program is no longer asked
+The computer is a place a browser can be in, so it is named too, and a rule that runs a program is no longer asked
 about it: browsing the drives with the Git plugin loaded used to fail where a repository was looked for from no path at
 all. A dock says what it is called through the contract's newest answer, which can say both the name a tab carries and
 the whole place it may be only part of.
 
 ### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Copy a cell's words from a directory listing's menu
 
-Right-clicking a cell of a directory listing now offers to copy the words shown in it — a name,
-a size, a date, the owner a column says — as the first entry of the menu the row already had. The
+Right-clicking a cell of a directory listing now offers to copy the words shown in it, a name,
+a size, a date, the owner a column says, as the first entry of the menu the row already had. The
 words are written on the entry, so a menu opened over a row says which of its cells it would copy:
 the size column copies the size, the owner column copies the owner. What is copied is the cell's
 whole text rather than the part the column had room to show, and it works in both arrangements the
@@ -551,13 +551,13 @@ dock reads entries in, the rows and the tiles.
 
 The path a change is read by in the Overview is now a way into the work: pressing the From or To cell of a row asks the
 browser to show the place the path names. A path of the work's is joined to the Workspace root the reading was made over
-and shown in the folder holding it, with the file chosen — the same choice a click makes, so the Version Graph follows
+and shown in the folder holding it, with the file chosen, the same choice a click makes, so the Version Graph follows
 it and the row can be looked at, and confirmed, from where it is shown. A cell that names an address is shown as the
 address it is, since only the plugin that answers one knows its shape, and a side of a row with no path on it is a cell
 that does nothing, marked with the pointer only where there is somewhere to go.
 
-The place is shown in the dock the user last worked in — the browser the Overview was read from, rather than a second
-one made beside it; one that is not open is made — and showing it brings that dock's tab forward and puts the keyboard
+The place is shown in the dock the user last worked in, the browser the Overview was read from, rather than a second
+one made beside it; one that is not open is made, and showing it brings that dock's tab forward and puts the keyboard
 in its listing. A file that is gone, or which a hide rule leaves out of the listing, is shown by its directory alone; a
 path whose directory is not there either is said rather than stepped to, so the dock stays where the user left it. A
 dock is told what to show with the same request it is opened with, so a browser opened onto a place and one shown a place
@@ -580,18 +580,18 @@ file cut short or written by a format this build does not know is refused rather
 the Linux packages, the AppImage and the Unix archive all carry it beside the programs, under
 `docs/`, where `BookSearch::locate` walks up to it from `bin/rola` and from `bin/desktop/…` alike.
 
-**The search.** Text separated by spaces is cut into lowercased words; Chinese-style text — Han,
-kana, hangul — is cut into every character and every adjacent pair, so a one-character query finds
+**The search.** Text separated by spaces is cut into lowercased words; Chinese-style text, Han,
+kana, hangul, is cut into every character and every adjacent pair, so a one-character query finds
 its line and a longer query asks for its phrase. An article is a hit only when every term of the
-query is in it, in any of its five fields — name, title, description, keywords, content — and the
+query is in it, in any of its five fields (name, title, description, keywords, content) and the
 hits are ranked by BM25 with a title match worth more than a body match and the name breaking a
 tie, so the same query over the same book answers in the same order. Each hit is one short
-fragment, cut from the field that matched with `…` where it was cut, and the fragment's ranges
+fragment, cut from the field that matched with `...` where it was cut, and the fragment's ranges
 count characters rather than bytes and are already merged where two ranges overlapped.
 
 **The fragments.** The build also cuts every word of a spaced script into runs of two and three
-characters and writes them as a second index, so a query that is a prefix or a substring of a word —
-`inst` or `stall` of `install` — finds the word without the book being read. A term found whole
+characters and writes them as a second index, so a query that is a prefix or a substring of a word,
+`inst` or `stall` of `install`, finds the word without the book being read. A term found whole
 ranks above one found through its fragments, and a fragment candidate is checked against the
 article's own words before the article is answered, so fragments that landed in two different words
 are not answered as one. The file is larger for it; the search is not.
@@ -630,8 +630,8 @@ borders: the header is bold and underlined, the columns are separated by two spa
 table of Chinese text lines up with one of Latin text, and words wrap inside their column rather
 than pushing it out of shape.
 
-A cell holds runs (`Cell`, `Run`, `RunStyle`), so a caller can draw part of one another way — the
-red and bold a search puts on a matched word — without handing the table a colour language to
+A cell holds runs (`Cell`, `Run`, `RunStyle`), so a caller can draw part of one another way, the
+red and bold a search puts on a matched word, without handing the table a colour language to
 parse. `rola docs --search` is the first user: it draws the article's name in an auto column and
 the matched fragments in a filled one.
 
@@ -658,7 +658,7 @@ list gets `Simple`, and one whose font turns out to have no glyphs is still answ
 prefixes on every terminal theme. The theme that carries true color used to replace the prefix with
 a `NerdFont` mark and a coloured badge, so the same line read as two different shapes depending on
 the terminal; it now keeps the name where a reader already knows it and gives it a brighter version
-of the level's colour instead — red, amber and green, still apart in hue. The message is still
+of the level's colour instead, red, amber and green, still apart in hue. The message is still
 italic, and an alert, a rule and a table still use the glyphs where the theme has them.
 
 # 0.1.2 (2026-10-29)
@@ -677,7 +677,7 @@ The path a sync takes was bytes the whole way down and serde the whole way, and 
 the one above it had already copied. It now carries what it is handed:
 
 - **A frame of its own.** A packet of entries, a blob and its pieces, an answer that is one byte per
-  key, a confirmation: each of those is bytes already, and each was put through `bincode2` first — a
+  key, a confirmation: each of those is bytes already, and each was put through `bincode2` first, a
   copy into an encoded buffer and a visit per element. They cross as a length and their bytes now, in
   as many parts as the caller holds, and a packet's entry headers are built where the entry is added
   rather than when the packet is sent. What a value that really is a number or a struct pays is
@@ -690,7 +690,7 @@ the one above it had already copied. It now carries what it is handed:
   way in, and several on the way out, is one each way.
 - **A packet is one record.** A record carries a megabyte, and a packet is sized to fit one: one
   sealing and one write per packet rather than sixty-four. A content of three hundred kilobyte chunks,
-  which is what a cut PSD looks like, can now read its chunks with the window always full — the reads
+  which is what a cut PSD looks like, can now read its chunks with the window always full, the reads
   for the next packet are begun while this one is being sent.
 - **Confirmed by what was written.** The side taking a direction answers "I have it" from the objects
   its batch accepted and the manifests it wrote, rather than reading the store back once the direction
@@ -701,14 +701,14 @@ the one above it had already copied. It now carries what it is handed:
   a pack and reading it in the same run.
 - **Read and written through one opened batch.** The chunks of a content are read through one batch:
   each pack is opened once and its entries read where they lie, where a read used to open the pack,
-  seek into it and read. The side sending a content no longer hashes each chunk before it goes — the
+  seek into it and read. The side sending a content no longer hashes each chunk before it goes, the
   side taking it checks every entry against the key it arrived under, which is the boundary that
-  decides what a store holds. A payload stored as it is *is* the content, so it is moved down inside
+  decides what a store holds. A payload stored as it is _is_ the content, so it is moved down inside
   the buffer it arrived in rather than copied into another.
 
 **Breaking:** two things on the wire changed, so a Vault and a client have to be of the same version.
-What a value's bytes are is stated by the new build for everything that was already bytes — a packet, a
-blob and its pieces, a presence answer, a confirmation — and a record's plaintext is a megabyte where it
+What a value's bytes are is stated by the new build for everything that was already bytes, a packet, a
+blob and its pieces, a presence answer, a confirmation, and a record's plaintext is a megabyte where it
 was sixteen kilobytes, which a reader of the old version refuses. A session also holds about three to
 four megabytes now, between the buffer it reads into, the buffer it writes out of and the packet being
 built, so the Vault's default of sixteen sessions at once is some tens of megabytes.
@@ -725,14 +725,14 @@ and `rola layout tree-diff` leave out a path the rules govern, and `--include-ig
 well; what the Layout names is still read, so a recorded file a rule matches appears as the change
 it is, and a move the reading found keeps its place whatever the rules say about where it went.
 
-`rola track` and `rola align` refuse a path the rules govern — naming an ignored file or directory,
-or a directory selection that is itself ignored — with the argument code the command already has
+`rola track` and `rola align` refuse a path the rules govern, naming an ignored file or directory,
+or a directory selection that is itself ignored, with the argument code the command already has
 (201 and 221) and a line pointing at `--include-ignored`, which is the run saying it means it. A
 directory named for recording still expands over what it holds silently: a file under it that the
 rules govern is not selected, and there is nothing to refuse because it was never named.
 
 `rola fetch` brings the Vault's ignore rules down with its Layout, by default, into
-`.rola/info/ignore/vaults/<NAME>/` — replacing whatever was there, so a rule the Vault gave up is
+`.rola/info/ignore/vaults/<NAME>/`: replacing whatever was there, so a rule the Vault gave up is
 gone here too. `--no-ignore-rules` fetches the Layout alone and leaves the rules here as they are.
 The fetch is the one Vault's, named or default, and never another bound Vault's.
 
@@ -743,7 +743,7 @@ rules are a refinement of it.
 ### 2. [`app`] [`rola`] Speak every action to a Vault behind SSH, one ssh per action
 
 Every command that speaks to a Vault now reaches one written as an scp destination. The client
-was already one place — `proc_action` — so what changed is what happens there: instead of a
+was already one place, `proc_action`, so what changed is what happens there: instead of a
 connection to a host and a port, the address is dialled, and a session becomes a process.
 
 ```text
@@ -762,8 +762,8 @@ instead of waiting for what can never be typed. What `ssh` says about a refused 
 host goes where the command's own errors go, the standard error, and is not intercepted.
 
 What the program ends with is part of the answer, so it is watched from the moment it starts
-rather than from the moment its output ends: a session that failed before its first write — an
-`ssh` that could not reach the host — is exactly the case with no output to read. A leg that cannot
+rather than from the moment its output ends: a session that failed before its first write, an
+`ssh` that could not reach the host, is exactly the case with no output to read. A leg that cannot
 be reached is a failure of its own, reported as `ActionError::Transport` and exit 152, and it says
 which leg: no `ssh` on this machine, no `rola-daemon` on that one, a daemon too old to know
 `serve`, a path that is not a Vault, a machine that refuses sessions, preferences that will not
@@ -781,8 +781,8 @@ connection, and a machine that pays it per action is a machine that has not conf
 
 The address a window is being edited with is read by the launcher before the command line is run,
 which is a second reading of the same grammar: what the window accepts has to be what the command
-accepts, or a window takes an address the command then refuses. It now knows the scp spelling too —
-`user@host:path`, with the SSH port between the host and the path when one is named — and refuses
+accepts, or a window takes an address the command then refuses. It now knows the scp spelling too,
+`user@host:path`, with the SSH port between the host and the path when one is named, and refuses
 what the command refuses: no account, no host, no path, a port no session is made to, two colons
 after the host, a path the far side would read as a flag.
 
@@ -795,7 +795,7 @@ not resolve.
 The Rorolala plugin now contributes a hide rule to the File System plugin's catalogue, offered as
 `rola_ignored` and labelled with the plugin's own key. A directory under the root being read is
 looked up for the Workspace holding it, the Workspace's rule set is loaded once per Workspace
-through the C ABI — off the thread the rows are drawn on, the way the provider contract asks — and
+through the C ABI (off the thread the rows are drawn on, the way the provider contract asks) and
 an entry the rules match is left out of a listing or a tree. Letting go of the answer when the files
 may have changed is what makes an edited or freshly fetched rule file seen.
 
@@ -806,8 +806,8 @@ answering about a row without walking the tree the reading walks.
 
 ### 5. [`modules`] Manage ignore rules in one directory, and let a Vault hand rules down
 
-Rorolala now reads its ignore rules from one managed directory — `.rola/info/ignore/` in a
-Workspace, `./info/ignore/` in a Vault — instead of from the tree, and a fetch brings a Vault's
+Rorolala now reads its ignore rules from one managed directory, `.rola/info/ignore/` in a
+Workspace, `./info/ignore/` in a Vault, instead of from the tree, and a fetch brings a Vault's
 rules down with its Layout. A rule file is held under the name its author gave it and holds
 gitignore's own syntax: negation, directory-only rules, anchoring and `**` all read as git reads
 them. A file that the rules govern is not the work's gain, so a tree reading leaves it out of what
@@ -817,7 +817,7 @@ found is a fact about the work rather than something a rule suppresses.
 The order the rules apply in is the managed directory's own answer: a deeper rule file is applied
 before a shallower one, and beside its siblings a file whose name sorts sooner (numbers by value)
 is applied before one that sorts later, so the last rule that matches a path is the one that
-decides. A Vault's rules land under `vaults/<name>/` — deeper than the Workspace's own — which is
+decides. A Vault's rules land under `vaults/<name>/`, deeper than the Workspace's own, which is
 what lets a Workspace's `!*.mb` suppress a Vault's `*.mb`.
 
 The rules themselves are matched by ripgrep's `ignore` crate rather than by a second
@@ -828,8 +828,8 @@ outside Rust asks the same set the command line does.
 `modules/tree-analyze` takes the rule set as part of a reading and filters only what the tree
 gained, after the moves are paired. `modules/status` reads with it, so a status made of a Workspace
 carries the same answer. `modules/daemon` gains the `fetch-ignore-rules` action (id 18), which
-hands a Vault's whole rule directory over and replaces the Workspace's copy of it as one swap
-— a rule the Vault deleted is gone from here after the next fetch, without either side keeping a
+hands a Vault's whole rule directory over and replaces the Workspace's copy of it as one swap.
+A rule the Vault deleted is gone from here after the next fetch, without either side keeping a
 list of what used to be.
 
 ### 6. [`modules`] Reach a Vault over an SSH session, with no port bound at either end
@@ -838,7 +838,7 @@ A Vault can now be served to a caller that arrives through `ssh`, which binds no
 nothing of the network beyond the `ssh` program the caller already has. The far side runs
 `rola-daemon serve <PATH>`: one connection is carried by that process's own standard input and
 output, and the process ends when the connection does. The table of namespaces is not read in that
-mode — the path on the command line is the Vault, taken exactly as written — so a machine with
+mode (the path on the command line is the Vault, taken exactly as written) so a machine with
 nothing registered can still serve one.
 
 An address says which of the two ways to reach a Vault it means. The SSH spelling is scp's, with
@@ -854,12 +854,12 @@ no daemon address ever carried one. `VaultAddress` gained `link()`, which answer
 the session the address names, and lost `port()`, `authority()` and the `set_*` methods, which
 described the daemon way of reaching one and not the other.
 
-`modules/daemon` reads `rola/daemon/preference.toml` beside the namespace table — two switches,
+`modules/daemon` reads `rola/daemon/preference.toml` beside the namespace table, two switches,
 both defaulting to the shape the feature was designed for, and written down with those defaults the
 first time a session asks and finds no file there. A machine that has said nothing is a machine
 whose switches a person still has to be able to find: the first session writes them, so turning one
 off is editing a file rather than knowing where it would have been. A data directory that cannot be
-written does not refuse the session — the defaults are what a machine that says nothing means — and
+written does not refuse the session, the defaults are what a machine that says nothing means, and
 says on the standard error that the switches could not be kept.
 
 ```toml
@@ -872,7 +872,7 @@ auto-register-by-ssh = false
 connection write the key it proved into the Vault's own keys when the name it uses has none there,
 which turns the first connection of somebody the Vault has never seen into a member with no hand
 placement of a key. It never writes over a key that is already there, never registers a name in
-`[auth] admins` — an administrator may move any file in the Vault — and never registers anything
+`[auth] admins`, an administrator may move any file in the Vault, and never registers anything
 where the Vault's `key_discovery` does not name its own keys. Turning it on changes what revoking
 a member means: a deleted key is written back by the next connection, so revoking is turning the
 switch off or closing the SSH access.
@@ -880,8 +880,8 @@ switch off or closing the SSH access.
 The mode has two contracts that a caller depends on. The standard output carries the protocol and
 nothing else, so a login script that prints breaks the session; everything the daemon has to say,
 including the audit line of a registration, goes to the standard error, which `ssh` forwards to
-the caller. And the exit code is the daemon's own — 4 for a path that is not a Vault, 5 for a failed
-session, 6 for a machine that refuses sessions, 7 for preferences that will not read — because that
+the caller. And the exit code is the daemon's own, 4 for a path that is not a Vault, 5 for a failed
+session, 6 for a machine that refuses sessions, 7 for preferences that will not read, because that
 number is all the other end has to tell one failure from another.
 
 Both switches are policy rather than a security boundary: nothing in a process can prove it was
@@ -910,7 +910,7 @@ still built again, since there the rows under the base are different rows.
 Opening a layout read a shard's snapshot and then its log as two reads, and a compaction between the two
 was a change lost: the snapshot read before a compaction and the log read after it are a shard with no
 entries, since the compaction had already folded what the log held into a snapshot the open did not see.
-A shard is now read whole — its snapshot and the log after it under the log's shared lock, which is the
+A shard is now read whole, its snapshot and the log after it under the log's shared lock, which is the
 lock a compaction holds exclusively for the whole of what it does. The open also builds what it answers
 from the shards it just read rather than refreshing a second time, which is one read fewer of every
 shard.
@@ -918,21 +918,21 @@ shard.
 A compaction passes over a shard whose log holds no bytes: there is nothing to fold, and what it would
 spend is a flush of a snapshot that is what is already there.
 
-A Vault also folds its Layout's log into the snapshots when the log has outgrown them — past a
-mebibyte, or more than what the snapshots hold — which is what keeps the reading an open does from
+A Vault also folds its Layout's log into the snapshots when the log has outgrown them, past a
+mebibyte, or more than what the snapshots hold, which is what keeps the reading an open does from
 growing with the history a Vault has served. A compaction that fails is left to the next action rather
 than failing the one that was asked for.
 
 ### 3. [`modules`] [`tree-analyze`] [`cache`] Keep a shared analysis cache whole while another reading writes it
 
 The cache a reading of the tree writes down is now written beside itself and moved over the file that is
-there, rather than written over it. One work is read by several readers at once — the desktop's Overview and
-each listing of it read it on threads of their own — and a reader opens either the cache that was there or
+there, rather than written over it. One work is read by several readers at once, the desktop's Overview and
+each listing of it read it on threads of their own, and a reader opens either the cache that was there or
 the one being written, and never a file that is part of each.
 
 A reader that caught the old file between the truncation and the new bytes took it for a cache written by
 another build and started from no agreements at all. It then wrote the tree as it stands as what the Layout
-agrees with, and the changes it was about to report — a file edited without holding it, say — were gone from
+agrees with, and the changes it was about to report (a file edited without holding it, say) were gone from
 every reading after that until the files changed again.
 
 ## Optimized
@@ -940,8 +940,8 @@ every reading after that until the files changed again.
 ### 1. **\[BREAKING!\]** [`modules`] [`daemon`] Bring the chain under a version from a Vault in one exchange
 
 A retrack may move the pointer to a version the Vault holds and this side never fetched. What it needs for
-such a version to be readable here is the chain under it - the version, the variant that produced it, the
-words they are named by, and so on down to a version this index already holds - and reading it one object
+such a version to be readable here is the chain under it (the version, the variant that produced it, the
+words they are named by, and so on down to a version this index already holds), and reading it one object
 per exchange was a connection and a handshake per object.
 
 It is one exchange now: the Workspace says the hash it wants the chain of and what it already holds, the
@@ -955,13 +955,13 @@ program that asks for the action against a daemon which does not serve it is ref
 ### 2. **\[BREAKING!\]** [`modules`] [`daemon`] Open the Vault's Layout once per action and write each run as one batch
 
 The actions that change the Vault's Layout no longer open it once per entry, and no longer write one
-change at a time. An ownership run — `hold`, `giveup`, and the two `rola layout` doors — opens the
+change at a time. An ownership run (`hold`, `giveup`, and the two `rola layout` doors) opens the
 Layout once, decides every `Uuid` against one batch, and commits it: one reading of the shards and one
 flush per shard, where it used to be sixteen shard reads and a flush for every entry. The `Uuid`s cross
 as one value and the outcomes come back as one, so a run of a thousand entries is two values instead of
 a thousand round trips.
 
-A write that is made of many entries — `write-remote-entries`, which a sync's push uses — is one batch
+A write that is made of many entries (`write-remote-entries`, which a sync's push uses) is one batch
 as well, and a create is one record rather than a path and an entry that a crash could part.
 
 The batch is committed before the outcomes are answered, and the side that asked is told whether it was
@@ -975,7 +975,7 @@ this, does not understand the exchange.
 ### 3. **\[BREAKING!\]** [`modules`] [`daemon`] [`fetch-layout`] Carry the Vault's Layout as the whole it holds, and pass over a fetch whose copy is already it
 
 A fetch no longer carries the Vault's Layout directory as it stands. It carries the layout written out
-whole — every shard a snapshot of everything it holds, with an empty log after it — because a directory
+whole (every shard a snapshot of everything it holds, with an empty log after it) because a directory
 read while another action writes or compacts is the two halves of two states, and what a copy is for is
 one whole.
 
@@ -983,7 +983,7 @@ A fetch that asks with the state its copy already holds is answered "unchanged" 
 a run whose layout has not changed since the copy was taken pays a round trip rather than a directory.
 What a layout is written out as depends on what it holds and not on how it is kept, so a compaction does
 not make a copy stale; and because the state is read back from the copy, a copy that was written to
-after it was fetched — an ownership change followed into it — answers for what it now holds rather than
+after it was fetched, an ownership change followed into it, answers for what it now holds rather than
 for the files it arrived in.
 
 The files of a generation are written without a flush each, and one flush of the generation as a whole
@@ -1005,7 +1005,7 @@ A copy that cannot be written is still reported, and the change the Vault made i
 
 A retrack that goes to a version the Vault holds and this side never fetched read the chain one object at a
 time, each its own connection and handshake. It asks for the whole chain in one exchange now, and what the
-Vault brings is written as one pack here - one file and one index for a chain of any length.
+Vault brings is written as one pack here, one file and one index for a chain of any length.
 
 What a run is told when the chain cannot be walked is unchanged: an object under the hash that is not a
 version is refused as a level that is not a version, and a hash the chain could not go past is named.
@@ -1014,7 +1014,7 @@ version is refused as a level that is not a version, and a hash the chain could 
 
 Every recording packed the index, and packing rewrites every object the index has ever held: the cost of
 a run grew with the index for a saving that did not. A recording now writes the objects it makes as one
-pack — one file and one index for the whole run rather than a file per object — and gathers what has
+pack, one file and one index for the whole run rather than a file per object, and gathers what has
 piled up only when the loose objects it leaves number a few hundred, or when it has left more than a
 handful of packs behind. Until then what it wrote is valid where it is, and a later run or `rola pack`
 settles it.
@@ -1046,10 +1046,10 @@ another reading of everything that arrived before the sync could return.
 What a side now lists is every key its store holds, read from the loose directory and the pack indexes,
 and the presence the two answers feed is what decides each key. What arrives is checked against the key
 it came under as it is taken, and the side that took it confirms what it holds by lookup rather than by
-putting every content back together and hashing it — one reading of the store where there were two.
+putting every content back together and hashing it, one reading of the store where there were two.
 
-The one thing this makes stricter: a key a store holds but cannot produce — a manifest whose chunks are
-gone — is now one both sides are asked for, and neither holds, so the run says so instead of leaving it
+The one thing this makes stricter: a key a store holds but cannot produce, a manifest whose chunks are
+gone, is now one both sides are asked for, and neither holds, so the run says so instead of leaving it
 out of the sync in silence.
 
 ### 10. [`modules`] [`daemon`] [`sync-index`] Carry an index sync as packets and write it as one pack
@@ -1088,9 +1088,9 @@ object, its decode and its hash check. A listing that names no kind reads no obj
 
 ### 13. [`modules`] [`vcs`] [`index`] Write a run of index objects as one pack
 
-A run of index objects - what a sync takes, what a recording makes - is now written through a batch: the
+A run of index objects (what a sync takes, what a recording makes) is now written through a batch: the
 objects are collected and laid down as one pack with one index, rather than a file, a rename and a
-directory entry for each of them. What a batch takes is what a transfer takes - an object is decoded and
+directory entry for each of them. What a batch takes is what a transfer takes: an object is decoded and
 held to the key it arrived under, and written as its canonical encoding.
 
 A pack number is claimed by creating the pack's file, so two writers never take one number for two packs,
@@ -1109,8 +1109,8 @@ least size has its splitter disabled instead of squeezing one out of reach, and 
 group takes the group with it, collapsing the split it was in.
 
 A dragged dock is answered in two steps: carried into a group, the group is approached and five points
-are drawn over it — four trapezoids along its edges, one for each way it may be split, and a centre
-rectangle for joining its tabs — and the pointer is always on one of them. A drop on the centre joins
+are drawn over it, four trapezoids along its edges, one for each way it may be split, and a centre
+rectangle for joining its tabs, and the pointer is always on one of them. A drop on the centre joins
 the group's tabs at the end of their order; a drop on an edge splits the group.
 
 The group last clicked or focused is the active one, and a dock opened without a place of its own goes
@@ -1119,7 +1119,7 @@ the group it came from when that window goes.
 
 The saved layout is version 2: the tree with a ratio for every split, the active group, and each group's
 chosen tab. A version 1 file states placements and pixel widths, which cannot be turned into a tree
-without inventing a window size; it is not converted — the starting arrangement is used, the log says
+without inventing a window size; it is not converted, the starting arrangement is used, the log says
 so, and the next save writes version 2. The starting arrangement is the old five-region one expressed as
 a split of two groups, with the same tab orders and the same band.
 
@@ -1157,8 +1157,8 @@ the environment provides.
 ### 3. [`app`] [`rola-daemon-gui`] Add the GTK 4 window over the daemon on Linux
 
 The daemon has a second window on Linux: `rola-daemon-gui`, built from C against GTK 4 and linked to
-no Rust. It shows the same four pages as the Windows window — the daemon and its output, the namespace
-registry, the user keys, and the Vaults' administrators — and every action behind them is still one
+no Rust. It shows the same four pages as the Windows window, the daemon and its output, the namespace
+registry, the user keys, and the Vaults' administrators, and every action behind them is still one
 the command-line programs answer.
 
 It reads the user's files where the Rust side does: `$ROLA_DATA_HOME` or `$XDG_DATA_HOME`, falling
@@ -1171,16 +1171,16 @@ Stopping a daemon the window started asks it to terminate and falls back to kill
 
 ### 4. [`dev`] [`rola-build`] [`publish`] Package the Linux hand-off as deb, rpm, Arch and AppImage
 
-`cargo dev publish` on Linux now lays the export out as the packages a distribution installs —
-`rorolala-vcs`, `rorolala-desktop` and `rorolala-dev` — a `rorolala-full` meta package that names
+`cargo dev publish` on Linux now lays the export out as the packages a distribution installs,
+`rorolala-vcs`, `rorolala-desktop` and `rorolala-dev`, a `rorolala-full` meta package that names
 all three, an all-in-one `rorolala` package that holds them, and a launcher-only AppImage. The
 Desktop program and launcher are published self-contained, so the packages that hold them carry the
 .NET runtime; the AppImage carries `rola`, `ROLALauncher` and `RororalaDesktop`, and no other
 program.
 
 A build for a musl target makes one package instead, `rorolala-musl`: the same all-in-one, with the
-command-line programs built against musl and the Desktop side — .NET, GTK and the C ABI's shared
-library — the host's own, since those are glibc wherever they are built.
+command-line programs built against musl and the Desktop side, .NET, GTK and the C ABI's shared
+library, the host's own, since those are glibc wherever they are built.
 
 The packages install the six programs, both desktop entries, the icons and completions, and a user
 `rolad.service`. The unit is installed but never enabled or started by the package: whether the
@@ -1190,7 +1190,7 @@ and nFPM and appimagetool are pinned beside the export.
 ### 5. [`modules`] [`define-format`] Add rola-define-format, the rola.lock format
 
 `rola.lock` names the materials a project places and the Vaults their content can be fetched
-from. It is generated — `rola.toml` is the file a person writes — so the grammar is deliberately
+from. It is generated, `rola.toml` is the file a person writes, so the grammar is deliberately
 small: a `? FORMAT 1` line, one `? VAULT <name> <url>` line per source, and one
 `<path> blake3:<hash>` line per material, with no patterns, conditions, inheritance or quoting.
 
@@ -1204,8 +1204,8 @@ the only place a lock is read or written: it holds no files, no network and no g
 
 ### 6. [`modules`] [`git-support`] Add rola-git-support for project files and the work tree
 
-A project is a directory holding `rola.toml` — the Vaults, the features, and one `[[mapping]]` per
-material — with the generated `rola.lock` beside it. This crate reads both, finds the project and
+A project is a directory holding `rola.toml`, the Vaults, the features, and one `[[mapping]]` per
+material, with the generated `rola.lock` beside it. This crate reads both, finds the project and
 the git work tree it sits in, and answers what the programs ask of it.
 
 It keeps the project's block of `.git/info/exclude` in step with the lock, so a placed material

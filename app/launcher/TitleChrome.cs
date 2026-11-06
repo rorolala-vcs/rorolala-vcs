@@ -18,8 +18,8 @@ namespace RorolalaLauncher;
 /// what makes them read as a row of controls rather than as three things in three boxes.
 /// <para>
 /// What is drawn on it is the Desktop program's own two frames. The Windows frame puts its marks at the
-/// corner in the order they read — the settings, then the one that puts the window away, then the one that
-/// closes it — each as wide as a caption button there, filling only under the pointer. The macOS frame puts
+/// corner in the order they read, the settings, then the one that puts the window away, then the one that
+/// closes it, each as wide as a caption button there, filling only under the pointer. The macOS frame puts
 /// its lights at the other corner, in its own order, with the mark each one carries hidden until the pointer
 /// reaches it; the settings is drawn beside them as the one control that is this program's rather than the
 /// frame's. A tiling window manager is the frame already, so nothing that belongs to a frame is drawn there

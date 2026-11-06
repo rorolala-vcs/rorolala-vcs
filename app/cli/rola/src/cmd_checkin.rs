@@ -3,7 +3,7 @@
 //! A `Uuid` enters a Layout by being tracked and enters the Vault's Layout by going up, which
 //! leaves what only the Vault holds out of reach: a sync names it rather than bringing it, since a
 //! `Uuid` is not something a sync may invent a local path for. This is how one is asked for by
-//! name: the operands read the way `mv`'s do — what is to come in first, where it is to land last —
+//! name: the operands read the way `mv`'s do (what is to come in first, where it is to land last)
 //! so a reference the Vault's Layout names is put at a path here, under a directory here, or at the
 //! path the Vault itself names it by when no destination was written.
 
@@ -81,8 +81,8 @@ const ARG_JOIN: PickerArg<'static, Option<String>> = arg![join: Option<String>];
 /// Whether each reference keeps only its own name under the destination.
 ///
 /// A directory destination is a prefix by default, so `Assets/hero.psd` lands at
-/// `<TO>/Assets/hero.psd` — the path the Vault gives it, kept whole. A run that brings entries the
-/// user chose elsewhere — a drop on a directory, a paste — means them to land where they were put
+/// `<TO>/Assets/hero.psd`, the path the Vault gives it, kept whole. A run that brings entries the
+/// user chose elsewhere (a drop on a directory, a paste) means them to land where they were put
 /// rather than where the Vault has them, so this makes the destination the parent and the
 /// reference the name: `<TO>/hero.psd`, and a folder keeps the tree it is under its own name.
 const ARG_BY_NAME: PickerArg<'static, Flag> = arg![by_name: Flag];
@@ -144,8 +144,8 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
 
 /// Brings what the Vault holds but this Layout does not into it
 ///
-/// The operands read the way `mv`'s do: every word but the last is a reference — a path in the
-/// Vault's Layout, a glob over those paths, or a `Uuid` — and the last, when there is more than one
+/// The operands read the way `mv`'s do: every word but the last is a reference, a path in the
+/// Vault's Layout, a glob over those paths, or a `Uuid`, and the last, when there is more than one
 /// word, is where those references are to land here. A reference therefore always comes from the
 /// Vault's side; nothing but the destination is read as a path of this run's.
 ///
@@ -160,8 +160,8 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
 /// selects from, so `Assets/*` lands its matches directly under `<TO>`. Any other destination names
 /// the whole landing path, so it takes exactly one reference.
 ///
-/// A reference that names a folder of the Vault's Layout — whether an entry stands at that path or
-/// only things below it — brings everything that stands under it as well, at the paths they have
+/// A reference that names a folder of the Vault's Layout, whether an entry stands at that path or
+/// only things below it, brings everything that stands under it as well, at the paths they have
 /// there: checking a folder in is bringing in the tree it is.
 ///
 /// What a reference names has to be something this Layout does not already hold, and every landing
@@ -170,8 +170,8 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
 /// landing is worked out before anything is written, so a run that is refused leaves nothing half
 /// done.
 ///
-/// The version the Vault holds is what comes with it — its content is taken out of the store and
-/// put at the path — and what the Layout then says is that version and the holder the Vault names.
+/// The version the Vault holds is what comes with it, its content is taken out of the store and
+/// put at the path, and what the Layout then says is that version and the holder the Vault names.
 ///
 /// # Errors
 ///
@@ -224,7 +224,7 @@ pub struct StateCheckin {
     /// What to bring in: paths in the Vault's Layout and `Uuid`s, or the one variant a merge checks
     /// in.
     refs: Vec<String>,
-    /// Where they are to land here, or nothing to land each at the path the Vault names it by — and
+    /// Where they are to land here, or nothing to land each at the path the Vault names it by, and
     /// for the variant mode, where its file is to lie.
     to: Option<String>,
     /// The file a variant is to be joined into, when this run checks one in.
@@ -307,13 +307,13 @@ pub fn handle_checkin(
     let account = account_named(&account_name, Some(held), None)?;
 
     // The content a checkin brings is asked of whichever Vault holds it, and the one the Layout
-    // tracks is asked first. What is read from that Vault is its Layout — a copy is still what the
-    // references are read against — while the objects themselves may come from any Vault that has
+    // tracks is asked first. What is read from that Vault is its Layout, a copy is still what the
+    // references are read against, while the objects themselves may come from any Vault that has
     // them, since a key is the hash of what it names.
     let primary = fetch::primary(remote.get_ref(), Some(vault_name.as_str()));
 
     // What the Vault holds now is what the references are read against, so its copy is brought up
-    // to date first — the same fetch `rola layout fetch` makes. Offline, the copy that is here is
+    // to date first, the same fetch `rola layout fetch` makes. Offline, the copy that is here is
     // the one read; a run with none is told so by the check below rather than by a fetch it may
     // not make.
     if !**offline {
@@ -403,7 +403,7 @@ pub fn handle_checkin(
 
 /// Checks a variant in to be joined into a file this Layout names.
 ///
-/// What comes in is not a path of the Vault's Layout but a variant the index holds — content that
+/// What comes in is not a path of the Vault's Layout but a variant the index holds, content that
 /// already happened elsewhere and is to be joined into a file here without either side giving up.
 /// The content is written to a **variant file** beside its target, under a name of the convention or
 /// of the run's own, and what is waiting for what is written into [`Merging`] rather than into the
@@ -879,7 +879,7 @@ fn join_failed(target: &str, cause: impl Into<String>) -> Next {
 /// Moves the index to what the Vault holds, which is what names the objects a checkin reads.
 ///
 /// Only the index: it is light, and it is what tells a version from its content. The content itself
-/// is asked for one object at a time, by what [`bring_in`] finds it needs — see [`Sources`].
+/// is asked for one object at a time, by what [`bring_in`] finds it needs, see [`Sources`].
 ///
 /// An offline run moves nothing: what the index already holds is what the versions are read from,
 /// and one that is not here fails where it is read rather than being fetched.
@@ -986,7 +986,7 @@ fn resolve(
     let destination = destination(root, to)?;
 
     // A destination that is not a directory names one landing. More than one operand is already
-    // more than it can take, the way `mv` reads them; one operand naming several — a glob — is
+    // more than it can take, the way `mv` reads them; one operand naming several, a glob, is
     // found out once the references are read below.
     if matches!(destination, Destination::Exact(_)) && refs.len() > 1 {
         return Err(Refusal::Argument);
@@ -1027,9 +1027,9 @@ fn resolve(
 /// where each of them lands.
 ///
 /// A reference that names a folder of the copy brings what stands under it as well: checking a
-/// folder in is bringing in the tree it is, and a path that names only the directory — no entry
-/// stands there — names what is under it rather than nothing. An entry several references name — a
-/// glob and a path that reaches into what it matched — is one request rather than a clash, so it is
+/// folder in is bringing in the tree it is, and a path that names only the directory, no entry
+/// stands there, names what is under it rather than nothing. An entry several references name, a
+/// glob and a path that reaches into what it matched, is one request rather than a clash, so it is
 /// brought in once.
 fn expand(
     remote: &Layout,
@@ -1086,14 +1086,14 @@ fn expand(
 
 /// What one reference names: the directory a glob selects from, and the paths it names.
 ///
-/// It is what the entries are walked from, so a path that names only a folder — no entry stands
-/// there — names what is under it rather than nothing, and a glob that matches a folder brings the
+/// It is what the entries are walked from, so a path that names only a folder, no entry stands
+/// there, names what is under it rather than nothing, and a glob that matches a folder brings the
 /// folder's tree in with it.
 ///
 /// # Errors
 ///
 /// Returns [`Refusal::Argument`] when a reference reads as a pattern but not as a usable one, and
-/// [`Refusal::Unknown`] when it names nothing — a glob that matches nothing included, since a run
+/// [`Refusal::Unknown`] when it names nothing, a glob that matches nothing included, since a run
 /// that quietly did part of what was asked is worse than one that stops.
 fn seeds(
     remote: &Layout,
@@ -1207,7 +1207,7 @@ fn matching(reference: &str, paths: &[LayoutPath]) -> Result<Vec<LayoutPath>, Re
 }
 
 /// Splits the operands the way `mv` reads its own: everything but the last word is what is to come
-/// in, and the last — when there is more than one word — is where it is to go.
+/// in, and the last, when there is more than one word, is where it is to go.
 ///
 /// The variant mode reads the same words differently: the first is the variant to check in and, when
 /// a second is written, it is where that variant's file is to lie rather than another reference.
@@ -1270,11 +1270,11 @@ fn destination(root: &Path, to: Option<&str>) -> Result<Destination, Refusal> {
 /// that is a directory, or the destination itself when that is the whole name.
 ///
 /// A path keeps all of itself under a directory, and a glob match keeps what it has below the
-/// directory the glob selects from: that is what makes checking a folder in bring the folder — the
-/// tree it is, remade where it is put — while `Assets/*` brings what is in `Assets` rather than
+/// directory the glob selects from: that is what makes checking a folder in bring the folder, the
+/// tree it is, remade where it is put, while `Assets/*` brings what is in `Assets` rather than
 /// `Assets` again.
 ///
-/// What a path names under the Vault's unplaced mark — `@/new/a.fbx` — lands without that mark.
+/// What a path names under the Vault's unplaced mark, `@/new/a.fbx`, lands without that mark.
 /// The `@` is the Vault's way of saying the entry has no path yet, not a directory anything here
 /// has: a Layout here that named `@/new/a.fbx` would make an `@` directory that names a decision
 /// the Vault has not made, and every reader of it would take it for a folder of the work.
@@ -1466,7 +1466,7 @@ fn bring_in(
         // What the Layout says is the version the Vault holds, the holder it names and the cut it
         // prefers; the path is this side's own, which is what the run was asked for. Nothing is
         // rebuilt from its parts: rebuilding is how a preference would be dropped, and a dropped
-        // preference is reported nowhere — the entry would go on being written, cut another way
+        // preference is reported nowhere, the entry would go on being written, cut another way
         // than the one it asked for.
         if let Err(error) = batch.create_file(id, data, &path) {
             failed.push(format!("{id}: {error}"));

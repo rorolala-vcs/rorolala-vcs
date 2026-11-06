@@ -1,8 +1,8 @@
 //! The commands, one to a module.
 //!
 //! A command turns its words into a state, and a chain handler does the work. What the handlers
-//! share — the refusal of a dirty tree, reading a file that may not be there, and writing the
-//! details with the summary regenerated from them — lives here rather than in each of them.
+//! share, the refusal of a dirty tree, reading a file that may not be there, and writing the
+//! details with the summary regenerated from them, lives here rather than in each of them.
 
 pub mod archive;
 pub mod get_version;

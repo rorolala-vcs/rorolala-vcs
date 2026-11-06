@@ -333,7 +333,7 @@ internal sealed partial class VersionGraphView
             );
         }
 
-        return string.Join(" · ", parts);
+        return string.Join(", ", parts);
     }
 
     /// <summary>How close the pointer has to be to an edge to be on it, in screen units.</summary>
@@ -788,7 +788,7 @@ internal sealed partial class VersionGraphView
             rows.Add((string.Empty, RolaI18N.Get("rorolala_vcs.version_graph.info_deprecated")));
         }
 
-        return new Info($"{chip.Tag} · {chip.Name}", rows, ink.Side(entry.Side));
+        return new Info($"{chip.Tag}, {chip.Name}", rows, ink.Side(entry.Side));
     }
 
     /// <summary>What a pill naming a variant's hash says.</summary>

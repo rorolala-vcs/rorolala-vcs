@@ -722,7 +722,7 @@ impl CategorySection {
 
                 writeln!(
                     list,
-                    "{}. {} — [See details]({path}#{anchor})",
+                    "{}. {}. [See details]({path}#{anchor})",
                     entry.number,
                     entry.title()
                 )
@@ -936,7 +936,7 @@ fn strip_breaking(rest: &str) -> (bool, &str) {
 /// The scopes a title starts with, and the text after them.
 ///
 /// A scope is written as `` [`name`] ``. Only the backticked form is read, so a summary that starts
-/// with an ordinary bracket — a link, for instance — is left as the summary.
+/// with an ordinary bracket (a link, for instance) is left as the summary.
 fn parse_scopes(mut rest: &str) -> (Vec<String>, &str) {
     let mut scopes = Vec::new();
 
@@ -1263,8 +1263,8 @@ All notable changes.
 
 ## Bugfix
 
-1. **\\[BREAKING!\\]** [`cli`] [`rola`] Fix it — [See details](dev/CHANGELOG-DETAILS.md#1-breaking-cli-rola-fix-it)
-2. [`vault`] Summary — [See details](dev/CHANGELOG-DETAILS.md#2-vault-summary)
+1. **\\[BREAKING!\\]** [`cli`] [`rola`] Fix it. [See details](dev/CHANGELOG-DETAILS.md#1-breaking-cli-rola-fix-it)
+2. [`vault`] Summary. [See details](dev/CHANGELOG-DETAILS.md#2-vault-summary)
 "
         );
     }
@@ -1274,7 +1274,7 @@ All notable changes.
         let text = "# 0.1.0 (Unreleased)\n\n## Bugfix\n\n### 1. Summary\n\nA body.\n";
         let summary = super::summary(text, "details.md");
 
-        assert!(summary.contains("1. Summary — [See details](details.md#1-summary)"));
+        assert!(summary.contains("1. Summary. [See details](details.md#1-summary)"));
         assert!(!summary.contains("A body."));
     }
 

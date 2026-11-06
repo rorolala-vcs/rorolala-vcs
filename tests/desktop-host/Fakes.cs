@@ -8,7 +8,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The view's control is deliberately absent. The dock manager holds it and hands it to the area,
-/// and nothing here draws, so a stand-in with no control is honest about what is exercised — the
+/// and nothing here draws, so a stand-in with no control is honest about what is exercised, the
 /// bookkeeping rather than the rendering. A test that has to watch where a control ends up gives it
 /// one, which is the one thing that makes this view a control tree rather than a placeholder.
 /// </remarks>
@@ -29,7 +29,7 @@ internal sealed class FakeDockView : IDockView
 /// </summary>
 /// <remarks>
 /// What a test of a dock's name needs: a view whose title can be made to say something else, so that what the host
-/// draws in a tab — and in the window a dock of its own is shown in — can be read from the outside.
+/// draws in a tab, and in the window a dock of its own is shown in, can be read from the outside.
 /// </remarks>
 internal sealed class TitledDockView : IDockView, IDockTitle
 {

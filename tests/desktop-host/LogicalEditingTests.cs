@@ -149,7 +149,7 @@ public sealed class LogicalEditingTests
     /// <summary>Keys pressed while a name is being typed act on the name, not on the listing behind it.</summary>
     /// <remarks>
     /// The dock answers its keys at the top of itself, so a key that reached the listing while a box was up would be a
-    /// row removed, a second box opened or a second folder made — under a name the user was still typing.
+    /// row removed, a second box opened or a second folder made, under a name the user was still typing.
     /// </remarks>
     [Fact]
     public void KeysPressedWhileNamingDoNotActOnTheListing()
@@ -297,7 +297,7 @@ public sealed class LogicalEditingTests
     /// </summary>
     /// <remarks>
     /// The rows are made before the window is drawn, so that the first read of the place is the answer the listing is
-    /// built from — which is what a row the dock is showing always is.
+    /// built from, which is what a row the dock is showing always is.
     /// </remarks>
     /// <param name="rows">The suggested folders the place holds to begin with.</param>
     /// <param name="hiddenDock">Whether a second dock, hidden as one behind a tab is, is made before this one.</param>

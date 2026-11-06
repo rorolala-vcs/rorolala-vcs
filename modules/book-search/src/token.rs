@@ -1,7 +1,7 @@
 //! How text is cut into the terms a query names.
 //!
-//! A term is what the index is keyed by, so the two sides of a search — the book written by a
-//! build tool and the query typed by a reader — have to be cut the same way. That is why this is
+//! A term is what the index is keyed by, so the two sides of a search, the book written by a
+//! build tool and the query typed by a reader, have to be cut the same way. That is why this is
 //! one function rather than two.
 //!
 //! Text that separates its words with spaces is cut into words. Text that does not, which is most
@@ -32,7 +32,7 @@ pub struct Term {
 /// Cuts `text` into the terms a search names it by.
 ///
 /// Runs of letters and digits are words; each Chinese-style character is a term of its own and
-/// each pair beside it another. Everything else — spaces, punctuation, symbols — only ends a run,
+/// each pair beside it another. Everything else (spaces, punctuation, symbols) only ends a run,
 /// and is otherwise ignored.
 #[must_use]
 pub fn terms(text: &str) -> Vec<Term> {
@@ -134,7 +134,7 @@ pub fn is_latin(text: &str) -> bool {
 
 /// The character n-grams of a word: every run of two and of three characters.
 ///
-/// These are what a query is looked up by when it is not a whole word — a prefix or a substring of
+/// These are what a query is looked up by when it is not a whole word, a prefix or a substring of
 /// a word holds all of its own n-grams, so an article whose word holds all of them is a candidate.
 /// Two characters is the shortest query a fragment is made for, which is what makes `in` a prefix
 /// of `install` rather than a query with nothing to look it up by.

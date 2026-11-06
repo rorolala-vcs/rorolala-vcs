@@ -21,8 +21,8 @@ internal sealed record Notice(LogLevel Level, string Source, string Message);
 /// while the program is running does not wait for the next window to be opened.
 /// <para>
 /// The deduplication service is shared with the log, and so is the count: an identical line and an
-/// identical popup are one notification seen twice. What each holds is its own, though — the log
-/// has one line for it and this shows it once — so a line the log has already recorded is still
+/// identical popup are one notification seen twice. What each holds is its own, though, the log
+/// has one line for it and this shows it once, so a line the log has already recorded is still
 /// shown if the user must act on it, and one that has been shown is not shown again.
 /// </para>
 /// </remarks>

@@ -61,7 +61,7 @@ int main(void) {
 
     /*
      * The Workspace's own rules: `*.mb` ignores Maya files but keeps one, and the Vault's copy of that
-     * rule sits deeper — so the Workspace's two lines are what stands.
+     * rule sits deeper, so the Workspace's two lines are what stands.
      */
     char maya[700];
     snprintf(maya, sizeof maya, "%s/maya", rules);

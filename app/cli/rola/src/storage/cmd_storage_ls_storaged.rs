@@ -58,12 +58,12 @@ pub fn complete_storage_ls_storaged() -> Suggest {
 
 /// Lists every object the store holds, one key per line.
 ///
-/// What is printed is the keys the store answers for — the same keys
-/// [`rola storage extract-file`](crate::storage::cmd_storage_extract_file) takes — so a line read here is
+/// What is printed is the keys the store answers for, the same keys
+/// [`rola storage extract-file`](crate::storage::cmd_storage_extract_file) takes, so a line read here is
 /// a hash to hand to that command. Only what the store *holds* is listed: a manifest whose chunks
 /// have gone is not named, since it is not something there is content to read.
 ///
-/// The run has to be somewhere a store can be found — inside one, or inside a Vault or Workspace
+/// The run has to be somewhere a store can be found, inside one, or inside a Vault or Workspace
 /// that keeps one.
 ///
 /// # Errors
@@ -95,7 +95,7 @@ pub fn handle_storage_ls_storaged(
         return ErrorLsNoStorage.into();
     };
 
-    // The store is asynchronous and a command is not, so the two meet here — see
+    // The store is asynchronous and a command is not, so the two meet here, see
     // `cmd_storage_write_file`.
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,

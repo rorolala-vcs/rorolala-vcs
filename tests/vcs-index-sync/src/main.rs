@@ -1,8 +1,8 @@
 //! `vcs-index-sync`: what `rola vcs-index sync-all` does to a Workspace's index and a Vault's.
 //!
 //! A program rather than a set of tests cargo runs, for the same reason the rest of them are: what
-//! it does is what a person does with a terminal — make a place to work in, keep an account, bind a
-//! Vault, put an object in each index, serve the Vault, ask for a sync — and what it checks is what
+//! it does is what a person does with a terminal, make a place to work in, keep an account, bind a
+//! Vault, put an object in each index, serve the Vault, ask for a sync, and what it checks is what
 //! the two indexes hold afterwards.
 //!
 //! What is checked is that a sync is not an upload or a download: the Vault holds an object the
@@ -235,7 +235,7 @@ fn pair(dir: &Path, name: &str) {
 ///
 /// The daemon belongs to the machine, so it is told where it sits through the user's own data
 /// directory: the sandbox's `ROLA_DATA_HOME` holds both the table and the account it proves
-/// itself with — the variable a Windows machine reads, where `XDG_DATA_HOME` names nothing.
+/// itself with, the variable a Windows machine reads, where `XDG_DATA_HOME` names nothing.
 fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
     register(data, dir);
 
@@ -278,7 +278,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

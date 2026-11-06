@@ -6,7 +6,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The retrack: what a run of it is told.
 /// </summary>
 /// <remarks>
-/// The movement itself is the command line's and is not run here — it needs a Workspace and an index — so
+/// The movement itself is the command line's and is not run here, it needs a Workspace and an index, so
 /// what is checked is what this plugin decides: which version the record is moved to, which file it is moved
 /// for, whether the work on disk follows it, and whether unrecorded changes are discarded. Whether the version
 /// is one the work's chain holds is the command line's to judge: a jump is what a retrack does by default, so

@@ -32,14 +32,14 @@ internal sealed class ProgressRun
 /// Every progress run this plugin has started, in the order they began.
 /// </summary>
 /// <remarks>
-/// A command is run by whoever reached for it — the Overview's own strip, an entry's menu — and every one of them
+/// A command is run by whoever reached for it (the Overview's own strip, an entry's menu) and every one of them
 /// is shown in the one panel down the Overview's right, so the runs are gathered here rather than kept by the
 /// view that draws them: a run begun from a menu has to reach a panel that may not exist yet, and a panel opened
 /// after the run began has to see it.
 /// <para>
 /// A run is taken off the moment its process ends, so the panel is what is going and nothing else. The runs are
 /// written from whatever thread a command runs on and read from the window's, so the list is written under a lock
-/// and whoever draws is told on the window's thread — a control belongs to the thread that made it.
+/// and whoever draws is told on the window's thread, a control belongs to the thread that made it.
 /// </para>
 /// </remarks>
 internal sealed class ProgressHub
@@ -100,7 +100,7 @@ internal sealed class ProgressHub
     /// Says that a run has said something of itself, so that whoever draws does so again.
     /// </summary>
     /// <remarks>
-    /// The records are written straight to the run rather than through here — they carry their own lock — and
+    /// The records are written straight to the run rather than through here, they carry their own lock, and
     /// this only says that they have changed, which is all a drawing needs to know.
     /// </remarks>
     public void Touch() => On(() => Changed?.Invoke(this, EventArgs.Empty));

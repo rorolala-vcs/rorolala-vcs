@@ -1,6 +1,6 @@
 //! The `rola vcs-index write-variant` command: write a Variant and answer with its hash.
 //!
-//! Nothing is checked to be there — the base version, the storage entry, the creator and the
+//! Nothing is checked to be there, the base version, the storage entry, the creator and the
 //! message are taken as the hashes they are given. `--join` makes it a merge, carrying the variant
 //! it brings in.
 

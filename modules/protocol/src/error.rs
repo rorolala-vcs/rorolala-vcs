@@ -45,7 +45,7 @@ pub enum ActionError {
     ///
     /// It is kept apart from [`Io`](Self::Io), which is the channel, because the two are acted on
     /// differently: a channel that failed is a peer to reach, while a file that failed is a place to
-    /// give access to — and the side it failed on is not always the one a caller would guess, since
+    /// give access to, and the side it failed on is not always the one a caller would guess, since
     /// the Vault's own Layout is a file to the Vault. The path is carried in the message, because a
     /// failure that says "access is denied" and nothing else says nothing a reader can go and look at.
     LocalFile(IoError),
@@ -53,7 +53,7 @@ pub enum ActionError {
     ///
     /// A value crosses as frames that are written and read and never acknowledged, so a side that has
     /// sent everything knows only that it wrote it. What the other side says at the end of a
-    /// direction is whether it can produce what it took — and a key it cannot is a key that is not
+    /// direction is whether it can produce what it took, and a key it cannot is a key that is not
     /// here, whatever either side believed a moment ago. The message names the first such key, since
     /// what a caller does about it is look at that content.
     NotConfirmed(String),
@@ -62,7 +62,7 @@ pub enum ActionError {
     ///
     /// It is told apart from [`Io`](Self::Io), which is a channel that failed once it was open,
     /// because a caller acts on the two differently: a channel that fails is a peer that went away,
-    /// while this is the leg *to* the peer — a program that is not installed here, a host that
+    /// while this is the leg *to* the peer, a program that is not installed here, a host that
     /// cannot be reached, or a daemon on the far side that says, in its own words on its own
     /// standard error, why it will not serve. The message is that leg's own sentence, so what a
     /// caller prints says which of them it was.
@@ -111,8 +111,8 @@ impl fmt::Display for ActionError {
 impl std::error::Error for ActionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            // The two carry the same kind of failure — an `io` error, whichever side of the exchange
-            // it failed on — so one arm says it for both.
+            // The two carry the same kind of failure, an `io` error, whichever side of the exchange
+            // it failed on, so one arm says it for both.
             Self::Io(source) | Self::LocalFile(source) => Some(source),
             Self::Codec(source) => Some(source),
             Self::Json(source) => Some(source),

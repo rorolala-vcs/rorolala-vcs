@@ -13,8 +13,8 @@ use mingling::{
 /// [`GlobalFlagSetup`](crate::GlobalFlagSetup)), and `-V`/`--version` is answered by the program's
 /// own version node rather than by the framework's version query. The picker takes a spelling it
 /// claims before any command sees it, so the two flags are not mounted at all; what is registered
-/// here is everything else `DefaultSetup` registers — help, quiet, confirm, the structural renderer,
-/// the exit code and the directory environment — and nothing more.
+/// here is everything else `DefaultSetup` registers, help, quiet, confirm, the structural renderer,
+/// the exit code and the directory environment, and nothing more.
 pub struct RorolalaDefaultSetup;
 
 impl<ThisProgram> ProgramSetup<ThisProgram> for RorolalaDefaultSetup

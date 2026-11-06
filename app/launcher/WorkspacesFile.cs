@@ -5,7 +5,7 @@ namespace RorolalaLauncher;
 /// </summary>
 /// <remarks>
 /// The file states one thing: a list of directories. What each one is, is read from the directory every
-/// time the list is drawn rather than written down here — a Workspace can be moved, taken away, or made
+/// time the list is drawn rather than written down here, a Workspace can be moved, taken away, or made
 /// over a directory the list still names, and a state kept in this file would be a second answer to a
 /// question the file system already answers.
 /// <para>
@@ -73,7 +73,7 @@ internal sealed class WorkspacesFile
     /// </summary>
     /// <remarks>
     /// Nothing on the disk is touched: the list is what this program remembers, and a directory taken off it
-    /// is one it will not offer again — importing it puts it back, which is what makes this a list being
+    /// is one it will not offer again, importing it puts it back, which is what makes this a list being
     /// tidied rather than a Workspace being removed.
     /// </remarks>
     /// <param name="path">The directory.</param>
@@ -115,8 +115,8 @@ internal sealed class WorkspacesFile
     /// The paths a file states.
     /// </summary>
     /// <remarks>
-    /// Read as an array rather than as a line, so that the list may be written one path a line — which is
-    /// how a person edits one — or all on one line, which is how a program that wrote it whole would. A
+    /// Read as an array rather than as a line, so that the list may be written one path a line, which is
+    /// how a person edits one, or all on one line, which is how a program that wrote it whole would. A
     /// file this cannot make sense of is answered as no paths: the list is only ever a convenience, and a
     /// program that refused to open over it would be refusing over the wrong thing.
     /// </remarks>

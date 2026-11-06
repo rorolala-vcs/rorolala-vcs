@@ -16,8 +16,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The two halves meet in the row: the cell is what the user presses, and the browser is what answers where the path
-/// is. What is checked here is the request that crosses — the path as the work spells it, joined to where the reading
-/// was made — and that the cell a row has no path on does nothing.
+/// is. What is checked here is the request that crosses, the path as the work spells it, joined to where the reading
+/// was made, and that the cell a row has no path on does nothing.
 /// </remarks>
 public sealed class OverviewRevealTests
 {

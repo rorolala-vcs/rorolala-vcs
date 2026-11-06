@@ -1,8 +1,8 @@
 //! The `rola layout read-ownership` command: who holds one entry, from the fetched copy.
 //!
 //! Nothing is reached for here: what is read is the copy a
-//! [`fetch`](crate::layout::cmd_layout_fetch) wrote, so a run with no copy — or one whose copy does
-//! not name the entry — is told to fetch rather than left to reach a Vault that may be elsewhere.
+//! [`fetch`](crate::layout::cmd_layout_fetch) wrote, so a run with no copy, or one whose copy does
+//! not name the entry, is told to fetch rather than left to reach a Vault that may be elsewhere.
 
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,

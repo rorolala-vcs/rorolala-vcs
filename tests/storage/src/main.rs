@@ -4,8 +4,8 @@
 //! with a terminal: make a store, put content into it every way it can be put, and take it back
 //! out to see whether what came back is what went in.
 //!
-//! What it is really asking is the one thing storage promises — what goes in comes out, byte for
-//! byte — asked across every codec and every cut, and then the things that follow from it: the
+//! What it is really asking is the one thing storage promises, what goes in comes out, byte for
+//! byte, asked across every codec and every cut, and then the things that follow from it: the
 //! same content is the same key however it was written, an edit disturbs only the chunks it lands
 //! between, compressing makes a store smaller where there is repetition, and a store that does not
 //! hold together is refused rather than handed on.
@@ -117,7 +117,7 @@ async fn cuts_show_in_the_layout(
     );
 
     // The same content, cut this time: the key is the same, and so the entry the key names has to
-    // change from one object to a manifest and its chunks — both are not the entry at once.
+    // change from one object to a manifest and its chunks, both are not the entry at once.
     let cut = sandbox.join("layout-cut");
     fs::write(&cut, &content).expect("the content is written to a file");
     let cut_key = store
@@ -217,7 +217,7 @@ async fn an_edit_disturbs_only_its_own_chunks(
     );
 }
 
-/// A packed container is taken apart where it is packed, so an edit to one member is cheap — and
+/// A packed container is taken apart where it is packed, so an edit to one member is cheap, and
 /// what comes back out is still the container that went in, byte for byte.
 async fn a_container_is_cut_at_its_members(
     sandbox: &Sandbox,
@@ -342,7 +342,7 @@ async fn a_text_file_costs_what_an_edit_moved(
 /// Cutting text at line ends is what lets an edit be cheap: a chunk can only be shared with another
 /// version of a file when it is made of lines both versions have, and a chunk that began or ended in
 /// the middle of a line would be one no other version could hold. Nothing in the layout records the
-/// cut, so this is asked of the store — every chunk's own bytes are read back and looked at.
+/// cut, so this is asked of the store, every chunk's own bytes are read back and looked at.
 async fn text_is_cut_at_the_ends_of_lines(
     sandbox: &Sandbox,
     store: &RorolalaStorage,
@@ -774,8 +774,8 @@ fn objects(sandbox: &Sandbox) -> usize {
 
 /// A packed container of `members`, stored rather than deflated.
 ///
-/// This is the shape a chunker reads — members one after another, with a directory saying where
-/// each one is — rather than the shape a packer would choose, which is what is being tested.
+/// This is the shape a chunker reads, members one after another, with a directory saying where
+/// each one is, rather than the shape a packer would choose, which is what is being tested.
 fn zipped(members: &[(&str, &[u8])]) -> Vec<u8> {
     let mut local = Vec::new();
     let mut directory = Vec::new();
@@ -869,7 +869,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

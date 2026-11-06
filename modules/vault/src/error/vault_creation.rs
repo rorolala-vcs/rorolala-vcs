@@ -28,8 +28,8 @@ pub enum CreationError {
 impl rorolala_errors::Failure for CreationError {
     /// The name of the way this failed, as a program reads it.
     ///
-    /// Every way of creating a Vault fails in its own right — a directory that will not be
-    /// made is not a configuration that will not be written — and a reader that is told
+    /// Every way of creating a Vault fails in its own right, a directory that will not be
+    /// made is not a configuration that will not be written, and a reader that is told
     /// which one it was has something to do about it. What they have in common is only the
     /// exit code, which is why they are named apart here.
     fn name(&self) -> &'static str {

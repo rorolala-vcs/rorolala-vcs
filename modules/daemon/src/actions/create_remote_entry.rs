@@ -1,8 +1,8 @@
 //! `create-remote-entry`: putting a `Uuid` only the Workspace holds into the Vault's Layout.
 //!
 //! A file enters a Layout by being tracked, and enters the Vault's Layout by this: the name to hold
-//! it under is the path it is tracked at, which is the caller's to choose — that path when free,
-//! else that path with the `Uuid` in short form — so what a reader sees is where the work holds the
+//! it under is the path it is tracked at, which is the caller's to choose, that path when free,
+//! else that path with the `Uuid` in short form, so what a reader sees is where the work holds the
 //! file. The holder is the account that asked, which the Vault reads from the session rather than
 //! from anything sent.
 
@@ -21,7 +21,7 @@ use super::layout_remote::{batched, create_remote, remote_write};
 ///
 /// What became of it, as JSON: the entry is there, the `Uuid` already was, the path already names
 /// something, or something could not be read. It crosses as text for the reason an ownership
-/// outcome does — see `request-ownership`.
+/// outcome does, see `request-ownership`.
 pub struct ActionCreateRemoteEntry;
 
 impl Action for ActionCreateRemoteEntry {

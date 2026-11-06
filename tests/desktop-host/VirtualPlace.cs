@@ -13,7 +13,7 @@ internal sealed record Suggested(string Path);
 /// </summary>
 /// <remarks>
 /// Enough of a place for what a listing does with one, without a Workspace, a Vault or a run: reading it answers what
-/// was made since the last read, and the redraw that makes a view ask again is said through the host's own channel —
+/// was made since the last read, and the redraw that makes a view ask again is said through the host's own channel,
 /// which is the one thing a real place and this one must agree on, since it is what makes the next listing exist.
 /// <para>
 /// What was done to a row is kept, so a check reads the answer rather than a log line: a rename is the name that was

@@ -19,7 +19,7 @@ internal sealed record AsepriteAnimation(int Width, int Height, IReadOnlyList<As
 /// </summary>
 /// <remarks>
 /// The file is a banner, and the banner is a picture of somebody's own: what is read is the whole document
-/// — layers composited in order, cels placed where they are placed — so that what is drawn is the
+/// (layers composited in order, cels placed where they are placed) so that what is drawn is the
 /// animation the artist drew and not a flattening of it.
 /// <para>
 /// What is not read is named rather than drawn wrongly: an indexed-colour file, a tilemap cel, or a
@@ -215,8 +215,8 @@ internal static class Aseprite
                     break;
 
                 default:
-                    // Every other chunk says something about the document — its palette, its tags, its
-                    // slices, the user data on a layer — and nothing about the picture this draws.
+                    // Every other chunk says something about the document, its palette, its tags, its
+                    // slices, the user data on a layer, and nothing about the picture this draws.
                     break;
             }
 
@@ -484,7 +484,7 @@ internal static class Aseprite
     /// </summary>
     /// <remarks>
     /// What is answered is the cel the pixels and the placement come from, not the link: a linking cel states where it
-    /// draws and nothing about how big it is — its size is the size of the cel it points at — so a drawing that read
+    /// draws and nothing about how big it is, its size is the size of the cel it points at, so a drawing that read
     /// the link's own size would draw nothing at all, which is a layer silently missing from the picture.
     /// </remarks>
     private static Cel? Resolve(

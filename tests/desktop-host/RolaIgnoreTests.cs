@@ -11,7 +11,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The Rorolala plugin's contribution to what the browser leaves out.
 /// </summary>
 /// <remarks>
-/// What is checked here is the registering and the shape of the answer — that the option is offered in
+/// What is checked here is the registering and the shape of the answer, that the option is offered in
 /// the File System plugin's catalogue, labelled with this plugin's own key, and that a place no Workspace
 /// holds is one under which nothing is hidden. The matching itself is the native loader's and is checked
 /// where the loader is: the C ABI suite.
@@ -37,7 +37,7 @@ public sealed class RolaIgnoreTests
         new FileSystem().Initialize(services.For(new PluginId(FileSystem.Identity), 0));
         new Vcs().Initialize(services.For(new PluginId("rorolala.vcs"), 1));
 
-        // The plugin's own label key is what names it — the File System plugin knows nothing about
+        // The plugin's own label key is what names it, the File System plugin knows nothing about
         // Rorolala's rules, only that a provider was added to the catalogue it offered.
         var rola = Assert.Single(HideRegistry.Providers, option => option.Value == "rola_ignored");
         Assert.Equal("rorolala_vcs.hides.rola_ignored", rola.LabelKey);
@@ -95,7 +95,7 @@ public sealed class RolaIgnoreTests
         provider.Prepare(workspace);
         Assert.True(provider.Ready(workspace));
 
-        // A path no rule can govern is answered as shown either way — the reading being had is the
+        // A path no rule can govern is answered as shown either way, the reading being had is the
         // answer, not a hide that came of it.
         Assert.False(provider.Hides(new Entry(kept, EntryKind.File), workspace));
 

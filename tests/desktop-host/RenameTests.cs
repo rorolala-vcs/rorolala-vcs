@@ -53,8 +53,8 @@ public sealed class RenameTests
     /// A second of a taken name carries the number before its extension rather than after it.
     /// </summary>
     /// <remarks>
-    /// The two are one rule read from its two ends — where a name stops and what says the kind of file it is
-    /// begin at the same dot — so a name that took its number at the end is a name whose extension is the
+    /// The two are one rule read from its two ends, where a name stops and what says the kind of file it is
+    /// begin at the same dot, so a name that took its number at the end is a name whose extension is the
     /// number, which is a file nothing opens by its extension any more.
     /// </remarks>
     /// <param name="name">The name that is taken.</param>

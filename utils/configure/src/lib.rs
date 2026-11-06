@@ -37,7 +37,7 @@ pub enum Reason {
     Missing,
     /// There, but not allowed.
     Denied,
-    /// There, but not what the operation needed — a directory where a file was wanted,
+    /// There, but not what the operation needed, a directory where a file was wanted,
     /// or the other way round.
     WrongKind,
     /// There, but in use, or otherwise busy.
@@ -74,7 +74,7 @@ impl fmt::Display for Reason {
 /// What can go wrong while reading, staging or publishing a configuration file.
 ///
 /// Every variant is a failure a caller can act on, and holds what that caller needs to
-/// act on it — paths, a [`Reason`], a position. None of them holds a message: the enum
+/// act on it, paths, a [`Reason`], a position. None of them holds a message: the enum
 /// crosses to C, where a caller switches on the variant, and text is for
 /// [`Display`](fmt::Display) to produce rather than for the value to carry.
 #[lazyffi(export = ConfigureError)]
@@ -116,8 +116,8 @@ pub enum Error {
     },
     /// The configuration could not be rendered in the file's format.
     ///
-    /// A serializer's complaint is always a sentence — there is nothing structured in a
-    /// `serde` failure to pass on — so it is not carried; what is left to say is that
+    /// A serializer's complaint is always a sentence, there is nothing structured in a
+    /// `serde` failure to pass on, so it is not carried; what is left to say is that
     /// the type cannot be written as this format, which is a fault in the type.
     Render {
         /// The file the rendering was for.
@@ -221,7 +221,7 @@ impl fmt::Display for Position {
 /// ```
 ///
 /// The format is the one the file's extension names: `toml` (and `tml`), `yaml` (and
-/// `yml`), and `json` — which is also what an extension this crate does not know, or
+/// `yml`), and `json`, which is also what an extension this crate does not know, or
 /// none at all, means.
 pub trait Configure: Serialize + DeserializeOwned {
     /// Reads the configuration in `file`.
@@ -270,7 +270,7 @@ pub trait Configure: Serialize + DeserializeOwned {
 /// [`read`](Config::read) parses the file and copies it to a staging file next to it
 /// (`<file>.lock`), and [`new`](Config::new) starts one from an empty configuration.
 /// [`write`](Config::write) renders the current contents into that staging file, and
-/// the original is then replaced by a single rename — on [`publish`](Config::publish),
+/// the original is then replaced by a single rename, on [`publish`](Config::publish),
 /// or when the value is dropped. The original is therefore never truncated in place: a
 /// process that dies mid-edit leaves it whole, with the staged edit beside it.
 ///
@@ -325,7 +325,7 @@ impl<T: Configure> Config<T> {
     /// Creates `path` as a new, empty configuration.
     ///
     /// The file is written straight away, with the default value rendered in the format
-    /// its extension names, and a copy of it is staged beside the original — which leaves
+    /// its extension names, and a copy of it is staged beside the original, which leaves
     /// exactly the state [`read`](Config::read) leaves behind, so editing and publishing
     /// carry on the same way. An existing file at `path` is replaced: this is the call
     /// that asks for a starting point.
@@ -355,7 +355,7 @@ impl<T: Configure> Config<T> {
             .map_err(|()| Error::Render { file: file.clone() })?;
 
         // Staged first and put in place second, so that a failure leaves the staging
-        // file — the same leftover an interrupted edit leaves, and the same sign that the
+        // file, the same leftover an interrupted edit leaves, and the same sign that the
         // original was never reached.
         fs::write(&lock, text).map_err(|error| Error::Stage {
             file: file.clone(),
@@ -1103,7 +1103,7 @@ mod tests {
         assert_eq!(payload.line, 3);
         assert_eq!(payload.column, 7);
 
-        // C → Rust, which borrows the repr — so the string is still ours to release.
+        // C → Rust, which borrows the repr, so the string is still ours to release.
         // SAFETY: `repr` came from the value this test constructed just above, and its tag was
         // just asserted to be `Parse`, so the repr and the tag it carries are the pair `InputType`
         // requires of its caller.

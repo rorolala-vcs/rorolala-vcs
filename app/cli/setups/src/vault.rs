@@ -19,7 +19,7 @@ pub const GLOBAL_ARG_VAULT_DIR: PickerArg<'static, PathBuf> = arg![vault_dir: Pa
 /// Resource representing the Vault's configuration
 ///
 /// The configuration is read from the file the Vault keeps it in, and written back to the
-/// same file once the program is done with it — so a change made through
+/// same file once the program is done with it, so a change made through
 /// [`config_mut`](Self::config_mut) is kept without the command having to say how.
 #[derive(Debug, Default, Clone)]
 pub enum ResVaultConfig {
@@ -214,7 +214,7 @@ fn read_vault_config(dir: &Path) -> ResVaultConfig {
 /// This runs when the program is done with the resource, and only for a configuration that
 /// was actually read and then changed: a Vault that was not found, one whose file would not
 /// parse, and one that was only read have nothing to write back. A drop has nowhere to
-/// report to, so a write that fails is lost with it — the file is left as it was read.
+/// report to, so a write that fails is lost with it, the file is left as it was read.
 fn save_vault_config(resource: ResVaultConfig) {
     if let ResVaultConfig::Read {
         path,

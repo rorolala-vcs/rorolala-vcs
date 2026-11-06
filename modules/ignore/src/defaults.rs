@@ -3,8 +3,8 @@
 //! The rules are a file like any other in the managed directory, rather than something compiled
 //! in: what a project ignores is the project's to change, and a rule set that began with nothing
 //! would leave the platform's own files as work to be confirmed on the first run of every new
-//! project. What is written is only what no work ever carries — the files the platforms keep
-//! beside it — so that a project that wants none of it can delete one line.
+//! project. What is written is only what no work ever carries, the files the platforms keep
+//! beside it, so that a project that wants none of it can delete one line.
 
 use std::fs;
 use std::io;

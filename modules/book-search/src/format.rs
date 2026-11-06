@@ -146,9 +146,9 @@ pub fn encode(articles: &[SourceArticle]) -> Result<Vec<u8>, BookError> {
 ///
 /// # Errors
 ///
-/// Returns [`BookError::Malformed`] when the bytes are not a book this build can read — not the
+/// Returns [`BookError::Malformed`] when the bytes are not a book this build can read, not the
 /// format's name, a digest that does not come back, a count or a length that runs past the file, a
-/// posting for an article the file does not hold — and [`BookError::Unsupported`] when the format
+/// posting for an article the file does not hold, and [`BookError::Unsupported`] when the format
 /// version is one this build does not write.
 pub fn decode(bytes: &[u8]) -> Result<Decoded, BookError> {
     let header = bytes

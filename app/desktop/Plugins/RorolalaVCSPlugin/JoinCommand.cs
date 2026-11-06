@@ -6,8 +6,8 @@ namespace RorolalaVCSPlugin;
 /// Running the command line's checkin in its variant mode: joining one variant into one file.
 /// </summary>
 /// <remarks>
-/// The join is the command line's — it reads the variant, writes the variant file beside its target,
-/// and records the waiting merge — so this owns only the words that ask for one: the variant and the
+/// The join is the command line's, it reads the variant, writes the variant file beside its target,
+/// and records the waiting merge, so this owns only the words that ask for one: the variant and the
 /// file it is to be joined into. A checkin in this mode can reach for a Vault when the variant or its
 /// content is not held here, which is why it is run off the window's thread.
 /// </remarks>

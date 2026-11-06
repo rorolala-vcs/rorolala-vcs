@@ -3,12 +3,12 @@
 //! A score is four ratios against the best yardstick on the same chain, combined by a weighted
 //! geometric mean:
 //!
-//! - **dedup** — the share of the content the store did not already have. Higher is better.
-//! - **worst marginal** — the largest share of one version that had to be written. Lower is better, and
+//! - **dedup**, the share of the content the store did not already have. Higher is better.
+//! - **worst marginal**, the largest share of one version that had to be written. Lower is better, and
 //!   it is the term that says whether an edit costs a chunk or the file.
-//! - **stored** — the bytes the store holds for the chain, per byte of content. Lower is better; it
+//! - **stored**, the bytes the store holds for the chain, per byte of content. Lower is better; it
 //!   includes the frame in front of every object and the manifest.
-//! - **manifest** — the bytes the manifests take, per byte of content. Lower is better, and it is the
+//! - **manifest**, the bytes the manifests take, per byte of content. Lower is better, and it is the
 //!   term that stops a strategy from "winning" by cutting into pieces too small to be worth a record.
 //!
 //! A geometric mean rather than a sum, because these are ratios and ratios multiply: a strategy that
@@ -61,7 +61,7 @@ pub struct Scored {
 
 /// What a policy's numbers are worth.
 ///
-/// `dedup` is reported as what was *kept* — the whole content minus what the store already had — so
+/// `dedup` is reported as what was *kept*, the whole content minus what the store already had, so
 /// every term of the score is one where less is worse, and a reader does not have to hold two
 /// directions in their head at once.
 #[must_use]

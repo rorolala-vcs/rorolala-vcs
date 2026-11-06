@@ -27,7 +27,7 @@ internal sealed record IconSource(IconCategory Category, string RelativePath);
 /// <remarks>
 /// A rule is tried before the fallback table, and the rules are tried in the order the set writes them, so
 /// the first one whose pattern matches the entry's name and whose kind includes the entry's kind wins. The
-/// pattern is matched against the name rather than the whole path, because what a name says — its suffix —
+/// pattern is matched against the name rather than the whole path, because what a name says, its suffix,
 /// is what a rule is about.
 /// </remarks>
 /// <param name="Patterns">What the entry's name may match.</param>
@@ -107,10 +107,10 @@ internal sealed record IconSet(
 /// </para>
 /// <para>
 /// The cache is under <c>icons/.cache/&lt;set&gt;/</c> beside the program, because it is the program's own
-/// working state rather than the user's — a set that was packaged with the program is drawn from files beside
+/// working state rather than the user's, a set that was packaged with the program is drawn from files beside
 /// the program, and a cache under the user's data directory would outlive the package that made it. Each set
 /// carries a <c>manifest.json</c> recording the SHA-1 of every source it was drawn from, so a source that was
-/// replaced — an update, a developer's edit — is drawn again rather than served from a cache that no longer
+/// replaced (an update, a developer's edit) is drawn again rather than served from a cache that no longer
 /// describes it.
 /// </para>
 /// <para>
@@ -405,7 +405,7 @@ internal static class IconSets
 
     /// <summary>The cached pictures of one source, at the drawn size nearest the one wanted.</summary>
     /// <remarks>
-    /// The set states the sizes it was drawn at, and a listing may ask for any other — a grid's zoom is
+    /// The set states the sizes it was drawn at, and a listing may ask for any other, a grid's zoom is
     /// continuous. The nearest drawn size is read and the control scales it, which keeps a zoom from asking
     /// the set to be drawn at every size the pointer passes through.
     /// </remarks>
@@ -787,8 +787,8 @@ internal static class IconSets
 
     /// <summary>The SHA-1 of a file.</summary>
     /// <remarks>
-    /// SHA-1 is enough here because it is not a signature: it is asked one question — has this source changed
-    /// since the cache was drawn from it — and an answer that a hostile file could collide with would cost a
+    /// SHA-1 is enough here because it is not a signature: it is asked one question, has this source changed
+    /// since the cache was drawn from it, and an answer that a hostile file could collide with would cost a
     /// wrong icon, not a wrong decision about who may do what. It is also the shortest hash that answers the
     /// question, which keeps the manifest a person can read.
     /// </remarks>
@@ -1098,7 +1098,7 @@ internal static class IconSets
     /// <summary>The patterns a rule states, compiled and in the order written.</summary>
     /// <remarks>
     /// A pattern is matched without regard to case, because an extension is not case on the systems this
-    /// runs on — <c>.MA</c> is a Maya file as much as <c>.ma</c> is. A pattern that needs case can say so
+    /// runs on, <c>.MA</c> is a Maya file as much as <c>.ma</c> is. A pattern that needs case can say so
     /// with <c>(?-i)</c>. It is given a timeout because it is matched once per row while a listing is drawn:
     /// a pattern with catastrophic backtracking would otherwise hang the window rather than cost its own
     /// rule. What times out is a rule that does not answer, and the fallback still draws the entry.

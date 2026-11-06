@@ -62,7 +62,7 @@ pub struct ActionContext<'a> {
 
     /// The outermost Vault above [`current_vault`](Self::current_vault).
     ///
-    /// A Vault sits under a root that holds it — see [`RootVault`] — and a Vault-side
+    /// A Vault sits under a root that holds it, see [`RootVault`], and a Vault-side
     /// action that works on the Vaults below it is handed that root rather than looking for
     /// it again. It is held on the Vault side, for the reason the Vault is.
     current_root_vault: OnlyVault<&'a RootVault>,
@@ -91,7 +91,7 @@ pub struct ActionContext<'a> {
     /// Where the action says what it is doing while it does it.
     ///
     /// An action that takes a while says so through this, and the side that started the
-    /// action decides what becomes of it — a bar, a record, or nothing. It is not a value
+    /// action decides what becomes of it, a bar, a record, or nothing. It is not a value
     /// that crosses: what one side is doing is not what the other side learns, so this is
     /// held on whichever side the action runs and never exchanged.
     progress: Progress,
@@ -301,7 +301,7 @@ impl<'a> ActionContext<'a> {
     /// Where the action says what it is doing while it does it.
     ///
     /// Handed out as a clone, so a part of an action that runs where the context cannot be
-    /// borrowed — inside a spawned task, say — can still be heard.
+    /// borrowed (inside a spawned task, say) can still be heard.
     #[must_use]
     pub fn progress(&self) -> Progress {
         self.progress.clone()
@@ -438,7 +438,7 @@ mod tests {
         assert!(ctx.current_vault_config().into_inner().is_some());
         assert!(ctx.current_root_vault_config().into_inner().is_some());
 
-        // The Workspace side has no Vault to hand, so there is nothing there to reach for —
+        // The Workspace side has no Vault to hand, so there is nothing there to reach for,
         // and a Vault context that was handed none is empty the same way.
         let ctx = ActionContext::new_workspace_ctx(Account::default());
         assert!(ctx.current_vault().into_inner().is_none());

@@ -28,7 +28,7 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// The window and the group are two questions: being in a window of its own is a change of window and not of
-    /// group, so a dock taken out of the bottom band comes back to it when it returns — and the group it was in
+    /// group, so a dock taken out of the bottom band comes back to it when it returns, and the group it was in
     /// may be pruned when it was the only dock there, which is why the id is kept rather than the place.
     /// </remarks>
     [Fact]
@@ -82,7 +82,7 @@ public sealed class WindowTests
         services.Windows.ToOwnWindow(instance);
 
         // The same window, and no second one: what is already there is brought forward instead. The key is
-        // what says so — a window made again would have the next one — and the count would not, since it
+        // what says so, a window made again would have the next one, and the count would not, since it
         // counts the main window too and that moves with the docks in it.
         Assert.Equal(window, instance.Window);
         Assert.Single(services.Docks.Instances, one => one.DockNameId == registration.DockNameId);
@@ -93,7 +93,7 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// What the option a window of one dock offers does: the dock goes back where it came from, to the group it
-    /// was in — or the active group where that one has been pruned since — and the window that held it, which is
+    /// was in, or the active group where that one has been pruned since, and the window that held it, which is
     /// a window of that dock and of nothing else, goes with it. A window left standing would be a frame around a
     /// dock that is drawn in another window.
     /// </remarks>
@@ -177,7 +177,7 @@ public sealed class WindowTests
     /// <remarks>
     /// The one window and the one dock a program may be down to, which is the state a first run starts in: what
     /// ends the program is every window being gone, so a main window closed as its last dock is torn out is the
-    /// program ending — the drag would take the program with it, and the dock with the window it was being moved
+    /// program ending, the drag would take the program with it, and the dock with the window it was being moved
     /// out of. What is left instead is an empty main window, which is the program's own window: its
     /// <c>Window</c> menu is where a dock is asked for again, and it is what a dock in a window of its own is
     /// brought back to.
@@ -213,7 +213,7 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// What a directory asked for in a window of its own is, and the one thing it must not do: a dock that was
-    /// <em>opened</em> in a window — rather than moved into it out of the main window — was never in the main
+    /// <em>opened</em> in a window, rather than moved into it out of the main window, was never in the main
     /// window, so closing that window is the end of it. Brought back instead, closing a window opened onto one
     /// directory would leave a dock of that directory in the main window, kept in the layout, that nobody
     /// asked for.
@@ -259,8 +259,8 @@ public sealed class WindowTests
     /// A dock that keeps one instance of its own is not moved in beside the one the main window shows.
     /// </summary>
     /// <remarks>
-    /// A dock may be asked for anew even where it keeps one instance — which is what a plugin asking for a
-    /// window of its own does — and the main window can then be showing one while a window of its own holds
+    /// A dock may be asked for anew even where it keeps one instance, which is what a plugin asking for a
+    /// window of its own does, and the main window can then be showing one while a window of its own holds
     /// another. Bringing the second one back would leave two of a name that may have one, so what is let go of
     /// is the second: the dock is already in the main window, and what the move leaves behind is the window.
     /// </remarks>
@@ -313,7 +313,7 @@ public sealed class WindowTests
     /// <remarks>
     /// The whole of what letting go of a header away from an area means: the dock is pulled out of the window it
     /// was in and lands nowhere, so it is given a window of its own rather than being left where it was. The
-    /// gesture before it is the host's — a press is not a drag until the pointer has moved — and what the press
+    /// gesture before it is the host's, a press is not a drag until the pointer has moved, and what the press
     /// becomes is the toolkit's own drag, which is what can carry a dock out of a window.
     /// </remarks>
     [Fact]
@@ -375,8 +375,8 @@ public sealed class WindowTests
     /// A dock in flight is the instance that was picked up, and not its namesake.
     /// </summary>
     /// <remarks>
-    /// What a drag carries is the pair the layout addresses an instance by — the dock's name and which
-    /// instance of it this is — because a dock that may be made again has one name and several instances, and
+    /// What a drag carries is the pair the layout addresses an instance by, the dock's name and which
+    /// instance of it this is, because a dock that may be made again has one name and several instances, and
     /// a drop that landed the wrong one of them would move a dock the user never took hold of.
     /// </remarks>
     [Fact]
@@ -408,8 +408,8 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// What a window of one dock is: the dock, under the row the desktop's title bar would have drawn. The row
-    /// is the menu bar's height in every window of the host — a window of one dock has no strip of tabs for it
-    /// to stand in for — and the dock's name is drawn in it, which is what the desktop would have said and what
+    /// is the menu bar's height in every window of the host, a window of one dock has no strip of tabs for it
+    /// to stand in for, and the dock's name is drawn in it, which is what the desktop would have said and what
     /// the dock is dragged back to the main window by.
     /// </remarks>
     [Fact]
@@ -465,7 +465,7 @@ public sealed class WindowTests
     /// <remarks>
     /// The second half of the two-step gesture: a drag over a group only shows what could be done, and what is
     /// dropped is the point it was let go of. Asked of a real window, with the toolkit's own drag event, because
-    /// what is being checked is that the area is a place a drag can land at all — the payload and the lookup are
+    /// what is being checked is that the area is a place a drag can land at all, the payload and the lookup are
     /// checked without one.
     /// </remarks>
     [Fact]
@@ -539,7 +539,7 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// The other direction of the same gesture, and the one a window of one dock is brought back by: what is
-    /// dragged is the dock, and the window it is drawn in is where the drag began — so landing in the main window
+    /// dragged is the dock, and the window it is drawn in is where the drag began, so landing in the main window
     /// is a change of window, and the window that held it is left with nothing to draw and closes. Where it lands
     /// is where the drop said, and not the group it left.
     /// </remarks>
@@ -626,7 +626,7 @@ public sealed class WindowTests
     /// <remarks>
     /// What a drag of a divider is for: the room it gives each side is a share of the whole, so the same drag in a
     /// window of another size puts the divider in the same place. The root has to still be the same split
-    /// afterwards — what a drag writes is a number, not an arrangement — which is also what says the rebuild it
+    /// afterwards (what a drag writes is a number, not an arrangement) which is also what says the rebuild it
     /// causes did not throw away the tree it was rebuilding from.
     /// </remarks>
     [Fact]
@@ -699,8 +699,8 @@ public sealed class WindowTests
     /// <summary>The point of a window's one group that a drop would land on to do one thing.</summary>
     /// <remarks>
     /// The group fills the area, so its leaf is the area's own rectangle, and the five points are worked out from
-    /// it by the same function the area hit tests with. What is aimed at is the middle of the outline — a point
-    /// inside a convex shape's corners is inside the shape — and the area has to have been laid out for any of that
+    /// it by the same function the area hit tests with. What is aimed at is the middle of the outline, a point
+    /// inside a convex shape's corners is inside the shape, and the area has to have been laid out for any of that
     /// to mean anything, which is why it is asked of the window that was shown.
     /// </remarks>
     /// <param name="main">The window to find the point in.</param>
@@ -732,7 +732,7 @@ public sealed class WindowTests
     /// A group whose docks are all hidden is not drawn, and so offers no dock point to be dropped on.
     /// </summary>
     /// <remarks>
-    /// A hidden toggle is still a dock, so its group is still in the tree — but a group that would be drawn empty is
+    /// A hidden toggle is still a dock, so its group is still in the tree, but a group that would be drawn empty is
     /// a band of the window kept for nothing and five points offered for a place with no docks in it. What is drawn
     /// is what has something open in it; the group is kept and comes back when its dock is shown again.
     /// </remarks>
@@ -780,7 +780,7 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// The shape of the answer, asked of the same function the area draws and hit tests with: five points, one per
-    /// thing a drop can do, no two of them overlapping, and between them covering the whole group — the group is the
+    /// thing a drop can do, no two of them overlapping, and between them covering the whole group, the group is the
     /// target once a drag has found it, so there is no room in it that is near the answer without being on it. What
     /// the edges take is a band rather than a share, and what the centre is, is the group less that band: a group is
     /// approached from its edge, so the edge is where the pointer arrives and the middle is what is left.
@@ -938,7 +938,7 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// The thing a window closing must not leave behind: a dock that still says it is in a window that is
-    /// gone. Nothing can show a dock like that — the next time it is asked for there is no window to ask, so
+    /// gone. Nothing can show a dock like that, the next time it is asked for there is no window to ask, so
     /// it is invisible for the rest of the run, and a toggle is worse than invisible: choosing it again turns
     /// it over rather than bringing it back.
     /// <para>
@@ -982,7 +982,7 @@ public sealed class WindowTests
         Assert.True(toggle.IsOpen);
 
         // And asking for it again is asking for it where it is: the window it is in is the main one, so a
-        // toggle turns over as it always does — once to hide it, and once to show it again.
+        // toggle turns over as it always does, once to hide it, and once to show it again.
         Assert.Same(toggle, services.Docks.Activate(registration));
         Assert.False(toggle.IsOpen);
 
@@ -998,7 +998,7 @@ public sealed class WindowTests
     /// which a dock opened in a window of its own is in the main one: it would be drawn in a group of the main
     /// window for as long as the assignment took. What is asked of the manager rather than of the windows,
     /// because it is the manager's own answer: a window of the host's does not exist yet at this point, and the
-    /// dock is already where it is going — in no group at all.
+    /// dock is already where it is going, in no group at all.
     /// </remarks>
     [Fact]
     public void ADockOpenedInAWindowOfItsOwnIsNeverInTheMainOne()
@@ -1027,7 +1027,7 @@ public sealed class WindowTests
     /// What a window of a dock's own is: the dock, under the window's own row. No strip of tabs, because
     /// there is nothing to switch between; no splitter, because there is nothing to resize it against; and no
     /// band of a group, because a group is a place a second view is put beside the first. A window that drew the
-    /// chrome anyway would be a strip around a view that nothing can be put beside — and the one thing a torn-out
+    /// chrome anyway would be a strip around a view that nothing can be put beside, and the one thing a torn-out
     /// dock must not look like is the window it came out of.
     /// <para>
     /// Asked of the layer rather than of a window, because the chrome is the layer's: what a window does with it
@@ -1067,7 +1067,7 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// The smallest thing the tests above rest on, asked on its own: whether closing a window works at all
-    /// under the platform they are run on. Kept because the answer is not obvious — everything else here
+    /// under the platform they are run on. Kept because the answer is not obvious, everything else here
     /// depends on it, and a failure of this one would say what a failure of the others means.
     /// </remarks>
     [Fact]
@@ -1091,7 +1091,7 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// What a headless host is: a request for a window is a request for something it was never given, and
-    /// the answer to it is that nothing happened rather than a failure — what is being asked for is the
+    /// the answer to it is that nothing happened rather than a failure, what is being asked for is the
     /// window, and the rest of the request is not something a window is needed for.
     /// </remarks>
     [Fact]
@@ -1148,7 +1148,7 @@ public sealed class WindowTests
     /// <remarks>
     /// The whole point of moving one, and the one thing that cannot be checked by bookkeeping: the dock has
     /// to end up on the tree of the window it was moved to, and off the tree of the window it left. A dock
-    /// that is in the right window and drawn nowhere is an empty window with a menu bar across the top —
+    /// that is in the right window and drawn nowhere is an empty window with a menu bar across the top,
     /// which is what this test exists because it was once the case.
     /// <para>
     /// The window it arrives in is the one the shell names, which is the one the host last made, and that is
@@ -1213,7 +1213,7 @@ public sealed class WindowTests
     /// </summary>
     /// <remarks>
     /// What a window of one dock is for is that dock, so a menu about a tree has nothing to say in a window
-    /// that holds a browser — while what the program itself has to say, which is the Window menu and the way
+    /// that holds a browser, while what the program itself has to say, which is the Window menu and the way
     /// back to the main window, is said in every window there is.
     /// <para>
     /// Asked of the menu bar rather than of a window, because what a window shows is this question and
@@ -1268,7 +1268,7 @@ public sealed class WindowTests
     /// A host whose windows are real ones, so that what a dock ends up drawn in can be asked.
     /// </summary>
     /// <remarks>
-    /// The windows are the program's own — the shell a dock is drawn in, and everything that follows from it.
+    /// The windows are the program's own, the shell a dock is drawn in, and everything that follows from it.
     /// Nothing is closed at the end of a test that uses this: what is being read is where a control was put,
     /// which is answered the moment it is put there, and a window closed from a test body is a window the
     /// toolkit is still tearing down when the next test reads its tree.

@@ -14,7 +14,7 @@ namespace FileSystemPlugin;
 /// at.
 /// <para>
 /// They live here rather than on a <see cref="Browser"/> because a dock may be taken out of step and given a
-/// location of its own. The location is then that dock's alone, while these stay everybody's —
+/// location of its own. The location is then that dock's alone, while these stay everybody's,
 /// which is what a location reads when it stages a listing, and this is what tells every one of them that
 /// something they read has moved on.
 /// </para>
@@ -73,7 +73,7 @@ internal sealed class Shared
     /// Raised when either answer changes, so that every location stages its listing again.
     /// </summary>
     /// <remarks>
-    /// A location is what holds a listing, so a change here has to reach every location there is — including
+    /// A location is what holds a listing, so a change here has to reach every location there is, including
     /// one a dock was given for being out of step, since a listing follows the base and the hiding wherever it
     /// is.
     /// </remarks>
@@ -85,7 +85,7 @@ internal sealed class Shared
     /// <remarks>
     /// Every location and not the one that acted, because a change made through one dock is one another may
     /// be looking at: a move is answered by the dock it was dropped on, and the dock the entries came out of
-    /// is showing the directory they left — which, a dock being able to be out of step, may be a directory
+    /// is showing the directory they left, which, a dock being able to be out of step, may be a directory
     /// only that dock is looking at.
     /// </remarks>
     public event Action? Touched;
@@ -96,7 +96,7 @@ internal sealed class Shared
     /// <remarks>
     /// The other half of <see cref="Touched"/>: a reading that landed changed nothing on disk, so what is drawn from it
     /// is drawn again and nobody's answers are given back. Saying a touch instead would have every reader of the work
-    /// read again for a reading it is already holding, which is one program run and one walk of the tree per drawing —
+    /// read again for a reading it is already holding, which is one program run and one walk of the tree per drawing,
     /// see <see cref="FilesChanged"/>.
     /// </remarks>
     public event Action? Redrawn;
@@ -106,13 +106,13 @@ internal sealed class Shared
     /// </summary>
     /// <remarks>
     /// Deferred to the end of the turn and said at most once in it. Deferred, because whoever asks has just
-    /// finished an event and reading a directory again rebuilds the views showing it — one of which may be the
+    /// finished an event and reading a directory again rebuilds the views showing it, one of which may be the
     /// view answering that event. Once a turn, because several things that finish together are one change to go
     /// and look for.
     /// <para>
     /// The host is told as well, once: what this plugin changed by a command of its own is a change the next plugin's
     /// readers have to know about, and nothing else says so. What comes back from the host is a touch of its own, and
-    /// is dropped rather than posted again (<see cref="_telling"/>) — the ring that would otherwise be one touch per
+    /// is dropped rather than posted again (<see cref="_telling"/>), the ring that would otherwise be one touch per
     /// turn for as long as the window is open.
     /// </para>
     /// </remarks>
@@ -139,8 +139,8 @@ internal sealed class Shared
     /// </summary>
     /// <remarks>
     /// The letting go is why this is a step of its own rather than part of the raising. What a provider
-    /// answered is read from the files this says may have changed — a lock is read from the Layout a file
-    /// operation renames a path in, and a hide rule is read from files a change may have rewritten — so a
+    /// answered is read from the files this says may have changed, a lock is read from the Layout a file
+    /// operation renames a path in, and a hide rule is read from files a change may have rewritten, so a
     /// listing read from an answer that was already stale would be drawn wrong until the next touch. What is
     /// read again and what is drawn from it are both later than this, which is what makes the order the whole
     /// of the point.
@@ -248,7 +248,7 @@ internal sealed class Shared
     /// </summary>
     /// <remarks>
     /// It is the plugin's rather than a view's, because the listing is what it changes: two docks looking at
-    /// one directory — and a dock out of step still looks at directories — must not list different things.
+    /// one directory, and a dock out of step still looks at directories, must not list different things.
     /// What a dock shows is the one setting every dock reads, so a switch turned in one of them is turned
     /// in all.
     /// <para>
@@ -275,7 +275,7 @@ internal sealed class Shared
 
     /// <summary>The registry itself, for the choice of which providers are in force.</summary>
     /// <remarks>
-    /// The catalogue it reads is the run's rather than this instance's — see <see cref="HideRegistry.All"/> —
+    /// The catalogue it reads is the run's rather than this instance's, see <see cref="HideRegistry.All"/>,
     /// so a dock draws the rules from the class and the choice from the registry.
     /// </remarks>
     public HideRegistry HideRegistry => _hides;

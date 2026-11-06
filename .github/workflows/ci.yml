@@ -2,7 +2,7 @@ name: CI
 
 # Every way work reaches this repository is checked the same way, and a tag only adds the release to
 # what was already checked: a push to `main`, a push to any other branch, a pull request into `main`,
-# and a tag. The shape is deliberately one workflow rather than several — what a branch and a tag are
+# and a tag. The shape is deliberately one workflow rather than several, what a branch and a tag are
 # held to must not be able to drift apart.
 on:
   push:
@@ -20,8 +20,8 @@ env:
 
 jobs:
   # The cheap gate in front of the matrices: the run must leave the tree exactly as it found it. The
-  # `git-lock` / `git-unlock` pair around the regeneration is what measures that — the unlock fails
-  # when anything tracked moved — so a source generated into the tree and left stale is caught here
+  # `git-lock` / `git-unlock` pair around the regeneration is what measures that, the unlock fails
+  # when anything tracked moved, so a source generated into the tree and left stale is caught here
   # rather than after a full matrix has run.
   #
   # What is regenerated is the chunking crate's own registry and module list, which its build script
@@ -88,13 +88,13 @@ jobs:
   # for the Windows build, and Windows is the slower of the two.
   #
   # What is shared is the dependency artifacts, through rust-cache with a key that is the same in every
-  # job of a platform — `cache-shared-key` replaces rust-cache's automatic per-job key. The workspace's
+  # job of a platform, `cache-shared-key` replaces rust-cache's automatic per-job key. The workspace's
   # own crates are not shared: a fresh checkout gives them new mtimes, so cargo rebuilds them whatever
-  # the cache holds, and caching them would only take space. What they are built against — `jj-lib`
-  # above all — is the expensive part and is the same for all of them.
+  # the cache holds, and caching them would only take space. What they are built against, `jj-lib`
+  # above all, is the expensive part and is the same for all of them.
   #
   # The C ABI library is built by the same step the packaging uses, so what a musl target can make
-  # there — the static library alone, see `dev/build/src/ops/library.rs` — is what this job produces
+  # there (the static library alone, see `dev/build/src/ops/library.rs`) is what this job produces
   # too, rather than a `cdylib` the target cannot make on a glibc machine.
   #
   # What this job does not share is the binaries themselves. A later job that needs a program gets it
@@ -103,8 +103,8 @@ jobs:
   # for dependencies, which do not change from job to job.
   #
   # A run whose dependency cache is already there has nothing to compile here: the cache restores
-  # under its exact key, and the builds below are skipped. Only a run that has to make a new cache —
-  # a changed `Cargo.toml`/`Cargo.lock`, a new toolchain, or an evicted cache — builds. That is what
+  # under its exact key, and the builds below are skipped. Only a run that has to make a new cache,
+  # a changed `Cargo.toml`/`Cargo.lock`, a new toolchain, or an evicted cache, builds. That is what
   # keeps the warm path from serializing the matrix behind work whose output it never sees.
   #
   # The integration suites are a workspace of their own (`tests/`), so their dependencies are not in
@@ -222,7 +222,7 @@ jobs:
   # runner it happened to share. Each platform waits for its own pre-warm and for nothing of the
   # other's.
   #
-  # Linux is built with the musl toolchain — `musl-gcc` is the linker (see the root
+  # Linux is built with the musl toolchain, `musl-gcc` is the linker (see the root
   # `.cargo/config.toml`) and the C runtime is static, which is what lets a musl binary run on a
   # machine with no musl installed.
   #
@@ -301,8 +301,8 @@ jobs:
           git config --global user.name "rola CI"
 
       # The C# bindings are generated from the header the Rust side writes, and the two items that
-      # touch .NET — the .NET checks and the integration suites, whose projects reach the plugins that
-      # bind the C ABI — are the ones that do not build Rust on their way there. It writes into cargo's
+      # touch .NET, the .NET checks and the integration suites, whose projects reach the plugins that
+      # bind the C ABI, are the ones that do not build Rust on their way there. It writes into cargo's
       # output only; the binding it generates is checked in, and the lock below is what says whether
       # what was generated is what is committed.
       - name: Build the C ABI header
@@ -404,7 +404,7 @@ jobs:
 
       # The compiler the installer is made with is the one `dev/build/src/iscc.rs` names, laid out
       # where it looks for it first (`.cache/toolchains/innosetup`). Nothing is fetched by the build
-      # itself, so fetching it is the workflow's to do — and the hash is checked, because what a
+      # itself, so fetching it is the workflow's to do, and the hash is checked, because what a
       # package is built with decides what is in it.
       - name: Install the pinned Inno Setup
         shell: pwsh
@@ -583,7 +583,7 @@ jobs:
 
       - name: Build the musl package
         # `CC` is `musl-gcc` from the toolchain step above. The window over the daemon and the C ABI's
-        # shared library are the glibc machine's either way — GTK and the .NET runtime are glibc — so
+        # shared library are the glibc machine's either way, GTK and the .NET runtime are glibc, so
         # the build gives those two runs `cc` of its own.
         run: cargo dev publish
 

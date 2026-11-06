@@ -72,7 +72,7 @@ fn writers_and_compaction(sandbox: &Guard) -> Result<(), String> {
     stress(sandbox, "writers-and-compaction", true)
 }
 
-/// Runs the writers — and, when `compacting`, a compactor — over one layout at `sandbox/into`, and
+/// Runs the writers (and, when `compacting`, a compactor) over one layout at `sandbox/into`, and
 /// reads it back whole to check nothing any writer wrote was lost.
 ///
 /// However it ends, every child is released and waited for: a run leaves no process of its own
@@ -312,7 +312,7 @@ fn wait_for(path: &Path) -> Result<(), String> {
 /// The `Uuid` the entry a given writer made at a given number is.
 ///
 /// Different writers never make the same one, so no two of them are ever writing about the same
-/// entry — the point is what the log does with many at once, not who wins a race. The first byte is
+/// entry, the point is what the log does with many at once, not who wins a race. The first byte is
 /// what the layout sorts an entry by, so it is made to change with the number: every shard is one
 /// writers are writing to, not just the one they would all land in.
 fn id_of(writer: u8, k: u32) -> Uuid {
@@ -358,7 +358,7 @@ impl Checked {
         self.asked += 1;
 
         if let Err(said) = answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

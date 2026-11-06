@@ -9,7 +9,7 @@
 //! # Why it is not part of `protocol`
 //!
 //! `protocol` says what an address is and what travels over one. What *reaches* an address is a
-//! client's business — this crate is both halves of the exchange — and it is here rather than
+//! client's business, this crate is both halves of the exchange, and it is here rather than
 //! there for that reason, and because a protocol library that held a TCP client and a process
 //! launcher would be one that had to be linked against a network stack and a shell to say what a
 //! namespace is.
@@ -19,7 +19,7 @@
 //! `ssh` is the only part of this that knows how to authenticate to a host, and it already does:
 //! it reads the user's configuration, their `known_hosts`, their agent, and their keys. Rather
 //! than teach this program to do any of that, one `ssh` is started per action and the two ends
-//! talk over its standard streams — which the program has to keep clean, since they are the
+//! talk over its standard streams, which the program has to keep clean, since they are the
 //! protocol and nothing else.
 
 use std::fmt;
@@ -57,8 +57,8 @@ const SSH_ENV_VAR: &str = "ROLA_SSH";
 
 /// What `ssh` itself exits with when it could not make the connection.
 ///
-/// It is reserved by `ssh` for its own failures — a host that is not known, a key that is not
-/// accepted, a name that does not resolve — as against whatever the remote command said.
+/// It is reserved by `ssh` for its own failures, a host that is not known, a key that is not
+/// accepted, a name that does not resolve, as against whatever the remote command said.
 const SSH_FAILURE: u8 = 255;
 
 /// What a shell exits with when the command it was asked to run is not there.
@@ -73,7 +73,7 @@ const UNKNOWN_COMMAND: u8 = 13;
 /// How long the failing end of a session is waited for once the exchange has failed.
 ///
 /// The program has already closed its output by then, since that is what a session fails on, so
-/// this is the wait for the last few instructions of a process that is ending — not for one that
+/// this is the wait for the last few instructions of a process that is ending, not for one that
 /// is still working.
 const ENDED_WITHIN: Duration = Duration::from_secs(2);
 
@@ -116,7 +116,7 @@ pub(crate) struct Dialed {
     /// What the program that carries the session ends with, where a program carries it.
     ///
     /// A daemon is a connection and has no such thing; an SSH session is a process, and its exit
-    /// code is the only thing that can say *why* it ended — a path that is not a Vault, a remote
+    /// code is the only thing that can say *why* it ended, a path that is not a Vault, a remote
     /// program that is not installed, a remote daemon that refuses sessions at all.
     pub(crate) exit: Option<ExitWatch>,
 }
@@ -240,7 +240,7 @@ fn dial_ssh(user: &str, host: &str, port: Option<u16>, path: &str) -> Result<Dia
         .args(ssh_arguments(user, host, port, path))
         // The two streams are the protocol, and the third is not: what `ssh` says about a host
         // key, a refused key, or a name that does not resolve is what a person has to read, and
-        // so is whatever the remote command writes — the audit line of a registration, or the
+        // so is whatever the remote command writes, the audit line of a registration, or the
         // reason it would not serve.
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -269,14 +269,14 @@ fn dial_ssh(user: &str, host: &str, port: Option<u16>, path: &str) -> Result<Dia
 
     // What the program ends with is watched from the moment it starts rather than from the moment
     // its output ends, since the two are not the same failure: a session whose first write cannot
-    // be made — a program that ended before it read — never sees the end of an output it never
+    // be made, a program that ended before it read, never sees the end of an output it never
     // read, and that is exactly the case a caller has to be told about.
     tokio::spawn(watch(child, stopped, ended));
 
     Ok(Dialed {
         socket: Box::new(SshSocket {
             // The pipe to a program that ends before it reads is a failure to report, not a reason
-            // to die silently — see `SigpipeGuard`.
+            // to die silently, see `SigpipeGuard`.
             _signal: SigpipeGuard::set_aside(),
             stdin,
             stdout,
@@ -342,7 +342,7 @@ fn ssh_arguments(user: &str, host: &str, port: Option<u16>, path: &str) -> Vec<S
     arguments.push("--".to_owned());
 
     // The destination is the host as it was written. `ssh` takes an ipv6 address unwrapped, and
-    // brackets it where a port would otherwise be read — which is not this position.
+    // brackets it where a port would otherwise be read, which is not this position.
     arguments.push(host.to_owned());
 
     // The command is one argument: `ssh` joins what follows the destination with spaces and hands
@@ -360,7 +360,7 @@ fn ssh_arguments(user: &str, host: &str, port: Option<u16>, path: &str) -> Vec<S
 ///
 /// Single quotes carry everything a shell would otherwise act on, including the `$`, the
 /// backtick and the backslash. The one thing they cannot carry is a single quote, which is closed,
-/// written escaped, and opened again — the standard reading, and the reason a path with a quote in
+/// written escaped, and opened again, the standard reading, and the reason a path with a quote in
 /// it still arrives as itself.
 fn shell_quote(word: &str) -> String {
     let mut quoted = String::with_capacity(word.len() + 2);
@@ -401,7 +401,7 @@ impl ExitWatch {
         match tokio::time::timeout(ENDED_WITHIN, exit.wait_for(Option::is_some)).await {
             Ok(Ok(ended)) => *ended,
             // A program that has not ended within the bound, and one whose watcher is gone, have
-            // nothing to say about the failure — what the exchange said is reported instead.
+            // nothing to say about the failure, what the exchange said is reported instead.
             Ok(Err(_)) | Err(_) => None,
         }
     }
@@ -411,12 +411,12 @@ impl ExitWatch {
 ///
 /// The stream to a session is a pipe, and writing to a pipe nothing reads raises `SIGPIPE`. This
 /// program asks the kernel to make that fatal, so that `rola | head` dies the way a filter is
-/// expected to die rather than carrying on writing into nothing — but a session is the one place
+/// expected to die rather than carrying on writing into nothing, but a session is the one place
 /// where the reader ending first is a *failure to report*: an `ssh` that cannot reach its host is
 /// exactly that, and dying on a signal would say nothing about it.
 ///
 /// So the disposition is set aside for as long as one session lives and given back when it goes.
-/// A run talks over one session at a time by construction — an action is one connection — which is
+/// A run talks over one session at a time by construction, an action is one connection, which is
 /// why one guard is enough and no counter is kept.
 struct SigpipeGuard {
     /// The disposition this process had before, which is restored when the guard goes.
@@ -460,14 +460,14 @@ impl Drop for SigpipeGuard {
 /// even when the session failed before it read a byte: nothing else can wait for a process, and a
 /// caller that is told only "broken pipe" is not told what happened at the other end.
 ///
-/// It ends when the program ends, or when the stream that spoke to it is dropped — a session that
+/// It ends when the program ends, or when the stream that spoke to it is dropped, a session that
 /// went away leaves nothing here holding a program open on both sides.
 async fn watch(mut child: Child, stopped: Stopped, ended: watch::Sender<Option<Ended>>) {
     let status = tokio::select! {
         status = child.wait() => status,
         // The other end went away: the program is given the moment it needs to end on its own
-        // before it is asked to. A stream that went away is usually the program's own doing — it
-        // closed its output, which is what the exchange failed on — and a program that is killed
+        // before it is asked to. A stream that went away is usually the program's own doing, it
+        // closed its output, which is what the exchange failed on, and a program that is killed
         // reports the kill rather than the reason it gave. On Windows that is 1, which is the
         // number `rola-daemon` uses to say it found no account, so a path that holds no Vault or a
         // machine that refuses sessions would be read as an identity that is missing.
@@ -542,8 +542,8 @@ impl AsyncWrite for SshSocket {
 impl Drop for SshSocket {
     /// The program goes with the stream.
     ///
-    /// A session that ended on this side — a run that was cancelled, or one that failed before the
-    /// far side said anything — would otherwise leave a program on this machine holding a
+    /// A session that ended on this side, a run that was cancelled, or one that failed before the
+    /// far side said anything, would otherwise leave a program on this machine holding a
     /// connection open on both. It is asked to stop rather than waited for, since dropping may not
     /// wait: what waits is the task that was watching it all along.
     fn drop(&mut self) {

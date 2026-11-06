@@ -143,7 +143,7 @@ public sealed class DesktopConfigTests
         start.ArgumentList.Add(Program);
         // Both names, because they say the same thing to different readers: `ROLA_DATA_HOME` is this
         // project's own and is read on every platform, while `XDG_DATA_HOME` is the name a Unix
-        // machine knows — a Windows program would read neither it nor anything else here, and would
+        // machine knows, a Windows program would read neither it nor anything else here, and would
         // go on to its window with the real user's configuration instead of the scratch one.
         start.Environment["ROLA_DATA_HOME"] = data;
         start.Environment["XDG_DATA_HOME"] = data;

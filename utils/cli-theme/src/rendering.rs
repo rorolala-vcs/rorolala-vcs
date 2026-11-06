@@ -1,13 +1,13 @@
 //! The color language Rorolala's messages are written in.
 //!
 //! A message is written the way it should read, with the styles marked in it, and is
-//! drawn once by [`TextRendering::render`] — or, more briefly, by `trd!`. What the
+//! drawn once by [`TextRendering::render`], or, more briefly, by `trd!`. What the
 //! drawing may use is not decided here: it is read off the program's
 //! [`ThemeChoice`] and coloring switch, so one source draws itself as plain text on a
 //! terminal that wants none of it and as glyphs in true color on one that wants both.
 //!
-//! The blocks are the ones a person already knows from Markdown — headings, quotes,
-//! alerts, rules, pipe tables and fenced code — and the inline styles are a smaller,
+//! The blocks are the ones a person already knows from Markdown, headings, quotes,
+//! alerts, rules, pipe tables and fenced code, and the inline styles are a smaller,
 //! deliberately non-Markdown set, because a message is not a document: a `[[red]]`
 //! stays on until its `[[/]]`, which nests, where Markdown's emphasis only ever pairs
 //! up.
@@ -63,7 +63,7 @@ impl TextRendering {
 
     /// Renders `source` as a document: headings, prose, quotations and tables laid out for reading.
     ///
-    /// This is [`render`](Self::render) with the reading layout — a heading stands on its own line
+    /// This is [`render`](Self::render) with the reading layout, a heading stands on its own line
     /// in reverse video, prose is indented and wrapped, a quotation keeps its gutter when it wraps,
     /// and a long table cell folds instead of running off the side. A message that is one line is
     /// still drawn by [`render`](Self::render); the layout here is for a document.
@@ -275,7 +275,7 @@ fn finish(lines: Vec<Line>, options: RenderOptions) -> String {
 /// A theme that carries the box-drawing characters draws it across the terminal, made
 /// of the same character a table's lines are made of, because that is the line the
 /// reader's eye is already following. Every other theme draws it across the message
-/// instead, where a `-` beyond the text it separates is just a run of dashes — and
+/// instead, where a `-` beyond the text it separates is just a run of dashes, and
 /// falls back to the message even under the glyphs where the terminal cannot be asked
 /// how wide it is.
 fn rule_width(lines: &[Line], options: RenderOptions) -> usize {
@@ -443,7 +443,7 @@ fn alert_title(kind: AlertKind, options: RenderOptions) -> String {
 /// One line of a block drawn beside a `|` gutter.
 ///
 /// The gutter is drawn in `style` and the line is drawn in it too, so that a style
-/// inside the line — a `[[red]]`, say — overrides it rather than nesting in it.
+/// inside the line (a `[[red]]`, say) overrides it rather than nesting in it.
 fn quoted(line: &str, style: StyleState<'_>, options: RenderOptions) -> String {
     if line.is_empty() {
         return paint("|", &style, options);
@@ -593,7 +593,7 @@ impl Fence {
 /// Renders the color language.
 ///
 /// The same call as [`TextRendering::render`], for the places where a macro reads
-/// better than a path — which is everywhere a message is written.
+/// better than a path, which is everywhere a message is written.
 ///
 /// A message written out in the source is read by [`format!`], so a value can be put
 /// into it by position or by name, and a message the program is already holding is
@@ -757,7 +757,7 @@ mod tests {
         assert_eq!(drawn("`a [[red]]b[[/]] c`"), "`a b c`");
 
         // The directive takes the style it was written in and changes one thing about
-        // it — the code span is still bold, so the `b` is bold and red — and the code
+        // it (the code span is still bold, so the `b` is bold and red) and the code
         // span carries on in the style it was written in rather than the one the
         // directive left behind.
         let drawn = with_color(|| render_with("`a [[red]]b[[/]] c`", colored(ThemeChoice::Simple)));

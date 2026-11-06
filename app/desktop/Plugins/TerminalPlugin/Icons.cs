@@ -9,7 +9,7 @@ namespace TerminalPlugin;
 /// </summary>
 /// <remarks>
 /// None is drawn here: the picture is what the host stamps as a mask, in the Window menu and in the dock's tab, and
-/// what this class holds is the reading of it out of the assembly it travels in — a plugin is discovered as one file,
+/// what this class holds is the reading of it out of the assembly it travels in, a plugin is discovered as one file,
 /// so a picture beside it would be a second thing to keep in step. The keys are the manifest's
 /// (`app/desktop/icons.toml`), written out by <c>cargo dev icons</c> rather than by hand.
 /// </remarks>

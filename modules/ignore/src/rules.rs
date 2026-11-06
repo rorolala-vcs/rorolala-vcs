@@ -28,7 +28,7 @@ pub struct IgnoreRuleSet {
     /// written from, which is the Workspace's root rather than the directory the rules sit in.
     root: PathBuf,
     /// How many rule files went in, which is what tells an empty directory apart from no
-    /// directory at all — both answer "nothing is ignored", and a reader that wants to know
+    /// directory at all, both answer "nothing is ignored", and a reader that wants to know
     /// whether rules were ever here asks this.
     files: usize,
 }
@@ -51,14 +51,14 @@ impl IgnoreRuleSet {
     ///
     /// The order the files are applied in is the order the rules decide by: a deeper file is
     /// applied before a shallower one, and beside its siblings a file whose name sorts sooner is
-    /// applied before one whose name sorts later — so a shallower rule, or a later-sorting one,
+    /// applied before one whose name sorts later, so a shallower rule, or a later-sorting one,
     /// is the one that stands when two rules contradict. `root` is what the rules are written
     /// from: patterns are relative to it wherever the file holding them sits.
     ///
     /// A directory that is not there is an empty set rather than an error: rules are managed,
     /// and a place none have been written to yet is a place nothing is ignored in. A file that
     /// cannot be read, or a line that does not read as a pattern, is left out of the set the
-    /// rest still make — one bad rule file is a reason to say so, not a reason the tree has no
+    /// rest still make, one bad rule file is a reason to say so, not a reason the tree has no
     /// answer.
     ///
     /// # Errors
@@ -173,14 +173,14 @@ impl IgnoreRuleSet {
 
     /// Whether `path` is ignored: the last rule that matches it says it is.
     ///
-    /// `is_dir` is what a rule that names a directory only — one ending in `/` — is decided by.
+    /// `is_dir` is what a rule that names a directory only, one ending in `/`, is decided by.
     /// An absolute path is stripped against the root the set was loaded with first, so a caller
     /// holding system paths and one holding the Layout's own spelling ask the same question.
     ///
     /// A path under an ignored directory is ignored, the way git reads it: the matcher answers
     /// for the one path it is given, so the directories above it are asked in turn, and one that
-    /// is ignored settles it. What git also says holds here — a negation cannot bring back a
-    /// file whose directory is ignored — since the directory's own answer is reached before the
+    /// is ignored settles it. What git also says holds here, a negation cannot bring back a
+    /// file whose directory is ignored, since the directory's own answer is reached before the
     /// file's rules are ever read.
     #[must_use]
     pub fn is_ignore(&self, path: &Path, is_dir: bool) -> bool {
@@ -246,7 +246,7 @@ fn collect(dir: &Path, depth: usize, found: &mut Vec<(usize, PathBuf)>) -> io::R
 /// The order two rule files are applied in: deeper before shallower, then by name.
 ///
 /// The name comparison runs over the path's components, so two files in one directory order by
-/// their own names, and two in different directories by the directories' names first — either
+/// their own names, and two in different directories by the directories' names first, either
 /// way two runs of the loader apply one set of files in one order.
 fn rule_order(left: &(usize, PathBuf), right: &(usize, PathBuf)) -> Ordering {
     right
@@ -406,7 +406,7 @@ mod tests {
         rule(&dir, "rules/maya", "*.mb\n");
 
         // The rules sit in a directory of their own, and the paths asked about are written from
-        // the root the work is at — the two are not the same directory.
+        // the root the work is at, the two are not the same directory.
         let set = IgnoreRuleSet::load(&dir.join("rules"), &dir).unwrap();
 
         assert!(set.is_ignore(&dir.join("scenes/a.mb"), false));

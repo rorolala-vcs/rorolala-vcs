@@ -5,7 +5,7 @@ namespace RolaSharp;
 /// <summary>What holds one entry of a Workspace's tracked Vault.</summary>
 /// <remarks>
 /// The four outcomes are the whole of what a Layout can say about an entry: it is held by an
-/// account, held by nobody, or named by neither the work's Layout nor the Vault's copy — and the
+/// account, held by nobody, or named by neither the work's Layout nor the Vault's copy, and the
 /// last is one answer rather than two, because both mean the same thing to a reader.
 /// </remarks>
 public enum EntryLockKind
@@ -35,8 +35,8 @@ public sealed record EntryLock(EntryLockKind Kind, string? Holder = null);
 /// </summary>
 /// <remarks>
 /// The same shape as <see cref="RolaWorkspace"/>: the native value is owned while this lives and
-/// given back on <see cref="Dispose"/>, and absence — no Workspace holds the directory, or the
-/// Workspace tracks no Vault — is <see langword="null"/> rather than a pointer to remember to check.
+/// given back on <see cref="Dispose"/>, and absence, no Workspace holds the directory, or the
+/// Workspace tracks no Vault, is <see langword="null"/> rather than a pointer to remember to check.
 /// <para>
 /// What it reads is the Vault copy the Workspace has fetched, so nothing is reached for and the
 /// answer says what the Vault held when it was last fetched. The two Layouts are opened once, when
@@ -61,7 +61,7 @@ public sealed class RolaOwnership : IDisposable
     {
         ArgumentNullException.ThrowIfNull(directory);
 
-        // A path crosses as bytes, and the platform's own encoding is UTF-8 — which is what this
+        // A path crosses as bytes, and the platform's own encoding is UTF-8, which is what this
         // writes. The buffer is this side's to free, which is why it is in a `finally`: the search
         // raising is no reason to lose it.
         var path = Marshal.StringToCoTaskMemUTF8(directory);

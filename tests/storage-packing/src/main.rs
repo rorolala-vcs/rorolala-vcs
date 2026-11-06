@@ -3,7 +3,7 @@
 //! A pack is a place objects live rather than a thing a caller knows about: an object that moves
 //! into one is the same bytes under the same key, and every read that worked loose still works
 //! packed. That is the whole promise, and this is where it is asked of a store that has actually
-//! been packed — not of an index in isolation.
+//! been packed, not of an index in isolation.
 //!
 //! A program rather than a set of tests cargo runs, for the same reason the rest of them are: what
 //! it does is what a person does with a terminal, and what it checks is what a program would say
@@ -234,11 +234,11 @@ async fn packing_what_is_packed_already_makes_no_pack(sandbox: &Sandbox, checked
 /// A store being packed is not packed again: a run that finds the lock taken is told so.
 ///
 /// A pack is read, changed and written back, so two runs at one store would each write a pack that
-/// had forgotten the other's — and the losing batch's loose copies are gone by the time its pack is
+/// had forgotten the other's, and the losing batch's loose copies are gone by the time its pack is
 /// overwritten, so nothing would hold it. Keeping them apart is what the lock is for, and it is one
 /// file at the store's root rather than one per opener: a second store over the same directory is
 /// turned away just the same. Where two packings were once raced for two numbers, what is asked now
-/// is the lock itself — that a run which would rather not wait is told to come back, and that the
+/// is the lock itself, that a run which would rather not wait is told to come back, and that the
 /// store is packable again once the guard goes.
 async fn a_store_being_packed_is_not_packed_again(sandbox: &Sandbox, checked: &mut Checked) {
     let store = store(sandbox, "being-packed");
@@ -303,7 +303,7 @@ async fn a_number_already_taken_is_passed_over(sandbox: &Sandbox, checked: &mut 
     let store = store(sandbox, "taken");
 
     // An orphan pack left by a write that was cut short: the file is there, the index is not, so
-    // no reader reaches it — but the number is not free to take either.
+    // no reader reaches it, but the number is not free to take either.
     let (orphan, _) = store.pack_paths(0);
     fs::write(&orphan, b"an orphan pack").expect("the orphan pack is written");
 
@@ -455,7 +455,7 @@ async fn a_key_packed_at_once_is_taken_from_every_pack(sandbox: &Sandbox, checke
 /// Two objects dropped from one pack at once are both dropped.
 ///
 /// A pack's index is read, changed and written back, so two removals that do not take turns each
-/// write an index that has forgotten the other's change — and one of the two objects the store said
+/// write an index that has forgotten the other's change, and one of the two objects the store said
 /// it had dropped is still named. Changing packs is done under one lock, and the lock is one *per
 /// root* rather than one per store, so the two removals are made through two stores of one directory:
 /// a store is handed out freely, and a lock each store keeps to itself would not make them take
@@ -650,7 +650,7 @@ async fn a_pack_changed_by_another_writer_is_read_afresh(sandbox: &Sandbox, chec
 /// A pack number given back by an emptied pack is not answered with what the last one held.
 ///
 /// A number is given out as one past the highest there is, so emptying a pack frees its number for
-/// the next packing — and an index read as the one before would name objects at offsets that no
+/// the next packing, and an index read as the one before would name objects at offsets that no
 /// longer mean them. What was read of a pack goes when the pack's index does.
 async fn a_number_given_back_is_not_answered_with_the_pack_that_had_it(
     sandbox: &Sandbox,
@@ -750,7 +750,7 @@ async fn a_change_made_through_another_store_is_seen(sandbox: &Sandbox, checked:
     );
 }
 
-/// A pack whose index does not read is a pack nothing is found in — and no other pack is affected.
+/// A pack whose index does not read is a pack nothing is found in, and no other pack is affected.
 async fn an_index_that_does_not_read_hides_only_its_own_pack(
     sandbox: &Sandbox,
     checked: &mut Checked,
@@ -804,7 +804,7 @@ async fn an_index_that_does_not_read_hides_only_its_own_pack(
     );
 }
 
-/// A pack whose index was taken away is a pack nothing is found in — and no other pack is affected.
+/// A pack whose index was taken away is a pack nothing is found in, and no other pack is affected.
 async fn an_index_that_is_gone_hides_only_its_own_pack(sandbox: &Sandbox, checked: &mut Checked) {
     let store = store(sandbox, "gone-index");
     let lost = written(&store, b"the object whose index is gone").await;
@@ -911,7 +911,7 @@ async fn a_content_whose_chunks_were_packed_is_still_whole(
     );
 
     // What the caller packs is keys; a key held as a manifest has no object of its own, so packing it
-    // moves the manifest — into a pack of the manifests — and makes no object of it.
+    // moves the manifest, into a pack of the manifests, and makes no object of it.
     let made = store
         .lock()
         .await
@@ -1019,8 +1019,8 @@ async fn a_packed_object_can_be_dropped(sandbox: &Sandbox, checked: &mut Checked
 /// Dropping a packed object changes only the index; the pack's bytes stay where they are.
 ///
 /// A pack and its index are two files, so a removal that rewrote the pack would leave a window where
-/// the index describes a pack that is already another one. Only the index is rewritten — the entry is
-/// dropped from it — and what the entry occupied is reclaimed by a later compaction rather than now.
+/// the index describes a pack that is already another one. Only the index is rewritten, the entry is
+/// dropped from it, and what the entry occupied is reclaimed by a later compaction rather than now.
 async fn dropping_a_packed_object_leaves_the_pack_bytes_where_they_are(
     sandbox: &Sandbox,
     checked: &mut Checked,
@@ -1200,7 +1200,7 @@ async fn repacking_rolls_over_at_the_size_the_store_allows(
         &format!("{} packs", packs.len()),
     );
 
-    // No pack grows past the limit, unless one entry is over it on its own — a limit cannot be met
+    // No pack grows past the limit, unless one entry is over it on its own, a limit cannot be met
     // by a single object that is bigger than it.
     let mut within = true;
     let mut reads_back = true;
@@ -1685,7 +1685,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

@@ -18,7 +18,7 @@ const INVERSE_FILE: &str = "inverse_0.dat";
 
 /// The reverse dependency index over one [`VCSIndex`]
 ///
-/// It answers what a content-addressed index cannot — which objects depend on a key — from records
+/// It answers what a content-addressed index cannot, which objects depend on a key, from records
 /// kept beside the objects, and falls back to reading the objects when the records do not describe
 /// the index as it now stands. The two are the same answer; which one is read is this crate's
 /// business, not the caller's.
@@ -63,7 +63,7 @@ impl InverseIndex {
     /// A rebuild is the one way the records are made. What it has to do follows what moved since it
     /// last ran: nothing, when the records already describe the index; the objects written since,
     /// which are read and added to the records it already holds; or every object, when the records
-    /// cannot be added to — they are not there, do not read, are of a format this build does not
+    /// cannot be added to, they are not there, do not read, are of a format this build does not
     /// know, or describe objects the index no longer holds. What it writes describes exactly the
     /// objects it read, so a reader that asked for it is answered from the answer, and a reader that
     /// arrives after another object is written sees records that no longer describe the index and
@@ -209,7 +209,7 @@ impl InverseIndex {
     ///
     /// A snapshot is one inversion of the records: every variant by its key with the parts it names,
     /// every version by its key with the variant it fixes and its number, and the questions the
-    /// graph asks of them — which versions fix a variant, which variants are based on a version,
+    /// graph asks of them, which versions fix a variant, which variants are based on a version,
     /// which merge one in, which were made of one content. It is what a reader that walks asks for
     /// instead of one record at a time.
     ///
@@ -357,8 +357,8 @@ impl InverseIndex {
 
     /// The number of the version named `key`
     ///
-    /// The records answer with the number they hold; when they hold none — because the version was
-    /// not there when they were built, or its chain does not reach the root — the chain is walked
+    /// The records answer with the number they hold; when they hold none, because the version was
+    /// not there when they were built, or its chain does not reach the root, the chain is walked
     /// from the objects, which is what tells a hole from a version that is simply not one.
     ///
     /// # Errors
@@ -462,8 +462,8 @@ fn mode_of(table: &Table, current: &[Hash]) -> RebuildMode {
 /// Whether `covered` is `current` with objects added: every key the records hold is still there.
 ///
 /// Both are in key order, which is what makes this one pass. A key the records hold that the index
-/// no longer does is not something they can be added to — an object once written is not taken away
-/// by a rebuild that only adds — so it is the whole table that is made again.
+/// no longer does is not something they can be added to, an object once written is not taken away
+/// by a rebuild that only adds, so it is the whole table that is made again.
 fn is_appendable(covered: &[Hash], current: &[Hash]) -> bool {
     let mut held = covered.iter();
     let mut next = held.next();
@@ -587,7 +587,7 @@ impl Counting {
 ///
 /// A version's number is its base version's, one past, and the root is numbered before the first; so
 /// the numbers fill from whatever is numbered outwards. A version cut off from every numbered one by
-/// a hole — a base version that was never written — is left without a number rather than given one
+/// a hole, a base version that was never written, is left without a number rather than given one
 /// that is not the chain's, and a later rebuild fills it when the link arrives. A number, once
 /// filled, is never changed: a version's base is fixed, so the answer is fixed with it.
 ///
@@ -675,7 +675,7 @@ fn reading(error: InverseIndexError) -> InverseIndexReadingError {
 ///
 /// These are the same questions the records answer, put to the objects directly: every object the
 /// index holds is read and the ones that point at the key are kept. It costs a read per object,
-/// which is what the records are for — this is the answer that is always right, to fall back to.
+/// which is what the records are for, this is the answer that is always right, to fall back to.
 mod direct {
     use std::collections::BTreeMap;
 
@@ -963,7 +963,7 @@ mod tests {
         let second = Hash::new([0x33; 32]);
         let second_variant = Hash::new([0x34; 32]);
 
-        // The second version is in the records, based on the first — which is not there yet.
+        // The second version is in the records, based on the first, which is not there yet.
         let mut table = Table::new(vec![]);
         table.add(first, second_variant, Edge::Base);
         table.add(second_variant, second, Edge::Variant);

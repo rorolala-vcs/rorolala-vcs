@@ -1,7 +1,7 @@
 //! What the last analysis found, kept so the next one can skip what has not changed.
 //!
 //! A reading of a tree costs what reading its files costs, so what was read is written down: each
-//! file's time, its length, the digest of its content, and — for a text file the Layout names —
+//! file's time, its length, the digest of its content, and, for a text file the Layout names,
 //! the spans its content was cut into, which is what a move is recognised by when the file that
 //! moved is no longer there to be read. A file whose time and length are what they were is not
 //! read again; its digest is the one already written down.
@@ -10,7 +10,7 @@
 //! from a loss and a gain; the second is what it held when the Layout was last known to agree with
 //! it, which is what tells a change from a file that is simply as it was. They are the same until
 //! the file changes, and the pair is what lets a reading be told what changed without forgetting it
-//! — a file that changed and was never written down again would be a change reported once.
+//!, a file that changed and was never written down again would be a change reported once.
 //!
 //! What is written down is a cache: a file that does not read, or that was written by another
 //! build, is nothing rather than a failure, since the next reading makes it again.
@@ -45,7 +45,7 @@ pub struct Entry {
     /// The digest of its content.
     digest: [u8; 32],
     /// The digest it held when the Layout was last known to agree with it, or nothing when the two
-    /// are known to disagree — a move whose file was edited as well, which the reading found and
+    /// are known to disagree, a move whose file was edited as well, which the reading found and
     /// nothing has recorded yet.
     agree: Option<[u8; 32]>,
     /// The spans its content was cut into, when it read as text.
@@ -109,7 +109,7 @@ impl Entry {
     ///
     /// The digest is what a file is, and the spans are only how a move of it may be guessed when
     /// two files are not the same bytes. Forgetting them leaves a record that still says what the
-    /// file was, and no longer says what it resembled — which is how a pairing the reader has
+    /// file was, and no longer says what it resembled, which is how a pairing the reader has
     /// decided against is taken back without losing what the path is remembered by.
     #[must_use]
     pub const fn without_spans(&self) -> Self {
@@ -183,8 +183,8 @@ impl Cache {
     /// Writes the cache to `path`, making the directory it sits in.
     ///
     /// The file is written beside itself and moved over the one that is there, rather than written over it:
-    /// one work is read by several readers at once — the desktop reads it from the Overview and from every
-    /// listing of it — and a write that truncated the file first would let a reader take the moment before
+    /// one work is read by several readers at once, the desktop reads it from the Overview and from every
+    /// listing of it, and a write that truncated the file first would let a reader take the moment before
     /// its bytes for a cache written by another build. Such a reading starts from no agreements at all and
     /// writes down the tree as it stands as what the Layout agrees with, which loses every change the
     /// reading was about to report: what those agreements are read back from is this file, so a reader must
@@ -448,7 +448,7 @@ mod tests {
     ///
     /// The cache is shared: the desktop reads one work from the Overview and from every listing of it at
     /// once, each reading on a thread of its own. A write that truncated the file first would let a reader
-    /// take the moment before the new bytes for a cache written by another build — which reads as nothing,
+    /// take the moment before the new bytes for a cache written by another build, which reads as nothing,
     /// and the reading that took it for nothing writes the tree as it stands as what the Layout agrees
     /// with. Every change it had to report is lost with that agreement, so what a reader already has open
     /// has to be the file it opened, whole, whatever is written under it.

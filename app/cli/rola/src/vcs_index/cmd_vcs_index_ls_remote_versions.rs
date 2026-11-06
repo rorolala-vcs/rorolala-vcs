@@ -2,8 +2,8 @@
 //!
 //! It is [`ls-versions`](crate::vcs_index::cmd_vcs_index_ls_versions) asked of the other end of an
 //! exchange: where that lists the index the run is inside, this reaches the Vault and lists what
-//! *its* index holds. What is printed is the versions' hashes, one per line — not their numbers,
-//! which would cost a trace of the chain for every one — so a line read here is one to hand to
+//! *its* index holds. What is printed is the versions' hashes, one per line, not their numbers,
+//! which would cost a trace of the chain for every one, so a line read here is one to hand to
 //! [`read-remote`](crate::vcs_index::cmd_vcs_index_read_remote).
 
 use mingling::{
@@ -47,7 +47,7 @@ pub fn desc_vcs_index_ls_remote_versions() -> Description {
 /// reads it: a name the Workspace has bound, or an ip and a port, with none naming the one the
 /// Workspace reaches for by default. What is printed is the versions' hashes, one per line, the way
 /// [`rola vcs-index ls-versions`](crate::vcs_index::cmd_vcs_index_ls_versions) prints them of the
-/// index the run is inside — each hash one to hand to `rola vcs-index read-remote`, which works out
+/// index the run is inside, each hash one to hand to `rola vcs-index read-remote`, which works out
 /// the number.
 ///
 /// Nothing is changed: the Vault is asked and answers, and no object moves.

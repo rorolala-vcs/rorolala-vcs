@@ -85,7 +85,7 @@ pub fn complete_layout_req_ownership(
 /// they are named.
 ///
 /// An entry nobody holds is named as this account's. One another account holds is left alone, and
-/// the run is told who holds it — where that happens nothing after it is taken, so a run that names
+/// the run is told who holds it, where that happens nothing after it is taken, so a run that names
 /// several stops at the first one it cannot have. The copy fetched here, when there is one, is
 /// changed to agree with the Vault; a run that never fetched is not refused for it.
 ///

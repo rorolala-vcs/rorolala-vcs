@@ -3,8 +3,8 @@
 The background daemon for Rorolala, belonging to the machine rather than to a directory.
 
 It serves the Vaults registered for the user, one namespace each, on one port. The table it
-reads is `~/.local/share/rola/daemon/registry.toml` — `rola/daemon/registry.toml` under the
-local data directory — and is a flat TOML table:
+reads is `~/.local/share/rola/daemon/registry.toml`, `rola/daemon/registry.toml` under the
+local data directory, and is a flat TOML table:
 
 ```toml
 alpha = "/home/me/vaults/alpha"
@@ -45,8 +45,8 @@ connection over the process's own standard input and output, and ends when that 
 it is what the far side of an `ssh` runs, and the whole of the transport is the `ssh` program
 the caller already has.
 
-`rola` writes the address `user@host:path` — an scp destination with the SSH port between the
-host and the path when one is named — and runs
+`rola` writes the address `user@host:path`, an scp destination with the SSH port between the
+host and the path when one is named, and runs
 
 ```text
 ssh -T -o BatchMode=yes [-p PORT] -l USER -- HOST "rola-daemon serve 'PATH'"
@@ -58,7 +58,7 @@ have is `rola-daemon` on its `PATH` (or a shell alias of that name) and permissi
 that account.
 
 Two things about the mode are contracts. The standard **output** carries the protocol and nothing
-else, so a login script that prints breaks the session — which is what `-T` and the
+else, so a login script that prints breaks the session, which is what `-T` and the
 "standard output must be clean" note in a failure are for. The standard **error** is free: what the
 far side says about a failure, and the audit line of a registration, are written there and
 forwarded by `ssh` to the caller's terminal.
@@ -79,29 +79,29 @@ ssh-connection = true
 auto-register-by-ssh = false
 ```
 
-A file that is not there is a machine that has said nothing, which is those two values — and the
+A file that is not there is a machine that has said nothing, which is those two values, and the
 first session to ask writes them down, so the switches are a file a person can find and change
 rather than something only this crate knows. A data directory that cannot be written is not a
 reason to refuse a session: the defaults are what a machine that says nothing means, so the session
 is served under them and the reason is said on the standard error. A file that is there and cannot
 be understood is refused rather than guessed at.
 
-- `ssh-connection` — whether a session is served at all. Off refuses it before any Vault is read.
-- `auto-register-by-ssh` — whether a connection may write the key it proved into the Vault's own
+- `ssh-connection`: whether a session is served at all. Off refuses it before any Vault is read.
+- `auto-register-by-ssh`: whether a connection may write the key it proved into the Vault's own
   keys when the name it uses has none there. Off by default: a Vault whose members are written down
   by hand is the usual one, and a switch that writes into one unasked is one nobody would leave a
   port behind. Note what turning it on means: **deleting a key is no longer a revocation**, since
-  the next connection writes it back. Revoking is turning this off, or closing the SSH access —
+  the next connection writes it back. Revoking is turning this off, or closing the SSH access,
   with it off, deleting the key is a revocation again.
 
 A registration is only ever made where the Vault's `key_discovery` names its own keys (`vault`),
-never for a name in `[auth] admins` — an administrator may move any file in the Vault, so a
-connection may not name itself one — and never over a key that is already there under that name.
+never for a name in `[auth] admins`, an administrator may move any file in the Vault, so a
+connection may not name itself one, and never over a key that is already there under that name.
 The names are first come, first served: what protects them is that a name is claimed with a key
 the far side proves it holds, which is the handshake's doing and not the registration's.
 
 `ssh-connection` and `auto-register-by-ssh` are policy, not a security boundary. Nothing in a
-process can prove it was started by `sshd` — the environment is a program's to write — so what
+process can prove it was started by `sshd`, the environment is a program's to write, so what
 actually decides what a session may do is who may run `rola-daemon` as this user at all. Pinning
 the far side's `authorized_keys` entry to `rola-daemon serve` with `command=` is what makes the
 switch mean what it says.

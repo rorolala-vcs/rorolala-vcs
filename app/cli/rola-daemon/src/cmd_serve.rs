@@ -6,7 +6,7 @@
 //! listened on, so a machine can offer a Vault over `ssh` alone.
 //!
 //! Two things about it are contracts rather than choices. The standard output carries the protocol
-//! and nothing else — not a greeting, not a result line — since a word written there is a word the
+//! and nothing else (not a greeting, not a result line) since a word written there is a word the
 //! client reads as part of an answer. And the exit code is the daemon's own (see
 //! [`rorolala_daemon::exit`]) rather than this program's, because the far side of a session has
 //! only that number to tell "the path is not a Vault" from "this machine refuses sessions".

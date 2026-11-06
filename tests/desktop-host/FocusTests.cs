@@ -149,7 +149,7 @@ public sealed class FocusTests
 
         Assert.Equal(second.DockNameId, services.Docks.Focus.Current?.DockNameId);
 
-        // The dock beside it — the other tab of its group — is what the work falls to, and what is marked.
+        // The dock beside it, the other tab of its group, is what the work falls to, and what is marked.
         services.Docks.Close(second);
 
         Assert.Equal(

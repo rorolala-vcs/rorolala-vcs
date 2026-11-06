@@ -5,11 +5,11 @@ use std::ops::{Deref, DerefMut};
 /// A presence is what [`contains_keys`](crate::StorageBackend::contains_keys) answers with: **one
 /// byte per key that was asked about**, in the order it was asked, holding
 /// [`HELD`](Self::HELD) where the object is there and [`MISSING`](Self::MISSING) where it is
-/// not. It is exactly as long as the batch it answers — a question about `n` keys comes back
-/// as `n` bytes — so a position here and a key there always name the same object.
+/// not. It is exactly as long as the batch it answers, a question about `n` keys comes back
+/// as `n` bytes, so a position here and a key there always name the same object.
 ///
 /// It reads as the bytes it holds, so a caller can index it or walk it as the slice it is, and
-/// the checked ways of reading it — [`held`](Self::held), [`iter`](Self::iter) — say what a
+/// the checked ways of reading it ([`held`](Self::held), [`iter`](Self::iter)) say what a
 /// byte means instead of leaving the caller to remember.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Presence {

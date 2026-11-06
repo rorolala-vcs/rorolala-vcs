@@ -3,7 +3,7 @@
 //! This is the listing of the inverse index read the other way: a variant a row with what it is made
 //! of, a version a row with the variant it fixes and its number, and the rows drawn through the
 //! template `--format` names or written as `--json` objects. It is read-only: records that do not
-//! describe the index are not rebuilt by a listing — the objects are read instead, which is the same
+//! describe the index are not rebuilt by a listing, the objects are read instead, which is the same
 //! answer at the price of a read per object.
 //!
 //! The rows are the variants first and then the versions, each in key order, since that is the order
@@ -88,8 +88,8 @@ pub fn complete_inv_idx_list(ctx: ShellContext) -> Suggest {
 /// The rows are the variants and then the versions, each in key order. `--kind` keeps one kind, and
 /// `--limit` stops after that many rows.
 ///
-/// The records are read when they describe the index; when they do not — an object was written and
-/// no rebuild has run since — the objects are read instead, so the run stays read-only and is still
+/// The records are read when they describe the index; when they do not, an object was written and
+/// no rebuild has run since, the objects are read instead, so the run stays read-only and is still
 /// answered with what a rebuild would make the records say.
 ///
 /// # Errors

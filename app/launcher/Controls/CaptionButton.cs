@@ -31,7 +31,7 @@ internal enum CaptionKind
 /// Windows frame draws its buttons as flat rectangles that fill with the wash of the pointer, wearing the
 /// Desktop program's own two pictures in the ink the button has; the macOS frame draws the lights with their
 /// own colours and a mark that appears only while the pointer is over them. What the program adds is one
-/// button of its own — the settings — drawn beside them in the same family rather than as a different kind
+/// button of its own, the settings, drawn beside them in the same family rather than as a different kind
 /// of thing.
 /// <para>
 /// A picture is stamped as an opacity mask over the ink rather than drawn as an image, which is how the

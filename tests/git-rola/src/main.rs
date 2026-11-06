@@ -6,7 +6,7 @@
 //! says, and what the work tree and the repository's exclude file hold afterwards.
 //!
 //! Everything happens inside one sandbox, and the machine's own git configuration is pointed into
-//! it as well — `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `HOME` — so a run here reads and writes
+//! it as well (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `HOME`) so a run here reads and writes
 //! nothing of the person's, and a machine whose git is configured differently answers the same. The
 //! programs of this build are put on the `PATH` the child git is given, because a hook installed in
 //! the repository is reached by git as `git rola` and has to find it. The language is pinned to
@@ -140,7 +140,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     }
 
     // The language is the one the run speaks: `--lang` names it, the environment names it when the
-    // flag does not, and what is said follows — not only the help, but the refusals too.
+    // flag does not, and what is said follows, not only the help, but the refusals too.
     let chinese = run.rola(elsewhere, &["--lang", "zh-CN", "--help"]);
     checked.exits("`--lang zh-CN --help` ends successfully", &chinese, 0);
     checked.stdout_has("the help is said in the named language", &chinese, "用法：");
@@ -1068,7 +1068,7 @@ impl Run {
     ///
     /// A store's objects are framed and compressed by the store's own backend, so one laid down by
     /// hand is not a store `git-rola` can read. The fixture is written by the `rola` program
-    /// instead — the same program a person's store is written by — and the store copied from there.
+    /// instead, the same program a person's store is written by, and the store copied from there.
     fn store(&self) -> PathBuf {
         self.sandbox().join("store")
     }
@@ -1148,7 +1148,7 @@ fn sibling(of: &Path, name: &str) -> PathBuf {
 }
 
 /// Lays down what a project carries before anything has been set up for it: the lock and the store
-/// the materials are read from. The file a person writes is not one of them — `init` writes that.
+/// the materials are read from. The file a person writes is not one of them, `init` writes that.
 fn lay_project(run: &Run, root: &Path, content: &[u8]) {
     fs::create_dir_all(root.join("Assets")).expect("the material's directory");
     store_content(run, root, content);
@@ -1252,7 +1252,7 @@ fn text(path: &Path) -> String {
 
 /// Whether what a run said names `path`, however that platform spells a separator.
 ///
-/// A place is written the way the program's path types write one — `/` — and an argument is written
+/// A place is written the way the program's path types write one, `/`, and an argument is written
 /// the way the machine writes one, so the two are the same place spelled twice.
 fn names(said: &str, path: &Path) -> bool {
     said.replace('\\', "/")
@@ -1301,7 +1301,7 @@ impl Checked {
         self.asked += 1;
 
         if !ok {
-            self.wrong.push(format!("{question} — {why}"));
+            self.wrong.push(format!("{question}, {why}"));
         }
     }
 

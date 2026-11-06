@@ -25,7 +25,7 @@ internal static class Names
     /// </summary>
     /// <remarks>
     /// The computer is the one place that has no name of its own, having no path: what it is called is
-    /// a word rather than a piece of one. The way up is the other, and is named before it is looked at —
+    /// a word rather than a piece of one. The way up is the other, and is named before it is looked at,
     /// the name it would be read as is <c>..</c>, which is a lucky accident of the path rather than what
     /// it is called.
     /// </remarks>
@@ -47,7 +47,7 @@ internal static class Names
     /// The extension of a file is left out of what is chosen, since what is being renamed is the name:
     /// typing over the whole of <c>hero.psd</c> to call it <c>villain</c> would take the extension with it,
     /// which is a way to lose what a file is by accident. Where the extension begins is the last dot, so
-    /// <c>archive.tar.gz</c> renames to <c>archive</c> and keeps <c>.tar.gz</c> — what a program that names a
+    /// <c>archive.tar.gz</c> renames to <c>archive</c> and keeps <c>.tar.gz</c>, what a program that names a
     /// file by its extension calls the extension.
     /// <para>
     /// A directory has no extension to leave out, and neither has a dot-file: the dot that begins
@@ -77,7 +77,7 @@ internal static class Names
     /// It is the choice above, used the other way round: the boundary <see cref="Chosen"/> leaves out of what
     /// a rename selects is exactly where a number belongs, because it is the boundary between the name and
     /// what says what kind of file it is. So <c>源文件.txt</c> becomes <c>源文件 (2).txt</c> rather than
-    /// <c>源文件.txt (2)</c> — a name that ends in the number has no extension at all as far as anything
+    /// <c>源文件.txt (2)</c>, a name that ends in the number has no extension at all as far as anything
     /// that opens a file by one is concerned, and the file stops being the kind of file it is. Everything
     /// before the last dot is the name, so a stack of them keeps all of it but the last:
     /// <c>源文件.pkg.tar.zst</c> is <c>源文件.pkg.tar (2).zst</c>, since <c>.zst</c> is what a program that
@@ -103,7 +103,7 @@ internal static class Names
 /// <summary>One column of values a table shows after the icon and the name.</summary>
 /// <remarks>
 /// Generic in the entry because the table is: a directory's columns say how large a file is and who holds it, and
-/// a plugin's place has no such columns — but the table that draws them, and the grabs that resize them, are one
+/// a plugin's place has no such columns, but the table that draws them, and the grabs that resize them, are one
 /// table either way.
 /// </remarks>
 /// <typeparam name="TItem">What one entry of the table is.</typeparam>
@@ -112,7 +112,7 @@ internal static class Names
 /// <param name="Value">What the column says about one entry.</param>
 /// <param name="Align">Where the text sits in the column.</param>
 /// <param name="Draw">
-/// How the column draws one entry, where a value of its own is not enough — a contributed column draws its own
+/// How the column draws one entry, where a value of its own is not enough, a contributed column draws its own
 /// ink. Answered instead of <see cref="Value"/> when it is there.
 /// </param>
 /// <param name="Placement">Where the column sits among the listing's own.</param>
@@ -135,7 +135,7 @@ internal sealed record Column<TItem>(
 /// whole run, and a click reads it as a rule over the one entry under the pointer.
 /// <para>
 /// Both are read from the choice as it stood when the pointer went down rather than from the choice on screen, so
-/// that a frame dragged back and forth settles on the answer the rule gives rather than on its own last preview —
+/// that a frame dragged back and forth settles on the answer the rule gives rather than on its own last preview,
 /// which is also what lets a gesture begin without dropping the choice it was made beside.
 /// </para>
 /// </remarks>
@@ -196,7 +196,7 @@ internal static class Choice
     /// Nothing held chooses that entry and lets go of the rest; <c>Ctrl</c> toggles the one entry. <c>Shift</c>
     /// is the range, and it is read against the two ends the choice has where it is one unbroken run: the end the
     /// click is nearer to is moved to the click and the end further off stays, so that a click beyond the run
-    /// grows it and a click inside it takes the run back on the side it was made from — a run made too long is
+    /// grows it and a click inside it takes the run back on the side it was made from, a run made too long is
     /// shortened by shift clicking the entry it is to end at, which adding a range could never do. A choice that
     /// is empty or has a gap in it has no such pair of ends, so <c>Shift</c> over it is what it always was: the
     /// run from where the last click or step landed, added to what is chosen.
@@ -305,11 +305,11 @@ internal static class Choice
 /// What a listing is made of: the items, and everything a view has to know about one of them.
 /// </summary>
 /// <remarks>
-/// A view is one arrangement of a listing — rows, or tiles — and a listing is one family of things arranged. The
+/// A view is one arrangement of a listing (rows, or tiles) and a listing is one family of things arranged. The
 /// two vary apart, which is why they are two: a directory and a plugin's place are both read as rows and as tiles,
 /// and neither arrangement has anything to say about what an entry <em>is</em>. So a view is made of an
-/// arrangement and a listing (<see cref="EntryView{TItem}"/> takes one), and what a place adds over a directory —
-/// a provider's picture, a provider's menu — is said here once rather than in a second pair of views.
+/// arrangement and a listing (<see cref="EntryView{TItem}"/> takes one), and what a place adds over a directory,
+/// a provider's picture, a provider's menu, is said here once rather than in a second pair of views.
 /// </remarks>
 /// <typeparam name="TItem">What one entry of a listing is.</typeparam>
 internal abstract class Listing<TItem>
@@ -511,7 +511,7 @@ internal abstract class Listing<TItem>
 /// </summary>
 /// <remarks>
 /// The root exists for what a dock holds without caring: a dock swaps one view for another, and what it does to
-/// either of them — put the keyboard in it, draw it again — does not depend on what is in it.
+/// either of them (put the keyboard in it, draw it again) does not depend on what is in it.
 /// </remarks>
 internal abstract class EntryView : UserControl
 {
@@ -519,7 +519,7 @@ internal abstract class EntryView : UserControl
     /// <remarks>
     /// Fainter rather than gone: what is hidden is still an entry of the directory, and it is dimmed so that
     /// the eye passes over it rather than being left out of the listing. It is the plugin's one answer for
-    /// how a hidden row is drawn, which the tree reads as well — a second number there would be one look
+    /// how a hidden row is drawn, which the tree reads as well, a second number there would be one look
     /// drawn two ways.
     /// </remarks>
     internal const double HiddenOpacity = 0.55;
@@ -558,7 +558,7 @@ internal abstract class EntryView : UserControl
     /// <remarks>
     /// The listing is where a dock answers its keys from: they are taken at the top of the dock and passed to the
     /// view being read, so a keyboard that is nowhere in the dock is a dock whose keys do nothing. That is what
-    /// happens when the address — which hides itself when an edit ends — was where the keyboard was
+    /// happens when the address, which hides itself when an edit ends, was where the keyboard was
     /// (Section 7.7).
     /// </remarks>
     public abstract void Listen();
@@ -568,18 +568,18 @@ internal abstract class EntryView : UserControl
 /// What both ways of reading a listing have in common: the choice, the keyboard, the menus, and the drags.
 /// </summary>
 /// <remarks>
-/// One listing is read two ways — as a table of rows and as tiles — and the two are one listing seen twice rather
+/// One listing is read two ways, as a table of rows and as tiles, and the two are one listing seen twice rather
 /// than two listings. Everything a user does to an entry, short of how it is laid out, is therefore written once
 /// here: what a click means, what the arrows and the typed letters mean, and what the menu on a choice offers. An
 /// arrangement supplies the layout and a face for one entry, and inherits the rest.
 /// <para>
 /// What an entry <em>is</em> is not here either: whether it is a file, what opening it does, whether it may be
-/// dragged — all of that is the <see cref="Listing{TItem}"/> the view was made over. That is what lets a plugin's
+/// dragged, all of that is the <see cref="Listing{TItem}"/> the view was made over. That is what lets a plugin's
 /// place be read by these very views rather than by a second set that would drift from them.
 /// </para>
 /// <para>
-/// The choice is the toolkit's own list selection, because it is exactly the one asked for — a click
-/// chooses, <c>Ctrl</c> adds or removes, <c>Shift</c> takes a range — and because the look already fills
+/// The choice is the toolkit's own list selection, because it is exactly the one asked for, a click
+/// chooses, <c>Ctrl</c> adds or removes, <c>Shift</c> takes a range, and because the look already fills
 /// a chosen row with the accent (§10). What is added here is only what the toolkit does not have: the
 /// arrows within a wrapped grid, the typed letters, and a menu that knows about a set.
 /// </para>
@@ -631,7 +631,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// </summary>
     /// <remarks>
     /// Both are bound rather than read, because a resource read where the view is built is read before
-    /// the view is anywhere a theme reaches — and a band that fell back to a colour of its own would be a
+    /// the view is anywhere a theme reaches, and a band that fell back to a colour of its own would be a
     /// second answer to what the primary is.
     /// </remarks>
     private static Border Band()
@@ -672,7 +672,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// The same choice as places in the listing, which is what a click and a frame are both read against.
     /// </summary>
     /// <remarks>
-    /// Places, because what a frame covers is read in places — it asks each row where it is — and the rule the
+    /// Places, because what a frame covers is read in places, it asks each row where it is, and the rule the
     /// gesture means is then read over the two sets by the listing's own numbering. The choice read from is the
     /// one that stood when the pointer went down and not the one on screen while a frame is drawn: a frame that
     /// grew and shrank would otherwise read its rule against its own last preview, and a range toggled back and
@@ -704,7 +704,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// </summary>
     /// <remarks>
     /// Read when the press lands rather than when the menu opens, because the menu is laid out before it is shown
-    /// and the press is over by then. It is one cell of one row — what the reader pointed at — so it is cleared
+    /// and the press is over by then. It is one cell of one row, what the reader pointed at, so it is cleared
     /// when it has been read: a menu opened from the keyboard is one no press landed on, and it must not offer to
     /// copy what some earlier press was on.
     /// </remarks>
@@ -732,7 +732,7 @@ internal abstract class EntryView<TItem> : EntryView
             ItemTemplate = new FuncDataTemplate<TItem>((item, _) => Item(item), true),
 
             // Focusable on the list and not only on its rows. The toolkit focuses a row when one is pressed, and a press
-            // in the space around them has no row to focus — so without this the keyboard is left nowhere, and the dock
+            // in the space around them has no row to focus, so without this the keyboard is left nowhere, and the dock
             // answers its keys at the top of itself and passes them down, which means a keyboard that is nowhere is a
             // dock whose Ctrl+C, Ctrl+V, F2 and F5 are never heard. A listing whose rows are all focused and whose space
             // is not is a listing where the clipboard works until the user clicks past the last row.
@@ -740,7 +740,7 @@ internal abstract class EntryView<TItem> : EntryView
         };
 
         // What the choice holds leaves this listing as it changes, since what the rest of the program
-        // does with a choice — the Version Graph's track — is about the files chosen rather than about
+        // does with a choice, the Version Graph's track, is about the files chosen rather than about
         // the one clicked. Every way a choice moves goes through the toolkit's selection, so this one
         // answer covers a click, a frame, the keyboard, and a listing rebuilt with the choice it had.
         List.Selection.SelectionChanged += (_, _) => source.Chosen(Chosen());
@@ -754,7 +754,7 @@ internal abstract class EntryView<TItem> : EntryView
         // toolkit's at all. A handler that let the list act first would be correcting an action already taken.
         //
         // Text is not a key: only the element with the keyboard raises it, and it is raised on the way up, so
-        // the letters are taken on both legs — the down leg reaches nothing while no field has the keyboard,
+        // the letters are taken on both legs, the down leg reaches nothing while no field has the keyboard,
         // and what a field does raise is left to the field (see `Typed`).
         List.AddHandler(KeyDownEvent, Keyed, RoutingStrategies.Tunnel);
         List.AddHandler(
@@ -767,7 +767,7 @@ internal abstract class EntryView<TItem> : EntryView
         // the room left between the rows as much as on the list's own edges: the list is hit nowhere in the
         // room between two rows, and a press there reaching nothing would be a frame that cannot be started
         // where the room to start one is. Taken on the way down like the keys, since what a press begins
-        // — a step, a drag or a frame — is settled before the list acts on it.
+        // (a step, a drag or a frame) is settled before the list acts on it.
         AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Tunnel);
         AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
@@ -788,14 +788,14 @@ internal abstract class EntryView<TItem> : EntryView
         DragDrop.SetAllowDrop(List, true);
 
         // Enter as well as over: the first position a drag is told of is an enter, so it is the one that draws the
-        // mark and the card first — and a drag that stopped moving the moment it arrived would be the one drawn
+        // mark and the card first, and a drag that stopped moving the moment it arrived would be the one drawn
         // never at all.
         List.AddHandler(DragDrop.DragEnterEvent, DraggedOver);
         List.AddHandler(DragDrop.DragOverEvent, DraggedOver);
         List.AddHandler(DragDrop.DragLeaveEvent, DraggedOff);
         List.AddHandler(DragDrop.DropEvent, Dropped);
 
-        // A name waiting to be typed, if one was made while this view was being made — which is what a new
+        // A name waiting to be typed, if one was made while this view was being made, which is what a new
         // folder is: its row is this view's, and this view is not laid out yet, so the box goes in a moment
         // later rather than at a row that does not exist. The listing is what knows whether the name is for what
         // it reads, since a view is handed a listing and not a directory (see `Listing.Pending`), and a view that
@@ -804,7 +804,7 @@ internal abstract class EntryView<TItem> : EntryView
         // Claimed when this view is on screen rather than when it is made: a dock behind another tab is drawn again on
         // every read too, and a name claimed there would be a box in a dock nobody is looking at, and none where the
         // user is. A view that is already up when the name is made is drawn again for it, so the claim falls to the
-        // view the drawing after the making builds — the first of them the user can actually see.
+        // view the drawing after the making builds, the first of them the user can actually see.
         AttachedToVisualTree += (_, _) => Naming();
     }
 
@@ -887,8 +887,8 @@ internal abstract class EntryView<TItem> : EntryView
     /// coordinates and a band inset by a container would not land where the pointer is.
     /// <para>
     /// There is no container around the content, and that is the point rather than tidy: what a listing is
-    /// fills the dock, so the room a frame is begun in has to be the listing's own — the gaps between its rows
-    /// or its tiles — rather than a margin belonging to something the listing sits in.
+    /// fills the dock, so the room a frame is begun in has to be the listing's own, the gaps between its rows
+    /// or its tiles, rather than a margin belonging to something the listing sits in.
     /// </para>
     /// </remarks>
     /// <param name="content">The card, or the tiles, the list at the heart of it.</param>
@@ -1031,7 +1031,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// </summary>
     /// <remarks>
     /// What it would copy is written on it, because a menu on a row is opened over one cell of it and a word such
-    /// as "Copy" would not say which cell's text — the size, the owner and the name are all cells of one row.
+    /// as "Copy" would not say which cell's text, the size, the owner and the name are all cells of one row.
     /// </remarks>
     /// <param name="words">What would be copied.</param>
     /// <returns>The entry.</returns>
@@ -1132,7 +1132,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// </summary>
     /// <remarks>
     /// The box is put in the name's place rather than the row being built again around it, which is what keeps the
-    /// name where the layout put it — and it is why the name has to be carried back: a listing that is not read again
+    /// name where the layout put it, and it is why the name has to be carried back: a listing that is not read again
     /// after an edit, because nothing about it changed, would otherwise leave a field standing in the row.
     /// </remarks>
     private (Panel Parent, int At, Control Name)? _named;
@@ -1295,7 +1295,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// </summary>
     /// <remarks>
     /// What a listing that is not read again after the edit needs: a place names a row without the files changing, so
-    /// nothing in the file system draws the listing again — and a box that stayed there would be a field nothing
+    /// nothing in the file system draws the listing again, and a box that stayed there would be a field nothing
     /// answers in, in a row that is no longer being edited. A rename the place refused is the case that needs it most:
     /// the name was not taken, and the row has to show the one it has.
     /// </remarks>
@@ -1325,7 +1325,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// <remarks>
     /// The listing is where a dock answers its keys from: they are taken at the top of the dock and passed to the
     /// view being read, so a keyboard that is nowhere in the dock is a dock whose keys do nothing. That is what
-    /// happens when the address — which hides itself when an edit ends — was where the keyboard was.
+    /// happens when the address, which hides itself when an edit ends, was where the keyboard was.
     /// </remarks>
     public override void Listen() => List.Focus();
 
@@ -1364,8 +1364,8 @@ internal abstract class EntryView<TItem> : EntryView
     /// Chooses one entry and brings its row into view, which is what a dock told to show a path does.
     /// </summary>
     /// <remarks>
-    /// The choice is the same one a press makes, so what follows a choice — the version graph, the commands that act
-    /// on it — reads it the same way; what is added here is the scroll, because a row chosen off screen is a choice
+    /// The choice is the same one a press makes, so what follows a choice, the version graph, the commands that act
+    /// on it, reads it the same way; what is added here is the scroll, because a row chosen off screen is a choice
     /// the user cannot see, and the whole point of being shown a path is to see it.
     /// </remarks>
     /// <param name="item">The entry to choose.</param>
@@ -1379,8 +1379,8 @@ internal abstract class EntryView<TItem> : EntryView
     /// Puts the choice back on what it was on before the listing was built again.
     /// </summary>
     /// <remarks>
-    /// A listing is built again whenever it is read again — a window come back to, a key asking for a
-    /// refresh, a change of zoom — and the choice is what the user was working with. Losing it to a read that
+    /// A listing is built again whenever it is read again, a window come back to, a key asking for a
+    /// refresh, a change of zoom, and the choice is what the user was working with. Losing it to a read that
     /// found the same things is losing work rather than changing the subject, and the tree keeps its own choice
     /// across the same rebuild for the same reason. An entry that is gone is simply not chosen again: a listing
     /// whose entries have changed is not the place to report which of them went.
@@ -1439,7 +1439,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// Draws every row again with what the listing is worth now: how faded, and whether it is cut.
     /// </summary>
     /// <remarks>
-    /// For a change that leaves the entries exactly as they are — the switch that shows what is hidden
+    /// For a change that leaves the entries exactly as they are, the switch that shows what is hidden
     /// changes how the entries are drawn and not which ones there are, so the rows are already in the tree and
     /// need their opacity said again rather than the view being built a second time.
     /// </remarks>
@@ -1456,8 +1456,8 @@ internal abstract class EntryView<TItem> : EntryView
     /// </summary>
     /// <remarks>
     /// The arrows step, <c>Home</c>, <c>End</c>, <c>PageUp</c> and <c>PageDown</c> go further,
-    /// <c>Shift</c> extends from where the last step landed, and <c>Enter</c> opens. Everything else — the
-    /// toolkit's own select-all among it — is left to the list, and the clipboard is the dock's and answered
+    /// <c>Shift</c> extends from where the last step landed, and <c>Enter</c> opens. Everything else, the
+    /// toolkit's own select-all among it, is left to the list, and the clipboard is the dock's and answered
     /// there.
     /// </remarks>
     /// <param name="sender">The list.</param>
@@ -1533,7 +1533,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// directory full of similarly named things reachable from the keyboard, and it is the behaviour of the
     /// file managers this is read like.
     /// <para>
-    /// Any run of characters is searched for as a whole — so typing quickly spells a longer name — and the
+    /// Any run of characters is searched for as a whole, so typing quickly spells a longer name, and the
     /// search always starts after the last move and wraps. The run is forgotten a second after the last
     /// character, which is how a new run begins.
     /// </para>
@@ -1586,7 +1586,7 @@ internal abstract class EntryView<TItem> : EntryView
 
     /// <summary>The first entry from a place on that begins with what was typed, or nothing.</summary>
     /// <remarks>
-    /// What a listing says is not a name — the way up — is left out: it is not a name but a place, and it is
+    /// What a listing says is not a name, the way up, is left out: it is not a name but a place, and it is
     /// reached by its own means rather than by being spelled, so a run that matched it would answer with
     /// something the reader did not name.
     /// </remarks>
@@ -1691,7 +1691,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// Remembers where the pointer went down, and what that press may become.
     /// </summary>
     /// <remarks>
-    /// A press on an entry of the choice — or on any entry at all where nothing is chosen — may become a drag of
+    /// A press on an entry of the choice, or on any entry at all where nothing is chosen, may become a drag of
     /// what is chosen. Anywhere else it may become a frame, and that is what keeps a frame begun beside a choice
     /// from carrying the entries it was drawn to add to. A press with <c>Shift</c> or <c>Ctrl</c>
     /// held is a hand that is choosing rather than moving, so it may become a frame wherever it lands and never a
@@ -1764,8 +1764,8 @@ internal abstract class EntryView<TItem> : EntryView
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
 
-        // Whatever a press left waiting is done with, so that a gesture whose release was never seen — one whose
-        // capture another control took — cannot be finished by the next press instead.
+        // Whatever a press left waiting is done with, so that a gesture whose release was never seen, one whose
+        // capture another control took, cannot be finished by the next press instead.
         _slippedAt = -1;
         _from = null;
 
@@ -2050,7 +2050,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// Starts a drag of the choice as it stood when the pointer went down.
     /// </summary>
     /// <remarks>
-    /// What is carried is the whole choice, or — where the press did not land on a chosen entry — the one entry it
+    /// What is carried is the whole choice, or, where the press did not land on a chosen entry, the one entry it
     /// landed on. Anywhere else the press begins a frame rather than a drag, which is what keeps a frame drawn
     /// beside a choice from carrying the entries it was drawn to add to (see <see cref="Pressed"/>). Everything
     /// after that is the listing's, because what a drag of a place's entries means is not what a drag of files
@@ -2077,8 +2077,8 @@ internal abstract class EntryView<TItem> : EntryView
             ? chosen
             : [dragged];
 
-        // What the listing will not hand over — a place that is not a thing, an entry that said it is not
-        // draggable — is left out here rather than refused when the drag is begun.
+        // What the listing will not hand over, a place that is not a thing, an entry that said it is not
+        // draggable, is left out here rather than refused when the drag is begun.
         carrying = [.. carrying.Where(Source.CanDrag)];
 
         if (carrying.Count == 0)
@@ -2258,7 +2258,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// <remarks>
     /// Wider than the grip drawn in it, and deliberately: four pixels is what the line is centred in, not
     /// what a pointer can be asked to find. The grip is still drawn at four, and the band around it is the
-    /// room to press — the two are different questions and this is the one the hand answers.
+    /// room to press, the two are different questions and this is the one the hand answers.
     /// </remarks>
     private const double GrabZone = 12;
 
@@ -2305,7 +2305,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// </summary>
     /// <remarks>
     /// What is wanted rather than what is drawn, and the two differ only by the squeeze a dock narrower than the
-    /// table puts every column under — see <see cref="Squeezed"/>. A drag of a column edge writes here, because
+    /// table puts every column under, see <see cref="Squeezed"/>. A drag of a column edge writes here, because
     /// what a hand moved is what the column is to be when there is room for it.
     /// </remarks>
     private readonly GridLength[] _widths;
@@ -2315,7 +2315,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// </summary>
     /// <remarks>
     /// Computed once for the table and written to the band of headings and to every row alike: a sheet that worked
-    /// its own share out — a star column, say — would put a row's cells at widths its own contents asked for, and
+    /// its own share out (a star column, say) would put a row's cells at widths its own contents asked for, and
     /// two rows that hold different words would then disagree about where a column begins. The written widths are
     /// pixels, so what a cell stands at is the same in the band and in every row, whatever the dock's width is.
     /// </remarks>
@@ -2381,7 +2381,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         _grabs = grabs;
 
         // What is drawn is what is wanted until the table has been laid out once, which is when there is a width
-        // to fit the columns into — see `Fit`.
+        // to fit the columns into, see `Fit`.
         _shown = [.. widths];
 
         // The list's own border and inset are taken off: what draws the table is the view, and a border and a
@@ -2391,14 +2391,14 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
 
         // The table is drawn at the width the list has rather than wider than it. With a horizontal scrollbar the
         // rows keep the width the columns ask for, however narrow the dock is, so the columns at the right are
-        // reachable only by scrolling — which is the hiding the squeeze exists to avoid, and they would also be
+        // reachable only by scrolling, which is the hiding the squeeze exists to avoid, and they would also be
         // wider than the band above them. A row is then as wide as the viewport, which is the width `Fit` reads.
         ScrollViewer.SetHorizontalScrollBarVisibility(List, ScrollBarVisibility.Disabled);
 
         // The item keeps the design's row height, and its own inset is taken off so that the header and the
         // rows share one edge. The four pixels left between two rows are the line's room and the frame's: the
         // rows are told apart by the line under each, and the room around it is the only place a press can
-        // land that is not on an entry — which is where a frame is begun from.
+        // land that is not on an entry, which is where a frame is begun from.
         List.Styles.Add(
             new Style(selector => selector.OfType<ListBoxItem>())
             {
@@ -2448,7 +2448,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// <remarks>
     /// The width comes from a row rather than from the dock, because a row is what the columns are read in: the
     /// list's viewport is the dock less whatever its scrollbar takes, and a table measured against the dock would
-    /// draw its last columns under the scrollbar. Every sheet — the band and each row — is then given the same
+    /// draw its last columns under the scrollbar. Every sheet, the band and each row, is then given the same
     /// pixels, which is what makes a column stand at one place down the whole table rather than each row working
     /// out a share of its own.
     /// <para>
@@ -2479,7 +2479,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// <remarks>
     /// The wanted widths are kept whole while there is room for them, and squeezed in proportion when there is not:
     /// the table is then still the dock's width, and no column of it is past the edge where it cannot be read. The
-    /// room column takes what is left over while there is room, and nothing at all while there is not — it is a
+    /// room column takes what is left over while there is room, and nothing at all while there is not, it is a
     /// width with nothing in it, and taking any of a squeezed table would be taking it from a column that is read.
     /// </remarks>
     /// <returns>The widths to draw the columns at.</returns>
@@ -2585,7 +2585,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// <summary>The columns of the table, as wide as the table was worked out for.</summary>
     /// <remarks>
     /// Pixels, and the same pixels for every sheet of the table, so that a column stands where it is in the band of
-    /// headings and in every row alike — see <see cref="_shown"/>.
+    /// headings and in every row alike, see <see cref="_shown"/>.
     /// </remarks>
     private ColumnDefinitions Definitions()
     {
@@ -2612,7 +2612,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         _header.ColumnDefinitions = Definitions();
 
         // The icon column is its own heading, with no word over it: the entries say what they are. A
-        // contributed column that names no key is headed the same way, which is what a column of marks is —
+        // contributed column that names no key is headed the same way, which is what a column of marks is,
         // what it says is said on the mark itself, and there is no word that would fit over one.
         var cells = new List<Control?>();
 
@@ -2723,7 +2723,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// <remarks>
     /// A <see cref="GridSplitter"/>, because that is the control the look is written for: the shell marks
     /// the grab between two regions with these classes and the look draws one, and a grab between two
-    /// columns is that same grab — its line, and the pointer it takes when the pointer is on it.
+    /// columns is that same grab, its line, and the pointer it takes when the pointer is on it.
     /// <para>
     /// It is put in a panel rather than in the header's own grid, and that is load-bearing rather than tidy.
     /// A splitter moves the columns of the grid it is in, and the table's rows are one grid each, so a
@@ -2838,8 +2838,8 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// </summary>
     /// <remarks>
     /// The pair taking the move is what makes the border land where the pointer is and leaves every other
-    /// border in the table where it was. Where one of the pair is the room the table is read in — the column
-    /// that takes what is left over — that one is skipped rather than moved: it takes the move for free, which
+    /// border in the table where it was. Where one of the pair is the room the table is read in, the column
+    /// that takes what is left over, that one is skipped rather than moved: it takes the move for free, which
     /// is also what keeps the table as wide as the dock.
     /// <para>
     /// Neither column is dragged away entirely: the move is taken as far as the narrower of the two allows,
@@ -3011,7 +3011,7 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     /// </summary>
     /// <remarks>
     /// The room is not only looks: a frame is begun where no entry is, so a grid whose tiles met
-    /// edge to edge would be a grid a frame could never start in — every point would be on a tile. It is left
+    /// edge to edge would be a grid a frame could never start in, every point would be on a tile. It is left
     /// on the **item** rather than on the tile drawn inside it, because it is the item's own area that answers
     /// the pointer: room left on what the item holds is room the item still covers, and a frame begun there
     /// would be a frame begun on the entry.
@@ -3031,7 +3031,7 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
         _icon = icon;
 
         // The tiles of a wrapped line fill the width it is given, so that the grid's outer inset is the room
-        // around it and stays put however wide the dock is — the room a line has to spare is spent between
+        // around it and stays put however wide the dock is, the room a line has to spare is spent between
         // its tiles rather than at its ends, and the last line keeps that same room so a short one stands in
         // the columns above. A grid that never wrapped reads from its start (see JustifiedPanel).
         List.ItemsPanel = new FuncTemplate<Panel?>(() => new JustifiedPanel { Gap = Gap });
@@ -3049,8 +3049,8 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
 
         // A tile at rest is its icon and its name on the dock's own ground: the surface a tile wears is what the
         // choice draws, so it arrives with the selection and leaves with it. What is left on the
-        // item is the room above and below a tile — the room across is the panel's, which is what makes the
-        // outermost room the grid's own padding and nothing else (see JustifiedPanel) — and the corner the
+        // item is the room above and below a tile, the room across is the panel's, which is what makes the
+        // outermost room the grid's own padding and nothing else (see JustifiedPanel), and the corner the
         // surface is rounded by, which is kept for every state so that a choice does not change the shape of
         // what it is drawn on.
         List.Styles.Add(
@@ -3067,8 +3067,8 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
             }
         );
 
-        // The card a chosen tile is drawn as: the fill is the theme's own wash over a chosen row — the same
-        // colour a chosen row of the table is filled with — and the edge is the one this view draws around it.
+        // The card a chosen tile is drawn as: the fill is the theme's own wash over a chosen row, the same
+        // colour a chosen row of the table is filled with, and the edge is the one this view draws around it.
         // The fill is the toolkit's and cannot be set from here: what a chosen item is filled with is written
         // into the theme's own template for it, which reaches the surface the tile is drawn on rather than the
         // item, so setting a background here would be a colour nothing is drawn with.
@@ -3154,7 +3154,7 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     /// <remarks>
     /// What a contribution says about an entry stands on the icon here rather than beside the name, which is
     /// where the list has it: a tile is a picture with a caption, and a mark in the caption would be a mark
-    /// taking room off the name at every zoom — the one thing a tile has none of. What is left is the name,
+    /// taking room off the name at every zoom, the one thing a tile has none of. What is left is the name,
     /// as wide as the icon and not one pixel wider, so that the two read as one column rather than as a
     /// picture with a caption under it that happens to start somewhere else.
     /// </remarks>

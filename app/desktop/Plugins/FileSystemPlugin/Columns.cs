@@ -8,8 +8,8 @@ namespace FileSystemPlugin;
 /// <remarks>
 /// The place is the contribution's rather than the listing's, because what a column says decides how it is
 /// read: a column saying where an entry is is read with the name, and one saying something about the entry
-/// is read once what it is has been read. The room the table is read in falls between the two — after what
-/// is read with the name and before what is read about the entry — so that the dock's spare width is spent
+/// is read once what it is has been read. The room the table is read in falls between the two, after what
+/// is read with the name and before what is read about the entry, so that the dock's spare width is spent
 /// in one place rather than scattered between the columns.
 /// </remarks>
 public enum ColumnPlacement
@@ -18,15 +18,15 @@ public enum ColumnPlacement
     /// Before everything, the picture included, where a mark that is about the entry stands.
     /// </summary>
     /// <remarks>
-    /// A column here is a mark rather than a value — a shape in a colour, with what it means said when the
-    /// pointer rests on it — so it is narrow, and it is read with the entry rather than after it. What it
+    /// A column here is a mark rather than a value, a shape in a colour, with what it means said when the
+    /// pointer rests on it, so it is narrow, and it is read with the entry rather than after it. What it
     /// says is what the entry is, and the name beside it is what the entry is called.
     /// </remarks>
     Leftmost,
 
     /// <summary>Right after the name, before the room the table is read in.</summary>
     /// <remarks>
-    /// A column here is the entry's second name — where it is named elsewhere — so it stands with the name
+    /// A column here is the entry's second name, where it is named elsewhere, so it stands with the name
     /// rather than after the listing's own columns: the name and what is read with it are one thing, and the
     /// room the table has to spare is left after them rather than between them.
     /// </remarks>
@@ -35,7 +35,7 @@ public enum ColumnPlacement
     /// <summary>After the room the table is read in, before the listing's own columns.</summary>
     /// <remarks>
     /// A column here is about what the entry is rather than what it is called, so it is read with the
-    /// listing's own columns — the time it was written, its size — which it stands in front of, being the
+    /// listing's own columns (the time it was written, its size) which it stands in front of, being the
     /// same kind of answer about the same entry.
     /// </remarks>
     BeforeValues,
@@ -48,12 +48,12 @@ public enum ColumnPlacement
 /// <remarks>
 /// The words and the ink, and nothing else: a column of values is text where the listing's own columns are,
 /// and one that grew a picture or a tag would be a second kind of thing in a table of one kind. What a
-/// contribution wants drawn rather than written — a mark with a picture in it, a badge on a tile — is the
+/// contribution wants drawn rather than written (a mark with a picture in it, a badge on a tile) is the
 /// Ownership column's business, which is another question asked in another way.
 /// </remarks>
 /// <param name="TextKey">An i18n key for the words, when they are the contributor's own.</param>
 /// <param name="Text">
-/// The words themselves, when they are not a phrase — a path, a name, which is data. Said, it wins over
+/// The words themselves, when they are not a phrase, a path, a name, which is data. Said, it wins over
 /// <paramref name="TextKey"/>.
 /// </param>
 /// <param name="Ink">What the words are drawn in, and what a dot is filled with where no colour is given.</param>
@@ -72,8 +72,8 @@ public enum ColumnPlacement
 /// over <paramref name="Ink"/>, and nothing means the role is what is drawn.
 /// </param>
 /// <param name="Edge">
-/// The line around the mark, which is the contribution's for the same reason its colour is — the two are one
-/// thing drawn — or nothing for a mark with no line at all.
+/// The line around the mark, which is the contribution's for the same reason its colour is, the two are one
+/// thing drawn, or nothing for a mark with no line at all.
 /// </param>
 public sealed record EntryColumnMark(
     string? TextKey = null,
@@ -137,7 +137,7 @@ public interface IEntryColumnProvider
     /// </summary>
     /// <remarks>
     /// A column of marks says nothing about an entry by having no mark, where a column of values says it the
-    /// way the listing says everything it does not know — with a dash. A dash where a mark would be is a mark
+    /// way the listing says everything it does not know, with a dash. A dash where a mark would be is a mark
     /// of its own, and it says the one thing a cell with no mark cannot mean twice.
     /// </remarks>
     bool Marks { get; }
@@ -148,7 +148,7 @@ public interface IEntryColumnProvider
     /// <remarks>
     /// Asked once for the directory a listing is of, not once per entry: it is what decides whether the
     /// column is there at all, and a column that appeared and disappeared row by row would not be a
-    /// column. A provider that cannot answer — a directory it may not inspect — says no rather than
+    /// column. A provider that cannot answer, a directory it may not inspect, says no rather than
     /// failing the listing.
     /// </remarks>
     /// <param name="directory">The directory being listed.</param>
@@ -161,8 +161,8 @@ public interface IEntryColumnProvider
     /// <remarks>
     /// A mark with nothing in it says the provider has nothing to say about the entry, and is drawn the
     /// way a listing draws what it does not know. It is an answer rather than an absence so that a reader
-    /// has one shape to handle, and so that a provider which says nothing about an entry — a directory,
-    /// which no Layout names — has no second way of saying it.
+    /// has one shape to handle, and so that a provider which says nothing about an entry, a directory,
+    /// which no Layout names, has no second way of saying it.
     /// </remarks>
     /// <param name="entry">The entry to consider.</param>
     /// <returns>What the cell says.</returns>
@@ -230,7 +230,7 @@ public static class EntryColumns
     /// </summary>
     /// <remarks>
     /// Said to all of them rather than to the ones a directory is answered by: what is read again is not
-    /// known here, and what a provider is holding is its own business — one with nothing to let go of
+    /// known here, and what a provider is holding is its own business, one with nothing to let go of
     /// answers nothing to it.
     /// </remarks>
     public static void Forget()

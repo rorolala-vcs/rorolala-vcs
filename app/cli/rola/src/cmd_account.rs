@@ -55,7 +55,7 @@ pub fn desc_account() -> Description {
 
 /// Names the account the work acts as, or lists the accounts it can act as.
 ///
-/// Naming no account lists every account any scope holds — deduplicated and in name order,
+/// Naming no account lists every account any scope holds, deduplicated and in name order,
 /// which is the same list completion offers. Naming one records it as the account the work
 /// acts as by default, in Rorolala's own file for the user; a name that is not an account
 /// anywhere is reported rather than recorded.
@@ -194,8 +194,8 @@ pub fn complete_account_ls() -> Suggest {
 /// Lists the accounts the work can act as, each with whether it is the one
 ///
 /// Every account any scope holds, in name order, drawn through a template the way every query is:
-/// the default names them one a line, and each carries `is_current` — whether it is the account the
-/// work acts as — so a run that reads the output as a program can tell which one is chosen without
+/// the default names them one a line, and each carries `is_current`, whether it is the account the
+/// work acts as, so a run that reads the output as a program can tell which one is chosen without
 /// a marker a person would read.
 #[command(node = "account.ls")]
 pub fn account_ls(format: &mut ResFormat) -> StateAccountLs {

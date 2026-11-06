@@ -345,7 +345,7 @@ internal sealed record GraphVocabulary(
 /// variants, the versions fixing them and the entries pointing at them, so the layout here is what turns
 /// that into lanes and columns. Three facts are derived rather than read:
 /// <list type="bullet">
-/// <item>a variant's <em>depth</em> is its version number — the index numbers a chain from the root, and
+/// <item>a variant's <em>depth</em> is its version number, the index numbers a chain from the root, and
 /// a variant without a version sits one past the version it is based on;</item>
 /// <item>a variant's <em>lane</em> is the file whose chain it stands on, which is found by walking every
 /// entry's chain up and giving the ancestors its path;</item>

@@ -20,9 +20,9 @@ use crate::failure::failure;
 
 /// The directories keys are looked for in, highest priority first.
 ///
-/// Everything Rorolala can reach: the keys beside the work at hand first — the Workspace's,
+/// Everything Rorolala can reach: the keys beside the work at hand first, the Workspace's,
 /// then the Vault's, since a key kept beside the copy being worked in shadows the same name
-/// in the Vault — and after them the scopes the user keeps for themselves. A scope the
+/// in the Vault, and after them the scopes the user keeps for themselves. A scope the
 /// machine does not name is simply not there.
 pub fn roots(workspace: Option<&Workspace>, vault: Option<&Vault>) -> Vec<PathBuf> {
     let mut roots = Vec::new();
@@ -44,7 +44,7 @@ pub fn roots(workspace: Option<&Workspace>, vault: Option<&Vault>) -> Vec<PathBu
 /// A path as it is meant to be read, with the `./` the layout writes taken out of it.
 ///
 /// The scopes are named `./keys/` and the like, and joining one onto a root leaves that `./`
-/// in the middle of every path built from it — a listing prints those paths, and a reader is
+/// in the middle of every path built from it, a listing prints those paths, and a reader is
 /// owed the place rather than the pieces it was joined from. Nothing is resolved by this: the
 /// path is walked back into the components it is made of, which is what a caller would have
 /// written.
@@ -56,7 +56,7 @@ fn plain(path: &Path) -> PathBuf {
 ///
 /// Every directory a command searches is one it named itself, the user's own stores
 /// included, so the other scopes are turned off: turning one on would name its directory a
-/// second time. `find_local` is what stays on — it is the flag for "search the directories
+/// second time. `find_local` is what stays on, it is the flag for "search the directories
 /// this caller handed in".
 pub const fn scopes() -> KeyLocateRule {
     KeyLocateRule {

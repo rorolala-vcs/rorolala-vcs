@@ -1,12 +1,12 @@
 //! The backend rola gives jj.
 //!
-//! jj reaches its storage through one trait — [`jj_lib::backend::Backend`] — and the backend it
+//! jj reaches its storage through one trait, [`jj_lib::backend::Backend`], and the backend it
 //! ships is Git's, which this build does not carry: `jj-lib` and `jj-cli` are depended on with
 //! `default-features = false`, so no Git repository is read or written anywhere in this program.
 //!
 //! What is left is a store that is rola's, and this is its place: a backend named [`NAME`],
 //! registered beside jj's own factories so that a repository whose store was written as one rola
-//! made is opened by it. Every method is a hole — `todo!()` — which is deliberate and is what is
+//! made is opened by it. Every method is a hole, `todo!()`, which is deliberate and is what is
 //! meant by an empty jj: the command line, the argument parsing, the configuration and the
 //! templates are jj's and work; what would reach the repository stops where rola's work has not
 //! been done.
@@ -48,7 +48,7 @@ pub const NAME: &str = "rola";
 
 /// rola's backend: the place a rola repository's objects will be read and written.
 ///
-/// It carries nothing yet. What it will carry — where the objects are kept, how they are named —
+/// It carries nothing yet. What it will carry (where the objects are kept, how they are named)
 /// is what the methods below are holes for, and a type that held a path now would be one to
 /// rewrite rather than fill in.
 #[derive(Debug)]
@@ -56,8 +56,8 @@ pub struct RolaBackend;
 
 /// What rola adds to jj's own store factories.
 ///
-/// jj's own are what the runner already holds — the in-memory `SimpleBackend` among them, which is
-/// what jj carries without Git — and the runner merges this into them, so a store written as
+/// jj's own are what the runner already holds, the in-memory `SimpleBackend` among them, which is
+/// what jj carries without Git, and the runner merges this into them, so a store written as
 /// [`NAME`] is opened by rola's backend and every other store is still jj's.
 ///
 /// The store's path and the run's settings are what a backend is made over, and neither is read
@@ -77,12 +77,12 @@ pub fn store_factories() -> StoreFactories {
 /// Writes [`RolaBackend`]'s implementation, with every body left as a hole.
 ///
 /// Each signature is written here the way jj writes it in the trait, and each body becomes a
-/// `todo!()` naming the method that is missing — so filling one in is replacing one line, and a
+/// `todo!()` naming the method that is missing, so filling one in is replacing one line, and a
 /// method jj adds is a compile error naming the line that is not there.
 ///
 /// The methods are in two groups because the keyword has to be told apart when the signatures are
 /// matched: `async fn` is a repeated fragment's own keyword and a repetition of a bare keyword
-/// across a repetition — `$(async)?` — is not something the macro language has. Which methods are
+/// across a repetition, `$(async)?`, is not something the macro language has. Which methods are
 /// asynchronous is jj's business and not this file's: what is written below is what the trait says.
 ///
 /// Every body takes jj's own parameter names and uses none of them, so the unused-parameter lint is
@@ -208,7 +208,7 @@ rola_backend! {
 
         /// Writes a commit, and answers what was written rather than what was handed over.
         ///
-        /// The signing function's lifetime is written as the trait writes it — elided — because an
+        /// The signing function's lifetime is written as the trait writes it, elided, because an
         /// implementation's signature is the trait's signature and not a spelling of its own; the
         /// lint that wants every lifetime in a path spelled out is excused here for that reason.
         #[allow(

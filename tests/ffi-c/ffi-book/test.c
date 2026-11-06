@@ -1,7 +1,7 @@
 /*
  * The book across the ABI: opened, located, and searched.
  *
- * A book is reached the way the index and the version graph are — an owned handle or nothing — and
+ * A book is reached the way the index and the version graph are, an owned handle or nothing, and
  * a search answers with a list of hits, each carrying the description and fragments a search
  * result is drawn with. What is worth meeting here is the nesting: a hit is a value of its own, a
  * fragment is a value of its own, and every one of the three is given back with its own `free_*`.

@@ -86,7 +86,7 @@ public interface IPluginConfig
     /// Keeps one of the plugin's own settings, as the preference panel keeps it.
     /// </summary>
     /// <remarks>
-    /// This is what a plugin uses when the setting is changed from somewhere the host does not draw — a
+    /// This is what a plugin uses when the setting is changed from somewhere the host does not draw, a
     /// control the plugin puts in a dock of its own, which is a shortcut to a setting the panel also shows.
     /// The value is written to the file at once, and a setting the plugin reads while it works takes effect
     /// without a restart; what the plugin declared decides how it is written.
@@ -148,7 +148,7 @@ public enum SettingKind
     /// <remarks>
     /// A preset is not a value kept in its own right: it lists the settings it stands for, and the one
     /// the settings currently agree with is the one shown. Choosing a preset writes the settings it
-    /// names; exactly one option names none, and is shown when no other does — the way back to setting
+    /// names; exactly one option names none, and is shown when no other does, the way back to setting
     /// each one by hand (see <see cref="SettingOption.Writes"/>).
     /// </remarks>
     Preset,
@@ -164,12 +164,12 @@ public enum SettingKind
 /// What choosing this option writes elsewhere, as setting identity to value, and nothing for a plain
 /// choice. A preset's option names the settings it stands for; choosing it writes each of them, and it
 /// is shown when every one of them is currently worth what it names. The one option of a preset that
-/// names nothing is the fallback — what is shown when the settings agree with no other option — and
+/// names nothing is the fallback, what is shown when the settings agree with no other option, and
 /// choosing it writes nothing, so that it is the way to adjust each setting by hand.
 /// </param>
 /// <param name="Label">
 /// The option's words, written out rather than named by an i18n key. It is for an option whose values
-/// are not known when the program is built — a picture set read from beside the program, say — and a
+/// are not known when the program is built (a picture set read from beside the program, say) and a
 /// <see cref="LabelKey"/> that named a key no file states would show the key itself.
 /// </param>
 /// <param name="Detail">
@@ -233,7 +233,7 @@ public interface IRola { }
 /// The host's windows being come back to.
 /// </summary>
 /// <remarks>
-/// A plugin that reads the world outside the program — a filesystem, a device, a share — has nothing to tell it
+/// A plugin that reads the world outside the program (a filesystem, a device, a share) has nothing to tell it
 /// that the user went away and came back, which is the moment something out there is most likely to have changed.
 /// The host knows, because its windows tell it, so the host says so.
 /// </remarks>
@@ -247,8 +247,8 @@ public interface IRefocus
 /// What the files may have done, said by whichever plugin changed them.
 /// </summary>
 /// <remarks>
-/// A plugin that changes the files does it by running something of its own — a command line, another program
-/// — and nothing about the filesystem tells the listing that shows them. The one that made the change knows
+/// A plugin that changes the files does it by running something of its own, a command line, another program
+///, and nothing about the filesystem tells the listing that shows them. The one that made the change knows
 /// it did, so it says so, and every listing reads again for it: it is the same signal a plugin's own
 /// operation raises, said by whoever knows rather than guessed at by whoever draws.
 /// <para>
@@ -267,7 +267,7 @@ public interface IFileChanges
     /// <remarks>
     /// The other half of <see cref="Changed"/>, and not the same thing: a reading that landed changed nothing on
     /// disk, so what is drawn from it is drawn again and nothing anyone read is given back. Saying
-    /// <see cref="Touch"/> instead would have every plugin drop its answers and read them again — which, for a
+    /// <see cref="Touch"/> instead would have every plugin drop its answers and read them again, which, for a
     /// reader whose answer is what just landed, is asking for the answer it is already holding: one reading per
     /// drawing, for as long as the window is open.
     /// </remarks>
@@ -295,8 +295,8 @@ public sealed record Dialog(string Title, string Message, Action Confirmed);
 
 /// <summary>One answer a question offers, and what choosing it runs.</summary>
 /// <remarks>
-/// The label is the words themselves rather than a key, because a question may be about a count — "Bring in
-/// the other 3" — and a key with a number in it is the asker's to fill. What is run is the asker's too: the
+/// The label is the words themselves rather than a key, because a question may be about a count, "Bring in
+/// the other 3", and a key with a number in it is the asker's to fill. What is run is the asker's too: the
 /// host draws a button and knows nothing of what it does.
 /// </remarks>
 /// <param name="Label">What the button says, in the words of whoever asked.</param>
@@ -395,7 +395,7 @@ public interface IDialogs
     /// </summary>
     /// <remarks>
     /// For what a line of text cannot say: a command's own report, read into the shapes its lines mean. The
-    /// stack, its look, and where it stands are the host's, so a plugin brings only the content — which is the
+    /// stack, its look, and where it stands are the host's, so a plugin brings only the content, which is the
     /// same division as everywhere else, a plugin saying what and the host saying how.
     /// </remarks>
     /// <param name="notification">What to say.</param>

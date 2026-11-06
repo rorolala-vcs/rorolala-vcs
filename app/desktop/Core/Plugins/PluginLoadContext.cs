@@ -53,8 +53,8 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
     /// Resolves an unmanaged library, answering the program's own copy where the runtime would not.
     /// </summary>
     /// <remarks>
-    /// The runtime's probing for a context of its own looks in the calling assembly's directory — the
-    /// plugins' directory — and on the platform's search path, and the program's own directory is
+    /// The runtime's probing for a context of its own looks in the calling assembly's directory, the
+    /// plugins' directory, and on the platform's search path, and the program's own directory is
     /// neither. A plugin that binds the C ABI reaches for a library the program carries beside the
     /// program, so without this it is found by nothing, and the binding fails at first use rather than
     /// where it was written.
@@ -88,7 +88,7 @@ internal sealed class PluginLoadContext : AssemblyLoadContext
     /// </summary>
     /// <remarks>
     /// What a binding asks for is the bare name, and what a platform calls the file is a spelling of
-    /// it: the runtime knows the spellings, and asking it is not an option here — this is the probing
+    /// it: the runtime knows the spellings, and asking it is not an option here, this is the probing
     /// that happens before there is anything to ask. The bare name is tried first so that a path the
     /// caller wrote itself is taken as it is.
     /// </remarks>

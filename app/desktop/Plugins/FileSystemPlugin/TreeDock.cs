@@ -18,7 +18,7 @@ namespace FileSystemPlugin;
 /// <remarks>
 /// It is a dock of its own rather than a layout the directory's dock can be put into.
 /// A tree is not another way of reading one directory; it is a way of walking the ones under a place,
-/// and it is the only view that is rooted somewhere the location is not — so it is not rearranged by
+/// and it is the only view that is rooted somewhere the location is not, so it is not rearranged by
 /// stepping through directories, and it is worth having on screen beside one that is.
 /// </remarks>
 internal sealed class TreeDock : IDockView
@@ -49,8 +49,8 @@ internal sealed class TreeDock : IDockView
 /// user has opened stays open while the location moves under it, and a step is read when it is opened
 /// so that a directory with many directories under it costs a listing only when it is looked at.
 /// <para>
-/// One button sits over it, which takes the root to the top of the platform — the drive list on
-/// Windows, the root on Unix — and roots the tree there: the way back to a place you can start
+/// One button sits over it, which takes the root to the top of the platform, the drive list on
+/// Windows, the root on Unix, and roots the tree there: the way back to a place you can start
 /// choosing a new base from.
 /// </para>
 /// </remarks>
@@ -89,8 +89,8 @@ internal sealed class TreeControl : UserControl
     /// <remarks>
     /// The base, the switch that shows what is hidden, and the providers in force: the first is what the
     /// tree is rooted at, and the other two decide which rows there are under it. A tree is read a step at
-    /// a time and keeps what it read, so a hiding that changed is not something a repaint reaches — the rows
-    /// themselves come and go — which is why it is compared here rather than faded where they are drawn.
+    /// a time and keeps what it read, so a hiding that changed is not something a repaint reaches, the rows
+    /// themselves come and go, which is why it is compared here rather than faded where they are drawn.
     /// </remarks>
     private (string Base, bool Shown, IReadOnlySet<string> Rules)? _drawn;
 
@@ -144,8 +144,8 @@ internal sealed class TreeControl : UserControl
         };
 
         // The tree is the whole dock: no row above it, because what a row there held is offered where the
-        // tree is read instead — the empty space's own menu carries the way back to the top of the platform
-        // (see `Actions.Empty`) — and a row that only holds one button is a row the steps are not drawn in.
+        // tree is read instead, the empty space's own menu carries the way back to the top of the platform
+        // (see `Actions.Empty`), and a row that only holds one button is a row the steps are not drawn in.
         //
         // The sidebar ground: the tree sits on the elevated surface, which is what reads as a pane of the
         // window rather than as a bare stretch of its ground. The edge against the dock beside it is not
@@ -218,7 +218,7 @@ internal sealed class TreeControl : UserControl
     /// </summary>
     /// <remarks>
     /// What is read again is the tree that is on screen, not a new one: a tree is a view the reader has scrolled
-    /// and walked into, and a tree built again comes back with its own scroll at the top — which is the change of
+    /// and walked into, and a tree built again comes back with its own scroll at the top, which is the change of
     /// the view's height a reader sees as the chosen step paging up or down under the pointer. The steps that are
     /// open and the step that is chosen are kept by the tree itself, which is what makes reading it again one
     /// drawing of the same view rather than a replacement of it.
@@ -245,7 +245,7 @@ internal sealed class TreeControl : UserControl
     /// <remarks>
     /// The steps and the choice are asked of the tree being replaced rather than kept here, because they are
     /// what that tree was drawn with: a tree rooted elsewhere, or one read by other rules, is a tree to build
-    /// again — the rows under the base are different rows — and a user who has walked down into a step should
+    /// again, the rows under the base are different rows, and a user who has walked down into a step should
     /// not be put back at the base for it, nor lose the step the clipboard's keys would act on.
     /// <para>
     /// What the files having changed is not: that is the same tree over the same base, read again in place by
@@ -258,7 +258,7 @@ internal sealed class TreeControl : UserControl
 
         // Whether the keyboard is inside the tree about to be replaced, for the reason a listing is asked about as
         // well: a view replaced from under the keyboard takes it away, and this dock answers its keys at the top of
-        // itself — so a tree rebuilt while it had the keyboard would answer nothing afterwards.
+        // itself, so a tree rebuilt while it had the keyboard would answer nothing afterwards.
         var seating = was is { } old && Keys.Holds(Keys.On(this), old);
 
         // A tree built for the first time is one nothing in this run says anything about, so it opens what
@@ -287,7 +287,7 @@ internal sealed class TreeControl : UserControl
     /// </summary>
     /// <remarks>
     /// Deferred to the next turn of the loop, because the tree it goes into has just been made and is not laid out
-    /// yet — a keyboard asked of a control that is not arranged yet is a keyboard it forgets. Not the
+    /// yet, a keyboard asked of a control that is not arranged yet is a keyboard it forgets. Not the
     /// tree itself but the row that is chosen, when there is one: what a keyboard on the tree reaches is that row.
     /// </remarks>
     private void Seated() =>
@@ -351,7 +351,7 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Every step on screen, so that the one a drag is over can be lit.</summary>
     /// <remarks>
     /// A step is recorded when it is made and never taken out: a tree read a step at a time keeps the ones it
-    /// has read, closed or not, so a row that was recorded is still the row the tree draws — and what is read
+    /// has read, closed or not, so a row that was recorded is still the row the tree draws, and what is read
     /// is bounded by what a user opened.
     /// </remarks>
     private readonly List<(string Path, Border Row)> _rows = [];
@@ -380,7 +380,7 @@ internal sealed class TreeBrowser : UserControl
     /// A step reads the directories under it once and holds them, which is what keeps a tree over a deep
     /// directory cheap. A directory made under a step is the one thing that makes what it holds wrong, so the
     /// step is named here and reads again the next time it is opened. Steps are named by path rather than by
-    /// row because the row may not exist yet when the change is made — a step that was never opened has no row.
+    /// row because the row may not exist yet when the change is made, a step that was never opened has no row.
     /// </remarks>
     private readonly HashSet<string> _stale = new(StringComparer.Ordinal);
 
@@ -388,7 +388,7 @@ internal sealed class TreeBrowser : UserControl
     /// The newest reading claimed for each step, so that a reading another has superseded does not land.
     /// </summary>
     /// <remarks>
-    /// A step read again — one a directory was made in is closed and opened again — may have a reading on its
+    /// A step read again, one a directory was made in is closed and opened again, may have a reading on its
     /// way from before, and both would draw rows: the one that lands is the newest claim, and the older is
     /// dropped rather than left to rebuild what it found.
     /// </remarks>
@@ -434,7 +434,7 @@ internal sealed class TreeBrowser : UserControl
     /// <remarks>
     /// A handful, because the turns it waits for are the reading of a directory and the lay-out of the row it
     /// makes: a few more than those are needed costs nothing, and asking forever would be a loop that never
-    /// ends for a directory this view is not drawing at all — one made in another dock's location, say.
+    /// ends for a directory this view is not drawing at all, one made in another dock's location, say.
     /// </remarks>
     private const int Tries = 6;
 
@@ -564,8 +564,8 @@ internal sealed class TreeBrowser : UserControl
     /// Says whether the base holds nothing under it, which is what the word drawn over the tree is for.
     /// </summary>
     /// <remarks>
-    /// Said again whenever the base's own level is read — the tree read again after the files changed, and a
-    /// reading of the root that lands — because what the base holds is not what it held when the tree was made:
+    /// Said again whenever the base's own level is read, the tree read again after the files changed, and a
+    /// reading of the root that lands, because what the base holds is not what it held when the tree was made:
     /// a base that was empty when it was first read is a base that may have been given something since, and a
     /// word kept from that first reading is a word about a tree that is no longer there.
     /// </remarks>
@@ -608,7 +608,7 @@ internal sealed class TreeBrowser : UserControl
     /// Where a drag would land: the directory of the step it is over.
     /// </summary>
     /// <remarks>
-    /// The step itself and not the space around it — a tree holds the steps a user opened, and the space beside
+    /// The step itself and not the space around it, a tree holds the steps a user opened, and the space beside
     /// and below them names nothing to go into, so a drag let go there is let go nowhere rather than being read
     /// as the base. The computer is a place to choose a drive from rather than a directory, so a step standing
     /// for it is not somewhere a drag can go either.
@@ -745,7 +745,7 @@ internal sealed class TreeBrowser : UserControl
     /// </summary>
     /// <remarks>
     /// The tree itself and not a row: a row is built into it, and what a keyboard on the tree reaches is the step
-    /// that is chosen under it — and being built again is exactly what a tree that lost the keyboard looks like
+    /// that is chosen under it, and being built again is exactly what a tree that lost the keyboard looks like
     /// from here.
     /// </remarks>
     public void Listen() => _tree.Focus();
@@ -793,8 +793,8 @@ internal sealed class TreeBrowser : UserControl
 
         // Closed and opened again, which is two turns of the loop rather than one: the step has to be told it
         // is closed before it can be told it is open, or a step that is already open is not opened at all. A
-        // step that was never opened is opened the once, and one that is empty — which a step with only a
-        // placeholder in it is — is not opened onto nothing.
+        // step that was never opened is opened the once, and one that is empty, which a step with only a
+        // placeholder in it is, is not opened onto nothing.
         var holds = HoldsAny(into);
 
         step.IsExpanded = false;
@@ -811,7 +811,7 @@ internal sealed class TreeBrowser : UserControl
     /// <remarks>
     /// The row of a directory just made arrives a turn or so after it is made: the tree is read again when the
     /// files change, that reading is itself deferred, and the row is only built once the step holding it is
-    /// opened. So the box is asked for again on each of a few turns until the row is there — a box asked for
+    /// opened. So the box is asked for again on each of a few turns until the row is there, a box asked for
     /// once, now, would be a box asked for before there is anything to put it in, which is exactly what a tree
     /// did when this was not retried.
     /// </remarks>
@@ -881,8 +881,8 @@ internal sealed class TreeBrowser : UserControl
     /// Opens what can be opened of the steps a rebuilt tree is to bring back, and chooses what was chosen.
     /// </summary>
     /// <remarks>
-    /// A step whose row is not drawn is either one the reading holding it has not reached — which is what this
-    /// waits for, and why the reading calls this again when it lands — or one that is not there at all, which
+    /// A step whose row is not drawn is either one the reading holding it has not reached, which is what this
+    /// waits for, and why the reading calls this again when it lands, or one that is not there at all, which
     /// is dropped. <paramref name="landed"/> is what tells the two apart: it is said by the reading that has
     /// just finished, since the tree cannot answer whether a row is missing or merely not made yet.
     /// <para>
@@ -942,8 +942,8 @@ internal sealed class TreeBrowser : UserControl
     /// <remarks>
     /// The tree is the same control rather than a new one, which is what keeps what a reader has scrolled to: a
     /// tree built again comes back with its scroll at the top, and a view whose scroll moved under the reader is
-    /// one where the chosen step is no longer where it was seen. What is read again is the rows — a directory
-    /// whose contents have moved is read from disk — and what is put back is what was open and what was chosen,
+    /// one where the chosen step is no longer where it was seen. What is read again is the rows, a directory
+    /// whose contents have moved is read from disk, and what is put back is what was open and what was chosen,
     /// which is what those rows are read against.
     /// <para>
     /// The root is read whether or not it is open, since it is the one step every other step hangs from; a step
@@ -1014,7 +1014,7 @@ internal sealed class TreeBrowser : UserControl
     /// What is chosen is put back only if it is still what is chosen: a reader who has chosen another step while
     /// the rows were being made has chosen that one, and a reading that put the old choice back would be the view
     /// undoing a choice rather than restoring one. A step whose row is not there once the rows are laid out is one
-    /// the tree no longer holds — a step that was open is opened again by the reading, so a gone row is gone — and
+    /// the tree no longer holds (a step that was open is opened again by the reading, so a gone row is gone) and
     /// it is let go of rather than kept for a row that will never be drawn.
     /// </remarks>
     /// <param name="chosen">The step that was chosen when the rows were read again.</param>
@@ -1265,7 +1265,7 @@ internal sealed class TreeBrowser : UserControl
     /// <remarks>
     /// Into the step the menu was opened on, which is what a step is: a directory. A menu opened on the space
     /// beside the steps has no such directory, which is why this is offered on a row and not on the tree's own
-    /// space — the tree draws the steps under a base rather than one directory, and a folder is made in a
+    /// space, the tree draws the steps under a base rather than one directory, and a folder is made in a
     /// directory.
     /// </remarks>
     /// <param name="into">The directory to make it in.</param>
@@ -1276,7 +1276,7 @@ internal sealed class TreeBrowser : UserControl
     /// </summary>
     /// <remarks>
     /// The row is found by the path in its own tag rather than by what is chosen, because a rename is asked
-    /// for about one entry and the choice is not always that entry — a folder just made is renamed without
+    /// for about one entry and the choice is not always that entry, a folder just made is renamed without
     /// ever being clicked.
     /// </remarks>
     /// <param name="entry">The directory whose name is being edited.</param>
@@ -1470,7 +1470,7 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>One directory as a step of the tree, reading its children when first opened.</summary>
     /// <remarks>
     /// Whether a step may be opened is a question for the filesystem, and the rules that answer it are a
-    /// repository's to read — which is a program run. It is asked where it can be answered without one: a
+    /// repository's to read, which is a program run. It is asked where it can be answered without one: a
     /// step is drawn with the mark that says it may be opened and corrected a moment later, rather than a
     /// window that stops drawing until a program has answered (see <see cref="Settle"/>).
     /// </remarks>
@@ -1654,9 +1654,9 @@ internal sealed class TreeBrowser : UserControl
     /// <para>
     /// A press on a directory switches the location there and then, rather than waiting for a second one: a tree
     /// is walked by choosing steps, and choosing one can only mean going to it. The step is left open with it, so
-    /// the walking is one press per step. What closes a step is its chevron — which the theme draws beside the
+    /// the walking is one press per step. What closes a step is its chevron, which the theme draws beside the
     /// header as a control of its own, so a press on the chevron is not a press on the row and never reaches this
-    /// handler — and the menu's close-everything. A file is chosen, and opened by a second press, because going to
+    /// handler, and the menu's close-everything. A file is chosen, and opened by a second press, because going to
     /// a file is nothing a tree can do.
     /// </para>
     /// <para>
@@ -1667,8 +1667,8 @@ internal sealed class TreeBrowser : UserControl
     /// <para>
     /// The base theme opens and closes a step on a double click of a row as well, which leaves the chevron
     /// as one of two ways rather than the way. That gesture is taken from it here, and taken from the row
-    /// rather than from the tree: the base theme's handler is on the row's own presenter — above it and
-    /// below the tree — and a gesture taken by a handler on the row is a gesture that has already been taken
+    /// rather than from the tree: the base theme's handler is on the row's own presenter, above it and
+    /// below the tree, and a gesture taken by a handler on the row is a gesture that has already been taken
     /// by the time the presenter is reached.
     /// </para>
     /// </remarks>
@@ -1683,7 +1683,7 @@ internal sealed class TreeBrowser : UserControl
 
         // Filled when it opens rather than when the row is made, which is how a listing's menu is made as
         // well (see `EntryView.Prepared`). What a menu holds is asked of the plugins, and what they answer
-        // — the ownership commands among them — is read from the filesystem: a tree builds a row for every
+        //, the ownership commands among them, is read from the filesystem: a tree builds a row for every
         // step under an opened one, so a menu made here is a menu paid for on every row nobody opened.
         var menu = new ContextMenu();
         menu.Opening += (_, _) =>
@@ -1693,7 +1693,7 @@ internal sealed class TreeBrowser : UserControl
 
             // Offered by every row with steps under it, which is the same row that is given an expander, since
             // closing them all is worth offering where there is more than one to close. What is not offered is
-            // the other half — opening them all — since that would read every directory under the row, which is
+            // the other half, opening them all, since that would read every directory under the row, which is
             // what a tree read a step at a time is for avoiding.
             if (collapse is not null)
             {
@@ -1702,7 +1702,7 @@ internal sealed class TreeBrowser : UserControl
         };
 
         // The menu is opened by the control the row is in rather than by the row, since one of the
-        // things it does — putting a path on the clipboard — is reached through a control on screen.
+        // things it does, putting a path on the clipboard, is reached through a control on screen.
         // A tree row is as wide as the tree, so what speaks for an entry is worn at the row's right rather than
         // on the icon's corner: a tree is a list of names, and a badge drawn over a picture in it would be a mark
         // on the picture rather than an answer about the entry.
@@ -1757,7 +1757,7 @@ internal sealed class TreeBrowser : UserControl
             {
                 // A press on a directory is the whole of walking: the location goes there, and the step is left
                 // open onto what it holds, so the step after it is one the user can see and press. A press on a
-                // row never puts a step away — what closes one is its chevron, or the menu's close-everything —
+                // row never puts a step away (what closes one is its chevron, or the menu's close-everything)
                 // so a tree is never folded up by the press that went into it.
                 //
                 // Opened before the location moves rather than after it: going to the directory the location is
@@ -1801,8 +1801,8 @@ internal sealed class TreeBrowser : UserControl
             e.Handled = true;
         };
 
-        // A step's header is made again when what it holds changes — the way to close it is offered once it has
-        // something to close — and the row it had is then no longer the row it is drawn with: keeping both would
+        // A step's header is made again when what it holds changes, the way to close it is offered once it has
+        // something to close, and the row it had is then no longer the row it is drawn with: keeping both would
         // leave the search for a row a name is edited in finding a row nothing is drawn in.
         _rows.RemoveAll(one => string.Equals(one.Path, path, StringComparison.Ordinal));
         _rows.Add((path, row));

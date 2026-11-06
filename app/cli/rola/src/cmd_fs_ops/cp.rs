@@ -48,7 +48,7 @@ pub fn complete_fs_ops_cp(ctx: ShellContext) -> Suggest {
 ///
 /// `TO` is the path the copy is to have, not the directory it is to be put in: what a name already
 /// taken there means was settled before this was called. Either path may name a file or a directory,
-/// and copying a directory copies everything under it — content and structure, which is all that is
+/// and copying a directory copies everything under it, content and structure, which is all that is
 /// claimed: permissions, ownership and times are the destination's own, as the system gives them for
 /// anything newly written.
 ///

@@ -25,7 +25,7 @@ pub const GLOBAL_ARG_CONCURRENCY: PickerArg<'static, String> = arg![concurrency:
 /// Represents how many transfers the run carries at once, and whether the run named it.
 ///
 /// A Vault reads a named value differently from a default one: what a client asks for is its own
-/// number of lanes, while a Vault that is told nothing keeps the number its configuration names —
+/// number of lanes, while a Vault that is told nothing keeps the number its configuration names,
 /// see `DaemonConfig::max_concurrency`. So whether the flag was given travels with the value.
 #[derive(Debug, Clone)]
 pub struct ResConcurrency {

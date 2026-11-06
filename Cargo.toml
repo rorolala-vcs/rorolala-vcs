@@ -63,8 +63,8 @@ authors = [
 
 [workspace.dependencies]
 # Jujutsu, which `rola-jj` is: its command line and the library under it, both depended on without
-# their default features — the Git backend and watchman are what `default-features = false` leaves
-# out — because what a rola repository is is rola's to say and not Git's (see `app/cli/rola-jj`).
+# their default features, the Git backend and watchman are what `default-features = false` leaves
+# out, because what a rola repository is is rola's to say and not Git's (see `app/cli/rola-jj`).
 #
 # `async-trait` and `futures` are named here as well as there because the backend trait is written
 # in their terms: its methods are `async` under `#[async_trait]`, and what they hand back is
@@ -139,7 +139,7 @@ arg-picker = "0.4.0"
 globset = "0.4.20"
 
 # gitignore matching for the managed ignore rules (`modules/ignore`): the syntax is gitignore's
-# whole surface — negation, directory-only, anchoring, `**` — and ripgrep's own matcher is the one
+# whole surface (negation, directory-only, anchoring, `**`) and ripgrep's own matcher is the one
 # already proven against it. Only the matching is taken, not the crate's own directory walking:
 # which files hold rules, and in what order they apply, is this project's own answer.
 ignore = "0.4.23"
@@ -152,7 +152,7 @@ toml = "0.8.23"
 bincode2 = "2.0.1"
 
 # Pictures. The descriptions under `res/icons` are read while the workspace builds, so what making a
-# picture of one amounts to — reading one format, sampling it down, writing another — is a build
+# picture of one amounts to (reading one format, sampling it down, writing another) is a build
 # concern rather than something a program carries at run time. Only the formats such a description
 # may name are enabled, so the decoders for every other one are not compiled at all.
 image = { version = "0.25.10", default-features = false, features = [
@@ -161,7 +161,7 @@ image = { version = "0.25.10", default-features = false, features = [
 ] }
 
 # The renderer the icon tool draws the Desktop's own pictures with: a library inside the tool rather
-# than a program the machine has to have, so that what is drawn is the same wherever it is drawn —
+# than a program the machine has to have, so that what is drawn is the same wherever it is drawn,
 # and so that a machine without librsvg is a machine that can still draw an icon. Text is left out
 # because the artwork is paths: the set draws no words, so nothing here needs a font.
 resvg = { version = "0.48.1", default-features = false }
@@ -219,7 +219,7 @@ dirs = "6.0.0"
 size = "0.5.0"
 
 # A terminal's other half: the pseudo-terminal a shell is run in. Windows is ConPTY and Unix is
-# `openpty`, and the differences between the two — the process group, `TERM`, the window size — are
+# `openpty`, and the differences between the two (the process group, `TERM`, the window size) are
 # what this crate is for rather than something a window that draws a terminal should carry.
 portable-pty = "0.9.0"
 

@@ -9,7 +9,7 @@ namespace RorolalaVCSPlugin;
 /// <remarks>
 /// The entry the path named is dropped and made again under a new <c>Uuid</c>, holding what it held:
 /// what changes is the identity a record is kept under, not the version or the content. That is what
-/// makes it a fork — a file may go on being recorded under an entry of its own without moving the
+/// makes it a fork, a file may go on being recorded under an entry of its own without moving the
 /// entry it was following.
 /// </remarks>
 internal static class LayoutPathNewUuidCommand

@@ -1,7 +1,7 @@
 //! The `rola bind` command: name a Vault address and point the Layout at it.
 //!
-//! Making a Workspace and putting it to work otherwise takes two commands — binding the address and
-//! choosing the Vault the Layout tracks — and the two share one name. This is that one name said
+//! Making a Workspace and putting it to work otherwise takes two commands, binding the address and
+//! choosing the Vault the Layout tracks, and the two share one name. This is that one name said
 //! once: the Vault is bound under it, and the Layout being worked in tracks it when the Layout
 //! tracks nothing yet.
 
@@ -78,8 +78,8 @@ pub fn complete_bind(ctx: ShellContext, history: &mut LazyRes<ResAddressHistory>
 /// Binds a Vault address under a name and points the Layout at it
 ///
 /// The name is the Workspace's own, so the same Vault may be `origin` here and something else
-/// elsewhere. It is normalised the way a name used as a directory key is — words of letters and
-/// digits joined by `-` — and the name `origin` is used when none is given.
+/// elsewhere. It is normalised the way a name used as a directory key is, words of letters and
+/// digits joined by `-`, and the name `origin` is used when none is given.
 ///
 /// The Vault bound becomes the one the Workspace reaches for, unless `--no-set-default-vault`.
 /// The Layout being worked in is made to track that Vault when it tracks nothing: a Layout that
@@ -155,7 +155,7 @@ pub fn handle_bind(
     let address = address.to_string();
 
     // The name is a directory key for what is fetched from the Vault, so it is held to the shape a
-    // directory name has — the same shape a Layout's name was held to when a name was one.
+    // directory name has, the same shape a Layout's name was held to when a name was one.
     let Some(name) = normalized_name(&name) else {
         return ErrorVaultNameInvalid { name }.into();
     };

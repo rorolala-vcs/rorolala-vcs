@@ -5,8 +5,8 @@
 //! serves the Vault, and then asks the two questions these commands exist for.
 //!
 //! What is checked is that a remote listing is *the other end's*, not the run's own, and that a
-//! remote read answers with the object the Vault holds — a Version with the number the Vault traced
-//! its chain to — while leaving both indexes as they were. The listing and the read are the two
+//! remote read answers with the object the Vault holds, a Version with the number the Vault traced
+//! its chain to, while leaving both indexes as they were. The listing and the read are the two
 //! halves of the same reaching, which is why a listing is hashes and the object is a read besides.
 
 use std::fs;
@@ -60,7 +60,7 @@ async fn main() {
 
     // The Vault's index holds a whole little chain: a creator, a message, the root version, a variant
     // based on the root, and the version made of that variant. The number of the version is 0, and the
-    // root's is the root number — both are the Vault's to work out, and neither is written down.
+    // root's is the root number, both are the Vault's to work out, and neither is written down.
     let vault_index = VCSIndex::create(root.join("index"));
     let creator = Creator::try_from(NAME).expect("a name");
     let message = Message::try_from("first").expect("a message");
@@ -81,7 +81,7 @@ async fn main() {
     let serving = serve_vault(&data, &root, PORT);
     let mut checked = Checked::default();
 
-    // A listing is the other end's, and it names hashes — one kind per command, so a listing of the
+    // A listing is the other end's, and it names hashes, one kind per command, so a listing of the
     // variants does not name the versions.
     let said = run(&mut client(
         &workspace,
@@ -312,7 +312,7 @@ fn keys(stdout: &str) -> Vec<String> {
 
 /// The text of `line` with any terminal escape sequences taken out.
 ///
-/// Output that has been piped is not read by a terminal, so what it holds is the line itself — but a
+/// Output that has been piped is not read by a terminal, so what it holds is the line itself, but a
 /// check that compares against it should not depend on that. This takes the escapes out either way.
 fn strip_colour(line: &str) -> String {
     let mut clean = String::with_capacity(line.len());
@@ -397,7 +397,7 @@ fn pair(dir: &Path, name: &str) {
 ///
 /// The daemon belongs to the machine, so it is told where it sits through the user's own data
 /// directory: the sandbox's `ROLA_DATA_HOME` holds both the table and the account it proves
-/// itself with — the variable a Windows machine reads, where `XDG_DATA_HOME` names nothing.
+/// itself with, the variable a Windows machine reads, where `XDG_DATA_HOME` names nothing.
 fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
     register(data, dir);
 
@@ -440,7 +440,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

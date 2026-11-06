@@ -7,14 +7,14 @@
 //! the caller's.
 //!
 //! Every line comes back without the newline that ends it, so that lines are joined by
-//! the caller — `format!("{}\n{}", err_line(..), help_line(..))` — rather than arriving
+//! the caller (`format!("{}\n{}", err_line(..), help_line(..))`) rather than arriving
 //! with a blank line after each.
 
 use crate::{TextRendering, ThemeChoice, theme_choice};
 
 /// The line an error is reported on.
 ///
-/// `prefix` is what the line is called — `Error`, in Rorolala's own messages — and
+/// `prefix` is what the line is called (`Error`, in Rorolala's own messages) and
 /// everything drawn around it is fixed: the `:` after the name, and the colour of both.
 /// A theme that carries true color draws the prefix in a brighter version of that colour,
 /// but writes the same name in the same place: a reader who knows `Error:` from one theme
@@ -110,7 +110,7 @@ macro_rules! help_line {
 ///
 /// Not meant to be called: it is the one place that decides what a written message is,
 /// so that the three do not each carry their own answer. A message written out is read
-/// by [`format!`] — whether or not it turns out to hold anything to fill in — and one
+/// by [`format!`], whether or not it turns out to hold anything to fill in, and one
 /// the program already holds is taken as it stands.
 #[doc(hidden)]
 #[macro_export]
@@ -187,7 +187,7 @@ fn drawn(level: Level, prefix: &str, content: &str) -> String {
 /// left to the engine.
 fn source(level: Level, prefix: &str, content: &str, theme: ThemeChoice) -> String {
     // What a program reads: the level as a word, and the message as it was written. Nothing is marked
-    // and nothing is trimmed away, because the other end reads the same language — a message trimmed
+    // and nothing is trimmed away, because the other end reads the same language, a message trimmed
     // here would lose the blank line that separates it from the next one, and one marked here would be
     // drawn twice.
     if theme == ThemeChoice::DesktopFriendly {
@@ -210,8 +210,8 @@ fn source(level: Level, prefix: &str, content: &str, theme: ThemeChoice) -> Stri
 /// The marking is a **single-line** one. The language is read a line at a time, so a
 /// pair of markers with a newline between them is not a pair at all: marking a message
 /// of several lines would leave a stray `*` at each end of it. A message that is one
-/// line is drawn in italics, and a longer one — a translation written as a `|` block,
-/// or one that carries an example — is drawn as it is. What a `|` block ends with is
+/// line is drawn in italics, and a longer one, a translation written as a `|` block,
+/// or one that carries an example, is drawn as it is. What a `|` block ends with is
 /// trimmed for the same reason it is not marking: it is not part of what was said.
 fn marked(content: &str) -> String {
     let content = content.trim();

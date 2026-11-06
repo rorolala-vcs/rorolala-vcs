@@ -27,8 +27,8 @@ internal enum ButtonKind
 /// A button drawn as this program draws one: a rectangle, an ink and a hover, and nothing else.
 /// </summary>
 /// <remarks>
-/// The toolkit's own button carries the base theme's look — its own corner, its own colours, its own idea of
-/// what a pressed button is — and a program whose every surface is drawn from one palette cannot leave one
+/// The toolkit's own button carries the base theme's look, its own corner, its own colours, its own idea of
+/// what a pressed button is, and a program whose every surface is drawn from one palette cannot leave one
 /// control drawn from another. So a button is a border that knows when it is pressed, which is small enough
 /// to be worth saying here rather than fought with a style per control.
 /// </remarks>

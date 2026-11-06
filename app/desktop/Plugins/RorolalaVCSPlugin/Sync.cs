@@ -189,8 +189,8 @@ internal static class Sync
     /// <remarks>
     /// The progress is read off the error stream line by line as the run writes it, which is why the run is not
     /// waited for before anything is read: a bar drawn from what a run said after it ended would be a bar that
-    /// appeared when there was nothing left to watch. The result — which goes to the output stream as one JSON
-    /// object — is read as it is written too, so that neither stream can fill and hold the run up.
+    /// appeared when there was nothing left to watch. The result, which goes to the output stream as one JSON
+    /// object, is read as it is written too, so that neither stream can fill and hold the run up.
     /// </remarks>
     /// <param name="directory">Where the work is rooted, and where the run is made.</param>
     /// <param name="way">Which way it carries.</param>
@@ -228,7 +228,7 @@ internal static class Sync
             RedirectStandardError = true,
             CreateNoWindow = true,
 
-            // The words are `rola`'s own, and `rola` writes UTF-8 — as every stream this project's programs
+            // The words are `rola`'s own, and `rola` writes UTF-8, as every stream this project's programs
             // write is. Left unstated, a redirected stream is decoded in the machine's codepage, which on a
             // Chinese Windows is GBK, and every word of the message comes out as mojibake.
             StandardOutputEncoding = Encoding.UTF8,

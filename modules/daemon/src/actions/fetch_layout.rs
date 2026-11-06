@@ -1,26 +1,26 @@
 //! `fetch-layout`: the Layout a Vault holds, brought here whole.
 //!
 //! A Workspace works in Layouts of its own and keeps one it did not make: a copy of what a Vault
-//! holds. It is fetched rather than synced, and nothing moves the other way — what a Workspace
+//! holds. It is fetched rather than synced, and nothing moves the other way, what a Workspace
 //! finds in the copy is who holds what upstream, so the copy is read and not worked in.
 //!
 //! What crosses is the Vault's Layout **written out whole**: every shard is a snapshot holding all
 //! of what it holds, with an empty log after it. That is a layout a reader opens without replaying
 //! anything, and it is the layout the Vault holds at the moment it answers rather than the files it
-//! keeps it in — a snapshot and a log on disk are a change apart whenever another action is writing
+//! keeps it in, a snapshot and a log on disk are a change apart whenever another action is writing
 //! or compacting, so reading the directory as it stands would carry away the two halves of two
 //! states.
 //!
-//! What a fetch writes is a **generation** of the copy, published by moving a pointer — see
+//! What a fetch writes is a **generation** of the copy, published by moving a pointer, see
 //! [`LayoutCopy`] for why. A copy is therefore never renamed over, and a run that is reading one
 //! cannot make a fetch fail.
 //!
 //! A fetch asks with what the copy here **is**, in the terms the Vault can compare with its own: the
-//! shape of every file — the name, the length and the hash — as the copy's own state writes out. A
+//! shape of every file (the name, the length and the hash) as the copy's own state writes out. A
 //! Vault whose layout is that very state answers "unchanged" instead of carrying it again. Because
 //! what a layout is written out as depends on what it holds and not on how it is kept, a compaction
-//! changes nothing about that answer, and a copy that was written to after it was fetched — an
-//! ownership change followed into it — answers for the state it was brought to rather than for the
+//! changes nothing about that answer, and a copy that was written to after it was fetched, an
+//! ownership change followed into it, answers for the state it was brought to rather than for the
 //! files it arrived in.
 
 use std::fs;
@@ -42,7 +42,7 @@ use super::sync_storage::{Side, carry_blob};
 ///
 /// # Input
 ///
-/// The name the Workspace keeps the fetched Layout under — the name it bound the Vault by. It
+/// The name the Workspace keeps the fetched Layout under, the name it bound the Vault by. It
 /// belongs to the Workspace and is read there; the Vault is handed it and has no use for it, since
 /// which Vault is reached is the address's to say. The Vault keeps one Layout, so what lands under
 /// that name is the one known as [`VAULT_LAYOUT_NAME`].
@@ -66,7 +66,7 @@ impl Action for ActionFetchLayout {
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
     /// Vault, [`ActionError::Store`] if the Vault's Layout could not be written out,
-    /// [`ActionError::LocalFile`] if the copy could not be written here — besides whatever the
+    /// [`ActionError::LocalFile`] if the copy could not be written here, besides whatever the
     /// exchange fails with.
     async fn process(
         input: OnlyWorkspace<Self::Input>,
@@ -162,8 +162,8 @@ enum Fetched {
 ///
 /// What is asked is the copy's own state rather than the files it arrived as: a copy that an
 /// ownership change was followed into holds a change its files' shapes no longer describe, and one
-/// read back as a layout says what it holds however it is kept. A directory that is not a copy — a
-/// fetch cut short, or one this build did not write — is no shapes at all, which is a copy asked for
+/// read back as a layout says what it holds however it is kept. A directory that is not a copy, a
+/// fetch cut short, or one this build did not write, is no shapes at all, which is a copy asked for
 /// whole rather than taken as it stands.
 fn current_shapes(ctx: &ActionContext<'_>, name: &str) -> Option<Vec<FileShape>> {
     let workspace = ctx.current_workspace().into_inner()?;
@@ -178,8 +178,8 @@ fn current_shapes(ctx: &ActionContext<'_>, name: &str) -> Option<Vec<FileShape>>
 ///
 /// What replaces the copy is written whole before the pointer is moved, so a fetch that fails part
 /// of the way through leaves the copy that is here untouched: a reader is never handed a directory
-/// that is half of what the Vault holds. The old generation is not removed here — a reader may be
-/// part of the way through it — and is cleared by a later fetch.
+/// that is half of what the Vault holds. The old generation is not removed here, a reader may be
+/// part of the way through it, and is cleared by a later fetch.
 ///
 /// # Errors
 ///
@@ -212,7 +212,7 @@ fn write_cache(
 /// Writes `files` as a generation of `copy`, points the copy at it, and clears what earlier runs left.
 ///
 /// The clearing is done last, and only after the copy is pointed at the new generation: a fetch that
-/// fails part of the way through costs nothing at all — the copy that was here is still the copy, and
+/// fails part of the way through costs nothing at all, the copy that was here is still the copy, and
 /// still the one named. What is cleared is everything the pointer does not name and nothing young
 /// enough to be another run's work, which is what keeps a crash from accumulating a copy's worth of
 /// directories under the cache without removing what another run is writing.
@@ -291,7 +291,7 @@ fn check(files: &[(String, Vec<u8>)]) -> Result<(), ActionError> {
 /// taken from, so a machine that lost power before the copy reached the disk has lost this fetch
 /// and not what it was a copy of. The bytes are therefore left with the operating system rather
 /// than flushed one file at a time, which on a directory of small files is most of what a fetch
-/// costs — and one flush of the generation as a whole is asked for instead, where there is one.
+/// costs, and one flush of the generation as a whole is asked for instead, where there is one.
 ///
 /// # Errors
 ///
@@ -304,7 +304,7 @@ fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 /// Pushes the generation directory to the disk as a whole, where an operating system can be asked.
 ///
 /// It is the one flush a fetch spends: a directory is a file a Unix system will flush, and one on
-/// Windows is not — so what a machine cut off between the writes and the pointer costs there is this
+/// Windows is not, so what a machine cut off between the writes and the pointer costs there is this
 /// fetch, which is the cost the copy was chosen to take rather than a cost on every fetch.
 ///
 /// # Errors
@@ -335,7 +335,7 @@ fn sync_dir(_dir: &Path) -> std::io::Result<()> {
 /// What a file that could not be read or written means to an action.
 ///
 /// The path is part of what is said: a failure that answers "access is denied" and nothing else is
-/// one a reader cannot go and look at, and the two sides of a fetch fail on files of their own — the
+/// one a reader cannot go and look at, and the two sides of a fetch fail on files of their own, the
 /// copy at one end, the generation it is written as at the other.
 fn local(path: &Path, error: &std::io::Error) -> ActionError {
     ActionError::LocalFile(IoError::new(
@@ -347,7 +347,7 @@ fn local(path: &Path, error: &std::io::Error) -> ActionError {
 /// Whether `name` is one path component and nothing else.
 ///
 /// What a Vault sends is written under the cache by the name it was sent under, so a name that
-/// names somewhere else — a path, a climbing name, a drive — would write outside the one directory
+/// names somewhere else (a path, a climbing name, a drive) would write outside the one directory
 /// the fetch is for. A name this refuses is a Layout directory that is not one.
 fn is_plain_name(name: &str) -> bool {
     let mut components = Path::new(name).components();

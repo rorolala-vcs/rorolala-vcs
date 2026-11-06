@@ -171,7 +171,7 @@ internal sealed class Dialogs : IDialogs
         };
 
         // A card of its own, so it takes the elevated ground the design puts a card on rather than the
-        // ground the window behind it is drawn on — the same division as the host's notice.
+        // ground the window behind it is drawn on, the same division as the host's notice.
         window[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
 
         var confirmed = false;
@@ -244,7 +244,7 @@ internal sealed class Dialogs : IDialogs
         var last = choice.Choices.Count - 1;
 
         // What was answered is kept in a source rather than a local, because a local is only ever written from a click
-        // handler: nothing on this side of the dialog ever assigns it, and a reader of the code — the analyzer included —
+        // handler: nothing on this side of the dialog ever assigns it, and a reader of the code, the analyzer included,
         // would be right to wonder whether anything ever does.
         var picked = new TaskCompletionSource<Action?>(TaskCreationOptions.RunContinuationsAsynchronously);
 

@@ -8,7 +8,7 @@
 //!
 //! A project that keeps no store is one whose materials can only be put back from the staging area.
 //! `update` is what makes a store here: it brings the content the Vault's versions name, so the
-//! commands that come after it find it — see [`crate::update`].
+//! commands that come after it find it, see [`crate::update`].
 
 use std::io;
 use std::path::Path;

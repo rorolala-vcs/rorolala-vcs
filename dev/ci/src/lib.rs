@@ -28,13 +28,13 @@ mod reporter;
 mod task;
 
 // The types a command generates live in the module that declares the command, while the program
-// collects them by bare name at the crate root — that is why `gen_program!()` below can name them.
+// collects them by bare name at the crate root, that is why `gen_program!()` below can name them.
 // A program that binds paths gets this from `pathf`'s re-exports; a gate has no paths to bind, so
 // its own modules are re-exported here instead.
 // The wildcard is on purpose: what is put in scope is what the command macros generate, and a list
 // written out by hand would be a second copy of their output that a rename would leave stale.
-// The path is kept crate-private on purpose too — the re-export exists for `gen_program!()`, not for
-// a caller of this library — which is why `pub(crate)` is not the redundancy clippy reads it as.
+// The path is kept crate-private on purpose too, the re-export exists for `gen_program!()`, not for
+// a caller of this library, which is why `pub(crate)` is not the redundancy clippy reads it as.
 #[allow(clippy::wildcard_imports, clippy::redundant_pub_crate)]
 pub(crate) use cmd::*;
 // `gen_program!()` reaches these by name, so the re-export exists for the macro rather than a Rust

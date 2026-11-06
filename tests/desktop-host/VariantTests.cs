@@ -15,8 +15,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// <remarks>
 /// A merge in progress is a target the Layout names and a variant file beside it that neither Layout names,
 /// so the file is the one thing about a merge no path of the work answers. It is read from the reading's own
-/// list of merges, and what is checked here is that the three places that care — the tile's badge, the
-/// Upstream column, and the Overview's button — find the same file: what a reader sees on a tile and what a
+/// list of merges, and what is checked here is that the three places that care, the tile's badge, the
+/// Upstream column, and the Overview's button, find the same file: what a reader sees on a tile and what a
 /// button runs have to be about one file.
 /// </remarks>
 public sealed class VariantTests

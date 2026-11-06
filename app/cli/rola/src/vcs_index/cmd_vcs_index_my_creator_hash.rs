@@ -1,6 +1,6 @@
 //! The `rola vcs-index my-creator-hash` command: the hash of the Creator the work acts as.
 //!
-//! Who made a change belongs to the variant, so a variant carries a Creator's hash — the object the
+//! Who made a change belongs to the variant, so a variant carries a Creator's hash, the object the
 //! account the work acts as is recorded under. The Creator is written into the index, and what is
 //! printed is the hash to hand to `write-variant` as `CREATOR_HASH`. The same name is the same
 //! object, so it is created once and read back whole on every run after.

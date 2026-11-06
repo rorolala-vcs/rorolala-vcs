@@ -8,7 +8,7 @@
 //!
 //! The file is shaped by `tmpl/explain.tmpl`, the way the daemon's are shaped by theirs: the
 //! prose that says what the module is lives in the template, and what is here is only the
-//! reading and the filling in. A template that cannot expand — its blocks do not pair up —
+//! reading and the filling in. A template that cannot expand, its blocks do not pair up,
 //! stops the build rather than writing out a file that is only half generated.
 //!
 //! The keys are read as text rather than with `syn`, unlike the daemon's build script. A key
@@ -18,11 +18,11 @@
 //!
 //! A code with no key above it stops the build. `explain_ec` answers an empty string to a
 //! code it does not state, and a code whose key is missing would be one the program states
-//! and cannot speak — which is the one thing this module exists to prevent.
+//! and cannot speak, which is the one thing this module exists to prevent.
 //!
 //! The file is written into the source tree, as `src/exit_codes/explain.rs`, and not into
 //! `OUT_DIR`, following `modules/daemon`'s build script: what comes out is ordinary source,
-//! and putting it where a reader can open it is worth the one rule that brings — the file is
+//! and putting it where a reader can open it is worth the one rule that brings, the file is
 //! generated, so it is not edited.
 //!
 //! The program's own icon is linked into the Windows executable as well.
@@ -65,7 +65,7 @@ const KEY_PREFIX: &str = "///";
 /// The resource script naming the program's icon, relative to the manifest directory.
 ///
 /// The script belongs beside the icon it names, which the workspace build script makes from the
-/// description beside it — `res/icons/rola-cli.png.toml` — and names it bare, because the resource
+/// description beside it, `res/icons/rola-cli.png.toml`, and names it bare, because the resource
 /// compiler reads a name in a script relative to the script rather than to where it was run from.
 #[cfg(windows)]
 const ICON_SCRIPT: &str = "../../../res/icons/rola-cli.rc";
@@ -79,7 +79,7 @@ fn main() {
     // A Windows program's icon is a resource linked into it rather than something it draws, so the
     // script beside the generated icon is compiled here and linked in by the directive the resource
     // crate adds. Nowhere else is there such a resource or a compiler for one, so nowhere else is
-    // there anything to do — which is why this is decided by the host rather than by the target.
+    // there anything to do, which is why this is decided by the host rather than by the target.
     #[cfg(windows)]
     {
         // Both are watched: the icon is made from the picture beside it by the workspace's build
@@ -87,8 +87,8 @@ fn main() {
         println!("cargo:rerun-if-changed={ICON_SCRIPT}");
         println!("cargo:rerun-if-changed={ICON}");
 
-        // UNWRAP: a build script that cannot link the icon has no artifact to continue with — the
-        // program would be built without the icon its Windows resources are for — so aborting the
+        // UNWRAP: a build script that cannot link the icon has no artifact to continue with, the
+        // program would be built without the icon its Windows resources are for, so aborting the
         // build is the answer, rather than handing out an executable that has no icon.
         embed_resource::compile(ICON_SCRIPT, embed_resource::NONE)
             .manifest_optional()
@@ -99,7 +99,7 @@ fn main() {
     println!("cargo:rerun-if-changed={TEMPLATE}");
     // The directory the module is written into is watched rather than the module itself:
     // a directory's timestamp moves when a file is added to it or removed from it, which is
-    // what makes a deleted module be generated again, while rewriting one leaves it alone —
+    // what makes a deleted module be generated again, while rewriting one leaves it alone,
     // watching the module would be watching this script's own output, and the build would
     // never settle.
     println!("cargo:rerun-if-changed={}", OUTPUT_DIR);
@@ -147,7 +147,7 @@ struct ExitCode {
 ///
 /// A key is held until something else is reached: a constant takes the key standing
 /// directly above it as its own, and a blank line clears what is standing. That is what
-/// leaves a section heading — one on a line of its own — out of the constant that follows
+/// leaves a section heading, one on a line of its own, out of the constant that follows
 /// it, while a key is still read from the line it is written on.
 ///
 /// The key is read with or without the backticks that `clippy::doc_markdown` wants around

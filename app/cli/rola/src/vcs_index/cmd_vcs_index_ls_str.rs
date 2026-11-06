@@ -52,7 +52,7 @@ pub fn complete_vcs_index_ls_str() -> Suggest {
 /// Version can say who made it and what was done by carrying their hashes. What is listed is those
 /// hashes and nothing else, since the text itself is read with `rola vcs-index read`.
 ///
-/// The run has to be somewhere an index can be found — inside a Vault or a Workspace.
+/// The run has to be somewhere an index can be found, inside a Vault or a Workspace.
 ///
 /// # Errors
 ///
@@ -80,7 +80,7 @@ pub fn handle_vcs_index_ls_str(
         return ErrorVcsIndexNoIndex.into();
     };
 
-    // The index is asynchronous and a command is not, so the two meet here — see
+    // The index is asynchronous and a command is not, so the two meet here, see
     // `cmd_storage_write_file`.
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,

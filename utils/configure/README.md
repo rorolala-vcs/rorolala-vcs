@@ -3,7 +3,7 @@
 Configuration files as a type: read one, edit it in place, and have the edit land
 atomically.
 
-`Configure` is what a configuration type implements — by deriving it — and `Config<T>`
+`Configure` is what a configuration type implements, by deriving it, and `Config<T>`
 is the file that holds one:
 
 ```rust
@@ -37,10 +37,10 @@ Replacing a file in place has two ways to lose it: a process that dies while wri
 leaves half a file, and two processes writing leave a mixture of both. So an edit never
 touches the original:
 
-1. `read` parses the original and copies it to `<file>.lock` beside it — and `new` stages
+1. `read` parses the original and copies it to `<file>.lock` beside it, and `new` stages
    an empty configuration the same way, for a file that is not there yet,
 2. `write` renders the contents into that staging file,
-3. publishing renames the staging file over the original — one atomic step.
+3. publishing renames the staging file over the original, one atomic step.
 
 A process that dies mid-edit therefore leaves the original whole and the staged edit
 beside it. The next `read` refuses rather than copying over that leftover, so it is
@@ -48,7 +48,7 @@ still there to recover or to discard by hand.
 
 ## Formats
 
-Chosen by the file's extension: `toml` (and `tml`), `yaml` (and `yml`), and `json` —
+Chosen by the file's extension: `toml` (and `tml`), `yaml` (and `yml`), and `json`,
 which is also what an extension this crate does not know, or none at all, means.
 
 ## Failures

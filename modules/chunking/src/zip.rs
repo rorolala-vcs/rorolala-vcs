@@ -3,14 +3,14 @@
 //! Some content is not one thing but many, packed one after another: a `.docx`, a `.pptx`, a
 //! `.xlsx`, an `.odt`, a `.jar`, an `.apk` are all a ZIP of members, and so is a plain `.zip`.
 //!
-//! Cutting such content on its content — see [`Cdc`](crate::Cdc) — finds little, because what a
+//! Cutting such content on its content, see [`Cdc`](crate::Cdc), finds little, because what a
 //! ZIP holds is mostly the output of a compressor, which shares no bytes with the same content
 //! compressed again. Cutting it *at its member boundaries* finds a great deal: a member the writer
 //! did not touch is the same bytes in the same order it was, so it is a chunk the store already
 //! has, and an edit to one member of a pack adds one chunk rather than the whole pack.
 //!
-//! Nothing here unpacks anything. A member is stored as the bytes it already is — its header, its
-//! name and its compressed data — so what comes back out is what went in, byte for byte, without
+//! Nothing here unpacks anything. A member is stored as the bytes it already is, its header, its
+//! name and its compressed data, so what comes back out is what went in, byte for byte, without
 //! anything having to reproduce a compressor's choices, and without a bomb in a member ever being
 //! opened to find out how large it would have been.
 //!
@@ -53,8 +53,8 @@ const MAX_COMMENT: usize = 65_535;
 
 /// A chunker that cuts a packed container at the boundaries of what it packs.
 ///
-/// It reads the central directory — which is written for the sake of being read, and whose offsets
-/// survive a member being written with sizes its header leaves blank — and takes each member as
+/// It reads the central directory, which is written for the sake of being read, and whose offsets
+/// survive a member being written with sizes its header leaves blank, and takes each member as
 /// the range from its local header to the end of its data. What follows the last member is the
 /// central directory and its end record, and they are one range: an edit moves every offset in
 /// them, so there is nothing in them to hold on to.
@@ -157,7 +157,7 @@ fn members(content: &[u8], directory: usize, count: usize) -> Option<Vec<(usize,
 /// The span the member whose local header is at `start` takes up.
 ///
 /// What is cut out is the member's **data**, not its header: a header carries the time it was
-/// written and where it sits, which a writer may change without the content changing — so a member
+/// written and where it sits, which a writer may change without the content changing, so a member
 /// whose bytes are the same as they were is a chunk the store already has, even after a save that
 /// touched every header in the container. Nothing is lost by leaving the headers out: they fall
 /// between the members, and what lies between two members is a range of its own.
@@ -179,8 +179,8 @@ fn span(content: &[u8], start: usize, compressed: usize) -> Option<(usize, usize
 
 /// The spans turned into ranges that cover `len` exactly and in order.
 ///
-/// A container may hold bytes belonging to no member — a descriptor between one member and the
-/// next, or whatever a writer left behind — and what belongs to no member is a range of its own, so
+/// A container may hold bytes belonging to no member, a descriptor between one member and the
+/// next, or whatever a writer left behind, and what belongs to no member is a range of its own, so
 /// that what comes back out is always all of what went in.
 fn ranges(len: usize, spans: Vec<(usize, usize)>) -> Vec<Range<usize>> {
     // The last of the between-bytes in a container is its central directory and end record, which
@@ -199,7 +199,7 @@ mod tests {
     /// A packed container of `members`, stored rather than deflated and stamped with `time`.
     ///
     /// This is the shape a chunker reads, which is what is being tested, rather than the shape a
-    /// packer would choose — and the stamp is what a save that changed nothing else moves.
+    /// packer would choose, and the stamp is what a save that changed nothing else moves.
     fn packed_at(members: &[(&str, &[u8])], stamp: u16) -> Vec<u8> {
         let mut local = Vec::new();
         let mut directory = Vec::new();
@@ -322,7 +322,7 @@ mod tests {
         let after = chunks(&after);
 
         // What the edit did not touch is the bytes it already was, so it is a chunk the store
-        // already has — which is the whole reason to cut a container at its members.
+        // already has, which is the whole reason to cut a container at its members.
         assert_eq!(before[1], after[1]);
         assert_ne!(before[3], after[3]);
     }

@@ -23,7 +23,7 @@ use super::sync_storage::{Side, carry_blob};
 ///
 /// What became of it, as JSON: the entry is now at the path it was moved to, nothing was at the
 /// path it came from, something is already at the path it was going to, or a path is not one a
-/// remote Layout may name. It crosses as text for the reason an ownership outcome does — see
+/// remote Layout may name. It crosses as text for the reason an ownership outcome does, see
 /// `request-ownership`.
 pub struct ActionMoveRemotePath;
 

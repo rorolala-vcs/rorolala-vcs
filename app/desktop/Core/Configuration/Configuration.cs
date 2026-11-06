@@ -22,15 +22,15 @@ internal enum ColorMode
 /// <c>theme.json</c>: what the user chooses about how the program looks.
 /// </summary>
 /// <remarks>
-/// The look itself is not one of them. It is the program's own — rectangles, one-pixel edges, hover in
-/// the variant's ink and the two colours spent on what is selected and what asks for attention — and it
+/// The look itself is not one of them. It is the program's own, rectangles, one-pixel edges, hover in
+/// the variant's ink and the two colours spent on what is selected and what asks for attention, and it
 /// is what makes the program look like one thing rather than like whatever it was assembled out of. What
 /// is left to choose is the variant it is drawn in, the two colours it is drawn with, and the ten
 /// grounds the two variants are made of.
 /// <para>
 /// Every field is optional, and a field that is not there is the default: the file holds only what the
 /// user chose, so taking a choice back is removing it rather than writing the default down.
-/// That is why the fields are nullable rather than defaulted — <c>null</c> is "the file says nothing",
+/// That is why the fields are nullable rather than defaulted, <c>null</c> is "the file says nothing",
 /// which is not the same as "the file chose the default".
 /// </para>
 /// <para>
@@ -41,8 +41,8 @@ internal enum ColorMode
 /// <para>
 /// The ten grounds are stated twice over, once per variant, because that is what they are: a surface is
 /// not the same colour on the light ground and the dark one, and one entry per role shared between the
-/// two would be one of the two variants drawn wrong. The two colours that do not follow the window —
-/// the primary and the accent — are stated once.
+/// two would be one of the two variants drawn wrong. The two colours that do not follow the window,
+/// the primary and the accent, are stated once.
 /// </para>
 /// </remarks>
 internal sealed class ThemeConfiguration
@@ -190,7 +190,7 @@ internal sealed class ThemeConfiguration
     /// </summary>
     /// <remarks>
     /// The variant in force is not what decides this: <see cref="Mode"/> may name the dark one, or name
-    /// neither and follow the desktop, and the look is built from both variants either way — so both are
+    /// neither and follow the desktop, and the look is built from both variants either way, so both are
     /// read, and which of them is drawn is the window's own question.
     /// </remarks>
     public ThemePalette LightTheme =>
@@ -237,7 +237,7 @@ internal sealed record PluginState(PluginId Id, bool Enabled);
 /// </summary>
 /// <remarks>
 /// The file stores user state only. It does not list plugin paths, dependencies, contract versions,
-/// or display names — those are declared by the plugin itself and discovered from the assembly.
+/// or display names, those are declared by the plugin itself and discovered from the assembly.
 /// <para>
 /// The sequence is the load order. It is the user's to arrange rather than the program's to work
 /// out, so a dependency that is disabled, absent, or placed later makes the dependent unloadable

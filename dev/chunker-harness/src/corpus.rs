@@ -1,11 +1,11 @@
 //! Where the chains are, and what a chain is.
 //!
 //! A corpus is a directory of policies, a policy is a directory of patterns, and a pattern is either
-//! one lane of versions or several. A lane is one path's history: `000.<ext>`, `001.<ext>`, … in the
+//! one lane of versions or several. A lane is one path's history: `000.<ext>`, `001.<ext>`, and so on in the
 //! order the numbers name. Nothing about a chain is written down anywhere but the file names, so what
 //! an author adds is files and the harness reads them.
 //!
-//! Two lanes in one pattern is the case of a resource shared between two paths — the same body in two
+//! Two lanes in one pattern is the case of a resource shared between two paths, the same body in two
 //! files, each edited somewhere else. It is measured as one chain, because what the two have in common
 //! is deduplication that only a cross-file measurement sees.
 
@@ -24,7 +24,7 @@ pub struct Corpus {
 pub struct Policy {
     /// The registered policy name this corpus belongs to.
     pub name: String,
-    /// Where it sits, so a policy's own files — its description, its score — are found beside it.
+    /// Where it sits, so a policy's own files (its description, its score) are found beside it.
     pub directory: PathBuf,
     /// One entry per pattern directory, in name order.
     pub patterns: Vec<Pattern>,

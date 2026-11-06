@@ -6,24 +6,24 @@ use crate::{Key, Presence};
 /// Local, content-addressed storage.
 ///
 /// A backend reads and writes objects kept under [`Key`]s and nothing else. It never speaks to
-/// another machine — moving objects between two ends is [`TransferableBackend`]'s job — and it
+/// another machine, moving objects between two ends is [`TransferableBackend`]'s job, and it
 /// never decides what an object *means*: a caller hands over a path to store, or a key and a
 /// path to put the content at.
 ///
 /// What a backend does decide is everything about how content is *kept*: where the bytes go,
 /// whether they are compressed, and how they are cut. None of it is visible above, since a key is
-/// the hash of the content rather than of the stored bytes — and none of it is part of the key, so
+/// the hash of the content rather than of the stored bytes, and none of it is part of the key, so
 /// a file re-written another way keeps the name it had.
 ///
 /// "The content" is the backend's to define, and it is the bytes at the boundary for every backend
-/// whose content is a file. A backend whose content is structured — the index is one, and keeps
-/// index objects — says a key is the hash of the object's canonical encoding rather than of
+/// whose content is a file. A backend whose content is structured, the index is one, and keeps
+/// index objects, says a key is the hash of the object's canonical encoding rather than of
 /// whatever bytes a file held before it was read, so that one key still names one byte string.
 /// What no backend may do is name content by the hash of how it was *stored*: a key outlives a
 /// re-encoding and a re-cutting, and a hash of the stored bytes would not.
 ///
-/// The trait is deliberately not object safe — `impl Future` in a trait cannot be reached
-/// through `dyn` — because which backend a caller uses is decided where the backend is instead
+/// The trait is deliberately not object safe, `impl Future` in a trait cannot be reached
+/// through `dyn`, because which backend a caller uses is decided where the backend is instead
 /// of behind a pointer.
 pub trait StorageBackend: Send + Sync {
     /// What a failed operation reports.
@@ -44,8 +44,8 @@ pub trait StorageBackend: Send + Sync {
     /// another day without any key changing.
     ///
     /// Deciding is synchronous where writing is not. A backend that decides from the content reads
-    /// the opening of the file and nothing else — a few thousand bytes, and the filesystem's own
-    /// answer for how long it is — so a caller on an async task blocks it for about as long as a
+    /// the opening of the file and nothing else, a few thousand bytes, and the filesystem's own
+    /// answer for how long it is, so a caller on an async task blocks it for about as long as a
     /// small read takes. It is left that way rather than made `async` because the read is bounded and
     /// happens once, in front of a write that reads the whole file anyway, while an `async` choice
     /// would put an `await` in front of every decision including the ones that read nothing at all.
@@ -58,8 +58,8 @@ pub trait StorageBackend: Send + Sync {
     ///
     /// A caller that has no opinion about the choice wants [`store_file`], which makes it.
     ///
-    /// A backend may write only part of what a choice can say — one that keeps objects small and
-    /// fixed, such as an index, has nowhere to record a cutting of one — and is expected to refuse
+    /// A backend may write only part of what a choice can say, one that keeps objects small and
+    /// fixed, such as an index, has nowhere to record a cutting of one, and is expected to refuse
     /// the rest rather than quietly write something else. [`choose_algorithm`] is what asks for a
     /// choice the backend will accept.
     ///
@@ -67,9 +67,9 @@ pub trait StorageBackend: Send + Sync {
     ///
     /// # Errors
     ///
-    /// [`Io`](crate::Error::Io) if `file` cannot be read — a file that is not there is an I/O
+    /// [`Io`](crate::Error::Io) if `file` cannot be read, a file that is not there is an I/O
     /// failure like any other, since it names no key to be [`NotFound`](crate::Error::NotFound)
-    /// under — and whatever the backend itself fails with, including a choice it does not write.
+    /// under, and whatever the backend itself fails with, including a choice it does not write.
     fn write_file(
         &self,
         file: &Path,
@@ -96,14 +96,14 @@ pub trait StorageBackend: Send + Sync {
     ///
     /// "Held" is whether the entries are there: content is held when it is stored whole, and a
     /// content kept as a manifest is held when every chunk it names is stored. It is not a promise
-    /// that they *read* — content that is there but does not hold together is found on the read that
+    /// that they *read*, content that is there but does not hold together is found on the read that
     /// asks for it, not here, since finding it would mean reading everything this is asked about.
     ///
     /// "There" is an entry rather than a byte that can be produced: an entry a pack's index names is
     /// held whether or not the pack's file is still beside the index, because an index is what a
     /// lookup reads and checking every pack's file as well would cost a stat per pack per key. So a
     /// key answered as held may still not be producible, and
-    /// [`content`](TransferableBackend::content) answers `None` for it — which is the case a
+    /// [`content`](TransferableBackend::content) answers `None` for it, which is the case a
     /// transfer's "nothing to send" frame is for. A pack whose index is missing or does not read has
     /// no entries to be held at all.
     ///
@@ -121,7 +121,7 @@ pub trait StorageBackend: Send + Sync {
     /// Every key the backend knows of, whether or not it holds it.
     ///
     /// This is what is *there*: the objects it holds, the manifests it holds, and the keys in its
-    /// packs. A manifest whose chunks have gone is named here and held nowhere — see
+    /// packs. A manifest whose chunks have gone is named here and held nowhere, see
     /// [`list_exist_keys`](Self::list_exist_keys) for the ones that are held.
     ///
     /// # Errors
@@ -131,7 +131,7 @@ pub trait StorageBackend: Send + Sync {
 
     /// Every key the backend holds.
     ///
-    /// This is [`list_all_keys`](Self::list_all_keys) with the keys that are not held taken out —
+    /// This is [`list_all_keys`](Self::list_all_keys) with the keys that are not held taken out,
     /// the same answer as asking [`contains_keys`](Self::contains_keys) of each one, and the same
     /// answer as a transfer would get from this end.
     ///
@@ -168,14 +168,14 @@ pub type ProtocolMagic = [u8; PROTOCOL_MAGIC_LEN];
 /// Moving the content of a store to another end of the same kind.
 ///
 /// The trait is the **local half** of a transfer: what one end has to be able to answer, and to
-/// take, when the other end asks. What carries the answers — a socket, a pipe, a pair of buffers in
-/// one process — is not here, because storage is at the bottom of the crate stack and knows nothing
+/// take, when the other end asks. What carries the answers, a socket, a pipe, a pair of buffers in
+/// one process, is not here, because storage is at the bottom of the crate stack and knows nothing
 /// of sockets; the exchange itself is driven over whatever stream the caller hands it, by
 /// [`transfer::initiate`](crate::transfer::initiate) and
 /// [`transfer::respond`](crate::transfer::respond).
 ///
-/// Both ends must be the *same* backend — a vault store syncs with another vault store and with
-/// nothing else — and before a single object is read or written they exchange
+/// Both ends must be the *same* backend, a vault store syncs with another vault store and with
+/// nothing else, and before a single object is read or written they exchange
 /// [`PROTOCOL_MAGIC`](Self::PROTOCOL_MAGIC), a fixed-width password that says the two are the same
 /// kind. A password that does not match is refused rather than guessed at, which is what keeps a
 /// store from being read by something that is not a store of its kind. It names no version: a
@@ -208,7 +208,7 @@ pub trait TransferableBackend: StorageBackend {
 
     /// Stores `content` under `key`, which is the hash it has to come to.
     ///
-    /// How it is kept — which codec, whether to cut it — is this end's own business, the same
+    /// How it is kept (which codec, whether to cut it) is this end's own business, the same
     /// business as any other write, so two stores that keep things differently still end up with
     /// the same content under the same key.
     ///
@@ -225,7 +225,7 @@ pub trait TransferableBackend: StorageBackend {
 /// Stores `file`, deciding how it is written the way `backend` decides.
 ///
 /// This is a write as a caller meets it: the *how* is the backend's to choose from the file in
-/// front of it — see [`StorageBackend::choose_algorithm`] — and once it has, the write itself is
+/// front of it, see [`StorageBackend::choose_algorithm`], and once it has, the write itself is
 /// the plain business of putting the content where its key says. A caller that has already made
 /// the choice wants [`StorageBackend::write_file`] instead.
 ///
@@ -247,7 +247,7 @@ where
 
 /// The key content at `file` is stored under, without storing anything.
 ///
-/// This is the same key [`store_file`] would answer with — the hash of the file's content — so a
+/// This is the same key [`store_file`] would answer with, the hash of the file's content, so a
 /// caller that has to know whether content is already recorded, before deciding whether to write
 /// it, can ask here and write only what is new. The whole file is read and nothing of it is kept,
 /// which is the same reading a write makes; what is saved is the write itself.

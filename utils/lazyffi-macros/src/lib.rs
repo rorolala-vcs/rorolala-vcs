@@ -103,14 +103,14 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 ///
 /// # Arguments
 ///
-/// - `export = <Name>` — the name of the generated FFI item. Accepts a bare
+/// - `export = <Name>`, the name of the generated FFI item. Accepts a bare
 ///   identifier (`export = FFIMyType`) or a string literal (`export = "FFIMyType"`).
 ///   When omitted the name derives from the Rust item: `ffi_<snake_case>` for
 ///   value-level items (`fn`, `const`), `FFI<PascalCase>` for types (`struct`,
 ///   `enum`).
 ///
 ///   On an `impl` it is a **prefix** instead of a name: every method the `impl` exports
-///   begins with it, and a method's own `export` names itself whole and is left alone — so
+///   begins with it, and a method's own `export` names itself whole and is left alone, so
 ///   it is a way of naming a whole `impl` at once, not of naming any one method.
 ///
 /// # Supported items
@@ -127,7 +127,7 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// pointer: `&mut` borrows it, a by-value parameter **takes ownership** of it, and a
 /// return hands out an owning pointer that C releases with `free_<type>`. This is
 /// also the only reason a resource whose fields have no repr-C sibling (a `PathBuf`,
-/// say) can be exported at all — its fields are never converted.
+/// say) can be exported at all, its fields are never converted.
 ///
 /// An `enum`'s repr is transparent, because its tag and payload *are* its interface:
 /// C has to be able to read them. The original item is always kept and the FFI item is
@@ -221,7 +221,7 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// ```
 ///
 /// **`&str` and `&Path`** name something a C string carries rather than a value C
-/// holds, so they are built from the C string first and the call borrows the result —
+/// holds, so they are built from the C string first and the call borrows the result,
 /// which is why releasing that buffer stays the caller's business. A `String` or
 /// `PathBuf` parameter is the same thing with the copy made explicit.
 ///
@@ -233,14 +233,14 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// A `Result<T, E>` return crosses as the one fixed `RorolalaResult` rather than as a
 /// repr generated for it. One C layout cannot hold two arbitrary payload types, and a
 /// conversion per `(T, E)` pair would collide the moment two exports returned the same
-/// one — so the payload is an owned `void *`, the header names what each side of the
+/// one, so the payload is an owned `void *`, the header names what each side of the
 /// tag holds, and the caller casts and releases it.
 ///
 /// `T` and `E` must each own a pointer of their own: an exported `struct` (whose repr
 /// already is one), a `String` or `PathBuf`, an exported `enum` (boxed, and released
 /// with the `free_<type>` generated beside it), or `()`, which is the `Ok` of the
-/// common `Result<(), E>` and crosses as a null payload. Anything else — a scalar, in
-/// particular — does not compile.
+/// common `Result<(), E>` and crosses as a null payload. Anything else, a scalar, in
+/// particular, does not compile.
 ///
 /// A `String` or `PathBuf` **error** is rejected outright: an error is a case the
 /// caller switches on, and a sentence gives it nothing to switch on.
@@ -312,7 +312,7 @@ enum DefaultName {
 
 /// The name of the generated item, refusing one that is the item's own.
 ///
-/// `export` names the repr, which is generated *beside* the item it mirrors — so naming
+/// `export` names the repr, which is generated *beside* the item it mirrors, so naming
 /// it after that item asks for the same name twice in one module. Saying so here beats
 /// the pile of resolution errors the collision would otherwise produce.
 fn exported_name(
@@ -333,7 +333,7 @@ fn exported_name(
 /// The name C knows an item by: its `export` where it has one, and its Rust name
 /// where it does not.
 ///
-/// This is what an `export` is for here — the generated release mirrors the name the
+/// This is what an `export` is for here, the generated release mirrors the name the
 /// caller writes in C, so two types one Rust name apart still have one release each.
 fn mirrored_name(args: &LazyFfiArgs, rust_name: &Ident) -> String {
     args.export
@@ -475,8 +475,8 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
         &item.attrs,
     );
 
-    // The emitted names are the C header's spelling — the type from `#[lazyffi(export = ...)]`,
-    // the release from that name — so `nonstandard_style` is emitted with them. The attribute
+    // The emitted names are the C header's spelling, the type from `#[lazyffi(export = ...)]`,
+    // the release from that name, so `nonstandard_style` is emitted with them. The attribute
     // is emitted with the item, and the reason cannot be: a comment written inside `quote!` is
     // dropped with the token stream, which is why it is written here instead.
     // SAFETY: the `unsafe fn`s emitted below are the `InputType`, `InputPtr` and `InputRef`
@@ -567,7 +567,7 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
         impl ::rorolala_utils_lazyffi::ResultPayload for #rust_name {
             fn into_payload(self) -> *mut ::core::ffi::c_void {
                 // An opaque value already crosses as an owning pointer, so it becomes a
-                // payload with nothing further — released with this type's own
+                // payload with nothing further, released with this type's own
                 // `free_<type>`.
                 <Self as ::rorolala_utils_lazyffi::ReturnType>::return_self(self).cast()
             }
@@ -644,7 +644,7 @@ fn expand_enum(args: &LazyFfiArgs, item: &ItemEnum) -> syn::Result<TokenStream2>
 ///
 /// A transparent type crosses by value, so no ordinary signature needs to release one.
 /// A `RorolalaResult` payload is a pointer, though, and the one it carries may name
-/// this enum — so there has to be a release for it, named the way every other release
+/// this enum, so there has to be a release for it, named the way every other release
 /// is. It frees the box and nothing else: the repr's own fields are the caller's to
 /// release one by one, exactly as they are when the enum is handed over by value.
 fn enum_release(args: &LazyFfiArgs, rust_name: &Ident, ffi_name: &Ident) -> TokenStream2 {
@@ -660,7 +660,7 @@ fn enum_release(args: &LazyFfiArgs, rust_name: &Ident, ffi_name: &Ident) -> Toke
     );
 
     // The release function is named for C: `free_` over the name C knows the type by, so
-    // `nonstandard_style` is emitted with it — the header's spelling, not Rust's. The
+    // `nonstandard_style` is emitted with it, the header's spelling, not Rust's. The
     // attribute is emitted with the item, and the reason cannot be: a comment written inside
     // `quote!` is dropped with the token stream, which is why it is written here instead.
     quote! {
@@ -723,8 +723,8 @@ fn expand_unit_enum(item: &ItemEnum, rust_name: &Ident, ffi_name: &Ident) -> Tok
     // and C spells each enumerator `<repr>_<variant>`, so the header repeats the type's prefix
     // where Rust keeps the variant names as they are. `nonstandard_style` is therefore emitted
     // with the enum, and `clippy::enum_variant_names` with it because a header whose variants
-    // share a word — `ParseVCSIndexObjectError`'s `ExpectVariant`, `ExpectVersion`,
-    // `ExpectCreator`, `ExpectMessage` — is the header's to name. The attribute is emitted
+    // share a word, `ParseVCSIndexObjectError`'s `ExpectVariant`, `ExpectVersion`,
+    // `ExpectCreator`, `ExpectMessage`, is the header's to name. The attribute is emitted
     // with the item, and the reason cannot be: a comment written inside `quote!` is dropped
     // with the token stream.
     quote! {
@@ -871,7 +871,7 @@ fn expand_data_enum(item: &ItemEnum, rust_name: &Ident, ffi_name: &Ident) -> Tok
 
     // The emitted tag enum, payload union and repr are named and stocked from C:
     // `#[lazyffi(export = ...)]` fixes the repr, the tag enum keeps the header's variant
-    // spelling, and the union carries `__unit` for the variants without a payload — the field
+    // spelling, and the union carries `__unit` for the variants without a payload, the field
     // `lazyffi-core` names (`PAYLOAD_UNIT_FIELD`) and the header generator leaves out of the C
     // union. So `nonstandard_style`, `clippy::enum_variant_names` (a header whose variants share
     // a word) and `clippy::pub_underscore_fields` (that `__unit` slot) are emitted with them. The
@@ -1048,8 +1048,8 @@ fn payload_repr(
         docs_or_fallback(&format!("payload of the `{variant_name}` variant"), attrs);
 
     (
-        // The companion struct's fields are the payload's own names — `_0`, `_1` for a tuple
-        // payload, the variant's field names for a braced one — and the header reads the very
+        // The companion struct's fields are the payload's own names, `_0`, `_1` for a tuple
+        // payload, the variant's field names for a braced one, and the header reads the very
         // same names, so `clippy::pub_underscore_fields` and `clippy::struct_field_names` are
         // emitted with the struct rather than answered by renaming what C is told. The
         // attribute is emitted with the item, and the reason cannot be: a comment written
@@ -1107,10 +1107,10 @@ fn conversion_impls(
     return_body: &TokenStream2,
 ) -> TokenStream2 {
     // SAFETY: the implementations emitted below are `InputType`, `ReturnType`, `InputPtr` and
-    // `ReturnPtr` — no `InputRef`, which only a repr borrowed in place can carry — and the
+    // `ReturnPtr` (no `InputRef`, which only a repr borrowed in place can carry) and the
     // `unsafe fn`s among them are the `InputType` and `InputPtr` ones, whose contract is the
     // trait's `# Safety` documentation in `utils/lazyffi/src/convert.rs`; each generated body
-    // only forwards to it — `input_body` is the conversion this function is handed, and
+    // only forwards to it, `input_body` is the conversion this function is handed, and
     // `InputPtr`'s two bodies go through `InputType` and `ReturnType`. The marker cannot be
     // emitted with them: a comment written inside `quote!` is dropped with the token stream.
     quote! {
@@ -1164,7 +1164,7 @@ fn conversion_impls(
         impl ::rorolala_utils_lazyffi::ResultPayload for #rust_name {
             fn into_payload(self) -> *mut ::core::ffi::c_void {
                 // A transparent type is a value and a result payload is a pointer, so
-                // the repr is boxed — released with the `free_<type>` beside this.
+                // the repr is boxed, released with the `free_<type>` beside this.
                 ::std::boxed::Box::into_raw(::std::boxed::Box::new(
                     <Self as ::rorolala_utils_lazyffi::ReturnType>::return_self(self),
                 ))
@@ -1328,8 +1328,8 @@ fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnPart
             #name: <#ty as ::rorolala_utils_lazyffi::InputType>::From
         });
         // SAFETY: the argument is what the wrapper's `# Safety` doc (`SAFETY_DOC`) and this
-        // type's `InputType` implementation demand of the caller — a value, or a pointer paired
-        // with its tag — and the conversion reads nothing beyond it.
+        // type's `InputType` implementation demand of the caller, a value, or a pointer paired
+        // with its tag, and the conversion reads nothing beyond it.
         parts.prelude.push(quote! {
             let #name = unsafe { <#ty as ::rorolala_utils_lazyffi::InputType>::input_type(#name) };
         });
@@ -1651,8 +1651,8 @@ fn expand_receiver(receiver: &Receiver) -> syn::Result<FnParts> {
                 #param: <Self as ::rorolala_utils_lazyffi::InputType>::From
             });
             // SAFETY: the receiver is what the wrapper's `# Safety` doc (`SAFETY_DOC`) and this
-            // type's `InputType` implementation demand of the caller — a value, or a pointer
-            // paired with its tag — and the conversion reads nothing beyond it.
+            // type's `InputType` implementation demand of the caller, a value, or a pointer
+            // paired with its tag, and the conversion reads nothing beyond it.
             parts.prelude.push(quote! {
                 #binding = unsafe {
                     <Self as ::rorolala_utils_lazyffi::InputType>::input_type(#param)

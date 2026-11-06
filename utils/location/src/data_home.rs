@@ -1,8 +1,8 @@
 //! Where the user's own files are kept.
 //!
 //! A person's run and a program's run want different answers. The machine's answer is
-//! [`dirs::data_local_dir`] — `~/.local/share` on a machine that follows the XDG layout, the
-//! local application data directory on Windows — which is right for a run a person makes and
+//! [`dirs::data_local_dir`], `~/.local/share` on a machine that follows the XDG layout, the
+//! local application data directory on Windows, which is right for a run a person makes and
 //! wrong for one made by something that must keep its files to itself.
 //!
 //! Such a run has an answer of its own: [`DATA_HOME_ENV_VAR`], read the way a shell reads

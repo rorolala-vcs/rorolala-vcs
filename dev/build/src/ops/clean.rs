@@ -1,7 +1,7 @@
 //! `clean`: everything the build ever produced, removed.
 //!
 //! What it names is what the build writes: cargo's output, whatever else the target directory holds
-//! — the generated header, mingling's completion scripts — .NET's output, and the exported `build/`.
+//! (the generated header, mingling's completion scripts) .NET's output, and the exported `build/`.
 //! The tree itself is not touched, and neither is anything outside it: what is removed is a
 //! directory the paths module said where it is.
 

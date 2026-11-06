@@ -4,8 +4,8 @@
 //! cannot be read from a working directory. It is read from a file instead: one flat table of
 //! namespace to the path the Vault sits at, kept under the user's own data directory.
 //!
-//! The file is ordinary configuration — the same extension-named format, and the same staged
-//! edit every other configuration goes through — so a daemon that dies mid-update leaves either
+//! The file is ordinary configuration, the same extension-named format, and the same staged
+//! edit every other configuration goes through, so a daemon that dies mid-update leaves either
 //! the whole old table or the whole new one, never half of each.
 
 use std::collections::BTreeMap;
@@ -20,7 +20,7 @@ use rorolala_utils_constants::{
 use rorolala_utils_location::data_home;
 use serde::{Deserialize, Serialize};
 
-/// Where the machine's daemon looks for the Vaults it serves, if this machine — or the run —
+/// Where the machine's daemon looks for the Vaults it serves, if this machine, or the run,
 /// names a place.
 ///
 /// It is `~/.local/share/rola/daemon/registry.toml` on a machine that follows XDG; a machine
@@ -38,7 +38,7 @@ pub fn registry_path() -> Option<PathBuf> {
 
 /// Where this machine's preferences are kept, if this machine names a place.
 ///
-/// They sit beside the table of namespaces — the same directory, because both are the machine's —
+/// They sit beside the table of namespaces (the same directory, because both are the machine's)
 /// and are read by the daemon only where they decide something: what a session may be served.
 #[must_use]
 pub fn preference_path() -> Option<PathBuf> {

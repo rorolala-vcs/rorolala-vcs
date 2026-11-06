@@ -40,8 +40,8 @@ public sealed class RolaI18NTests : IDisposable
             zh-CN: 仓库已是这样的布局
 
           err_pack_failed:
-            en: "The store would not pack — %{reason}"
-            zh-CN: "仓库无法打包 —— %{reason}"
+            en: "The store would not pack: %{reason}"
+            zh-CN: "仓库无法打包：%{reason}"
 
           help:
             en: |

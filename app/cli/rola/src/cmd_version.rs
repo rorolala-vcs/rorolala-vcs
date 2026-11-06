@@ -1,13 +1,13 @@
 //! The `rola -V` / `rola --version` output: what this build is.
 //!
 //! `-V` and `--version` are not commands of their own: a `pre_dispatch` hook rewrites them to the
-//! node below, which is kept out of what a run is offered — see [`VERSION_NODE`]. What is printed
+//! node below, which is kept out of what a run is offered, see [`VERSION_NODE`]. What is printed
 //! then goes through the program's own renderers, so `--json` answers with the fields `build.rs`
 //! wrote and a plain run answers with the banner.
 //!
 //! The values are read from the reference the workspace's build script wrote beside the target
 //! directory, taken at compile time: the program carries them, rather than looking a file up again
-//! at run time — a binary installed on its own has no `.cache` to read.
+//! at run time, a binary installed on its own has no `.cache` to read.
 
 use mingling::{
     Grouped, StructuralData, Suggest,
@@ -38,7 +38,7 @@ const REFERENCE: &str = include_str!(concat!(
 
 /// The banner the version is drawn in.
 ///
-/// The picture is the one the project's other programs share — only the three lines beside it are
+/// The picture is the one the project's other programs share, only the three lines beside it are
 /// this program's, and they are left as markers here and filled in when it is drawn. A line is
 /// written out with its leading spaces kept, so the picture lines up.
 const BANNER: &str = concat!(
@@ -63,7 +63,7 @@ const BANNER: &str = concat!(
 /// How much of a commit's hash is shown beside the version.
 ///
 /// A hash is long enough to name a commit and longer than a line wants, so what is drawn is the
-/// head of it — the same seven characters git shows.
+/// head of it, the same seven characters git shows.
 const COMMIT_HEAD: usize = 7;
 
 /// The fields the reference holds, as the build script wrote them.
@@ -157,7 +157,7 @@ impl ResultVersion {
 #[renderer(buffer)]
 pub fn render_result_version(result: ResultVersion) {
     let version_line = format!("rola {} ({})", result.version, result.commit_head());
-    let build_line = format!("{} · {}", result.commit_date, result.rustc_version);
+    let build_line = format!("{}, {}", result.commit_date, result.rustc_version);
 
     let banner = BANNER
         .replace("%TITLE%", t!("version.title").trim())

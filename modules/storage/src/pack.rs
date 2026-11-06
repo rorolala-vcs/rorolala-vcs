@@ -2,8 +2,8 @@ use crate::{BLAKE3_HASH_LEN, Blake3Hash, Error, Key, split_u64};
 
 /// The magic every pack index starts with.
 ///
-/// A pack's `.pack` holds nothing but entries and needs no preamble — each entry begins with the
-/// frame it would have had loose — so the file that has to say what it is is the index beside it.
+/// A pack's `.pack` holds nothing but entries and needs no preamble, each entry begins with the
+/// frame it would have had loose, so the file that has to say what it is is the index beside it.
 pub const PACK_INDEX_MAGIC: [u8; 4] = *b"RLPI";
 
 /// The version of the pack index format this build writes.
@@ -15,7 +15,7 @@ pub const PACK_INDEX_VERSION: u8 = 2;
 
 /// Where one object sits inside a pack, and how long it is.
 ///
-/// `len` counts the whole entry — the frame as well as the payload — so an object read out of a
+/// `len` counts the whole entry, the frame as well as the payload, so an object read out of a
 /// pack is read as the very bytes it would have been loose: packing changes where content lives,
 /// and nothing else.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,10 +62,10 @@ impl PackEntry {
 
 /// The directory of a pack: which objects it holds and where each one sits.
 ///
-/// The entries are kept in key order, which is what a caller looks one up by — a pack may hold
+/// The entries are kept in key order, which is what a caller looks one up by, a pack may hold
 /// thousands of objects, and finding one by reading the whole directory is the difference between
 /// a read that is worth making and one that is not. The order is not a caller's to get wrong: an
-/// index is put into it as it is built — see [`new`](Self::new) and [`push`](Self::push) — and an
+/// index is put into it as it is built, see [`new`](Self::new) and [`push`](Self::push), and an
 /// index *read back* out of order is refused, so a lookup by binary search always answers what a
 /// walk of the entries would.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -127,7 +127,7 @@ impl PackIndex {
 
     /// Writes the index down, so it can be read back by [`decode`](Self::decode).
     ///
-    /// An index is a header and then one record per object — the digest, the offset and the length —
+    /// An index is a header and then one record per object (the digest, the offset and the length)
     /// which is everything a reader needs to reach an entry and nothing about what the entry means.
     #[must_use]
     pub fn encode(&self) -> Vec<u8> {
@@ -150,7 +150,7 @@ impl PackIndex {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Malformed`] if `bytes` does not read as an index — the wrong magic, a
+    /// Returns [`Error::Malformed`] if `bytes` does not read as an index, the wrong magic, a
     /// version this build does not know, a count or a record that does not fit, entries out of key
     /// order, or bytes left over at the end.
     pub fn decode(bytes: &[u8]) -> Result<Self, Error> {
@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn an_index_not_in_key_order_is_refused() {
-        // A file out of order, as one that went wrong on disk would be — the builders here cannot
+        // A file out of order, as one that went wrong on disk would be, the builders here cannot
         // make one, which is the point of them.
         let mut out_of_order = Vec::new();
         out_of_order.extend_from_slice(&super::PACK_INDEX_MAGIC);

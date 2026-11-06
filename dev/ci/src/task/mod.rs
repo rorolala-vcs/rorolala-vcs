@@ -33,8 +33,8 @@ pub(crate) use {
 
 /// Runs one check, records how it ended, and gives its status to the run.
 ///
-/// A check is the tree's own program run as it always was — its output goes to the terminal as it
-/// runs — and what is recorded is only where it was run and how it ended: the report is a reading of
+/// A check is the tree's own program run as it always was, its output goes to the terminal as it
+/// runs, and what is recorded is only where it was run and how it ended: the report is a reading of
 /// a run, not a second copy of its output.
 fn run_check(
     task: &str,

@@ -1,11 +1,11 @@
 //! The `rola entries` command: the paths a Layout names, said as a list to read and to pipe.
 //!
 //! It is [`rola layout entries`](crate::layout::cmd_layout_entries) in the one shape that is
-//! wanted most of the time — a path a line, nothing else — which is what a `tree`, a script, or
+//! wanted most of the time (a path a line, nothing else) which is what a `tree`, a script, or
 //! anything else that reads one path a line is given. Everything else an entry holds is still one
 //! command over, since that is what the other is for.
 //!
-//! What it reads is the Layout being worked in, or — with `--remote` — the Vault's own, as the
+//! What it reads is the Layout being worked in, or, with `--remote`, the Vault's own, as the
 //! copy a `rola layout fetch` left in the Workspace. Nothing is fetched for it: a run that has not
 //! fetched is told there is no copy rather than quietly reaching for one, so a query answers from
 //! what is already at hand.
@@ -53,7 +53,7 @@ pub fn desc_entries() -> Description {
 
 /// Completes what `rola entries` can be given next.
 ///
-/// The command names no argument of its own — what it lists is whatever the run is in — so the
+/// The command names no argument of its own, what it lists is whatever the run is in, so the
 /// only thing to answer is a word that starts a flag.
 #[completion(EntryEntries)]
 pub fn complete_entries(ctx: ShellContext) -> Suggest {
@@ -71,8 +71,8 @@ pub fn complete_entries(ctx: ShellContext) -> Suggest {
 
 /// Lists the paths a Layout names, one a line
 ///
-/// The Layout being worked in is what is read. `--remote` reads the Vault's own Layout instead —
-/// the one that Layout tracks — as the copy `rola layout fetch` left in the Workspace. Nothing is
+/// The Layout being worked in is what is read. `--remote` reads the Vault's own Layout instead,
+/// the one that Layout tracks, as the copy `rola layout fetch` left in the Workspace. Nothing is
 /// fetched for it, so a run that has not fetched is told there is no copy rather than reaching for
 /// one: what a query reads is what is at hand.
 ///

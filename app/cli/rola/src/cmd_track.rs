@@ -2,7 +2,7 @@
 //!
 //! It is the whole of a piece of work rather than a step of it: a file is named, its content goes
 //! into the store, a version is made of it, and the Layout being worked in is made to name that
-//! version — so what a person says is a file, and what a Layout gains is everything a checkout of
+//! version, so what a person says is a file, and what a Layout gains is everything a checkout of
 //! it would need. A file already recorded is left alone while its content has not changed, and is
 //! given a new version when it has.
 //!
@@ -20,8 +20,8 @@
 // store, the index and the report about them are moved through together, and the borrows `#[chain]`
 // hands the handler would be scattered across helpers if that pass were cut up.
 #![allow(clippy::too_many_lines)]
-// A recording of one file needs everything about it — where it is, what it holds, the version it is
-// at, the merge waiting for it and the move it confirms — and gathering them into one value would
+// A recording of one file needs everything about it, where it is, what it holds, the version it is
+// at, the merge waiting for it and the move it confirms, and gathering them into one value would
 // only move the count somewhere else.
 #![allow(clippy::too_many_arguments)]
 // The progress setting is the resource the injection hands the handler and not something a recording
@@ -99,7 +99,7 @@ const EDIT_ATTEMPTS: usize = 10;
 
 /// How long a recording goes unwatched before its bars are let out.
 ///
-/// Shorter than the ordinary wait — see [`crate::progress`] — because a recording opens with the part a
+/// Shorter than the ordinary wait, see [`crate::progress`], because a recording opens with the part a
 /// reader most wants to watch: the whole of every file it is to record is read before anything is
 /// written, and a bar that appeared only once that reading was over would be a bar for nothing.
 const WATCH_AFTER: Duration = Duration::from_secs(1);
@@ -114,7 +114,7 @@ const LOOSE_BEFORE_PACK: usize = 256;
 /// How many packs the index may hold before a recording gathers them into one.
 ///
 /// A run writes what it makes as one pack, so a run that never gathered would leave a pack per run
-/// behind — and every lookup walks every pack. A handful is what a run of them is worth; past that the
+/// behind, and every lookup walks every pack. A handful is what a run of them is worth; past that the
 /// walk is the reading rather than the lookup, and one rewrite is cheaper than it.
 const PACKS_BEFORE_REPACK: usize = 8;
 
@@ -181,13 +181,13 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
 
 /// Records one or more files in the Layout being worked in
 ///
-/// Each `FILE` is read first, to find whether what it holds differs from what the Layout names — the
+/// Each `FILE` is read first, to find whether what it holds differs from what the Layout names, the
 /// files that changed and no others then go on to a message, a version and a Layout entry. A file
 /// already recorded and unchanged is skipped, and one that did change is given a new version. A
 /// `FILE` that is a directory is taken recursively: every file
 /// under it is recorded, read the way the tree reading reads them, so what the Workspace keeps for
 /// itself and what another Workspace holds are left out. A name is read against where the run was
-/// made, so `.` is the directory it is in — and, at the Workspace root, the whole of the work.
+/// made, so `.` is the directory it is in, and, at the Workspace root, the whole of the work.
 ///
 /// `--message` says what the whole group did and is what each file carries; `--file-message` gives
 /// one file its own words, one for each file named, paired with the files by position. A file whose
@@ -197,16 +197,16 @@ pub fn complete_track(ctx: ShellContext) -> Suggest {
 /// `--replace` redoes the version each file is at rather than adding one after it, the way
 /// `git commit --amend` redoes the last commit: the new version is built on what the version being
 /// replaced was built on, so that version stands as if it had never been made. It is what a run
-/// asks for when the version it made was wrong — the wrong content, or the wrong words — and the
+/// asks for when the version it made was wrong (the wrong content, or the wrong words) and the
 /// file's content is what the tree holds now. A file the Layout records nothing for, and a version
 /// that is a merge, are refused: neither is a version a new one can take the place of. The old
 /// version and its variant stay in the index; only the Layout stops naming them. With `--replace`
 /// and no `--message` or `--file-message`, the words the replaced version had are what the editor
-/// opens on — and what `--no-editor` records as they stand.
+/// opens on, and what `--no-editor` records as they stand.
 ///
 /// A file the tree moved is recorded where it is now, and the move is confirmed along with it: what
 /// a run asks for is a version. A move whose file was not edited is nothing to record, though, so
-/// it is left alone — `rola align` is what confirms it.
+/// it is left alone, `rola align` is what confirms it.
 ///
 /// A file the fetched copy of the Vault's Layout says another account holds is refused: the version
 /// made here would be one this side cannot push, so recording it makes the conflict rather than
@@ -284,8 +284,8 @@ pub fn track(args: EntryTrack, force: &ResForce) -> Next {
 }
 
 /// The state a recording starts in.
-// What a run does to the tree is a handful of independent answers the caller gave — no editor, a
-// replaced version, another account's file, the ignore rules — and making each a two-variant enum
+// What a run does to the tree is a handful of independent answers the caller gave, no editor, a
+// replaced version, another account's file, the ignore rules, and making each a two-variant enum
 // would say no more than the bool does while writing every use of it out twice.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Grouped)]
@@ -376,7 +376,7 @@ fn record(
     let root = held.get_root().to_path_buf();
 
     // A variant file is content waiting to be joined rather than work to record, so where it lies is
-    // left out of every reading here — and a file waiting for one is recorded as the merge it is.
+    // left out of every reading here, and a file waiting for one is recorded as the merge it is.
     let mut merging = Merging::read(&root);
     let ignored = merging.ignored(&layout);
 
@@ -386,7 +386,7 @@ fn record(
 
     // Recording works on a tree that is settled: a path the Layout names and the tree does not hold
     // is something to settle first, with `rola align`, rather than something to record around. A
-    // move is not one of these — naming a path where it is now is how a move is confirmed.
+    // move is not one of these, naming a path where it is now is how a move is confirmed.
     let diff = match tree_diff(&layout, held, DEFAULT_ALIKE, &rules) {
         Ok(diff) => diff,
         Err(error) => return fail(error.to_string()),
@@ -447,8 +447,8 @@ fn record(
 
     // A file the Vault's fetched copy says another account holds is not one to record: the version
     // made here is one this side cannot push, so recording it makes the conflict rather than
-    // avoiding it. Only what the tree says changed is asked about — a file that did not change
-    // records nothing — and a Vault that tracks nothing, a copy that is not there, and a file the
+    // avoiding it. Only what the tree says changed is asked about, a file that did not change
+    // records nothing, and a Vault that tracks nothing, a copy that is not there, and a file the
     // copy does not name are all answered with nothing to refuse.
     if !force {
         let tracked = tracked_vault(held);
@@ -481,7 +481,7 @@ fn record(
     // What is worth reading is what the tree says changed, plus what `--replace` names and what the
     // reading could not look at: a file the Layout agrees with holds content the store already has, so
     // it is not read at all. The reading happens before the message is asked and before anything is
-    // written — see `enumerate` — so a file the reading agrees with is neither asked about nor
+    // written, see `enumerate`, so a file the reading agrees with is neither asked about nor
     // written, and a move that changed nothing under it is left to `rola align` as it always was.
     let recordable: BTreeSet<LayoutPath> = diff
         .modified
@@ -518,7 +518,7 @@ fn record(
     };
 
     // The files in the list are the ones that changed; one that did not is not recorded, so it is
-    // not something a message stands for either — including when it was named on the command line.
+    // not something a message stands for either, including when it was named on the command line.
     enumerated.retain(|file| file.changed);
     let changing = enumerated;
     // A tree named, or standing under a directory named, is one subject of the recording, taken as
@@ -604,7 +604,7 @@ fn record(
         }
     }
 
-    // The content of every file that is to be recorded goes into the store, read again as it goes — the
+    // The content of every file that is to be recorded goes into the store, read again as it goes, the
     // price of having asked for the message first (see `enumerate`).
     let staged = match write(store, &runtime, progress, changing) {
         Ok(staged) => staged,
@@ -690,7 +690,7 @@ fn record(
         return fail(error.to_string());
     }
 
-    // What was recorded is what the tree and the Layout now agree on, so the reading remembers it —
+    // What was recorded is what the tree and the Layout now agree on, so the reading remembers it,
     // only for the paths recorded, since remembering the whole tree would take every other change
     // with it and a later `rola status` would have nothing to say about them.
     if let Err(error) = batch.commit() {
@@ -751,10 +751,10 @@ fn record(
 ///
 /// A run writes what it makes as a pack already, so what gathers between packings is a pack per run
 /// rather than a loose file per object. What a gathering costs is a rewrite of every object the index
-/// holds, though, which grows with the index while what it saves does not — so a run gathers only when
+/// holds, though, which grows with the index while what it saves does not, so a run gathers only when
 /// the loose objects it left number [`LOOSE_BEFORE_PACK`], or when the packs it left number more than
 /// [`PACKS_BEFORE_REPACK`], and until then they are valid where they are: a later run or `rola pack`
-/// settles them. It is best effort — a pack that cannot be made because another run holds the lock
+/// settles them. It is best effort, a pack that cannot be made because another run holds the lock
 /// leaves an index that is correct and merely ungathered, and a failure here does not fail a recording
 /// that is already durable.
 fn pack_index(index: &VCSIndex, runtime: &tokio::runtime::Runtime) {
@@ -776,7 +776,7 @@ fn remember(layout: &Layout, root: &Path, committed: &[(LayoutPath, PathBuf)]) -
 
     for (layout_path, disk) in committed {
         // The reading of the tree already wrote down what the file holds, and nothing in this run
-        // has touched the file since — so what it found is taken rather than the file read a third
+        // has touched the file since, so what it found is taken rather than the file read a third
         // time, and the Layout is held to agree with the digest it wrote down.
         let entry = match cache.get(layout_path) {
             Some(read) => read.clone().with_agreed(Some(read.digest())),
@@ -810,8 +810,8 @@ struct Prepared {
     ///
     /// A path that moved is recorded only when what it holds changed: a move by itself is not
     /// something a recording is about, so a file that was moved and not edited is left for
-    /// `rola align` to confirm. One that was edited as well is recorded — the change is the
-    /// recording — and the move is carried in with it, since the Layout has to name where the file
+    /// `rola align` to confirm. One that was edited as well is recorded, the change is the
+    /// recording, and the move is carried in with it, since the Layout has to name where the file
     /// now is for the change to be recorded at all.
     moved_from: Option<LayoutPath>,
 }
@@ -887,7 +887,7 @@ struct Recorded {
 
 /// Resolves each name against the Layout and the tree, or refuses.
 ///
-/// A name is written the way a shell writes one — relative to where the run was made, or absolute —
+/// A name is written the way a shell writes one (relative to where the run was made, or absolute)
 /// and what a Layout names is a path relative to the Workspace root, so one becomes the other here.
 /// A directory is taken recursively: every file under it is recorded, read the way the tree reading
 /// reads them, so what a Workspace keeps for itself and what another Workspace holds are left out.
@@ -896,7 +896,7 @@ struct Recorded {
 ///
 /// Each file's cut is settled here as well: `policy` if the run named one, else the preference the
 /// entry already has, else nothing. Settling it before anything is asked or written is what lets a
-/// preference this build cannot honour stop the run with the workspace untouched — and it settles
+/// preference this build cannot honour stop the run with the workspace untouched, and it settles
 /// every file, not only the ones that turn out to have changed, because a file's preference is not
 /// something a change is needed to discover.
 fn prepare(
@@ -930,7 +930,7 @@ fn prepare(
         };
 
         if disk.is_dir() {
-            // A directory the rules ignore is not this run's to record either — what it holds is
+            // A directory the rules ignore is not this run's to record either, what it holds is
             // reached by the same walk the tree reading uses, and the rules govern what that gains.
             if !include_ignored && rules.is_ignore(relative, true) {
                 refused.push(given.clone());
@@ -939,7 +939,7 @@ fn prepare(
 
             // A directory is read where it is rather than by walking the whole Workspace and
             // filtering, so naming `src/` reads `src/` alone. What the walk leaves out is left out
-            // just the same, since it is the same walk — see `reachable` for the one thing a walk
+            // just the same, since it is the same walk, see `reachable` for the one thing a walk
             // started inside the tree does not see for itself.
             check_directory(relative, given)?;
             standing.push(Named::Directory(disk, at));
@@ -951,7 +951,7 @@ fn prepare(
                 continue;
             }
 
-            // An ignored file cannot be selected — but a move's destination is the work's own file
+            // An ignored file cannot be selected, but a move's destination is the work's own file
             // wearing a new place, and a rule is not written against that.
             if !include_ignored && !crate::ignore::selectable(rules, &path, renames) {
                 refused.push(given.clone());
@@ -968,8 +968,8 @@ fn prepare(
         return Err(ErrorTrackIgnored { paths: refused }.into());
     }
 
-    // A directory is read through the same walk the tree reading uses, so what it leaves out — the
-    // Workspace's own `.rola`, a Workspace nested inside it, a symbolic link — is left out here too,
+    // A directory is read through the same walk the tree reading uses, so what it leaves out, the
+    // Workspace's own `.rola`, a Workspace nested inside it, a symbolic link, is left out here too,
     // and so is every variant file among what it found. The walk starts at the directory named
     // rather than at the Workspace root, so naming a directory reads that directory alone.
     let mut files: Vec<(usize, LayoutPath, PathBuf)> = Vec::new();
@@ -1000,7 +1000,7 @@ fn prepare(
                         }
 
                         // What the rules ignore is not selected by a directory's expansion either:
-                        // it was never named, so there is nothing to refuse — it is simply left out.
+                        // it was never named, so there is nothing to refuse, it is simply left out.
                         if !include_ignored && !crate::ignore::selectable(rules, &path, renames) {
                             return None;
                         }
@@ -1014,7 +1014,7 @@ fn prepare(
         }
     }
 
-    // A file named twice — under a directory that was named as well, or as itself — is one file, so
+    // A file named twice (under a directory that was named as well, or as itself) is one file, so
     // it is recorded once.
     let mut seen = BTreeSet::new();
     files.retain(|(_, path, _)| seen.insert(path.clone()));
@@ -1023,8 +1023,8 @@ fn prepare(
 
     for (named_at, path, disk) in files {
         // A path the tree moved still has its entry under where it was, so the entry is read there.
-        // The move itself is made only as the file is recorded — a move the file did not change
-        // under is not recorded at all, and is left to `rola align` — so a run that is refused
+        // The move itself is made only as the file is recorded, a move the file did not change
+        // under is not recorded at all, and is left to `rola align`, so a run that is refused
         // before then, for a message it could not be given, has changed nothing.
         let moved_from = renames
             .iter()
@@ -1107,7 +1107,7 @@ fn resolve(cwd: &Path, given: &str) -> PathBuf {
 /// `path` with its `.` dropped and its `..` climbed, worked out lexically rather than on disk.
 ///
 /// A name is written against where the run was made, so `.` names the directory it was made in and
-/// `..` its parent — and a path that spells one place two ways is one place. Working it out here,
+/// `..` its parent, and a path that spells one place two ways is one place. Working it out here,
 /// before the disk is asked anything, is what lets `.` name the Workspace root rather than a path
 /// with no components in it.
 fn normalize(path: &Path) -> PathBuf {
@@ -1153,8 +1153,8 @@ fn file_path(relative: &Path, given: &str) -> Result<LayoutPath, Next> {
 
 /// Whether the whole-tree walk would have descended into `dir`.
 ///
-/// The walk never descends into a directory that keeps a data directory of its own — that directory
-/// is a Workspace of its own — and a walk started inside the tree does not see the directories above
+/// The walk never descends into a directory that keeps a data directory of its own, that directory
+/// is a Workspace of its own, and a walk started inside the tree does not see the directories above
 /// it. So whether any of them is such a Workspace is asked here; a directory under one holds work
 /// that is not this Workspace's to record.
 fn reachable(root: &Path, dir: &Path) -> bool {
@@ -1229,7 +1229,7 @@ fn assemble_all(
 ///
 /// Three shapes come out of the two, which is what a message has always been able to be: the group
 /// alone, the file's own alone, or the two joined by `: `. A file's own message that begins with `!`
-/// is the second shape — it says the group does not apply here — which is how a run says in one
+/// is the second shape, it says the group does not apply here, which is how a run says in one
 /// argument what would otherwise be a choice about the whole group. Nothing at all is `None`.
 fn assemble(global: &str, own: &str) -> Option<String> {
     let global = global.trim();
@@ -1439,7 +1439,7 @@ fn section_name(line: &str) -> Option<String> {
 
 /// Reads every candidate file and says which of them changed, before anything is asked or written.
 ///
-/// The content is read here — the whole of every candidate — because whether a file is worth a message
+/// The content is read here, the whole of every candidate, because whether a file is worth a message
 /// and a version is whether what is on disk differs from what the Layout names, and that is only known by
 /// hashing it. The bar is drawn over that reading, since it is the part a reader has to wait through.
 ///
@@ -1517,7 +1517,7 @@ fn enumerate(
 ///
 /// These are the files [`enumerate`] found changed, so nothing else is written: a file whose content the
 /// store already has has nothing to put there. Each is read again, which is what makes this a pass of its
-/// own and what its bar is drawn over — the price of having asked for the message before writing.
+/// own and what its bar is drawn over, the price of having asked for the message before writing.
 ///
 /// # Errors
 ///
@@ -1669,7 +1669,7 @@ fn commit(
     .with_preference(file.file.policy.map(str::to_owned));
 
     // A moved file is brought to where it is now: the move is the last thing done, so that a
-    // failure before it — writing the version the change is — leaves the Layout as it was. The
+    // failure before it, writing the version the change is, leaves the Layout as it was. The
     // variant file waiting for it, if there is one, moves with it.
     if let Some(from) = &file.file.moved_from {
         if let Err(error) = batch.move_path(from, &file.file.path) {

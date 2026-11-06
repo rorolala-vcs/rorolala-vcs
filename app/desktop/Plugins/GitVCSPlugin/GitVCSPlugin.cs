@@ -8,12 +8,12 @@ namespace GitVCSPlugin;
 /// The Git plugin: it offers Git's own notion of what is ignored to the File System plugin.
 /// </summary>
 /// <remarks>
-/// It carries no dock and no window of its own. What it does is contribute one hide provider — the
-/// entries Git ignores — through the File System plugin's extension point, which it reaches by
+/// It carries no dock and no window of its own. What it does is contribute one hide provider, the
+/// entries Git ignores, through the File System plugin's extension point, which it reaches by
 /// depending on that plugin: the reference is what lets it name <see cref="HideRegistry"/>, and the
 /// manifest's dependency is what has the host start this one after it. A plugin of its own rather than
 /// a part of the browser, because Git's rules are the version control system's to offer, not the file
-/// manager's — and a browser that knew about <c>.gitignore</c> would know about one system only.
+/// manager's, and a browser that knew about <c>.gitignore</c> would know about one system only.
 /// </remarks>
 public sealed class GitVCSPlugin : IRolaPlugin
 {

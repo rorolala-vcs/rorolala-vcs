@@ -15,8 +15,8 @@ pub type EntryFuture<'a> = std::pin::Pin<
 
 /// One action as the registry holds it: erased over the types it runs on and yields.
 ///
-/// `Action` cannot be what the registry stores — its `Input` and `Output` differ per
-/// action, and `process` takes no `self` — so this is what each entry wraps: a way to run
+/// `Action` cannot be what the registry stores, its `Input` and `Output` differ per
+/// action, and `process` takes no `self`, so this is what each entry wraps: a way to run
 /// an action that names none of its types. Which id it answers to is its place in
 /// [`build_action_registry`], not something it carries.
 pub trait ActionEntry: Send + Sync {
@@ -85,7 +85,7 @@ pub fn build_action_registry() -> Vec<std::option::Option<std::boxed::Box<dyn Ac
 /// # Errors
 ///
 /// Returns [`ActionError::UnknownAction`](rorolala_protocol::ActionError::UnknownAction)
-/// when `id` names no action — a hole, or a slot past the end — and whatever the action
+/// when `id` names no action (a hole, or a slot past the end) and whatever the action
 /// itself fails with.
 pub async fn do_action_with(
     registry: &[std::option::Option<std::boxed::Box<dyn ActionEntry>>],

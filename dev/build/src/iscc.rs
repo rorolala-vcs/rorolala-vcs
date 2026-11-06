@@ -2,8 +2,8 @@
 //!
 //! It is pinned the way the icon set is pinned, and for the same reason: what a package is built
 //! with decides what is in it, so it is named rather than found. The project's own copy is preferred
-//! — a package built with a compiler this project names is one that anybody can build again the
-//! same way — and a machine's own is taken where there is no other, so a developer who already has
+//!, a package built with a compiler this project names is one that anybody can build again the
+//! same way, and a machine's own is taken where there is no other, so a developer who already has
 //! Inno Setup installed is not made to lay a second copy down.
 //!
 //! Nothing is fetched and nothing is installed. Laying a toolchain down is a decision, and a build

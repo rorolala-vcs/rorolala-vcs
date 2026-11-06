@@ -64,8 +64,8 @@ where
     /// Wraps `inner` as a value held on the Vault, without a context to ask.
     ///
     /// This is how something that already knows which side it is on records a value that
-    /// side holds — a [`ActionContext`](crate::ActionContext) keeping the member it acts
-    /// as — where which wrapper is being built says the side, and `f` never has to be run
+    /// side holds, a [`ActionContext`](crate::ActionContext) keeping the member it acts
+    /// as, where which wrapper is being built says the side, and `f` never has to be run
     /// to find out.
     pub(crate) const fn holding(inner: Inner) -> Self {
         Self { inner: Some(inner) }
@@ -236,8 +236,8 @@ where
     /// Wraps `inner` as a value held on the Workspace, without a context to ask.
     ///
     /// This is how something that already knows which side it is on records a value that
-    /// side holds — a [`ActionContext`](crate::ActionContext) keeping the account it acts
-    /// as — where which wrapper is being built says the side, and `f` never has to be run
+    /// side holds, a [`ActionContext`](crate::ActionContext) keeping the account it acts
+    /// as, where which wrapper is being built says the side, and `f` never has to be run
     /// to find out.
     pub(crate) const fn holding(inner: Inner) -> Self {
         Self { inner: Some(inner) }

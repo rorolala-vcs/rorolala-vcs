@@ -20,12 +20,12 @@ internal enum CheckinBlocker
     /// </summary>
     /// <remarks>
     /// It is the one case a checkin has a third way out of: what the Vault now names `A/b.fbx` is what this side checked
-    /// in as `imported.fbx` — an earlier name of the same entry — so moving the local file and its record over is what
+    /// in as `imported.fbx`, an earlier name of the same entry, so moving the local file and its record over is what
     /// letting the checkin go ahead would have done, without fetching the content again.
     /// </remarks>
     Elsewhere,
 
-    /// <summary>Something else is already at the landing path — another entry's file, or a path the Layout names.</summary>
+    /// <summary>Something else is already at the landing path, another entry's file, or a path the Layout names.</summary>
     Taken,
 }
 
@@ -88,7 +88,7 @@ internal sealed record CheckinPlan(
     /// <summary>The references a run of the clean entries is given.</summary>
     /// <remarks>
     /// A drag or a paste lands where it was put, so what it names is what it carried rather than every entry under it: a
-    /// folder is one reference, and the run keeps the tree it is — the command line rebases each on its own name. The
+    /// folder is one reference, and the run keeps the tree it is, the command line rebases each on its own name. The
     /// button names the entries themselves, since each is to land at the path the Vault gives it.
     /// </remarks>
     /// <returns>What a checkin is to name, in the order the entries were carried.</returns>
@@ -245,7 +245,7 @@ internal static class CheckinPlanning
     /// <summary>A path as it is written here, with the Vault's unplaced mark taken off the front.</summary>
     /// <remarks>
     /// `@/new/a.fbx` is an entry the Vault holds no path for yet, and `@/removed/a.fbx` one taken out of the work: the
-    /// mark is the Vault's bookkeeping, so what lands here is the name below it — `new/a.fbx` — and a directory called
+    /// mark is the Vault's bookkeeping, so what lands here is the name below it, `new/a.fbx`, and a directory called
     /// `@` is never made. A path that is nothing but the mark is left as it is, since there is no name to place.
     /// </remarks>
     /// <param name="path">The path the Vault's copy names the entry by.</param>
@@ -332,7 +332,7 @@ internal static class CheckinPlanning
 /// </summary>
 /// <remarks>
 /// The command line checks in what it is given, or nothing: the first reference it refuses is the run refused, so
-/// "bring in what fits and leave the rest" is a plan made here and then run — see <see cref="CheckinPlanning"/>. What
+/// "bring in what fits and leave the rest" is a plan made here and then run, see <see cref="CheckinPlanning"/>. What
 /// the user is asked when the plan does not fit is the one question this class puts: move the files that are already
 /// here under another name, leave them out, or let the checkin go.
 /// <para>
@@ -497,8 +497,8 @@ internal sealed class CheckinFlow
             return;
         }
 
-        // A plan with nothing in the way and nothing already here is run as it stands. One that has something here — where
-        // the Vault names it — is asked about as well: nothing is in the way of those entries, but the run leaves them out,
+        // A plan with nothing in the way and nothing already here is run as it stands. One that has something here, where
+        // the Vault names it, is asked about as well: nothing is in the way of those entries, but the run leaves them out,
         // and a run that half did something is not one to start without saying so.
         if (!plan.Blocks && plan.Here == 0)
         {
@@ -586,7 +586,7 @@ internal sealed class CheckinFlow
     /// <remarks>
     /// The file is moved before the record that names it, and put back where it was if the record cannot follow: a path
     /// that moved to a file that is not there is worse than a file beside the name it already had. What actually moved is
-    /// said — a run that moved files and said nothing is a run the user cannot tell from one that did not.
+    /// said, a run that moved files and said nothing is a run the user cannot tell from one that did not.
     /// </remarks>
     /// <param name="plan">What the checkin comes to.</param>
     /// <param name="program">The program the window was opened by.</param>
@@ -700,7 +700,7 @@ internal sealed class CheckinFlow
 
         if (references.Count == 0)
         {
-            // Nothing to hand the command line: what changed is already in the work — or was never going to be — and the
+            // Nothing to hand the command line: what changed is already in the work, or was never going to be, and the
             // place is drawn from the files, so it is told they may have moved.
             _host.Files.Touch();
 

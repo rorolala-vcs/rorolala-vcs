@@ -7,7 +7,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The badge extension point: which providers a tile asks, and in what order their badges are numbered.
 /// </summary>
 /// <remarks>
-/// Nothing here draws — that needs a renderer, and a badge is a control — so what is exercised is the
+/// Nothing here draws (that needs a renderer, and a badge is a control) so what is exercised is the
 /// catalogue: a badge exists only where a provider speaks for the directory, and the order the providers
 /// were offered in is what says which badge of the arc is whose.
 /// </remarks>

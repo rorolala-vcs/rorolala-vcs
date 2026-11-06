@@ -9,8 +9,8 @@ namespace RorolalaVCSPlugin;
 /// </summary>
 /// <remarks>
 /// The copy every reading is made from is one file, so two views asking at once would be two fetches for
-/// a thing one of them is about to write. A request made while a fetch is going is run when it ends — it
-/// asked for what that fetch is bringing — rather than started beside it.
+/// a thing one of them is about to write. A request made while a fetch is going is run when it ends, it
+/// asked for what that fetch is bringing, rather than started beside it.
 /// <para>
 /// What the fetch wrote is what every reading of the work is made from, so the files are said to have
 /// changed when it ends: the columns of a listing, the Overview and the Version Graph all read the copy

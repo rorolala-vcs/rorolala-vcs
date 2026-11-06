@@ -1,7 +1,7 @@
 //! `sync-all`: making the store on each side hold the same keys as the other.
 //!
 //! Where [`sync_storage`](crate::sync_storage) is the carrying, this is the asking: it works out
-//! what a full sync is — everything either side holds — and hands that to the primitive, so that
+//! what a full sync is, everything either side holds, and hands that to the primitive, so that
 //! what one side has and the other does not is on both by the time it returns.
 
 use rorolala_protocol::{Action, ActionContext, ActionError, Both, OnlyVault, OnlyWorkspace};
@@ -14,7 +14,7 @@ use super::sync_storage::{Side, carry_blob, sync_storage};
 /// The Workspace and the Vault each keep a store of their own, and this asks for a full sync
 /// between them: each side says what it holds, and the keys asked for are everything the two of
 /// them hold between them, so what is only on one side ends up on both. Nothing is uploaded or
-/// downloaded — a key moves in whichever direction it is only on one side of.
+/// downloaded, a key moves in whichever direction it is only on one side of.
 ///
 /// A side that has no store is given one, since a store that is not there holds nothing and a full
 /// sync of two stores is what was asked for.
@@ -43,7 +43,7 @@ impl Action for ActionSyncAll {
     /// # Errors
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
-    /// Vault to work on, and whatever the exchange fails with — see
+    /// Vault to work on, and whatever the exchange fails with, see
     /// [`sync_storage`](crate::sync_storage).
     async fn process(
         _: OnlyWorkspace<Self::Input>,
@@ -60,8 +60,8 @@ impl Action for ActionSyncAll {
         // It is every key the store holds rather than only those it can produce: producing one means
         // reading it back, chunk by chunk, which is a full read of the store before a byte moves, and
         // the presence the two answers feed is what decides each key anyway. What that costs is the
-        // one thing this run is for: a key held but not producible — a manifest whose chunks are gone
-        // — is now asked for by both sides, and neither holds it, so the run says so rather than
+        // one thing this run is for: a key held but not producible, a manifest whose chunks are gone
+        //, is now asked for by both sides, and neither holds it, so the run says so rather than
         // leaving it out of the sync in silence.
         let mine: Vec<u8> = local
             .list_all_keys()

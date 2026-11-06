@@ -1,6 +1,6 @@
 //! `write-remote-entries`: writing many entries of the Vault's Layout in one exchange.
 //!
-//! A sync names every entry it is ahead on, and each would otherwise be its own exchange — a
+//! A sync names every entry it is ahead on, and each would otherwise be its own exchange, a
 //! connection and a handshake per file. The writes are made here in one go: the entries to create,
 //! and the versions to set, are carried across together and answered together, one outcome per
 //! write in the order they were asked for.
@@ -24,13 +24,13 @@ pub struct RemoteWrites {
 ///
 /// # Input
 ///
-/// The writes, as JSON: the entries to create — each a path, a `Uuid`, a version and what it is — and the
+/// The writes, as JSON: the entries to create (each a path, a `Uuid`, a version and what it is) and the
 /// versions to set, each a `Uuid` and a version.
 ///
 /// # Output
 ///
 /// What became of each, as JSON: an array of outcomes, one per write, in the order they were asked
-/// for — the creates first, then the sets. Each outcome is what `create-remote-entry` or
+/// for, the creates first, then the sets. Each outcome is what `create-remote-entry` or
 /// `set-remote-version` answers on its own.
 pub struct ActionWriteRemoteEntries;
 

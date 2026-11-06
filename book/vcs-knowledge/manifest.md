@@ -6,13 +6,13 @@ keywords: concept, storage, manifest, blake3, chunking, chunk, objects, object
 
 # About Manifest Object
 
-A manifest records *how* a chunked piece of content is composed: it lists the chunks in content order, and each chunk is a key plus a length.
+A manifest records _how_ a chunked piece of content is composed: it lists the chunks in content order, and each chunk is a key plus a length.
 
 When a piece of content is split into two or more chunks, the store writes a manifest for it. Content saved whole has **no manifest**; under its key there is just one complete object.
 
 ## Content
 
-A manifest records the chunks *only in order*.
+A manifest records the chunks _only in order_.
 
 Each chunk records two things:
 
@@ -45,31 +45,31 @@ Decoding is strict:
 - No bytes may remain after all records are read.
 - The sum of the lengths must not overflow, and must not exceed `isize::MAX`.
 
-The last rule is *not* an estimate of disk capacity; it is a limit on whether the content can be put back together at all. The content ultimately goes into a `Vec<u8>`, and no `Vec` can exceed `isize::MAX` bytes. A manifest above that limit describes content this build cannot hold, even if the disk has room.
+The last rule is _not_ an estimate of disk capacity; it is a limit on whether the content can be put back together at all. The content ultimately goes into a `Vec<u8>`, and no `Vec` can exceed `isize::MAX` bytes. A manifest above that limit describes content this build cannot hold, even if the disk has room.
 
-Decoding does **not** reserve memory according to the chunk count the manifest claims. That count is only what the manifest *says*, not bytes already read; a corrupt or malicious manifest can claim a huge chunk count, and reserving according to it would exhaust memory before a single chunk has been read. The reservation is capped at the number of records the remaining bytes can hold, and the *true* chunk count is verified by reading records one at a time.
+Decoding does **not** reserve memory according to the chunk count the manifest claims. That count is only what the manifest _says_, not bytes already read; a corrupt or malicious manifest can claim a huge chunk count, and reserving according to it would exhaust memory before a single chunk has been read. The reservation is capped at the number of records the remaining bytes can hold, and the _true_ chunk count is verified by reading records one at a time.
 
 ## Why the splitting scheme is not recorded
 
-A manifest describes *the result*, not the process. This makes splitting a purely write-time choice:
+A manifest describes _the result_, not the process. This makes splitting a purely write-time choice:
 
 - A reader needs only the manifest, not the splitter that was used at the time.
 - The splitting scheme can be tuned or replaced, and content already written remains readable.
-- When two stores save the same content using *different* splits, the key is the same; their manifests differ, but each can reassemble the same content.
+- When two stores save the same content using _different_ splits, the key is the same; their manifests differ, but each can reassemble the same content.
 
-This is also the boundary in "the content is the key, the split is not": the key promises the *content*; the manifest is merely how that content is laid out in one particular store.
+This is also the boundary in "the content is the key, the split is not": the key promises the _content_; the manifest is merely how that content is laid out in one particular store.
 
 ## Why it is stored separately
 
 Manifests are stored under `manifest/`, separate from objects, rather than in the same directory as objects. The reason is **garbage collection**:
 
 - A manifest states **which chunks are referenced**.
-- Reading *only* the manifests is enough to know which chunks "someone wants", and which chunks no manifest mentions—orphans that are no longer referenced.
+- Reading _only_ the manifests is enough to know which chunks "someone wants", and which chunks no manifest mentions, orphans that are no longer referenced.
 - If manifests were mixed in with objects, collection would have to read every object, first decide whether it is a manifest, and only then decide.
 
 Likewise, the index of a manifest pack is also placed under `manifest/`, rather than alongside the manifest pack files. That way, "read out all manifests" means reading **one directory**, without opening every pack.
 
-The same key may have both an object and a manifest at once: they are **two entries, in two places**, and reads cannot confuse them. A chunk may itself happen to be exactly some complete piece of content, so "object" and "manifest" are not two mutually exclusive kinds of content, but **two storage forms under the same key**.
+The same key may have both an object and a manifest at once: they are **two entries, in two places**, and reads cannot confuse them. A chunk may itself happen to be exactly some complete piece of content, so "object" and "manifest" are **two storage forms under the same key**.
 
 ## When it is written
 
@@ -88,7 +88,7 @@ When reading a piece of content, the manifest is **the first thing consulted**:
 2. **Manifest present**: read each chunk in order, check that each chunk's actual length equals the length recorded in the manifest, then concatenate.
 3. Verify the concatenated content against the key **once more**.
 
-Step 3 **cannot be skipped**. The manifest is not covered by the key: the key is the hash of the *complete content*, while the manifest is only a description of how to assemble it. A manifest can point at correct chunks but in the wrong order, or point at chunks belonging to other content, so **every chunk being correct does not mean the assembled content is what the key promised**.
+Step 3 **cannot be skipped**. The manifest is not covered by the key: the key is the hash of the _complete content_, while the manifest is only a description of how to assemble it. A manifest can point at correct chunks but in the wrong order, or point at chunks belonging to other content, so **every chunk being correct does not mean the assembled content is what the key promised**.
 
 On error, the store first tries the complete object under the same key:
 

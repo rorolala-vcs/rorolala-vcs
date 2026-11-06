@@ -11,8 +11,8 @@ namespace FileSystemPlugin;
 /// picture comes from: the icon set in force, and the system's own pictures where the set says nothing. So the one
 /// answer this plugin gives a listing is given to a place as well, rather than a second look being drawn beside it.
 /// <para>
-/// The path is matched, not opened: an icon is chosen by what the entry is called — its extension, and whether it
-/// is a folder — so a path nothing is at draws the same picture a file of that name would.
+/// The path is matched, not opened: an icon is chosen by what the entry is called, its extension, and whether it
+/// is a folder, so a path nothing is at draws the same picture a file of that name would.
 /// </para>
 /// </remarks>
 public static class EntryIcons

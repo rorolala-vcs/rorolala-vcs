@@ -12,7 +12,7 @@
 //! The command line is one file to open and nothing else: what a run was going to say is in the
 //! file, and everything after opening it is the caller's. The file comes first in the argument
 //! list because it is the only thing a run is really about, and the language the run speaks is
-//! read the way `rola` reads one — the argument, then the environment, then English.
+//! read the way `rola` reads one, the argument, then the environment, then English.
 
 rust_i18n::i18n!("i18n", fallback = "en");
 
@@ -162,8 +162,8 @@ fn default_language() -> String {
 
 /// An environment value as a locale rust-i18n knows.
 ///
-/// `LANG` and friends carry an encoding suffix and spell the territory with an underscore —
-/// `zh_CN.UTF-8` — and neither belongs in a locale name, so they become `zh-CN`. A value already
+/// `LANG` and friends carry an encoding suffix and spell the territory with an underscore,
+/// `zh_CN.UTF-8`, and neither belongs in a locale name, so they become `zh-CN`. A value already
 /// in that shape passes through unchanged.
 fn locale_of(value: &str) -> String {
     value.split('.').next().unwrap_or(value).replace('_', "-")

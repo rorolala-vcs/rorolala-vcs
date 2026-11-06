@@ -3,7 +3,7 @@
 //! The index is a store of its own, addressed by the same kind of key a store is: a Variant or a
 //! Version is written under its own hash and read back by it, whether it sits loose or in a pack.
 //! That is the whole promise, and this is where it is asked of an index that has actually been
-//! packed — and of what a `rola pack` leaves behind.
+//! packed, and of what a `rola pack` leaves behind.
 //!
 //! A program rather than a set of tests cargo runs, for the same reason the rest of them are: what
 //! it does is what a person does with a terminal, and what it checks is what a program would say
@@ -422,7 +422,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

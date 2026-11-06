@@ -33,8 +33,8 @@ pub enum ResProgressSetting {
 /// A [`ProgramSetup`] implementation that decides how a run reports its progress
 ///
 /// The choice is made of two requests a run can already make, so it needs no flag of its
-/// own: `--no-progress` says nothing is to be shown, and a structural renderer — `--json`
-/// and its kind — says the run is being read by a program rather than watched by a person,
+/// own: `--no-progress` says nothing is to be shown, and a structural renderer, `--json`
+/// and its kind, says the run is being read by a program rather than watched by a person,
 /// which is what the records are for. Asking for neither is a person watching, and that is
 /// what a terminal is redrawn for.
 ///

@@ -6,7 +6,7 @@ namespace RorolalaDesktop.Contract;
 /// <remarks>
 /// A reading of something that is read often and costs something to read belongs here rather than in
 /// the settings: a cache is thrown away when it is wrong without anybody being asked, and a setting
-/// is a decision a person made. What is written is the plugin's own business — the host names the
+/// is a decision a person made. What is written is the plugin's own business, the host names the
 /// directory and asks nothing about what is in it.
 /// <para>
 /// The directory is the plugin's alone, so a file in it never has to be named after the plugin: two

@@ -8,8 +8,8 @@
 //!
 //! Each fetches the Vault's Layout first, since every gate is read against what the Vault holds
 //! now, and each writes what the Vault agreed to into that copy afterwards, so a reading next
-//! shows the ownership as it now is. What they move is every entry the names stand for — a file is
-//! itself, a directory is every file under it, and `.` is the directory the run was made in — and
+//! shows the ownership as it now is. What they move is every entry the names stand for, a file is
+//! itself, a directory is every file under it, and `.` is the directory the run was made in, and
 //! the gates are read for all of them before any ownership moves: a batch that cannot be done whole
 //! is not half done, unless `--allow-partial` says the doable part is worth doing anyway.
 //!
@@ -137,7 +137,7 @@ fn complete_ownership(ctx: &ShellContext) -> Suggest {
 ///
 /// Each `PATH` is where a file sits in the Layout being worked in; ownership is about the `Uuid`
 /// that Layout names the path by, in the Vault the Layout tracks. A `PATH` that is a directory is
-/// taken recursively — every file under it — and `.` is the directory the run was made in, so
+/// taken recursively, every file under it, and `.` is the directory the run was made in, so
 /// `rola hold .` claims everything in the work that is not already claimed. Files that directory
 /// brings in which the Layout does not name have no `Uuid` to be about, and are passed over.
 ///
@@ -145,7 +145,7 @@ fn complete_ownership(ctx: &ShellContext) -> Suggest {
 /// and every gate is read for every entry before any ownership moves:
 ///
 /// - the entry must be one the Vault already holds: one it never took is nothing to claim;
-/// - what is here must be the version the Vault names — `--force` moves past this. What the tree
+/// - what is here must be the version the Vault names, `--force` moves past this. What the tree
 ///   holds on top of it need not be recorded: a version that matches is one nobody else has moved,
 ///   so work written before it was claimed still claims safely;
 /// - the entry must be held by nobody: claiming what another account holds is not a claim, and
@@ -158,8 +158,8 @@ fn complete_ownership(ctx: &ShellContext) -> Suggest {
 ///
 /// Renders [`ErrorOwnershipNoTrack`] when the Layout tracks no Vault, [`ErrorOwnershipName`] when a
 /// name is not a file or directory inside the Workspace, and, unless `--allow-partial` is asked
-/// for, whatever one of the gates refused — [`ErrorOwnershipPath`], [`ErrorOwnershipUpstream`],
-/// [`ErrorOwnershipVersion`], [`ErrorOwnershipChanged`] or [`ErrorOwnershipTaken`] — for the first
+/// for, whatever one of the gates refused, [`ErrorOwnershipPath`], [`ErrorOwnershipUpstream`],
+/// [`ErrorOwnershipVersion`], [`ErrorOwnershipChanged`] or [`ErrorOwnershipTaken`], for the first
 /// one, or [`ErrorOwnershipRefused`] when several were refused at once.
 #[command(node = "hold", entry = EntryHold)]
 pub fn hold(args: EntryHold, force: &ResForce, offline: &ResOffline) -> Next {
@@ -188,7 +188,7 @@ pub fn hold(args: EntryHold, force: &ResForce, offline: &ResOffline) -> Next {
         return next;
     }
 
-    // Picking several cannot fail for want of them — an absent list is an empty one — so a run
+    // Picking several cannot fail for want of them, an absent list is an empty one, so a run
     // that named nothing is told so here rather than reading as a run with nothing to do.
     if paths.is_empty() {
         return ErrorOwnershipArgument {
@@ -257,7 +257,7 @@ pub fn desc_giveup() -> Description {
 ///
 /// Each `PATH` is where a file sits in the Layout being worked in; ownership is about the `Uuid`
 /// that Layout names the path by, in the Vault the Layout tracks. A `PATH` that is a directory is
-/// taken recursively — every file under it — and `.` is the directory the run was made in, so
+/// taken recursively, every file under it, and `.` is the directory the run was made in, so
 /// `rola giveup .` lets go of everything in the work this account holds. Files that directory
 /// brings in which the Layout does not name have no `Uuid` to be about, and are passed over.
 ///
@@ -265,7 +265,7 @@ pub fn desc_giveup() -> Description {
 /// and every gate is read for every entry before any ownership moves:
 ///
 /// - the entry must be one the Vault already holds: one it never took is nothing to let go of;
-/// - what is here must be the version the Vault names, and nothing in it may be unrecorded —
+/// - what is here must be the version the Vault names, and nothing in it may be unrecorded,
 ///   `--force` moves past this;
 /// - the entry must be held by this account: another account's is not this run's to let go of, and
 ///   one nobody holds is nothing to let go of at all. `--force` does not move this.
@@ -277,8 +277,8 @@ pub fn desc_giveup() -> Description {
 ///
 /// Renders [`ErrorOwnershipNoTrack`] when the Layout tracks no Vault, [`ErrorOwnershipName`] when a
 /// name is not a file or directory inside the Workspace, and, unless `--allow-partial` is asked
-/// for, whatever one of the gates refused — [`ErrorOwnershipPath`], [`ErrorOwnershipUpstream`],
-/// [`ErrorOwnershipVersion`], [`ErrorOwnershipChanged`] or [`ErrorOwnershipNotHeld`] — for the
+/// for, whatever one of the gates refused, [`ErrorOwnershipPath`], [`ErrorOwnershipUpstream`],
+/// [`ErrorOwnershipVersion`], [`ErrorOwnershipChanged`] or [`ErrorOwnershipNotHeld`], for the
 /// first one, or [`ErrorOwnershipRefused`] when several were refused at once.
 #[command(node = "giveup", entry = EntryGiveup)]
 pub fn giveup(args: EntryGiveup, force: &ResForce, offline: &ResOffline) -> Next {
@@ -307,7 +307,7 @@ pub fn giveup(args: EntryGiveup, force: &ResForce, offline: &ResOffline) -> Next
         return next;
     }
 
-    // Picking several cannot fail for want of them — an absent list is an empty one — so a run
+    // Picking several cannot fail for want of them, an absent list is an empty one, so a run
     // that named nothing is told so here rather than reading as a run with nothing to do.
     if paths.is_empty() {
         return ErrorOwnershipArgument {
@@ -364,7 +364,7 @@ pub fn handle_giveup(
 /// Runs one of the two commands, with a reader watching what the Vault is asked for.
 ///
 /// Split from the handlers so that the reader is started and waited for around the run exactly once,
-/// however many ways it has of returning — the ownership moves themselves are one exchange, but the
+/// however many ways it has of returning, the ownership moves themselves are one exchange, but the
 /// gates before them are many ways out.
 fn run(
     kind: Own,
@@ -402,7 +402,7 @@ fn run(
 /// Moves the ownership of every entry the names stand for, once the gates have all been read.
 ///
 /// `routeify` is what lets the two handlers above be one: what this returns is the same `Next` a
-/// handler would, so a failure the framework knows — no Workspace, no Vault to reach, no account —
+/// handler would, so a failure the framework knows (no Workspace, no Vault to reach, no account)
 /// is carried out of here just as it would be out of either of them.
 #[routeify]
 fn change(
@@ -455,7 +455,7 @@ fn change(
     let account = account_named(&account_name, Some(held), None)?;
 
     // Every gate is read against what the Vault holds now, so its copy is brought up to date first
-    // — and that copy is what is written afterwards, so a reading agrees with the Vault. That fetch is
+    //, and that copy is what is written afterwards, so a reading agrees with the Vault. That fetch is
     // the wait a reader watches for, and it is said as a bar of its own the way a sync says its plan:
     // the ownership that follows is a second wait rather than the same one, and a reader shown only the
     // second would see a bar that appeared when the slow half was already over.
@@ -543,7 +543,7 @@ struct Wanted {
 ///
 /// A name that is a file is that file; one that is a directory is every file under it, read the way
 /// the tree reading reads the tree, so what the Workspace keeps for itself is left out. A name
-/// that is both — one spelled twice, or a file under a directory named as well — is one path.
+/// that is both (one spelled twice, or a file under a directory named as well) is one path.
 fn expanded(
     held: &Workspace,
     cwd: &Path,
@@ -583,7 +583,7 @@ fn expanded(
         }
 
         // The walk is the whole of what a directory may bring in, so it is read once however many
-        // directories are named — and only when one is.
+        // directories are named, and only when one is.
         let found = walked.get_or_insert_with(|| walk(&root).0);
         let prefix = if relative.as_os_str().is_empty() {
             String::new()
@@ -789,10 +789,10 @@ fn free(kind: Own, path: &LayoutPath, upstream: &MutableData, me: &str) -> Resul
 ///
 /// The whole batch is one exchange, over one connection: the `Uuid`s cross together and the outcomes
 /// come back together, one per entry in the order they were asked for. That is what a run naming a
-/// directory wants — one handshake rather than one per file — and the bar is drawn over the entries
+/// directory wants, one handshake rather than one per file, and the bar is drawn over the entries
 /// as they are done, so a reader is shown which one the Vault is on now.
 ///
-/// What the Vault agreed to is written into `copy` — the copy this run opened once — as one batch
+/// What the Vault agreed to is written into `copy`, the copy this run opened once, as one batch
 /// after the whole exchange: what a run of a thousand entries costs the copy is one open and one
 /// flush per shard, rather than an open and a flush for each of them.
 fn act(
@@ -809,7 +809,7 @@ fn act(
     }
 
     // What the bar is called belongs to whoever watches the run, so it is said here and crosses with
-    // the entries — as JSON, since a list is not a thing the C ABI can hand over and the action's
+    // the entries, as JSON, since a list is not a thing the C ABI can hand over and the action's
     // input is one string: this crate has the words and the action, run on both ends, has none.
     let name = match kind {
         Own::Hold => t!("ownership.holding").trim().to_string(),
@@ -884,7 +884,7 @@ fn act(
     }
 
     // A copy that cannot be written is the one failure here that is not the Vault's: the change it
-    // follows is already made, so what is said is that the copy did not follow it — a fetch, which
+    // follows is already made, so what is said is that the copy did not follow it, a fetch, which
     // every one of these runs begins with, is what brings a copy back.
     let mut batch = copy.batch();
     if let Err(error) = set_cached_owners(&mut batch, &changes).and_then(|()| batch.commit()) {

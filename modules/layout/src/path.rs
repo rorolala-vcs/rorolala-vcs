@@ -12,7 +12,7 @@ use crate::error::LayoutError;
 ///
 /// It is held normalized: components joined by `/`, relative, with no empty component and no `.`
 /// or `..`, and each component NFC-normalized. So one path has one spelling wherever it was
-/// written, and the string itself is the key — a path is compared and stored as the bytes it
+/// written, and the string itself is the key, a path is compared and stored as the bytes it
 /// normalizes to.
 ///
 /// NFC is what makes a name written with combining characters on one machine and with precomposed

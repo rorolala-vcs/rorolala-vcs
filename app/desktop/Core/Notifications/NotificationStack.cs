@@ -14,7 +14,7 @@ namespace RorolalaDesktop.Notifications;
 /// A panel of its own rather than a stack of items, because the movement is the point: a new notification
 /// arrives at the bottom and every one already there is pushed up, and that push has to be animated rather
 /// than jumping. The layout places every card where it belongs, and a card whose place has changed is drawn
-/// at its old place for one frame and then slides to the new one — the same arrangement the plugin manager
+/// at its old place for one frame and then slides to the new one, the same arrangement the plugin manager
 /// uses for its cards, for the same reason.
 /// <para>
 /// The cards are laid out from the bottom up: the newest is the lowest, and the stack grows towards the top

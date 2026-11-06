@@ -72,7 +72,7 @@ public sealed class DockIconTests
     /// <summary>The room on a tab's left is the picture, its padding, and the room its word kept from it.</summary>
     /// <remarks>
     /// The room between the picture and the word is the room the word kept from the tab's own edge before there was a
-    /// picture — widening the padding for the picture widens that side alone, rather than pushing the word away twice.
+    /// picture, widening the padding for the picture widens that side alone, rather than pushing the word away twice.
     /// </remarks>
     [Fact]
     public void ATabKeepsRoomForItsPictureAndItsWord()
@@ -94,7 +94,7 @@ public sealed class DockIconTests
         // pixels rather than between them.
         Assert.Equal(16.0, mark.Bounds.Width);
 
-        // The picture stands at the tab's own edge — one pixel of border before it — and the word begins as much after it
+        // The picture stands at the tab's own edge, one pixel of border before it, and the word begins as much after it
         // as it kept from that edge before there was a picture.
         Assert.InRange(markAt.X, 18.0, 20.0);
         Assert.InRange(columns[0].Width.Value - ((markAt.X - 1) + mark.Bounds.Width), 5.0, 7.0);
@@ -184,7 +184,7 @@ public sealed class DockIconTests
     /// <remarks>
     /// The look's base theme sets a menu's word through the presenter it draws it in, and a plain text block put into an
     /// item's header is set at the program's size instead: a row of those is larger than the menu it is in, which is a
-    /// thing a test without the look applied cannot see. What is checked here is what a reader sees — the row, and the
+    /// thing a test without the look applied cannot see. What is checked here is what a reader sees, the row, and the
     /// word, are the same as an item that says its word alone.
     /// </remarks>
     [Fact]

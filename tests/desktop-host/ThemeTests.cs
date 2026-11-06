@@ -12,8 +12,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The look: what is built from the colours the user chooses, and what follows from them.
 /// </summary>
 /// <remarks>
-/// Nothing here applies the look — that needs a running Avalonia, and the order it is applied in is
-/// what the theme requires rather than anything a test can watch — so what is checked is the look
+/// Nothing here applies the look, that needs a running Avalonia, and the order it is applied in is
+/// what the theme requires rather than anything a test can watch, so what is checked is the look
 /// itself: the rule the ink on a filled surface is read by, that every name a plugin draws a mark with
 /// is answered, that a fade runs between one colour and the same one at no alpha, and that the twelve
 /// a person may change reach the roles they are named for.
@@ -67,7 +67,7 @@ public sealed class ThemeTests
     /// </summary>
     /// <remarks>
     /// The names come from the contract rather than from literals written in this test, so what is
-    /// checked is that a plugin asking for a role is answered — which is also what says the names the
+    /// checked is that a plugin asking for a role is answered, which is also what says the names the
     /// plugins now share have not been renamed out from under them.
     /// </remarks>
     [Fact]
@@ -92,8 +92,8 @@ public sealed class ThemeTests
     /// </summary>
     /// <remarks>
     /// Avalonia fades a brush by interpolating its colour's channels and its alpha apart, and "no colour" is
-    /// white: fading from it into the sunken ground would pass through a light grey — lighter than either end
-    /// at the middle of the fade — which is a flash of light where a fill was meant to arrive. The look's part
+    /// white: fading from it into the sunken ground would pass through a light grey, lighter than either end
+    /// at the middle of the fade, which is a flash of light where a fill was meant to arrive. The look's part
     /// of that is the palette: a clear entry has to be the colour it fades to, so that the alpha is the only
     /// thing that changes.
     /// </remarks>
@@ -123,7 +123,7 @@ public sealed class ThemeTests
     /// <remarks>
     /// A plugin reads a colour as a value through <c>IPalette</c> where it has to paint with it, and as a
     /// resource name where the variant has to answer for it. The two are one answer said twice, so what
-    /// this checks is that they still say the same thing — which is the whole of what makes the interface
+    /// this checks is that they still say the same thing, which is the whole of what makes the interface
     /// and the published names two spellings rather than two palettes. A look is built from the variant in
     /// force, so each variant's names are read from a look of its own.
     /// </remarks>
@@ -157,8 +157,8 @@ public sealed class ThemeTests
     /// The twelve a person may change are the roles they name, in both variants.
     /// </summary>
     /// <remarks>
-    /// Each is chosen as a colour no default is, so that a field read into the wrong role — or into
-    /// neither — is a failure rather than a coincidence: the ten grounds and the two configured colours
+    /// Each is chosen as a colour no default is, so that a field read into the wrong role, or into
+    /// neither, is a failure rather than a coincidence: the ten grounds and the two configured colours
     /// are the whole of what the panel edits, and a look built from them has to be built from all of
     /// them.
     /// </remarks>
@@ -235,7 +235,7 @@ public sealed class ThemeTests
     /// The two colours that stand on a filled surface are filled with the ink that goes with them.
     /// </summary>
     /// <remarks>
-    /// A ground is never filled with the primary, so the ink it carries is the front ink — and a look
+    /// A ground is never filled with the primary, so the ink it carries is the front ink, and a look
     /// built from a dark ground has to carry a light one, since words in the ground's own colour are
     /// words that are not there.
     /// </remarks>

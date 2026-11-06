@@ -9,13 +9,13 @@ namespace RorolalaVCSPlugin;
 /// What the Vault copy says about the directories being listed, read once each.
 /// </summary>
 /// <remarks>
-/// What is read is the copy the Workspace has fetched, through <see cref="RolaOwnership"/> — nothing is
+/// What is read is the copy the Workspace has fetched, through <see cref="RolaOwnership"/>, nothing is
 /// reached for, so a listing says what the Vault held when it was last fetched. One reading answers for
 /// everything this plugin shows about an entry: who holds it, and where upstream names it. Two
 /// contributions asking separately would open the same two Layouts twice per directory.
 /// <para>
 /// The answers are read once per directory rather than once per row, and forgotten when the files may have
-/// changed — which is when another run is most likely to have fetched a newer copy.
+/// changed, which is when another run is most likely to have fetched a newer copy.
 /// </para>
 /// <para>
 /// Opening the two Layouts is not done on the window's thread: a Layout is a snapshot of the whole tree, and a
@@ -89,7 +89,7 @@ internal sealed class OwnershipReadings
     /// Lets go of what was read, so the next answer is read from the tree as it is now.
     /// </summary>
     /// <remarks>
-    /// What was read is a `RolaOwnership` — two Layouts opened once — and a Layout is a snapshot: what
+    /// What was read is a `RolaOwnership`, two Layouts opened once, and a Layout is a snapshot: what
     /// another run writes after it was opened is not in it. A move or a removal renames a path in the
     /// Layout the Workspace works in, so the answers kept here are about a tree that no longer exists, and
     /// the handles are given back rather than only forgotten.
@@ -119,8 +119,8 @@ internal sealed class OwnershipReadings
     /// One answer about one entry, read from the copy the directory's Workspace has fetched.
     /// </summary>
     /// <remarks>
-    /// What an answer is about is a file of the work, so an entry that names no directory of its own — the
-    /// way up, which is a step rather than a place — is nothing either answer speaks about. A read that
+    /// What an answer is about is a file of the work, so an entry that names no directory of its own, the
+    /// way up, which is a step rather than a place, is nothing either answer speaks about. A read that
     /// fails is answered as nothing rather than raised: a listing that will not appear because a lock could
     /// not be read is a worse answer than one that appears without it.
     /// </remarks>
@@ -227,7 +227,7 @@ internal sealed class OwnershipReadings
             }
 
             // Drawn either way: what landed is drawn when it stands, and when it does not, the drawing is what asks
-            // for it again — the answer being one from before the change the drawing is following. It is a drawing and
+            // for it again, the answer being one from before the change the drawing is following. It is a drawing and
             // not a change, so nothing anyone else read is given back for it.
             _files.Redraw();
         });

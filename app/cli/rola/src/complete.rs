@@ -1,7 +1,7 @@
 //! What every command's completion shares: which word of the line is being filled, and how the
 //! candidates a run already knows are put to the shell.
 //!
-//! A completion's answers are the run's own — a bound Vault's name, an account, a path, a hash —
+//! A completion's answers are the run's own (a bound Vault's name, an account, a path, a hash)
 //! so very little is common to them. What is common is reading the command line: a command is
 //! reached by a node, the words after it are its positional arguments, and the word in progress
 //! is one of them. That counting, and the narrowing of a known list to what the word could still
@@ -31,7 +31,7 @@ use crate::layout::{chosen, readonly_layout_copy};
 
 /// Which positional argument the word being completed is, counting from zero.
 ///
-/// `anchor` is the last word of the node the command is reached by — `bind` for `vault bind` —
+/// `anchor` is the last word of the node the command is reached by, `bind` for `vault bind`,
 /// since that is where the command's own arguments begin. A word already typed fills its
 /// position; the word being completed fills the position it is about to, so it is the words
 /// after the node that are counted, less the one in progress. A run that names the anchor
@@ -61,8 +61,8 @@ pub fn typing_flag(ctx: &ShellContext) -> bool {
 
 /// Whether `word` is `arg` written as a flag, with a value after the style's separator.
 ///
-/// The flag strings are built from the same `PickerArg` the parse reads — through the parser's own
-/// [`build_possible_flags`] — so a name is written once and the two ends cannot come to disagree
+/// The flag strings are built from the same `PickerArg` the parse reads, through the parser's own
+/// [`build_possible_flags`], so a name is written once and the two ends cannot come to disagree
 /// about it. A flag with a short name or aliases is answered for in every form it may be written.
 #[must_use]
 pub fn is_flag<T>(word: &str, arg: &'static PickerArg<'static, T>) -> bool
@@ -106,8 +106,8 @@ pub fn positional_word(ctx: &ShellContext, anchor: &str, index: usize) -> Option
 
 /// The value written after `arg` on the line, when one is there.
 ///
-/// A flag may be named before the argument whose completion needs it — `layout entries --uuid`
-/// after `--layout` — so the value already written is read back from the line rather than
+/// A flag may be named before the argument whose completion needs it, `layout entries --uuid`
+/// after `--layout`, so the value already written is read back from the line rather than
 /// required to be the word in progress. The value is told apart the way the parser tells it: the
 /// flag is built from the same `PickerArg`, and it carries its value either as the next word or
 /// after the style's separator.
@@ -271,8 +271,8 @@ pub fn layout_uuids(layout: &Layout) -> Vec<String> {
 
 /// The `Uuid`s the Layout holds that no path names, in `Uuid` order.
 ///
-/// An entry no path names is one waiting to be put somewhere — what a fetch of a Vault's Layout
-/// leaves, or what unbinding a path leaves — so it is the candidate a command that moves a path onto
+/// An entry no path names is one waiting to be put somewhere, what a fetch of a Vault's Layout
+/// leaves, or what unbinding a path leaves, so it is the candidate a command that moves a path onto
 /// an entry offers.
 #[must_use]
 pub fn layout_orphan_uuids(layout: &Layout) -> Vec<String> {
@@ -290,8 +290,8 @@ pub fn layout_orphan_uuids(layout: &Layout) -> Vec<String> {
 /// The words `rola retrack` may be given as the target, as far as the run can know them.
 ///
 /// What a target names is what the path is to record: a version the index holds, or an entry of the
-/// fetched copy of the Vault's Layout, or one this Layout holds at no path. Nothing is fetched here —
-/// a copy that is not here offers nothing — since a completion must not reach anywhere for what it
+/// fetched copy of the Vault's Layout, or one this Layout holds at no path. Nothing is fetched here,
+/// a copy that is not here offers nothing, since a completion must not reach anywhere for what it
 /// offers, and no step count or version number is offered, since nothing here says how far back a
 /// run means to go.
 #[must_use]
@@ -439,7 +439,7 @@ pub fn index_keyed(index: Option<&VCSIndex>) -> Vec<(Key, VCSIndexObject)> {
 
 /// The keys the index holds of one kind, in the index's own order.
 ///
-/// It is also what a short hash is resolved against — see [`crate::hash`] — since a head names an
+/// It is also what a short hash is resolved against, see [`crate::hash`], since a head names an
 /// object only beside the ones that are there.
 #[must_use]
 pub fn index_keys(index: Option<&VCSIndex>, kind: IndexObject) -> Vec<Key> {

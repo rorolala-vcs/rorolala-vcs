@@ -359,7 +359,7 @@ internal sealed class SyncStrip : StackPanel
     /// <remarks>
     /// Three things may be worth saying beyond the button's own name, and they are said in the order a reader
     /// wants them: what a run told to leave the Layout behind cannot do, that a held key changes the run, and
-    /// why there is nothing to carry — which is the one thing a reader looking at three grey buttons wants to
+    /// why there is nothing to carry, which is the one thing a reader looking at three grey buttons wants to
     /// know.
     /// </remarks>
     /// <param name="label">The key of what the button is called.</param>
@@ -372,12 +372,12 @@ internal sealed class SyncStrip : StackPanel
 
         if (!WayPressable(way))
         {
-            return $"{said} — {RolaI18N.Get("rorolala_vcs.sync.direction_needs_layout")}";
+            return $"{said}, {RolaI18N.Get("rorolala_vcs.sync.direction_needs_layout")}";
         }
 
         if (held is { Length: > 0 })
         {
-            return $"{said} — {held}";
+            return $"{said}, {held}";
         }
 
         // A plan that could not be made says why, whether or not that leaves the buttons pressable: an
@@ -385,7 +385,7 @@ internal sealed class SyncStrip : StackPanel
         // thing a reader wants from it.
         if (!_sync.Running && _sync.Why is { Length: > 0 } why)
         {
-            return $"{said} — {why}";
+            return $"{said}, {why}";
         }
 
         return said;
@@ -457,7 +457,7 @@ internal sealed class SyncStrip : StackPanel
     /// A button drawn as its picture, which is what a strip is made of.
     /// </summary>
     /// <remarks>
-    /// The same shape the host draws a header command in — a ghost button whose content is a mark — because this
+    /// The same shape the host draws a header command in, a ghost button whose content is a mark, because this
     /// strip stands in the row those commands are drawn in, and a strip that did not match the button beside it
     /// would read as something that arrived from another program.
     /// </remarks>

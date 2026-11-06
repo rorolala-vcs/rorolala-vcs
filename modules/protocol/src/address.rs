@@ -1,7 +1,7 @@
 //! Addressing the daemon an action is spoken to, and the namespace a request names.
 //!
-//! There are three spellings for where a Vault is. One is a bare address — a host, a host and a
-//! port, or a port alone — which says where a daemon answers and nothing about which namespace
+//! There are three spellings for where a Vault is. One is a bare address, a host, a host and a
+//! port, or a port alone, which says where a daemon answers and nothing about which namespace
 //! under it is meant. Another is the `rola://` link, which says both:
 //!
 //! ```text
@@ -21,13 +21,13 @@
 //! namespace is the first path segment; anything after it names a Vault under the one the namespace
 //! was registered for.
 //!
-//! A host is an ip or a name — `127.0.0.1`, `[::1]`, `localhost`, `example.com`. A name is not
+//! A host is an ip or a name, `127.0.0.1`, `[::1]`, `localhost`, `example.com`. A name is not
 //! resolved here: it is kept as the name it is and left to whatever dials the daemon, so an
 //! address stays the address it was written as, whatever a resolver would make of it.
 //!
 //! An SSH address names no namespace: its path *is* the Vault, so a request over one carries the
 //! root and nothing under. What is written after the host is a path on the far side of the
-//! connection, so it is the one part of an address this program does not read at all — it is
+//! connection, so it is the one part of an address this program does not read at all, it is
 //! quoted and handed to `ssh` as it was written.
 
 use std::fmt;
@@ -56,12 +56,12 @@ const SSH_USER_SEPARATOR: char = '@';
 /// A Vault named by the link it answers at.
 ///
 /// The parts say where to knock and which Vault is being asked for: `link` is the daemon or the
-/// SSH session that carries a request, and `sub_vault` is what a request names under a daemon —
+/// SSH session that carries a request, and `sub_vault` is what a request names under a daemon,
 /// a namespace, or a namespace and a Vault below the one that namespace was registered for.
 /// `raw` is what the caller wrote, kept so that what was asked for can be handed back as it was
 /// asked, and it is not what the other two are read from once this has been built.
 ///
-/// Every form an address is written in reads as one of these — see [`parse`](Self::parse) — and
+/// Every form an address is written in reads as one of these, see [`parse`](Self::parse), and
 /// what comes back is the same kind of thing whichever was written, so a caller never has to
 /// ask which spelling it was given. Which *kind* it is, though, is [`link`](Self::link)'s to
 /// say: a daemon is dialled over TCP, and an SSH session is not reached here at all.
@@ -78,7 +78,7 @@ pub struct VaultAddress {
     ///
     /// It is the first path segment of the link and whatever follows it: `alpha` names the
     /// namespace, `alpha/vaults/beta` names the Vault that namespace holds under `beta`. An SSH
-    /// address names no namespace — its path is the Vault — so it is always empty.
+    /// address names no namespace, its path is the Vault, so it is always empty.
     sub_vault: String,
 }
 
@@ -119,7 +119,7 @@ impl PartialEq for VaultAddress {
     /// Two addresses are the same when they name the same place.
     ///
     /// [`raw`](Self::raw) is not part of that. It is what the caller happened to write, and the
-    /// same address is written `10.0.0.1` by one caller and `rola://10.0.0.1/` by another — so a
+    /// same address is written `10.0.0.1` by one caller and `rola://10.0.0.1/` by another, so a
     /// configuration that wrote one away and read it back holds the address it stored, whatever
     /// spelling the file came back in. What is compared is the link and the namespace under it:
     /// an SSH link is where a request goes as much as a host and a port are.
@@ -152,8 +152,8 @@ impl VaultAddress {
     /// What an SSH address may be is narrower, because its parts are not all read the same way:
     /// an account is letters, digits, `.`, `_` and `-`; a host is what a host is anywhere else,
     /// or an ipv6 address in brackets; a port, when it is written, is a number between 1 and
-    /// 65535; and a path may carry anything but what would make it ambiguous — a second colon is
-    /// refused rather than guessed at — and anything that would end the line it is handed to
+    /// 65535; and a path may carry anything but what would make it ambiguous, a second colon is
+    /// refused rather than guessed at, and anything that would end the line it is handed to
     /// `ssh` on. A path starting with `-` is refused too, since what is written with it on the
     /// far side is a command line.
     ///
@@ -164,14 +164,14 @@ impl VaultAddress {
     /// rather than guessed at.
     pub fn parse(text: &str) -> Result<Self, AddrError> {
         // The `rola://` scheme is a daemon link and nothing else: an SSH address is not written
-        // with one, so an `@` after the scheme reads as an address that names no daemon — which
+        // with one, so an `@` after the scheme reads as an address that names no daemon, which
         // is what it is, since a daemon link has no account.
         if let Some(rest) = text.strip_prefix(SCHEME) {
             return Self::parse_daemon(text, rest);
         }
 
         // An `@` before the first `:` is what tells an SSH address from every other spelling: no
-        // daemon address may carry one, since a host is written without it. The order matters —
+        // daemon address may carry one, since a host is written without it. The order matters,
         // reading the first `/` first would split `user@host:path/to/vault` into an authority and
         // a namespace, which is not what was written.
         if is_ssh(text) {
@@ -206,8 +206,8 @@ impl VaultAddress {
 
     /// Reads the SSH link `text` spells.
     ///
-    /// Nothing is filled in here: what an SSH address leaves out is left out — a port with no
-    /// number is not the default port, it is SSH's own to choose — so a part that was not written
+    /// Nothing is filled in here: what an SSH address leaves out is left out, a port with no
+    /// number is not the default port, it is SSH's own to choose, so a part that was not written
     /// cannot be mistaken for one that was.
     fn parse_ssh(text: &str) -> Result<Self, AddrError> {
         read_ssh(text)
@@ -288,7 +288,7 @@ impl fmt::Display for Link {
     /// host, port and path.
     ///
     /// A daemon's port is always written here, since the one thing this cannot say is which
-    /// number was left out — an address says that by writing the link it adds up to, and that is
+    /// number was left out, an address says that by writing the link it adds up to, and that is
     /// [`VaultAddress`]'s to write.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -416,7 +416,7 @@ fn is_ssh_user(user: &str) -> bool {
 /// It is handed on to the far side as an argument to a command, so it cannot carry what would end
 /// that command (a colon, refused by its reader for being ambiguous, and the newlines), and it
 /// cannot start with a `-`, which the far side's program would read as a flag rather than as the
-/// path it is. Everything else — the spaces, the quotes, the characters a shell would act on —
+/// path it is. Everything else (the spaces, the quotes, the characters a shell would act on)
 /// is allowed, and escaped by whoever writes the command.
 fn is_ssh_path(path: &str) -> bool {
     !path.is_empty() && !path.starts_with('-') && !path.contains([':', '\0', '\n', '\r'])
@@ -463,7 +463,7 @@ fn read_authority(authority: &str) -> Option<(String, u16)> {
 /// Whether `name` reads as a host a daemon could be dialled at.
 ///
 /// A host is written with the letters, digits, hyphens, dots and underscores a name or an ip is
-/// made of — `localhost` is the one name every machine knows. An empty name, and anything
+/// made of, `localhost` is the one name every machine knows. An empty name, and anything
 /// carrying a separator, whitespace or the like, is not one, and is refused here rather than
 /// handed on for a resolver to fail over.
 fn is_host(name: &str) -> bool {
@@ -479,7 +479,7 @@ impl fmt::Display for VaultAddress {
     /// A daemon link leaves its port out when it is the one an address without a port means: what
     /// is left out is what a reader would have to write the same number to say, and a link is
     /// read back as the address it spells either way. An SSH link leaves out only what was left
-    /// out — a port that was not written is not a port that was — since the path it does write is
+    /// out, a port that was not written is not a port that was, since the path it does write is
     /// the far side's to read.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.link {
@@ -538,7 +538,7 @@ impl From<SocketAddr> for VaultAddress {
     ///
     /// An address says where a daemon is and nothing about which Vault under it is meant, so
     /// what it becomes names the one that daemon serves. This is how an address that was taken
-    /// apart and put back together — one read from a configuration, say — is read as the same
+    /// apart and put back together (one read from a configuration, say) is read as the same
     /// kind of thing a caller wrote.
     fn from(address: SocketAddr) -> Self {
         Self {
@@ -557,8 +557,8 @@ impl SinglePickable for VaultAddress {
     ///
     /// It is [`parse`](VaultAddress::parse) and nothing else: what a caller can write on a
     /// command line is what an address is written as anywhere, so the two cannot come apart.
-    /// A word that names no address is [`NotFound`](PickerArgResult::NotFound) — the picker's
-    /// way of saying the argument was not one it could read — rather than a value made up to
+    /// A word that names no address is [`NotFound`](PickerArgResult::NotFound), the picker's
+    /// way of saying the argument was not one it could read, rather than a value made up to
     /// stand for one.
     fn pick_single(text: Option<&str>) -> PickerArgResult<Self> {
         text.map_or(PickerArgResult::NotFound, |text| Self::parse(text).into())
@@ -587,7 +587,7 @@ impl VaultAddress {
     /// The link's port, as the ABI spells it.
     ///
     /// An SSH address names a port only when one was written, and one that was not is SSH's own
-    /// to choose — so nothing is written where a number is expected, which is what `0` is here:
+    /// to choose, so nothing is written where a number is expected, which is what `0` is here:
     /// no session is made to port 0.
     #[lazyffi(export = vault_address_read_port)]
     #[must_use]
@@ -803,7 +803,7 @@ mod tests {
         assert_eq!(bare.link().written_host(), "[::1]");
 
         // The colons of an ipv6 address would read as the port's, so it is bracketed when a
-        // port follows it — including where the port is left out.
+        // port follows it, including where the port is left out.
         assert_eq!(bare.to_string(), "rola://[::1]/");
 
         let with_port = VaultAddress::parse("rola://[::1]:7000/sub").unwrap();

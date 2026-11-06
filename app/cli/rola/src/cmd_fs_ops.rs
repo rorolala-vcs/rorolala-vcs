@@ -1,8 +1,8 @@
 //! The `rola fs-ops` namespace: moving, copying and removing paths, and nothing besides.
 //!
 //! These are the file operations the Desktop program hands its work to. What a drag, a paste or a
-//! removal *means* is decided there — whether a name already taken is replaced, skipped or renamed,
-//! and whether a transfer moves or copies — and what is left is the act itself, which is all this is.
+//! removal *means* is decided there, whether a name already taken is replaced, skipped or renamed,
+//! and whether a transfer moves or copies, and what is left is the act itself, which is all this is.
 //! It is therefore deliberately thin, and deliberately a namespace rather than one command with
 //! switches: a path is moved, copied or removed, each by its own word, so that adding a fourth
 //! operation is adding a word rather than reshaping this one.
@@ -15,12 +15,12 @@
 //! **Ownership is not read here.** Who holds an entry upstream is the Vault's, and none of these
 //! operations touches it: a path moved, copied or removed in the tree leaves the Vault's Layout naming
 //! what it named, until the change is recorded and sent up. Gating an operation on it would stop the
-//! work exactly where the work is — a drag that refuses because somebody else holds the file — while
+//! work exactly where the work is, a drag that refuses because somebody else holds the file, while
 //! changing nothing the refusal was meant to protect. The Layout the Workspace works in is kept in step,
 //! because that is this side's own record of the tree; the upstream view is not.
 //!
 //! Reaching `fs-ops` with none of those words is a question about the namespace rather than about one
-//! of its commands, so it is answered with what the namespace holds — see [`handle_fs_ops`] — and the
+//! of its commands, so it is answered with what the namespace holds, see [`handle_fs_ops`], and the
 //! same words answer `rola fs-ops -h`.
 
 use std::io;
@@ -65,7 +65,7 @@ pub fn desc_fs_ops() -> Description {
 /// Names what `fs-ops` holds.
 ///
 /// A command the namespace has is matched before this is reached, so what arrives here is a run that
-/// named none of them — or one it does not have. Either is a question about the namespace rather than
+/// named none of them, or one it does not have. Either is a question about the namespace rather than
 /// about a command of it, and both are answered the way [`help_fs_ops`] answers.
 #[chain]
 pub fn handle_fs_ops(_: EntryFsOps) -> Next {
@@ -178,7 +178,7 @@ pub fn render_error_fs_ops_failed(error: ErrorFsOpsFailed, ec: &mut ResExitCode)
 
 /// Puts a path at another, whichever of the two is a directory.
 ///
-/// A rename the filesystem refuses — across two devices, most often — is still a move to a reader, so
+/// A rename the filesystem refuses (across two devices, most often) is still a move to a reader, so
 /// it is done the long way instead: copied, and then removed. Nothing is asked and nothing is
 /// confirmed: a name already taken at the destination is what the destination being there means, and
 /// whether it should have been replaced was settled before this was called.
@@ -247,7 +247,7 @@ fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
 /// The Layout a run in a Workspace works in, when it is in one.
 ///
 /// It is the Workspace's own Layout and never a Vault's: a filesystem operation is about the tree, so a
-/// run on a Vault — or one whose paths are in no Workspace — has nothing here to keep in step and is
+/// run on a Vault, or one whose paths are in no Workspace, has nothing here to keep in step and is
 /// left to the filesystem alone.
 pub fn working(held: &Workspace) -> Option<Layout> {
     held.layout_if_there().ok().flatten()
@@ -256,7 +256,7 @@ pub fn working(held: &Workspace) -> Option<Layout> {
 /// The Workspace `disk` sits in, when it sits in one.
 ///
 /// It is looked for from the path itself and never from where the run was made: a filesystem operation
-/// names the paths it works on, and those are what say which tree — if any — it is about. A run made
+/// names the paths it works on, and those are what say which tree, if any, it is about. A run made
 /// outside every Workspace, or inside another one, still keeps in step the tree its paths are in.
 pub fn workspace_of(cwd: &Path, disk: &Path) -> Option<Workspace> {
     locate_workspace(&normalize(&resolve(cwd, disk)))
@@ -266,7 +266,7 @@ pub fn workspace_of(cwd: &Path, disk: &Path) -> Option<Workspace> {
 ///
 /// `disk` is read where the run was made, the way `rola track` reads a name; what a Layout names is
 /// relative to the Workspace root, so one becomes the other here. Nothing is named for a path outside
-/// the root — no Layout names it — and a directory names every path under it, itself included, the
+/// the root, no Layout names it, and a directory names every path under it, itself included, the
 /// Workspace root naming the whole of the work.
 pub fn touched(layout: &Layout, held: &Workspace, cwd: &Path, disk: &Path) -> Vec<LayoutPath> {
     let root = normalize(held.get_root());

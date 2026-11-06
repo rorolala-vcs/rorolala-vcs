@@ -8,7 +8,7 @@ declares, so reading it is what keeps the two surfaces the same one.
 
 It is run by a C# project rather than by the root build script: `RolaSharp` invokes this program on
 every build, so its bindings are never stale against the header. That is why the header must exist
-first — the Rust side has to have been built — and why a build of `RolaSharp` alone, before any Rust
+first, the Rust side has to have been built, and why a build of `RolaSharp` alone, before any Rust
 build, has nothing to read.
 
 ## What is generated
@@ -17,7 +17,7 @@ build, has nothing to read.
 - a named enum becomes a C# enum;
 - a complete struct or union becomes a `[StructLayout]` struct, a union as an explicit layout;
 - every pointer becomes a `nint`, because the header cannot say what a pointer points at and the
-  layer above owns the marshalling — a returned string is a pointer to release with `free_string`;
+  layer above owns the marshalling, a returned string is a pointer to release with `free_string`;
 - every member is `internal`, so the assembly's public shape is empty and the hand-written, more
   OOP layer is what a caller sees.
 
@@ -33,6 +33,6 @@ it is this project's own output, in a fixed style.
 
 ## Why no third-party C parser
 
-The header is generated, so its grammar is known and small — `typedef enum`, `typedef struct`
+The header is generated, so its grammar is known and small, `typedef enum`, `typedef struct`
 (complete and forward), `typedef union`, and function declarations, in one fixed style. A general C
 parser would be a large dependency for a shape this generator already controls.

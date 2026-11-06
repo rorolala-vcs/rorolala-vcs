@@ -3,7 +3,7 @@
 //! A program rather than a set of tests cargo runs, because what it does is what a person does
 //! with a terminal: name a Vault, list what is served, check it, take it away, and complain
 //! when what was said is not what was expected. The machine's own table is never touched: every
-//! run is given a sandbox's `ROLA_DATA_HOME`, which is where the daemon looks for it — and
+//! run is given a sandbox's `ROLA_DATA_HOME`, which is where the daemon looks for it, and
 //! which is what makes that true on Windows, where `XDG_DATA_HOME` names nothing.
 
 use std::fs;

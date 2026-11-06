@@ -15,7 +15,7 @@ internal sealed record Facts(string Permissions, string Modified, string Size);
 /// </summary>
 /// <remarks>
 /// Read from the file when a row is drawn rather than while the directory is listed. A directory of
-/// thousands is worth listing whether or not anybody looks at it, and the rows on screen are a handful —
+/// thousands is worth listing whether or not anybody looks at it, and the rows on screen are a handful,
 /// so the asking is done where the looking is, and a long listing costs what is seen of it.
 /// <para>
 /// Every answer is an answer or a blank: a file that has gone, or that cannot be asked about, leaves its
@@ -140,7 +140,7 @@ internal static class Stats
                 unit += 1;
             }
 
-            // Whole bytes are written whole — no file is 512.0 bytes — and anything larger keeps one
+            // Whole bytes are written whole, no file is 512.0 bytes, and anything larger keeps one
             // fraction, which is as much as a column of a fixed width is worth.
             var written = unit == 0
                 ? size.ToString("0", CultureInfo.InvariantCulture)

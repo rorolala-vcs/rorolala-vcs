@@ -28,8 +28,8 @@ internal enum DockAxis
 /// </summary>
 /// <remarks>
 /// The tree is what replaced the five fixed regions, and it is recursive without a depth limit: a leaf is a
-/// group of tabs, and any group may be split again. It is also the persisted shape — the layout file is this
-/// tree written down with a ratio for every split — so the types here are the schema the file is read and
+/// group of tabs, and any group may be split again. It is also the persisted shape, the layout file is this
+/// tree written down with a ratio for every split, so the types here are the schema the file is read and
 /// written through, with <c>kind</c> as the discriminator a hand-edited file states.
 /// <para>
 /// Geometry is ratios only. A split stores the share of its first child in <c>(0, 1)</c>; nothing stores
@@ -70,7 +70,7 @@ internal sealed class LayoutGroup : LayoutNode
 {
     /// <summary>The group's stable id, of the form <c>g-&lt;number&gt;</c>.</summary>
     /// <remarks>
-    /// What the rest of the host names a group by — the active group, and where a dock brought back from a
+    /// What the rest of the host names a group by, the active group, and where a dock brought back from a
     /// window of its own goes. Assigned by the host and never reused within a run, because a dock in a
     /// window of its own remembers the group it came from.
     /// </remarks>
@@ -160,7 +160,7 @@ internal sealed class DockLayout
     /// <remarks>
     /// The tree the five fixed regions used to be, as one ratio: the program opens at 1100 pixels wide, and
     /// the band down the right the tree was given was 219 of them, so the rest is this share. It is a
-    /// starting point rather than a decision — every splitter may be dragged from there — and a ratio is
+    /// starting point rather than a decision, every splitter may be dragged from there, and a ratio is
     /// written rather than a width because a width is one window's.
     /// </remarks>
     public const double StartingRatio = 0.8009;
@@ -189,7 +189,7 @@ internal sealed class DockLayout
     /// Not written down: what a loaded tree says is the most a file can say, and this is the rest. It is
     /// what keeps a group id from being handed out twice within one run: the largest id may belong to a
     /// group that was just pruned, and a dock in a window of its own may still remember that id as the group
-    /// it came from — a new group given the same id would collect that dock on its return.
+    /// it came from, a new group given the same id would collect that dock on its return.
     /// </remarks>
     [JsonIgnore]
     public int GroupIdHighWater { get; set; }
@@ -201,7 +201,7 @@ internal sealed class DockLayout
     /// What is being worked on in the middle, and its tree down the right: the arrangement the five fixed
     /// regions used to give, expressed as a split of two groups. The tab order is the order the old layout
     /// restored these docks in, so a first run looks as it did rather than merely holding the same docks. It
-    /// is a starting point rather than a decision — every one of them can be closed, moved, or opened again,
+    /// is a starting point rather than a decision, every one of them can be closed, moved, or opened again,
     /// and the layout is written with what there is from then on.
     /// </remarks>
     /// <returns>The layout to start from.</returns>
@@ -282,8 +282,8 @@ internal static class LayoutStore
     /// <remarks>
     /// The version is read before the layout is: a file written by an earlier build states one, and what it
     /// states decides whether the rest of it is worth reading at all. This program reads version two and
-    /// nothing else — a version one file records a placement and four pixel widths, which cannot be turned
-    /// into a tree without inventing a window size — so an old file is left where it is, reported once, and
+    /// nothing else, a version one file records a placement and four pixel widths, which cannot be turned
+    /// into a tree without inventing a window size, so an old file is left where it is, reported once, and
     /// replaced by the next save.
     /// </remarks>
     /// <param name="log">Where a file that would not read, or is of another version, is reported.</param>

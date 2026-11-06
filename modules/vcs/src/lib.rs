@@ -67,7 +67,7 @@ pub const ROOT_VERSION: u64 = u64::MAX;
 
 /// The number an object carries when it has only been read, not worked out
 ///
-/// A number is derived rather than stored — it is neither written down nor put into the hash —
+/// A number is derived rather than stored, it is neither written down nor put into the hash,
 /// so a read cannot know it. This stands in until
 /// [`VCSIndex::version_num`](crate::VCSIndex::version_num) traces the chain.
 pub const UNKNOWN_VERSION: u64 = u64::MAX - 1;

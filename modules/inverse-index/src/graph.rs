@@ -3,7 +3,7 @@
 //! The records describe every object at once, which is more than a drawing asks for. What a view is
 //! asked for is a window: a focus to stand on, how far back and forward to walk, and a hard cap. What
 //! it answers with is the variants in that window, the versions fixing them, the edges between them,
-//! and where the window was cut — a [`Frontier`] on each node — so a reader that reaches the edge of
+//! and where the window was cut, a [`Frontier`] on each node, so a reader that reaches the edge of
 //! what it has can walk further from the node it reached rather than be handed the whole index.
 //!
 //! A window is a map, not a picture: what it holds is decided by the request, and every answer is
@@ -196,7 +196,7 @@ impl Snapshot {
     ///
     /// The window is walked from each focus: back along the base chain, forward over the variants
     /// based on it, into what the variants in the window merge in, and over the branches on the
-    /// versions in the window — each followed on to what was built on it — within the request's
+    /// versions in the window, each followed on to what was built on it, within the request's
     /// limits. A version or variant the records do not name is answered as missing rather than left
     /// unexplained, since a reader that asked where its focus is can only be told that it is not here.
     #[must_use]
@@ -365,7 +365,7 @@ impl<'a> Walk<'a> {
         }
 
         // What the base version resolves to is part of the node, and a base that resolves to
-        // nothing is the root or a version the index does not hold — the one is drawn as the start
+        // nothing is the root or a version the index does not hold, the one is drawn as the start
         // of the chain, the other as a key to fetch, and neither is a variant in the window.
         match self.snapshot.version(record.base_version) {
             Some(base) => {
@@ -643,7 +643,7 @@ mod tests {
     /// The root version is `root`; the first variant is based on it and fixed by `first`; the second
     /// variant is based on `first` and fixed by `second`; the third is based on `second` and fixed by
     /// `third`. `branch` is based on `first` as well, so it is a sibling of the second variant, and
-    /// `merge` is based on `third` and merges `foreign` — a variant of another chain — in.
+    /// `merge` is based on `third` and merges `foreign`, a variant of another chain, in.
     struct Chain {
         /// The root version.
         root: Hash,

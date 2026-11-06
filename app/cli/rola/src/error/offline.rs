@@ -3,7 +3,7 @@
 //! `--offline` is one flag for every command, but it does not mean the same thing to all of them:
 //! a command whose work is the exchange with the Vault is refused, while one that only fetches the
 //! Vault's Layout on the way to local work goes on without it. What is left for this module is the
-//! first kind — the refusal — said once, so every command that makes it says it the same way.
+//! first kind, the refusal, said once, so every command that makes it says it the same way.
 
 use mingling::{
     Grouped,

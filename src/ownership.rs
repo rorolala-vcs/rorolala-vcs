@@ -1,6 +1,6 @@
 //! Who holds what, as the C ABI answers it.
 //!
-//! The read itself is the Workspace's — see `rorolala_workspace::Ownership` — and what is added
+//! The read itself is the Workspace's, see `rorolala_workspace::Ownership`, and what is added
 //! here is the one thing a module cannot reach: which account the work acts as, which belongs to
 //! the user rather than to a Vault or a Workspace, and which therefore sits with the crate that
 //! ties the modules together.

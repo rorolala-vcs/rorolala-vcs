@@ -45,7 +45,7 @@ pub fn desc_vcs_index_ls_remote_str() -> Description {
 /// reads it: a name the Workspace has bound, or an ip and a port, with none naming the one the
 /// Workspace reaches for by default. What is printed is the Creator and Message hashes, one per
 /// line, the way [`rola vcs-index ls-str`](crate::vcs_index::cmd_vcs_index_ls_str) prints them of
-/// the index the run is inside — each hash one to hand to `rola vcs-index read-remote`, which reads
+/// the index the run is inside, each hash one to hand to `rola vcs-index read-remote`, which reads
 /// the text itself.
 ///
 /// Nothing is changed: the Vault is asked and answers, and no object moves.

@@ -9,7 +9,7 @@ namespace RorolalaVCSPlugin;
 /// the work through docks of its own.
 /// </summary>
 /// <remarks>
-/// What it contributes to the browser is a preset — the <c>rola fs-ops</c> commands — and what it adds
+/// What it contributes to the browser is a preset, the <c>rola fs-ops</c> commands, and what it adds
 /// beside it is the views of the work: Overview, Workspace, Version Graph and Accounts. Both are reached by
 /// depending on the File System plugin: the reference is what lets it name
 /// <see cref="FileOperationPresets"/>, and the manifest's dependency is what has the host start this one
@@ -60,13 +60,13 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         RorolalaLocks.Declare(host, statuses, ownership);
 
         // And what the browser leaves out: the entries a Workspace's ignore rules govern. The rules are
-        // Rorolala's — kept in its data directory, fetched from the Vaults, matched by the native
-        // loader — so the provider is this plugin's contribution to the File System plugin's hiding
+        // Rorolala's, kept in its data directory, fetched from the Vaults, matched by the native
+        // loader, so the provider is this plugin's contribution to the File System plugin's hiding
         // rules rather than something that plugin decides by itself.
         HideRegistry.Register(new RolaIgnored());
 
         // What every command this plugin runs reports itself to: a card per command down the Overview, drawn by
-        // whoever reached for the command — the strip, an entry's menu — and read by the Overview's panel.
+        // whoever reached for the command (the strip, an entry's menu) and read by the Overview's panel.
         var hub = new ProgressHub();
 
         // One sync and one fetch between the two views of the work: a fetch brings the copy both read, and a
@@ -77,7 +77,7 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
 
         // And what the work is looked at through: the three docks, which are this plugin's own windows
         // rather than anything the File System plugin is asked for. What they will hold is Rorolala's,
-        // while the base directory they are read against is that plugin's — which is why the two are one
+        // while the base directory they are read against is that plugin's, which is why the two are one
         // plugin depending on another (see RorolalaDocks).
         RorolalaDocks.Declare(host, Manifest.Id, hub, statuses, watch, fetch);
 

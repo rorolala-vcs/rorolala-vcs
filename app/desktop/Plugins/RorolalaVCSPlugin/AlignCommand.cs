@@ -8,7 +8,7 @@ namespace RorolalaVCSPlugin;
 /// </summary>
 /// <remarks>
 /// A merge is ended in two runs, because that is the contract `align --delete` states: it ends the merge
-/// of a variant file that is no longer there, so the file — which is only how the variant was shown —
+/// of a variant file that is no longer there, so the file, which is only how the variant was shown,
 /// is removed first. Neither run touches the main file unless a restore is asked for on top of it, which
 /// is the difference the two cancel items draw.
 /// </remarks>

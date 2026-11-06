@@ -1,6 +1,6 @@
 //! How the work stands, as the C ABI reads it.
 //!
-//! The reading itself is the status module's — see [`Status`], which is `rorolala_status::Status` —
+//! The reading itself is the status module's (see [`Status`], which is `rorolala_status::Status`)
 //! and what is added here is the one thing a module cannot reach: which account the work acts as,
 //! which belongs to the user rather than to a Vault or a Workspace, and which therefore sits with
 //! the crate that ties the modules together.
@@ -85,8 +85,8 @@ mod tests {
 
     /// A directory of its own, emptied first so a rerun starts clean.
     ///
-    /// The system temp is used when it can be. A machine whose temp is not writable — a Windows
-    /// profile can be — falls back to the directory this test's own program sits in, which cargo has
+    /// The system temp is used when it can be. A machine whose temp is not writable, a Windows
+    /// profile can be, falls back to the directory this test's own program sits in, which cargo has
     /// just written there and so is writable wherever the temp is not.
     fn scratch(label: &str) -> PathBuf {
         static NEXT: AtomicUsize = AtomicUsize::new(0);

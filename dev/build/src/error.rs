@@ -53,7 +53,7 @@ pub enum Error {
     Missing {
         /// What is missing, in one line.
         summary: String,
-        /// What makes it available, one line each — never something done on the reader's behalf.
+        /// What makes it available, one line each, never something done on the reader's behalf.
         advice: Vec<String>,
     },
 }

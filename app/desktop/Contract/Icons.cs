@@ -11,7 +11,7 @@ namespace RorolalaDesktop.Contract;
 /// image. A picture contributed once under a key is therefore the one every reader of that key
 /// sees, wherever it is read from.
 /// <para>
-/// One key names one picture, and adding another under a key replaces it — the picture is the
+/// One key names one picture, and adding another under a key replaces it, the picture is the
 /// contributor's to correct, and a reader that had to choose between two would be choosing by load
 /// order. A key nothing names answers nothing, and the reader draws what it would have drawn
 /// without a picture.

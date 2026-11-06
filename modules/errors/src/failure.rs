@@ -4,7 +4,7 @@
 //! person reads a sentence in the language the run was asked to speak; a program reads a
 //! name, which is the program's own and means the same thing whatever language the run was
 //! asked for. This is the shape both are handed over in, so that what a program branches on
-//! does not have to be dug out of a translated sentence — which is the one thing that cannot
+//! does not have to be dug out of a translated sentence, which is the one thing that cannot
 //! be branched on, since it changes with the locale.
 
 use serde::Serialize;
@@ -19,7 +19,7 @@ pub trait Failure {
     ///
     /// The name is the program's own and is never translated: it is what a reader branches
     /// on, so it has to mean the same thing in every locale. It is written the way the
-    /// program's other names are — lowercase, with words joined by `_`.
+    /// program's other names are, lowercase, with words joined by `_`.
     fn name(&self) -> &'static str;
 
     /// Why it happened, in the run's language.

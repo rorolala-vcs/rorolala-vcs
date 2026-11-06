@@ -1,7 +1,7 @@
 //! The `rola vcs-index sync-all` command: make the Workspace's index and the Vault's hold the same.
 //!
-//! It is [`vault handshake`](crate::vault::cmd_vault_handshake)'s reach — a Vault the Workspace has
-//! bound, or an address — with the indexes at both ends being what is spoken about: each side says
+//! It is [`vault handshake`](crate::vault::cmd_vault_handshake)'s reach, a Vault the Workspace has
+//! bound, or an address, with the indexes at both ends being what is spoken about: each side says
 //! what it holds, and what only one of them holds crosses, so one run leaves both holding every
 //! index object either had. Because that is a change to both indexes, it is asked for first.
 

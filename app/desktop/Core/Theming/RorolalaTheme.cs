@@ -38,8 +38,8 @@ namespace RorolalaDesktop.Theming;
 /// beneath it.
 /// </para>
 /// <para>
-/// The colours are spent by role. <b>Primary</b> fills what is chosen — a chosen row is a wash of it,
-/// a chosen tab and the one action of a dialog are filled with it — and it is written into the base
+/// The colours are spent by role. <b>Primary</b> fills what is chosen, a chosen row is a wash of it,
+/// a chosen tab and the one action of a dialog are filled with it, and it is written into the base
 /// theme's own accent resources, so a selected row, a checked box and a selection of text are the
 /// primary from one definition. <b>Accent</b> is the second colour, and it is spent on the marks that
 /// must not be mistaken for a selection: the band a drag draws, the zone a dragged dock is aimed at,
@@ -56,12 +56,12 @@ namespace RorolalaDesktop.Theming;
 /// The shell marks the surfaces it owns with classes, which is how a rule here addresses a dock without
 /// knowing what one is: <see cref="MainWindow.MenuBarClass"/> on the menu bar,
 /// <see cref="DockArea.HeadersClass"/> on a region's header strip,
-/// <see cref="DockArea.TitleClass"/> on a dock's own tab — with <see cref="DockArea.SelectedClass"/> on
-/// the one being shown and <see cref="DockArea.LeadingClass"/> on the first of them — and
+/// <see cref="DockArea.TitleClass"/> on a dock's own tab, with <see cref="DockArea.SelectedClass"/> on
+/// the one being shown and <see cref="DockArea.LeadingClass"/> on the first of them, and
 /// <see cref="DockArea.CloseClass"/> on the close it carries, with
 /// <see cref="DockArea.SplitterClass"/> on the grab between groups, and
-/// <see cref="DockArea.DockPointClass"/> on each point of the cluster a drop is aimed with —
-/// <see cref="DockArea.DockPointCenterClass"/> and the four sides — with
+/// <see cref="DockArea.DockPointClass"/> on each point of the cluster a drop is aimed with,
+/// <see cref="DockArea.DockPointCenterClass"/> and the four sides, with
 /// <see cref="DockArea.DockPointOverClass"/> on the one the pointer is on.
 /// </para>
 /// </remarks>
@@ -145,7 +145,7 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// A window's buttons are chrome, not a thing to press, so they are drawn by their own rules rather
-    /// than by the rule every button in the program shares — and being excluded from that rule is also
+    /// than by the rule every button in the program shares, and being excluded from that rule is also
     /// what keeps a press on them from being styled as though it were an ordinary action.
     /// </remarks>
     public const string CaptionClass = "caption";
@@ -215,8 +215,8 @@ internal sealed class RorolalaTheme
     /// <summary>What the menu bar leaves free for the window's own buttons.</summary>
     /// <remarks>
     /// A menu bar that reached the buttons would draw its last menu under them: the row is shared by laying
-    /// it out, and this is the part of it the menu may not have. Which side they are on is the style's — the
-    /// three marks are on the right and the three lights on the left — and a window under a tiling window
+    /// it out, and this is the part of it the menu may not have. Which side they are on is the style's, the
+    /// three marks are on the right and the three lights on the left, and a window under a tiling window
     /// manager has none of them, so its menu bar has the whole of the row.
     /// </remarks>
     private Thickness MenuBarPadding =>
@@ -257,12 +257,12 @@ internal sealed class RorolalaTheme
     /// The height a step of a tree is held at, and the room left under the line it draws.
     /// </summary>
     /// <remarks>
-    /// A step draws a band of twenty-one pixels — an icon and a line of text with the row's own padding — and
+    /// A step draws a band of twenty-one pixels, an icon and a line of text with the row's own padding, and
     /// these two put three more under it: the row is twenty-four, and the three are left below the presenter
     /// rather than being the difference between the row and what it draws. That difference is what the base
     /// theme leaves, and it is dead: a row of thirty draws twenty-one and keeps nine, all of them under the
     /// band, so two steps of one directory stand nine pixels apart and a step and the first of its children
-    /// stand nine too — except that the nine under a parent is *inside* the parent's own row, which puts its
+    /// stand nine too, except that the nine under a parent is *inside* the parent's own row, which puts its
     /// children three pixels closer to it than they are to each other. Stating the room below the line makes
     /// every pair of consecutive steps the same distance apart, whichever of them is the other's parent.
     /// </remarks>
@@ -350,7 +350,7 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// A fade is between two colours, and "no colour" is <em>white</em> at no alpha: fading from it into a
-    /// dark fill passes through a light grey — at the middle of the fade, a grey lighter than either end —
+    /// dark fill passes through a light grey (at the middle of the fade, a grey lighter than either end)
     /// which reads as a flash of light on the way in. Avalonia interpolates a colour' channels one by one and
     /// leaves the alpha to its own, so what it fades is the <em>colour</em> whether or not either end can be
     /// seen. A clear fill is therefore the colour it fades to at no alpha, and the only thing that changes
@@ -423,7 +423,7 @@ internal sealed class RorolalaTheme
     /// <remarks>
     /// A dark ink laid thin, which is what macOS draws on all three of its lights: the fill is the colour
     /// that says which of them it is, and a mark in the window's own ink would be white on two of the three
-    /// on the dark ground — where a mark that cannot be read is a bead with nothing to say.
+    /// on the dark ground, where a mark that cannot be read is a bead with nothing to say.
     /// </remarks>
     private static readonly Color MacInk = Color.FromArgb(0x66, 0x00, 0x00, 0x00);
 
@@ -468,8 +468,8 @@ internal sealed class RorolalaTheme
     /// The class a tool wears while it is on.
     /// </summary>
     /// <remarks>
-    /// A tool's state is the program's rather than the toolkit's — a toolbar's switch says whether the program
-    /// is showing what the rules hide, which is no control's own fact — so it is a class the program puts on
+    /// A tool's state is the program's rather than the toolkit's, a toolbar's switch says whether the program
+    /// is showing what the rules hide, which is no control's own fact, so it is a class the program puts on
     /// rather than the toolkit's checked state: the look draws it, and what it means stays where the meaning is
     /// kept.
     /// </remarks>
@@ -479,8 +479,8 @@ internal sealed class RorolalaTheme
     /// The class a menu item wears when it is one of the forced actions.
     /// </summary>
     /// <remarks>
-    /// What an action does past the checks it would otherwise make is worth saying twice — in its words and in
-    /// its colour — because it is the one kind of item a user should reach on purpose rather than by pointing
+    /// What an action does past the checks it would otherwise make is worth saying twice, in its words and in
+    /// its colour, because it is the one kind of item a user should reach on purpose rather than by pointing
     /// at whatever is under the pointer.
     /// </remarks>
     private const string Forced = "force";
@@ -551,7 +551,7 @@ internal sealed class RorolalaTheme
     /// <remarks>
     /// Three grounds rather than one: content sits on the ground, chrome and a control sit on the
     /// elevated one, and what is held or welled sits in the sunken one. A surface under the pointer is the
-    /// one that steps the other way — away from its own face — because which way a hover reads is which way
+    /// one that steps the other way, away from its own face, because which way a hover reads is which way
     /// the ground lets it (see <see cref="Grounds.Hover"/>). The ramp of ink is
     /// three steps rather than an opacity, so that text is legible by construction rather than by
     /// arithmetic - and the two semantic pairs are the look's own, not the user's to choose, because
@@ -613,7 +613,7 @@ internal sealed class RorolalaTheme
         /// <remarks>
         /// The step is taken from the face towards the ink, so that it goes whichever way reads on the
         /// ground it is drawn on: a light look darkens under the pointer and a dark look brightens. What a
-        /// hover is for is being seen, and a step that only ever darkened — the hollow of the ground, say —
+        /// hover is for is being seen, and a step that only ever darkened (the hollow of the ground, say)
         /// is barely there on a dark ground; a hover the eye cannot catch reads as lag even where there is
         /// none to feel, which is the whole of what this token is for. Being a step rather than a colour of
         /// its own, it also holds for whatever ink and ground the user chose.
@@ -771,7 +771,7 @@ internal sealed class RorolalaTheme
             ["ThemeControlHighlightLowBrush"] = Fill(grounds.Sunken),
             // A row under the pointer steps away from its own face rather than sinking into the hollow the
             // ground has: the hollow is the wrong way on a dark look, where a hover has to brighten to be
-            // seen — and a hover the eye does not catch is read as lag. See `Grounds.Hover` for which way the
+            // seen, and a hover the eye does not catch is read as lag. See `Grounds.Hover` for which way the
             // step goes and why.
             ["ThemeControlHighlightMidColor"] = grounds.Hover,
             ["ThemeControlHighlightMidBrush"] = Fill(grounds.Hover),
@@ -824,7 +824,7 @@ internal sealed class RorolalaTheme
 
             // What a tab that is not the one being read is filled with when the pointer is on it, and the same
             // colour at no alpha for the rest of the time. The two are one pair rather than a fill and
-            // "nothing", because a tab at rest is not filled with nothing — it is filled with the strip's own
+            // "nothing", because a tab at rest is not filled with nothing, it is filled with the strip's own
             // ground, which is what a clear fill has to be if the fade is to change the alpha alone
             // (see `SunkenClear`).
             [TabHover] = Fill(TabFill(grounds)),
@@ -856,8 +856,8 @@ internal sealed class RorolalaTheme
             [Contract.PaletteKeys.AddBackground] = Fill(WithAlpha(grounds.Add, 0x24)),
             // The mark a warning is raised with, and the wash it stands on: its own amber laid thin rather
             // than a second colour, since what a warning is coloured is not a preference, and neither is the
-            // ground it is read against. Both variants hold it, so that what names the mark — a contributed
-            // column asking for the warn ink — is answered wherever the look is asked.
+            // ground it is read against. Both variants hold it, so that what names the mark, a contributed
+            // column asking for the warn ink, is answered wherever the look is asked.
             [Warn] = Fill(WarnColour),
             [Contract.PaletteKeys.WarnBackground] = Fill(WithAlpha(WarnColour, 30)),
             [DelInk] = Fill(grounds.Del),
@@ -888,7 +888,7 @@ internal sealed class RorolalaTheme
     /// grip is widened to.
     /// <para>
     /// The colour is a parameter rather than the accent the two hover brushes happen to use, because the
-    /// line drawn at rest is the border's own and that one differs by variant — which is also why these
+    /// line drawn at rest is the border's own and that one differs by variant, which is also why these
     /// are made here, where the variant's neutrals are, rather than where a splitter is styled.
     /// </para>
     /// </remarks>
@@ -987,7 +987,7 @@ internal sealed class RorolalaTheme
     /// <remarks>
     /// A control sits on the elevated ground with one border; under the pointer it drops to the sunken
     /// one and its border firms up, which is the whole of the interaction a control has beyond being
-    /// chosen. Everything is rounded — a card at eight, a control at five — because the design is a
+    /// chosen. Everything is rounded (a card at eight, a control at five) because the design is a
     /// raised one rather than a flat one.
     /// </remarks>
     private static Style[] Content() =>
@@ -1104,8 +1104,8 @@ internal sealed class RorolalaTheme
                 new Setter(TemplatedControl.CornerRadiusProperty, Small)
             ),
             // A list is a pane rather than a card, for the reason a tree is: what it is drawn in is the
-            // ground of whatever holds it, and a card of its own inside a dock — with an edge and a corner
-            // of its own, boxed in by the dock's own edges — reads as a surface laid on the dock rather than
+            // ground of whatever holds it, and a card of its own inside a dock, with an edge and a corner
+            // of its own, boxed in by the dock's own edges, reads as a surface laid on the dock rather than
             // as the part of the window the entries are read in. Nothing is drawn around it here, which is
             // said because the base theme does draw something: its border would be that card.
             On(
@@ -1141,7 +1141,7 @@ internal sealed class RorolalaTheme
             // is what the row's own line is drawn in, and the steps under it are laid out directly below it, so
             // the room left here is what the first of them stands off by. Left to the difference between the
             // row's height and the band it draws, that room lands under the row's cell instead of under the
-            // line — which is where nothing is ever drawn — and a step reads as being further from the line of
+            // line, which is where nothing is ever drawn, and a step reads as being further from the line of
             // its parent than from the step beside it.
             On(
                 selector => selector.OfType<TreeViewItem>().Template().Name("PART_HeaderPresenter"),
@@ -1150,7 +1150,7 @@ internal sealed class RorolalaTheme
             // The arrow says what the step is, and it says it from the step's own state: the base theme's
             // chevron is a toggle button bound to the step, so the state is already there to select on. The
             // two states are two style values rather than one binding, because a value a style hands a
-            // control is applied when the control is dressed and is not asked again — a binding put there
+            // control is applied when the control is dressed and is not asked again, a binding put there
             // reads the state once and goes on saying what it read. The turn is a transition on the same
             // property, which is what makes it animated without becoming a second state to keep in step.
             // The part is named as the base theme names it, since that is what a template part is found by:
@@ -1239,7 +1239,7 @@ internal sealed class RorolalaTheme
             ),
             // A bar is a plain rectangle rather than a pill, drawn as one surface: the whole of it is outlined in
             // the primary, the part that is done is the primary itself, and the part that is not is a wash of that
-            // same primary — the `selection` the design already spends on what is chosen. Which of the two the
+            // same primary, the `selection` the design already spends on what is chosen. Which of the two the
             // fill is comes from the base theme's own template, which paints `PART_Indicator` with the bar's
             // `Foreground` and the track behind it with its `Background`.
             On(
@@ -1296,8 +1296,8 @@ internal sealed class RorolalaTheme
     /// The template parts the base theme colours itself.
     /// </summary>
     /// <remarks>
-    /// The base theme draws most states on a control's template rather than on the control — a hovered
-    /// row's fill, a focused field's edge, the tick in a box — so a rule for the control cannot reach
+    /// The base theme draws most states on a control's template rather than on the control, a hovered
+    /// row's fill, a focused field's edge, the tick in a box, so a rule for the control cannot reach
     /// them and the part has to be named. Every rule here carries an activator as well as the part
     /// name: Avalonia ranks an activated setter above a template binding and above a plain setter,
     /// which is what it takes to be heard over the base theme's styling of the same place.
@@ -1322,7 +1322,7 @@ internal sealed class RorolalaTheme
             ),
 
             // A tab and the cross it carries are buttons this look draws itself, so the rule above leaves
-            // them out — and what it leaves out is exactly what has to be said for them, since a hover there
+            // them out, and what it leaves out is exactly what has to be said for them, since a hover there
             // would otherwise firm the part's border with the base theme's brush, at once, while the fill
             // behind it fades: the two arriving at different times is what a flicker is. Both are said again
             // here, against the part, because a button's template is what paints its own background, border
@@ -1330,7 +1330,7 @@ internal sealed class RorolalaTheme
             //
             // What is deliberately *not* said for them is the part's own transition. The look gives one to
             // every other button; here it is left out, because a button that is already fading its own
-            // background hands the part a new brush on each frame of that fade — so a transition on the part
+            // background hands the part a new brush on each frame of that fade, so a transition on the part
             // has nothing to animate but a value that is itself moving, is begun again by every frame of the
             // first, and arrives nowhere. A fade that never arrives is a highlight that flickers.
             On(
@@ -1424,18 +1424,18 @@ internal sealed class RorolalaTheme
             ),
 
             // A step of a list or a grid is the one place the rule above is not wanted as it stands. A row or
-            // a tile the pointer is merely over takes its mark at once — a highlight that trailed the cursor
-            // would read as the program being slow, and a highlight is the last thing that may feel lagged —
+            // a tile the pointer is merely over takes its mark at once, a highlight that trailed the cursor
+            // would read as the program being slow, and a highlight is the last thing that may feel lagged,
             // while what is *chosen* is a statement about the entry rather than a report of where the pointer
             // is, so its wash is allowed to arrive as a fade. The two states are therefore told apart here: the
             // unchosen one is given a set with nothing in it, which cancels the fade the rule above hands every
             // presenter, and the chosen one keeps it. The chosen rule is the one that animates, because the
-            // transition is in place before the background it fades — the chosen ground comes from the base
+            // transition is in place before the background it fades, the chosen ground comes from the base
             // theme's own rule, which ranks below this one and so is applied after it.
             //
             // Both name the part, because the ground a step changes is the presenter's and not the step's: a
             // rule on the item would set a property the template only binds from, not the one the base theme
-            // paints. Both are activated — by being unchosen, and by being chosen — and an activated setter
+            // paints. Both are activated (by being unchosen, and by being chosen) and an activated setter
             // outranks the plain rule above, which is what lets them be heard over it at all.
             On(
                 selector => selector
@@ -1482,7 +1482,7 @@ internal sealed class RorolalaTheme
     /// <remarks>
     /// Chrome is the elevated ground with one border under it, so the window reads as a stack of cards:
     /// the row at the top, each strip, and the content between them. A dock's tabs are a segmented
-    /// control — one bordered rounded container, the tab being shown filled with the primary — which is
+    /// control (one bordered rounded container, the tab being shown filled with the primary) which is
     /// the design's own answer to a tab strip and the reason there is no underline anywhere.
     /// </remarks>
     private Style[] Chrome() =>
@@ -1492,7 +1492,7 @@ internal sealed class RorolalaTheme
             // bar inside the row is transparent on purpose: a bar painted with its own fill would take every
             // pixel of itself out of the toolkit's hands, and the press that moves a window would then work
             // everywhere in the row except the empty space of the bar, which is where it is aimed. What is set
-            // here is what a press cannot do without — the room a menu needs and the room on the right the
+            // here is what a press cannot do without, the room a menu needs and the room on the right the
             // buttons are in.
             On(
                 selector => selector.OfType<Border>().Class(TitleBarClass),
@@ -1525,13 +1525,13 @@ internal sealed class RorolalaTheme
             // A window's own buttons, which are the one thing about this row the three styles disagree on.
             .. Captions(),
 
-            // The strip a region's headers sit in: the sunken ground, so that the tab being read — which is
-            // drawn on the elevated one — is the one thing in the row that lifts out of it.
+            // The strip a region's headers sit in: the sunken ground, so that the tab being read, which is
+            // drawn on the elevated one, is the one thing in the row that lifts out of it.
             //
             // The line along its foot is what separates the row from the dock below, and it is the row's own
             // rather than each tab's: one line under everything is one line, where a foot drawn by each tab
-            // would be a line broken wherever two tabs meet. The tab being read covers it — see the rule for
-            // one that is chosen — so the line stops where that tab starts and the two surfaces join there.
+            // would be a line broken wherever two tabs meet. The tab being read covers it, see the rule for
+            // one that is chosen, so the line stops where that tab starts and the two surfaces join there.
             On(
                 selector => selector.OfType<Border>().Class(DockArea.HeadersClass),
                 Brushed(Border.BackgroundProperty, Sunken),
@@ -1540,7 +1540,7 @@ internal sealed class RorolalaTheme
             ),
 
             // A tab is a piece of the strip rather than a control laid in it: no margin, as tall as the
-            // strip, and square, because the tabs *are* the strip. What a tab is, is its fill — the one
+            // strip, and square, because the tabs *are* the strip. What a tab is, is its fill, the one
             // being read is drawn on the elevated ground and lifts out of the sunken one the strip is, which
             // is what makes a row of them read as one strip with the current one lit. A tab that is not the
             // one being read draws nothing of its own, so that the strip it is part of shows through and the
@@ -1548,14 +1548,14 @@ internal sealed class RorolalaTheme
             //
             // The one edge drawn is the one between two tabs: each tab carries it on its left, so a shared
             // edge is drawn once rather than twice. What ends the row carries one on its right as well,
-            // because that is the edge between the tabs and the room the strip keeps beside them — and the
+            // because that is the edge between the tabs and the room the strip keeps beside them, and the
             // tab that is both ends of a strip of one is closed on its right and open on its left, where the
             // strip's own edge already is. Nothing is drawn on the top or the bottom, which are the strip's.
             //
             // A tab's name is set at the weight the program's words are set at, and the tab being read is no
             // heavier than the rest: a strip of names is a strip of labels rather than of actions, and the one
             // being read is told apart by the ground it is drawn on. A lighter weight was tried and reads thinner
-            // than a label of the program's should at this size — the thin strokes go first at the size a tab is.
+            // than a label of the program's should at this size, the thin strokes go first at the size a tab is.
             On(
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass),
                 Brushed(TemplatedControl.BackgroundProperty, TabClear),
@@ -1617,7 +1617,7 @@ internal sealed class RorolalaTheme
                 Brushed(TemplatedControl.BackgroundProperty, Elevated)
             ),
 
-            // The close a tab carries: nothing of its own — no ground behind it, no border, no ink, so that it
+            // The close a tab carries: nothing of its own, no ground behind it, no border, no ink, so that it
             // is written in the tab's and reads as the end of the title rather than as a button that found its
             // way into one. Its room is the tab's to give (see `DockArea.Make`), which is why nothing about how
             // wide or how tall it is is said here: it is a strip of the tab's own right side, and a strip is
@@ -1625,8 +1625,8 @@ internal sealed class RorolalaTheme
             //
             // It is drawn while the pointer is on the tab rather than always, because a row of crosses is a row
             // of things to avoid pressing, and one that arrives under the pointer is one the eye finds when it
-            // is wanted. Being on the cross *is* being on the tab — the toolkit marks every ancestor of what it
-            // is over, and not only what it hit — so nothing has to hold it drawn under a pointer that has come
+            // is wanted. Being on the cross *is* being on the tab, the toolkit marks every ancestor of what it
+            // is over, and not only what it hit, so nothing has to hold it drawn under a pointer that has come
             // to rest on it.
             On(
                 selector => selector.OfType<Button>().Class(DockArea.CloseClass),
@@ -1654,7 +1654,7 @@ internal sealed class RorolalaTheme
             // only the ground read as two docks that did not meet. What it is drawn in is the border's own
             // colour, so every divider is the same one wherever two docks meet.
             //
-            // The grab is wider than the line — see `DockArea.SplitterSize` — and the line is drawn through
+            // The grab is wider than the line, see `DockArea.SplitterSize`, and the line is drawn through
             // the middle of it by a gradient rather than by a border, because a splitter is one surface with
             // no template part a theme may address: painting the grip clear and the middle of it not is the
             // only way to put one pixel of line inside five pixels of grip.
@@ -1731,8 +1731,8 @@ internal sealed class RorolalaTheme
             ),
 
             // The points a dragged dock may be put on, filling the group the drag is over: four isosceles trapezoids
-            // around a centre rectangle. They are the answer rather than a hint — a drag that is on one of them can
-            // be let go of — so they are drawn filled rather than as hairlines, and the one the pointer is on is
+            // around a centre rectangle. They are the answer rather than a hint, a drag that is on one of them can
+            // be let go of, so they are drawn filled rather than as hairlines, and the one the pointer is on is
             // filled with the accent. Nothing is drawn around or behind them: they fill the group, so a box over the
             // same rectangle would be a second surface saying what the five already say, and two translucent
             // surfaces over one another are a darker rectangle rather than a clearer answer.
@@ -1777,7 +1777,7 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// One button is a mark on the right on Windows, a light on the left on macOS, and nothing at all under
-    /// a tiling window manager — which keeps its window by a frame of its own, so buttons drawn here would
+    /// a tiling window manager, which keeps its window by a frame of its own, so buttons drawn here would
     /// be a second frame inside the first.
     /// <para>
     /// The marks are drawn the way the design draws a tool: nothing of their own until the pointer is on
@@ -1856,7 +1856,7 @@ internal sealed class RorolalaTheme
     /// filled with a translucent colour, which is what says "the pointer is on this" and "this is
     /// the one being dragged" and "this cannot load" without the card becoming a different colour
     /// from the ones beside it. The wash is a child rather than the card's own background because a
-    /// background cannot be laid over a ground — it replaces it — and a tint that replaced the
+    /// background cannot be laid over a ground, it replaces it, and a tint that replaced the
     /// surface would read as a different control rather than as the same one under the pointer.
     /// <para>
     /// The card's own error state is stated last, so that it beats the pointer and the drag: an
@@ -1961,7 +1961,7 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// A window of one dock draws no strip of tabs, so the name its tab would have carried has nowhere to be
-    /// but the row — which is what the desktop's title bar would have said, and the one part of the window
+    /// but the row, which is what the desktop's title bar would have said, and the one part of the window
     /// that is not the dock itself. It is the handle the dock is dragged back to the main window by
     /// (<see cref="MainWindow"/>), which is why it is a control of its own rather than a word laid on the
     /// row.
@@ -2015,7 +2015,7 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// Walked rather than compared, because what the pointer hits is a part of the name's own template
-    /// rather than the name — the same reason what landed on a menu is walked to the item.
+    /// rather than the name, the same reason what landed on a menu is walked to the item.
     /// </remarks>
     /// <param name="pressed">What the press landed on.</param>
     /// <returns>Whether it is that name.</returns>
@@ -2037,7 +2037,7 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// The desktop's title bar is not wanted and neither is a second one: what this states is a frame the
-    /// window's own row shows through, carrying the two things the toolkit is still needed for — the area a
+    /// window's own row shows through, carrying the two things the toolkit is still needed for, the area a
     /// press on the row moves the window by, and the window's own buttons. Everything the frame is drawn
     /// with is the window's own content, so the row and the frame are one thing.
     /// <para>
@@ -2087,7 +2087,7 @@ internal sealed class RorolalaTheme
         if (style != WindowStyle.TillingWm)
         {
             // Made in the order they are drawn, which is the style's own: Windows puts its three marks in the
-            // order they read — minimize, maximize, close — and macOS puts the one that closes the window at
+            // order they read (minimize, maximize, close) and macOS puts the one that closes the window at
             // the window's own corner, then the light that puts it away, then the one that makes it fill the
             // screen.
             if (style == WindowStyle.Mac)
@@ -2140,7 +2140,7 @@ internal sealed class RorolalaTheme
     /// <remarks>
     /// What each does is the toolkit's, from the role it carries, and it is the toolkit that reads them out
     /// of the template's names and wires them up. What is left here is what a window button is made of: a
-    /// part the toolkit looks for, a role, and the class the look draws it by — and, where the frame is
+    /// part the toolkit looks for, a role, and the class the look draws it by, and, where the frame is
     /// drawn the way macOS draws one, the light's own colour, which is the one thing about it the look
     /// cannot say in a rule, three buttons of one class being three different colours.
     /// </remarks>
@@ -2195,7 +2195,7 @@ internal sealed class RorolalaTheme
     /// <summary>The area a press on the row moves the window by.</summary>
     /// <remarks>
     /// Transparent and under everything: it is what a press finds where no menu and no button claimed it.
-    /// The role is what a display server that draws its own decorations reads to move the window — the
+    /// The role is what a display server that draws its own decorations reads to move the window, the
     /// desktop moves it through the window's own code instead, which is why the role is here and the call
     /// is in the window's.
     /// </remarks>
@@ -2280,7 +2280,7 @@ internal sealed class RorolalaTheme
     /// The reference is resolved where the element is rather than here, so a colour is the one the
     /// element's own variant has. Resolving it here would fix it to the variant that was in force when
     /// the theme was applied, and a system that changed variant while the program ran would leave the
-    /// overlay behind — half of the window following the system and half of it not. It is also what lets
+    /// overlay behind, half of the window following the system and half of it not. It is also what lets
     /// a colour changed at runtime reach every control that took it.
     /// </remarks>
     private static Setter Brushed(AvaloniaProperty property, string resource) =>
@@ -2295,7 +2295,7 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// Black or white, whichever can be read on it. The design names its own ink for its own primary; a
-    /// primary the user chose has no such name, so it is worked out — which is why it is open to the
+    /// primary the user chose has no such name, so it is worked out, which is why it is open to the
     /// tests as well as used here.
     /// </remarks>
     /// <param name="accent">The colour anything accented is drawn in.</param>
@@ -2367,7 +2367,7 @@ internal sealed class RorolalaTheme
     /// </summary>
     /// <remarks>
     /// Only the width is tweened, and only on the fill: the width is the number that means "how far", and it
-    /// is written by the control rather than by anything here — so a transition on it is the whole of the
+    /// is written by the control rather than by anything here, so a transition on it is the whole of the
     /// animation, and a transition on the bar would have nothing of its own to move. The colour and the height
     /// are the look's, and arrive at once.
     /// </remarks>

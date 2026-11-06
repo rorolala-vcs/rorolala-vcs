@@ -7,7 +7,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The window and its look are both drawn from the answer, and neither can be asked about it in a test: what
-/// is checked here is the reading of the two things that choose one — the name on the command line, and the
+/// is checked here is the reading of the two things that choose one, the name on the command line, and the
 /// environment a tiling window manager leaves behind.
 /// </remarks>
 public sealed class WindowStyleTests

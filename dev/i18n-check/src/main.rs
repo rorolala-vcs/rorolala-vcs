@@ -2,7 +2,7 @@
 //!
 //! A call site is a Rust `t!("key")` or a C# `I18n.Get("key")`. What answers one depends on where
 //! it is written: a command line crate's keys are its own `i18n/` directory, a Desktop plugin's
-//! are the host's plus its own — a plugin registers after the host — and the host's are its own.
+//! are the host's plus its own, a plugin registers after the host, and the host's are its own.
 //!
 //! The scan is deliberately static and deliberately shallow. A key written as anything but a
 //! string literal is counted and left alone, since what it adds up to is not known until the

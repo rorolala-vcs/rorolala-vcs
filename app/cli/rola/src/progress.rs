@@ -1,6 +1,6 @@
 //! Watching a run: what it says while it runs, and what becomes of it.
 //!
-//! A run says its progress down a channel — see [`rorolala_utils_progress`] — and this is what
+//! A run says its progress down a channel, see [`rorolala_utils_progress`], and this is what
 //! reads that channel while the run goes on: `rola` was asked how the progress should appear,
 //! and here is where that answer is carried out. Nothing is drawn on the thread the work runs
 //! on, so watching a run never slows it down.
@@ -96,7 +96,7 @@ impl Reporting {
     ///
     /// A run is asked for a wait of its own when what it does first is the slow part: a recording
     /// reads the whole of every file it is to record before it writes anything, and a reader watching
-    /// for that wants the bar sooner than the ordinary wait allows — a bar that appeared only once the
+    /// for that wants the bar sooner than the ordinary wait allows, a bar that appeared only once the
     /// reading was over would be a bar for nothing.
     #[must_use]
     pub fn after(setting: ResProgressSetting, delay: Duration) -> Self {
@@ -158,7 +158,7 @@ impl Watcher {
     ///
     /// The reader is a thread of its own and not a task, so it waits the way a thread waits.
     /// What a run that is over quickly is shown is nothing at all: see [`Terminal::watch`].
-    /// Records are not held back that way — a program reading them is reading what happened,
+    /// Records are not held back that way, a program reading them is reading what happened,
     /// and a run being over quickly does not make what happened less worth having.
     fn watch(&mut self, receiver: &mut mpsc::Receiver<Signal>) {
         match self {
@@ -211,7 +211,7 @@ impl Terminal {
     /// wiped again a moment later are a flicker where there was nothing to say, and a person
     /// reading them learns nothing they did not already know from the run having ended. So for
     /// the first little while nothing is let out, though what the run says is read all the
-    /// same — the rows are as far along as the run is by the time they are shown — and a run
+    /// same, the rows are as far along as the run is by the time they are shown, and a run
     /// that ends inside that while is never shown at all.
     ///
     /// The waiting is the clock's and not the run's, so it is done by looking rather than by
@@ -230,7 +230,7 @@ impl Terminal {
 
         // The rows have been drawn all along, into nothing: letting them out now shows them as
         // they are, and drawing them again shows them at once rather than at the next thing the
-        // run says — which may be a long way off, since this is the run's own pace.
+        // run says, which may be a long way off, since this is the run's own pace.
         self.bars.set_draw_target(ProgressDrawTarget::stderr());
         for bar in self.drawn.values() {
             bar.force_draw();
@@ -294,7 +294,7 @@ impl Terminal {
                 self.drawn.insert(id, bar);
             }
             // A piece being done right now: not a row of its own, but what the row above it is
-            // moving — which is the last column of that row.
+            // moving, which is the last column of that row.
             (Some(parent), None) => {
                 if let Some(above) = self.drawn.get(&parent) {
                     above.set_message(fit(what, PIECE));

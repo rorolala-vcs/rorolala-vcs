@@ -60,13 +60,13 @@ pub fn complete_storage_ls_manifests() -> Suggest {
 /// Lists every content the store keeps as a manifest of chunks, one key per line.
 ///
 /// A manifest is what a cut content has; a whole one has none. What is printed is named
-/// `manifest:<digest>` — the way [`rola storage write-file`](crate::storage::cmd_storage_write_file) names
-/// content it cut — and the same name is read back by
+/// `manifest:<digest>`, the way [`rola storage write-file`](crate::storage::cmd_storage_write_file) names
+/// content it cut, and the same name is read back by
 /// [`rola storage extract-file`](crate::storage::cmd_storage_extract_file), so a line read here can be
 /// handed straight to it. A manifest whose chunks have gone is still listed: it is still what the
 /// store was told to cut, and what is missing is found on the read that asks for it.
 ///
-/// The run has to be somewhere a store can be found — inside one, or inside a Vault or Workspace
+/// The run has to be somewhere a store can be found, inside one, or inside a Vault or Workspace
 /// that keeps one.
 ///
 /// # Errors
@@ -95,7 +95,7 @@ pub fn handle_storage_ls_manifests(
         return ErrorManifestsNoStorage.into();
     };
 
-    // The store is asynchronous and a command is not, so the two meet here — see
+    // The store is asynchronous and a command is not, so the two meet here, see
     // `cmd_storage_write_file`.
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,

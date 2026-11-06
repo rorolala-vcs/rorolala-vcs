@@ -4,10 +4,10 @@
 //! either shows up in a diff beside what caused it: `modules/chunking`'s registry and its module
 //! list, written by that crate's build script, and each policy's `SCORE.md`, written by the harness.
 //! The price of that arrangement is a generated file that can be committed while it disagrees with
-//! its sources, and nothing in a build notices — the build would simply rewrite it. This is what
+//! its sources, and nothing in a build notices, the build would simply rewrite it. This is what
 //! notices: generate, then ask git whether anything moved.
 //!
-//! What is compared is the working tree against `HEAD`, so this passes on a committed tree — which
+//! What is compared is the working tree against `HEAD`, so this passes on a committed tree, which
 //! is what a gate runs on. Before a commit it reports the generated files as changed, which is true:
 //! they are not committed yet.
 

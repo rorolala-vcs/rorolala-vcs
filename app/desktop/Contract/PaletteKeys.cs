@@ -5,7 +5,7 @@ namespace RorolalaDesktop.Contract;
 /// </summary>
 /// <remarks>
 /// A plugin may not reference the host, so the look's names used to be written as literals in each
-/// plugin that drew with them — three plants saying the same word, which disagreed the day one of them
+/// plugin that drew with them, three plants saying the same word, which disagreed the day one of them
 /// was corrected. They are stated here once instead, beside <see cref="IPalette"/>, which is what a
 /// plugin reads a colour from when it wants the value rather than a resource to name: the five members
 /// of that interface are roles, and these are the same roles as the look publishes them.
@@ -30,7 +30,7 @@ public static class PaletteKeys
     /// </summary>
     /// <remarks>
     /// Named once more under the role it is read as, because where a mark is not the picture of a
-    /// control it is drawn from the look rather than from whatever holds it — and a reader looking for
+    /// control it is drawn from the look rather than from whatever holds it, and a reader looking for
     /// that answer looks for it under the name the mark is, not under the name the surface is.
     /// </remarks>
     public const string PlainInk = Front;

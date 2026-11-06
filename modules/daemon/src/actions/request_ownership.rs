@@ -3,7 +3,7 @@
 //! A Layout names who holds each entry, and a Vault is where that naming is shared: a Workspace
 //! asks to be the holder of some `Uuid`s, the Vault names each of them if nobody else holds it, and
 //! the answer says which of those happened for each. What the Workspace keeps a copy of is changed
-//! to match — the command that asked does that — so what a fetch reads next agrees with the Vault.
+//! to match, the command that asked does that, so what a fetch reads next agrees with the Vault.
 //!
 //! The `Uuid`s are taken in one run rather than one connection apiece: the whole batch crosses over
 //! one session, one entry at a time, which is what a run that names a directory wants.
@@ -19,7 +19,7 @@ use super::layout_remote::{ownership_batch, take};
 /// What to take, as JSON: an array of the words the bar is drawn under and the `Uuid`s of the entries,
 /// as text. The `Uuid`s belong to the caller, so they are read on the Workspace and cross to the Vault,
 /// which is the side that has a Layout to name them in; the words cross with them because the caller is
-/// the side that has them — see `ownership_batch`. A list is not a thing the C ABI can hand over, so the
+/// the side that has them, see `ownership_batch`. A list is not a thing the C ABI can hand over, so the
 /// pair crosses as one JSON string, the same way a sync's batch of writes does. Which account asks is
 /// not input: the session already says, and a name sent beside it would be a claim the Vault could not
 /// hold the caller to.
@@ -27,9 +27,9 @@ use super::layout_remote::{ownership_batch, take};
 /// # Output
 ///
 /// What became of each, as JSON: an array of outcomes, one per `Uuid`, in the order they were asked
-/// for. Each is what one request answers on its own — the entry is now held by the caller, the Vault
+/// for. Each is what one request answers on its own, the entry is now held by the caller, the Vault
 /// holds no such entry, or another account holds it. It crosses as text because an action's output is
-/// what the C ABI hands back, and an outcome is not a type a C caller reads — [`Ownership`](super::layout_remote::Ownership)
+/// what the C ABI hands back, and an outcome is not a type a C caller reads, [`Ownership`](super::layout_remote::Ownership)
 /// is.
 pub struct ActionRequestOwnership;
 

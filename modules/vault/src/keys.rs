@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 /// The directories a key search covers for the Vault rooted at `root`, nearest first.
 ///
-/// `root` is taken to be a Vault — it is where a configuration was found — so its own keys are
+/// `root` is taken to be a Vault, it is where a configuration was found, so its own keys are
 /// always the first scope, whether or not the directory is there yet. What follows is every
 /// directory above that is a Vault in its own right; a directory in between that is not one
 /// contributes nothing, since a Vault is one only because a configuration says so.

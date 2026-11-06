@@ -53,7 +53,7 @@ internal static class ConfigPaths
     private static string ResolveRoot()
     {
         // A run that names a data directory of its own is answered with it, under the same name the
-        // command line reads — `ROLA_DATA_HOME`, which the suites set so that what they start writes
+        // command line reads, `ROLA_DATA_HOME`, which the suites set so that what they start writes
         // beside itself instead of into the files of whoever is running them. The platform's known
         // folder is not consulted when it is set: on Windows there is no environment variable that
         // redirects it, which is what made a sandbox named only by `XDG_DATA_HOME` a sandbox on

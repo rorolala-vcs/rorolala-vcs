@@ -1,7 +1,7 @@
 //! The configuration a store works from.
 //!
-//! A store is told how to hold what it holds by the file that makes its directory one —
-//! `rolast.toml` — and this is what that file says. What is not said is defaulted rather than
+//! A store is told how to hold what it holds by the file that makes its directory one,
+//! `rolast.toml`, and this is what that file says. What is not said is defaulted rather than
 //! refused: a store that says nothing about a thing takes the ordinary answer, so a file that is
 //! missing, empty, or written in a way this build does not know still leaves a store that works.
 
@@ -29,7 +29,7 @@ pub struct StorageConfig {
 /// What the configuration says about packing.
 #[derive(Debug, Clone, Default, Deserialize)]
 struct StorageSection {
-    /// The largest a pack may grow before another is started, written as a size — `"2GiB"`.
+    /// The largest a pack may grow before another is started, written as a size, `"2GiB"`.
     max_pack_size: Option<String>,
 }
 
@@ -46,7 +46,7 @@ impl StorageConfig {
 
     /// The largest a pack may grow before another is started.
     ///
-    /// A size the file writes that this build does not read — or one that is nothing at all — is
+    /// A size the file writes that this build does not read, or one that is nothing at all, is
     /// answered with [`DEFAULT_MAX_PACK_SIZE`], for the same reason a file that does not read is.
     #[must_use]
     pub fn max_pack_size(&self) -> u64 {

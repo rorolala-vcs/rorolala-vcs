@@ -9,14 +9,14 @@ namespace FileSystemPlugin;
 /// <remarks>
 /// A line with room to spare puts that room between its tiles rather than at its ends, so the inset at the
 /// grid's left and right edges is the same however wide the dock is and however many tiles a line happens
-/// to hold — which a wrapping panel that leaves the room at the end does not do, its inset then depending on
+/// to hold, which a wrapping panel that leaves the room at the end does not do, its inset then depending on
 /// where the last tile of a line fell.
 /// <para>
 /// Every line that wrapped is filled to the width, so the room between its tiles is the same on all of
 /// them. The last line keeps that same room rather than its own spare, so that the tiles of a short last
 /// line stand in the same columns as the tiles above instead of being pulled together; what is left over
 /// stays at its end. A grid that never wrapped has no filled line to take the room from and keeps the
-/// least room, reading from its start — sharing its room out would spread the few tiles of a short line
+/// least room, reading from its start, sharing its room out would spread the few tiles of a short line
 /// across the whole width.
 /// </para>
 /// </remarks>

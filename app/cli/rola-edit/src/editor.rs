@@ -6,7 +6,7 @@
 //! one line above the status bar for a message that only has to be said once.
 //!
 //! A line is measured by what the terminal shows it as rather than by how many characters it has
-//! — the material this is opened on is CJK, which is two columns a character — so the width of a
+//! (the material this is opened on is CJK, which is two columns a character) so the width of a
 //! line and where the cursor sits in it are both counted in columns. See [`display_width`].
 
 use std::fs;
@@ -79,8 +79,8 @@ fn coord(value: usize) -> u16 {
 
 /// The editor, as it stands between two keys.
 ///
-/// Its own state is a handful of independent facts — whether the text has been changed, whether a
-/// warning was shown, whether the run is ending, and on Windows whether an IME is composing — and
+/// Its own state is a handful of independent facts, whether the text has been changed, whether a
+/// warning was shown, whether the run is ending, and on Windows whether an IME is composing, and
 /// a state machine over them would be more machinery than they are worth here.
 #[allow(clippy::struct_excessive_bools)]
 pub struct Editor {
@@ -206,7 +206,7 @@ impl Editor {
 
     /// Whether a key is one to pass over rather than act on.
     ///
-    /// Windows sends a key twice — once as a press and once as a release — and sends its own noise
+    /// Windows sends a key twice, once as a press and once as a release, and sends its own noise
     /// around an IME's composition, so both are told apart from a keystroke there. Nowhere else has
     /// either to answer for, and the answer is always no.
     #[cfg(windows)]

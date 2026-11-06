@@ -1,6 +1,6 @@
 //! The `rola vcs-index print-rootver` command: print the root version's hash.
 //!
-//! The root version is the version before the first — numbered `u64::MAX` — and every chain starts
+//! The root version is the version before the first, numbered `u64::MAX`, and every chain starts
 //! from it. Its hash is the same in every index, and it is what a first `write-variant` takes for
 //! `BASE_VERSION`. An index that does not hold it is told so rather than answered with the hash it
 //! would have had: a chain whose root is not stored cannot be read back.
@@ -38,7 +38,7 @@ pub fn desc_vcs_index_print_rootver() -> Description {
 
 /// Prints the root version's hash
 ///
-/// The root version is the version before the first — `u64::MAX` as a number — and every chain
+/// The root version is the version before the first, `u64::MAX` as a number, and every chain
 /// starts from it. What is printed is what a first `write-variant` takes for `BASE_VERSION`; an
 /// index that does not hold the root version is told so, since nothing read back from it could.
 ///

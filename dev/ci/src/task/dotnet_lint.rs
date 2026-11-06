@@ -1,8 +1,8 @@
 //! `dotnet-lint`: the .NET side of the workspace, held to every rule the analyzers carry.
 //!
 //! This is the counterpart of `clippy` for the Rust side, and it is a check of its own for the same
-//! reason `clippy` is: the extra tier — `AnalysisMode=All`, which is every rule rather than the
-//! recommended few — is asked for here rather than in `Directory.Build.props`, so that an ordinary
+//! reason `clippy` is: the extra tier, `AnalysisMode=All`, which is every rule rather than the
+//! recommended few, is asked for here rather than in `Directory.Build.props`, so that an ordinary
 //! build is held to the warnings the compiler already raises while this gate is held to the whole of
 //! what the analyzers say.
 

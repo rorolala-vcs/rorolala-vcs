@@ -29,7 +29,7 @@ impl IgnoreRuleSet {
     ///
     /// # FFI
     ///
-    /// `is_dir` is what a rule naming a directory only — one ending in `/` — is decided by.
+    /// `is_dir` is what a rule naming a directory only, one ending in `/`, is decided by.
     #[must_use]
     #[lazyffi(export = rola_ignore_rules_is_ignore)]
     pub fn ignored(&self, path: &Path, is_dir: bool) -> bool {

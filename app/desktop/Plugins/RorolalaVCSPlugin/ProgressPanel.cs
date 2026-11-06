@@ -18,7 +18,7 @@ namespace RorolalaVCSPlugin;
 /// What the commands this plugin runs are doing, as a stack of capsules at the bottom right of the Overview.
 /// </summary>
 /// <remarks>
-/// A capsule is one command: what it is called, how far its own phases have got, and — under the pointer — the
+/// A capsule is one command: what it is called, how far its own phases have got, and, under the pointer, the
 /// phases themselves. The stack floats over the reading rather than taking a column of it, so the table keeps
 /// its width whether a run is going or not; a command that appears fades into the stack, and one that ends
 /// fades out of it.
@@ -306,7 +306,7 @@ internal sealed class ProgressPanel : StackPanel
                 ? RolaI18N.Get("rorolala_vcs.progress.waiting")
                 : focus?.Total is { } length
                     ? Share(focus.Done, length)
-                    : "…";
+                    : "...";
 
             _whole.IsIndeterminate = focus?.Total is null;
             _whole.Maximum = Math.Max(focus?.Total ?? 1, 1);
@@ -457,7 +457,7 @@ internal sealed class ProgressPanel : StackPanel
                 if (total is not { } length)
                 {
                     _bar.IsIndeterminate = true;
-                    _share.Text = "…";
+                    _share.Text = "...";
                 }
                 else
                 {

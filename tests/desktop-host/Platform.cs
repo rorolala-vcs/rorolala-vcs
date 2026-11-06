@@ -10,13 +10,13 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// <remarks>
 /// Most of what this suite drives needs no screen: the registries, the configuration and the docks are
 /// bookkeeping, and a test that reads them is honest without one. What does need one is anything that
-/// <em>makes</em> a window — the shell a dock is drawn in, and the row of menus across the top of it — and the
+/// <em>makes</em> a window (the shell a dock is drawn in, and the row of menus across the top of it) and the
 /// headless platform is what provides one: it is the toolkit's own window, drawing nothing and showing
 /// nothing, so what a window is made of is exercised for real rather than stood in for.
 /// <para>
 /// Set up once here rather than per test, because the platform is the process's: an application is made
-/// before the first test body runs, and what it answers — the cursor factory a dock's headers ask for, the
-/// font manager a row of menus is measured with — is the same for every test after it.
+/// before the first test body runs, and what it answers, the cursor factory a dock's headers ask for, the
+/// font manager a row of menus is measured with, is the same for every test after it.
 /// </para>
 /// </remarks>
 internal static class Platform

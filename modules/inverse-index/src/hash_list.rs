@@ -2,7 +2,7 @@
 //!
 //! FFI has no list of its own, and a hash list that crossed as nothing but a `char *` could not be
 //! told from one hash crossing as a `char *`. So a list has a type of its own, carried as one string
-//! with a hash a line, in the order the answer gives them — the same way a Creator or a Message is
+//! with a hash a line, in the order the answer gives them, the same way a Creator or a Message is
 //! carried, and released the same way.
 
 use rorolala_utils_lazyffi::lazyffi;

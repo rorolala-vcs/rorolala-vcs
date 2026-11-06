@@ -96,7 +96,7 @@ public sealed class ContextMenuTests
     /// A menu opened on several entries is about all of them, and wears the words of the one that was clicked.
     /// </summary>
     /// <remarks>
-    /// The whole choice, because an action may be about all of it — claiming three files is one claim, and a
+    /// The whole choice, because an action may be about all of it, claiming three files is one claim, and a
     /// menu item handed only the first would have to be pointed at three times. And the kind of the one that was
     /// clicked, because a menu is about what was pointed at first: a folder among files is still a menu opened
     /// on a folder, which is the kind of thing its words are about.

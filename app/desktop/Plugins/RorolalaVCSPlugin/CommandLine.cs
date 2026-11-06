@@ -9,7 +9,7 @@ namespace RorolalaVCSPlugin;
 /// <remarks>
 /// A command asked for a structural renderer writes its progress as one JSON record per line on its error stream,
 /// beside the words it has to say. The two are one stream, so what is a record is kept and what is left is what
-/// the command said — which is what a failure is shown with.
+/// the command said, which is what a failure is shown with.
 /// <para>
 /// The streams are read while the command runs rather than after it ends: a card drawn from what a run said once
 /// it was over would be a card that appeared when there was nothing left to watch, and a run that filled the pipe
@@ -81,7 +81,7 @@ internal static class CommandLine
             RedirectStandardError = true,
             CreateNoWindow = true,
 
-            // The words are `rola`'s own, and `rola` writes UTF-8 — as every stream this project's programs
+            // The words are `rola`'s own, and `rola` writes UTF-8, as every stream this project's programs
             // write is. Left unstated, a redirected stream is decoded in the machine's codepage, which on a
             // Chinese Windows is GBK, and every word of the message comes out as mojibake.
             StandardOutputEncoding = Encoding.UTF8,

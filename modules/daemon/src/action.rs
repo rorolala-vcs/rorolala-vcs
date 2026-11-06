@@ -31,11 +31,11 @@ use crate::wire;
 /// wrapped as the [`OnlyWorkspace`] the action takes; `workspace` is the copy the work is
 /// being taken from, handed on so that an action can reach it; the account is the one the
 /// caller named, so the action runs as that identity rather than as whatever was found first;
-/// and `target` is where the Vault is — a daemon a host and a port reach, or a session an
-/// `ssh` carries — written as [`VaultAddress::parse`] reads it.
+/// and `target` is where the Vault is, a daemon a host and a port reach, or a session an
+/// `ssh` carries, written as [`VaultAddress::parse`] reads it.
 ///
 /// The session is established before the action runs. The account's private key proves
-/// which identity the action runs as, and a public key beside it — if there is one — is
+/// which identity the action runs as, and a public key beside it, if there is one, is
 /// the identity the peer must prove in turn. An account without one accepts the peer as
 /// whoever it proves itself to be, which is what lets a Workspace that knows only its own
 /// key still be challenged by a Vault.
@@ -69,7 +69,7 @@ where
 
     // What reaches the address is the transport's to know: a daemon is a connection to make and
     // a Vault behind SSH is a program to start. What comes back is the stream either of them
-    // leaves behind, and — for a program — the watch that says what it ended with.
+    // leaves behind, and, for a program, the watch that says what it ended with.
     let crate::transport::Dialed { socket, exit } = crate::transport::dial(&address)
         .await
         .map_err(|error| ActionError::Transport(error.to_string()))?;
@@ -128,7 +128,7 @@ where
     /// Runs the session: proves both ends, names the action, and leaves the action to run.
     ///
     /// The account's private key proves which identity the action runs as, and a public key
-    /// beside it — if there is one — is the identity the peer must prove in turn. An account
+    /// beside it, if there is one, is the identity the peer must prove in turn. An account
     /// without one accepts the peer as whoever it proves itself to be, which is what lets a
     /// Workspace that knows only its own key still be challenged by a Vault.
     async fn run(self) -> Result<A::Output, ActionError> {
@@ -319,7 +319,7 @@ mod tests {
         let keys = scratch("peer-key");
         let client = Ed25519SigningKey::from_bytes(&[2; 32]);
         // A public key beside the private one names a peer, so the account holds its
-        // peer to it — until the file is gone.
+        // peer to it, until the file is gone.
         enroll(&keys, "client", &client);
         publish(&keys, "client", &Ed25519SigningKey::from_bytes(&[3; 32]));
 

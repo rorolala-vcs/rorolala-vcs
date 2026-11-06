@@ -9,8 +9,8 @@ use mingling::picker::Pickable;
 ///
 /// Three of these are about the terminal the output is drawn on, ordered by how much a
 /// style may ask of it, so a program picks the highest one it knows both ends can
-/// render. The fourth is not a terminal at all — see
-/// [`DesktopFriendly`](Self::DesktopFriendly) — and is never arrived at by choosing.
+/// render. The fourth is not a terminal at all, see
+/// [`DesktopFriendly`](Self::DesktopFriendly), and is never arrived at by choosing.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Pickable)]
 pub enum ThemeChoice {
@@ -23,7 +23,7 @@ pub enum ThemeChoice {
     ///
     /// Symbols are plain ASCII and colors come out of the sixteen a terminal is
     /// expected to have, so this is what every terminal renders as intended. It is also
-    /// the default, which is what the picker names an absent argument by — not what a
+    /// the default, which is what the picker names an absent argument by, not what a
     /// program is drawn in, which is the global and starts as the terminal's answer.
     #[default]
     Simple = 1,
@@ -37,8 +37,8 @@ pub enum ThemeChoice {
     Pretty = 2,
     /// Marked lines for a program to read rather than a terminal to draw
     ///
-    /// What reports something says which it is in a word at the head of the line — `err: `,
-    /// `warn: `, `help: ` — and what it says follows as it was written, its marks and all, because
+    /// What reports something says which it is in a word at the head of the line, `err: `,
+    /// `warn: `, `help: `, and what it says follows as it was written, its marks and all, because
     /// what draws it on the other end reads the same language this program writes in. What is not a
     /// line of one of those is written exactly as it was: a result is a result, and the other end
     /// shows it as text.
@@ -52,8 +52,8 @@ impl ThemeChoice {
     /// The most a terminal is known to carry here
     ///
     /// A terminal that is not being written to gets [`Text`](Self::Text). A terminal that
-    /// is, and whose environment names one of the modern terminals — Windows Terminal,
-    /// Zed, `WezTerm`, kitty, Ghostty, iTerm and the rest of the list — gets
+    /// is, and whose environment names one of the modern terminals, Windows Terminal,
+    /// Zed, `WezTerm`, kitty, Ghostty, iTerm and the rest of the list, gets
     /// [`Pretty`](Self::Pretty); every other terminal gets [`Simple`](Self::Simple).
     ///
     /// The `Pretty` test is an approximation on purpose: a terminal carries no answer
@@ -84,8 +84,8 @@ impl ThemeChoice {
 
     /// The choice a number stands for
     ///
-    /// A number that names no choice — which only a caller writing the global directly
-    /// can produce — reads as [`Simple`](Self::Simple), the one that assumes a terminal
+    /// A number that names no choice, which only a caller writing the global directly
+    /// can produce, reads as [`Simple`](Self::Simple), the one that assumes a terminal
     /// is at least ordinary.
     #[must_use]
     pub const fn from_u8(value: u8) -> Self {
@@ -187,7 +187,7 @@ fn modern_terminal(program: Option<&str>, term: Option<&str>, markers: &[bool]) 
 
 /// Which theme Rorolala's output is drawn in
 ///
-/// Starts as the terminal's answer — see [`theme_choice`] — and is replaced the moment
+/// Starts as the terminal's answer, see [`theme_choice`], and is replaced the moment
 /// a program states its own, which is why it is lazily built rather than holding a
 /// number from the start: the initial value is not knowable until the terminal is asked.
 static CHOICE: LazyLock<AtomicU8> =

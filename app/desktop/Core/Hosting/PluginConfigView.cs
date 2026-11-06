@@ -10,7 +10,7 @@ namespace RorolalaDesktop.Hosting;
 /// <remarks>
 /// The host interprets nothing beyond the value's own kind. A setting the file does not state reads as the
 /// default the plugin declared for it, and one that is neither stated nor declared reads as the fallback the
-/// caller passed — so a plugin may read a key it never declared, which is what a hand-written file has.
+/// caller passed, so a plugin may read a key it never declared, which is what a hand-written file has.
 /// <para>
 /// Booleans, integers, floating-point numbers, strings, lists and enums are read directly; enums are read by
 /// name.

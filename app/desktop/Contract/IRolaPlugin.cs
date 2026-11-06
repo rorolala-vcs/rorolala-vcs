@@ -5,8 +5,8 @@ namespace RorolalaDesktop.Contract;
 /// </summary>
 /// <remarks>
 /// The host finds the one implementing type in an assembly, makes it, reads
-/// <see cref="Manifest"/>, and — once the plugin's dependencies are satisfied and the version check
-/// has passed — calls <see cref="Initialize"/> with the host services. Registration happens during
+/// <see cref="Manifest"/>, and, once the plugin's dependencies are satisfied and the version check
+/// has passed, calls <see cref="Initialize"/> with the host services. Registration happens during
 /// that call, and a plugin that would register after the window is shown is not supported.
 /// </remarks>
 public interface IRolaPlugin

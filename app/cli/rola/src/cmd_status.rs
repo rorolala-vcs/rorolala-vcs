@@ -3,15 +3,15 @@
 //! It is the reading behind the two [porcelain](crate) commands that act on the tree, said for a
 //! person rather than for a program: what is lost or untagged needs `rola align`, what changed in
 //! place needs `rola track`, and a move is one `rola align` confirms and `track` confirms by
-//! itself. What it is drawn as is a few lines — what moved, what is gone, what appeared, what
-//! changed — and the one thing to do about each.
+//! itself. What it is drawn as is a few lines, what moved, what is gone, what appeared, what
+//! changed, and the one thing to do about each.
 //!
 //! A clean tree says so and nothing else. A run that asked for `--json` is answered with the same
 //! reading as data, since a reading is what it is either way; a template is not offered, as what a
 //! person is shown here is not a list of one shape but a sentence about several.
 
-// The reading of how a file stands takes every part of it — the version, the Vault's copy, the
-// index, the merge in progress — and gathering them into one value would only move the count
+// The reading of how a file stands takes every part of it, the version, the Vault's copy, the
+// index, the merge in progress, and gathering them into one value would only move the count
 // somewhere else.
 #![allow(clippy::too_many_arguments)]
 
@@ -345,7 +345,7 @@ fn broken_said(broken: &Broken) -> String {
 /// The variant waiting whose file is at the path `target` names, when the target is one.
 ///
 /// A variant file is not a path the Layout names, so it is found by the reading a name gets anywhere
-/// else — from where the run was made, then as it stands — and answered from the merge in progress
+/// else (from where the run was made, then as it stands) and answered from the merge in progress
 /// rather than from the Layout.
 fn variant_pending<'a>(
     merging: &'a Merging,
@@ -379,8 +379,8 @@ struct Found {
 /// What a target may name is read in the order a run is likely to have meant: a path read from where
 /// the run was made, a path of the Layout being worked in, where a path of the Layout has moved to
 /// in the tree, a path in the Vault's own Layout as the copy here has it, a `Uuid`, then the hash of
-/// an index object. The first that names something is what is drawn — so a name that is a path of
-/// this work is the work's, even when some object of the index happens to hash to it — and a target
+/// an index object. The first that names something is what is drawn, so a name that is a path of
+/// this work is the work's, even when some object of the index happens to hash to it, and a target
 /// that names nothing at all is refused rather than guessed at.
 #[routeify]
 fn lookback_of(
@@ -461,7 +461,7 @@ fn lookback_of(
 /// Lists the unjoined variants of the chain the target names.
 ///
 /// The target names what a lookback would draw, and the chain is read the same way; what is listed is
-/// the other half of it — the variants no link points at, which a drawing cannot reach. Each line
+/// the other half of it, the variants no link points at, which a drawing cannot reach. Each line
 /// carries the version it is based on, so a variant is placed in the chain without drawing it.
 ///
 /// # Errors
@@ -617,7 +617,7 @@ fn standing(
 
 /// How the version this Layout is at stands beside the Vault's, and how many versions apart they are.
 ///
-/// The comparison itself is the status module's — see [`librorolala::status::compare`] — and what is
+/// The comparison itself is the status module's, see [`librorolala::status::compare`], and what is
 /// added here is the command's own spelling of the answer: the chain drawn above a target names the
 /// relation in words of its own, and the reading that calls a base wrong speaks of it in terms of the
 /// work rather than of a drawing.
@@ -649,8 +649,8 @@ fn tracked_layout(held: &Workspace) -> Option<(String, Layout)> {
     let track = held.layout_track().ok().flatten()?;
     let dir = readonly_layout_copy(held, &track, VAULT_LAYOUT_NAME)?;
 
-    // Opened as something that has to be there: a cache directory with none of the Layout in it — one a fetch was cut
-    // short of, or one an older build made — is not a copy, and opening it as a writable Layout would make one and read
+    // Opened as something that has to be there: a cache directory with none of the Layout in it, one a fetch was cut
+    // short of, or one an older build made, is not a copy, and opening it as a writable Layout would make one and read
     // it as a Layout holding nothing.
     Layout::open_existing(&dir)
         .ok()
@@ -664,8 +664,8 @@ fn short(hash: &str) -> &str {
 
 /// The paths `target` may name, in the order a run is likely to have meant them.
 ///
-/// A name is written the way a shell writes one — against the directory the run was made in, or
-/// absolute — while a Layout names a path from the Workspace root. Where the run was made is what
+/// A name is written the way a shell writes one, against the directory the run was made in, or
+/// absolute, while a Layout names a path from the Workspace root. Where the run was made is what
 /// the name is read against first, since that is what the completion offered and what the commands
 /// acting on the tree take. A relative name as it stands is read after, so a path written from the
 /// root keeps working from anywhere in the tree. An absolute name has no such second reading: a
@@ -711,7 +711,7 @@ fn resolve(cwd: &Path, given: &str) -> PathBuf {
 /// `path` with its `.` dropped and its `..` climbed, worked out lexically rather than on disk.
 ///
 /// Working it out here, before the disk is asked anything, is what lets a name be read from where
-/// the run was made even when the path it makes does not exist — a file the Layout names and the
+/// the run was made even when the path it makes does not exist, a file the Layout names and the
 /// tree has lost is exactly what a status is asked about.
 fn normalize(path: &Path) -> PathBuf {
     let mut components: Vec<Component<'_>> = Vec::new();
@@ -757,7 +757,7 @@ fn found(
         // A path the Layout does not name is still a path of this work when the tree reading finds a
         // path it does name moved there: a move's destination is how a run asks after the file that
         // moved, since that is where it is now. What is on disk is asked before the reading is, so a
-        // hash — which also reads as a path — does not walk the tree for nothing.
+        // hash, which also reads as a path, does not walk the tree for nothing.
         if held.get_root().join(path.to_path_buf()).is_file() {
             // What is asked here is whether the tree's gain is a tracked path's move, and the
             // ignore rules have no say in that: the reading is taken unfiltered.
@@ -1163,7 +1163,7 @@ pub struct TreeContentLine {
 ///
 /// The reading is the same one `rola layout tree-diff` gives, so what a `--json` run reads here is
 /// what a reader of that command would: every path the two disagree about, with `modified` holding
-/// the ones that changed where they were as well as the destinations of moves — except the ones the
+/// the ones that changed where they were as well as the destinations of moves, except the ones the
 /// fetched copy says are not this account's, which are held apart in `unowned` rather than counted
 /// among the run's own work.
 #[derive(StructuralData, Serialize, Grouped)]

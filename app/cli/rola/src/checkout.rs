@@ -1,12 +1,12 @@
 //! Putting a version's content back into the tree.
 //!
 //! A version is what the Layout names and the store is what it means, so a run that brings a
-//! version down — `rola sync`'s pull and `rola checkin` — writes the content at the path and then
+//! version down, `rola sync`'s pull and `rola checkin`, writes the content at the path and then
 //! writes down that the two agree. A path left marked as disagreed would be reported as changed by
 //! the very next reading, which is the one thing a pull must not leave behind.
 //!
 //! What a run reads and writes down is one [cache](librorolala::workspace_analyze::Cache), so a run that
-//! brings many paths down opens it once, remembers each path in memory, and writes it once — rather
+//! brings many paths down opens it once, remembers each path in memory, and writes it once, rather
 //! than reading and writing the whole cache for every path, which is what a run of many files would
 //! otherwise pay.
 
@@ -47,7 +47,7 @@ impl Checkout {
 
     /// Writes down that the path `path` under the root holds what the Layout now names.
     ///
-    /// A path that is not a file — one a run did not write, or wrote nowhere — is nothing to
+    /// A path that is not a file (one a run did not write, or wrote nowhere) is nothing to
     /// remember.
     ///
     /// # Errors

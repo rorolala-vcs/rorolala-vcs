@@ -7,8 +7,8 @@ namespace RorolalaLauncher;
 /// </summary>
 /// <remarks>
 /// The day/night choice and the colours are not here: those are the Desktop program's own file, and the
-/// two programs read and write the same one. What is here is the one choice only this program makes —
-/// how the window's own frame is drawn — and what this program does when the user has not made it.
+/// two programs read and write the same one. What is here is the one choice only this program makes,
+/// how the window's own frame is drawn, and what this program does when the user has not made it.
 /// <para>
 /// A style that is not written is the machine's own answer, which is the answer a run asks the command
 /// line for (see <see cref="Rola.RolaRunner.ProbeWindowStyle"/>). Writing one down is the user's choice,

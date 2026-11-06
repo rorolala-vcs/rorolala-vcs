@@ -5,7 +5,7 @@ namespace FileSystemPlugin;
 /// <summary>The four commands one preset carries the file operations out with.</summary>
 /// <remarks>
 /// Each is a template rather than a fixed argument list: where a path goes is named in it, so a command
-/// may put the two wherever it needs them — a pair the runner hands each of over as one argument.
+/// may put the two wherever it needs them, a pair the runner hands each of over as one argument.
 /// </remarks>
 /// <param name="Copy">What copies a source to a target.</param>
 /// <param name="Move">What moves a source to a target.</param>
@@ -39,8 +39,8 @@ public interface IFileOperationPreset
 /// </summary>
 /// <remarks>
 /// The catalogue holds the very options list the declared setting carries, and a dependent plugin
-/// initializes after this one, so what it adds is there by the time the preference panel — which is drawn
-/// after every plugin has started — reads the options. The list is rebuilt on every start, so a plugin
+/// initializes after this one, so what it adds is there by the time the preference panel, which is drawn
+/// after every plugin has started, reads the options. The list is rebuilt on every start, so a plugin
 /// that was there last run and is gone this one leaves nothing behind.
 /// </remarks>
 public static class FileOperationPresets

@@ -34,7 +34,7 @@ internal sealed record PluginFault(PluginId Plugin, PluginId Dependency, PluginF
 /// what its choice costs is paid by its dependents, and an error belongs where the missing premise
 /// is felt rather than where the choice was made.
 /// <para>
-/// The kinds are decided in the order below — missing, disabled, later, unavailable — so the reason
+/// The kinds are decided in the order below (missing, disabled, later, unavailable) so the reason
 /// a card gives is the first one that applies and is the one the user can act on. A dependency that
 /// is announced only later is answered by <see cref="PluginFaultKind.DependencyLater"/> before its
 /// own fault is known, which is right: moving it earlier is what fixes the order, whatever else is

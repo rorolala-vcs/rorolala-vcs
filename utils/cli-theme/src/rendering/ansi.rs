@@ -171,7 +171,7 @@ pub(super) fn escape_count(text: &str) -> usize {
 /// `text` with every escape sequence taken out.
 ///
 /// A syntax highlighter draws from its own palette, which is twenty-four bit, so the
-/// flat theme has nothing to keep from it — and it keeps nothing at all, not even the
+/// flat theme has nothing to keep from it, and it keeps nothing at all, not even the
 /// colour: [`paint`] draws nothing there either, so a bold word would be the only
 /// emphasis left on the screen.
 ///
@@ -221,7 +221,7 @@ fn rewrite(sequence: &str) -> String {
         let token = tokens[index];
         // An extended colour is the only one that has to move. Everything else is
         // carried over as it stands, including the colours that are already one of the
-        // sixteen — a sequence that says `31` is a sequence the sixteen can already
+        // sixteen, a sequence that says `31` is a sequence the sixteen can already
         // draw, and leaving it out would leave whatever colour was in force before it.
         if (token == "38" || token == "48")
             && let Some((color, consumed)) = extended(&tokens, index)

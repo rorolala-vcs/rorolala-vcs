@@ -1,6 +1,6 @@
 //! The order two rule files are applied in when they sit beside each other.
 //!
-//! A name with numbers in it is ordered the way a reader expects — `2` before `10` — which a
+//! A name with numbers in it is ordered the way a reader expects, `2` before `10`, which a
 //! plain lexicographic ordering does not do. The comparison is byte-oriented rather than
 //! locale-aware: rule files are named by whoever wrote them, and two runs of the loader have to
 //! agree about one name set, not about any language's idea of order.
@@ -9,7 +9,7 @@ use std::cmp::Ordering;
 
 /// Compares `left` and `right` naturally: runs of digits by value, everything else byte by byte.
 ///
-/// Two digit runs equal in value are told apart by length, so the ordering stays total — `01`
+/// Two digit runs equal in value are told apart by length, so the ordering stays total, `01`
 /// and `1` are two names, and one of them has to come first. Shorter goes first there, which is
 /// what the plain byte ordering would have said as well.
 pub fn natural(left: &str, right: &str) -> Ordering {

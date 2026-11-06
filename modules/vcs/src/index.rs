@@ -1,7 +1,7 @@
 ﻿//! The version control index: where a run's variants and versions are kept.
 //!
 //! The index is a store of its own, kept in a directory of its own and addressed by the same
-//! kind of key a store is — but it is not the store: what it holds are the index objects the
+//! kind of key a store is, but it is not the store: what it holds are the index objects the
 //! version control logic works in, not the content a project is made of. It implements the two
 //! storage traits so that the transfer two ends speak is the same one, and reuses storage's
 //! framing, keys and pack directories rather than growing a second of each.
@@ -58,7 +58,7 @@ const KIND_HEAD: u64 = FRAME_HEADER_LEN as u64 + 1;
 ///
 /// Records every index object of the version control system, to be queried and read.
 ///
-/// It is the index directory of whichever the run is inside — a Vault's or a Workspace's —
+/// It is the index directory of whichever the run is inside, a Vault's or a Workspace's,
 /// so locating one is locating that directory, not the Vault or Workspace that holds it.
 #[lazyffi(export = RolaVCSIndex)]
 #[derive(Default, Clone)]
@@ -83,7 +83,7 @@ impl Locate for VCSIndex {
     ///
     /// It is one walk up the tree, not two: whichever marker is nearer is the one the run
     /// is inside, so a Workspace nested in a Vault is the Workspace's index. Where a single
-    /// directory is both — it holds `vault.toml` and `.rola` — the Vault is taken, since
+    /// directory is both, it holds `vault.toml` and `.rola`, the Vault is taken, since
     /// that is the one a run reached from there is served by.
     fn locate(cwd: &Path) -> Option<Self> {
         let root = cwd.locate(|dir| {
@@ -367,7 +367,7 @@ impl VCSIndex {
     /// Reads the object under `key`, as the kind it is.
     ///
     /// The object is checked against the key by [`read_object_checked`](Self::read_object_checked),
-    /// which every read goes through, and the object that check decoded is the one answered with —
+    /// which every read goes through, and the object that check decoded is the one answered with,
     /// so a chain of reads does not pay for the same decode twice.
     async fn read_object_typed(&self, key: Hash) -> Result<VCSIndexObject, VCSIndexError> {
         self.read_object_checked(&key)
@@ -378,8 +378,8 @@ impl VCSIndex {
     /// The number of `version` in its chain, worked out by tracing back to the root
     ///
     /// A number is derived rather than stored, so this is what a read leaves for the caller to
-    /// ask: the chain is walked one link at a time — the version's variant, that variant's base
-    /// version, and so on — until the root, which is one before the first version. It costs a read
+    /// ask: the chain is walked one link at a time, the version's variant, that variant's base
+    /// version, and so on, until the root, which is one before the first version. It costs a read
     /// per link, so it is meant to be asked once and kept rather than in a loop.
     ///
     /// # Errors
@@ -432,7 +432,7 @@ impl VCSIndex {
 
     /// Every object the index holds, with the key it is held under, in key order
     ///
-    /// Each object is read whole, so this costs a read per object — which is what a listing is.
+    /// Each object is read whole, so this costs a read per object, which is what a listing is.
     /// The kinds are not told apart here: what a caller does with an object is the caller's.
     ///
     /// # Errors
@@ -456,7 +456,7 @@ impl VCSIndex {
     ///
     /// This is a scan rather than a listing: what is wanted is which content the index points at,
     /// so an object of another kind is skipped as soon as the bytes say which kind it is, without
-    /// being decoded. A Variant is decoded, since the hash is one of its fields — but the object is
+    /// being decoded. A Variant is decoded, since the hash is one of its fields, but the object is
     /// not checked against the key it is held under, unlike [`read`](Self::read): what is taken from
     /// it is which content it names, not the object itself.
     ///
@@ -514,7 +514,7 @@ impl VCSIndex {
 
     /// Every key the index holds an object under, loose or in a pack
     ///
-    /// This is what a caller that has to know what the index holds — without reading any of it —
+    /// This is what a caller that has to know what the index holds, without reading any of it,
     /// asks: the keys alone, which the pack index and the loose tree name without an object being
     /// read. It is the cheap half of a listing, and what a reader compares against to see whether
     /// something built from the index still describes it.
@@ -546,7 +546,7 @@ impl VCSIndex {
     /// in hand and writing it again would only put a second copy beside the first.
     ///
     /// What is there is taken as whole: an existing object is not read and hashed back before a
-    /// write is skipped, so damage is found on the read that asks for it rather than repaired here —
+    /// write is skipped, so damage is found on the read that asks for it rather than repaired here,
     /// see [`RorolalaStorage::write_object`](rorolala_storage::RorolalaStorage::write_object) for
     /// the same bargain. A path that is not a file is not an object, so a directory where one belongs
     /// makes the write go ahead and fail rather than be skipped.
@@ -646,7 +646,7 @@ impl VCSIndex {
     ///
     /// A pack whose index does not read is skipped rather than failing the whole listing: one index
     /// gone wrong must not hide every other pack, and what the store holds is what can be found. It
-    /// is not skipped silently — [`broken_packs`](Self::broken_packs) is where it is reported, which
+    /// is not skipped silently, [`broken_packs`](Self::broken_packs) is where it is reported, which
     /// is what keeps a pack a listing cannot see from disappearing without a word.
     pub(crate) async fn list_object_keys(&self) -> Result<Vec<Hash>, VCSIndexError> {
         let mut keys = BTreeSet::new();
@@ -676,7 +676,7 @@ impl VCSIndex {
     /// Drops the object stored under `key`, loose and in a pack.
     ///
     /// Every representation is dropped rather than the first one found: an entry can be loose and
-    /// packed at once — an old pack beside a later loose write — and a removal that answered `Ok`
+    /// packed at once, an old pack beside a later loose write, and a removal that answered `Ok`
     /// while a copy was still readable would be saying it had taken away what it had not. The loose
     /// file goes first, then the packs are asked; `NotFound` from either only says that way of
     /// keeping the object was not there.
@@ -714,8 +714,8 @@ impl VCSIndex {
     ///
     /// A pack that its index names but that is not there is answered as `None` rather than as a
     /// failure: nothing can be read out of a pack that has gone, which is the same answer as a pack
-    /// that was never there. The key is still *held* — an index record is what held means, see
-    /// [`StorageBackend::contains_keys`](rorolala_storage::StorageBackend::contains_keys) — so this
+    /// that was never there. The key is still *held*, an index record is what held means, see
+    /// [`StorageBackend::contains_keys`](rorolala_storage::StorageBackend::contains_keys), so this
     /// is where "held but not producible" is turned into the `None` a caller can act on.
     async fn entry_bytes(&self, key: &Hash) -> Result<Option<Vec<u8>>, VCSIndexError> {
         if let Some(bytes) = self.read_entry(key).await? {
@@ -734,7 +734,7 @@ impl VCSIndex {
         }
     }
 
-    /// Writes an entry — its frame and its payload — where `path` says.
+    /// Writes an entry, its frame and its payload, where `path` says.
     ///
     /// It is written beside where it belongs and moved into place, so a write that is cut
     /// short leaves the index as it was rather than one holding half an entry.
@@ -753,7 +753,7 @@ impl VCSIndex {
         // buffer first: index objects are small, but there is no reason for a copy of one to exist
         // only to put a header in front of it. The flush completes the write that tokio's file has
         // taken but not yet landed and closes the handle, so what the rename moves is the whole
-        // entry — see `RorolalaStorage::write_entry` for the same rule.
+        // entry, see `RorolalaStorage::write_entry` for the same rule.
         let temporary = temporary_beside(path)?;
         let mut file = tokio::fs::File::create(&temporary).await?;
         file.write_all(&frame.encode()).await?;
@@ -778,7 +778,7 @@ impl VCSIndex {
     ///
     /// It is what a listing that filters by kind needs, and a read would answer with the whole
     /// object: what tells a variant from a version is the first byte of the payload, right behind the
-    /// frame, so only that much of the entry is read — one short read out of a pack rather than the
+    /// frame, so only that much of the entry is read, one short read out of a pack rather than the
     /// entry's worth of bytes, its decode and its hash check.
     ///
     /// An entry written under a codec other than raw is the one case that has to be read whole: what
@@ -1488,7 +1488,7 @@ mod tests {
 
         // The listing still answers with what it can see, and the pack it could not read is
         // reported rather than silently gone. A lookup answers the same way: nothing can be found
-        // through that index, so the key it held is answered as one the index does not hold — one
+        // through that index, so the key it held is answered as one the index does not hold, one
         // bad pack must not make every other answer an error.
         assert_eq!(
             run(index.list_object_keys()).unwrap().unwrap(),
@@ -1515,7 +1515,7 @@ mod tests {
         let packed_key = run(held.write(variant())).unwrap().unwrap();
         run(held.repack()).unwrap().unwrap();
 
-        // Two keys laid into the pack, and one written after it — which is the loose tree — and one
+        // Two keys laid into the pack, and one written after it, which is the loose tree, and one
         // this index has never held.
         let also_packed = Version::new_bare_version([8_u8; 32], 0);
         let loose = Version::new_bare_version([9_u8; 32], 0);
@@ -1566,7 +1566,7 @@ mod tests {
         run(index.repack()).unwrap().unwrap();
 
         // The index still names the key; the pack file is what a read opens. Held is the index's
-        // answer, so the key is held and not producible — a transfer asks for it and is told there
+        // answer, so the key is held and not producible, a transfer asks for it and is told there
         // is nothing to send rather than being failed a lookup.
         let pack = index.get_root().join("packed").join("packed_0.pack");
         fs::remove_file(&pack).unwrap();
@@ -1772,7 +1772,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        // The key is what the object says, taken through the salt its kind is hashed with — not the
+        // The key is what the object says, taken through the salt its kind is hashed with, not the
         // hash of the bytes the file held. That is what a variant or a version can point at.
         assert_eq!(key, object.hash());
         assert_ne!(key, Hash::new(*blake3::hash(&plain).as_bytes()));

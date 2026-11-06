@@ -8,7 +8,7 @@ namespace FileSystemPlugin;
 /// <remarks>
 /// The answer to one address, read once so that everything drawn about it agrees: the title on the path bar, the
 /// entries in the listing, the step over it, and the provider that a drag is offered to. A provider of nothing is
-/// a place nobody answers — an address whose prefix no plugin claimed — which is a thing to say rather than a
+/// a place nobody answers, an address whose prefix no plugin claimed, which is a thing to say rather than a
 /// failure to read.
 /// </remarks>
 /// <param name="Address">The address that was opened.</param>

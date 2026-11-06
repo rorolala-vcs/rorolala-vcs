@@ -19,7 +19,7 @@ public sealed class BaseDirectoryTests
     /// <remarks>
     /// The two halves are one answer: a plugin that reads the base before anything has moved it has to
     /// be told where the run started, and one that follows it has to be told when the user roots the
-    /// tree somewhere else — once, since rooting it where it already is asks for nothing.
+    /// tree somewhere else, once, since rooting it where it already is asks for nothing.
     /// </remarks>
     [Fact]
     public void TheBaseDirectoryIsPublishedAndFollowsWhereTheTreeIsRooted()

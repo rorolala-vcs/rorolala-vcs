@@ -6,8 +6,8 @@ namespace RorolalaVCSPlugin;
 /// Running the command line's retrack: setting what a file's Layout entry records.
 /// </summary>
 /// <remarks>
-/// What is recorded is the command line's — the Layout pointer, the content written back over the file, and the
-/// Vault consulted when the content is not here — so this owns only the words that ask for it: the file, what
+/// What is recorded is the command line's, the Layout pointer, the content written back over the file, and the
+/// Vault consulted when the content is not here, so this owns only the words that ask for it: the file, what
 /// the path is to record, and whether the work on disk is to follow it.
 /// <para>
 /// The program is the one the window was opened by, named by the environment the run handed over, because the

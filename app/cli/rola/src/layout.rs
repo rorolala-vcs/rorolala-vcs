@@ -1,7 +1,7 @@
 //! The `rola layout` namespace: the one Layout a Workspace works in and the one a Vault keeps.
 //!
 //! A Workspace works in one Layout and a Vault keeps one. What is here is what the two have in
-//! common — where a run's Layout is, and how a failure to work on it is said — beside the
+//! common (where a run's Layout is, and how a failure to work on it is said) beside the
 //! subcommands, each in a file of its own: listing it, tracking the Vault it goes to, fetching
 //! that Vault's own Layout, and reading and changing what a Layout names.
 
@@ -74,7 +74,7 @@ pub fn render_error_no_layouts(_: ErrorNoLayouts, ec: &mut ResExitCode) {
 
 /// Error: a Layout could not be worked on.
 ///
-/// The reason is the library's own words, since the Layout says what went wrong about it — a path
+/// The reason is the library's own words, since the Layout says what went wrong about it, a path
 /// already taken, a name that is not one, or bytes that would not be read.
 #[derive(Grouped)]
 pub struct ErrorLayoutFailed {
@@ -121,7 +121,7 @@ pub fn render_error_layout_failed(error: ErrorLayoutFailed, ec: &mut ResExitCode
 /// A Workspace works in one Layout and a Vault keeps one, so a name a run writes is only ever a
 /// fetched copy of a Vault's: `NAME@VAULT`. Naming the Workspace's own Layout by the label it is
 /// listed under is accepted so that a place can address it, and nothing else is a Layout a run can
-/// name — there is no second one to choose.
+/// name, there is no second one to choose.
 ///
 /// # Errors
 ///
@@ -175,7 +175,7 @@ pub fn chosen(
 /// The Layout a run works on, when the run is to change it.
 ///
 /// It is [`chosen`] for a command that writes: a fetched copy of a Vault's Layout is read, never
-/// worked in, so naming one is refused before anything is opened — see [`ErrorLayoutReadOnly`].
+/// worked in, so naming one is refused before anything is opened, see [`ErrorLayoutReadOnly`].
 ///
 /// # Errors
 ///
@@ -197,7 +197,7 @@ pub fn chosen_writable(
 
 /// The Vault and the Layout a name written `NAME@VAULT` names, when it is written that way.
 ///
-/// `NAME` is the Layout as the Vault knows it — `truth`, for the one a Vault keeps — and `VAULT` is
+/// `NAME` is the Layout as the Vault knows it (`truth`, for the one a Vault keeps) and `VAULT` is
 /// the name the Workspace fetched it under, which is what the copy on disk is keyed by. A name
 /// that is not written this way, or one that names nothing on either side of the `@`, is no such
 /// name: `@` is not a character a Layout's own name can hold, so there is no local name to confuse
@@ -239,7 +239,7 @@ pub fn cached_layout(workspace: &ResWorkspace, layout: &str, vault: &str) -> Res
     };
 
     // Opened as something that has to be there, because a directory is not a copy: one that holds none of the Layout's
-    // own files — left by a fetch that was cut short, or made by an older build's reader — would otherwise open as a
+    // own files (left by a fetch that was cut short, or made by an older build's reader) would otherwise open as a
     // Layout holding nothing, and answer "the Layout is empty" where the truth is "the copy is not here".
     match Layout::open_existing(&dir) {
         Ok(copy) => Ok(copy),
@@ -285,8 +285,8 @@ pub fn cached_vault_copy(workspace: &Workspace, vault: &str) -> Result<Layout, N
 
 /// Whether `name` is one path component and nothing else.
 ///
-/// A fetched copy is keyed by the names it was fetched under, so a name that names a path — or
-/// climbs, or is a drive — would read outside the cache rather than inside it.
+/// A fetched copy is keyed by the names it was fetched under, so a name that names a path, or
+/// climbs, or is a drive, would read outside the cache rather than inside it.
 fn is_plain_name(name: &str) -> bool {
     let mut components = std::path::Path::new(name).components();
 
@@ -403,7 +403,7 @@ pub fn hash_of(text: &str, candidates: impl FnOnce() -> Vec<Key>) -> Result<Key,
 /// Error: the Workspace has no Layout to work in.
 ///
 /// A Workspace that has just been made has none, and one whose Layouts were all taken away is back
-/// to that: nothing is wrong with the arguments, and nothing is missing by name — what is missing
+/// to that: nothing is wrong with the arguments, and nothing is missing by name, what is missing
 /// is the Layout itself, so it gets an answer of its own rather than the one for a name that does
 /// not resolve.
 #[derive(Grouped)]
@@ -559,8 +559,8 @@ pub fn uuid_of(text: &str) -> Result<Uuid, Next> {
 /// that names nothing, or a `Uuid` that no path names, is a state a Layout allows, but not one a
 /// reader should be shown while the change is being made.
 ///
-/// The entry `id` is reused rather than made again when the Layout already holds it — an entry no
-/// path names yet — since what an entry is is a `Uuid` that holds data.
+/// The entry `id` is reused rather than made again when the Layout already holds it, an entry no
+/// path names yet, since what an entry is is a `Uuid` that holds data.
 ///
 /// Switching a path to the entry it already names does nothing: a caller refuses it before it gets
 /// here, and writing it down would be a removal the batch makes again.
@@ -668,7 +668,7 @@ pub fn readonly_layout_copy(
 /// The Vault and the `Uuid` an ownership command was given, from the words it was given.
 ///
 /// `VAULT` comes first and may be left out, so one word is the `Uuid` and two are the Vault and
-/// then the `Uuid`. Anything else — none, or more than two — is not a way to name one entry, and
+/// then the `Uuid`. Anything else (none, or more than two) is not a way to name one entry, and
 /// a word where the `Uuid` belongs that does not read as one is not either.
 #[must_use]
 pub fn vault_and_uuid(words: &[String]) -> Option<(Option<String>, Uuid)> {
@@ -706,7 +706,7 @@ pub fn vault_and_uuids(words: &[String]) -> Option<(Option<String>, Vec<Uuid>)> 
 
 /// Names the entries of the fetched copy as held by what a Vault said, in one write.
 ///
-/// What is changed is the Vault's own Layout — the one known as [`VAULT_LAYOUT_NAME`] — since that
+/// What is changed is the Vault's own Layout, the one known as [`VAULT_LAYOUT_NAME`], since that
 /// is the copy an ownership exchange is about. The changes go into `copy`, which is a batch of a copy
 /// a caller opened once: opening a copy reads sixteen shards and writing one change at a time reads
 /// and flushes for each entry, so a run of a thousand entries would be a thousand of both otherwise.
@@ -736,7 +736,7 @@ pub fn set_cached_owners(
 /// Writes the ownership changes a run agreed with the Vault into the copy it keeps, if it keeps one.
 ///
 /// It is the whole of what a run that moved ownership does to the copy afterwards: a copy that is not
-/// there is left as it is — the Vault is the truth, and a fetch is what brings a copy up to date —
+/// there is left as it is (the Vault is the truth, and a fetch is what brings a copy up to date)
 /// and one that is there is opened and written once for the whole run.
 ///
 /// # Errors
@@ -757,7 +757,7 @@ pub fn write_cached_owners(
 
 /// Moves the path `from` to `to` in the fetched copy, when the copy is there and names `from`.
 ///
-/// It follows a move the Vault accepted, so that a copy read afterwards says what the Vault says —
+/// It follows a move the Vault accepted, so that a copy read afterwards says what the Vault says,
 /// the same reason [`write_cached_owners`] follows an ownership change. A copy that is not there, or
 /// one that does not name the path, is left as it is: the Vault is the truth, and the copy is
 /// brought up to date by `rola layout fetch`.
@@ -793,7 +793,7 @@ pub fn set_cached_path(
 
 /// Takes the entry a path names out of the fetched copy, when the copy is there and names it.
 ///
-/// It follows a removal the Vault accepted, so that a copy read afterwards says what the Vault says —
+/// It follows a removal the Vault accepted, so that a copy read afterwards says what the Vault says,
 /// the same reason [`set_cached_path`] follows a move. A copy that is not there, or one that does not
 /// name the path, is left as it is: the Vault is the truth, and the copy is brought up to date by
 /// `rola layout fetch`.

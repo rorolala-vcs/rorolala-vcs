@@ -9,13 +9,13 @@ namespace RorolalaDesktop.Contract;
 /// <param name="StartAt">
 /// The place the dock is to look at, or nothing for the one it opens at by itself: what a window was
 /// opened onto is not the same as where a dock it holds happens to start, and a browser told where to look
-/// is the whole point of opening one from a directory's own menu. A path inside such a place — a file, which
-/// a browser shows by going to its directory and choosing it — is what a <see cref="IWindows.Reveal"/> is
+/// is the whole point of opening one from a directory's own menu. A path inside such a place, a file, which
+/// a browser shows by going to its directory and choosing it, is what a <see cref="IWindows.Reveal"/> is
 /// asked with, so what a dock accepts here is its own answer.
 /// </param>
 /// <param name="OpenMode">
 /// Whether an existing instance is to be shown instead of a new one being made, or nothing for what the
-/// registration itself declares. A dock with one instance of its own — a tree, the log — is shown rather
+/// registration itself declares. A dock with one instance of its own (a tree, the log) is shown rather
 /// than made twice, while a browser is made again: the two answers follow the registration, so nothing is
 /// asked for here unless a caller has a reason to disagree with it.
 /// </param>
@@ -36,7 +36,7 @@ public sealed record DockRequest(
 /// </summary>
 /// <remarks>
 /// It is read-only on purpose. Nothing here makes a window, moves one, or closes one: what a plugin says is
-/// that a dock should be shown — which the host answers with the window it already has or one of its own —
+/// that a dock should be shown, which the host answers with the window it already has or one of its own,
 /// and the set of windows the program is made of stays the host's to decide.
 /// </remarks>
 public interface IWindows
@@ -73,8 +73,8 @@ public interface IWindows
     /// Shows a place in a dock the user is already working in, or in one made for it when there is none.
     /// </summary>
     /// <remarks>
-    /// What a view that names a path asks for — the Overview's rows naming where a change comes from or goes to
-    /// — and what <see cref="Show"/> is not: the dock the user last worked in of that name is brought forward,
+    /// What a view that names a path asks for, the Overview's rows naming where a change comes from or goes to
+    ///, and what <see cref="Show"/> is not: the dock the user last worked in of that name is brought forward,
     /// its tab chosen and its window activated, and it is told what to look at. No second instance is made beside
     /// a dock the user already has, because what is asked for is a place to look at rather than another window of
     /// the same kind; a dock that is not open at all is made.
@@ -89,7 +89,7 @@ public interface IWindows
 
     /// <summary>Opens the main window, or brings it forward where it is already up.</summary>
     /// <remarks>
-    /// The main window is one of the host's windows like any other — it can be closed and opened again —
+    /// The main window is one of the host's windows like any other, it can be closed and opened again,
     /// which is why this is a question rather than a control: what it answers is that there is a main
     /// window now, not that one was made.
     /// </remarks>
@@ -111,8 +111,8 @@ public enum DockMenuTarget
 /// browsing belongs to a browser, and one about a tree belongs to a tree.
 /// </param>
 /// <param name="Item">
-/// The item itself. Its <c>Command</c> is handed the one contextual shape the program has —
-/// <see cref="ContextTarget"/> — which for a tab states the dock's stable name id as the directory and
+/// The item itself. Its <c>Command</c> is handed the one contextual shape the program has,
+/// <see cref="ContextTarget"/>, which for a tab states the dock's stable name id as the directory and
 /// carries no entries: a tab is a dock and not a file, and the shape is shared so that an item is written
 /// once for both.
 /// </param>

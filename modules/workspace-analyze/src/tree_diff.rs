@@ -11,7 +11,7 @@
 //! A path that moved is a path that is gone and another that appeared, holding what the first one
 //! held. Telling the two apart costs reading content, so it is done in two passes: a file whose
 //! digest is one a lost path was last seen with has moved unchanged, and a text file that is alike
-//! enough has moved and been edited. The likeness is git's — see [`crate::fingerprint`] — and how
+//! enough has moved and been edited. The likeness is git's, see [`crate::fingerprint`], and how
 //! alike is alike enough is the caller's to say.
 //!
 //! A file that moved and was edited is counted as a move *and* as a change: what it holds is not
@@ -19,7 +19,7 @@
 //!
 //! # What it remembers
 //!
-//! A move is worked out from what a lost path held, which is not on disk any more — so the reading
+//! A move is worked out from what a lost path held, which is not on disk any more, so the reading
 //! keeps what it found: see [`crate::Cache`]. A file whose time and length have not changed is not
 //! read again, and a lost path is recognised by what the last reading wrote down about it. A
 //! reading of a tree that has never been read has no such memory, so a move that happened before
@@ -50,7 +50,7 @@ pub struct PathRename {
     /// The path the tree holds it at now.
     pub to: LayoutPath,
 
-    /// Whether the move is one the two being the same bytes makes — a strong move — rather than one
+    /// Whether the move is one the two being the same bytes makes, a strong move, rather than one
     /// only their likeness suggests, which is a weak move and may be taken back.
     ///
     /// It is the whole of what a caller can tell about a move: a strong one is a fact to be
@@ -88,8 +88,8 @@ pub struct TreeDiff {
     /// Paths the tree holds that the Layout does not name and the ignore rules govern.
     ///
     /// They are kept apart from [`untagged`](Self::untagged) rather than dropped, because a reader
-    /// that wants to show what the rules cover — a browser switching them on, a person asking why a
-    /// file is not there — needs to know which gains were left out and why. A path is only here when
+    /// that wants to show what the rules cover, a browser switching them on, a person asking why a
+    /// file is not there, needs to know which gains were left out and why. A path is only here when
     /// the reading left it out for the rules; a move's destination the reading found is in
     /// [`renamed`](Self::renamed) instead, whatever the rules say about where it went.
     pub ignored: Vec<LayoutPath>,
@@ -121,15 +121,15 @@ pub struct TreeDiff {
 /// `1.0` is no change at all, and anything past either end is taken as the end. It never touches a
 /// binary file, which is the same file moved only when its digest is the one it had.
 ///
-/// It writes down what it read, so a move can be told from a loss and a gain next time — and so that
+/// It writes down what it read, so a move can be told from a loss and a gain next time, and so that
 /// a file that is moved after it changed is recognised as the same file. What a change is told by is
 /// not that reading, though, but the digest the Layout was last known to agree with: a file that
 /// changed and stayed changed is reported as changed until something records it.
 ///
 /// `rules` is the Workspace's ignore rule set, and it governs exactly one list: a path the tree
 /// holds and the Layout does not name is left out of [`TreeDiff::untagged`] when the rules say so,
-/// and kept in [`TreeDiff::ignored`] instead. A path the Layout names is the work's already —
-/// however it was named — and a move the reading found is a fact about it, so neither `lost`,
+/// and kept in [`TreeDiff::ignored`] instead. A path the Layout names is the work's already,
+/// however it was named, and a move the reading found is a fact about it, so neither `lost`,
 /// `modified` nor `renamed` is the rules' to touch. The filtering happens after the moves are
 /// paired, which is what keeps a file moved into an ignored place a move rather than a loss beside
 /// a hidden gain.
@@ -222,7 +222,7 @@ pub fn tree_diff(
 
         // Reading a file again does not change what the Layout was last known to agree with: a file
         // never read before is one the Layout has not disagreed with, and one read before keeps the
-        // agreement — or the disagreement — it had.
+        // agreement, or the disagreement, it had.
         let agree = previous
             .get(path)
             .map_or_else(|| Some(read.digest()), Entry::agreed);
@@ -230,7 +230,7 @@ pub fn tree_diff(
         current.insert(path.clone(), read.with_agreed(agree));
     }
 
-    // What changed is what no longer holds what the Layout agrees with — not what the last reading
+    // What changed is what no longer holds what the Layout agrees with, not what the last reading
     // wrote down, which the reading itself would overwrite. So a file that changed and stayed
     // changed is reported as changed until something records it.
     let mut modified: Vec<LayoutPath> = current
@@ -310,7 +310,7 @@ pub fn tree_diff(
         renamed.push(PathRename {
             from: from.clone(),
             to: to.clone(),
-            // The two are not the same bytes — that is the first pass's business — so the move is
+            // The two are not the same bytes, that is the first pass's business, so the move is
             // one the likeness suggests rather than one the content makes.
             strong: false,
         });
@@ -319,7 +319,7 @@ pub fn tree_diff(
     }
 
     // A move is a change as well when what the new path holds is not what the Layout agreed with at
-    // the old one — which a file that was edited before it moved is, however alike the two readings
+    // the old one, which a file that was edited before it moved is, however alike the two readings
     // of it are.
     for pair in &renamed {
         let agreed = previous.get(&pair.from).and_then(Entry::agreed);
@@ -333,8 +333,8 @@ pub fn tree_diff(
     modified.dedup();
     failed.sort_by(|left, right| left.path.cmp(&right.path));
 
-    // What the next reading starts from: what each file holds now, and — for a path the Layout
-    // still names but the tree no longer holds — what it held when it was last seen, which is all
+    // What the next reading starts from: what each file holds now, and, for a path the Layout
+    // still names but the tree no longer holds, what it held when it was last seen, which is all
     // that is left of it to recognise a move by. The digest the Layout agrees with is carried along,
     // since it is not the reading that changes it.
     let mut next = Cache::empty();
@@ -361,7 +361,7 @@ pub fn tree_diff(
     // The ignore rules govern only what the tree gained, and only once the moves are known: a gain
     // that turned out to be where a tracked file went is a move, and a move is not the rules' to
     // hide. What is left is an addition nobody is answerable for, which is exactly what a rule is
-    // written against — and what the rules took is kept, so a reader can say what was left out.
+    // written against, and what the rules took is kept, so a reader can say what was left out.
     let mut ignored: Vec<LayoutPath> = Vec::new();
     untagged.retain(|path| {
         if rules.is_ignore(Path::new(path.as_str()), false) {
@@ -583,9 +583,9 @@ pub fn cache_path(root: &Path, layout: &Layout) -> PathBuf {
 /// Writes down that a path the Layout names holds what it held where it was, a move having put it there.
 ///
 /// A move is not a change. The entry the Layout agrees with is the *entry*, wherever it is named, so what a
-/// reading wrote down about it where it was is what it has where it is: what the file holds is read afresh —
+/// reading wrote down about it where it was is what it has where it is: what the file holds is read afresh,
 /// it is at another path, so the reading's own skip of a file whose time and length are what they were does
-/// not apply — and the digest the Layout was known to agree with is carried over with it.
+/// not apply, and the digest the Layout was known to agree with is carried over with it.
 ///
 /// Written down as agreement with what the file holds now, a file that was changed before it moved would be a
 /// file that changed nothing: the path it moved to is one the Layout names, so there is no move left to be
@@ -603,7 +603,7 @@ pub fn remember_moved(
 ) -> Result<(), TreeDiffError> {
     let disk = root.join(to.to_path_buf());
 
-    // A path that is not a file — a move that landed nowhere — is nothing to write down.
+    // A path that is not a file, a move that landed nowhere, is nothing to write down.
     if !disk.is_file() {
         return Ok(());
     }
@@ -613,7 +613,7 @@ pub fn remember_moved(
     let read = entry_of(&disk)?;
 
     // A path the cache has never read is one nothing has disagreed with yet, which is what a file read for the
-    // first time is; a path it has read keeps the agreement — or the disagreement — that entry had.
+    // first time is; a path it has read keeps the agreement, or the disagreement, that entry had.
     cache.insert(
         to.clone(),
         match cache.get(from) {
@@ -630,7 +630,7 @@ pub fn remember_moved(
 /// What the file at `disk` holds now, as a reading of it writes it down.
 ///
 /// It is one file read on its own, for a caller that needs what a file looks like to the analysis
-/// without walking the tree around it — aligning a Layout asks for exactly this, to say what a path
+/// without walking the tree around it, aligning a Layout asks for exactly this, to say what a path
 /// now holds when the tree and the Layout disagree about where it went.
 ///
 /// # Errors

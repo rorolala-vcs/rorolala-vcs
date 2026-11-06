@@ -24,7 +24,7 @@ internal sealed class I18nService : II18n
     [SuppressMessage(
         "Performance",
         "CA1822:Mark members as static",
-        Justification = "the host hands this service to whatever needs words and those holders read the language through it — `_i18n.Get(...)` — so it is reached as a role rather than as a type; what is behind it is the process's own translations, which is why the method itself needs no instance"
+        Justification = "the host hands this service to whatever needs words and those holders read the language through it, `_i18n.Get(...)`, so it is reached as a role rather than as a type; what is behind it is the process's own translations, which is why the method itself needs no instance"
     )]
     public string Get(string key) => RolaI18N.Get(key);
 

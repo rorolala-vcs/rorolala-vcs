@@ -76,8 +76,8 @@ pub struct VersionGraph {
     ///
     /// It is the chain from the version the tracked Vault records back to the root, the highest
     /// first, and its numbers are the same as the local chain's where the two share a version. It
-    /// is empty when the Vault's version is not held here — a fetch brings its Layout and never its
-    /// versions — and then only [`Self::upstream_head`] is known.
+    /// is empty when the Vault's version is not held here, a fetch brings its Layout and never its
+    /// versions, and then only [`Self::upstream_head`] is known.
     upstream: Vec<VersionNode>,
     /// The version the tracked Vault records, as the index names it by, or an empty string when the
     /// Layout tracks no Vault or the Vault's Layout does not name the entry.

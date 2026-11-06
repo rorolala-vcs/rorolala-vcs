@@ -12,10 +12,10 @@ namespace RorolalaDesktop.Docking;
 /// picked up in: pulling one out of a region and letting it go over another window, or over nothing at all,
 /// is one gesture, and a window that kept the pointer to itself could not see where it ended.
 /// <para>
-/// What travels is the dock's stable name id and its ordinal — the same pair the layout file addresses an
-/// instance by — so what a drop lands is the instance that was picked up rather than whichever instance of
+/// What travels is the dock's stable name id and its ordinal, the same pair the layout file addresses an
+/// instance by, so what a drop lands is the instance that was picked up rather than whichever instance of
 /// that name happens to be first. The format is the application's own rather than text, so that a drop
-/// target that is not this host's — a file listing inside a dock, which reads text as paths — neither reads
+/// target that is not this host's (a file listing inside a dock, which reads text as paths) neither reads
 /// the payload nor answers the drag: a drag nothing takes is what tells the host the dock was let go of
 /// where there is no region for it.
 /// </para>

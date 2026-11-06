@@ -176,7 +176,7 @@ impl BookSnippet {
         self.0.field.label().to_owned()
     }
 
-    /// The fragment's text, with `…` where it was cut.
+    /// The fragment's text, with `...` where it was cut.
     ///
     /// # FFI
     ///

@@ -2,7 +2,7 @@
 //!
 //! Nothing here is authoritative: it is a convenience so that the next `rola vault bind`
 //! can offer an address that was used before instead of making it be typed out again.
-//! Reading it is best-effort — a history that cannot be read is simply empty — and it is
+//! Reading it is best-effort, a history that cannot be read is simply empty, and it is
 //! kept under the user's local data directory, one address per line, sorted and without
 //! repeats.
 

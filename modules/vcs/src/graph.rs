@@ -1,16 +1,16 @@
 //! The version chain and how it is drawn.
 //!
 //! A [`Chain`] is the top of a version chain and every variant under it, the variants that form the
-//! spine — one per level — and those merged into them. It says nothing about where anything is
+//! spine, one per level, and those merged into them. It says nothing about where anything is
 //! drawn: [`draw`] turns it into a grid of cells, where a cell says whether it is a version's
 //! number, a variant's label or an edge and the caller decides what each looks like. That keeps the
-//! look of the drawing — which is a terminal's business — out of the shape of the graph.
+//! look of the drawing, which is a terminal's business, out of the shape of the graph.
 //!
 //! The root version is not part of a chain: the chain stops at the first version, so every level is
-//! zero or more. The top may be a version with a number, or — when a single variant is looked back
-//! from — the version that variant produced, whose number is drawn `?`: what a variant is drawn
+//! zero or more. The top may be a version with a number, or, when a single variant is looked back
+//! from, the version that variant produced, whose number is drawn `?`: what a variant is drawn
 //! between is the version it produced and the one it is based on, so looking back from a variant
-//! shows the same chain with an unnamed version at the top — see [`Chain::unknown`].
+//! shows the same chain with an unnamed version at the top, see [`Chain::unknown`].
 
 /// What the top of a chain is, as it is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -205,7 +205,7 @@ impl VersionRow {
 
 /// Draws `chain`.
 ///
-/// The top is a version's number — the highest one, or `?` when that number is unknown. Under it
+/// The top is a version's number, the highest one, or `?` when that number is unknown. Under it
 /// the chain descends level by level to the first version, numbered zero; the root, which the first
 /// version's variant is based on, is left out. Each level holds its spine variant where the version
 /// above drops to it, and the variants merged into the chain to its right, each reached by a bus
@@ -264,8 +264,8 @@ impl Rows {
     /// Lays the levels out.
     ///
     /// The highest version is drawn first, then for each level under it the edge down, the
-    /// variants, the edge on, and the version below. A version whose own row is a placeholder —
-    /// looked back from a variant, or being edited — has its row where its number would be.
+    /// variants, the edge on, and the version below. A version whose own row is a placeholder,
+    /// looked back from a variant, or being edited, has its row where its number would be.
     fn of(top: u64) -> Self {
         let Ok(levels) = usize::try_from(top) else {
             return Self {

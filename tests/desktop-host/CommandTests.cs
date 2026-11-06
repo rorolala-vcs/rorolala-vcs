@@ -23,7 +23,7 @@ public sealed class CommandTests
     /// </summary>
     /// <remarks>
     /// One argument is the whole of why a variable is a token of its own: a program under a directory with a
-    /// space in it is one word here, where writing the value into the line would have made two — and the
+    /// space in it is one word here, where writing the value into the line would have made two, and the
     /// second would be read as an argument of the command.
     /// </remarks>
     [Fact]

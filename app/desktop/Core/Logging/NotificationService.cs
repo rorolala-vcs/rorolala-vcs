@@ -8,8 +8,8 @@ namespace RorolalaDesktop.Logging;
 /// </summary>
 /// <remarks>
 /// Both popups and the Log dock consult this, so there is one deduplication rule rather than two. A
-/// notification is identified by a hash of its combined content — level, source, message, and the
-/// values already formatted into it — so content that differs by even a little is a distinct
+/// notification is identified by a hash of its combined content, level, source, message, and the
+/// values already formatted into it, so content that differs by even a little is a distinct
 /// notification and is not suppressed. Distinctness is scoped to one session: a restart begins with
 /// an empty table, and because a restart is also how plugins are reloaded, that is enough.
 /// </remarks>

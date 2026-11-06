@@ -58,7 +58,7 @@ where
 /// A store is looked for on its own first: a directory carrying a configuration is a store, and
 /// the nearest one upwards is the one the caller is *in*, whatever else the directories above it
 /// hold. A run that is not *in* a store may still be inside a Vault or a Workspace, and each of
-/// those keeps a store of its own under its root — so one of those is found next, and the store
+/// those keeps a store of its own under its root, so one of those is found next, and the store
 /// it keeps is the one the run works on. Nothing found anywhere is no store at all, which is a
 /// resource whose internal value is None rather than a failure: whether a store is needed is a
 /// command's to know, not this one's.

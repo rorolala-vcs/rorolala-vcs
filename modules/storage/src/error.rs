@@ -5,8 +5,8 @@ use crate::Key;
 
 /// What a storage operation failed with.
 ///
-/// Every backend is free to name its own failure — a backend that reaches another machine has
-/// failures a local one does not — but this is what they all mean, so a caller that only wants
+/// Every backend is free to name its own failure, a backend that reaches another machine has
+/// failures a local one does not, but this is what they all mean, so a caller that only wants
 /// to tell one kind of failure from another has one thing to read.
 #[non_exhaustive]
 #[derive(Debug)]

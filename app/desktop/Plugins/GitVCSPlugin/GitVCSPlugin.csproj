@@ -20,7 +20,7 @@
          is what a dependent plugin is, and the manifest names the same plugin in its dependencies so that
          the host starts this one after it. Only this plugin's own assembly is laid beside the program;
          the File System plugin's is already there, and the load context hands this one that copy rather
-         than a second — which is also what makes the static catalogue of providers one catalogue. -->
+         than a second, which is also what makes the static catalogue of providers one catalogue. -->
     <ProjectReference Include="../FileSystemPlugin/FileSystemPlugin.csproj" />
   </ItemGroup>
 

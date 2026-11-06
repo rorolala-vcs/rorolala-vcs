@@ -16,7 +16,7 @@ use crate::{
 /// A name beginning with a dot is the whole of the convention where the rest of this was written, and
 /// Windows is not one of those platforms: it shows such a directory like any other, and has an attribute
 /// for the answer instead. What is set here is that attribute, which is what Explorer and everything else
-/// on the platform reads — so a Workspace's own things look like the program's rather than like the work's.
+/// on the platform reads, so a Workspace's own things look like the program's rather than like the work's.
 #[cfg(windows)]
 mod hidden {
     use std::os::windows::ffi::OsStrExt as _;

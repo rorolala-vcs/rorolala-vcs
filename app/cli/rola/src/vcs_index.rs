@@ -1,11 +1,11 @@
 //! The `rola vcs-index` namespace: the version control index, read and written.
 //!
-//! The index holds four kinds of object — a Variant and a Version, a Creator and a Message — under
+//! The index holds four kinds of object (a Variant and a Version, a Creator and a Message) under
 //! the hashes they are named by, and every command here speaks in those hashes: what a listing
 //! prints is a hash to hand to another command, and what a write prints is the hash of what it
 //! stored.
 //!
-//! Each command is a module of its own beside this one — see the `cmd_vcs_index_*` files — so that
+//! Each command is a module of its own beside this one, see the `cmd_vcs_index_*` files, so that
 //! adding one is adding a file rather than reshaping this one. What stands here is what they share:
 //! the failures any of them can reach for, the hash of what a write stored, and the little that
 //! reading a hash and driving the index takes.
@@ -82,7 +82,7 @@ pub fn desc_vcs_index() -> Description {
 /// Names what `vcs-index` holds.
 ///
 /// A command the namespace has is matched before this is reached, so what arrives here is a run
-/// that named none of them — or one it does not have. Either is a question about the namespace
+/// that named none of them, or one it does not have. Either is a question about the namespace
 /// rather than about a command of it, and both are answered the way [`help_vcs_index`] answers.
 #[chain]
 pub fn handle_vcs_index(_: EntryVcsIndex) -> Next {
@@ -109,7 +109,7 @@ pub fn hex(digest: &[u8; 32]) -> String {
 
 /// The `(store:..)` and, when it is a merge, `(join:..)` a variant is listed with.
 ///
-/// What a variant points at — the storage entry its content sits in — and what it merges in are
+/// What a variant points at, the storage entry its content sits in, and what it merges in are
 /// both hashes the reader may want next, so both are named beside the variant itself.
 pub fn variant_tail(storage: &[u8; 32], join: Option<&[u8; 32]>) -> String {
     let mut tail = String::new();
@@ -415,8 +415,8 @@ pub fn render_result_vcs_index_hash(
 
 /// Result: the hashes a listing named.
 ///
-/// A remote listing names hashes and nothing else — what each one holds is read with
-/// `rola vcs-index read-remote` — so the same result answers every one of them, and a hash read
+/// A remote listing names hashes and nothing else, what each one holds is read with
+/// `rola vcs-index read-remote`, so the same result answers every one of them, and a hash read
 /// here is one to hand straight on. The field is the same one
 /// [`ls-str`](crate::vcs_index::cmd_vcs_index_ls_str) writes, since what is held is the same thing:
 /// a list of hashes, each as hex.

@@ -1,4 +1,4 @@
-//! `lib`: the C ABI artifact — a release shared and static library — and, as a side effect of the
+//! `lib`: the C ABI artifact, a release shared and static library, and, as a side effect of the
 //! root build script, the C header that describes it.
 
 use std::ffi::OsStr;
@@ -39,7 +39,7 @@ pub fn build_library() -> Result<(), crate::Error> {
 
     // A musl build has no shared library, and the reason is in rustc rather than here: a `cdylib` is
     // refused for a target whose C runtime is static, and the dynamic alternative needs a musl
-    // `libgcc_s` — the unwinder is the one piece of the C toolchain `musl-tools` does not carry, so a
+    // `libgcc_s`, the unwinder is the one piece of the C toolchain `musl-tools` does not carry, so a
     // glibc machine cannot link one. What that target can hand a C consumer is the static library;
     // the header beside it is the same one every platform is given.
     if is_musl(&workspace) {

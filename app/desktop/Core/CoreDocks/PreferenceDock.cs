@@ -18,7 +18,7 @@ namespace RorolalaDesktop.CoreDocks;
 /// </summary>
 /// <remarks>
 /// A kernel dock, always available from <c>Window</c>. It shows what plugins declared rather than what the
-/// host knows about them — a plugin says what it can be told to do, and the host renders it — so a plugin
+/// host knows about them (a plugin says what it can be told to do, and the host renders it) so a plugin
 /// needs no UI of its own to be settable.
 /// <para>
 /// Editing here writes <c>preference.json</c> at once, and the three things the look is drawn in, which
@@ -283,7 +283,7 @@ internal sealed class PreferenceView : UserControl
 
         // The order a surface is read in rather than the order of any table: the ground a thing stands
         // on, the face it is, the hollow it sits in, the ink on it, and the line between it and its
-        // neighbour — which is also the order the two configured colours come after.
+        // neighbour, which is also the order the two configured colours come after.
         var rows = new StackPanel { Spacing = 8 };
 
         if (light)
@@ -528,7 +528,7 @@ internal sealed class PreferenceView : UserControl
             _settings.Keep(owner, setting, null);
 
             // Drawn again rather than set here, so that what is on screen is what is in force for every kind
-            // alike — a box and a field are not set the same way, and neither should have to be known here.
+            // alike, a box and a field are not set the same way, and neither should have to be known here.
             Show();
         };
 
@@ -565,7 +565,7 @@ internal sealed class PreferenceView : UserControl
             lines.Add(
                 new TextBlock
                 {
-                    Text = string.Join(" · ", notes),
+                    Text = string.Join(", ", notes),
                     Classes = { "caption", "faint" },
                 }
             );
@@ -652,7 +652,7 @@ internal sealed class PreferenceView : UserControl
                         }
 
                         // Written at once rather than when the window is left, because the value is a list
-                        // and the reader of it — the plugin the setting belongs to — acts as soon as it is
+                        // and the reader of it, the plugin the setting belongs to, acts as soon as it is
                         // written: a reader that waited for the window to close would show a listing the
                         // panel already disagreed with.
                         _settings.Keep(
@@ -682,7 +682,7 @@ internal sealed class PreferenceView : UserControl
 
             case SettingKind.Preset:
                 // A preset has no value of its own: what is shown is the option the settings it stands for
-                // already agree with — `value` is that option — and choosing one writes them, after which
+                // already agree with, `value` is that option, and choosing one writes them, after which
                 // the whole owner is drawn again so the settings it wrote show what it wrote.
                 var presets = (setting.Options ?? []).ToArray();
                 var preset = new ComboBox
@@ -795,8 +795,8 @@ internal sealed class PreferenceView : UserControl
     /// What a multi-choice setting's button says: the options chosen, by name.
     /// </summary>
     /// <remarks>
-    /// Every chosen option is named rather than a count, because the set is small — it is what one plugin
-    /// offers — and a number would make the reader open the list to find out what they already chose.
+    /// Every chosen option is named rather than a count, because the set is small, it is what one plugin
+    /// offers, and a number would make the reader open the list to find out what they already chose.
     /// </remarks>
     /// <param name="setting">The setting.</param>
     /// <param name="chosen">The values chosen.</param>
@@ -807,14 +807,14 @@ internal sealed class PreferenceView : UserControl
             .Select(OptionLabel)
             .ToArray();
 
-        return shown.Length == 0 ? _i18n.Get("setting.none") : string.Join(" · ", shown);
+        return shown.Length == 0 ? _i18n.Get("setting.none") : string.Join(", ", shown);
     }
 
     /// <summary>
     /// What an option is called: the words it carries, or the key they are read from.
     /// </summary>
     /// <remarks>
-    /// An option whose values are read from data beside the program — an icon set, say — carries its own
+    /// An option whose values are read from data beside the program (an icon set, say) carries its own
     /// words, because no translation file was written when the program was built. An option whose values are
     /// the program's own carries a key, so that the two languages it speaks are two files rather than two
     /// copies of a word in a source file.

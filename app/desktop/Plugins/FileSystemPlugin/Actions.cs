@@ -9,8 +9,8 @@ namespace FileSystemPlugin;
 /// The one set of things a view does with entries: opening them, and the menus opened on them.
 /// </summary>
 /// <remarks>
-/// Every view in this plugin does the same things with an entry — the same opening, the same menu, the
-/// same clipboard — so they are made once here rather than once per view, which is also what keeps them
+/// Every view in this plugin does the same things with an entry, the same opening, the same menu, the
+/// same clipboard, so they are made once here rather than once per view, which is also what keeps them
 /// from drifting apart as one is changed.
 /// <para>
 /// A menu is about a <em>set</em> of entries rather than one, because a choice can be several: the menu
@@ -168,7 +168,7 @@ internal sealed class BrowserActions
     /// Making a folder reads the directory again, and reading it again makes a new view: a row belongs to the
     /// view that draws it, so the name to be typed is handed to the view about to be made rather than put in a
     /// row of the one about to go. It is raised rather than kept in a field because more than one view draws
-    /// the same directories — a dock beside this one may be showing the directory the folder went into — and a
+    /// the same directories, a dock beside this one may be showing the directory the folder went into, and a
     /// field would be read by whichever of them was made first, which is how a name comes to be typed in the
     /// wrong dock. A view that is not drawing that directory has nothing to type and does nothing.
     /// </remarks>
@@ -191,7 +191,7 @@ internal sealed class BrowserActions
     /// </summary>
     /// <remarks>
     /// Set by whatever put a box in a row and cleared by whatever took it out, because what the name may be
-    /// chosen up to — the last dot or the whole of it — is decided by whether the entry is a directory, and a
+    /// chosen up to, the last dot or the whole of it, is decided by whether the entry is a directory, and a
     /// row holds a name and not a kind.
     /// </remarks>
     public Entry? Renaming { get; set; }
@@ -278,7 +278,7 @@ internal sealed class BrowserActions
     /// </summary>
     /// <remarks>
     /// The question is the host's to show and this plugin's to word, and what will be removed is settled
-    /// before it is asked: the entries that cannot go — the way up, the computer — are left out here rather
+    /// before it is asked: the entries that cannot go (the way up, the computer) are left out here rather
     /// than refused when the run is made, so that the question names what is about to go and the answer cannot
     /// bring a surprise with it.
     /// <para>
@@ -619,8 +619,8 @@ internal sealed class BrowserActions
     /// The entries a copy or a cut can be about, which is every entry that is a thing rather than a place.
     /// </summary>
     /// <remarks>
-    /// The way up and the computer carry no path of their own — the first is the listing's parent and the
-    /// second is not a directory at all — so neither can be put on a clipboard or pasted anywhere.
+    /// The way up and the computer carry no path of their own, the first is the listing's parent and the
+    /// second is not a directory at all, so neither can be put on a clipboard or pasted anywhere.
     /// </remarks>
     /// <param name="entries">What is chosen.</param>
     private static List<Entry> Offered(IReadOnlyList<Entry> entries) =>
@@ -650,8 +650,8 @@ internal sealed class BrowserActions
     /// One menu item, named by a translation key.
     /// </summary>
     /// <remarks>
-    /// Open to the views as well as to the menus here, so that a view with an item of its own to add —
-    /// the tree closes every step from its root — adds one that is named the way the items around it
+    /// Open to the views as well as to the menus here, so that a view with an item of its own to add,
+    /// the tree closes every step from its root, adds one that is named the way the items around it
     /// are named rather than spelling a label out.
     /// <para>
     /// What the item wears is looked up rather than handed in, because an action is one action wherever it is
@@ -680,8 +680,8 @@ internal sealed class BrowserActions
     /// The picture each menu item wears, by the translation key it is named by.
     /// </summary>
     /// <remarks>
-    /// An action that is a way of opening something — the entry itself, and the directory holding it in the
-    /// system's own file manager — is drawn the same way, and so is one that is a way of copying something,
+    /// An action that is a way of opening something, the entry itself, and the directory holding it in the
+    /// system's own file manager, is drawn the same way, and so is one that is a way of copying something,
     /// since what the pair of them say apart is in their words rather than in their picture.
     /// <para>
     /// It is read by the check that every one of these is a picture this plugin draws, so it is not private:

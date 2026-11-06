@@ -20,7 +20,7 @@ namespace RorolalaDesktop.Configuration;
 /// </para>
 /// <para>
 /// The JSON is read a property at a time rather than deserialized into a type, so that a repeated
-/// key — which a deserializer would quietly keep the last of — is caught and refused.
+/// key, which a deserializer would quietly keep the last of, is caught and refused.
 /// </para>
 /// </remarks>
 internal static class ConfigurationLoader
@@ -511,7 +511,7 @@ internal static class ConfigurationLoader
     /// <summary>The colour as the file writes it: six digits, whatever the colour's alpha is.</summary>
     private static string Hex(Color colour) => $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}";
 
-    /// <summary>The same, for a field that may state nothing — which is written as nothing at all.</summary>
+    /// <summary>The same, for a field that may state nothing, which is written as nothing at all.</summary>
     /// <param name="colour">The colour, or nothing.</param>
     /// <returns>The six digits, or nothing.</returns>
     private static string? Hex(Color? colour) => colour is { } stated ? Hex(stated) : null;
@@ -614,7 +614,7 @@ internal static class ConfigurationLoader
         }
         catch (JsonException error)
         {
-            throw new ConfigurationFailure(code, $"{path}: not valid JSON — {error.Message}");
+            throw new ConfigurationFailure(code, $"{path}: not valid JSON, {error.Message}");
         }
     }
 

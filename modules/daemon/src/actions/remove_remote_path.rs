@@ -3,7 +3,7 @@
 //! Deleting a file of the Vault's is the entry going rather than the entry moving: a move keeps what
 //! is at the path and changes where it is, while this is the Vault's Layout no longer naming it. What
 //! the entry's version names stays in the store, and the version and the objects under it stay in the
-//! index, so what is lost is the file as a thing the Vault holds — its path, its holder and what it
+//! index, so what is lost is the file as a thing the Vault holds, its path, its holder and what it
 //! says about itself.
 //!
 //! Who may remove is the account that holds it, or one that administrates the Vault, which is the
@@ -25,7 +25,7 @@ use super::layout_remote::{EntryRemove, remote_transact, remove_remote};
 ///
 /// What became of it, as JSON: the entry is gone, the path names nothing, the account may not remove
 /// it, or the path is not one a remote Layout may name. It crosses as text for the reason an
-/// ownership outcome does — see `request-ownership`.
+/// ownership outcome does, see `request-ownership`.
 pub struct ActionRemoveRemotePath;
 
 impl Action for ActionRemoveRemotePath {

@@ -4,7 +4,7 @@
 //! manifest line. Both are safe only on a tree whose changes are the ones being made, so the check
 //! is a refusal rather than an attempt to guess which changes were the user's.
 //!
-//! The editor's own draft, backup and rewrite files are named `__…` and are ignored by the
+//! The editor's own draft, backup and rewrite files are named with a leading `__` and are ignored by the
 //! repository; a tree that does not ignore them still has no changes worth refusing over, so the
 //! check leaves those paths out.
 

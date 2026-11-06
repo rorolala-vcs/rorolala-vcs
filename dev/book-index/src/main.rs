@@ -2,7 +2,7 @@
 //!
 //! Run with no arguments it builds the checkout's own book: `book/` beside the crate's manifest is
 //! read, and `build/docs/builtin.book` under the same root is written. A caller that lays a build
-//! out somewhere else — `cargo dev export` with `BUILD_DIR` set — names the two paths instead:
+//! out somewhere else, `cargo dev export` with `BUILD_DIR` set, names the two paths instead:
 //!
 //! ```text
 //! rorolala-dev-book-index [<book-dir> [<output-file>]]

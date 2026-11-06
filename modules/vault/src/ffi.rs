@@ -3,7 +3,7 @@
 //! What locks a Vault is a guard being held, and a guard is a value rather than a name, so what
 //! crosses the ABI is a pointer to one. It is opaque in both directions: C takes one from
 //! `RolaVault_get_locking_guard` and gives it back to `RolaVault_drop_locking_guard`, and nothing
-//! about the guard — what it holds, how it releases the lock, how long it must live — is readable
+//! about the guard (what it holds, how it releases the lock, how long it must live) is readable
 //! from outside. Holding the pointer is holding the lock, and giving it back is giving the lock
 //! back, so a consumer that leaks one leaves the Vault locked.
 //!
@@ -60,7 +60,7 @@ pub unsafe extern "C" fn RolaVault_is_locking(vault: *const RolaVault) -> bool {
 /// # FFI
 ///
 /// Returns a pointer the caller releases with `RolaVault_drop_locking_guard`, and null when nothing
-/// was locked. The lock is held until then — a caller that keeps the pointer keeps the lock,
+/// was locked. The lock is held until then, a caller that keeps the pointer keeps the lock,
 /// whatever else it does.
 ///
 /// A Vault that is locked already is not waited for: nothing is handed back and it is the caller's

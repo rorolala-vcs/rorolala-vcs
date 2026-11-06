@@ -21,8 +21,8 @@ namespace RorolalaVCSPlugin;
 /// </summary>
 /// <remarks>
 /// One table of the changes, read as the file browser reads a directory: a band naming the columns over
-/// rows of thirty pixels, told apart by a line. A row is one thing the reading says about one path — what
-/// kind of change it is, where it comes from and where it goes, and what became of its content — so the
+/// rows of thirty pixels, told apart by a line. A row is one thing the reading says about one path, what
+/// kind of change it is, where it comes from and where it goes, and what became of its content, so the
 /// work is read down a column to see what is of a kind, and across a row to see what is of a path.
 /// <para>
 /// The words are this dock's own rather than the command line's, because the two are read differently: a
@@ -64,13 +64,13 @@ internal sealed class OverviewDock : IDockView
     /// reader reaches for about the whole work belongs in one row, and a refresh that stood apart from the
     /// buttons beside it would be the one thing in the row that is not about the work as a whole.
     /// <para>
-    /// It is drawn as its pictures rather than as its words — the reading's own `refresh` first, then this
-    /// plugin's three for the sync — because that is what a header is for: each plugin draws its own marks, so
+    /// It is drawn as its pictures rather than as its words, the reading's own `refresh` first, then this
+    /// plugin's three for the sync, because that is what a header is for: each plugin draws its own marks, so
     /// one plugin's keys stay its own.
     /// </para>
     /// <para>
-    /// Reading the work again is offered as the strip's own command as well, because a header drawn as a menu —
-    /// a dock in a window of its own — has nowhere to put a control: without that, a window holding this dock
+    /// Reading the work again is offered as the strip's own command as well, because a header drawn as a menu,
+    /// a dock in a window of its own, has nowhere to put a control: without that, a window holding this dock
     /// would have no way to ask for a reading, which is a way it had before the strip existed.
     /// </para>
     /// </remarks>
@@ -97,7 +97,7 @@ internal sealed record OverviewReading(StatusFacts? Facts, string? Said, RolaSta
 /// </summary>
 /// <remarks>
 /// It is what the table is built from, and it is a type of this plugin's own rather than
-/// <see cref="RolaStatus"/> so that what a reading is turned into can be read — and checked — without a
+/// <see cref="RolaStatus"/> so that what a reading is turned into can be read, and checked, without a
 /// Workspace to read one from: the native side is a handle that can only be made by looking at a tree.
 /// </remarks>
 /// <param name="Lost">Paths the Layout names that the tree does not hold.</param>
@@ -146,7 +146,7 @@ internal sealed record StatusFacts(
             status.Broken,
             // The three what a sync would do are the reading's whole list of standings, asked once each: every
             // path the Layout records a version for is in it, whether or not the tree changed it. They are not
-            // read from `WrongBase`, which is the changes the tree has made against a base upstream moved past —
+            // read from `WrongBase`, which is the changes the tree has made against a base upstream moved past,
             // a file nobody touched but the Vault has moved past is a receive too, and would otherwise have no row.
             [.. status.Ahead],
             [.. status.Behind],
@@ -163,7 +163,7 @@ internal sealed record StatusFacts(
 /// word composed where a row is made: the letters, the colour and the operations are the state's own answer, so
 /// a state added later is a member here and nothing else changes.
 /// <para>
-/// The colour is this plugin's own — see <see cref="RorolalaColours"/> — rather than a role of the look's,
+/// The colour is this plugin's own, see <see cref="RorolalaColours"/>, rather than a role of the look's,
 /// because what a state is coloured is the state: red for what must not be recorded, green for what is not
 /// recorded yet, amber for what is under way or has to be read twice, and blue for what is somewhere else than
 /// the Layout says.
@@ -237,7 +237,7 @@ internal sealed record StatusPill(State State, string Letters, Color Fill, strin
 /// <param name="Pills">
 /// What the path's state is, one pill each: what kind of change it is, and what became of its content.
 /// A change of content alone has no kind, and a kind alone has nothing to say about a content, so a row
-/// carries as many pills as it has states — one or two, and more where a merge has something to add.
+/// carries as many pills as it has states, one or two, and more where a merge has something to add.
 /// </param>
 /// <param name="Notes">
 /// What the row has to say that is not a state: why a merge cannot go on. A note is written rather than
@@ -250,13 +250,13 @@ internal sealed record StatusPill(State State, string Letters, Color Fill, strin
 /// buttons of both, because a file that moved and was edited is two things to act on.
 /// </param>
 /// <param name="Act">
-/// Which of the two paths the operations act on, where it is neither of the ones the rule picks — see
+/// Which of the two paths the operations act on, where it is neither of the ones the rule picks, see
 /// <see cref="OverviewView.Path"/>. Nothing for every row whose operations act on where its file is now.
 /// </param>
 /// <param name="Ignored">
 /// Whether the row is a path the ignore rules govern rather than one the reading reports as work. Such a
 /// row is only drawn when the ignored are being shown, and its two path columns are drawn in the ink kept
-/// for what is not the work — which is what tells a reader at a glance that nothing is to be done with it.
+/// for what is not the work, which is what tells a reader at a glance that nothing is to be done with it.
 /// </param>
 internal sealed record TableRow(
     IReadOnlyList<StatusPill> Pills,
@@ -272,13 +272,13 @@ internal sealed record TableRow(
 /// What the Overview shows: the work as it stands, read where the tree is rooted.
 /// </summary>
 /// <remarks>
-/// The reading is made when the dock appears and whenever something says it may have changed — the tree
+/// The reading is made when the dock appears and whenever something says it may have changed, the tree
 /// being rooted elsewhere, the files having been changed, or one of the host's windows being come back to.
 /// Nothing polls: a reading is a walk of the tree, and one made on a timer would spend most of its time
 /// saying what the last one said.
 /// <para>
-/// The events it listens to are not all raised on the window's thread — a plugin that changed a file says
-/// so from the work it did it on — so what is drawn is drawn through the dispatcher. A control belongs to
+/// The events it listens to are not all raised on the window's thread, a plugin that changed a file says
+/// so from the work it did it on, so what is drawn is drawn through the dispatcher. A control belongs to
 /// the thread that made it, and this one is made by the host.
 /// </para>
 /// </remarks>
@@ -298,13 +298,13 @@ internal sealed class OverviewView : UserControl
     /// </summary>
     /// <remarks>
     /// What a state is a width and the two paths are shares of what is left: a state is one or two letters in a
-    /// pill of a fixed size, so the room it wants is a measure rather than a share — three pills and the room
+    /// pill of a fixed size, so the room it wants is a measure rather than a share, three pills and the room
     /// between them, which is what a row of states comes to before it wraps. A path is read in full, so the rest
     /// is given to the two of them as shares rather than as widths, and a wider dock is a longer path rather than
     /// a wider column of states.
     /// <para>
     /// The operations are a measure of their own, and the widest measure in the table: a button is a word, and
-    /// the words are the command's own — 「还原内容」 and 「获取所有权」 are not shorter for being a table's. They
+    /// the words are the command's own, 「还原内容」 and 「获取所有权」 are not shorter for being a table's. They
     /// are the last column rather than the first because they are what a reader does <em>after</em> reading what
     /// a row says: the state, then the paths, then what may be done about them.
     /// </para>
@@ -321,7 +321,7 @@ internal sealed class OverviewView : UserControl
     /// <remarks>
     /// Four colours and nothing else: what is not recorded yet, what is under way, what must not be recorded,
     /// and what is somewhere else than the Layout says. They are named here rather than read from the look,
-    /// because what a state is coloured is the state — see <see cref="RorolalaColours"/>.
+    /// because what a state is coloured is the state, see <see cref="RorolalaColours"/>.
     /// </remarks>
     private static Color WrongFill => RorolalaColours.Wrong;
 
@@ -343,7 +343,7 @@ internal sealed class OverviewView : UserControl
     /// <remarks>
     /// The look's faint ink, which it spends on what is not to be acted on: the work's own paths are drawn
     /// in the ink the rest of the table is, and these are read past. The same colour the notes use, because
-    /// it is the same statement — there is nothing here to act on.
+    /// it is the same statement, there is nothing here to act on.
     /// </remarks>
     private const string QuietInk = PaletteKeys.Faint;
 
@@ -355,8 +355,8 @@ internal sealed class OverviewView : UserControl
 
     /// <summary>How often the work is read again while the dock is on screen.</summary>
     /// <remarks>
-    /// Nothing tells the program that another program changed a file — an artist saving a picture changes
-    /// the tree with this window hearing nothing of it — so a reading is asked for on a timer as well as
+    /// Nothing tells the program that another program changed a file, an artist saving a picture changes
+    /// the tree with this window hearing nothing of it, so a reading is asked for on a timer as well as
     /// when something says the files have changed. Five seconds is long enough that a reading is not what
     /// the program spends its time on, and short enough that a save made elsewhere is answered before the
     /// reader has looked away from the row it changes.
@@ -396,8 +396,8 @@ internal sealed class OverviewView : UserControl
     /// </summary>
     /// <remarks>
     /// Held by the row rather than by a button, because what is connected to what is a fact about two rows and
-    /// not about the control that was pressed: the table is drawn again under a reader — by the reading on its
-    /// timer — and a connection kept in a button would be lost the moment the button was thrown away.
+    /// not about the control that was pressed: the table is drawn again under a reader, by the reading on its
+    /// timer, and a connection kept in a button would be lost the moment the button was thrown away.
     /// <para>
     /// What is held is the path rather than the row, since a row is built afresh on every reading and two rows
     /// that say the same thing are not the same object: the path is what a row is about, and a path is what the
@@ -433,8 +433,8 @@ internal sealed class OverviewView : UserControl
     /// here as the row is drawn rather than carried in the row: a row built by <see cref="Rows"/> has no reading to
     /// ask, and the reading is a snapshot that is the same one however many rows are drawn from it.
     /// <para>
-    /// It is owned here: a reading that is replaced — or one a newer reading says the same as, and so is not drawn
-    /// — is given back rather than left to the native side.
+    /// It is owned here: a reading that is replaced, or one a newer reading says the same as, and so is not drawn
+    ///, is given back rather than left to the native side.
     /// </para>
     /// </remarks>
     private RolaStatus? _reading;
@@ -513,7 +513,7 @@ internal sealed class OverviewView : UserControl
 
         // The sync's own state, which the strip in the dock's header draws from; what the runs of every command
         // say is gathered in the hub, which the floating capsules draw from and which every place a command
-        // may be run from — the strip, an entry's menu — writes to.
+        // may be run from (the strip, an entry's menu) writes to.
         _strip = new SyncStrip(
             _host,
             _sync,
@@ -529,7 +529,7 @@ internal sealed class OverviewView : UserControl
         // One column: what a command is doing floats over the bottom right of the reading rather than taking a
         // column of it, so the table keeps its width whether a run is going or not.
         //
-        // Nothing scrolls the whole of the reading: the list of rows scrolls inside itself — see `Table` — and a
+        // Nothing scrolls the whole of the reading: the list of rows scrolls inside itself, see `Table`, and a
         // table that fills the dock and is then put in a scroller would be measured with no end to fill and so
         // would fill nothing, which is the height this view had before the table was one of its own.
         var reading = new Grid { Children = { _tableCell, _notice } };
@@ -573,7 +573,7 @@ internal sealed class OverviewView : UserControl
         };
 
         // A dock in a tab that is shown again is being looked at again, which is a moment to ask what
-        // there is to carry — see `BecameVisible`.
+        // there is to carry, see `BecameVisible`.
         PropertyChanged += BecameVisible;
 
         // A run that has just ended is the fetch or the sync the reading was held for, and the capsule of one that
@@ -586,7 +586,7 @@ internal sealed class OverviewView : UserControl
     /// <summary>Asks what there is to carry when the dock is shown again, and reads the work again with it.</summary>
     /// <remarks>
     /// A dock in a tab that was not shown is not being looked at, and the timer that reads the work does not run
-    /// for it. A command run elsewhere — the terminal's <c>rola track</c>, say — is not one this plugin is told
+    /// for it. A command run elsewhere (the terminal's <c>rola track</c>, say) is not one this plugin is told
     /// about by the files, so coming back to the Overview is the moment what a sync would carry is asked again
     /// rather than left as it was when the tab was left. It is one ask per becoming visible rather than a second
     /// timer: a plan costs a fetch of the Vault's Layout, and one made while nobody is looking is work for
@@ -616,7 +616,7 @@ internal sealed class OverviewView : UserControl
         _ = changed;
 
         // A run that has just ended is the fetch or the sync the reading was held for: what it wrote is what the
-        // work is read from now, and nothing else will say so — see <see cref="Drawn"/>.
+        // work is read from now, and nothing else will say so, see <see cref="Drawn"/>.
         if (_running && !_hub.Any)
         {
             _running = false;
@@ -719,8 +719,8 @@ internal sealed class OverviewView : UserControl
     /// What the Overview makes of a directory the tree is rooted at.
     /// </summary>
     /// <remarks>
-    /// A directory that has not been said, or that is the computer — neither of which is somewhere a
-    /// Workspace can be found from — is answered the way a directory no Workspace holds is. A Workspace
+    /// A directory that has not been said, or that is the computer, neither of which is somewhere a
+    /// Workspace can be found from, is answered the way a directory no Workspace holds is. A Workspace
     /// that holds it and still answers nothing is told apart from that, because the two are different
     /// things to have happened: nothing is being looked at, or the work that is being looked at could not
     /// be read.
@@ -743,7 +743,7 @@ internal sealed class OverviewView : UserControl
         {
             // What is read is handed back to the caller rather than given back here: a row's count is asked of
             // the reading as it is drawn, so the reading has to live as long as the rows do. It is given back
-            // when the reading is replaced or discarded — see <see cref="Show"/> and <see cref="Drawn"/>.
+            // when the reading is replaced or discarded, see <see cref="Show"/> and <see cref="Drawn"/>.
             status = RolaStatus.Locate(at);
 
             if (status is not null)
@@ -792,7 +792,7 @@ internal sealed class OverviewView : UserControl
     /// on the row it is already on.
     /// </para>
     /// <para>
-    /// A path the ignore rules govern is not work — the reading keeps the two lists apart — so its row is
+    /// A path the ignore rules govern is not work, the reading keeps the two lists apart, so its row is
     /// read last, after every group that is to be acted on, and only when the table is asked to show it.
     /// </para>
     /// </remarks>
@@ -807,7 +807,7 @@ internal sealed class OverviewView : UserControl
         ArgumentNullException.ThrowIfNull(facts);
 
         // Read once and used for every row, since a table is one drawing: what a kind is called is the same
-        // word on every row it names. Every one is asked for by a literal so that the gate can see it — and the
+        // word on every row it names. Every one is asked for by a literal so that the gate can see it, and the
         // letters are the pill's own, so what a state is known by is stated where the state is made rather than
         // read from the catalogue.
         var stopped = RolaI18N.Get("rorolala_vcs.status.merge_broken");
@@ -886,7 +886,7 @@ internal sealed class OverviewView : UserControl
                     [],
                     // The variant file comes first and the file it is for second, which is the direction the
                     // content is to move: the variant's content is joined into the file the Layout names. What
-                    // the row's one button acts on is the variant file — the one a merge is ended at — so the
+                    // the row's one button acts on is the variant file, the one a merge is ended at, so the
                     // row says so rather than leaving the rule to pick the other column.
                     VariantFiles.Place(item),
                     item.Target,
@@ -906,7 +906,7 @@ internal sealed class OverviewView : UserControl
 
                 return new TableRow(
                     // A merge that cannot go on is a thing gone wrong rather than work under way, so its pill
-                    // wears the colour of what is wrong rather than the colour of a merge that is — and what is
+                    // wears the colour of what is wrong rather than the colour of a merge that is, and what is
                     // wrong with it is in the note, where there is room for the reason.
                     [Pill(State.Broken)],
                     [$"{stopped}{BrokenSaid(reason)}"],
@@ -929,7 +929,7 @@ internal sealed class OverviewView : UserControl
         );
 
         // What a sync would do with a path already named above is on the row it is already on; what is left is
-        // the work that is in step with nothing wrong about it — which is the ordinary state of a file, and the
+        // the work that is in step with nothing wrong about it, which is the ordinary state of a file, and the
         // one a reader opens the Overview to see is safe to sync.
         syncing.AddRange(
             facts
@@ -950,7 +950,7 @@ internal sealed class OverviewView : UserControl
         // What the ignore rules govern is what the tree gained and the reading kept apart from the
         // work. It is drawn last, because it is not work: a reader scans past it rather than acting on
         // it, and a row that stood among the changes would read as one of them. Nothing is offered to
-        // do with it — a recording refuses a path the rules govern — so the row carries no buttons.
+        // do with it, a recording refuses a path the rules govern, so the row carries no buttons.
         if (showIgnored)
         {
             governed.AddRange(
@@ -964,7 +964,7 @@ internal sealed class OverviewView : UserControl
 
         // One path of what a sync would move, as a row of its own. It offers no button: what is to be done about it
         // is the sync the strip in the header runs, and a button here would be a second way to ask for the same
-        // run — one that would have to say what it carries, which the strip already says.
+        // run, one that would have to say what it carries, which the strip already says.
         //
         // The path is written where it comes from rather than where it goes: nothing goes anywhere here, and the
         // two columns are the sides of a change rather than a direction, so a path with nothing on the other side
@@ -986,7 +986,7 @@ internal sealed class OverviewView : UserControl
         bool Misfit(Rename rename) => rename.Modified && behind.Contains(rename.To);
 
         // One move, as a row. A move whose file was edited is a change of content as well, so what became of
-        // the content is a pill of the move's own row rather than a row of its own — and a move that changed
+        // the content is a pill of the move's own row rather than a row of its own, and a move that changed
         // nothing says nothing beyond being a move, since there is no change of content to report.
         //
         // The buttons are both states' where it is both: what a reader has to do about a file that moved and
@@ -1043,8 +1043,8 @@ internal sealed class OverviewView : UserControl
     /// <remarks>
     /// The count is asked of the reading rather than taken from the row, because it is the one thing about a
     /// standing that the reading keeps per path: what a pill carries is the direction, and how far is in the words.
-    /// A count the chain does not give is not said at all — what the Vault is at is ordinarily a version this side
-    /// never fetched — since a zero would read as being in step, which is the one thing the row is not about.
+    /// A count the chain does not give is not said at all, what the Vault is at is ordinarily a version this side
+    /// never fetched, since a zero would read as being in step, which is the one thing the row is not about.
     /// </remarks>
     /// <param name="state">Which of the four the path is in.</param>
     /// <param name="path">The path.</param>
@@ -1120,7 +1120,7 @@ internal sealed class OverviewView : UserControl
     /// What the buttons of a row are made of, which is a fresh set on every drawing.
     /// </summary>
     /// <remarks>
-    /// Held rather than made where a row is, because what a button does needs the host — and the rows are built
+    /// Held rather than made where a row is, because what a button does needs the host, and the rows are built
     /// by a static method that has no host and no reason to want one. The owner is what the buttons read as they
     /// are drawn: the path the run is made in and what to tell when the files have changed.
     /// </remarks>
@@ -1155,15 +1155,15 @@ internal sealed class OverviewView : UserControl
     /// <para>
     /// What a press does depends on what is being connected: a connection is two clicks and the second one runs
     /// the operation, where every other button runs when it is pressed. While a connection is on, every button
-    /// that is not a side of it is disabled — including the other buttons of the row it began from — so that a
+    /// that is not a side of it is disabled, including the other buttons of the row it began from, so that a
     /// reader who has begun one cannot also ask for something else, which would be two runs over one path.
     /// </para>
     /// <para>
     /// The two sides of it are the two that stand out, and what tells them is what they say rather than how
     /// they are painted: the button that began the connection says that it is waiting, and every button it
     /// could be finished on says that it is an answer (see <see cref="Label"/>). The rest keep their own words
-    /// and are not dimmed — the look has no faded state, and inventing one here would be a colour the theme
-    /// does not hold — but they do not answer: a disabled button takes no press and takes no pointer, so a
+    /// and are not dimmed, the look has no faded state, and inventing one here would be a colour the theme
+    /// does not hold, but they do not answer: a disabled button takes no press and takes no pointer, so a
     /// reader finds the ones that name themselves before they find the ones that do not.
     /// </para>
     /// </remarks>
@@ -1201,7 +1201,7 @@ internal sealed class OverviewView : UserControl
             HorizontalContentAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 2, ButtonGap, 2),
             // Everything is pressable while nothing is being connected or run; while a connection is in
-            // hand, only the two sides of it are — which is the row's own button again, so that a second
+            // hand, only the two sides of it are, which is the row's own button again, so that a second
             // press takes it back; and while an operation is going, nothing answers at all.
             IsEnabled = !_busy && (!running || begun || candidate),
         };
@@ -1224,7 +1224,7 @@ internal sealed class OverviewView : UserControl
     /// What a button says, which is not always what it does.
     /// </summary>
     /// <remarks>
-    /// A connection is a question — which of these two is which — and the answer is given by pressing one of
+    /// A connection is a question, which of these two is which, and the answer is given by pressing one of
     /// them. So the buttons that are part of the question stop saying what they do and start saying what they
     /// are: the one that began it says that it is waiting, and each one it could be finished on says that it is
     /// an answer. Every other button on the table says what it does, and the two flags are the connection
@@ -1233,7 +1233,7 @@ internal sealed class OverviewView : UserControl
     /// <para>
     /// Words rather than a mark, because the two sides of a connection are two rows that may be far apart and
     /// may look alike: what a reader has to be able to tell is which of them they started from and which of them
-    /// they may finish on, and 「…」 and 「组合」 say that where a tint has to be noticed first.
+    /// they may finish on, and 「连接中」 and 「组合」 say that where a tint has to be noticed first.
     /// </para>
     /// </remarks>
     /// <param name="operation">The operation the button is for.</param>
@@ -1276,7 +1276,7 @@ internal sealed class OverviewView : UserControl
         }
 
         // The lost path is the one that moved, so it is the one the command is given and the other is what it
-        // moved to — whichever of the two rows was clicked first.
+        // moved to, whichever of the two rows was clicked first.
         var lost = Choices(row).Contains(State.Lost) ? path : from;
         var gain = lost == path ? from : path;
 
@@ -1297,8 +1297,8 @@ internal sealed class OverviewView : UserControl
     /// </summary>
     /// <remarks>
     /// The operations are the command line's and are not waited for. Two of them over one work at once would be
-    /// two runs whose effect is each other's to undo — a mode is not known to be safe against a second mode over
-    /// the same tree — so a run takes the whole table: its own row's buttons and every other row's, and the
+    /// two runs whose effect is each other's to undo, a mode is not known to be safe against a second mode over
+    /// the same tree, so a run takes the whole table: its own row's buttons and every other row's, and the
     /// button it was pressed on along with them. They answer again when it is over.
     /// <para>
     /// The busy flag is written and cleared on the window's thread, which is what draws: the run begins on the
@@ -1328,7 +1328,7 @@ internal sealed class OverviewView : UserControl
     /// Draws the table's operation buttons pressable or not, which is every operation button while one is going.
     /// </summary>
     /// <remarks>
-    /// What the buttons say has not changed — only whether they answer — so the table is drawn from the rows
+    /// What the buttons say has not changed, only whether they answer, so the table is drawn from the rows
     /// already on screen rather than read again: a reading spent on a button, and one that might disagree with
     /// what the reader is looking at.
     /// </remarks>
@@ -1350,9 +1350,9 @@ internal sealed class OverviewView : UserControl
     /// <remarks>
     /// Putting content back writes over what the file holds now, and what it held is not in the store: the
     /// Layout names a version, and what was changed between them is work that no command can recover. So it is
-    /// asked about rather than done — the one operation of the six whose effect a reader might not have meant.
+    /// asked about rather than done, the one operation of the six whose effect a reader might not have meant.
     /// Cancelling a merge is asked about for the same reason and one of its own: it takes the variant file
-    /// away, and what that file holds is not kept anywhere the file is not — the record says which variant it
+    /// away, and what that file holds is not kept anywhere the file is not, the record says which variant it
     /// was checked in as, and the content that is to be joined comes back only from the Vault.
     /// <para>
     /// The other operations are not asked about, and that is deliberate: a move that is taken back is a move
@@ -1396,12 +1396,12 @@ internal sealed class OverviewView : UserControl
     /// <remarks>
     /// A row that stands for one path has that path in one of its two columns and nothing in the other, and
     /// which of the two it is depends on the state: a loss is a path the Layout names, a gain is one the tree
-    /// holds. A move is the one row with both, and what a move's operations act on is where the file is now —
+    /// holds. A move is the one row with both, and what a move's operations act on is where the file is now,
     /// that is the path a reader is looking at, and the one the command can find.
     /// <para>
     /// A merge is the other row with both, and it is the other way round: the two columns read the variant
     /// file being joined and the file it is being joined into, and what a merge's operation acts on is the
-    /// variant file — the one a merge is ended at, and the one the command is run on. That is why a row may
+    /// variant file, the one a merge is ended at, and the one the command is run on. That is why a row may
     /// say which of its paths to act on rather than leaving it to the rule.
     /// </para>
     /// </remarks>
@@ -1447,7 +1447,7 @@ internal sealed class OverviewView : UserControl
     /// <remarks>
     /// What the sync buttons offer is the Vault's answer beside this side's, and a version recorded here is
     /// one the Vault has not been told of: the plan is asked again with the reading, or a work that has gained
-    /// something to send keeps the buttons of the answer before it — grey, and saying there is nothing to
+    /// something to send keeps the buttons of the answer before it, grey, and saying there is nothing to
     /// carry. The reading on the timer asks nothing of the Vault, so this is the only ask a change makes;
     /// <see cref="SyncWatcher.Plan"/> coalesces, so a burst of changes is one run of the command.
     /// </remarks>
@@ -1462,7 +1462,7 @@ internal sealed class OverviewView : UserControl
     /// </summary>
     /// <remarks>
     /// For what changes what the table looks like without changing what it says: beginning a connection, and
-    /// taking one back. Reading the work again for that would be a reading spent on nothing — and worse, it
+    /// taking one back. Reading the work again for that would be a reading spent on nothing, and worse, it
     /// would be a reading that might disagree, since the work may have moved since the last one.
     /// </remarks>
     private void Redraw()
@@ -1500,7 +1500,7 @@ internal sealed class OverviewView : UserControl
     /// <summary>Reads the work again and draws it.</summary>
     /// <remarks>
     /// The reading itself is made on a thread of its own: it is a walk of the whole tree with a version chain walked for
-    /// every path that records one, and it is asked for on a timer — a reading made here would stop the window for as long
+    /// every path that records one, and it is asked for on a timer, a reading made here would stop the window for as long
     /// as the walk took, every five seconds, for as long as the dock was open. What is asked for here is the read; what
     /// comes back draws it (<see cref="Landed"/>).
     /// </remarks>
@@ -1510,7 +1510,7 @@ internal sealed class OverviewView : UserControl
 
         // A reading made while a sync is carrying content down says what the tree held in the middle of the run, and
         // the rows drawn from it would be out of step with the copy the same run is writing. What is on screen is
-        // read again after it, which the hub's own event says — and nothing is read here at all, since it would be a
+        // read again after it, which the hub's own event says, and nothing is read here at all, since it would be a
         // reading spent on an answer that cannot be drawn.
         if (_sync.Running)
         {
@@ -1573,7 +1573,7 @@ internal sealed class OverviewView : UserControl
         var rows = facts is null ? [] : Rows(facts, _showIgnored);
         var said = Line(reading, rows.Count);
 
-        // What a sync would carry is asked whenever the reading says the standings it is about have moved — see
+        // What a sync would carry is asked whenever the reading says the standings it is about have moved, see
         // `PlanIfMoved`. It is asked before the same-answer check below, since the plan may be stale even when
         // the rows are not.
         if (facts is not null)
@@ -1594,7 +1594,7 @@ internal sealed class OverviewView : UserControl
         // A reading is asked for on a timer, so all but a few of them say what the last one said.
         //
         // What the rows say is not the whole of what the table looks like: a connection in hand is the view's
-        // rather than the reading's, and the row it is on is not rebuilt when a button is pressed — see
+        // rather than the reading's, and the row it is on is not rebuilt when a button is pressed, see
         // <see cref="Redraw"/>. So a reading that says what the last one said is still drawn when the table on
         // screen was drawn with no connection in it, which is the one case where the two differ.
         if (
@@ -1616,8 +1616,8 @@ internal sealed class OverviewView : UserControl
 
     /// <summary>Asks what a sync would carry when the reading says the standings it is about have moved.</summary>
     /// <remarks>
-    /// The reading is made on a timer and sees the copy of the Vault's Layout that a command run elsewhere — the
-    /// terminal's <c>rola fetch</c> or <c>rola track</c>, say — may have moved without telling this plugin that
+    /// The reading is made on a timer and sees the copy of the Vault's Layout that a command run elsewhere, the
+    /// terminal's <c>rola fetch</c> or <c>rola track</c>, say, may have moved without telling this plugin that
     /// the files changed. What a plan is about is those standings, so a reading that changes them is the moment
     /// to ask; a reading that says what it said before costs nothing, and a plan costs a fetch of the Vault's
     /// Layout.
@@ -1691,7 +1691,7 @@ internal sealed class OverviewView : UserControl
     /// </summary>
     /// <remarks>
     /// A line over a table is a line over the changes, and the two say different things at once: a work with
-    /// changes is the table and nothing else, and a work without them is the words — that there is nothing to
+    /// changes is the table and nothing else, and a work without them is the words, that there is nothing to
     /// confirm, or that a work there is could not be read.
     /// </remarks>
     /// <param name="reading">What was read where the tree is rooted.</param>
@@ -1710,7 +1710,7 @@ internal sealed class OverviewView : UserControl
     /// <remarks>
     /// The rows are built afresh on every reading, so what tells one reading from another is what the rows
     /// say rather than the values they happen to be. A row holding a list of pills is where that is easy to
-    /// get wrong — two lists that say the same thing are not the same list — and getting it wrong means a
+    /// get wrong, two lists that say the same thing are not the same list, and getting it wrong means a
     /// table rebuilt for nothing on every reading.
     /// </remarks>
     /// <param name="left">What one reading came to.</param>
@@ -1742,7 +1742,7 @@ internal sealed class OverviewView : UserControl
     /// </summary>
     /// <remarks>
     /// The band names the columns and the rows carry the changes, and both are laid out by the same
-    /// columns — the two fixed ones for what a kind is called and what became of a content, and two that
+    /// columns, the two fixed ones for what a kind is called and what became of a content, and two that
     /// share what is left for the paths. A path is one line however long it is: what a row cannot show is
     /// on the path itself, and a row that grew to two lines would put every row under it out of step with
     /// the ones beside it.
@@ -1919,7 +1919,7 @@ internal sealed class OverviewView : UserControl
     /// The line and the letters are the state's colour and the ground behind them is that colour laid thin, so
     /// a pill is one thing said rather than a colour with a label stuck on it: the tint is what tells the pill
     /// from the row it stands on, and the colour entire is what makes it a mark. Laid thin rather than mixed
-    /// down, so that one pill reads on the light look and the dark one without being told which it is on — what
+    /// down, so that one pill reads on the light look and the dark one without being told which it is on, what
     /// stands behind the colour is whatever the row is drawn on.
     /// <para>
     /// Every pill is the same size, whatever its letters: they are read as a column of marks rather than as
@@ -2010,7 +2010,7 @@ internal sealed class OverviewView : UserControl
     /// Three because that is what a row of states comes to before it wraps: a move whose file was edited is two,
     /// and three is the most a reader is given before the rest goes on the next line. A width rather than a
     /// share of the dock, because a column of one- to two-letter marks has nothing to gain from a wider window
-    /// — the room belongs to the paths, which is where it is read.
+    ///, the room belongs to the paths, which is where it is read.
     /// </remarks>
     private const double StateColumn = (3 * PillWidth) + (3 * PillGap);
 
@@ -2018,7 +2018,7 @@ internal sealed class OverviewView : UserControl
     /// How wide a button is, and how far one stands from the next.
     /// </summary>
     /// <remarks>
-    /// Wide enough for the longest words a button ever carries — 「获取所有权」 — and no wider, since the column
+    /// Wide enough for the longest words a button ever carries, 「获取所有权」, and no wider, since the column
     /// is taken from the paths beside it. The width is stated rather than left to the words, because the words
     /// change while a connection is being made and the column must not: what a reader is doing is reading three
     /// buttons that say what they are part of, and a button that moved out from under the pointer between the
@@ -2033,8 +2033,8 @@ internal sealed class OverviewView : UserControl
     /// How wide the column of operations is: three buttons and the room between them.
     /// </summary>
     /// <remarks>
-    /// Three because that is the most a row is ever offered — a loss wants rebuilding, connecting and confirming,
-    /// and a likely move wants confirming, taking back and connecting — so the column holds them all on one line
+    /// Three because that is the most a row is ever offered, a loss wants rebuilding, connecting and confirming,
+    /// and a likely move wants confirming, taking back and connecting, so the column holds them all on one line
     /// rather than wrapping the third under the others. A row with more than fits still wraps, which is what the
     /// WrapPanel is for and what makes a row grow rather than lose a button.
     /// </remarks>
@@ -2087,7 +2087,7 @@ internal sealed class OverviewView : UserControl
     /// <summary>One cell of a row holding a path, or nothing where the path is not one.</summary>
     /// <remarks>
     /// A path is a way into the work: pressing one asks the browser to show the place it names, which is what makes a
-    /// row read in the Overview something the user can act on where it is — the file's own directory, the file chosen,
+    /// row read in the Overview something the user can act on where it is, the file's own directory, the file chosen,
     /// and the version graph following it. A row has one side or two, and the side a change is not on is a cell of
     /// nothing that does nothing.
     /// </remarks>
@@ -2126,7 +2126,7 @@ internal sealed class OverviewView : UserControl
 
         // A path that can be gone to says so with the pointer: what the row is offering is a step into the work, and
         // a path drawn like the words beside it would be read as text rather than as a way there. The ground is a
-        // transparent brush rather than none, because a control with nothing to fill is not under the pointer at all —
+        // transparent brush rather than none, because a control with nothing to fill is not under the pointer at all,
         // and the cells around it are where a press would land instead.
         cell.Cursor = new Cursor(StandardCursorType.Hand);
         cell.Background = Brushes.Transparent;

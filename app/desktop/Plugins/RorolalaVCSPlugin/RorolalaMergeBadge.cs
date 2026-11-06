@@ -11,8 +11,8 @@ namespace RorolalaVCSPlugin;
 /// <remarks>
 /// A merge in progress is two files: the one the Layout names, which wears the state dot of work under way,
 /// and the variant file beside it, which holds the content waiting to become part of it. The second is a
-/// file neither Layout names, so nothing else says what it is — a listing draws it as an untracked file,
-/// which it is not — and the badge is where that is said: the set's two lines coming together into one,
+/// file neither Layout names, so nothing else says what it is, a listing draws it as an untracked file,
+/// which it is not, and the badge is where that is said: the set's two lines coming together into one,
 /// drawn in the amber every other mark of a merge is drawn in.
 /// <para>
 /// It is read through the same <see cref="StatusReadings"/> the State and Standing columns read through, so
@@ -43,8 +43,8 @@ internal sealed class RorolalaMergeBadge : IEntryMarkProvider
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        // What a merge is about is a file of the work, so an entry that names no directory of its own — the
-        // way up, which is a step rather than a place — is nothing this speaks about.
+        // What a merge is about is a file of the work, so an entry that names no directory of its own, the
+        // way up, which is a step rather than a place, is nothing this speaks about.
         if (
             Path.GetDirectoryName(entry.Path) is not { Length: > 0 } directory
             || _readings.Reading(directory) is not { } status

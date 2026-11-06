@@ -1,7 +1,7 @@
 //! What an index object is written down as.
 //!
-//! An object crosses into the store as bytes and nothing else — the store keeps content under a
-//! key and knows nothing of variants or versions — so this is where the two kinds are told apart
+//! An object crosses into the store as bytes and nothing else, the store keeps content under a
+//! key and knows nothing of variants or versions, so this is where the two kinds are told apart
 //! and put back together. The bytes lead with the kind, so a reader learns which of the two it
 //! holds before it reads anything else.
 

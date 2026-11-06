@@ -6,8 +6,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The accounts dock: what the command line says read back into the accounts and the keys it named.
 /// </summary>
 /// <remarks>
-/// The runs themselves are the command line's and are not made here — a run reads the machine's own key stores
-/// and may write a pair — so what is checked is everything this plugin decides without one: what a listing and
+/// The runs themselves are the command line's and are not made here, a run reads the machine's own key stores
+/// and may write a pair, so what is checked is everything this plugin decides without one: what a listing and
 /// a key listing come to, which name a key file stands for, and which names an account may not have.
 /// </remarks>
 public sealed class AccountsTests

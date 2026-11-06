@@ -20,14 +20,14 @@ pub type Blake3Hash = [u8; BLAKE3_HASH_LEN];
 
 /// The content address a stored object is named by.
 ///
-/// A key is the `Blake3` hash of the object's **original content** — what a caller handed over, not
+/// A key is the `Blake3` hash of the object's **original content**, what a caller handed over, not
 /// what the backend laid down. Which means a backend may encode, compress, or pack an object however
 /// it likes without any key changing with it, and a read can always tell whether what came back is
 /// what was asked for.
 ///
 /// `Blake3` is the hash, and the key says so by being nothing else: a store reads and writes these
 /// and no other. Keeping a name for the algorithm beside the digest would be a promise to read
-/// another one, and there is nothing here that can — so a second algorithm would be a second kind of
+/// another one, and there is nothing here that can, so a second algorithm would be a second kind of
 /// store rather than a flag on this one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key {
@@ -68,8 +68,8 @@ impl Key {
 /// The head of a digest, which names an object when no other digest shares it.
 ///
 /// A whole digest is [`Key`]'s to read; this is only the short form, so it is strictly shorter
-/// than what [`Key`] takes. The digits alone cannot say what they name — a head names an object
-/// only beside the keys that are there — so a caller settles it with [`resolve`](Self::resolve)
+/// than what [`Key`] takes. The digits alone cannot say what they name, a head names an object
+/// only beside the keys that are there, so a caller settles it with [`resolve`](Self::resolve)
 /// against the keys it can list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShortHash {
@@ -168,7 +168,7 @@ impl Serialize for Key {
     /// A key that crossed into structured output as its digest would be thirty-two numbers that
     /// say nothing on their own, and a reader would have to know the width and the order to put them
     /// back together. Written as a string it is the same key an object sits under, so what comes out
-    /// of a listing is what goes back in — [`FromStr`] reads exactly this back.
+    /// of a listing is what goes back in, [`FromStr`] reads exactly this back.
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -180,7 +180,7 @@ impl Serialize for Key {
 impl FromStr for Key {
     type Err = Error;
 
-    /// Reads a key written as [`Display`](fmt::Display) writes it — `blake3:<hex>` — or as the
+    /// Reads a key written as [`Display`](fmt::Display) writes it, `blake3:<hex>`, or as the
     /// digest alone, which is how one is written when the hash is not in doubt.
     ///
     /// `manifest:` is read in front of the digest as well as `blake3:`, since a key is the same
@@ -190,7 +190,7 @@ impl FromStr for Key {
     /// # Errors
     ///
     /// Returns [`Error::Malformed`] if `text` is not a digest of the width this store writes, in
-    /// hex — with or without the name of the hash or the word `manifest` in front of it.
+    /// hex, with or without the name of the hash or the word `manifest` in front of it.
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let hex = text
             .strip_prefix("blake3:")

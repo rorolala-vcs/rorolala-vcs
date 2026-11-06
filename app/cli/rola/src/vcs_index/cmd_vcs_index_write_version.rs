@@ -1,6 +1,6 @@
 //! The `rola vcs-index write-version` command: write a Version and answer with its hash.
 //!
-//! Nothing is checked to be there — the variant is taken as the hash it is given, and the number
+//! Nothing is checked to be there, the variant is taken as the hash it is given, and the number
 //! the chain would work out is left unknown.
 
 use librorolala::vcs::{UNKNOWN_VERSION, Version};

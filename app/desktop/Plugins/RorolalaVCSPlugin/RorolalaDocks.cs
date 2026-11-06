@@ -12,13 +12,13 @@ namespace RorolalaVCSPlugin;
 /// The docks this plugin shows: what the work is looked at through, and what the accounts are.
 /// </summary>
 /// <remarks>
-/// The Overview is the view of the work that is there — how it stands beside the Layout it works from,
+/// The Overview is the view of the work that is there, how it stands beside the Layout it works from,
 /// which is the reading `rola status` makes (see <see cref="OverviewDock"/>). The Version Graph is the
 /// work's variants: a card per variant, a lane per file and a column per version depth, laid out from
 /// the index's own reading of them (see <see cref="VersionGraphDock"/>). The Workspace dock is still to
 /// be written, and what it carries while it is is a line about where the tree is rooted. The Accounts
-/// dock is the machine's own key pairs — which account the work acts as, and what may be done about
-/// them (see <see cref="AccountsDock"/>) — which is not about one work but about the person, and so is
+/// dock is the machine's own key pairs, which account the work acts as, and what may be done about
+/// them (see <see cref="AccountsDock"/>), which is not about one work but about the person, and so is
 /// a dock of its own rather than a part of the Overview.
 /// <para>
 /// The base is read through <see cref="BaseDirectory"/>, the File System plugin's published answer,

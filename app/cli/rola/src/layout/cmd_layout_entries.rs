@@ -101,7 +101,7 @@ pub fn complete_layout_entries(
 
 /// Lists what a Layout's entries hold
 ///
-/// Every entry is listed — one that is at no path is listed with an empty one — with the `Uuid` it
+/// Every entry is listed, one that is at no path is listed with an empty one, with the `Uuid` it
 /// is known by, the version it is at, the account that holds it, and what it says about itself.
 /// `--uuid` lists one of them alone, which is how a file is asked after: `deprecated` says whether
 /// the Vault has moved it under `@/removed/`.
@@ -141,7 +141,7 @@ impl StateLayoutEntries {
     /// The state that lists every entry of the Layout `layout` names.
     ///
     /// Naming none reads the one being worked in, which is what the state a run starts in means
-    /// anyway; it is public so that a command which lists in another shape — `rola entries` — says
+    /// anyway; it is public so that a command which lists in another shape, `rola entries`, says
     /// which Layout is read without keeping a second reading of its own.
     #[must_use]
     pub fn every(layout: Option<String>) -> Self {

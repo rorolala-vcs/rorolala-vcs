@@ -1,6 +1,6 @@
 //! Where a store puts the things it keeps.
 //!
-//! The paths are the store's own — a caller hands over content and keys — so nothing here is more
+//! The paths are the store's own, a caller hands over content and keys, so nothing here is more
 //! than `pub(crate)`, and what a test needs of it is reached through [`Internals`](crate::internals).
 
 use std::path::PathBuf;
@@ -46,7 +46,7 @@ impl RorolalaStorage {
     /// Where the packed file of `index` sits.
     ///
     /// Every pack is one file, whichever kind of entry it holds: a pack number names one pack, and
-    /// what that pack is *read* with is its index — see [`index_path`](Self::index_path).
+    /// what that pack is *read* with is its index, see [`index_path`](Self::index_path).
     pub(super) fn pack_path(&self, index: u64) -> PathBuf {
         self.root
             .join(PACKED_DIR)
@@ -56,8 +56,8 @@ impl RorolalaStorage {
     /// Where the index of the pack of `index` sits, which is what says what the pack holds.
     ///
     /// An object pack keeps its index beside it; a manifest pack keeps its index among the manifests,
-    /// so that reading everything that says how content was cut — which is what tells a chunk that is
-    /// spoken for from one nothing refers to — is reading one directory rather than every pack.
+    /// so that reading everything that says how content was cut, which is what tells a chunk that is
+    /// spoken for from one nothing refers to, is reading one directory rather than every pack.
     pub(super) fn index_path(&self, kind: PackKind, index: u64) -> PathBuf {
         let directory = match kind {
             PackKind::Object => PACKED_DIR,

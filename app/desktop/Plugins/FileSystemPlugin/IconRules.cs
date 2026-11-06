@@ -34,8 +34,8 @@ internal enum IconCategory
 /// </summary>
 /// <remarks>
 /// This is a rule of thumb rather than a content sniff, and it is deliberately cheap: it runs for every row of
-/// every listing, so it may not open the file. What it cannot tell — a PSD that is really a renamed ZIP, a text
-/// file with no extension — is a file drawn as a generic document, which is what a person reading a listing
+/// every listing, so it may not open the file. What it cannot tell, a PSD that is really a renamed ZIP, a text
+/// file with no extension, is a file drawn as a generic document, which is what a person reading a listing
 /// expects of a name that says nothing.
 /// <para>
 /// The four lists below are the whole of the rule. A kind added to a set's <c>[fallback]</c> table is a kind

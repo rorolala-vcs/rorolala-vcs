@@ -6,7 +6,7 @@ namespace RolalalaLauncher.IntegrationTests;
 /// <remarks>
 /// They sit under the suite's own directory rather than the system's temporary one, because what they hold
 /// is a launcher's files and a file system that is not the suite's own is a file system with somebody
-/// else's leftovers in it — and because a run leaves nothing behind where it did not have to write.
+/// else's leftovers in it, and because a run leaves nothing behind where it did not have to write.
 /// </remarks>
 internal static class Scratch
 {

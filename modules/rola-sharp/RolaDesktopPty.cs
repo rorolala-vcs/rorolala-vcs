@@ -9,8 +9,8 @@ namespace RolaSharp;
 /// <remarks>
 /// It is the other half of a dock that draws one: <c>rola-desktop-pty</c> runs the program in a
 /// pseudo-terminal, and this is what a view reads its output from, writes a key to, and resizes. What
-/// crosses is bytes and nothing else — what the bytes mean is a parser's business, and that is the
-/// window's — so this stays a handle and four calls.
+/// crosses is bytes and nothing else, what the bytes mean is a parser's business, and that is the
+/// window's, so this stays a handle and four calls.
 /// <para>
 /// Reading is a poll rather than a callback: the native side drains the terminal on a thread of its
 /// own, and <see cref="Read"/> answers what has arrived since the last ask. Zero is "nothing yet" and

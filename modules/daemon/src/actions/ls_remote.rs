@@ -3,7 +3,7 @@
 //! The listing half of an exchange, where [`sync_all`](crate::sync_all) is the carrying half: a
 //! Workspace asks, the Vault answers with what its own store holds, and nothing but the listing
 //! moves. Which listing is asked for is the caller's word, and the two the store has are the two
-//! it can be told to give — the objects it holds, and the contents it keeps cut.
+//! it can be told to give, the objects it holds, and the contents it keeps cut.
 
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
 use rorolala_storage::{Key, RorolalaStorage, StorageBackend as _};
@@ -21,7 +21,7 @@ use super::sync_storage::{Side, carry_blob};
 ///
 /// # Output
 ///
-/// The keys, as a listing prints them — each as hex, one a line. It is the Workspace's answer that
+/// The keys, as a listing prints them, each as hex, one a line. It is the Workspace's answer that
 /// is read, the Vault's listing handed back, since the Workspace is where the caller is. The listing
 /// travels as one string rather than a run of keys because that is what crosses the C ABI whole; a
 /// caller that wants keys apart reads it the way it was written, a line at a time.
@@ -48,7 +48,7 @@ impl Action for ActionListRemote {
         let local = local_store(&ctx)?;
 
         // What listing is wanted is the caller's word, so it belongs to the Workspace and crosses to
-        // the Vault first — the Vault is the side with a store of its own to answer with.
+        // the Vault first, the Vault is the side with a store of its own to answer with.
         let here = input.into_inner();
         let to_vault = here.clone().map(String::into_bytes);
         let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;

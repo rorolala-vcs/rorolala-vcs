@@ -2,11 +2,11 @@
 //!
 //! It is what `rola explain exit-code` explains when it is given no number: the run just
 //! before is the one being asked about, and all of it that is kept is a number. Only a run
-//! that failed is written down — a run that did nothing wrong has nothing to explain, and
+//! that failed is written down, a run that did nothing wrong has nothing to explain, and
 //! writing it would bury the failure a reader still has a question about.
 //!
-//! It is the smallest of the files Rorolala keeps — written once as a run ends, read once
-//! when it is asked about — and a machine that does not name a local data directory has
+//! It is the smallest of the files Rorolala keeps, written once as a run ends, read once
+//! when it is asked about, and a machine that does not name a local data directory has
 //! nowhere to keep it, so both sides stay silent about a file they cannot reach.
 
 use std::fs;
@@ -71,7 +71,7 @@ pub fn last() -> Option<i32> {
 ///
 /// Doing the work here rather than after the program is run is what keeps the program in the
 /// pipeline: running it is also what tears it down, and tearing it down is what runs every
-/// resource's own write-back — so a run that ended has everything it kept already written by
+/// resource's own write-back, so a run that ended has everything it kept already written by
 /// the time there is a process exit code to look at.
 pub struct LastExitCodeRecordSetup;
 

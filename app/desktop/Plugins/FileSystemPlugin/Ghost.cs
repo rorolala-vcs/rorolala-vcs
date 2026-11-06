@@ -11,7 +11,7 @@ namespace FileSystemPlugin;
 /// The card that follows the pointer while this program is carrying entries.
 /// </summary>
 /// <remarks>
-/// The toolkit floats no picture of its own — a drag is handed data and nothing else — and on X11 the source of
+/// The toolkit floats no picture of its own, a drag is handed data and nothing else, and on X11 the source of
 /// a drag is told nothing about the pointer while it is on, because the XDND handler swallows the motion before
 /// it reaches the tree. So what says a drag is happening is this, drawn over the view at the positions the drop
 /// side is told.
@@ -85,7 +85,7 @@ internal sealed class Ghost
     /// What a drag of this program's is carrying, for the card's sake.
     /// </summary>
     /// <remarks>
-    /// Said by the view that started the drag — before it is handed over, and nowhere after — and read by every
+    /// Said by the view that started the drag (before it is handed over, and nowhere after) and read by every
     /// view: the one the pointer is over draws the card, and a view that did not start the drag has no other way
     /// to know what it would be showing.
     /// </remarks>

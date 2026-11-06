@@ -1,13 +1,13 @@
 //! Frames: a value written as its length and then its bytes.
 //!
-//! A value that crosses a sync is mostly bytes already — a packet of entries, a blob, the answer to
-//! "which of these do you hold" — and putting one of those through serde is a copy and a visit per
+//! A value that crosses a sync is mostly bytes already, a packet of entries, a blob, the answer to
+//! "which of these do you hold", and putting one of those through serde is a copy and a visit per
 //! element for a shape that is bytes and nothing else. So the frame is a layer of its own: it knows a
 //! length and a run of bytes, and [`send_value`]/[`receive_value`] in [`sync`](crate::sync) are the
 //! serde shell over it for the values that really are numbers and structs.
 //!
 //! What a frame is for is *one* value: its length is what tells the other side where it ends, and a
-//! value too long for one frame — a content bigger than [`MAX_FRAME`] — is carried in pieces by its
+//! value too long for one frame, a content bigger than [`MAX_FRAME`], is carried in pieces by its
 //! caller rather than by a frame of its own.
 
 use std::mem::size_of;
@@ -24,7 +24,7 @@ use crate::{ActionContext, ActionError, Channel};
 /// reads a frame it will not take.
 ///
 /// What it bounds is a value *once framed*, which is why a caller carrying something larger than
-/// this — a content, or a batch — carries it in pieces rather than in one value.
+/// this (a content, or a batch) carries it in pieces rather than in one value.
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
 
 /// The room a frame's own length takes in front of its bytes.
@@ -114,7 +114,7 @@ pub async fn write_frame(channel: &mut Channel, parts: &[&[u8]]) -> Result<(), A
 /// # Errors
 ///
 /// Returns [`ValueTooLarge`](ActionError::ValueTooLarge) if the peer says it is sending more than
-/// [`MAX_FRAME`], and [`Io`](ActionError::Io) if the channel failed — a channel that ended partway
+/// [`MAX_FRAME`], and [`Io`](ActionError::Io) if the channel failed, a channel that ended partway
 /// through a frame included, which is an `UnexpectedEof` rather than a short value.
 pub async fn read_frame(channel: &mut Channel) -> Result<Vec<u8>, ActionError> {
     let mut header = [0_u8; LENGTH];

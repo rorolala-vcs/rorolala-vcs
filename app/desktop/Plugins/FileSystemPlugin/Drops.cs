@@ -10,7 +10,7 @@ namespace FileSystemPlugin;
 /// <summary>Where a drag lands in a view: the directory it goes into, and the row that stands for it.</summary>
 /// <param name="Into">The directory the dragged entries go into.</param>
 /// <param name="Row">
-/// What says which row to light — the entry's own key — or nothing where no row stands for the place.
+/// What says which row to light, the entry's own key, or nothing where no row stands for the place.
 /// </param>
 /// <remarks>
 /// The row is a key rather than a path because what a row stands for is not always a file: a listing of a plugin's
@@ -173,7 +173,7 @@ internal sealed class Drops
     /// <remarks>
     /// Every location's directory and not only one's, because the operation that has just finished may have
     /// changed a directory another dock is the one showing: a move is answered by the dock it was dropped on,
-    /// and the entries may have been dragged out of another dock — which, a dock being able to be out of step,
+    /// and the entries may have been dragged out of another dock, which, a dock being able to be out of step,
     /// may be looking at a directory of its own. Deferring is the other half of it: reading a directory again
     /// rebuilds the views showing it, and one of them may be the view answering the event.
     /// </remarks>
@@ -236,7 +236,7 @@ internal static class Drag
     /// In-process on purpose: what a logical place takes is an object of the source's own making, which no
     /// platform can serialize and no other program has a word for. A drag that leaves this program still carries
     /// its files and their paths, and this is the extra thing this program's own views read to decide whether a
-    /// place can take it — which is why the platform is asked to keep it out of its own negotiation.
+    /// place can take it, which is why the platform is asked to keep it out of its own negotiation.
     /// </remarks>
     public static readonly DataFormat<LogicalDrag> Payload =
         DataFormat.CreateInProcessFormat<LogicalDrag>("rorolala.logical-drag");
@@ -248,7 +248,7 @@ internal static class Drag
     /// It is what tells a moved-out drag from a moved-in one: a drop answered by one of this program's views has
     /// already dealt with what was carried, so the source must not take the originals away as well. Held for the
     /// whole program rather than by a view, because the drop is answered by the view it landed on and the removal
-    /// is the source's — which is a view of its own, and may be another dock's (Section 7.7).
+    /// is the source's, which is a view of its own, and may be another dock's (Section 7.7).
     /// </remarks>
     public static bool Answered { get; set; }
 
@@ -260,7 +260,7 @@ internal static class Drag
     /// as files and a text field as text. What the platform does with the drag is its own business: this hands
     /// over the data and waits to be told what became of it. A move another program made is a
     /// move this program has to finish, the other program having only copied the files it was handed; a move one
-    /// of this program's own docks answered has already moved them, which is what <see cref="Answered"/> records —
+    /// of this program's own docks answered has already moved them, which is what <see cref="Answered"/> records,
     /// taking them away again would delete what was just carried.
     /// </remarks>
     /// <param name="through">A location to say a read through, since every location reads its directory again.</param>
@@ -297,7 +297,7 @@ internal static class Drag
 
         // The paths are what this program's own object says, and what a logical place is offered: the contract rubs
         // the type out at the boundary and the source hands over what it made, and what a file drag says is where
-        // the files are — the same words the text carries, since a place that takes one takes a file's name.
+        // the files are, the same words the text carries, since a place that takes one takes a file's name.
         var said = string.Join(Environment.NewLine, carrying.Select(entry => entry.Path));
 
         transfer.Add(DataTransferItem.CreateText(said));
@@ -333,7 +333,7 @@ internal static class Drag
     /// <remarks>
     /// The source's own object is what travels, under the format this program's own views read: an entry of a place
     /// is not a file, so there is nothing the platform could hand to another program and nothing a file manager could
-    /// make of it. A choice travels as a choice — one object per entry the listing showed chosen — because what a
+    /// make of it. A choice travels as a choice, one object per entry the listing showed chosen, because what a
     /// place takes is what was chosen, and which one of them the pointer took hold of is not the answerer's question.
     /// </remarks>
     /// <param name="from">The press the drag begins at, which is what the platform is handed.</param>
@@ -356,7 +356,7 @@ internal static class Drag
         try
         {
             // Both, because what a drop on a place's entry means is the target's answer: a directory takes one as a
-            // copy — there is nothing to move away from the place — and a place takes one as a move of a path in its
+            // copy, there is nothing to move away from the place, and a place takes one as a move of a path in its
             // Vault. A source that offered one of the two would have the other answered as impossible, and the
             // platform draws that as a drag that cannot land anywhere at all.
             _ = await DragDrop.DoDragDropAsync(
@@ -368,7 +368,7 @@ internal static class Drag
         catch (Exception error) when (error is not OutOfMemoryException)
         {
             // A drag the platform stopped is nothing to report: the pointer came up, the window went away, or the
-            // target refused it — and none of those is a failure of this side's work.
+            // target refused it, and none of those is a failure of this side's work.
             _ = error;
         }
     }

@@ -1,13 +1,13 @@
 //! The `rola vcs-index lookback` command: draw the chain an object sits at the top of.
 //!
-//! The drawing is made of two halves: [`read_chain`] walks the chain and says what is there — one
+//! The drawing is made of two halves: [`read_chain`] walks the chain and says what is there, one
 //! level a version, each with the variant its version points at and the variants merged in beside
-//! it, and the variant itself at the top when the hash named one — and [`draw_chain`] turns that
+//! it, and the variant itself at the top when the hash named one, and [`draw_chain`] turns that
 //! into a grid. What `--json` prints is [`ResultVcsIndexLookback`], which is the same thing the
 //! drawing is made from.
 //!
 //! A version is what a message belongs to: it points at one variant, and that variant carries who
-//! made it and what it says — both by hash, at a [`Creator`](librorolala::vcs::Creator) and a
+//! made it and what it says, both by hash, at a [`Creator`](librorolala::vcs::Creator) and a
 //! [`Message`](librorolala::vcs::Message) in the index. So what a level is drawn with is read from
 //! the variant its version points at, and the drawing is [rola status](crate::cmd_status)'s too:
 //! what it draws for a file is this, with [`TopKind::Editing`] over it when the file has changes
@@ -69,7 +69,7 @@ pub const ARG_MAX_MESSAGE_LENGTH: PickerArg<'static, Option<usize>> =
 
 /// What a lookback is drawn as, by the run that asked for it.
 ///
-/// A resource rather than state, since it is read where the drawing is made — the renderer — and
+/// A resource rather than state, since it is read where the drawing is made, the renderer, and
 /// set where the run's flags are read, which for `rola status` is a command that draws a lookback
 /// only when it was given something to look back from.
 // The fields are the flags a run names, one each, and they are independent of one another: a drawing
@@ -154,7 +154,7 @@ impl ResLookback {
     /// Takes what the run asked for from the flags it gave.
     ///
     /// It is what a command calls as it is reached, so that the drawing a renderer makes is the one
-    /// the run named — whichever of the two commands that draw a lookback it was.
+    /// the run named, whichever of the two commands that draw a lookback it was.
     pub fn asked(
         &mut self,
         compact: Flag,
@@ -197,8 +197,8 @@ pub fn desc_vcs_index_lookback() -> Description {
 
 /// Completes what `rola vcs-index lookback` can be given next.
 ///
-/// The hash is the top of a chain, which is a version or a variant — a variant sits over the version
-/// it is based on — so both kinds are offered. `--max-message-length` takes a number, which no list
+/// The hash is the top of a chain, which is a version or a variant, a variant sits over the version
+/// it is based on, so both kinds are offered. `--max-message-length` takes a number, which no list
 /// of hashes answers.
 #[completion(EntryVcsIndexLookback)]
 pub fn complete_vcs_index_lookback(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> Suggest {
@@ -226,8 +226,8 @@ pub fn complete_vcs_index_lookback(ctx: ShellContext, index: &mut LazyRes<ResVCS
 
 /// Draws the chain one index object sits at the top of
 ///
-/// A Version is drawn at the top, and the chain walked back to the first version — the root, a
-/// version of its own, is not drawn — reading each version once, so the numbers fall by one a step.
+/// A Version is drawn at the top, and the chain walked back to the first version, the root, a
+/// version of its own, is not drawn, reading each version once, so the numbers fall by one a step.
 /// A Variant names the same chain from the other side: it is drawn over the version it is based on,
 /// under a version whose number nothing here knows, drawn `?`.
 ///
@@ -333,8 +333,8 @@ pub fn from_object(
 
 /// How the file a chain was drawn for stands, as `rola status` reads it.
 ///
-/// It is the data behind the two lines drawn above the chain — where the file is mapped from and how
-/// it stands — so a `--json` run reads the same thing a person is shown, and the words are put to it
+/// It is the data behind the two lines drawn above the chain, where the file is mapped from and how
+/// it stands, so a `--json` run reads the same thing a person is shown, and the words are put to it
 /// where it is drawn rather than here.
 #[derive(Serialize)]
 pub struct Standing {
@@ -387,8 +387,8 @@ pub enum StandingRelation {
 
 /// Result: the chain, one level a version, the highest version's first.
 ///
-/// It is what a drawing needs and no more — a level's number, the variant its version points at,
-/// and the variants merged in beside it, and what the top of the chain is — so what a `--json` run
+/// It is what a drawing needs and no more, a level's number, the variant its version points at,
+/// and the variants merged in beside it, and what the top of the chain is, so what a `--json` run
 /// prints is the graph itself.
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultVcsIndexLookback {
@@ -431,7 +431,7 @@ pub fn render_result_vcs_index_lookback(result: ResultVcsIndexLookback, lookback
         Vec::new()
     };
 
-    // The lines above the chain, one blank line apart — and one more between them and the chain
+    // The lines above the chain, one blank line apart, and one more between them and the chain
     // itself, so what a file is reads apart from the versions it has.
     for (at, hint) in hints.iter().enumerate() {
         if at > 0 {
@@ -492,7 +492,7 @@ pub fn render_result_vcs_index_lookback(result: ResultVcsIndexLookback, lookback
 /// The lines drawn above the chain: where the file is mapped from, and how it stands.
 ///
 /// A chain drawn by a hash has no file behind it and says neither. The state is drawn in a colour of
-/// its own — white when the two sides stand as they should, bright yellow when they do not — so what
+/// its own (white when the two sides stand as they should, bright yellow when they do not) so what
 /// is wrong reads before the words do.
 fn hints(result: &ResultVcsIndexLookback) -> Vec<String> {
     let Some(standing) = &result.standing else {
@@ -545,7 +545,7 @@ fn state_words(standing: &Standing) -> String {
 
     // Being behind is ordinarily without a count: a fetch brings the Vault's Layout and never its versions,
     // so the chain that would measure the gap is the Vault's own and is not here. The direction is said on
-    // its own, since the count a reader would otherwise be given is the one thing that is not known — and a
+    // its own, since the count a reader would otherwise be given is the one thing that is not known, and a
     // zero there would read as the two sides being in step.
     if matches!(standing.relation, StandingRelation::Behind) && standing.distance.is_none() {
         return match (standing.mine, standing.modified) {
@@ -655,7 +655,7 @@ fn anomalous(standing: &Standing) -> bool {
 
 /// One row as the line that says the Vault records the version it draws.
 ///
-/// The whole line is drawn as one thing — the number, the Vault's name and the version's words —
+/// The whole line is drawn as one thing (the number, the Vault's name and the version's words)
 /// since what it says is where the Vault stands rather than what any part of it is.
 fn marked(row: &[Cell], vault: &str, note: Option<&String>) -> String {
     let text = plain(row);
@@ -739,8 +739,8 @@ fn notes(result: &ResultVcsIndexLookback, lookback: &ResLookback) -> HashMap<u64
 
 /// The number the highest version the chain recorded carries.
 ///
-/// One version is number 0, and every version over the oldest — a level of the drawing, or the head
-/// a chain was started from — adds one. The levels alone do not count them, since the oldest
+/// One version is number 0, and every version over the oldest, a level of the drawing, or the head
+/// a chain was started from, adds one. The levels alone do not count them, since the oldest
 /// version's variant is based on the root and hangs from no level; a chain that recorded nothing is
 /// number 0 all the same, which is where a placeholder stands when there is nothing under it.
 fn recorded_top(result: &ResultVcsIndexLookback) -> u64 {
@@ -817,7 +817,7 @@ mod tests {
 
     /// Being behind is said with the count the chain gave, and without a count when it did not give one.
     ///
-    /// The second is the ordinary one — a fetch brings the Vault's Layout and never its versions — and what it
+    /// The second is the ordinary one, a fetch brings the Vault's Layout and never its versions, and what it
     /// must not say is a number: the count is the one thing that is not known, and a zero there would read as
     /// the two sides being in step.
     #[test]

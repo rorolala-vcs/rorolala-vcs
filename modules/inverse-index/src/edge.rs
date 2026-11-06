@@ -3,8 +3,8 @@
 //! A key is pointed at by different objects for different reasons: a Variant points at the content
 //! it was made of, at the Version it is based on, at the Variant it merges in, and at the text that
 //! says who made it and what was done; a Version points at the Variant it fixes. What a reader asks
-//! for is the dependents *of one role* — which versions pin this variant is a different question
-//! from which variants merged it in — so the role is kept beside the source rather than the key
+//! for is the dependents *of one role*, which versions pin this variant is a different question
+//! from which variants merged it in, so the role is kept beside the source rather than the key
 //! alone being enough.
 
 use rorolala_utils_lazyffi::lazyffi;

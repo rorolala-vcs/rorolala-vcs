@@ -10,8 +10,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// answered is let go of.
 /// </summary>
 /// <remarks>
-/// Nothing here draws — that needs a running Avalonia, and the column and the mark are built out of
-/// controls — so what is exercised is the catalogue: a column exists only where a provider speaks for
+/// Nothing here draws, that needs a running Avalonia, and the column and the mark are built out of
+/// controls, so what is exercised is the catalogue: a column exists only where a provider speaks for
 /// the directory, and which provider that is is what the listing is built from.
 /// </remarks>
 public sealed class LockTests
@@ -110,8 +110,8 @@ public sealed class LockTests
 
     /// <summary>What the providers answered is let go of when the files may have changed.</summary>
     /// <remarks>
-    /// What a provider answers is read from a tree a file operation changes — a Layout names each path by
-    /// a `Uuid`, and a move renames one — and a listing is read again for the same change. A listing read
+    /// What a provider answers is read from a tree a file operation changes, a Layout names each path by
+    /// a `Uuid`, and a move renames one, and a listing is read again for the same change. A listing read
     /// from an answer that was not let go of is drawn from a tree that is gone, which is what this says
     /// cannot happen again.
     /// </remarks>

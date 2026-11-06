@@ -9,9 +9,9 @@ namespace TerminalPlugin;
 /// <remarks>
 /// It depends on the File System plugin for the one thing it starts a shell from: where the tree is rooted.
 /// A terminal is not a view of the file manager, though, so it is a plugin of its own rather than a dock of
-/// that one — a shell is the shell's, and a user who wants no file manager may still want one.
+/// that one, a shell is the shell's, and a user who wants no file manager may still want one.
 /// <para>
-/// The exchange with the shell is a pseudo-terminal, which is Rust's — see <c>rola-desktop-pty</c> — and what
+/// The exchange with the shell is a pseudo-terminal, which is Rust's, see <c>rola-desktop-pty</c>, and what
 /// the dock adds is the drawing and the keys. That half is deliberately this plugin's: what a terminal draws
 /// is a grid of cells and a parser, and both are the window's answer rather than the exchange's.
 /// </para>

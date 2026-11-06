@@ -70,7 +70,7 @@ pub use rola_desktop_pty as desktop_pty;
 ///
 /// The Workspace comes before the Vault, since it is the copy being worked in, so a key
 /// kept there shadows an equally named one in the Vault. The Vault then brings every scope
-/// it is admitted to — see [`Vault::key_scopes`] — its own first and the Vaults holding it
+/// it is admitted to, see [`Vault::key_scopes`], its own first and the Vaults holding it
 /// after, so a member kept in a sub-vault is looked for there before the root, and is not
 /// found at all by a search that starts above it. The keyring itself does not know what
 /// any of those are: this is where their directories are turned into the plain roots it
@@ -113,8 +113,8 @@ fn roots_here() -> Vec<PathBuf> {
 /// Every member whose public key `rule` finds, highest priority first.
 ///
 /// A member is named by a public key, which is meant to be shared, so it is looked for in
-/// every scope the rule turns on — the local roots first, then the user's local data
-/// directory, the filesystem root, and `ROLA_HOME` — with a name found higher up shadowing
+/// every scope the rule turns on, the local roots first, then the user's local data
+/// directory, the filesystem root, and `ROLA_HOME`, with a name found higher up shadowing
 /// the same name below it.
 ///
 /// The local roots are the keys of the Workspace the call is made from and of `vault`, in
@@ -139,7 +139,7 @@ pub fn member_find(member_name: &str, rule: &KeyLocateRule) -> Option<Member> {
 /// Every account whose private key `rule` finds, highest priority first.
 ///
 /// An account is named by a private key, which is not shared, so it is only ever looked
-/// for in the local roots — beside the Workspace and `vault`, in that order — whatever the
+/// for in the local roots (beside the Workspace and `vault`, in that order) whatever the
 /// rule says about the other scopes. The accounts cross as a set, read one index at a
 /// time; see [`Accounts`].
 #[must_use]

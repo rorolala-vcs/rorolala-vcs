@@ -6,7 +6,7 @@
 //! nobody ever will. `__scratch/` is ignored by git.
 //!
 //! Each call is a directory no other call uses: the process id and a counter make the name, so a run
-//! that measures several stores in a row — or a test binary running its cases at once — never shares
+//! that measures several stores in a row, or a test binary running its cases at once, never shares
 //! one. A name left over from an earlier run of the same process is emptied first.
 
 use std::fs;
@@ -34,8 +34,8 @@ pub fn at(label: &str) -> PathBuf {
     let _ = fs::remove_dir_all(&path);
 
     if let Err(error) = fs::create_dir_all(&path) {
-        // PANIC: the `# Panics` section above is the contract — a measurement with no writable
-        // directory is not one that can be taken — so this stops rather than report from nowhere.
+        // PANIC: the `# Panics` section above is the contract, a measurement with no writable
+        // directory is not one that can be taken, so this stops rather than report from nowhere.
         panic!("making {}: {error}", path.display());
     }
 

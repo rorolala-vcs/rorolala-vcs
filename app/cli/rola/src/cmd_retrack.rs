@@ -2,12 +2,12 @@
 //!
 //! A Layout names one version for each path, and the content behind a version stays in the index
 //! whether or not anything points at it. What a run names after the file is what the path is to
-//! record: a version — a step back, a number, or a hash — which moves the entry's pointer, or another
-//! entry — a `Uuid`, or a path of the Vault's own Layout — which makes the path record that entry in
+//! record: a version (a step back, a number, or a hash) which moves the entry's pointer, or another
+//! entry (a `Uuid`, or a path of the Vault's own Layout) which makes the path record that entry in
 //! place of the one it recorded.
 //!
-//! Moving the pointer and leaving the file alone would leave the two apart — the file holds what a
-//! newer version did, and the Layout now names an older one — so the version's content is written
+//! Moving the pointer and leaving the file alone would leave the two apart, the file holds what a
+//! newer version did, and the Layout now names an older one, so the version's content is written
 //! back over the file as well, and the reading is told the two agree again, the way
 //! [`crate::checkout`] tells it for a pull. `--only-index` is what a run gives when it wants the
 //! record moved and the work left alone; what the tree then holds is what `rola status` reports as
@@ -15,7 +15,7 @@
 //!
 //! A file with changes that were never recorded, and one a variant is waiting to be joined into,
 //! are not states a retrack that writes content may write over: both are refused. `--force` is how a
-//! run says to go ahead anyway — for the first, the changes are discarded and the content switched;
+//! run says to go ahead anyway, for the first, the changes are discarded and the content switched;
 //! for the second, the merge is ended, its variant file removed, and the content switched.
 
 // A retrack reads a target, a Layout, a chain and a version before it moves one pointer, and every
@@ -150,19 +150,19 @@ pub fn complete_retrack(
 
 /// Records what is named for a file, in the Layout being worked in
 ///
-/// `FILE` is one local path in this Workspace — a `Uuid`, a hash and a remote name are refused — and
+/// `FILE` is one local path in this Workspace (a `Uuid`, a hash and a remote name are refused) and
 /// it has to be a path the Layout records. `TARGET` is what the path is to record, and is one
 /// version back when it is not given.
 ///
 /// A version target moves the entry's pointer: `~N` N versions back, `N` the version numbered N, or
-/// a hash a version on the way back from where the entry is now — a hash off that way is a jump, and
+/// a hash a version on the way back from where the entry is now, a hash off that way is a jump, and
 /// `--deny-jump` is what refuses one. `~N` and `N` past either end of the chain are always refused.
 /// The `Uuid`, the path and the description stay as they are, and nothing is removed from the index.
 /// A version this index does not hold is brought from the Vault the Layout tracks before the pointer
 /// moves, so a run may go to a version this side never fetched; `--offline` refuses that instead of
 /// reaching for it.
 ///
-/// An entry target — a `Uuid`, or a path of the Vault's own Layout — makes the path record that
+/// An entry target (a `Uuid`, or a path of the Vault's own Layout) makes the path record that
 /// entry in place of the one it recorded, which is dropped. The entry must hold no path of its own
 /// and must record a version; what it holds is read from the fetched copy of the Vault's Layout, or
 /// from this Layout when the `Uuid` is one it holds at no path. Whether the file changes follows how
@@ -173,7 +173,7 @@ pub fn complete_retrack(
 /// `--fork` records a fresh `Uuid` for what the path records now and leaves the file, the index and
 /// the Vault alone; it cannot be given with a target.
 ///
-/// The version's content is written back over the file with the record, so the two agree again —
+/// The version's content is written back over the file with the record, so the two agree again,
 /// what a file standing as recorded is given without being asked, since the content it holds is the
 /// run's to replace. `--only-index` moves the record and leaves the file alone, which is what a run
 /// wants when the work on disk is not to be touched: `rola status` then reports the file as changed.
@@ -264,8 +264,8 @@ pub fn retrack(args: EntryRetrack, force: &ResForce) -> Next {
 }
 
 /// The state a retracking starts in.
-// What the run is to do is a handful of independent answers it was given — a fresh `Uuid`, leaving
-// the file alone, refusing jumps, going past unrecorded changes — and making each a two-variant
+// What the run is to do is a handful of independent answers it was given, a fresh `Uuid`, leaving
+// the file alone, refusing jumps, going past unrecorded changes, and making each a two-variant
 // enum would say no more than the bool does while writing every use of it out twice.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Grouped)]
@@ -435,7 +435,7 @@ pub fn handle_retrack(
 
     // The target is read before anything is looked at, so a run that wrote one the command cannot
     // use is told that rather than a complaint about a file it would have refused for another
-    // reason. A fork names no target — the two cannot be given together — and is its own answer.
+    // reason. A fork names no target, the two cannot be given together, and is its own answer.
     let written = target.clone().unwrap_or_else(|| "~1".to_owned());
     let recording = if fork {
         Recording::Fork
@@ -642,7 +642,7 @@ struct RecordingVersion<'a> {
 /// [`ErrorRetrackFailed`] when the store, the index or the Layout refuses.
 ///
 /// The answer is the state the run ends in, and what a refusal is drawn from is the error it is
-/// handed — the two are one value here because a command's handler answers with the one or the other.
+/// handed, the two are one value here because a command's handler answers with the one or the other.
 fn record_version(asked: RecordingVersion<'_>) -> Result<Next, Next> {
     let RecordingVersion {
         level,
@@ -753,7 +753,7 @@ fn record_version(asked: RecordingVersion<'_>) -> Result<Next, Next> {
         }
     }
 
-    // Content is read, and a Vault is bound to, only when the run writes it back — and only when
+    // Content is read, and a Vault is bound to, only when the run writes it back, and only when
     // the store here does not already hold it: a retrack of content this Workspace has is local
     // work, and asking for an account would make it fail where there is nothing to fetch.
     let content = match action {
@@ -844,8 +844,8 @@ enum Action {
 }
 
 /// What a run that records an entry for a path was asked for, and what it was asked about.
-// What the run is to do is a handful of independent answers it was given — leaving the file alone,
-// jumping between chains, going past unrecorded changes — and making each a two-variant enum would
+// What the run is to do is a handful of independent answers it was given, leaving the file alone,
+// jumping between chains, going past unrecorded changes, and making each a two-variant enum would
 // say no more than the bool does while writing every use of it out twice.
 #[allow(clippy::struct_excessive_bools)]
 struct Switching<'a> {
@@ -893,8 +893,8 @@ struct Switching<'a> {
 ///
 /// What the path records is dropped and the entry it is to record takes its place, in one batch: an
 /// entry is its `Uuid`, so the two are one change and not a removal and a creation a reader could
-/// meet between. Nothing else is touched — the index, the stores and the working tree know nothing
-/// of a Layout's paths — except the file the run is told to write back or to leave alone.
+/// meet between. Nothing else is touched, the index, the stores and the working tree know nothing
+/// of a Layout's paths, except the file the run is told to write back or to leave alone.
 ///
 /// What is read is read before anything is written, so a refused run leaves the Layout, the tree and
 /// the merge as they were.
@@ -1027,7 +1027,7 @@ fn switch_uuid(asked: Switching<'_>) -> Next {
     }
 
     // The Layout is written before the content, so a run whose store is short of it leaves a record
-    // naming a version the file does not hold — which `rola status` reports as a change, and a
+    // naming a version the file does not hold, which `rola status` reports as a change, and a
     // second `rola retrack` puts right.
     if let Err(error) = switch_entry(layout, path, target, new_data) {
         return layout_failed(&error);
@@ -1142,7 +1142,7 @@ struct Entry {
 ///
 /// A `Uuid` needs no path and no fetch: one this Layout holds at no path is the entry to record, and
 /// the copy of the Vault's Layout is read only when it is here already. A path is read from that
-/// copy, fetched first when it is not here — the one step of this that may leave the machine.
+/// copy, fetched first when it is not here, the one step of this that may leave the machine.
 fn recorded_entry(
     target: &EntryTarget,
     written: &str,
@@ -1213,7 +1213,7 @@ fn recorded_entry(
     };
 
     // The entry the path records already is the one case every other check would be told apart
-    // from: it is named by a path — this one — so it is refused for being the entry it is.
+    // from: it is named by a path, this one, so it is refused for being the entry it is.
     if id == old {
         return Err(ErrorRetrackEntry {
             entry: written.to_owned(),
@@ -1301,7 +1301,7 @@ fn relation(
 /// How the version a path records stands beside the version the entry to record holds.
 ///
 /// A version the index does not hold is brought from the Vault the Layout tracks, since a chain that
-/// cannot be read cannot be compared — which is the one step of this that may leave the machine.
+/// cannot be read cannot be compared, which is the one step of this that may leave the machine.
 fn stand_of(
     data: &MutableData,
     target: &MutableData,
@@ -1383,7 +1383,7 @@ enum SwitchRefusal {
 /// what the path records, so an entry that records the same version or a later one is a change of
 /// identity and nothing more, and one that records an earlier version has that version's content
 /// written over the file. Whether the file may be written is what the caller's reading of it decides
-/// — a file that stands as recorded is written without being asked, and one holding changes that were
+///, a file that stands as recorded is written without being asked, and one holding changes that were
 /// never recorded is what `--force` is for. Different chains are not a step back at all, so they are
 /// what a run does unless it asked to stay on the chain with `--deny-jump`.
 fn switch_action(
@@ -1447,7 +1447,7 @@ fn content_of(
 ///
 /// The record is written out before the file is removed, since a record that outlived its variant
 /// file is a merge a reading reports as broken, while a variant file left by a write that failed is
-/// only a path the tree holds untagged — and the target's content is replaced by the caller.
+/// only a path the tree holds untagged, and the target's content is replaced by the caller.
 ///
 /// `disk` is where the variant file was found before the caller changed anything, read before the
 /// change because a change of `Uuid` takes away the entry the merge names its file by.
@@ -1667,8 +1667,8 @@ struct VaultEnd {
 
 /// Reads the chain a version is the top of into this index, from the Vault that holds it.
 ///
-/// A retrack may go to a version the Vault holds and this side never fetched. The chain under it — /// the version, the variant that produced it, the words they are named by, and so on down to a version
-/// this index already holds — is asked for in one exchange, and what the Vault walks is written here
+/// A retrack may go to a version the Vault holds and this side never fetched. The chain under it, /// the version, the variant that produced it, the words they are named by, and so on down to a version
+/// this index already holds, is asked for in one exchange, and what the Vault walks is written here
 /// as one pack: what is left behind is a chain as readable here as one a sync brought.
 struct Bringer<'a> {
     /// The Workspace the exchange is spoken from.
@@ -1687,7 +1687,7 @@ impl Bringer<'_> {
     /// Walks the chain from `hash` down to a version this index already holds, writing each object.
     ///
     /// One exchange rather than one per object: the Vault walks the chain itself, down to the first
-    /// version this side already holds, and sends the whole of what is missing — which is one
+    /// version this side already holds, and sends the whole of what is missing, which is one
     /// connection and one pack here however long the chain is.
     ///
     /// # Errors
@@ -1768,7 +1768,7 @@ fn vault_end(
 ///
 /// `recorded` is the content the version is of, which is what the store holds it under. The store
 /// may not hold it: what is not here is brought from a Vault first, which is the one step of a
-/// retrack that may leave the machine, and `sources` is the run that may do it — nothing when the
+/// retrack that may leave the machine, and `sources` is the run that may do it, nothing when the
 /// content was already here and there is nothing to ask for.
 fn restore(
     storage: &mut LazyRes<ResRorolalaStorage>,
@@ -1810,14 +1810,14 @@ fn restore(
 
 /// Writes down what the file is to agree with now that the Layout names an older version.
 ///
-/// Moving the pointer and leaving the file alone leaves the two apart — the file is what the newer
-/// version held, and the Layout names an older one — but the reading does not tell that from the
+/// Moving the pointer and leaving the file alone leaves the two apart, the file is what the newer
+/// version held, and the Layout names an older one, but the reading does not tell that from the
 /// pointer: what it compares is the file against what the Layout was last known to agree with. So
 /// the agreement is written afresh here rather than left standing, or the very next `rola status`
 /// would call a file with changes never recorded one with nothing to record.
 ///
 /// What is written is the content the new version holds, so a file that is then put back to it by
-/// hand reads as agreed again — a plain "nothing" would leave such a file reported as changed with
+/// hand reads as agreed again, a plain "nothing" would leave such a file reported as changed with
 /// `rola track` having nothing to say about it. The content of a version the index does not hold is
 /// nothing that can be read, so the agreement is taken back rather than guessed at.
 ///
@@ -1908,7 +1908,7 @@ fn stored_hash(
 ///
 /// Only a local path is taken. A `Uuid`, a hash and a remote name are refused by shape rather than
 /// answered as a path that happens not to be there, since a run that wrote one meant the other
-/// command that takes one. A name holds `@` often enough — `logo@2x.png` — that a plain one is
+/// command that takes one. A name holds `@` often enough, `logo@2x.png`, that a plain one is
 /// left to be a path: what is refused is the Vault-side marker and the one name a Vault's Layout
 /// is kept under.
 fn locate(root: &Path, cwd: &Path, given: &str) -> Result<LayoutPath, Next> {

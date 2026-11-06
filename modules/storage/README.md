@@ -11,10 +11,10 @@ replaceable backend.
   which keys are held, and reading or storing content by key. The exchange itself is driven over
   any stream by [`transfer::initiate`] and [`transfer::respond`], which compare [`ProtocolMagic`]
   before a key is named.
-- What moves is content, named by [`Key`] — never a file, and never a layout: content kept as
+- What moves is content, named by [`Key`], never a file, and never a layout: content kept as
   chunks crosses whole, and the other end writes it the way that end writes anything.
 
-Encoding — how an object is laid out, and whether it is compressed — is the backend's own
+Encoding (how an object is laid out, and whether it is compressed) is the backend's own
 business, so what a caller hands over and gets back does not change when the backend does.
 
 Where a store puts what it keeps is its own business too: the paths are not part of this boundary.
@@ -24,7 +24,7 @@ itself rather than something a caller asks for.
 ## Locking
 
 A store is changed one run at a time: [`Lockable::lock`] hands out a [`LockingGuard`] that holds the
-store for as long as it lives. The changes that need that — [`LockingGuard::pack`] and
-[`LockingGuard::repack`], which read a store's packs, change them and write them back — are reached
+store for as long as it lives. The changes that need that, [`LockingGuard::pack`] and
+[`LockingGuard::repack`], which read a store's packs, change them and write them back, are reached
 through a guard and nowhere else, so a run that would lose another's work cannot start the work at
 all.

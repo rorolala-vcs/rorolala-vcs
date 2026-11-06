@@ -14,7 +14,7 @@ namespace RorolalaDesktop.Hosting;
 /// It covers the client area and takes the press: the window is on the screen before there is anything to do
 /// in it, and the first frame being the window rather than a half-made shell is the whole of what this is for.
 /// What it cannot cover is the window's own buttons, which the frame draws over the client area rather than in
-/// it — a frame that belongs to the desktop's window is not the covering's to hide.
+/// it, a frame that belongs to the desktop's window is not the covering's to hide.
 /// <para>
 /// What is on it is a mark that turns, and nothing else. The work it is over is short enough that a line of
 /// copy would be read at most once and often not finished, so there is nothing here to read: the mark says

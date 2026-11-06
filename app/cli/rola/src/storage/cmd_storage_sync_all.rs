@@ -1,7 +1,7 @@
 //! The `rola storage sync-all` command: make the Workspace's store and the Vault's hold the same.
 //!
-//! It is [`vault handshake`](crate::vault::cmd_vault_handshake)'s reach — a Vault the Workspace has
-//! bound, or an address — with the stores at both ends being what is spoken about: each side says
+//! It is [`vault handshake`](crate::vault::cmd_vault_handshake)'s reach, a Vault the Workspace has
+//! bound, or an address, with the stores at both ends being what is spoken about: each side says
 //! what it holds, and what only one of them holds crosses, so one run leaves both holding
 //! everything either had. Because that is a change to both stores, it is asked for first.
 
@@ -58,8 +58,8 @@ pub fn desc_storage_sync_all() -> Description {
 ///
 /// What crosses is what only one end holds, in whichever direction that is: a full sync is not an
 /// upload or a download, and one run leaves each store holding everything either of them had. A key
-/// is the whole of what it names — a content kept as chunks is its manifest and the chunks the
-/// manifest names — so a store that is given one keeps it the way the other store had it.
+/// is the whole of what it names, a content kept as chunks is its manifest and the chunks the
+/// manifest names, so a store that is given one keeps it the way the other store had it.
 ///
 /// The run changes both stores, so it asks before it starts, and a run that is told no does nothing
 /// and says so. `--confirm` answers that question in advance, which is what a run without a person

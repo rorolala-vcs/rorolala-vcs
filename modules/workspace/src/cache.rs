@@ -4,7 +4,7 @@
 //! pointer file beside them. It is kept this way because of what a directory costs on Windows: a
 //! directory whose files another process holds open cannot be renamed, so a copy that is replaced by
 //! renaming the copy itself fails with "Access is denied" whenever anything is reading it at the
-//! same moment — a status reading, a plan, another fetch. A generation is therefore written whole
+//! same moment, a status reading, a plan, another fetch. A generation is therefore written whole
 //! under a name of its own and never renamed again, and what moves instead is the pointer: a file,
 //! which may be replaced while it is open.
 //!
@@ -153,7 +153,7 @@ impl LayoutCopy {
     /// What is cleared is everything the copy is not: a generation no pointer names, the shape a
     /// copy was kept in before generations, and a staging directory a run that died left. Nothing
     /// the pointer names is touched, and nothing younger than the leftover age before `started` is
-    /// either — a run of another fetch is a few seconds long, and removing what it is writing would
+    /// either, a run of another fetch is a few seconds long, and removing what it is writing would
     /// fail it for no reason.
     ///
     /// A container whose pointer cannot be read is left as it is: nothing there is known to be
@@ -225,7 +225,7 @@ fn unique() -> String {
 /// Whether `name` is one path component and nothing else.
 ///
 /// A pointer is read as a directory name and joined onto the container, so a name that names
-/// somewhere else — a path, a climbing name, a drive — would be read outside the one directory the
+/// somewhere else (a path, a climbing name, a drive) would be read outside the one directory the
 /// copy is for.
 fn is_plain_name(name: &str) -> bool {
     let mut components = Path::new(name).components();
@@ -427,7 +427,7 @@ mod tests {
     fn two_runs_that_publish_at_once_leave_a_pointer_that_names_a_whole_generation() {
         // Two runs of a fetch, as two processes are: neither is told about the other, and both name
         // the copy. What has to hold is that whichever pointer write lands last, what it names is a
-        // generation that was written whole — never a directory that was still being filled.
+        // generation that was written whole, never a directory that was still being filled.
         let (root, workspace) = scratch("raced");
 
         let one = super::LayoutCopy::of(&workspace, "vault", "truth");

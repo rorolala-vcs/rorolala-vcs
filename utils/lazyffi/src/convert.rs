@@ -10,7 +10,7 @@
 //!   InputType::From == InputPtr::From == ReturnType::Target == ReturnPtr::Target
 //!   ```
 //!
-//! - an **opaque** type — an exported `struct`, whose layout C is never told — has
+//! - an **opaque** type (an exported `struct`, whose layout C is never told) has
 //!   no value C could name, so it crosses through a pointer in every direction:
 //!   [`InputType::From`] and [`ReturnType::Target`] are `*mut` handles, while
 //!   [`InputPtr::From`], [`ReturnPtr::Target`] and [`InputRef::From`] are the handle
@@ -28,25 +28,25 @@
 //!
 //! A `&mut` parameter is handled by reading through [`InputPtr::input_ptr`], calling
 //! the function with `&mut`, then writing the value back through the same pointer with
-//! [`InputPtr::write_ptr`] — so a transparent type needs no layout compatibility
+//! [`InputPtr::write_ptr`], so a transparent type needs no layout compatibility
 //! between `Self` and its repr, and an opaque one is moved in and out of place.
 //!
 //! A `&` parameter is borrowed with [`InputRef::input_ref`] instead and never taken,
 //! so the repr stays C's for the whole call.
 //!
 //! The input conversions are `unsafe`: the value comes from C, so the caller is
-//! responsible for it being valid (a readable pointer, a live string, …).
+//! responsible for it being valid (a readable pointer, a live string, and so on).
 
 /// Receives a value from C by value.
 pub trait InputType {
-    /// The repr-C sibling, or — for an opaque type — a borrowed `*mut` handle.
+    /// The repr-C sibling, or, for an opaque type, a borrowed `*mut` handle.
     type From;
 
     /// Builds `Self` from a repr passed by value.
     ///
     /// # Safety
     ///
-    /// `input` must be a valid value of the repr — in particular, any pointer it
+    /// `input` must be a valid value of the repr, in particular, any pointer it
     /// carries must be usable for the conversion.
     unsafe fn input_type(input: Self::From) -> Self;
 }
@@ -56,7 +56,7 @@ pub trait InputType {
 /// This is how a `&T` parameter or a `&self` receiver crosses: C points at the repr
 /// with a `const` pointer, and the borrow lasts for the call and no longer.
 ///
-/// Nothing is taken, which is what makes the borrow a borrow — and that is only
+/// Nothing is taken, which is what makes the borrow a borrow, and that is only
 /// possible where the repr *is* the value in place, as an opaque handle's is. A
 /// transparent type has no such conversion: a borrow of one would have to point at a
 /// value this side had to build, which is a copy wearing a reference's clothes. So a
@@ -70,7 +70,7 @@ pub trait InputRef {
     /// # Safety
     ///
     /// `input` must be valid, aligned and readable for `Self::From`, and the storage
-    /// must stay readable for as long as the borrow is used — which the generated
+    /// must stay readable for as long as the borrow is used, which the generated
     /// wrapper limits to the call itself.
     unsafe fn input_ref<'a>(input: *const Self::From) -> &'a Self;
 }
@@ -81,7 +81,7 @@ pub trait InputRef {
 /// [`input_ptr`](InputPtr::input_ptr) and written back with
 /// [`write_ptr`](InputPtr::write_ptr).
 ///
-/// `From` is what C points at — the repr-C sibling for a transparent type, and the
+/// `From` is what C points at, the repr-C sibling for a transparent type, and the
 /// handle itself for an opaque one, whose handle *is* its value.
 pub trait InputPtr {
     /// The repr-C sibling: what C points at.
@@ -110,7 +110,7 @@ pub trait InputPtr {
 
 /// Hands a value back to C by value.
 pub trait ReturnType {
-    /// The repr-C sibling, or — for an opaque type — an owning `*mut` handle.
+    /// The repr-C sibling, or, for an opaque type, an owning `*mut` handle.
     type Target;
 
     /// Converts `self` into the repr handed back to C.

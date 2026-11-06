@@ -8,7 +8,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The sync: what a run is told, what it is warned about, and what is read back from it.
 /// </summary>
 /// <remarks>
-/// The exchange itself is the command line's and is not run here — a run needs a Vault and a network — so what
+/// The exchange itself is the command line's and is not run here, a run needs a Vault and a network, so what
 /// is checked is everything this plugin decides: which flags a direction and a scope come to, which warning a
 /// scope and a direction are confirmed with, and what the records a run writes about itself come to.
 /// </remarks>
@@ -89,7 +89,7 @@ public sealed class SyncTests
     /// <remarks>
     /// The table and the buttons read the work two ways: the plan is the command line's whole answer, and the
     /// reading names where each recorded version stands. They can disagree while one is stale, and the table
-    /// saying "Sync Down" beside three grey buttons is the disagreement a reader must not meet — so what the
+    /// saying "Sync Down" beside three grey buttons is the disagreement a reader must not meet, so what the
     /// reading names is pressable on its own.
     /// </remarks>
     [Fact]
@@ -113,8 +113,8 @@ public sealed class SyncTests
     /// <summary>A run that carries everything is confirmed with nothing, and one that does not says what.</summary>
     /// <remarks>
     /// Thirteen things may be said, which is the table a reader was given: seven ways of leaving something out,
-    /// and the three of them that differ by which way the run goes. The three parts are not interchangeable —
-    /// leaving the storage behind is not what leaving the index behind is — so what is checked is that no two
+    /// and the three of them that differ by which way the run goes. The three parts are not interchangeable,
+    /// leaving the storage behind is not what leaving the index behind is, so what is checked is that no two
     /// cells of that table say the same thing, and that every one of them is stated in the catalogue.
     /// </remarks>
     [Fact]
@@ -146,7 +146,7 @@ public sealed class SyncTests
         Assert.Equal(13, keys.Distinct(StringComparer.Ordinal).Count());
 
         // The ways that leave the Layout out say one thing whichever way the run goes, since nothing about the
-        // Vault's Layout moves either way — which is what the difference between thirteen and twenty-one is.
+        // Vault's Layout moves either way, which is what the difference between thirteen and twenty-one is.
         foreach (var scope in Left().Where(scope => !scope.Layout))
         {
             Assert.Equal(
@@ -192,7 +192,7 @@ public sealed class SyncTests
     /// <remarks>
     /// The plan is asked for before anything is pressed, and what it comes to decides whether the three are drawn
     /// pressable: a plan with entries is work to carry, and one with none is a run that would write nothing. What
-    /// is checked is that reading one is reading the entries — an answer that cannot be read is not taken as
+    /// is checked is that reading one is reading the entries, an answer that cannot be read is not taken as
     /// "nothing to do" quietly, but said.
     /// </remarks>
     [Fact]
@@ -236,7 +236,7 @@ public sealed class SyncTests
     /// <summary>What a run says about itself is read into the tasks it reports.</summary>
     /// <remarks>
     /// The records are the command line's, so what is checked is what this reads out of them: every task a
-    /// `begin` opens is kept — a bar of the run's own, and a direction under it — while a task that only names
+    /// `begin` opens is kept (a bar of the run's own, and a direction under it) while a task that only names
     /// what its parent is moving is that parent's line rather than a task of its own. Anything that is not a
     /// record at all is ignored rather than drawn.
     /// </remarks>

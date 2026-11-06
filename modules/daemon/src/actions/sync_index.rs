@@ -3,7 +3,7 @@
 //! The index is synced the way a store is, and for the same reason: each side says what it holds,
 //! and what only one of them holds crosses, so one run leaves both holding everything either had.
 //! What differs is what a key is made of. An index object is one object and is never cut, so there
-//! is none of the manifest-and-chunks a store's content may need — a key crosses as its bytes, and
+//! is none of the manifest-and-chunks a store's content may need, a key crosses as its bytes, and
 //! the other side accepts them under the key they hash to.
 
 use std::collections::BTreeSet;
@@ -25,7 +25,7 @@ use super::sync_storage::{
 ///
 /// The two ends keep an index of their own, and this asks for a full sync between them: each side
 /// says what it holds, and what crosses is everything the two of them hold between them. Nothing is
-/// uploaded or downloaded — an object moves in whichever direction it is only on one side of.
+/// uploaded or downloaded, an object moves in whichever direction it is only on one side of.
 ///
 /// A side that has no index is given one, since an index that is not there holds nothing and a full
 /// sync of two indexes is what was asked for.
@@ -54,7 +54,7 @@ impl Action for ActionSyncIndexAll {
     /// # Errors
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
-    /// Vault to work on, and whatever the exchange fails with — see `sync_index`.
+    /// Vault to work on, and whatever the exchange fails with, see `sync_index`.
     async fn process(
         _: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
@@ -109,7 +109,7 @@ impl Action for ActionSyncIndexAll {
 /// The index this side works on, made if it is not there yet.
 ///
 /// Which index that is follows from where this runs: an action taken from a Workspace works on the
-/// Workspace's index, and one served by a Vault works on the Vault's — each is kept beside the store
+/// Workspace's index, and one served by a Vault works on the Vault's, each is kept beside the store
 /// of the same root, at the path the layout names. A side that has neither is not a side an action
 /// can run on.
 pub(crate) fn local_index(ctx: &ActionContext<'_>) -> Result<VCSIndex, ActionError> {
@@ -128,9 +128,9 @@ pub(crate) fn local_index(ctx: &ActionContext<'_>) -> Result<VCSIndex, ActionErr
 
 /// Makes two indexes hold the same keys.
 ///
-/// It is the same exchange [`sync_storage`](super::sync_storage) runs — each side says which of the
+/// It is the same exchange [`sync_storage`](super::sync_storage) runs, each side says which of the
 /// keys it holds, the answers cross, and then every key one side holds and the other does not is
-/// carried over, the Workspace's first — with the carrying shaped for what an index object is: an
+/// carried over, the Workspace's first, with the carrying shaped for what an index object is: an
 /// object is one object and is never cut, so a whole packet of them crosses in one value, and what
 /// the taker receives it writes as one pack rather than a file apiece.
 ///
@@ -311,7 +311,7 @@ async fn send_keys(
 ///
 /// Nothing is written loose: an index object is small and the run of them is many, so the entries of
 /// a whole direction become one pack with one index rather than a file apiece. That is also what
-/// makes a direction one commit — a reader finds the objects of a sync when the pack naming them is
+/// makes a direction one commit, a reader finds the objects of a sync when the pack naming them is
 /// there, and not one at a time as they arrive.
 ///
 /// What it answers is what the sender is told: which of the keys it now holds, read from what the
@@ -347,7 +347,7 @@ async fn take_keys(
         let last = packet.carried.is_empty();
 
         // One name for a whole packet: what a reader is shown is the work in hand, and a packet is
-        // what is in hand — naming every object of it would be the chatter this shape is rid of.
+        // what is in hand, naming every object of it would be the chatter this shape is rid of.
         let named = packet
             .carried
             .first()

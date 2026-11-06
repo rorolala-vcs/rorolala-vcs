@@ -8,8 +8,8 @@ namespace RorolalaDesktop.Contract;
 /// One thing being dragged: an object the source made, with its type rubbed out.
 /// </summary>
 /// <remarks>
-/// Rubbed out on purpose. A drag crosses between views that know nothing of each other — the file tree, a
-/// plugin's own listing, whatever is added next — and a contract that named every kind of thing that could be
+/// Rubbed out on purpose. A drag crosses between views that know nothing of each other, the file tree, a
+/// plugin's own listing, whatever is added next, and a contract that named every kind of thing that could be
 /// dragged would have to be changed by every one of them. So the source hands over its own object and the view
 /// under the pointer decides whether it is something it can take: what a drop means is the dropped-on view's
 /// question, which is also why nothing here says how a drag is drawn.
@@ -22,7 +22,7 @@ public sealed record LogicalDrag(object Data);
 /// </summary>
 /// <remarks>
 /// The payload is not read here and has no grammar: it is one string, handed over whole, because what is inside
-/// it is the answer's own business — <c>rola@/some/workspace@vault</c> is one address whose middle is a
+/// it is the answer's own business, <c>rola@/some/workspace@vault</c> is one address whose middle is a
 /// directory and whose end is which of that directory's views is wanted, and only the plugin that answers
 /// <c>rola</c> knows the two apart.
 /// </remarks>
@@ -33,7 +33,7 @@ public sealed record LogicalAddress(string Scheme, string Payload)
     /// <summary>Whether a prefix is one a plugin may claim.</summary>
     /// <remarks>
     /// One or more lower-case segments joined by a dot, each opening with a letter: the shape of an identity
-    /// elsewhere in this contract, so that a prefix cannot be something that reads as part of the payload — a
+    /// elsewhere in this contract, so that a prefix cannot be something that reads as part of the payload, a
     /// space, an <c>@</c>, or a path separator.
     /// </remarks>
     private static readonly Regex Grammar = new(
@@ -90,8 +90,8 @@ public sealed record LogicalAddress(string Scheme, string Payload)
 /// <remarks>
 /// A logical view is a place a plugin answers for rather than a directory, so what is in it is not a file and
 /// has no size or time: what it has is what its provider says it has. The list is drawn by the file browser, so
-/// that a place is read the same way wherever it is, while what is drawn in it — the name, the picture, what a
-/// click does, what the menu offers — is the provider's answer.
+/// that a place is read the same way wherever it is, while what is drawn in it, the name, the picture, what a
+/// click does, what the menu offers, is the provider's answer.
 /// <para>
 /// What an entry carries beyond its words is its to interpret: <see cref="Data"/> is handed back to the provider
 /// when the entry is used, so that a provider may keep a key of its own in it rather than parsing its own name
@@ -108,7 +108,7 @@ public sealed record LogicalAddress(string Scheme, string Payload)
 /// place share a name.
 /// </param>
 /// <param name="Picture">
-/// What to draw where the picture goes, for a picture the icon library holds no key for — an entry whose look is
+/// What to draw where the picture goes, for a picture the icon library holds no key for, an entry whose look is
 /// chosen from its name, which is what a file's extension is. Answered beside <paramref name="IconKey"/> rather
 /// than instead of it: a key is a picture the library already holds, and a maker is one the answer draws for the
 /// size it is asked for.
@@ -133,8 +133,8 @@ public sealed record LogicalEntry(
 /// </summary>
 /// <remarks>
 /// Four questions and no more: what the place is called, what is in it, whether a drag is something it can take,
-/// and taking it. Everything else about a logical view — what a double click does, what a menu offers, whether an
-/// entry may be picked up — is said by the entries themselves, which is what keeps this from growing a method per
+/// and taking it. Everything else about a logical view, what a double click does, what a menu offers, whether an
+/// entry may be picked up, is said by the entries themselves, which is what keeps this from growing a method per
 /// feature a plugin might have.
 /// <para>
 /// Asked on the window's thread, and asked often: a listing reads the entries whenever it draws, so an answer
@@ -159,7 +159,7 @@ public interface ILogicalViewProvider
     /// <remarks>
     /// Asked rather than worked out, because only the provider knows what is over an address: a payload has no
     /// grammar here, so <c>rola@/work/place@vault</c> may be read apart by the plugin that answers <c>rola</c>
-    /// and by nobody else. Nothing is the top of a place, which is what a listing with no step out of it means —
+    /// and by nobody else. Nothing is the top of a place, which is what a listing with no step out of it means,
     /// and what the toolbar's way-up button goes dead on.
     /// </remarks>
     /// <param name="address">The address being asked about.</param>
@@ -188,7 +188,7 @@ public interface ILogicalViewProvider
     /// </summary>
     /// <remarks>
     /// A place's rows are drawn by the browser's own table, so what a row is worth saying about it is the
-    /// answerer's: an entry of a Vault has a uuid and a holder, and one of a directory has a size and a time — the
+    /// answerer's: an entry of a Vault has a uuid and a holder, and one of a directory has a size and a time, the
     /// table does not know which, and a place that states nothing is a place read by its names alone.
     /// </remarks>
     /// <param name="address">The place being read.</param>
@@ -223,8 +223,8 @@ public sealed record LogicalColumn(
 /// </summary>
 /// <remarks>
 /// The other direction of <see cref="ILogicalViewProvider"/>: a place is dropped <em>on</em>, while a directory
-/// takes what was dropped <em>from</em> one. What a directory does with it is not the file browser's to decide — a
-/// place's entry is not a file, and what it means to put one in a directory is the plugin's answer — so a plugin
+/// takes what was dropped <em>from</em> one. What a directory does with it is not the file browser's to decide, a
+/// place's entry is not a file, and what it means to put one in a directory is the plugin's answer, so a plugin
 /// says which directories it takes one in and does the work itself.
 /// <para>
 /// Asked while the pointer is still moving, so that a directory which would refuse it does not offer the drop at
@@ -264,8 +264,8 @@ public interface IDropTargetRegistry
 /// </summary>
 /// <remarks>
 /// A place that refused a drop silently is a place the user cannot tell from one the drag never reached, and "no" with
-/// no word is the least useful answer a place can give: the reasons are the place's own — the entry is already there,
-/// a path there is taken, the copy is still being read — and none of them is something the browser could work out.
+/// no word is the least useful answer a place can give: the reasons are the place's own, the entry is already there,
+/// a path there is taken, the copy is still being read, and none of them is something the browser could work out.
 /// <para>
 /// Optional, because a provider may have nothing to add: one that does not answer is shown with the one thing the
 /// browser knows, which is that the place did not take the drag.
@@ -284,7 +284,7 @@ public interface ILogicalRefusal
 /// What a place can do to the folders it holds that are not in what it reads.
 /// </summary>
 /// <remarks>
-/// A place read from somewhere else — a Vault's copy, a history — has no directories of its own to make: what it lists
+/// A place read from somewhere else (a Vault's copy, a history) has no directories of its own to make: what it lists
 /// is what it read. A place that lets its reader arrange the work before there is any is the case this exists for: an
 /// empty folder is a place's own, so making one, naming it, and letting it go are the place's to answer rather than the
 /// browser's.
@@ -319,8 +319,8 @@ public interface ILogicalFolderEditor
     /// </summary>
     /// <remarks>
     /// A folder made by a key is a folder nobody named: the view puts the name in a box where it is drawn, and what it
-    /// needs for that is which row. Answered once — a listing asks as it is built, and one that asked twice would open a
-    /// box on every redraw — so a view that never asks leaves nothing behind.
+    /// needs for that is which row. Answered once, a listing asks as it is built, and one that asked twice would open a
+    /// box on every redraw, so a view that never asks leaves nothing behind.
     /// </remarks>
     /// <param name="address">The place the folder was made in.</param>
     /// <returns>The path, or nothing when nothing was just made.</returns>

@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 # The argument parser, used on its own rather than through mingling: this program is one word of
-# `rola`'s — `rola edit` is `rola-edit` — and answers one position and one flag, which is not a
+# `rola`'s, `rola edit` is `rola-edit`, and answers one position and one flag, which is not a
 # command tree worth a framework. The version has to be the one mingling resolves to, so that the
 # `SinglePickable` behind a positional `PathBuf` is the trait this crate picks against.
 arg-picker.workspace = true

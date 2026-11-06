@@ -8,7 +8,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// Taking an entry out of a Vault's Layout: what the place offers to remove, and what the command is run with.
 /// </summary>
 /// <remarks>
-/// An entry of a Vault's copy is a file the Vault holds, and the account that holds it may let it go — which is the one
+/// An entry of a Vault's copy is a file the Vault holds, and the account that holds it may let it go, which is the one
 /// row of a place that is a deletion rather than a suggestion about the work. What is checked here is the judgement the
 /// place draws from what it read, and the run it makes: neither the command line nor a Vault is here to be run against.
 /// </remarks>

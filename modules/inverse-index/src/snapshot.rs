@@ -1,8 +1,8 @@
 //! The records read the other way: what each object is, and the questions a walk asks of them.
 //!
 //! The records are kept as what points at what, because that is what a lookup asks. A reader that
-//! walks — which versions fix a variant, which variants are based on a version, which merge one in,
-//! which were made of one content — asks the other way, so a snapshot inverts every record once and
+//! walks, which versions fix a variant, which variants are based on a version, which merge one in,
+//! which were made of one content, asks the other way, so a snapshot inverts every record once and
 //! keeps the result: each variant by its key with the parts it names, each version by its key with
 //! the variant it fixes and its number, and the reverse questions those make answerable without
 //! reading the records again per step.
@@ -83,7 +83,7 @@ impl Snapshot {
     /// # Errors
     ///
     /// Returns [`InverseIndexError::Malformed`] if a variant the records name does not have every
-    /// part a variant is made of — which is not something this build writes, since it reads the
+    /// part a variant is made of, which is not something this build writes, since it reads the
     /// parts off the object itself.
     pub(crate) fn from_table(table: &Table) -> Result<Self, InverseIndexError> {
         let mut drafts: BTreeMap<Hash, VariantDraft> = BTreeMap::new();

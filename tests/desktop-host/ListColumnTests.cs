@@ -14,7 +14,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The columns are pixels written into the band of headings and into every row, rather than a share each sheet
-/// works out for itself — a row that worked its own share out would put its cells where its own words asked for
+/// works out for itself, a row that worked its own share out would put its cells where its own words asked for
 /// them, and two rows holding different words would disagree about where a column begins. What is checked here is
 /// that the band and every row are given one set of widths, and that the set fits the room the table has.
 /// </remarks>

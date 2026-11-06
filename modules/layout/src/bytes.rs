@@ -1,6 +1,6 @@
 //! The little encodings a layout writes down.
 //!
-//! Everything a layout keeps on disk — a change in a log, a shard in a snapshot — is written with
+//! Everything a layout keeps on disk (a change in a log, a shard in a snapshot) is written with
 //! the same few shapes: a UUID, a string with its length in front, and the data an entry holds.
 //! They are kept here so both writers cannot come to disagree about what those bytes mean.
 

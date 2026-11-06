@@ -33,7 +33,7 @@ internal static class Host
         var preference = new PreferenceConfiguration();
 
         // A window is drawn with a picture the platform makes, and a headless test has no platform and
-        // no window: nothing here is drawn with one, so there is nothing to hand on — to a dialog or
+        // no window: nothing here is drawn with one, so there is nothing to hand on, to a dialog or
         // to the services a plugin is given.
         WindowIcon? icon = null;
 

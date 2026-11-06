@@ -1,9 +1,9 @@
 //! The paths a `restore` names, read the way git reads a pathspec.
 //!
 //! A name is a path relative to the directory the run is made in: a material's own path, a
-//! directory — everything under it — or `.` for everything under the current directory. A name
+//! directory, everything under it, or `.` for everything under the current directory. A name
 //! written with a leading `/` is relative to the project's root instead, and a name written the way
-//! [`check`](crate::check) prints it — from the work tree's root — is read that way when nothing
+//! [`check`](crate::check) prints it, from the work tree's root, is read that way when nothing
 //! else matches it, since that is the spelling a person copies out of a `check`.
 //!
 //! Reading the names is a pure business: what a name means is decided from the paths alone, so the
@@ -98,7 +98,7 @@ fn wanted(spec: &str, base: &Path, prefix: &str) -> Result<Vec<String>, Refusal>
     let mut candidates = vec![read(base, &name)?];
 
     // A name written from the project's root still names the material when the run is above it in
-    // the project, and a name written from the work tree's root — what `check` prints — still names
+    // the project, and a name written from the work tree's root, what `check` prints, still names
     // it when the project is below that root. A reading that would leave the project is no reading
     // at all here: the run's own reading has already decided what the name means.
     if let Ok(from_project) = read(Path::new(""), &name) {

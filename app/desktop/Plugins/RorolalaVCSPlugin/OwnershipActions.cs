@@ -12,8 +12,8 @@ namespace RorolalaVCSPlugin;
 /// Taking ownership and letting it go, by running the command line that does it.
 /// </summary>
 /// <remarks>
-/// The exchange with the Vault is the command line's — fetching its Layout, reading the gates, writing the
-/// claim — and doing it here would be a second answer to the same question, kept in step by hand. So an entry's
+/// The exchange with the Vault is the command line's, fetching its Layout, reading the gates, writing the
+/// claim, and doing it here would be a second answer to the same question, kept in step by hand. So an entry's
 /// menu runs <c>rola hold</c> or <c>rola giveup</c> and reports what came of it: what this plugin owns is which
 /// words are put to the user, not how ownership moves.
 /// <para>
@@ -45,7 +45,7 @@ internal static class OwnershipActions
     /// <remarks>
     /// The same flag the sync is run with: what is read here is the records the command writes about itself, and
     /// they are written only when the run is being read by a program rather than watched by a person. The result
-    /// crosses as JSON too, which is no loss — nothing here reads it on the way through.
+    /// crosses as JSON too, which is no loss, nothing here reads it on the way through.
     /// </remarks>
     private const string Json = "--json";
 
@@ -54,7 +54,7 @@ internal static class OwnershipActions
     /// </summary>
     /// <remarks>
     /// Two commands, each with a forced twin, for each of the two kinds of entry: a file is one entry, and a
-    /// directory is everything under it, which the command line does by itself — so the words say the
+    /// directory is everything under it, which the command line does by itself, so the words say the
     /// difference and the command does not.
     /// </remarks>
     /// <param name="host">The host, whose context menus they are registered with.</param>
@@ -85,7 +85,7 @@ internal static class OwnershipActions
     /// <remarks>
     /// A Workspace, and only a Workspace: an entry outside one has no Layout to claim it in, and an action that
     /// could only fail is not worth offering. What cannot be read is answered as nothing to say rather than
-    /// raised — a menu that will not open because ownership could not be read is a worse answer than a menu
+    /// raised, a menu that will not open because ownership could not be read is a worse answer than a menu
     /// without these four lines in it, which is the same judgement the column makes.
     /// <para>
     /// The answer is read from what a listing has already read (see <see cref="OwnershipReadings"/>), not by opening the
@@ -152,7 +152,7 @@ internal static class OwnershipActions
     /// Run off the window's thread and not waited for: the command talks to a Vault, which takes as long as a
     /// network takes, and a window that stopped drawing until it answered would be a window that stopped. What
     /// the files may have become is said once it is done either way, because a run that ends unhappily may have
-    /// claimed some of what it was given — which is what it was asked to do.
+    /// claimed some of what it was given, which is what it was asked to do.
     /// </para>
     /// </remarks>
     /// <param name="verb">Which command it is.</param>
@@ -199,7 +199,7 @@ internal static class OwnershipActions
         }
 
         // The run's card down the Overview is opened before the work is handed off, so that it is there to be
-        // drawn from the moment the command begins — see the hub for why the runs are gathered rather than kept
+        // drawn from the moment the command begins, see the hub for why the runs are gathered rather than kept
         // where they were begun.
         var run = hub.Begin(TitleKey(verb));
 
@@ -318,7 +318,7 @@ internal static class OwnershipActions
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            // The words are `rola`'s own, and `rola` writes UTF-8 — as every stream this project's
+            // The words are `rola`'s own, and `rola` writes UTF-8, as every stream this project's
             // programs write is. Left unstated, a redirected stream is decoded in the machine's codepage,
             // which on a Chinese Windows is GBK, and every word of the message comes out as mojibake.
             StandardOutputEncoding = Encoding.UTF8,

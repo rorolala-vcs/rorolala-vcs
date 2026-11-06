@@ -2,7 +2,7 @@
 //!
 //! It is pinned the way the Windows installer's compiler is pinned, and for the same reason: what a
 //! package is built with decides what is in it. One program makes the three formats a Linux
-//! distribution asks for — deb, rpm and Arch's package — so a machine that builds one can build the
+//! distribution asks for (deb, rpm and Arch's package) so a machine that builds one can build the
 //! others without the other distributions' tools.
 //!
 //! Nothing is fetched and nothing is installed, as with the Windows compiler: a build that

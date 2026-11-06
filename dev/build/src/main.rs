@@ -2,8 +2,8 @@
 //!
 //! Everything the program can do is declared in the library beside this file, one command to one
 //! module; this is only what starts it. `DefaultSetup` is the arrangement the rest of the tree's
-//! programs use — help, quiet, verbose, the exit code a task asks for, and the environment
-//! resources — so a build step exits the way it reports.
+//! programs use, help, quiet, verbose, the exit code a task asks for, and the environment
+//! resources, so a build step exits the way it reports.
 //!
 //! One command is answered before the tree is entered: `chunker` hands its words to the harness
 //! unchanged, because what it takes is that program's own options and a second description of them

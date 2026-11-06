@@ -4,16 +4,16 @@ namespace FileSystemPlugin;
 /// The directory the tree is rooted at, published for the plugins that depend on this one.
 /// </summary>
 /// <remarks>
-/// A dependent plugin reaches this plugin's extension points by depending on it — the manifest's
-/// dependency is what has the host start that one after this — and what crosses is a catalogue, as
+/// A dependent plugin reaches this plugin's extension points by depending on it, the manifest's
+/// dependency is what has the host start that one after this, and what crosses is a catalogue, as
 /// the hide providers and the lock providers are. What crosses here is where the work is: the base
-/// is one answer for the whole plugin, and a view that is not the listing — Rorolala's own docks
-/// among them — has no other way to learn it.
+/// is one answer for the whole plugin, and a view that is not the listing, Rorolala's own docks
+/// among them, has no other way to learn it.
 /// <para>
 /// A catalogue rather than a member of the plugin, because there is no plugin instance a dependent
 /// may hold: <c>Initialize</c> is called once and holds nothing public afterwards, and a second
 /// answer kept beside the browser would be one to keep in step by hand. What is read before this
-/// plugin starts is nothing, which a dependent need not handle — a plugin that depends on this one
+/// plugin starts is nothing, which a dependent need not handle, a plugin that depends on this one
 /// is started after it.
 /// </para>
 /// </remarks>
@@ -41,8 +41,8 @@ public static class BaseDirectory
     /// Says where the tree is rooted now.
     /// </summary>
     /// <remarks>
-    /// Said from the one place that owns the answer — the plugin's own shared state, which is written
-    /// when it is made and whenever the base moves — so that what is published cannot drift from what
+    /// Said from the one place that owns the answer, the plugin's own shared state, which is written
+    /// when it is made and whenever the base moves, so that what is published cannot drift from what
     /// the browser is rooted at. A base that is already the one published is not said again: a user
     /// who roots the tree where it already is asked for nothing, and a listener told otherwise would
     /// read the work again for a change that did not happen.

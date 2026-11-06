@@ -2,7 +2,7 @@
 //!
 //! A change is a whole, self-describing record: a length, a checksum over the rest, and then the
 //! kind of change with what it names. A reader takes records off the front until it meets one that
-//! is not all there — which is what a write cut short by a crash leaves — and stops, so whatever
+//! is not all there, which is what a write cut short by a crash leaves, and stops, so whatever
 //! was written whole is what is read back.
 //!
 //! Every record carries the `Uuid` it is about, which is what decides the shard it is appended to:
@@ -118,7 +118,7 @@ pub enum Record {
         /// What it holds now.
         data: MutableData,
     },
-    /// `id` was created, holding `data`, at `path` — one change rather than a create and a
+    /// `id` was created, holding `data`, at `path`, one change rather than a create and a
     /// binding, so a create is whole or not there at all.
     Create {
         /// The `Uuid` that was created.
@@ -190,7 +190,7 @@ impl Record {
     /// # Errors
     ///
     /// Returns [`LayoutError::Malformed`] if `bytes` holds a whole record this build cannot read.
-    /// Returns `Ok(None)` if `bytes` does not hold a whole record yet — what a write cut short
+    /// Returns `Ok(None)` if `bytes` does not hold a whole record yet, what a write cut short
     /// leaves, and what a reader stops at.
     pub fn decode(bytes: &[u8]) -> Result<Option<(Self, usize)>, LayoutError> {
         let Some(head) = bytes.get(..HEAD_LEN) else {

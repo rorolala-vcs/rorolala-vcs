@@ -1,4 +1,4 @@
-//! `build`: everything that ships — the library and the programs.
+//! `build`: everything that ships, the library and the programs.
 
 use mingling::{
     Grouped,

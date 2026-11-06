@@ -7,8 +7,8 @@ namespace RorolalaVCSPlugin;
 /// </summary>
 /// <remarks>
 /// The command line's own two directions, read from a record's <c>direction</c> field: work leaving this side is
-/// up, and work arriving is down. A task that moves no data — reading the Layout, planning, writing the changes
-/// down — carries none, and is drawn without one.
+/// up, and work arriving is down. A task that moves no data, reading the Layout, planning, writing the changes
+/// down, carries none, and is drawn without one.
 /// </remarks>
 internal enum MoveAim
 {
@@ -24,8 +24,8 @@ internal enum MoveAim
 /// </summary>
 /// <remarks>
 /// A task is what one <c>begin</c> record opens and the records that name the same id are about: how long it is,
-/// how far it has got, and what it is moving right now. A task that is part of another is a bar of its own — the
-/// two directions of a transfer under the transfer — while a task that only names what its parent is moving is
+/// how far it has got, and what it is moving right now. A task that is part of another is a bar of its own, the
+/// two directions of a transfer under the transfer, while a task that only names what its parent is moving is
 /// not: it is what the parent shows as a line of its own.
 /// </remarks>
 internal sealed class ProgressTask
@@ -93,8 +93,8 @@ internal sealed class ProgressTask
 /// What a run says it is doing, as the tasks it reports.
 /// </summary>
 /// <remarks>
-/// The records are the command line's own — one JSON object per line on its error stream, written whenever a run
-/// is asked for a structural renderer — and every task one of them opens is kept, so that a run which draws
+/// The records are the command line's own, one JSON object per line on its error stream, written whenever a run
+/// is asked for a structural renderer, and every task one of them opens is kept, so that a run which draws
 /// several bars at once is read as several rather than as one. A run of `rola sync` is exactly that: reaching the
 /// Vault and planning, carrying the content, and writing the changes down each say a bar of their own, one after
 /// another, and a reader shown only the last would see a bar that jumped.
@@ -224,7 +224,7 @@ internal sealed class ProgressRecords
         {
             // A task with a parent and no direction is not a bar of its own: it is the piece its parent is
             // moving right now, which the parent says as a line rather than beside its own. A parent this has
-            // not kept — a piece of a task that has already ended — names nothing.
+            // not kept, a piece of a task that has already ended, names nothing.
             if (_byId.TryGetValue(above, out var moving))
             {
                 moving.Name(Text(record, "what"));
@@ -266,8 +266,8 @@ internal sealed class ProgressRecords
     /// Marks the task a record names as over, keeping it on the list.
     /// </summary>
     /// <remarks>
-    /// A task that is over is kept rather than taken off — see <see cref="ProgressTask.Finish"/> for why a card
-    /// outlives its run — so a finish only says the task is spent, and a piece whose bar was never kept is a
+    /// A task that is over is kept rather than taken off, see <see cref="ProgressTask.Finish"/> for why a card
+    /// outlives its run, so a finish only says the task is spent, and a piece whose bar was never kept is a
     /// finish this knows nothing of.
     /// </remarks>
     /// <param name="at">The id it was named by.</param>

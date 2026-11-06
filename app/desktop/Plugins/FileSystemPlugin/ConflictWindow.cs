@@ -34,7 +34,7 @@ internal enum ConflictAction
 /// Shown by the plugin over the host's main window, as a child of it rather than a window of a program
 /// of its own: the question is about what the user just did in that window, and a window that stands
 /// apart from it would be asking from somewhere else. It is drawn in the host's own look, which is what
-/// taking it into the host's process means — there is no separate program to draw it like the host.
+/// taking it into the host's process means, there is no separate program to draw it like the host.
 /// <para>
 /// The answer is handed back as a task rather than through an event, so the flow that shows the
 /// window reads one conflict at a time as a straight line. Closing the window answers Cancel, which
@@ -92,8 +92,8 @@ internal sealed class ConflictWindow : Window
             Spacing = 8,
         };
 
-        // Replacing is no answer to an item that is being copied onto itself — the target is the source, so a
-        // replace would take it away and leave nothing to copy — so it is not offered for one, and the answer
+        // Replacing is no answer to an item that is being copied onto itself, the target is the source, so a
+        // replace would take it away and leave nothing to copy, so it is not offered for one, and the answer
         // that is wanted is what stands out instead: a second of it, beside it, under a new name.
         if (!item.OntoItself)
         {

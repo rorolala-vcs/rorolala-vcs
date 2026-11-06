@@ -23,7 +23,7 @@ internal enum SyncWay
 /// What a sync is told to carry, and what it is told to leave alone.
 /// </summary>
 /// <remarks>
-/// The three parts of a sync are separate on purpose — the command line's own three flags — because a side may
+/// The three parts of a sync are separate on purpose, the command line's own three flags, because a side may
 /// be behind on one and not on another, and because what is left out changes what the run means rather than
 /// only how much it does. What a scope leaves out is both the flags a run is given and what warns about them.
 /// </remarks>

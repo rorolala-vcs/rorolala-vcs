@@ -2,7 +2,7 @@
 //!
 //! What a run tells the Vault it holds is a whole chain of versions, and a version is only a meaning
 //! once what it stored is in the store that names it. So a push has to carry the content of *every*
-//! version in the chain it moves, not just the version at the top — otherwise the chain crosses, the
+//! version in the chain it moves, not just the version at the top, otherwise the chain crosses, the
 //! content below it does not, and a later run that moves a pointer back finds a name nothing can
 //! produce.
 //!
@@ -96,7 +96,7 @@ fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    // One version of the file is one content, so a chain of two is two manifests in the Vault — and
+    // One version of the file is one content, so a chain of two is two manifests in the Vault, and
     // a run that carried only the top of the chain leaves one.
     let serving = serve_vault(&data, &root);
 
@@ -160,7 +160,7 @@ fn main() {
         "the file at the Vault's path is not what the Vault holds",
     );
 
-    // Moving the pointer back one version needs the version below the top — the content a run that
+    // Moving the pointer back one version needs the version below the top, the content a run that
     // carried only the top of the chain never sent.
     let said = run(&mut client(&second, &data, &["retrack", LOCAL_PATH]));
     checked.wants(
@@ -179,7 +179,7 @@ fn main() {
         "the file the pointer was moved to is not what the version below the top stored",
     );
 
-    // A run that cannot be carried out must say so — which is what the confirmation at the end of a
+    // A run that cannot be carried out must say so, which is what the confirmation at the end of a
     // direction is for. It cannot be made to fail from outside: the Vault makes its own directories
     // as it opens, so taking one away is not taking away its ability to write. What the detector
     // itself does with content that is gone is checked in the store's own tests, where a chunk can
@@ -191,8 +191,8 @@ fn main() {
 
 /// A Photoshop document, cut into chunks by the store's own policy for the format.
 ///
-/// It is a real document as far as the policy reads one — a header, a colour mode section, an image
-/// resources section, layer records and their channels, and a composite image — so what the store
+/// It is a real document as far as the policy reads one, a header, a colour mode section, an image
+/// resources section, layer records and their channels, and a composite image, so what the store
 /// keeps is a manifest naming chunks, which is the case a version below the top is lost for.
 fn psd(seed: u8) -> Vec<u8> {
     let layers: Vec<(String, Vec<Vec<u8>>)> = (0..20)
@@ -416,7 +416,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

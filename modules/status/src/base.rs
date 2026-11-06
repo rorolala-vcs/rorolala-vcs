@@ -4,12 +4,12 @@
 //! two are the same while the work is in step, and differ as soon as either side has moved: this side
 //! having recorded something the Vault has not been told of is *ahead*, which is ordinary work; the
 //! Vault having moved on without this side is *behind*, and two sides that have each moved on are
-//! *apart*. The last two are what makes a base wrong — a change made on one of them is a change made
-//! against a version the other side is not at — which is why they are told apart from being ahead.
+//! *apart*. The last two are what makes a base wrong, a change made on one of them is a change made
+//! against a version the other side is not at, which is why they are told apart from being ahead.
 //!
 //! Telling them apart costs reading the chain: the index holds the variants and versions to walk. What a
 //! fetch brings is the Vault's Layout and never its versions, so being behind is ordinarily answered
-//! without a distance — the direction is known from the version having come from elsewhere, and the chain
+//! without a distance, the direction is known from the version having come from elsewhere, and the chain
 //! that would count the versions between is the Vault's own. See [`compare`] for the whole of it.
 
 use rorolala_layout::{Layout, LayoutPath};
@@ -52,7 +52,7 @@ pub struct Base {
 ///
 /// A fetch brings the Vault's *Layout* here and never its versions, so the version upstream records is
 /// ordinarily **not** in the index this reads. That is not a reading that cannot answer: a version this side
-/// never had can only have come from elsewhere — the Vault is ahead of this side — and it is answered
+/// never had can only have come from elsewhere, the Vault is ahead of this side, and it is answered
 /// [`Relation::Behind`] with no distance, because the chain that would measure the gap is the Vault's own and
 /// is not here. What is *not* answered that way is a version this side holds and cannot place either: see
 /// [`Relation::Unknown`].
@@ -102,7 +102,7 @@ pub fn compare(
         };
     }
 
-    // Both versions are here and neither is below the other, so the two sides have moved on from each other —
+    // Both versions are here and neither is below the other, so the two sides have moved on from each other,
     // unless this side's own version is the one that cannot be read, which is a reading that cannot place
     // what it recorded and says nothing rather than calling the two chains separate.
     if here.is_none() {
@@ -139,7 +139,7 @@ pub struct Standing {
 /// without a version is left out, which is an entry that was never recorded rather than one that is
 /// ahead.
 ///
-/// This is the whole of what [`wrong_base`] is a filter of, and it is read the same way — one walk of the
+/// This is the whole of what [`wrong_base`] is a filter of, and it is read the same way, one walk of the
 /// chain per path, which is what the command line already pays for every path it draws.
 #[must_use]
 pub fn every(
@@ -182,10 +182,10 @@ pub fn every(
 /// The paths among `paths` whose version stands behind or apart from the one upstream records.
 ///
 /// These are the changes made against a version the other side is not at: what is recorded here would be
-/// based on something the Vault does not have. That includes the ordinary case of being behind — the Vault
+/// based on something the Vault does not have. That includes the ordinary case of being behind, the Vault
 /// moved on and this side never fetched the version it is at, which is a base gone wrong whether or not the
-/// chain that would measure the gap is here (see [`compare`]). A path upstream does not name — one it was
-/// never told of — is not one of them: nothing there is in the way, and there is no version to be based on.
+/// chain that would measure the gap is here (see [`compare`]). A path upstream does not name, one it was
+/// never told of, is not one of them: nothing there is in the way, and there is no version to be based on.
 ///
 /// A path whose version is *ahead* is not one of them either: this side holding work the other has not
 /// been told of is what working looks like, not a base gone wrong.
@@ -389,7 +389,7 @@ mod tests {
     }
 
     /// This side holding work the other has not been told of is ahead, and how far is counted along the
-    /// chain the index holds — which is this side's own.
+    /// chain the index holds, which is this side's own.
     #[test]
     fn work_the_other_side_has_not_been_told_of_is_ahead() {
         let (dir, index, versions, runtime) = chain("ahead", 3);
@@ -410,7 +410,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    /// The Vault having moved on is behind, and how far is counted along the Vault's chain — which is
+    /// The Vault having moved on is behind, and how far is counted along the Vault's chain, which is
     /// walked when the version it starts at is here.
     #[test]
     fn the_other_side_having_moved_on_is_behind() {

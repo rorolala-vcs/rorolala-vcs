@@ -2,7 +2,7 @@
 //!
 //! It is kept the way the address history is: read once when it is first needed, and written
 //! back once the program is done with it. A machine that does not name a local data directory
-//! has nowhere to keep it, so a resource with no file is still a resource — it has simply
+//! has nowhere to keep it, so a resource with no file is still a resource, it has simply
 //! nowhere to write.
 
 use std::fs;
@@ -20,7 +20,7 @@ use crate::user::account_path;
 ///
 /// A resource is a value the program shares, so it is `Clone` and `Default`. The account is
 /// the name alone, and whether it was changed is what decides whether the file is written
-/// back — a run that only reads it leaves the file as it was.
+/// back, a run that only reads it leaves the file as it was.
 #[derive(Debug, Default, Clone)]
 pub struct ResCurrentAccount {
     /// The name the work acts as, if one has been named.
@@ -69,7 +69,7 @@ impl ResCurrentAccount {
 
     /// Writes the name to `path`, if there is one to write.
     ///
-    /// This runs as the resource is dropped, so a failure is silent — for the reason reading
+    /// This runs as the resource is dropped, so a failure is silent, for the reason reading
     /// one is: there is nowhere left to report to.
     fn write(&self, path: &Path) {
         let Some(name) = &self.name else {

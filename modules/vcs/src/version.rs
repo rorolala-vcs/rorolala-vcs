@@ -47,7 +47,7 @@ impl Version {
     /// The root of every chain: a Version pointing at no variant
     ///
     /// Every file's first variant is based on it, so a chain traced back from any version ends
-    /// here. Its number is one before the first version — `-1` written as a `u64` — so the first
+    /// here. Its number is one before the first version, `-1` written as a `u64`, so the first
     /// version a file has is numbered from nothing.
     #[must_use]
     pub const fn root() -> Self {

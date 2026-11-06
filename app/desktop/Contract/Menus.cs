@@ -17,7 +17,7 @@ public enum ContextMenuTarget
 /// <param name="Directory">The directory the menu was opened in.</param>
 /// <param name="Entries">
 /// The whole choice, in the order the menu is about it: the entry that was right-clicked first, so that a menu
-/// is about what was pointed at before it is about the rest of the choice — and nothing at all when the menu
+/// is about what was pointed at before it is about the rest of the choice, and nothing at all when the menu
 /// was opened on empty space.
 /// </param>
 /// <remarks>

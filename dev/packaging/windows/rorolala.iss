@@ -3,11 +3,11 @@
 ;
 ; What it installs is the layout `cargo dev export` lays down, taken as it stands: the command line programs
 ; and the two libraries beside them, the Desktop program with its plugins, and the completion scripts, with
-; README and LICENSE going in with all of it. It is offered as two presets over the parts — `compact`, the
-; command line and its interface, and `full`, everything — with every part still on the page for a reader who
+; README and LICENSE going in with all of it. It is offered as two presets over the parts, `compact`, the
+; command line and its interface, and `full`, everything, with every part still on the page for a reader who
 ; wants one left out. What it *does*, beyond copying, is the three things that make a program reachable
-; rather than merely present — a block in the user's `$PROFILE`, an entry on the path, and a context menu
-; item — and each of them is written conservatively, so that an uninstall removes what this installer wrote
+; rather than merely present, a block in the user's `$PROFILE`, an entry on the path, and a context menu
+; item, and each of them is written conservatively, so that an uninstall removes what this installer wrote
 ; and nothing else.
 ;
 ; It is compiled with the pinned Inno Setup that `cargo dev publish` lays out; the four things that differ
@@ -75,12 +75,12 @@ WizardStyle=modern
 ; own image slots and scales it, where the bitmap a `[Code]` page can show is a Windows bitmap and nothing
 ; else. It is the same picture the title page of the README is, so the installer looks like the project.
 ; Only the small slot is filled: the large, upright image Inno draws down the side of the Welcome and Setup
-; Completed pages is a second copy of the same picture, and blanking it is how Inno is told not to draw one —
+; Completed pages is a second copy of the same picture, and blanking it is how Inno is told not to draw one,
 ; leaving the directive out would bring back Inno's own image instead. The page layout is unchanged.
 WizardImageFile=
 WizardSmallImageFile=..\..\..\res\icons\rorolala-title.png
 ; What the installer itself is drawn as in a file list and on a shortcut: the installer's own icon rather
-; than the program's, and the multi-frame one this project generates for it — Windows asks a program for one
+; than the program's, and the multi-frame one this project generates for it, Windows asks a program for one
 ; of five sizes, and a single frame would be resampled for four of them. It is built from
 ; `res/icons/installer/installer.toml` by the workspace build script, so a build makes it before this is
 ; compiled (see `res/icons/.gitignore`).
@@ -96,7 +96,7 @@ PrivilegesRequired=lowest
 
 [Languages]
 ; English is Inno's own and travels with it. Chinese does not: Inno Setup ships twenty-eight translations and
-; that is not one of them — it is maintained in Inno's own source repository and has to be fetched — so the
+; that is not one of them, it is maintained in Inno's own source repository and has to be fetched, so the
 ; line is kept only where the file is there. A build whose network cannot reach it is a build with one
 ; language rather than a build that fails, and one whose network can is the bilingual installer this project
 ; wants: `publish` fetches it beside the toolchain and says so when it cannot.
@@ -158,15 +158,15 @@ zh.Missed=程序已安装，但下面这些没能写入：
 [Components]
 ; One component per thing a reader may want or not want, and the two presets those parts add up to: a
 ; quick or full install is a set of the parts below named in one go, and a reader who picks no preset is
-; offered every part one by one. Everything is offered and everything starts selected — what was installed
-; last time is not remembered, so the state a page opens in should be the whole of it — and the one
+; offered every part one by one. Everything is offered and everything starts selected, what was installed
+; last time is not remembered, so the state a page opens in should be the whole of it, and the one
 ; component that cannot be cleared is the command line, since the Desktop program is opened by it and the
 ; context menu runs it: a Desktop program with no way to open it is a directory nobody can start.
 ;
 ; `compact` is the command line and its interface and nothing that is only ever reached from a shell: the
 ; Desktop program, the daemon it talks to, the completion scripts, the path entry and the context menu.
-; `full` is that and the parts a developer reaches for — the editor helper, the C ABI, Jujutsu, Git and
-; the ones the picker keeps off the compact list — which is why it is the one that is selected to begin
+; `full` is that and the parts a developer reaches for, the editor helper, the C ABI, Jujutsu, Git and
+; the ones the picker keeps off the compact list, which is why it is the one that is selected to begin
 ; with and the one Inno is named for, so a reader who reads nothing gets all of it.
 Name: "compact"; Description: "{cm:Compact}"; Types: compact custom
 Name: "full"; Description: "{cm:Full}"; Types: full custom; Flags: fixed
@@ -186,7 +186,7 @@ Name: "path"; Description: "{cm:Path}"; Types: compact full custom
 
 [Files]
 ; What every install has, whatever was chosen above: the command line itself, which is the one program that
-; cannot be left out — the Desktop program is opened by it, and the context menu runs it — beside the words
+; cannot be left out (the Desktop program is opened by it, and the context menu runs it) beside the words
 ; that say what this is. README and LICENSE carry no component because there is nothing to leave them out
 ; for: they are two small files, and a layout a reader is handed should have the terms it is handed under.
 Source: "{#SourceDir}\bin\rola.exe"; DestDir: "{app}\bin"; Components: rola; Flags: ignoreversion
@@ -205,7 +205,7 @@ Source: "{#SourceDir}\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recur
 
 ; The daemon and Jujutsu are programs of their own rather than parts of the command line: what a reader
 ; installs is what they use. The daemon's window is laid down beside the daemon it starts, since that is
-; where it looks for it — the two are one component because a window without the daemon it starts is a
+; where it looks for it, the two are one component because a window without the daemon it starts is a
 ; program that opens only to say it cannot.
 Source: "{#SourceDir}\bin\rola-daemon.exe"; DestDir: "{app}\bin"; Components: daemon; Flags: ignoreversion
 Source: "{#SourceDir}\bin\rola-daemon-gui.exe"; DestDir: "{app}\bin"; Components: daemon; Flags: ignoreversion
@@ -243,14 +243,14 @@ Name: "{group}\Uninstall Rorolala"; Filename: "{uninstallexe}"
 [Registry]
 ; The context menu, as two entries: one for a click on a folder's own background, and one for a click on the
 ; folder itself. Both hand the directory to `rola desktop`, which is what decides whether the directory is
-; inside a Workspace — a menu item is drawn by the shell before anything of this project runs, so whether
+; inside a Workspace, a menu item is drawn by the shell before anything of this project runs, so whether
 ; there is work here to open is a question only the program can answer, and it answers it by opening where
 ; there is work and doing nothing where there is not.
 ;
 ; What both run is a script host and not a shell, and the directory is handed over rather than being where the
 ; menu happened to leave the process: a shell would open a console window over whatever the reader was doing, and
 ; a click on the folder itself starts in the folder's parent. The script it runs is the one beside the command
-; line, which starts that command hidden — see `desktop-here.vbs`.
+; line, which starts that command hidden, see `desktop-here.vbs`.
 Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\RorolalaDesktop"; ValueType: string; ValueName: ""; ValueData: "{cm:OpenWith}"; Components: menu; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\RorolalaDesktop"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\bin\desktop\RorolalaDesktop.exe"; Components: menu
 Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\RorolalaDesktop\command"; ValueType: string; ValueName: ""; ValueData: "wscript.exe //B //Nologo ""{app}\bin\desktop-here.vbs"" ""%V"""; Components: menu; Flags: uninsdeletekey
@@ -271,8 +271,8 @@ var
 
 { Whether the Desktop runtime the published program needs is on this machine.
 
-  A framework-dependent build is what the export lays down — the program names the runtime rather than
-  carrying it — so a machine without it would install a program that does not start, which is worth saying
+  A framework-dependent build is what the export lays down, the program names the runtime rather than
+  carrying it, so a machine without it would install a program that does not start, which is worth saying
   before it is copied rather than after it is run. Any version of the major the program was built against is
   enough, which is why the directory is searched rather than a version named. }
 function RuntimeUnder(const Root: String): Boolean;
@@ -318,7 +318,7 @@ end;
 
   `$PROFILE` is `Documents\PowerShell\Microsoft.PowerShell_profile.ps1` for PowerShell 7 and
   `Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1` for Windows PowerShell: two files for two
-  shells, and the block is written into whichever of them exists — into both when both do, since a reader who
+  shells, and the block is written into whichever of them exists, into both when both do, since a reader who
   has both should find the programs on the path in either. }
 function Profiles: TArrayOfString;
 var
@@ -426,7 +426,7 @@ end;
 
   Conservative in the one way that matters: a block this installer did not write is a block it does not
   touch. It looks for its own two markers, replaces what stands between them if they are both there, and
-  appends the block if they are not — which is also what makes running the installer twice one block rather
+  appends the block if they are not, which is also what makes running the installer twice one block rather
   than two. }
 procedure WriteBlock(const Profile: String; const Block: TArrayOfString);
 var
@@ -610,8 +610,8 @@ end;
   that did: whether the entry is there is the environment's answer rather than the registry call's, and it is
   what an install that says it added something should check.
 
-  A machine that refuses it is a machine where the rest of the install is still worth having — the programs are
-  there and the profile is written — so a refusal is answered with False rather than thrown: an exception out of
+  A machine that refuses it is a machine where the rest of the install is still worth having, the programs are
+  there and the profile is written, so a refusal is answered with False rather than thrown: an exception out of
   here would take the whole install back over one line of the environment. }
 function AddToPath: Boolean;
 var
@@ -642,8 +642,8 @@ end;
 
 { Takes the entry back out of the path, and touches nothing else in it.
 
-  Conservative in the one way that matters: the entry is removed because it is the one this installer wrote —
-  the directory the programs were installed into — and every other entry, whoever wrote it, is kept exactly
+  Conservative in the one way that matters: the entry is removed because it is the one this installer wrote,
+  the directory the programs were installed into, and every other entry, whoever wrote it, is kept exactly
   as it was, in the order it was in. A path without the entry is left alone. }
 procedure RemoveFromPath;
 var
@@ -680,12 +680,12 @@ end;
 
 procedure InitializeWizard;
 begin
-  { What this is, before any question is asked. The picture is the wizard's own — see `WizardImageFile` in
-    `[Setup]` — rather than one drawn here: a page of this script's own can show a Windows bitmap and nothing
+  { What this is, before any question is asked. The picture is the wizard's own, see `WizardImageFile` in
+    `[Setup]`, rather than one drawn here: a page of this script's own can show a Windows bitmap and nothing
     else, and the project's title is a PNG.
 
     The two words are asked for through `ExpandConstant`, and that is not ceremony: a custom message is expanded
-    by the installer where a message is used, and a page of this script's own is not one of those places — a
+    by the installer where a message is used, and a page of this script's own is not one of those places, a
     message written straight into one is shown with its braces and its name, which is what a reader saw. Note
     what this comment is made of as well: these become comments at the first closing brace, so a message constant
     is not written out inside one. }
@@ -701,7 +701,7 @@ end;
   their own.
 
   A silent install is neither asked nor stopped. There is nobody there to answer, and Inno answers a script's
-  question for them — with "no" — so a run that asked one would be a run that refused itself. What is said in
+  question for them, with "no", so a run that asked one would be a run that refused itself. What is said in
   that case is the log, and what is installed is everything. }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
@@ -718,7 +718,7 @@ end;
 
 { Says, after everything is copied, what could not be done about the machine itself.
 
-  The two things written outside the install directory — the block in the profile and the entry on the path — are
+  The two things written outside the install directory, the block in the profile and the entry on the path, are
   the ones a machine may refuse, and a refusal of either is not a reason to take the programs back: what is said
   is what was not done, so that a reader is not left working out why a command they just installed is not found. }
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -774,7 +774,7 @@ begin
 
   { The profile is taken back out whether or not the completions were installed: an install that was
     updated by a later one, or a choice made in the wizard, is not something an uninstall should have to
-    reconstruct — and the removal only ever touches a block with this installer's own markers in it. }
+    reconstruct, and the removal only ever touches a block with this installer's own markers in it. }
   Said := Profiles;
   for At := 0 to GetArrayLength(Said) - 1 do
     RemoveBlock(Said[At]);

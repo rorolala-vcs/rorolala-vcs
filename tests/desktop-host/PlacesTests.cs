@@ -9,7 +9,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The listing of a place: the folder it makes, the row that folder is named in, and what a row's menu offers.
 /// </summary>
 /// <remarks>
-/// A place is read, and what this side arranges in it — a folder made, a row named, a row removed — is the place's
+/// A place is read, and what this side arranges in it (a folder made, a row named, a row removed) is the place's
 /// answer rather than a directory's. What is checked here is the hand-off between the listing that asked for the folder
 /// and the listing that names it, which is the one thing a redraw in between must not lose.
 /// </remarks>
@@ -49,7 +49,7 @@ public sealed class PlacesTests
     /// <summary>Removing a row is asked about first, and done when the user said so.</summary>
     /// <remarks>
     /// A dialog needs a window and a headless test has none, so what is checked is the asking: with nothing to show the
-    /// question on, nothing is removed — which is what says the row was not removed on the key alone.
+    /// question on, nothing is removed, which is what says the row was not removed on the key alone.
     /// </remarks>
     [Fact]
     public void RemovingARowAsksFirst()

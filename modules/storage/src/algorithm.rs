@@ -3,8 +3,8 @@ use crate::{Chunking, Codec};
 /// How a file is to be written: what it is encoded with, and how it is cut.
 ///
 /// The choice is the whole of the per-file "how", and it is deliberately a plain value: making
-/// it is the backend's business — see
-/// [`choose_algorithm`](crate::StorageBackend::choose_algorithm) — and everything after it is
+/// it is the backend's business, see
+/// [`choose_algorithm`](crate::StorageBackend::choose_algorithm), and everything after it is
 /// deterministic, so the same content written with the same choice always lands as the same
 /// bytes.
 ///

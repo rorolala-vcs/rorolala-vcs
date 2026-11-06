@@ -5,7 +5,7 @@ using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 using RorolalaVCSPlugin;
 using Vcs = global::RorolalaVCSPlugin.RorolalaVCSPlugin;
-// Both plugins publish an `Operation` — theirs are the file operations — so what a row of the Overview
+// Both plugins publish an `Operation`, theirs are the file operations, so what a row of the Overview
 // offers is named by the one its buttons are.
 using Operation = RorolalaVCSPlugin.Operation;
 
@@ -16,7 +16,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// Nothing here draws, and nothing here makes a window. What is exercised is what the <c>Window</c> menu
-/// is built from, the judgement a dock's view is filled by, and the control that judgement is put into —
+/// is built from, the judgement a dock's view is filled by, and the control that judgement is put into,
 /// which is what a run with no Workspace under its base directory comes to.
 /// </remarks>
 public sealed class RorolalaDockTests
@@ -82,8 +82,8 @@ public sealed class RorolalaDockTests
 
     /// <summary>A base directory no Workspace holds is said so rather than left blank.</summary>
     /// <remarks>
-    /// A scratch directory is under no Workspace, and a directory that was never said — nothing, or the
-    /// computer, which is not a path at all — is under none either. What a dock does with the answer is
+    /// A scratch directory is under no Workspace, and a directory that was never said, nothing, or the
+    /// computer, which is not a path at all, is under none either. What a dock does with the answer is
     /// that it shows these words, so what is checked is that there are words to show.
     /// </remarks>
     [Fact]
@@ -114,7 +114,7 @@ public sealed class RorolalaDockTests
     /// checked by <see cref="TheOverviewSaysABaseOutsideEveryWorkspaceIsNotOne"/>.
     /// <para>
     /// Nothing about a Workspace is asked, since the base published by an earlier test of this run is no
-    /// more a Workspace than a fresh one is — and the line is what a base outside every Workspace comes
+    /// more a Workspace than a fresh one is, and the line is what a base outside every Workspace comes
     /// to either way.
     /// </para>
     /// </remarks>
@@ -188,7 +188,7 @@ public sealed class RorolalaDockTests
     /// It is one strip rather than a run of commands, because what stands there is more than buttons: the three
     /// sync buttons belong together, their colour answers a key the user is holding, and what they are to leave
     /// out is a dropdown. The host puts the control in its header and asks nothing about what is inside it, so
-    /// what this pins is that the dock hands one over at all — which is the whole of what the header says — and
+    /// what this pins is that the dock hands one over at all, which is the whole of what the header says, and
     /// that reading the work again is still in it, drawn from a picture the plugin contributes: the library is
     /// the shell's, and a plugin's pictures are found in it by key.
     /// </remarks>
@@ -217,7 +217,7 @@ public sealed class RorolalaDockTests
     /// <summary>A line in the middle of the dock is said only where the table has nothing to show.</summary>
     /// <remarks>
     /// The two say different things at once: a work with changes is the table, and the words for a work without
-    /// them are what stands in its place. A line left over a table is a dock saying both at once — that there
+    /// them are what stands in its place. A line left over a table is a dock saying both at once, that there
     /// is nothing to confirm, over the things to confirm.
     /// </remarks>
     [Fact]
@@ -256,7 +256,7 @@ public sealed class RorolalaDockTests
     /// <remarks>
     /// The table is the whole of what the Overview shows, so what it is built from is the one thing worth
     /// checking without a window: a change of each kind becomes a row of its own, the paths land in the
-    /// columns they belong in, and the state a row is in is the pills it wears — the kind of change it is,
+    /// columns they belong in, and the state a row is in is the pills it wears, the kind of change it is,
     /// and what became of its content.
     /// </remarks>
     [Fact]
@@ -285,7 +285,7 @@ public sealed class RorolalaDockTests
 
         Assert.Equal(7, rows.Count);
 
-        // What is wrong is read first — another account's before a base upstream has moved past — then what
+        // What is wrong is read first, another account's before a base upstream has moved past, then what
         // is under way, then what the Layout and the tree disagree about, and last what is to be recorded.
         // A pill is read by its letters, which is what a column of states is scanned by.
         Assert.Equal(
@@ -328,7 +328,7 @@ public sealed class RorolalaDockTests
     /// shown of it is drawn as what is not the work.
     /// </summary>
     /// <remarks>
-    /// The reading keeps the two apart — what the tree gained as work, and what the rules govern — so which
+    /// The reading keeps the two apart (what the tree gained as work, and what the rules govern) so which
     /// of them a table is built from is the view's answer. A row of the governed is read like an untagged one
     /// and offers nothing to do with it: a recording refuses a path the rules govern, and a button that could
     /// only refuse is a row pretending to be work.
@@ -361,7 +361,7 @@ public sealed class RorolalaDockTests
         Assert.Equal(("new.txt", string.Empty), (gain.From, gain.To));
 
         // Asked for: the governed path is a row of its own, last, marked as not the work's and with nothing
-        // to press — the ink it is drawn in is the row's flag, which the drawing reads.
+        // to press, the ink it is drawn in is the row's flag, which the drawing reads.
         var shown = OverviewView.Rows(facts, showIgnored: true);
 
         Assert.Equal(2, shown.Count);
@@ -375,8 +375,8 @@ public sealed class RorolalaDockTests
     /// <remarks>
     /// What is in step with nothing wrong about it is still a file a sync would carry, and the Overview is where it
     /// is read which way the work moves: sent, fetched, created, or settled only by a forced sync. The path is a row
-    /// of its own only where no other row already names it — a path that changed here and is behind is on the row of
-    /// its change, wearing the one pill saying its base is wrong — and the row offers no button, because the run that
+    /// of its own only where no other row already names it, a path that changed here and is behind is on the row of
+    /// its change, wearing the one pill saying its base is wrong, and the row offers no button, because the run that
     /// settles it is the strip's sync rather than one entry of the table.
     /// </remarks>
     [Fact]
@@ -516,8 +516,8 @@ public sealed class RorolalaDockTests
 
     /// <summary>A move whose file was edited is one row, which says both things about it.</summary>
     /// <remarks>
-    /// The destination of a move is among the changes of content as well — what it holds is not what the
-    /// Layout agreed with at the path it came from — so a table that took both lists at their word would
+    /// The destination of a move is among the changes of content as well, what it holds is not what the
+    /// Layout agreed with at the path it came from, so a table that took both lists at their word would
     /// show one file twice, once as a move and once as a change, with nothing to say they are the same.
     /// </remarks>
     [Fact]
@@ -551,7 +551,7 @@ public sealed class RorolalaDockTests
     /// <summary>A merge that cannot go on still names the file it is for.</summary>
     /// <remarks>
     /// The reason crosses as a kind and what it is about; the file the variant is for is the one thing the
-    /// row's own columns want and no reason carries, so it is asked for beside them — and the one reason
+    /// row's own columns want and no reason carries, so it is asked for beside them, and the one reason
     /// where the Layout names no such file is the one that answers with nothing.
     /// </remarks>
     [Fact]
@@ -601,7 +601,7 @@ public sealed class RorolalaDockTests
         Assert.Equal([Operation.CancelMerge], rows[0].Operations);
 
         // The Layout naming no such file is a reason rather than a missing answer, so the row is there with its
-        // pill and its reason, and the columns that want a path are the ones left empty — and a row with no
+        // pill and its reason, and the columns that want a path are the ones left empty, and a row with no
         // path is one nothing can be done from, so it is offered no button.
         Assert.Equal((string.Empty, string.Empty), (rows[1].From, rows[1].To));
         Assert.Null(rows[1].Act);
@@ -618,7 +618,7 @@ public sealed class RorolalaDockTests
     /// The dock reads the work again on a timer, and what it reads is what it draws: a reading that says
     /// what the last one said must leave the table alone, or the reader loses what they had scrolled to,
     /// chosen and were pointing at every few seconds. That rests on two readings built apart comparing equal
-    /// — which a row holding a list of pills is where it is easy to get wrong, since two lists that say the
+    ///, which a row holding a list of pills is where it is easy to get wrong, since two lists that say the
     /// same thing are not the same list.
     /// </remarks>
     [Fact]

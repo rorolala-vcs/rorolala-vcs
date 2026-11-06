@@ -1,10 +1,10 @@
 //! The `rola inv-idx` namespace: the inverse index, built and asked.
 //!
 //! The version control index answers "what is stored under this hash"; the inverse index answers
-//! the other way — which objects depend on a key. It is derived data, so a rebuild is what makes
+//! the other way, which objects depend on a key. It is derived data, so a rebuild is what makes
 //! it, and a read falls back to the objects when it does not describe the index as it stands.
 //!
-//! Each command is a module of its own beside this one — see the `cmd_inv_idx_*` files. What stands
+//! Each command is a module of its own beside this one, see the `cmd_inv_idx_*` files. What stands
 //! here is what they share: the failures they can reach for, the hash-list result they hand back,
 //! and the little that reading a hash and driving the index takes.
 
@@ -61,7 +61,7 @@ pub fn desc_inv_idx() -> Description {
 /// Names what `inv-idx` holds.
 ///
 /// A command the namespace has is matched before this is reached, so what arrives here is a run
-/// that named none of them — or one it does not have — and both are answered the way
+/// that named none of them, or one it does not have, and both are answered the way
 /// [`help_inv_idx`] answers.
 #[chain]
 pub fn handle_inv_idx(_: EntryInvIdx) -> Next {

@@ -19,11 +19,11 @@ namespace RorolalaDesktop;
 /// <remarks>
 /// The work is in two parts, because a window that is on the screen is worth more than a window that is
 /// assembled: what the window can be drawn over is made first, the window is shown, and only then is the rest
-/// of the host made — each step of it on the window's own thread, one turn of it at a time, so that the
+/// of the host made, each step of it on the window's own thread, one turn of it at a time, so that the
 /// covering the window puts up is drawn while the work goes on.
 /// <para>
 /// The order inside each part is still the order the steps must run in. The kernel's docks and menus are
-/// registered first, then the look is applied, and then the window is made — the look before the window
+/// registered first, then the look is applied, and then the window is made, the look before the window
 /// because a style added to the application after a window exists stops applying to what is already on the
 /// screen, without saying so. The plugins are initialized after the window, because everything they register
 /// is drawn over a window that is already there.
@@ -51,7 +51,7 @@ internal sealed class Desktop
     /// <summary>Whether the first half of the assembly has been done: the kernel, the look, and the window.</summary>
     private bool _shellMade;
 
-    /// <summary>Whether the second half — everything the window is drawn over — has been started.</summary>
+    /// <summary>Whether the second half, everything the window is drawn over, has been started.</summary>
     private bool _assembling;
 
     /// <summary>Whether the second half has finished, so that a window opened now is one with nothing to cover.</summary>
@@ -82,14 +82,14 @@ internal sealed class Desktop
     public event Action? ShellOpened;
 
     /// <summary>
-    /// Makes what a window can be opened over — the kernel's own docks and menus, the look, and the
-    /// arrangement the docks are to be given — and opens the main window.
+    /// Makes what a window can be opened over, the kernel's own docks and menus, the look, and the
+    /// arrangement the docks are to be given, and opens the main window.
     /// </summary>
     /// <returns>The main window.</returns>
     /// <remarks>
     /// Only what may not wait for the window's work is here. The look is the one such thing: it is added to
     /// the application's styles, and a style added after a window exists stops applying to what is already on
-    /// the screen without saying so — see <see cref="ThemeService"/>. Everything else the host is made of is
+    /// the screen without saying so, see <see cref="ThemeService"/>. Everything else the host is made of is
     /// work a window is shown over; see <see cref="Assemble"/>.
     /// </remarks>
     public MainWindow StartShell()
@@ -109,7 +109,7 @@ internal sealed class Desktop
 
         // Before the window, rather than after the plugins where it used to sit: nothing may be added to the
         // application's styles once a window exists, and the window is what this method goes on to make. It
-        // reads nothing of the plugins — the variant and the colours are the file's and the application's —
+        // reads nothing of the plugins, the variant and the colours are the file's and the application's,
         // which is what lets it be applied this early.
         _services.Theme.Apply();
 
@@ -131,7 +131,7 @@ internal sealed class Desktop
     /// <param name="done">What to do once every step has returned, which is the window letting its covering go.</param>
     /// <remarks>
     /// One step per turn of the window's thread, so that what is drawn between them is drawn: the covering
-    /// writes itself while the work goes on. A step that throws is written down and the rest go on — one
+    /// writes itself while the work goes on. A step that throws is written down and the rest go on, one
     /// plugin that could not be started is not a reason to leave the user under a black window.
     /// <para>
     /// Steps do not need the main window to be up: it may have been closed while this ran, and what is left of
@@ -259,8 +259,8 @@ internal sealed class Desktop
         var notices = new NotificationCenter();
 
         // Made here and not by a window, because the windows it is for are not all the host's: a plugin
-        // reaches it through the contract, so the one picture is decoded once and every window — the
-        // host's, a dock's own, a question — is drawn with the same one.
+        // reaches it through the contract, so the one picture is decoded once and every window, the
+        // host's, a dock's own, a question, is drawn with the same one.
         var icon = AppIcon.Load(log);
 
         // Made before the object they are put in, because a dialog is shown on the window and the window is
@@ -322,7 +322,7 @@ internal sealed class Desktop
         services.Windows.Make = (key, dock) =>
         {
             // The window is given the covering only while the shell's work is still to be done: one opened
-            // after it — the main window closed and asked for again from the Window menu — is a window over a
+            // after it, the main window closed and asked for again from the Window menu, is a window over a
             // host that is already assembled, and covering it would be covering work that has been done.
             var window = new MainWindow(services, key, dock, loading: key is null && !_assembled);
 
@@ -417,7 +417,7 @@ internal sealed class Desktop
 
         // The two things the host itself says about a dock's tab, offered for every dock: moving one into a
         // window of its own is the host's answer about windows and not a plugin's, and closing one is what
-        // the close on the tab does — which a menu that has no close of its own would leave unsaid.
+        // the close on the tab does, which a menu that has no close of its own would leave unsaid.
         services.DockMenus.Add(
             Kernel,
             Core.Position,

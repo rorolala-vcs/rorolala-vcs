@@ -2,17 +2,17 @@
 //!
 //! A program rather than a set of tests cargo runs, for the same reason the rest of them are: what
 //! a C caller does is compile against the generated header, link the built library, run, and read
-//! what came back. Nothing Rust reaches across the boundary here — the checks are the ones a C
-//! program can make, made in C — so what is checked is the ABI itself rather than the library under
+//! what came back. Nothing Rust reaches across the boundary here, the checks are the ones a C
+//! program can make, made in C, so what is checked is the ABI itself rather than the library under
 //! it.
 //!
 //! The checks are split into modules, one directory beside this one per area of the surface, each
 //! named `ffi-<area>` and holding a `test.c` that is a C11 program of its own. Every directory with
-//! such a program is compiled and run, so what is answered here is one question per module — and
+//! such a program is compiled and run, so what is answered here is one question per module, and
 //! one more for the library and the header being there at all.
 //!
 //! The library is built here rather than waited for, since the release programs do not depend on the
-//! `rorolala-ffi` crate — a header without the library beside it proves nothing.
+//! `rorolala-ffi` crate, a header without the library beside it proves nothing.
 
 use std::env;
 use std::fs;
@@ -127,7 +127,7 @@ fn fixture(scratch: &Path) -> Fixture {
 
 /// The modules of this suite, in name order.
 ///
-/// A module is a directory beside `src` — `ffi-*`, by convention — holding a `test.c`; anything
+/// A module is a directory beside `src` (`ffi-*`, by convention) holding a `test.c`; anything
 /// else is passed over, so adding a module is adding a directory with a program in it.
 fn modules(suite: &Path) -> Vec<String> {
     let mut names: Vec<String> = fs::read_dir(suite)
@@ -267,7 +267,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

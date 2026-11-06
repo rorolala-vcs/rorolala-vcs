@@ -15,7 +15,7 @@ impl Vault {
     /// Creates a Vault in the specified directory
     ///
     /// The Vault is its configuration: the directory is made first, so that there is
-    /// somewhere to write the configuration into — the same way a Workspace makes its own
+    /// somewhere to write the configuration into, the same way a Workspace makes its own
     /// data directory before writing the configuration inside it.
     ///
     /// The directory it keeps its keys in is made beside it, so that the key pair a Vault

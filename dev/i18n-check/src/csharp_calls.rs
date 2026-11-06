@@ -1,7 +1,7 @@
 //! Finds the keys a C# program's `I18n.Get` calls name.
 //!
 //! There is no C# parser here, so the calls are found by their spelling: a call to `Get` on a
-//! receiver whose name mentions `i18n` — `RolaI18N`, `_i18n`, `i18n`, `_services.I18n` — whose
+//! receiver whose name mentions `i18n` (`RolaI18N`, `_i18n`, `i18n`, `_services.I18n`) whose
 //! first argument is a string literal. A call made on anything else, or with an argument that is
 //! not a literal, is not read.
 
@@ -16,7 +16,7 @@ const GET: &str = ".Get(";
 
 /// Reads every `.cs` file under `dir` and collects the keys its `I18n.Get` calls name.
 ///
-/// A build tree under the sources — `bin`, `obj` — is left alone, since what it holds is a copy of
+/// A build tree under the sources (`bin`, `obj`) is left alone, since what it holds is a copy of
 /// what is already read.
 ///
 /// # Errors

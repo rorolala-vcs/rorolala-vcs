@@ -3,10 +3,10 @@
 //! The model here reproduces what `write_content` does, entry for entry: one range is written as one
 //! object, more than one is written as an object each plus a manifest, and an entry already held is
 //! not written again. What comes out of that is exactly the bytes the store's `obj/` and `manifest/`
-//! directories would hold, frame headers included — which is what keeps this model honest, and what
+//! directories would hold, frame headers included, which is what keeps this model honest, and what
 //! `store.rs` checks against a real store rather than asserts.
 //!
-//! The alternative — running a store for every measurement — would be slower than the cut by an order
+//! The alternative, running a store for every measurement, would be slower than the cut by an order
 //! of magnitude, and the model lets the same walk answer dedup, the cost of each version and the
 //! manifest overhead in one pass.
 
@@ -203,7 +203,7 @@ pub fn measure(
             let ratio = allocation(len);
 
             // The repeats answer two things at once: a rate that is not the first run's, and the
-            // stability gate — the same content has to cut the same way, or one file has two
+            // stability gate, the same content has to cut the same way, or one file has two
             // manifests and the store holds the same content twice under one key.
             for round in 1..TIMINGS {
                 let started = Instant::now();
@@ -282,7 +282,7 @@ fn digest(content: &[u8]) -> [u8; 32] {
 /// The multiple of the version's own length a split's working set came to, over what it was given.
 ///
 /// The content is already held by the caller, so what this counts is everything the heap had live at
-/// its highest — the content included. A cut that copies its input once reads as 2, and that is the
+/// its highest, the content included. A cut that copies its input once reads as 2, and that is the
 /// number worth having: it is what a large file costs to cut.
 fn allocation(len: u64) -> f64 {
     if len == 0 {
@@ -380,7 +380,7 @@ mod tests {
         let measured = measure(&pattern, &Chunking::Whole).unwrap();
 
         // The second version is the first one's bytes, so the store holds one object for both and
-        // the second version costs nothing — which is what a content-addressed store is for.
+        // the second version costs nothing, which is what a content-addressed store is for.
         assert_eq!(measured.numbers.versions, 2);
         assert_eq!(measured.numbers.unique, measured.numbers.content / 2);
         assert!(measured.numbers.worst_marginal.abs() < f64::EPSILON);

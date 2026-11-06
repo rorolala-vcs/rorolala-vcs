@@ -2,7 +2,7 @@
 //!
 //! A fragment is a window around the words that matched, cut on character boundaries so that a
 //! range handed back always splits the text cleanly. When the window is shorter than the field it
-//! came from, the cut ends are marked with `…`, and the ranges are counted from the marked text so
+//! came from, the cut ends are marked with `...`, and the ranges are counted from the marked text so
 //! a caller never has to know where the marks were put.
 
 use crate::article::{Article, Field, Range, Snippet};
@@ -23,6 +23,9 @@ const CONTEXT_AFTER: usize = 32;
 
 /// How close two matches have to be to be shown as one fragment.
 const WINDOW_GAP: usize = 8;
+
+/// The mark a cut end is shown with.
+const MARK: &str = "...";
 
 /// The fragments of `article` that `query` matched, the field that reads best first.
 ///
@@ -177,14 +180,18 @@ fn cut(text: &str, field: Field, start: usize, end: usize, found: &[Range]) -> S
     let mut body = String::new();
 
     if trimmed_front {
-        body.push('…');
+        body.push_str(MARK);
     }
 
-    let shift = usize::from(trimmed_front);
+    let shift = if trimmed_front {
+        MARK.chars().count()
+    } else {
+        0
+    };
     body.extend(characters(text, start, end));
 
     if trimmed_back {
-        body.push('…');
+        body.push_str(MARK);
     }
 
     let mut ranges: Vec<Range> = Vec::new();
@@ -312,8 +319,8 @@ mod tests {
         );
 
         let snippet = &snippets(&longer, &query(&["needle"]))[0];
-        assert!(snippet.text.starts_with('…'));
-        assert!(snippet.text.ends_with('…'));
+        assert!(snippet.text.starts_with("..."));
+        assert!(snippet.text.ends_with("..."));
 
         for range in &snippet.ranges {
             let got: String = snippet

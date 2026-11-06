@@ -229,7 +229,7 @@ impl Range {
 
 /// A fragment of one field, and the words in it the query matched.
 ///
-/// The text is cut from the field around the match, with `…` where it was cut, and the ranges are
+/// The text is cut from the field around the match, with `...` where it was cut, and the ranges are
 /// the places inside that text to draw as matched. A range counts characters of the text that is
 /// returned, so a caller splits the text at the ranges and styles the pieces it was told to.
 #[derive(Debug, Clone, PartialEq, Eq)]

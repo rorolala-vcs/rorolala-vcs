@@ -54,7 +54,7 @@ launcher:
       en: Import a Workspace
       zh-CN: 导入工作区
     empty:
-      en: No Workspace exists yet — you can create one or import one
+      en: No Workspace exists yet, you can create one or import one
       zh-CN: 尚不存在任何工作区，你可以导入或创建
 
   settings:
@@ -122,8 +122,8 @@ launcher:
       en: "The Desktop program could not be started from %{program}"
       zh-CN: "无法从 %{program} 启动桌面程序"
     opening:
-      en: Opening…
-      zh-CN: 正在打开…
+      en: Opening
+      zh-CN: 正在打开
     launch_timeout:
       en: The Desktop program is taking longer than expected to open
       zh-CN: 桌面程序打开得比预期更久
@@ -137,7 +137,7 @@ launcher:
       zh-CN: 导入工作区
     not_a_workspace:
       en: "%{path} is not a Workspace: it holds no .rola directory"
-      zh-CN: "%{path} 不是工作区：其中没有 .rola 目录"
+      zh-CN: "%{path} 不是工作区：其中没有 `.rola` 目录"
 
   account:
     title:
@@ -171,8 +171,8 @@ launcher:
       en: Create account
       zh-CN: 创建账户
     creating:
-      en: Creating…
-      zh-CN: 正在创建…
+      en: Creating
+      zh-CN: 正在创建
     empty:
       en: Please write a name first.
       zh-CN: 请先写一个名字。
@@ -189,8 +189,8 @@ launcher:
       en: Export public key
       zh-CN: 导出公钥
     exporting:
-      en: Exporting…
-      zh-CN: 正在导出…
+      en: Exporting
+      zh-CN: 正在导出
     export_type:
       en: Public key
       zh-CN: 公钥
@@ -242,8 +242,8 @@ launcher:
       en: "That folder could not be read: %{reason}"
       zh-CN: "无法读取这个文件夹：%{reason}"
     browse:
-      en: Choose…
-      zh-CN: 选择…
+      en: Choose
+      zh-CN: 选择
     picker_failed:
       en: "The folder picker could not be opened: %{reason}"
       zh-CN: "无法打开文件夹选择器：%{reason}"
@@ -251,8 +251,8 @@ launcher:
       en: Check connection
       zh-CN: 检查连接
     checking:
-      en: Checking…
-      zh-CN: 正在检查…
+      en: Checking
+      zh-CN: 正在检查
     reached:
       en: The Vault answered.
       zh-CN: 保险库已回应。
@@ -269,8 +269,8 @@ launcher:
       en: Create
       zh-CN: 创建
     creating:
-      en: Creating…
-      zh-CN: 正在创建…
+      en: Creating
+      zh-CN: 正在创建
     failed_create:
       en: "The Workspace could not be created: %{reason}"
       zh-CN: "无法创建工作区：%{reason}"

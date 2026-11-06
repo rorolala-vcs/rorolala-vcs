@@ -16,8 +16,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// A dock that names itself by where it is: what its tab says, what its tip says, and what a window of its own says.
 /// </summary>
 /// <remarks>
-/// The host draws a dock's name in three places — the tab, the window a dock of its own is shown in, and the top of the
-/// tab's menu — and the three are one answer: what a dock says about itself. What is checked here is that they follow
+/// The host draws a dock's name in three places, the tab, the window a dock of its own is shown in, and the top of the
+/// tab's menu, and the three are one answer: what a dock says about itself. What is checked here is that they follow
 /// it, which is the whole of the feature: a browser is one dock looked at in several windows, and a strip of tabs all
 /// called "Directories" is a strip nobody can tell apart.
 /// </remarks>
@@ -69,7 +69,7 @@ public sealed class DockTitleTests
         var word = DockArea.TabTitle(title);
 
         // What is kept is the tail, with the ellipsis standing where everything before it was.
-        Assert.Equal("…" + title[^(DockArea.TabWordLength - 1)..], word);
+        Assert.Equal("..." + title[^(DockArea.TabWordLength - 3)..], word);
         Assert.True(word.Length <= DockArea.TabWordLength);
         Assert.EndsWith(@"C:\work\art", word, StringComparison.Ordinal);
 

@@ -1,7 +1,7 @@
 //! What a file looks like to the analysis: a digest of its content, and the spans it is cut into.
 //!
-//! Two files are the same when their digests are. When they are only *alike* — a file that was
-//! edited after being moved, say — the digests differ, and the likeness is estimated the way git
+//! Two files are the same when their digests are. When they are only *alike*, a file that was
+//! edited after being moved, say, the digests differ, and the likeness is estimated the way git
 //! estimates one: the content is cut into spans, the spans are counted, and what was copied from
 //! one to the other is what is left once the counts are lined up. See git's `diffcore-delta.c`,
 //! whose `hash_chars` and `diffcore_count_changes` this is a port of.
@@ -97,7 +97,7 @@ const fn fold(first: u32, second: u32) -> u32 {
 ///
 /// Both are the span lists [`spans`] gives, in hash order, so lining them up is a walk: a span the
 /// two share is copied as far as the smaller count reaches, and a span only one has is not copied
-/// at all. The number is what the likeness is worked out of — see
+/// at all. The number is what the likeness is worked out of, see
 /// [`TreeDiff`](crate::TreeDiff).
 #[must_use]
 pub fn copied(source: &[(u32, u32)], destination: &[(u32, u32)]) -> u64 {

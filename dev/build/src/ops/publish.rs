@@ -2,8 +2,8 @@
 //!
 //! What an export is made of is programs, and what someone who is not a developer wants is something
 //! that puts them where a shell and a file manager will find them. The platforms do not agree on what
-//! that is: Windows is given an installer — a program that copies the layout, writes the two things
-//! that make a program reachable, and can be asked to undo all of it — Linux is given the packages a
+//! that is: Windows is given an installer, a program that copies the layout, writes the two things
+//! that make a program reachable, and can be asked to undo all of it, Linux is given the packages a
 //! distribution installs and an `AppImage`, and the other Unixes are given an archive and the script
 //! that installs it, since what a Unix hands over is a tree and a script.
 

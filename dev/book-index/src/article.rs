@@ -2,7 +2,7 @@
 //!
 //! An article is a Markdown file with an optional YAML front matter block. Two files never meet
 //! unless one is under the other's directory: the walk is over every `*.md` under `book/`, and a
-//! file or directory whose name begins with `__` is left out — that is where this tree keeps a
+//! file or directory whose name begins with `__` is left out, that is where this tree keeps a
 //! draft, and a draft is not part of the book that ships.
 
 use std::ffi::OsStr;

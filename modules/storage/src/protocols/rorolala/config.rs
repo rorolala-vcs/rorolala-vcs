@@ -1,6 +1,6 @@
 //! What the store is told by the file that makes it a store.
 //!
-//! The file is the store's own — `rolast.toml`, the same one a search finds the store by — and what
+//! The file is the store's own (`rolast.toml`, the same one a search finds the store by) and what
 //! it says is read here rather than in the places that act on it, so a caller asks a store what it
 //! was told instead of knowing where that is written down.
 
@@ -10,7 +10,7 @@ use crate::StorageConfig;
 impl RorolalaStorage {
     /// The configuration this store works from.
     ///
-    /// A configuration that cannot be read — no file, or one that does not read — is the empty one,
+    /// A configuration that cannot be read (no file, or one that does not read) is the empty one,
     /// so what a store does not say is defaulted rather than refused.
     #[must_use]
     pub async fn config(&self) -> StorageConfig {

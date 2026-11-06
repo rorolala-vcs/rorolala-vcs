@@ -4,7 +4,7 @@
 //! with a terminal: make a place to work in, put keys in it in one place or another, serve it,
 //! reach it, and complain when what came back is not what was expected.
 //!
-//! There are two Vaults, a root one and one under it — `root/vaults/alpha` — which is what sets
+//! There are two Vaults, a root one and one under it, `root/vaults/alpha`, which is what sets
 //! the key search walking outward. What is checked is who each of them admits: a member whose
 //! public key is kept in the root is a member of everything below it, one kept only below it is
 //! a member of that Vault and of nothing above, and one kept nowhere is a member of nothing at
@@ -62,7 +62,7 @@ fn main() {
     pair(&keys, "nobody");
 
     // Who each Vault admits: the root's keys hold `rootuser`, the ones below hold `subuser`, and
-    // `nobody` is a name neither has heard of. Only the public half is given to a Vault — the
+    // `nobody` is a name neither has heard of. Only the public half is given to a Vault, the
     // private half is the member's own to keep, which is what makes one account a member of one
     // Vault and of no other.
     publish(&keys, &root, "rootuser");
@@ -86,7 +86,7 @@ fn main() {
         checked.wants_refused(&workspace, "nobody", &address, "nothing holds it");
 
         // The same daemon serves the Vault it holds when the request names one, so a link to it
-        // is answered by the Vault below — under that Vault's own rules, which reach up into the
+        // is answered by the Vault below, under that Vault's own rules, which reach up into the
         // root's keys and no further.
         let alpha_link = link(ROOT_PORT, ROOT_NAME, ALPHA_NAME);
 
@@ -142,7 +142,7 @@ impl Checked {
 
         if let Err(said) = reach(workspace, name, address) {
             self.wrong.push(format!(
-                "{name} should have been admitted to {address} — {why}, but: {said}"
+                "{name} should have been admitted to {address}, {why}, but the run said: {said}"
             ));
         }
     }
@@ -153,7 +153,7 @@ impl Checked {
 
         if let Ok(said) = reach(workspace, name, address) {
             self.wrong.push(format!(
-                "{name} should have been turned away from {address} — {why}, but was told: {said}"
+                "{name} should have been turned away from {address}, {why}, but was told: {said}"
             ));
         }
     }
@@ -242,7 +242,7 @@ fn register(data: &Path, entries: &[(&str, &Path)]) {
 /// Puts the public half of the pair `name` names, kept under `keys`, where `vault` admits it.
 ///
 /// Only the public half: a member is a name a Vault admits, and the private half stays with
-/// whoever acts as that member — which is what makes one account a member of one Vault and of
+/// whoever acts as that member, which is what makes one account a member of one Vault and of
 /// no other.
 fn publish(keys: &Path, vault: &Path, name: &str) {
     let public = keys.join(format!("{name}.pub"));

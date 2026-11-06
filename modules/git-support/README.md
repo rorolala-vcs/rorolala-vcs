@@ -32,5 +32,5 @@ git keeps one exclude file for the whole repository and reads it in every work t
 work trees of one project would write the same managed block from different locks: whichever ran
 last would leave the other's materials visible to git. Until a work tree's materials can be kept
 apart, a session opened in a linked work tree is refused with [`Error::LinkedWorkTree`], and the
-places that consult the repository without acting — the installed hooks, the wrapped git commands —
+places that consult the repository without acting (the installed hooks, the wrapped git commands)
 say so instead of acting there.

@@ -1,12 +1,12 @@
 //! Whether a run that writes to the version control index also rebuilds the inverse index.
 //!
 //! The inverse index is derived data: it answers what the index cannot, and is left alone while it
-//! still describes the index and ignored once it does not — a reader falls back to the objects. So
+//! still describes the index and ignored once it does not, a reader falls back to the objects. So
 //! nothing depends on it being current, and rebuilding it after every write is a cost a run chooses
 //! rather than one it pays: `--rebuild` is how a run says it wants the records kept in step.
 //!
 //! It is a resource rather than a plain flag so that a command reaches it the way it reaches the
-//! rest of the run's shape — see [`ResUsingVault`](rorolala_cli_setups::ResUsingVault), which is
+//! rest of the run's shape, see [`ResUsingVault`](rorolala_cli_setups::ResUsingVault), which is
 //! read from a global flag the same way.
 
 use mingling::{
@@ -35,7 +35,7 @@ where
     ThisProgram: ProgramCollect<Enum = ThisProgram>,
 {
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
-        // UNWRAP: each pick can fall back, so parsing never fails and the `unwrap` is safe — the
+        // UNWRAP: each pick can fall back, so parsing never fails and the `unwrap` is safe, the
         // same reason `GlobalFlagSetup` gives for its own.
         let (rebuild, args) = program.take_args().pick(ARG_REBUILD).pick(REMAINS).unwrap();
         program.replace_args(args.into());

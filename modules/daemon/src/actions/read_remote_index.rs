@@ -3,7 +3,7 @@
 //! The one-object reach of [`list_remote_index`](crate::list_remote_index): a Workspace names a hash,
 //! the Vault reads the object under it from its own index, and what comes back is the object and, for
 //! a Version, the number its chain traces to. The number is worked out on the Vault because the chain
-//! the Version sits in is there, not here — and it crosses beside the object rather than in it, since
+//! the Version sits in is there, not here, and it crosses beside the object rather than in it, since
 //! a Version is written down without its number.
 
 use std::str::FromStr as _;
@@ -27,8 +27,8 @@ use super::sync_storage::{Side, carry_blob};
 ///
 /// # Output
 ///
-/// The object. A Version carries the number its chain traces to, worked out on the Vault — or
-/// [`UNKNOWN_VERSION`] when the chain will not trace — since the chain is there and not here.
+/// The object. A Version carries the number its chain traces to, worked out on the Vault, or
+/// [`UNKNOWN_VERSION`] when the chain will not trace, since the chain is there and not here.
 pub struct ActionReadRemoteIndex;
 
 impl Action for ActionReadRemoteIndex {
@@ -64,7 +64,7 @@ impl Action for ActionReadRemoteIndex {
         })?;
 
         // What is read is read on the Vault: it is the side with the index. What crosses back is the
-        // object's bytes and its number, or nothing when no object is held under the hash — and a
+        // object's bytes and its number, or nothing when no object is held under the hash, and a
         // missing object is answered as nothing rather than as a failure, so both ends reach the one
         // decision after the carrying rather than the Vault leaving the Workspace waiting.
         let held = if ctx.is_vault() {
@@ -73,7 +73,7 @@ impl Action for ActionReadRemoteIndex {
             None
         };
 
-        // The number is not part of a Version's bytes — it is derived, and written down nowhere — so
+        // The number is not part of a Version's bytes (it is derived, and written down nowhere) so
         // the object and its number cross together as one payload, and the two ends read the same.
         let mine = if ctx.is_vault() {
             Some(held.encode().map_err(codec_failed)?)
@@ -121,7 +121,7 @@ async fn read_the_object(
 
 /// The object the bytes hold, with `number` written into it when it is a Version.
 ///
-/// A Version is read back without its number — it is written down nowhere — so the number that
+/// A Version is read back without its number, it is written down nowhere, so the number that
 /// crossed beside it is put back in, which is what a reader is shown. Anything else is itself.
 fn object_with_number(bytes: &[u8], number: Option<u64>) -> Result<VCSIndexObject, ActionError> {
     let object =

@@ -18,7 +18,7 @@ use crate::{Broken, Merge, PathState, Rename, Status};
 /// # FFI
 ///
 /// One variant per reason, and [`BrokenKind::None`] for the reading having no such entry. What the
-/// reason is about — the variant, or the path its file lies at — is answered beside it by
+/// reason is about (the variant, or the path its file lies at) is answered beside it by
 /// `rola_status_broken_what`.
 #[lazyffi(export = RolaStatusBroken)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,8 +72,8 @@ impl BrokenKind {
 ///
 /// One variant per standing, which is [`PathState`]'s shape and not its subject: a path's *state* is what
 /// is wrong with it, and its *standing* is how far it is from what the Vault has. A path may be in either
-/// without the other — a file that is in step and a file that was never recorded are both nothing to act
-/// on — so the two are asked separately.
+/// without the other, a file that is in step and a file that was never recorded are both nothing to act
+/// on, so the two are asked separately.
 ///
 /// The distance is not part of this by value: it is asked for by `rola_status_standing_distance_of`, which
 /// answers how many versions apart the two are, or a negative number when nothing says. See that function
@@ -89,7 +89,7 @@ pub enum Standing {
 
     /// The Vault has moved on, so what is here is based on a version that has.
     ///
-    /// This is also the answer when the version the Vault records is not in the index — which is the ordinary
+    /// This is also the answer when the version the Vault records is not in the index, which is the ordinary
     /// case, since a fetch brings the Vault's Layout and never its versions. The direction is known from the
     /// version having come from elsewhere; how far is not, and is asked for by
     /// `rola_status_standing_distance_of`, which answers nothing for it.
@@ -206,7 +206,7 @@ impl Status {
     /// How many changed paths are based on a version upstream has moved past.
     ///
     /// What is counted is what changed while the version recorded for it stands behind or apart from the
-    /// one the Vault's fetched copy records — so what is recorded here would be based on something the
+    /// one the Vault's fetched copy records, so what is recorded here would be based on something the
     /// other side does not have. A version this side is *ahead* on is not one of them.
     #[must_use]
     #[lazyffi(export = rola_status_wrong_base_count)]
@@ -447,7 +447,7 @@ impl Status {
     /// A signed number rather than an `Option`, because C has no `Option` and this is one number: a negative
     /// answer is "nothing says how far", and zero is "they are the same version", which is the one distance
     /// that is not a count of anything. A caller wanting to tell "in step" from "not known" reads this
-    /// rather than the standing, since both of those are answered `Unknown` above — in step because there is
+    /// rather than the standing, since both of those are answered `Unknown` above, in step because there is
     /// nothing to act on, and not known because the chain is not here.
     #[must_use]
     #[lazyffi(export = rola_status_standing_distance_of)]
@@ -490,7 +490,7 @@ impl Status {
     ///
     /// # FFI
     ///
-    /// A `Standing` by value, which is `Unknown` for an index the reading does not hold — the same answer a
+    /// A `Standing` by value, which is `Unknown` for an index the reading does not hold, the same answer a
     /// path that is not known is given. How far apart the two are is not part of it; that is
     /// `rola_status_standing_distance_of`.
     #[must_use]

@@ -94,8 +94,8 @@ public sealed class SyncStripTests
     /// </summary>
     /// <remarks>
     /// What it shows is the Overview's answer rather than the switch's: the strip reads it each time it draws,
-    /// so a state changed anywhere is drawn from that state. The pictures are the plugin's own pair — the eye
-    /// and the eye struck through — and what is checked is that pressing it asks and that the drawing follows
+    /// so a state changed anywhere is drawn from that state. The pictures are the plugin's own pair, the eye
+    /// and the eye struck through, and what is checked is that pressing it asks and that the drawing follows
     /// the answer, not the colours the look gives them.
     /// </remarks>
     [Fact]
@@ -183,7 +183,7 @@ public sealed class SyncStripTests
     /// <summary>A capsule is drawn for every command, and the whole bar adds up its own phases.</summary>
     /// <remarks>
     /// What is drawn is what the commands said of themselves: one capsule per command, the command's own phases
-    /// added up as the bar at its head, and a row under it for every phase it reports — the rows are the capsule's
+    /// added up as the bar at its head, and a row under it for every phase it reports, the rows are the capsule's
     /// own detail, shown while the pointer is on it.
     /// </remarks>
     [Fact]

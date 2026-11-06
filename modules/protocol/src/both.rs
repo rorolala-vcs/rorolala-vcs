@@ -57,7 +57,7 @@ where
     /// The context is what says whether this is the side that keeps the value: a value
     /// only the Workspace holds must not be left lying on the Vault, so on the Vault it is
     /// dropped and the wrapper comes back empty. There is deliberately no `From` impl to
-    /// demote with — one could not see the side, and would hand the value over on both.
+    /// demote with, one could not see the side, and would hand the value over on both.
     ///
     /// # Examples
     ///
@@ -91,7 +91,7 @@ where
     /// The context is what says whether this is the side that keeps the value: a value
     /// only the Vault holds must not be left lying on the Workspace, so on the Workspace it
     /// is dropped and the wrapper comes back empty. There is deliberately no `From` impl to
-    /// demote with — one could not see the side, and would hand the value over on both.
+    /// demote with, one could not see the side, and would hand the value over on both.
     ///
     /// # Examples
     ///
@@ -140,7 +140,7 @@ where
     /// Which of the two it is follows from the inputs and not from the caller: a tuple
     /// mixing the two, or holding a value that is not wrapped at all, has no
     /// implementation, so the compiler rejects it. The side that does not hold the inputs
-    /// does not run the closure and cannot disagree about what the change was — it takes
+    /// does not run the closure and cannot disagree about what the change was, it takes
     /// what arrives.
     ///
     /// One to twelve inputs are accepted. One is passed bare and reaches the closure as

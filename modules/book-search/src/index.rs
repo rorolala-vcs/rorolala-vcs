@@ -133,9 +133,9 @@ impl BookSearch {
     /// The query is cut into terms the same way the book was, and an article is a hit only when
     /// every one of them is in it: `rola 安装` asks for both, and `版本控制` asks for the phrase
     /// rather than the four characters anywhere. A Latin term is also looked up by the fragments
-    /// its word was built with, so a query that is a prefix or a substring of a word — `inst` of
-    /// `install`, `stall` of `install` — finds the word too; a whole-word match ranks above one
-    /// found that way. A query with no terms in it — one that is all punctuation, or empty — finds
+    /// its word was built with, so a query that is a prefix or a substring of a word, `inst` of
+    /// `install`, `stall` of `install`, finds the word too; a whole-word match ranks above one
+    /// found that way. A query with no terms in it (one that is all punctuation, or empty) finds
     /// nothing. `limit` of zero finds nothing too, which is what a caller asking for no lines means.
     ///
     /// Each hit carries the fragments the query matched in it, taken from the first field that has

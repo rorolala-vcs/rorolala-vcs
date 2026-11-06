@@ -7,7 +7,7 @@ namespace RorolalaDesktop;
 
 class Program
 {
-    /// The language the command line asked this program to speak, as a locale — `zh-CN`, `en`.
+    /// The language the command line asked this program to speak, as a locale, `zh-CN`, `en`.
     ///
     /// The command line chooses a language for the run and for itself, and hands the answer over
     /// rather than leaving this program to work it out again: what a run speaks and what the
@@ -30,7 +30,7 @@ class Program
 
     /// The style the window's own frame is drawn in.
     ///
-    /// What the command line asked for, or — started on its own, where there is nobody to ask — the style
+    /// What the command line asked for, or (started on its own, where there is nobody to ask) the style
     /// the machine's own desktop is drawn in, which is worked out before Avalonia starts because the window
     /// and its look are both built from it.
     public static WindowStyle WindowStyle { get; private set; } = WindowStyles.Here();
@@ -48,7 +48,7 @@ class Program
     /// </summary>
     /// <remarks>
     /// A second start of the program does not open a window of its own: what it says is where it was made,
-    /// and what that comes to is this run's to work out — a dock opened onto that directory in the main
+    /// and what that comes to is this run's to work out, a dock opened onto that directory in the main
     /// window, which is not something a channel can decide. Raised on the window's thread.
     /// </remarks>
     public static event Action<string?>? Called;
@@ -58,7 +58,7 @@ class Program
     /// </summary>
     /// <remarks>
     /// What a run that was called says is raised through this rather than written to a property, because the
-    /// thing that answers a call is the host — a dock opened onto the directory, in a window — and the host
+    /// thing that answers a call is the host (a dock opened onto the directory, in a window) and the host
     /// does not exist when the call is received. A run that nobody is listening to yet has nobody to tell,
     /// which cannot happen: listening begins with the host, and the host is what answers.
     /// </remarks>
@@ -121,7 +121,7 @@ class Program
     // The two options below are what make the window's own frame work on a Linux desktop. Neither
     // backend draws decorations unless it is asked to: X11 hides the window manager's and draws its own
     // only for a window that extended into them *and* only when this option is on, and Wayland lets the
-    // compositor decide until it is told otherwise — a compositor that would draw a server-side title bar
+    // compositor decide until it is told otherwise, a compositor that would draw a server-side title bar
     // would then draw one over a window that has its own. Both are experimental in the toolkit and both
     // are wanted here: a compositor's title bar is the thing this program does not have.
     public static AppBuilder BuildAvaloniaApp() =>
@@ -137,7 +137,7 @@ class Program
 
     /// Records what the run handed over: each argument this program answers to, and nothing else.
     ///
-    /// An argument that is not one of these is left alone rather than reported — the arguments are
+    /// An argument that is not one of these is left alone rather than reported, the arguments are
     /// the command line's, and this program is not the only thing that may be reading them.
     private static void Record(string[] args)
     {

@@ -17,7 +17,7 @@ futures.workspace = true
 
 # The I/O driver of the runtime jj's command line builds for itself, named here because jj-cli's own
 # tokio features do not reach it everywhere: tokio enables that driver for `net`, or for `process`
-# and `signal` *on Unix*, and what jj-cli declares is `process` — so on Windows the driver is off and
+# and `signal` *on Unix*, and what jj-cli declares is `process`, so on Windows the driver is off and
 # `jj-cli` does not compile. It is one feature more of a dependency already in the graph, and not a
 # second tokio.
 tokio = { workspace = true, features = ["net"] }

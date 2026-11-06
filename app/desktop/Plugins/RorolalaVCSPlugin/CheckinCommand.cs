@@ -30,7 +30,7 @@ internal sealed record CheckinAnswer(
 /// </summary>
 /// <remarks>
 /// The references are paths of the Vault's Layout, so what a run brings in is what the tree showed at the path
-/// the reader chose — an entry upstream has moved since is refused rather than brought from somewhere else.
+/// the reader chose, an entry upstream has moved since is refused rather than brought from somewhere else.
 /// A path that reads as a pattern is a path the command line would take for one, so a reference holding a
 /// character a glob reads is passed as its uuid instead: what lands is the same either way, and the uuid cannot
 /// be read as anything but the entry.
@@ -71,7 +71,7 @@ internal static class CheckinCommand
 
         // The destination is the last operand, which is how the command line reads them: every word but the last is a
         // reference, and a run with one word has none. It is a path of this run's rather than of the Vault's, which is
-        // why it is handed over as an absolute one — what it is resolved against is where the run is made.
+        // why it is handed over as an absolute one, what it is resolved against is where the run is made.
         if (to is { Length: > 0 })
         {
             arguments.Add(to);

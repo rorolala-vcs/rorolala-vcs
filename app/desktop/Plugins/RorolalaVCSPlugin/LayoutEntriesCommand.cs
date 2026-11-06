@@ -23,8 +23,8 @@ internal sealed record VaultListing(string Name, bool Default);
 /// to read and hands the listing to <c>rola layout entries</c>, so a row of the Vault's copy and a row of this one
 /// differ in what they say and not in how they are read.
 /// <para>
-/// A path is empty for an entry the side names nowhere. That is not a row to draw — the reading it comes from
-/// says where the entry is, and one that is nowhere is not a place — but it is still an entry the side holds,
+/// A path is empty for an entry the side names nowhere. That is not a row to draw, the reading it comes from
+/// says where the entry is, and one that is nowhere is not a place, but it is still an entry the side holds,
 /// which is what the uuid is kept for.
 /// </para>
 /// </remarks>
@@ -85,7 +85,7 @@ internal sealed record VaultsAnswer(bool Done, int Code, string Said, IReadOnlyL
 /// Asking the command line what a Layout holds: the Layouts a run works in, and the entries of one.
 /// </summary>
 /// <remarks>
-/// A Layout is the command line's to read — it is a set of shards whose names mean something only to the library —
+/// A Layout is the command line's to read, it is a set of shards whose names mean something only to the library,
 /// so what this owns is the question, the flags that make the answer one a program reads, and the shape of the
 /// answer.
 /// <para>
@@ -255,7 +255,7 @@ internal static class LayoutEntriesCommand
     /// </summary>
     /// <remarks>
     /// A Vault is a name and an address, which the command writes as an object: the name is what a place is keyed by, and
-    /// the address is where it answers — which this side has no use for, since a run inside the Workspace reaches it by
+    /// the address is where it answers, which this side has no use for, since a run inside the Workspace reaches it by
     /// the name the Workspace bound it under. Whether a Vault is the Workspace's default is read as well, because that is
     /// the one the work's own upstream is opened at when the Layout being worked in tracks none.
     /// </remarks>

@@ -9,7 +9,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// A place reads a copy of the Vault's Layout, so a folder this side made is not in anything: what is checked here is
-/// what the place does with one — a name it gives, a name it takes, a path that carries what is under it, and a folder
+/// what the place does with one, a name it gives, a name it takes, a path that carries what is under it, and a folder
 /// that is let go of whole. Nothing is written anywhere, which is the point: the folder is a suggestion about the work.
 /// </remarks>
 public sealed class DraftFolderTests

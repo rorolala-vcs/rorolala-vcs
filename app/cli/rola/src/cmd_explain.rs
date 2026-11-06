@@ -1,6 +1,6 @@
 //! The `rola explain` command: what a number or a name the program left behind means.
 //!
-//! `explain` is a namespace rather than one thing to say — an exit code is what it explains
+//! `explain` is a namespace rather than one thing to say, an exit code is what it explains
 //! today, and what it explains is what the subcommands under it grow into. Each of those is
 //! therefore two layers deep, `explain exit-code` for one, so that adding another is adding
 //! another word rather than reshaping this one.
@@ -59,7 +59,7 @@ pub fn explain() -> Next {
 ///
 /// The same answer [`help_explain`] gives, since a run that reached `explain` with nothing
 /// and a run that asked it for help are asking the same thing. What it says is written out
-/// twice rather than shared, because what puts it on the screen — `r_eprintln!` — is a
+/// twice rather than shared, because what puts it on the screen, `r_eprintln!`, is a
 /// buffer only the attributes open.
 #[derive(Grouped)]
 pub struct ResultExplainHelp;

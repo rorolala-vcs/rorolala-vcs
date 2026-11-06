@@ -157,8 +157,8 @@ pub fn complete_vault_ls() -> Suggest {
 /// Lists the Vaults this Workspace knows, each with whether it is the one reached for
 ///
 /// The same names `rola vault` lists, drawn through a template the way every query is: the default
-/// names each one and its address, and each carries `is_default` — whether it is the Vault the
-/// Workspace reaches for — so a run that reads the output as a program can tell which one is chosen
+/// names each one and its address, and each carries `is_default`, whether it is the Vault the
+/// Workspace reaches for, so a run that reads the output as a program can tell which one is chosen
 /// without a marker a person would read.
 #[command(node = "vault.ls")]
 pub fn vault_ls(format: &mut ResFormat) -> StateVaultLs {

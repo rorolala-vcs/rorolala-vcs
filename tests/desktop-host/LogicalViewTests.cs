@@ -265,7 +265,7 @@ public sealed class LogicalViewTests
         Assert.False(browser.CanGoUp);
         Assert.False(browser.SetBase("logic@somewhere"));
 
-        // A path is a directory again, read as it was — including the directory the browser was in before, which
+        // A path is a directory again, read as it was, including the directory the browser was in before, which
         // has to be gone to rather than taken for where it already is.
         Assert.True(browser.Go(directory));
 
@@ -307,7 +307,7 @@ public sealed class LogicalViewTests
     /// A directory whose name holds an at-sign still opens as the directory it is.
     /// </summary>
     /// <remarks>
-    /// An address begins with a prefix of a shape a path step cannot be — no separator — so a path that holds an
+    /// An address begins with a prefix of a shape a path step cannot be, no separator, so a path that holds an
     /// at-sign later on is not one, which is what keeps a directory named with one reachable.
     /// </remarks>
     [Fact]
@@ -332,7 +332,7 @@ public sealed class LogicalViewTests
     /// </summary>
     /// <remarks>
     /// A payload has no grammar in the contract, so what is over an address is the provider's answer and nobody
-    /// else's — the location only carries it to the button, and a place with nothing over it leaves the button with
+    /// else's, the location only carries it to the button, and a place with nothing over it leaves the button with
     /// nowhere to go.
     /// </remarks>
     [Fact]

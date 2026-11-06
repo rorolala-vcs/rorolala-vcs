@@ -7,7 +7,7 @@ pub use colored::{ColoredString, Colorize};
 
 /// Whether Rorolala's output is colorized
 ///
-/// Starts as the environment's answer — see [`is_enabled`] — and is replaced the moment
+/// Starts as the environment's answer, see [`is_enabled`], and is replaced the moment
 /// a program states its own, which is why it is lazily built rather than a bare
 /// [`AtomicBool`]: the initial value is not knowable until the environment is read.
 static ENABLED: LazyLock<AtomicBool> =
@@ -28,7 +28,7 @@ pub fn set_enabled(enabled: bool) {
 ///
 /// Until [`set_enabled`] is called, this is the environment's answer: `CLICOLOR_FORCE`
 /// first, then `NO_COLOR`, then `CLICOLOR` together with whether standard output is a
-/// terminal — the rules `colored` itself follows.
+/// terminal, the rules `colored` itself follows.
 #[must_use]
 pub fn is_enabled() -> bool {
     ENABLED.load(Ordering::Relaxed)

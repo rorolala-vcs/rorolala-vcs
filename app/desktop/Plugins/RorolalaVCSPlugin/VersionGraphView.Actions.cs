@@ -16,7 +16,7 @@ internal sealed partial class VersionGraphView
 {
     /// <summary>Offers what a right-click on the thing under the pointer can do.</summary>
     /// <remarks>
-    /// A card offers what can be done with the file it stands for — copying its hashes, moving the
+    /// A card offers what can be done with the file it stands for, copying its hashes, moving the
     /// record, joining an unrecorded variant, ending a merge. A pill, the message and the creator offer
     /// what that one thing says, copied: the whole of it, which is what a pill cannot show.
     /// </remarks>
@@ -399,7 +399,7 @@ internal sealed partial class VersionGraphView
 
     /// <summary>The file whose record another side's entry is to become.</summary>
     /// <remarks>
-    /// The file the user is on is what a switch is about — it is the one whose entry is being changed,
+    /// The file the user is on is what a switch is about, it is the one whose entry is being changed,
     /// and the entry pressed may be at another path altogether. A card's own local file is the answer
     /// when no file is chosen, which is what makes the item reachable from the graph alone.
     /// </remarks>

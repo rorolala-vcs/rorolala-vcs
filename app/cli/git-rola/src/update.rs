@@ -2,7 +2,7 @@
 //!
 //! A mapping names a material by its UUID and says which version to place: the version the Vault's
 //! Layout currently points it at (`pin = "latest"`, or a Vault's name), or a number in its chain.
-//! What is written down is the content the version names — the mapping and the version are the
+//! What is written down is the content the version names, the mapping and the version are the
 //! intent, and the content is what the work tree needs.
 //!
 //! Resolving is the Vault side, which is this program's to reach and not the git half's: the Vault's
@@ -81,8 +81,8 @@ pub fn run() -> Result<Outcome, String> {
     let config = project.config().map_err(|error| error.to_string())?;
     let lock = resolve(project, &config)?;
 
-    // What was placed before is taken out first, so a failure here leaves the lock — and so the
-    // command — as it was rather than half applied.
+    // What was placed before is taken out first, so a failure here leaves the lock, and so the
+    // command, as it was rather than half applied.
     session.detach().map_err(|error| error.to_string())?;
 
     write_lock(&project.lock_path(), &lock)?;
@@ -297,7 +297,7 @@ fn account(project: &Project) -> Result<Account, String> {
 ///
 /// The fetched copy is a Vault's Layout as it stands, and `fetch-layout` writes it under a
 /// workspace's cache. The whole of `.rola/` belongs to this project's own commands, so the copy is
-/// fetched under the git half's private area — `.rola/git/vault/` — rather than into the cache the
+/// fetched under the git half's private area, `.rola/git/vault/`, rather than into the cache the
 /// `rola` program keeps for the same purpose: two programs answering for one project should not be
 /// sharing the shape of a directory neither of them owns.
 struct Fetch {
@@ -531,7 +531,7 @@ fn version_at(
 ///
 /// A key is the hash of its content, so any Vault that holds it hands back the same object: the
 /// content is asked of every Vault the mappings resolve through, and what none of them holds is a
-/// resolution that cannot be applied — which is refused here, before the lock says it is placed.
+/// resolution that cannot be applied, which is refused here, before the lock says it is placed.
 ///
 /// # Errors
 ///

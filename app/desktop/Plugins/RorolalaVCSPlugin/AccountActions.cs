@@ -20,7 +20,7 @@ internal sealed record Account(string Name, bool Current);
 /// <para>
 /// The two that have no command are the dock's own file work: exporting a public key, which is copying the
 /// `.pub` beside the account, and removing one, which is taking that pair away. What they act on is found the
-/// way the command line finds it — through `rola key`, which lists the keys in the order the scopes are read —
+/// way the command line finds it (through `rola key`, which lists the keys in the order the scopes are read)
 /// so a name resolves to the same file here as it does there.
 /// </para>
 /// <para>
@@ -79,7 +79,7 @@ internal static class AccountActions
     /// The key files for the accounts, in the order the command line ranks the scopes.
     /// </summary>
     /// <remarks>
-    /// With `secret`, the private keys are listed — the accounts themselves — and without it the public ones,
+    /// With `secret`, the private keys are listed, the accounts themselves, and without it the public ones,
     /// which is what a `.pub` beside an account is. The paths are the command line's own answer, so what is
     /// found here is what would be found by a run of `rola key`.
     /// </remarks>
@@ -238,7 +238,7 @@ internal static class AccountActions
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            // The words are `rola`'s own, and `rola` writes UTF-8 — as every stream this project's programs
+            // The words are `rola`'s own, and `rola` writes UTF-8, as every stream this project's programs
             // write is. Left unstated, a redirected stream is decoded in the machine's codepage, which on a
             // Chinese Windows is GBK, and every word of the message comes out as mojibake.
             StandardOutputEncoding = Encoding.UTF8,

@@ -1,13 +1,13 @@
 //! The `rola storage` namespace: what a store holds, read and written by hand.
 //!
-//! `storage` is a namespace rather than one thing to do — a file is put in, a hash is taken out, a
-//! pack is looked at — and what it holds is what sits under version control rather than part of it:
+//! `storage` is a namespace rather than one thing to do, a file is put in, a hash is taken out, a
+//! pack is looked at, and what it holds is what sits under version control rather than part of it:
 //! the store the content is kept in. Each of its commands is therefore two words deep,
 //! `storage write-file` for one, so that adding another is adding another word rather than
 //! reshaping this one.
 //!
 //! Reaching `storage` with none of those words is a question about the namespace rather than about
-//! one of its commands, so it is answered with what the namespace holds — see [`handle_storage`] —
+//! one of its commands, so it is answered with what the namespace holds, see [`handle_storage`],
 //! and the same words answer `rola storage -h`.
 
 use mingling::{
@@ -38,7 +38,7 @@ pub fn desc_storage() -> Description {
 /// Names what `storage` holds.
 ///
 /// A command the namespace has is matched before this is reached, so what arrives here is a run
-/// that named none of them — or one it does not have. Either is a question about the namespace
+/// that named none of them, or one it does not have. Either is a question about the namespace
 /// rather than about a command of it, and both are answered the way [`help_storage`] answers.
 #[chain]
 pub fn handle_storage(_: EntryStorage) -> Next {
@@ -49,7 +49,7 @@ pub fn handle_storage(_: EntryStorage) -> Next {
 ///
 /// The same answer [`help_storage`] gives, since a run that reached `storage` with nothing and a
 /// run that asked it for help are asking the same thing. What it says is written out twice rather
-/// than shared, because what puts it on the screen — `r_eprintln!` — is a buffer only the
+/// than shared, because what puts it on the screen, `r_eprintln!`, is a buffer only the
 /// attributes open.
 #[derive(Grouped)]
 pub struct ResultStorageHelp;

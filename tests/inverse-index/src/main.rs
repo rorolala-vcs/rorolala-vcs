@@ -1,7 +1,7 @@
 //! `inverse-index`: what the reverse dependency index answers, and what it falls back to.
 //!
 //! The index is content addressed, so it answers "what is stored under this hash" and nothing the
-//! other way. The inverse index is the other way — which objects depend on a key — kept as records
+//! other way. The inverse index is the other way, which objects depend on a key, kept as records
 //! beside the objects, and built by reading every object once. It is derived data, so what matters
 //! is that an answer is the same whether it came from the records or from the objects, that it is
 //! right the moment an object is written the records do not describe, and that what is answered does
@@ -635,7 +635,7 @@ impl Checked {
         self.asked += 1;
 
         if !answered {
-            self.wrong.push(format!("{question} — {said}"));
+            self.wrong.push(format!("{question}, {said}"));
         }
     }
 

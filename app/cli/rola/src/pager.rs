@@ -3,14 +3,14 @@
 //! A run draws its answer into the render buffer, and the framework writes that buffer out once
 //! the run is over. What is drawn is the contract, so a pager cannot be a different way of
 //! drawing: it is the same text, handed to something that shows a screenful of it at a time.
-//! That is what this registers — a `post_render` hook, which is the last place the buffer is
+//! That is what this registers, a `post_render` hook, which is the last place the buffer is
 //! whole and nothing has been written out yet. The hook takes the answer's entries out of the
 //! buffer, so the framework writes none of them again, and writes them itself: through a pager
 //! when there is a terminal to page on, and straight out when there is not.
 //!
 //! Which stream the answer was drawn on is the run's to say: a command draws its result on
 //! `stdout`, and a help answer on `stderr`, which is where the help renderers write it. The hook
-//! takes that stream's entries and leaves the other where it is, in the order it was written — a
+//! takes that stream's entries and leaves the other where it is, in the order it was written, a
 //! command's warnings, progress and failures stay on `stderr` for the framework to write, exactly
 //! as they always did. So `rola ... > file` still writes the answer to the file and still says its
 //! own troubles on the terminal, `rola ... | head` is still a pipe, and a help answer long enough
@@ -27,7 +27,7 @@
 //!
 //! Which pager it is, is the machine's to say first: `$PAGER` names one, and `cat` means the
 //! machine has asked for the text to be written out as it is. With nothing named, the pager
-//! carried inside the program is used — see [`minus`] — so a machine with no pager installed can
+//! carried inside the program is used, see [`minus`], so a machine with no pager installed can
 //! still read a long answer.
 //!
 //! A pager is a convenience, not a contract. If one cannot be started, or stops reading, or dies,
@@ -90,7 +90,7 @@ where
 
 /// Which stream an answer was drawn on.
 ///
-/// A command draws its result on `stdout`, and a help answer on `stderr` — which is where the help
+/// A command draws its result on `stdout`, and a help answer on `stderr`, which is where the help
 /// renderers write it. The pager reads, and when it cannot page, writes back that one stream, so
 /// whatever a run says on the other is left exactly where it was.
 #[derive(Clone, Copy)]
@@ -150,8 +150,8 @@ fn page(result: &mut RenderResult, mode: QueryMode) {
 
     // Two terminals are asked about first, and both have to be one. The pager draws on `stdout`,
     // so a run whose `stdout` is a pipe or a file has nothing to page on. The answer is on its own
-    // stream, so a run whose answer is being read — a result piped elsewhere, a help answer sent to
-    // a file — has nothing to page either. Asking both keeps an answer on the stream it was drawn
+    // stream, so a run whose answer is being read, a result piped elsewhere, a help answer sent to
+    // a file, has nothing to page either. Asking both keeps an answer on the stream it was drawn
     // on: a help answer is never moved onto `stdout`, and a result is never moved off it.
     if !answer.is_terminal() || !std::io::stdout().is_terminal() {
         return;
@@ -169,7 +169,7 @@ fn page(result: &mut RenderResult, mode: QueryMode) {
     if let Ok(pager) = std::env::var("PAGER") {
         let pager = pager.trim();
 
-        // The machine named a pager of its own — one that pages, or one that says the text is not
+        // The machine named a pager of its own, one that pages, or one that says the text is not
         // to be paged at all.
         if !pager.is_empty() {
             if pager == NO_PAGER {
@@ -177,7 +177,7 @@ fn page(result: &mut RenderResult, mode: QueryMode) {
             } else if !through(pager, &text) {
                 // A pager that cannot be reached or stops reading has not shown the answer, so it
                 // is written out instead. `less` quits once there is nothing more to read, which
-                // is a write this run has no reason to treat as a failure — and on Unix the same
+                // is a write this run has no reason to treat as a failure, and on Unix the same
                 // quit arrives as `SIGPIPE`, which is deliberately fatal (see `main.rs`), so this
                 // is the path Windows takes.
                 answer.write(&text);
@@ -198,7 +198,7 @@ fn page(result: &mut RenderResult, mode: QueryMode) {
 /// How many lines the answer holds, as the buffer holds it.
 ///
 /// A buffered line is what the framework writes next to what it writes it with, so the entries are
-/// read the way the framework would write them: in order, one after another — see [`merge`]. A
+/// read the way the framework would write them: in order, one after another, see [`merge`]. A
 /// line is ended by a newline, and an answer whose last line has none is still a line.
 fn line_count<S: AsRef<str>>(entries: &[S]) -> usize {
     let newlines: usize = entries
@@ -254,7 +254,7 @@ fn through(program: &str, answer: &[u8]) -> bool {
     });
 
     // What the pager exited with is the pager's own business: the answer has been handed over, and
-    // what became of it is what a reader of a pager expects — quitting before the end included.
+    // what became of it is what a reader of a pager expects, quitting before the end included.
     let _ = child.wait();
 
     written

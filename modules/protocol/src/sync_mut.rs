@@ -3,7 +3,7 @@
 //! There are two entry points, split by where the side a change lands on comes from:
 //!
 //! * [`OnlyWorkspace::sync_mut`] and [`OnlyVault::sync_mut`] take no data from outside.
-//!   The wrapper already names the side — it holds the value — so the closure is handed
+//!   The wrapper already names the side, it holds the value, so the closure is handed
 //!   that value alone, and both sides come out holding what it wrote as a [`Both`].
 //! * [`Both::sync_mut_with`] changes a value both sides already hold. The side is named
 //!   by the read-only inputs the caller passes instead, which is what the `_with` is
@@ -118,7 +118,7 @@ where
 ///
 /// Implemented for a single [`OnlyWorkspace`] or [`OnlyVault`], and for a tuple of two
 /// to twelve of either. A tuple mixing the two, or holding a value that is not wrapped
-/// at all, has no implementation, so the compiler rejects it — which is what makes the
+/// at all, has no implementation, so the compiler rejects it, which is what makes the
 /// side a change lands on follow from the inputs rather than from a flag.
 ///
 /// This is the shape [`sync_mut_with`](crate::Both::sync_mut_with) dispatches through; it
@@ -330,7 +330,7 @@ internal_repeat!(2..=12 => {
 
 // `internal_repeat!` is a proc macro, so its parser cannot be reached directly from a unit test:
 // `proc_macro::TokenStream` values cannot be built outside a live macro invocation. What can be
-// pinned is the behaviour of its expansions, which is what these tests do — each one invokes the
+// pinned is the behaviour of its expansions, which is what these tests do, each one invokes the
 // macro with a shape that exercises a specific branch of its parser and asserts on the Rust the
 // expansion produces. The silent fallbacks (no `=>`, an empty range, non-numeric bounds) expand to
 // the same twelve repetitions, so they are asserted to hold that behaviour rather than to error.

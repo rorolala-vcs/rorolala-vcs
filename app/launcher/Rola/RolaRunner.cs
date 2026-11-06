@@ -24,14 +24,14 @@ internal sealed record RolaResult(bool Done, int Code, string Output, string Sai
 /// machine's `PATH` holds may be another `rola` of another version, against another Vault, and the two
 /// programs are exported together so there is no reason to look anywhere else.
 /// <para>
-/// Every run is asked for the look the Desktop program reads — <c>desktop-friendly</c> — so what comes
+/// Every run is asked for the look the Desktop program reads, <c>desktop-friendly</c>, so what comes
 /// back is plain text rather than a drawing meant for a terminal, and every stream is decoded as UTF-8,
 /// which is what these programs write: left unstated, a redirected stream is decoded in the machine's own
 /// codepage, and on a Chinese Windows that is GBK.
 /// </para>
 /// <para>
-/// Every run is also told the language this program speaks, so that what the command line says back — a
-/// reason a check failed, a name a dialog is about to show — is in the language the person reading the
+/// Every run is also told the language this program speaks, so that what the command line says back, a
+/// reason a check failed, a name a dialog is about to show, is in the language the person reading the
 /// window is reading. Left to itself the command line reads the machine's own locale, and a window that is
 /// speaking one language while its reasons are written in another is a window that reads as two programs.
 /// </para>
@@ -51,7 +51,7 @@ internal sealed class RolaRunner(string program, string language)
     /// </summary>
     /// <remarks>
     /// It changes while the program runs: the language a window speaks is a choice of the person reading it,
-    /// and the command line the window asks for things has to be asked in it — a reason written in one
+    /// and the command line the window asks for things has to be asked in it, a reason written in one
     /// language under a window speaking another reads as two programs rather than one.
     /// </remarks>
     public string Language { get; set; } = language;

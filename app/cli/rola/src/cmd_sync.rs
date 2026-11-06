@@ -1,6 +1,6 @@
 //! The `rola sync` command: moving a Layout's work to and from the Vault it tracks.
 //!
-//! A Layout tracks one Vault — the name in its `TRACK` file — and this is how the two are brought
+//! A Layout tracks one Vault, the name in its `TRACK` file, and this is how the two are brought
 //! together. What the Vault holds now is fetched first, since the plan is made from it, and the
 //! plan says what is to move and which way. `--dry-run` stops there: it prints the plan and does
 //! nothing, which is what the run that wants to know before it is changed asks for.
@@ -8,8 +8,8 @@
 //! What goes up is the plan's creations and versions: a `Uuid` only this Layout holds is made an
 //! entry of the Vault's Layout at the path the work tracks it at, and a version the Vault is behind
 //! on is set. What comes down is a version the Vault is ahead on: what it stored is written into
-//! the tree, and the version into the Layout. Content is moved around the Layout either way — the
-//! index and the store, unless `--no-index` or `--no-storage` says otherwise — and `--no-layout`
+//! the tree, and the version into the Layout. Content is moved around the Layout either way, the
+//! index and the store, unless `--no-index` or `--no-storage` says otherwise, and `--no-layout`
 //! leaves the Layout out of it entirely: no plan is made, the index is exchanged both ways, and the
 //! stored content is uploaded. A direction is a narrowing of the plan, so `--up-only` and
 //! `--down-only` are refused beside it.
@@ -134,7 +134,7 @@ pub fn complete_sync(ctx: ShellContext) -> Suggest {
 /// [bound](crate::vault::cmd_vault_bind). What the Vault holds now is fetched first, and the plan
 /// says what is to move: a `Uuid` only this Layout holds goes up at the path the work tracks it at,
 /// a version the Vault is behind on goes up when this account holds it, one this Layout is behind
-/// on comes down, and a `Uuid` only the Vault holds is named rather than brought — `checkin` is
+/// on comes down, and a `Uuid` only the Vault holds is named rather than brought, `checkin` is
 /// what brings one.
 ///
 /// `--up-only` and `--down-only` keep the plan to one direction; neither, or `--both`, is both.
@@ -198,8 +198,8 @@ pub fn sync(
         _ => Direction::Both,
     };
 
-    // A run that reads no Layout has no plan for a direction to narrow: what it does is fixed —
-    // the index both ways and the store up — so a direction is refused rather than dropped.
+    // A run that reads no Layout has no plan for a direction to narrow: what it does is fixed,
+    // the index both ways and the store up, so a direction is refused rather than dropped.
     if no_layout && (up || down) {
         return ErrorSyncNoLayoutDirection.into();
     }
@@ -303,7 +303,7 @@ pub fn handle_sync(
     };
 
     // What the Vault holds now is what the plan is made from, so its copy is brought up to date
-    // first — the same fetch `rola layout fetch` makes. A run that is not about the Layout at all,
+    // first, the same fetch `rola layout fetch` makes. A run that is not about the Layout at all,
     // which `--no-layout` says, makes no plan and reads no copy. One watching covers the whole run:
     // the steps that make the plan and carry it out are one thing to a reader, and a bar waiting on
     // each part would never have been let out at all.
@@ -384,7 +384,7 @@ pub fn handle_sync(
 
 /// What a run that was carried out answers with.
 ///
-/// What a run with no plan did is not in the three plan counts — there was no plan — so the counts
+/// What a run with no plan did is not in the three plan counts, there was no plan, so the counts
 /// of what crossed are carried through beside them, and which pair is printed follows from whether
 /// there was a Layout to read.
 fn done(plan: Option<&sync::Plan>, layout: String, vault: String, carried: Carried) -> Next {
@@ -512,7 +512,7 @@ fn carries_trees(layout: &Layout) -> bool {
 /// Content is moved before the Layout is touched either way: a version is only a meaning once what
 /// it stored is here, and what goes up names versions the Vault has to be able to read.
 ///
-/// The two exchanges say their own progress — they are actions, and an action reports itself — and
+/// The two exchanges say their own progress (they are actions, and an action reports itself) and
 /// what is left, one entry at a time, is said here, since no action knows it is part of a longer
 /// run. The watching the bars are drawn into is the caller's.
 ///
@@ -532,8 +532,8 @@ fn carry_with(
 ) -> Result<Carried, ErrorSyncFailed> {
     // A plan is what names the content to move, and `--no-layout` is the run that has none. Reading
     // no Layout must not leave the content behind, though: `--no-storage` is the only thing that
-    // suppresses moving content. So with no plan what moves is everything the index holds — the
-    // stored object every variant points at, the new ones included — and it is read here, before the
+    // suppresses moving content. So with no plan what moves is everything the index holds, the
+    // stored object every variant points at, the new ones included, and it is read here, before the
     // index is synced, so what crosses is this side's own work rather than everything the Vault
     // holds as well.
     //
@@ -553,7 +553,7 @@ fn carry_with(
 
     let sources = sources_of(state, carry, vault_name, progress)?;
 
-    // What moves the content, which is the plan's entries or — with no plan — everything the index
+    // What moves the content, which is the plan's entries or, with no plan, everything the index
     // names. Both the orders below ask for it, so what it does is stated once.
     let carry_content = || -> Result<usize, ErrorSyncFailed> {
         let Some(sources) = &sources else {
@@ -581,7 +581,7 @@ fn carry_with(
 
     // Which of the two exchanges goes first is decided by what names what. With no plan the Vault's
     // index is about to name variants this run sends, so the content goes first: a failed upload
-    // then leaves content nobody names — harmless, since a key is its content — rather than a name
+    // then leaves content nobody names (harmless, since a key is its content) rather than a name
     // pointing at nothing until a later run repairs it. With a plan it is the other way round: a
     // version to bring down is resolved through index objects only the Vault holds, so the index has
     // to cross before its content can be found.
@@ -596,7 +596,7 @@ fn carry_with(
 
     // What a run with no plan asked the Vault for is what the index named: the content every variant
     // points at. The index objects themselves cross in an exchange of their own, which answers with
-    // no count — the action is already exported to C with a `()` output — so what is reported is the
+    // no count, the action is already exported to C with a `()` output, so what is reported is the
     // list this run made, not what the Vault answered with.
     let index_objects = if state.skip.index {
         0
@@ -661,7 +661,7 @@ fn carry_with(
 
     // What is written up is one exchange of many entries rather than a step each, so its share of
     // the bars is taken once it is done: the whole bar must not read as finished while the exchange
-    // — the step that reaches the network — is still in front of the reader.
+    //, the step that reaches the network, is still in front of the reader.
     if let Some(task) = &mut up {
         task.advance_by(up_total);
     }
@@ -770,7 +770,7 @@ fn sync_index(
             carry.account,
             carry.target.to_string(),
             // The exchange has one answer whichever side asks: a full sync is everything either side
-            // holds, and an input names nothing — see `ActionSyncIndexAll`.
+            // holds, and an input names nothing, see `ActionSyncIndexAll`.
             String::new(),
             progress.clone(),
         ))
@@ -804,12 +804,12 @@ fn indexed(carry: &Carry<'_>) -> Vec<Key> {
 /// the Vault's store.
 ///
 /// A version is only a meaning once what it stored is in the store that names it, so each entry
-/// names what the version it moves stands on as well as the version itself — the whole chain back to
+/// names what the version it moves stands on as well as the version itself, the whole chain back to
 /// its root. Naming only the version at the top is what left every version below it a name in the
 /// Layout with no content behind it: the chain crossed, the content did not, and a later run that
 /// needed an older version found a name nothing could produce.
 ///
-/// An entry that is neither — a refusal, a block, or a `Diverged` a run is not forcing — names
+/// An entry that is neither (a refusal, a block, or a `Diverged` a run is not forcing) names
 /// nothing to move, and its content is never asked for.
 fn content_of(entries: &[&Entry], state: StateSync, carry: &Carry<'_>) -> (Vec<Key>, Vec<Key>) {
     let mut receive = Vec::new();
@@ -1455,8 +1455,8 @@ pub fn render_result_sync_plan(result: ResultSyncPlan) {
         );
     }
 
-    // A plan of nothing is not what a run that read no Layout would do — it moves the index and the
-    // store whichever count is printed — so that run is told what it is about to move instead.
+    // A plan of nothing is not what a run that read no Layout would do, it moves the index and the
+    // store whichever count is printed, so that run is told what it is about to move instead.
     if result.layout_read {
         r_println!(
             "{}",

@@ -2,7 +2,7 @@
 //!
 //! What either kind of suite checks is the program a caller meets rather than the parts it is made
 //! of: a cargo suite is a program rather than a test crate, because what it does is what a caller
-//! does — it is run, and it complains, by ending non-zero, when what came back was not what it
+//! does, it is run, and it complains, by ending non-zero, when what came back was not what it
 //! expected. That is also what lets one do what a test cannot: serve a Vault, reach it, and stop it
 //! again.
 //!
@@ -83,7 +83,7 @@ fn run_integration_test() -> Result<(), Error> {
         // The C ABI is met by compiling C against the built shared library and linking it, and that
         // needs two things this run may not have: a shared library, which a musl build does not make
         // (rustc refuses a `cdylib` whose C runtime is static, and the dynamic one needs a musl
-        // `libgcc_s` a glibc machine does not carry — see `rola_build::ops::library`), and a POSIX C
+        // `libgcc_s` a glibc machine does not carry, see `rola_build::ops::library`), and a POSIX C
         // toolchain, which the suite is written for: `mkdtemp`, `cc -std=c11`, `-Wl,-rpath,`. The
         // suite is skipped where either is missing and run where both hold.
         if let Some(reason) = skipped(&name, &workspace) {

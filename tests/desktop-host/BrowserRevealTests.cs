@@ -99,8 +99,8 @@ public sealed class BrowserRevealTests
     /// </summary>
     /// <remarks>
     /// The two answers a dock gives to being told what to show: opened onto a directory it takes a place of its own,
-    /// and shown a path afterwards it navigates the way the user's own steps do. A file is the second kind — nothing
-    /// can be opened onto a file — and what says it worked is the file chosen.
+    /// and shown a path afterwards it navigates the way the user's own steps do. A file is the second kind, nothing
+    /// can be opened onto a file, and what says it worked is the file chosen.
     /// </remarks>
     [Fact]
     public void ADockShownAPathAfterBeingOpenedGoesThereAndChoosesTheFile()

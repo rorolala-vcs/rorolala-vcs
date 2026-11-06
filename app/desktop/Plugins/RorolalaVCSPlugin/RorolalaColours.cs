@@ -10,7 +10,7 @@ namespace RorolalaVCSPlugin;
 /// They are the plugin's rather than the theme's, because what a state is coloured is the state and not a
 /// preference: green for what is not recorded yet, amber for what is under way, red for what must not be
 /// recorded, and blue for what is somewhere else than the Layout says. What a user may change is the two of
-/// them each is drawn in — the preference panel holds them as the hexes below — and nothing about them follows
+/// them each is drawn in, the preference panel holds them as the hexes below, and nothing about them follows
 /// the look: the same four read on a light ground and on a dark one, which is what makes them the plugin's
 /// answer rather than the theme's.
 /// <para>
@@ -69,7 +69,7 @@ internal static class RorolalaColours
     /// <remarks>
     /// A weighted sum rather than a proper contrast ratio, because what it decides is which of two shades of one
     /// colour is drawn: either reads, and the two are told apart by what is easier on the eye rather than by a
-    /// standard. The weights are the eye's — green is what it sees most of — and the cut is where the lightest
+    /// standard. The weights are the eye's, green is what it sees most of, and the cut is where the lightest
     /// of these colours stops wanting a light ink.
     /// </remarks>
     private const double LightEnough = 0.6;
@@ -83,7 +83,7 @@ internal static class RorolalaColours
     /// <remarks>
     /// The colours are read from the settings as they are drawn rather than read once and kept: a setting
     /// changed in the panel is one the next pill or dot is drawn in, and what draws them draws again on its
-    /// own — the Overview on its reading, a listing when the files may have changed.
+    /// own, the Overview on its reading, a listing when the files may have changed.
     /// </remarks>
     /// <param name="config">The plugin's own settings.</param>
     public static void Declare(IPluginConfig config)
@@ -103,7 +103,7 @@ internal static class RorolalaColours
     /// </summary>
     /// <remarks>
     /// A shade of its own family rather than white or black, because the words and the ground they sit on are
-    /// one thing — a pill is a state said loudly, and words in another colour would be two things said at once.
+    /// one thing, a pill is a state said loudly, and words in another colour would be two things said at once.
     /// </remarks>
     /// <param name="colour">What the words are written on.</param>
     /// <returns>What to write them in.</returns>

@@ -8,12 +8,12 @@ namespace RorolalaDesktop.I18n;
 /// <remarks>
 /// The files are the ones <c>rust-i18n</c> reads for the command line, and they are read the way
 /// it reads them: every <c>*.yml</c> under the directory is read, however deep it sits, and where
-/// a file sits says nothing about what it holds — the files are gathered into one set of nodes, so
+/// a file sits says nothing about what it holds, the files are gathered into one set of nodes, so
 /// a key belongs to the file that states it rather than to the directory it is filed under.
 /// <para>
 /// A node is a mapping of locale to written form, which is a mapping whose every value is written
 /// out. Everything else is a step on the way to one: a mapping with a mapping under it is walked
-/// into, and a value that is not a mapping — <c>_version</c>, which every file opens with — is
+/// into, and a value that is not a mapping (<c>_version</c>, which every file opens with) is
 /// left where it is.
 /// </para>
 /// </remarks>

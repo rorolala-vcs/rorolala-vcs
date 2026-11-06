@@ -12,9 +12,9 @@ namespace RorolalaDesktop;
 /// </summary>
 /// <remarks>
 /// The library's pictures are drawn white on nothing, so a mark is the picture cut out and painted through rather
-/// than the picture itself: what colour it takes is stated by the holder — a menu item's ink, a tab's — and a mark
+/// than the picture itself: what colour it takes is stated by the holder (a menu item's ink, a tab's) and a mark
 /// that carried its own would be one per look. The holder is named rather than guessed at, because what stands
-/// between the two — the presenter a menu item or a button puts its content in — states nothing of its own.
+/// between the two, the presenter a menu item or a button puts its content in, states nothing of its own.
 /// </remarks>
 internal static class Marks
 {
@@ -55,7 +55,7 @@ internal static class Marks
     /// </summary>
     /// <remarks>
     /// The interpolation is set high because what is scaled is a picture drawn at several times the size it is shown
-    /// at — see the manifest's own answer for what is drawn — so a filter that samples a few of its pixels leaves a
+    /// at, see the manifest's own answer for what is drawn, so a filter that samples a few of its pixels leaves a
     /// stroke broken, and the whole of what it covers is taken instead.
     /// </remarks>
     /// <param name="picture">What to stamp.</param>

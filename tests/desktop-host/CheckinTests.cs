@@ -9,8 +9,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The command line refuses a run whole for the first reference it will not take, so a batch that half fits is a batch
-/// that would do nothing at all. What is checked here is the judgement made before the run — where each entry would
-/// land, and what is already in the way — because that judgement is what the question to the user is built from.
+/// that would do nothing at all. What is checked here is the judgement made before the run, where each entry would
+/// land, and what is already in the way, because that judgement is what the question to the user is built from.
 /// The runs themselves are checked beside this, as the arguments they are given.
 /// </remarks>
 public sealed class CheckinTests
@@ -180,7 +180,7 @@ public sealed class CheckinTests
     /// <summary>A folder cut out of the upstream and pasted into the work comes back as the folder it was.</summary>
     /// <remarks>
     /// A cut is a drag that waits: the clipboard carries the folder's row, and the paste is the same plan a drop of it
-    /// makes. What it must not be is the folder's files alone — cutting `A` and pasting into the root is the root gaining
+    /// makes. What it must not be is the folder's files alone, cutting `A` and pasting into the root is the root gaining
     /// an `A`, which is the tree under it rather than three names beside each other.
     /// </remarks>
     [Fact]

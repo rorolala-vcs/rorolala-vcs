@@ -5,7 +5,7 @@
 //! result of it, so the same content may be written differently on another day without any key
 //! changing.
 //!
-//! The choice is made from the content alone — from the first bytes of it, and how long it is — so a
+//! The choice is made from the content alone (from the first bytes of it, and how long it is) so a
 //! write from a file and a write from a transfer land the same way, and neither has to be told what it
 //! is being given.
 
@@ -20,7 +20,7 @@ impl RorolalaStorage {
     /// Chooses how `file` is to be written.
     ///
     /// This is the choice made from a file: enough of its opening is read to tell what it is, and how
-    /// long it is is asked of the filesystem rather than of the content — nothing here reads the whole
+    /// long it is is asked of the filesystem rather than of the content, nothing here reads the whole
     /// of anything.
     ///
     /// The opening is read with a blocking `std` handle rather than through `tokio::fs`, which is what
@@ -58,8 +58,8 @@ impl RorolalaStorage {
     /// - **A container a policy claims** is cut by the policy that claims it. The claim is the one
     ///   thing here that knows what the bytes are without reading them, which is what makes it the
     ///   cheapest of the answers and the most predictable.
-    /// - **A packed container** — anything that starts with a ZIP's signature, which is what a `.zip`
-    ///   and every format built on one are — is cut at the boundaries of what it packs. See
+    /// - **A packed container**, anything that starts with a ZIP's signature, which is what a `.zip`
+    ///   and every format built on one are, is cut at the boundaries of what it packs. See
     ///   [`Chunking::Zip`]: boundaries given rather than searched for, and the cut that can tell what
     ///   is still the same bytes it was.
     /// - **Text** is cut at the ends of its lines once there is enough of it to be worth a manifest,
@@ -81,7 +81,7 @@ impl RorolalaStorage {
         extension: Option<&str>,
     ) -> AlgorithmChoice {
         // The encoding and the cut are two decisions, taken apart from each other. What a caller
-        // forces is a cut — a policy names how content is cut, not how it is stored — so forcing one
+        // forces is a cut (a policy names how content is cut, not how it is stored) so forcing one
         // leaves the other where the content put it: text stays compressed and a container stays as
         // it came in.
         let container = starts_a_container(magic);
@@ -126,15 +126,15 @@ impl RorolalaStorage {
     }
 }
 
-/// Whether `magic` — the first bytes of some content — starts a signature this store recognises.
+/// Whether `magic`, the first bytes of some content, starts a signature this store recognises.
 ///
 /// The only one it recognises is a ZIP's, which is what tells a packed container from content of any
-/// other kind — see [`Zip`](crate::Zip) for what a container is taken apart by.
+/// other kind, see [`Zip`](crate::Zip) for what a container is taken apart by.
 fn starts_a_container(magic: &[u8]) -> bool {
     magic.starts_with(&ZIP_MAGIC)
 }
 
-/// Whether `magic` — the first bytes of some content — reads as text.
+/// Whether `magic`, the first bytes of some content, reads as text.
 ///
 /// A zero byte is what says content is not text, which is the rule `git` reads a file by: what a file
 /// is *for* cannot be told from its bytes, but whether it is something a person wrote can be told well

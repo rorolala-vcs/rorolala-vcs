@@ -13,7 +13,7 @@ namespace RorolalaDesktop.SysIcons;
 /// is, so what is read here is the theme the desktop says it is using, then whatever that theme says
 /// it inherits from, then hicolor, which every theme has to fall back to.
 /// <para>
-/// What a theme keeps for a folder is usually an SVG — Papirus, Adwaita and Breeze all do — and
+/// What a theme keeps for a folder is usually an SVG (Papirus, Adwaita and Breeze all do) and
 /// nothing here can draw one, so the system's own renderer is asked to. librsvg is what the desktop
 /// draws these with itself, so what comes back is the picture the desktop would have shown rather
 /// than an approximation of it. It is asked for once per icon, and the answer is kept.
@@ -34,7 +34,7 @@ internal static class IconTheme
     /// The names a file of no known kind may be drawn under, most specific first.
     /// </summary>
     /// <remarks>
-    /// A theme names a file by its MIME type — <c>image-png</c>, <c>application-pdf</c> — and by the
+    /// A theme names a file by its MIME type (<c>image-png</c>, <c>application-pdf</c>) and by the
     /// generic name of its top-level kind. These are the generic names, which are what is left when the
     /// type is not known or the theme has no picture for it.
     /// </remarks>
@@ -82,8 +82,8 @@ internal static class IconTheme
     /// <remarks>
     /// The MIME type is what the system's own glob table says the name is, so a PSD is asked for as
     /// <c>application-vnd.adobe.photoshop</c> and a PDF as <c>application-pdf</c>. A type no theme has a
-    /// picture for falls back to the generic picture of its top-level kind — an image, a sound, a
-    /// document — which is still a better answer than calling every file text.
+    /// picture for falls back to the generic picture of its top-level kind, an image, a sound, a
+    /// document, which is still a better answer than calling every file text.
     /// </remarks>
     /// <param name="name">The file's name or path.</param>
     /// <returns>The names to look for, in the order they are worth trying.</returns>
@@ -232,7 +232,7 @@ internal static class IconTheme
     /// The theme the desktop says it is using, or nothing when it does not say.
     /// </summary>
     /// <remarks>
-    /// Read out of the two files desktops write it in — GTK's and KDE's — and then asked of GSettings,
+    /// Read out of the two files desktops write it in, GTK's and KDE's, and then asked of GSettings,
     /// which is where a GNOME desktop keeps its answer and keeps it nowhere a file can be read.
     /// </remarks>
     private static string? Named()
@@ -314,8 +314,8 @@ internal static class IconTheme
     /// are not.
     /// </summary>
     /// <remarks>
-    /// Both are looked for in the size directories, because that is where themes keep them — Papirus
-    /// has no scalable directory at all and keeps an SVG inside each of its size directories — and the
+    /// Both are looked for in the size directories, because that is where themes keep them, Papirus
+    /// has no scalable directory at all and keeps an SVG inside each of its size directories, and the
     /// size wanted is taken before the sizes further off, since a picture of the size wanted need not
     /// be scaled at all.
     /// </remarks>
@@ -503,7 +503,7 @@ internal static class IconTheme
     /// </summary>
     /// <remarks>
     /// A program is asked rather than a file read where the answer is kept somewhere no file holds it
-    /// — GSettings, which is not a text file — and where the program that computes it is the desktop's
+    /// (GSettings, which is not a text file) and where the program that computes it is the desktop's
     /// own. It is asked once, since what it answers with is cached.
     /// </remarks>
     private static string? Asked(string program, string[] arguments)

@@ -27,8 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The host itself. This suite drives its own types — the configuration, the plugin manager,
-         the registries, the log — rather than only the contract it publishes. -->
+    <!-- The host itself. This suite drives its own types, the configuration, the plugin manager,
+         the registries, the log, rather than only the contract it publishes. -->
     <ProjectReference Include="../../app/desktop/Core/RorolalaDesktop.csproj" />
     <!-- The plugins that ship with the program, so that one plugin's contribution to another's
          extension point is checked in process: what is exercised is the catalogue the two share, which

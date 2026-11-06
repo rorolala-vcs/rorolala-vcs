@@ -38,12 +38,12 @@ impl Chunk {
 /// How a file was stored: the ordered chunks it is made of.
 ///
 /// A manifest is the whole of what a reader needs to put content back together, and it is
-/// deliberately free of any hint about how the chunks were found — see
+/// deliberately free of any hint about how the chunks were found, see
 /// [`Chunker`](crate::Chunker). Two stores that cut the same content differently still agree on
 /// what the content is, because the key is the hash of the content and not of the cutting.
 ///
-/// It is kept apart from [`obj`](crate::RorolalaStorage) — under a directory of its own, and in packs
-/// of its own whose indexes sit among the manifests — so that the chunks a manifest refers to can be
+/// It is kept apart from [`obj`](crate::RorolalaStorage), under a directory of its own, and in packs
+/// of its own whose indexes sit among the manifests, so that the chunks a manifest refers to can be
 /// told from the objects nothing refers to. That is what a cleanup reads to find what is an orphan and
 /// what is not, without reading a single object.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -87,8 +87,8 @@ impl Manifest {
     /// A manifest that came from bytes never adds up past the limit [`decode`](Self::decode)
     /// enforces, since it refuses one that does; neither does one built here a chunk at a time,
     /// because each length is a length of bytes that were really there. The sum saturates rather than
-    /// wrapping so that a manifest that is neither — one built by a caller with lengths nothing backs
-    /// — cannot panic a debug build and cannot wrap into a small lie in a release one. A caller that
+    /// wrapping so that a manifest that is neither, one built by a caller with lengths nothing backs
+    ///, cannot panic a debug build and cannot wrap into a small lie in a release one. A caller that
     /// has to tell a saturating sum from a real one wants [`checked_content_len`].
     ///
     /// [`checked_content_len`]: Self::checked_content_len
@@ -107,7 +107,7 @@ impl Manifest {
 
     /// Writes the manifest down, so it can be read back by [`decode`](Self::decode).
     ///
-    /// A manifest is a count and then one record per chunk — the digest and the length — which is
+    /// A manifest is a count and then one record per chunk, the digest and the length, which is
     /// all a reader needs and nothing about how the chunks were found.
     #[must_use]
     pub fn encode(&self) -> Vec<u8> {
@@ -126,7 +126,7 @@ impl Manifest {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Malformed`] if `bytes` does not read as a manifest — a count that will
+    /// Returns [`Error::Malformed`] if `bytes` does not read as a manifest, a count that will
     /// not fit, a record that is cut short, bytes left over at the end, or lengths that add up to
     /// more than this build can put back together.
     pub fn decode(bytes: &[u8]) -> Result<Self, Error> {
@@ -176,7 +176,7 @@ const RECORD_LEN: usize = BLAKE3_HASH_LEN + size_of::<u64>();
 
 /// The longest content a manifest may describe.
 ///
-/// Content is put back together as one `Vec<u8>`, and no `Vec` holds more than `isize::MAX` bytes —
+/// Content is put back together as one `Vec<u8>`, and no `Vec` holds more than `isize::MAX` bytes,
 /// so a manifest whose chunks add up to more describes content this build cannot carry, whatever
 /// the disks it was read from are big enough for. It is a bound on what can be put back together
 /// rather than a guess at what content is worth keeping: a genuinely large file stays legal for as

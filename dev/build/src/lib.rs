@@ -1,14 +1,14 @@
 //! `rola-build`: what this workspace's artifacts are made of, and how they are laid out.
 //!
-//! This crate is the product side of the build — the library and the programs, the icons a package
+//! This crate is the product side of the build, the library and the programs, the icons a package
 //! carries, the export a hand-off is made of, and the package itself. What *checks* the tree is
 //! `rola-ci`; the two are reached as `cargo dev` and `cargo ci`.
 //!
 //! A build step is a program of the workspace rather than a script beside it, written once and the
 //! same on every platform.
 //!
-//! What a step needs before it can do anything — where the workspace is, where its output goes, how
-//! this platform spells an artifact — is [`paths`] and [`platform`]; how a toolchain is run is
+//! What a step needs before it can do anything, where the workspace is, where its output goes, how
+//! this platform spells an artifact, is [`paths`] and [`platform`]; how a toolchain is run is
 //! [`toolchain`]; and every failure a step reports is [`Error`].
 
 #![deny(missing_docs)]
@@ -52,13 +52,13 @@ mod show_shape;
 pub use ops::chunker::passthrough as chunker_passthrough;
 
 // The types a command generates live in the module that declares the command, while the program
-// collects them by bare name at the crate root — that is why `gen_program!()` below can name them.
+// collects them by bare name at the crate root, that is why `gen_program!()` below can name them.
 // A program that binds paths gets this from `pathf`'s re-exports; a build tool has no paths to bind,
 // so its own modules are re-exported here instead.
 // The wildcard is on purpose: what is put in scope is what the command macros generate, and a list
 // written out by hand would be a second copy of their output that a rename would leave stale.
-// The path is kept crate-private on purpose too — the re-export exists for `gen_program!()`, not for
-// a caller of this library — which is why `pub(crate)` is not the redundancy clippy reads it as.
+// The path is kept crate-private on purpose too, the re-export exists for `gen_program!()`, not for
+// a caller of this library, which is why `pub(crate)` is not the redundancy clippy reads it as.
 #[allow(clippy::wildcard_imports, clippy::redundant_pub_crate)]
 pub(crate) use ops::*;
 // `gen_program!()` reaches these functions by name, so the re-export exists for the macro rather

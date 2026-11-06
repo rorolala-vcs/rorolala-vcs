@@ -1,15 +1,15 @@
 //! `cli-external`: a word that names no command is handed to the program beside `rola`.
 //!
 //! `rola daemon` is `rola-daemon`: the two are exported together, and what a run writes after `rola`
-//! may be the rest of another program's name. What is checked is what a caller meets — the program
-//! is run, its output is the terminal's, and the run ends with its code — which is why this suite
+//! may be the rest of another program's name. What is checked is what a caller meets, the program
+//! is run, its output is the terminal's, and the run ends with its code, which is why this suite
 //! lays the programs out itself and runs the copy of `rola` it made, rather than whatever happens to
 //! sit beside the built one.
 //!
 //! The companion is `rola-daemon`, copied under names of its own: the hand-over is not a rule about
 //! the word `daemon`, and a name with hyphens in it is reached as one word. Its `--help` is
-//! asked for because it is an answer nothing else gives — `rola`'s own help does not name
-//! `registry.toml` — so what comes back says which program answered.
+//! asked for because it is an answer nothing else gives, `rola`'s own help does not name
+//! `registry.toml`, so what comes back says which program answered.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -25,7 +25,7 @@ const HYPHENS: &str = "aa-bb-cc";
 
 /// What only the daemon's own help says, in either language it is written in: the usage line names
 /// the program, and a translation of the help does not rename it. An English word would say nothing
-/// on a machine whose locale is another, because the help is translated — which is why this is not
+/// on a machine whose locale is another, because the help is translated, which is why this is not
 /// one of the words the help is written in.
 const ITS_OWN_WORDS: &str = "rola-daemon";
 
@@ -56,7 +56,7 @@ fn main() {
         );
 
         // The code is the program's own. `--help` is help, which is 2 where the daemon is
-        // concerned — and the same 2 where this program is — so what says which program answered is
+        // concerned, and the same 2 where this program is, so what says which program answered is
         // the words above and not this number.
         assert_eq!(
             Some(2),

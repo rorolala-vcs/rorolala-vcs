@@ -7,7 +7,7 @@ namespace RorolalaVCSPlugin;
 /// <remarks>
 /// Removing a path here is not the unbinding a Layout of the Workspace's own does: a Vault's entry is a
 /// file the Vault holds, and letting one go is the entry going, path and all. Only the account that holds
-/// it, or one that administrates the Vault, is allowed to, which is the command's to say — what this owns
+/// it, or one that administrates the Vault, is allowed to, which is the command's to say, what this owns
 /// is the question, and the answer read back from the copy the command wrote.
 /// <para>
 /// The Layout is named rather than left to be resolved, because what the place shows is the one the

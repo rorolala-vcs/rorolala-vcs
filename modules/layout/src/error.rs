@@ -15,7 +15,7 @@ pub enum LayoutError {
     /// The bytes would not be read or written.
     Io(io::Error),
 
-    /// A path is not one a layout may name — empty, or climbing past the root.
+    /// A path is not one a layout may name, empty, or climbing past the root.
     Path(String),
 
     /// A name is not one a layout may be given.

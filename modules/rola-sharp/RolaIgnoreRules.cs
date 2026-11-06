@@ -7,13 +7,13 @@ namespace RolaSharp;
 /// </summary>
 /// <remarks>
 /// A hand-written wrapper over the generated bindings, as <see cref="RolaWorkspace"/> is: what crosses
-/// is an opaque handle the native side owns, and what this adds is the shape a caller wants — a set is
+/// is an opaque handle the native side owns, and what this adds is the shape a caller wants, a set is
 /// loaded from a directory rather than built from a pointer, absence is <see langword="null"/>, and the
 /// handle is given back on <see cref="Dispose"/>.
 /// <para>
 /// The rules themselves are the native side's: the syntax is gitignore's, the order the files apply in
-/// is the loader's, and nothing of either is reimplemented here. What a caller gets is one question —
-/// whether a path is ignored — asked as often as a listing needs it.
+/// is the loader's, and nothing of either is reimplemented here. What a caller gets is one question,
+/// whether a path is ignored, asked as often as a listing needs it.
 /// </para>
 /// </remarks>
 public sealed class RolaIgnoreRules : IDisposable
@@ -41,7 +41,7 @@ public sealed class RolaIgnoreRules : IDisposable
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(root);
 
-        // A path crosses as bytes, and the platform's own encoding is UTF-8 — which is what this
+        // A path crosses as bytes, and the platform's own encoding is UTF-8, which is what this
         // writes. Both buffers are this side's to free, which is why they are in a `finally`.
         var rulesPath = Marshal.StringToCoTaskMemUTF8(rules);
         var rootPath = Marshal.StringToCoTaskMemUTF8(root);
@@ -63,7 +63,7 @@ public sealed class RolaIgnoreRules : IDisposable
     /// Whether a path is ignored: the last rule that matches it says it is.
     /// </summary>
     /// <remarks>
-    /// <paramref name="isDirectory"/> is what a rule naming a directory only — one ending in `/` — is
+    /// <paramref name="isDirectory"/> is what a rule naming a directory only, one ending in `/`, is
     /// decided by. A path that is absolute and under the root the set was loaded with is matched
     /// against its place under that root, so a listing's system paths and the Layout's own spelling ask
     /// the same question.

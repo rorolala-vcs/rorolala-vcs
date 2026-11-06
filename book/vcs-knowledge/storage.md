@@ -6,14 +6,14 @@ keywords: system, storage, store, chunking, chunk, manifest
 
 # About Storage System
 
-The storage system stores *content only*: every object is named by the BLAKE3 hash of its content and retrieved by that hash — this is **CAS (content-addressable storage)**.
+The storage system stores *content only*: every object is named by the BLAKE3 hash of its content and retrieved by that hash, this is **CAS (content-addressable storage)**.
 
 Rorolala has two storages that share the same underlying layer:
 
 - **Content storage:** it holds the content of project files.
 - **Version control index:** it holds variants, versions, Creators and Messages; see `vcs-knowledge/variant` and `vcs-knowledge/version`.
 
-Both are addressed by key and both use the same frames, keys and packing directory layout — they simply store *different things*.
+Both are addressed by key and both use the same frames, keys and packing directory layout, they simply store *different things*.
 
 ## How addressing works
 
@@ -33,7 +33,7 @@ A key is 32 bytes, and the command line accepts three forms:
 | `manifest:<64 hex digits>` | A chunked piece of content; the digest is still the whole content's hash |
 | `<64 hex digits>`          | A prefix-free form, equivalent to `blake3:`                              |
 
-`manifest:` is *not* another kind of key — it is only a different annotation of the same digest: it tells the reader that this content is stored as a manifest plus several chunks. When content is fetched, either form reads it back.
+`manifest:` is *not* another kind of key, it is only a different annotation of the same digest: it tells the reader that this content is stored as a manifest plus several chunks. When content is fetched, either form reads it back.
 
 Commands also accept the beginning of a hash, at least 4 hex digits. A short name is resolved only among the objects the current command can enumerate; if it matches nothing or matches more than one, the command errors out rather than picking one for you.
 
@@ -50,7 +50,7 @@ content
 
 Codec and chunking are *two independent decisions*. The codec decides how the payload is compressed; the chunking decides how the content is split into chunks. **Neither is written into the key**, so the same content stored a different way is still the same key.
 
-Chunking happens *only at write time*. A read needs only the manifest, and never needs to know which chunking was used at the time — see `vcs-knowledge/chunk` and `vcs-knowledge/manifest`.
+Chunking happens *only at write time*. A read needs only the manifest, and never needs to know which chunking was used at the time, see `vcs-knowledge/chunk` and `vcs-knowledge/manifest`.
 
 ## Storage directory
 

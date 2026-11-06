@@ -384,7 +384,7 @@ pub(super) struct RenderOptions {
     pub(super) terminal: Option<usize>,
     /// Whether the source is a document to lay out rather than a line to draw.
     ///
-    /// A document gets the reading layout — indented headings and body, wrapped prose, and
+    /// A document gets the reading layout, indented headings and body, wrapped prose, and
     /// tables that fold a long cell instead of running off the side. A line is drawn where it
     /// is written, so a message or a status line keeps the shape its caller chose.
     pub(super) document: bool,
@@ -514,7 +514,7 @@ const fn channels(color: Color) -> Rgb {
 /// `text` drawn in `rgb`, behind it when `background`.
 ///
 /// Only the colour is closed, with the sequence that hands the terminal its own
-/// foreground or background back — a run drawn in a colour and nothing else has no reset
+/// foreground or background back, a run drawn in a colour and nothing else has no reset
 /// of `colored`'s to end it, and ending it with a full reset would take the attributes of
 /// whatever holds this run with it.
 fn drawn_in(background: bool, rgb: Rgb, text: &str) -> String {

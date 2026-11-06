@@ -13,7 +13,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// Making a directory in a directory dock, and the name box the row it makes is given.
 /// </summary>
 /// <remarks>
-/// Making one reads the directory again, which builds the view the new row is drawn in — so the name is not typed in
+/// Making one reads the directory again, which builds the view the new row is drawn in, so the name is not typed in
 /// the view that asked for the folder but in the one the reading after it made. What is checked here happens in a real
 /// tree on a headless window: the box is there when the row is, and it is in the dock the user is looking at rather
 /// than in a dock behind a tab.

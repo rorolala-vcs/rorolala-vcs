@@ -118,8 +118,8 @@ fn main() {
     // `-V` and `--version` are not commands, but what they ask for is what a command's result is
     // drawn by: the request is rewritten to the node the version output lives on, and dispatched
     // like any other, so `--json` and every other output setting apply to it as they do to the
-    // rest. Only the first word is read — a command that happens to take a `-V` of its own keeps
-    // it — and `-v` is left alone: it is the short name of `--vault`.
+    // rest. Only the first word is read, a command that happens to take a `-V` of its own keeps
+    // it, and `-v` is left alone: it is the short name of `--vault`.
     program.with_hook(ProgramHook::empty().on_pre_dispatch(|info| {
         if info
             .arguments
@@ -131,8 +131,8 @@ fn main() {
         }
     }));
 
-    // A word that names no command of this program may name a program beside it — `rola daemon` is
-    // `rola-daemon` — and the run is that program's from there. Registered after the version
+    // A word that names no command of this program may name a program beside it, `rola daemon` is
+    // `rola-daemon`, and the run is that program's from there. Registered after the version
     // request is rewritten, so what this reads is the words a run is matched by; it is the last
     // thing asked before the words are matched, which is where a word no command answers to is
     // still the run's to change.
@@ -143,8 +143,8 @@ fn main() {
 
 /// Asks the kernel to kill the process on `SIGPIPE`, the way a Unix filter is expected to die.
 ///
-/// Rust starts every process with `SIGPIPE` ignored, so a write to a pipe whose reader has gone —
-/// `rola ... | head`, or any program that stops reading early — returns `EPIPE` instead. The
+/// Rust starts every process with `SIGPIPE` ignored, so a write to a pipe whose reader has gone,
+/// `rola ... | head`, or any program that stops reading early, returns `EPIPE` instead. The
 /// output helpers then treat that as a failure and panic, printing a backtrace over the very
 /// output the reader was consuming. Dying on the signal is what every other Unix tool does, and
 /// it leaves the exit status a pipe expects instead of a panic.

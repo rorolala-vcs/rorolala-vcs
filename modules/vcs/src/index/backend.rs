@@ -1,15 +1,15 @@
 //! What the index answers a caller and a peer with.
 //!
-//! The two traits are the boundary a store is reached through — [`StorageBackend`] for a local
-//! caller and [`TransferableBackend`] for a peer — and the index implements both, so that the
+//! The two traits are the boundary a store is reached through, [`StorageBackend`] for a local
+//! caller and [`TransferableBackend`] for a peer, and the index implements both, so that the
 //! transfer two ends speak is the very one storage's is rather than a second of its own.
 //!
-//! The key an index object is kept under is the object's **semantic** hash — the hash of what it
-//! says, taken through the salt its kind is hashed with — and not the hash of the bytes filed under
+//! The key an index object is kept under is the object's **semantic** hash, the hash of what it
+//! says, taken through the salt its kind is hashed with, and not the hash of the bytes filed under
 //! it. The two differ on purpose: the key is what a variant or a version points at, so it has to be
 //! the object's meaning rather than an accident of how that meaning was written down. What is
-//! stored is the object's canonical encoding — see
-//! [`StorageBackend::write_file`] — so one key still names exactly one byte string, which is what
+//! stored is the object's canonical encoding, see
+//! [`StorageBackend::write_file`], so one key still names exactly one byte string, which is what
 //! makes reading it back checkable.
 
 use std::collections::HashSet;
@@ -77,8 +77,8 @@ impl StorageBackend for VCSIndex {
     }
 
     async fn contains_keys(&self, keys: &[Key]) -> Result<Presence, Self::Error> {
-        // A transfer asks about a whole batch at once — a sync asks about every key before it moves
-        // anything — and one key used to cost three looks at the filesystem: the loose tree, the
+        // A transfer asks about a whole batch at once, a sync asks about every key before it moves
+        // anything, and one key used to cost three looks at the filesystem: the loose tree, the
         // pack directory, and a pack's index. A batch of fifty thousand keys was a hundred and fifty
         // thousand reads of what had not changed between them. The three are read once here, and
         // every key of the batch is answered from what they said.
@@ -98,7 +98,7 @@ impl StorageBackend for VCSIndex {
         let mut presence = Presence::all_missing(keys.len());
 
         // What is not in a pack has to be loose, and the loose tree is walked only for a key that got
-        // that far: a settled index — every object packed — never reads it at all.
+        // that far: a settled index, every object packed, never reads it at all.
         let mut loose: Option<HashSet<Key>> = None;
 
         for (at, key) in keys.iter().enumerate() {
@@ -126,7 +126,7 @@ impl StorageBackend for VCSIndex {
 
     async fn list_exist_keys(&self) -> Result<Vec<Key>, Self::Error> {
         // What is listed is the loose objects and the entries of the packs' indexes, and an index
-        // record is what "held" means here — see `StorageBackend::contains_keys`. So the two
+        // record is what "held" means here, see `StorageBackend::contains_keys`. So the two
         // listings agree today, and would part only if held came to mean "readable", which costs a
         // lookup per key and is not the answer a transfer needs.
         self.list_object_keys().await

@@ -1,7 +1,7 @@
 //! What Linux is handed: the packages a distribution installs, and the `AppImage` a person runs.
 //!
-//! The packages are three parts of one product — the command line and daemon, the Desktop program,
-//! and the C ABI — plus two ways to install all of them: `rorolala-full`, a meta package that
+//! The packages are three parts of one product, the command line and daemon, the Desktop program,
+//! and the C ABI, plus two ways to install all of them: `rorolala-full`, a meta package that
 //! depends on the three, and `rorolala`, one package that holds what they hold. The two are
 //! mutually exclusive, and an install of either is the whole product. The `AppImage` is the launcher
 //! only: it carries `rola` because the launcher runs it, and nothing else, so a person who wants the
@@ -9,7 +9,7 @@
 //!
 //! What every artifact is made of is the export this crate already lays out. Nothing here compiles a
 //! program: it stages what an export holds, writes the packager's configuration from the workspace's
-//! own metadata, and runs the two pinned tools — nFPM for the three package formats, appimagetool
+//! own metadata, and runs the two pinned tools, nFPM for the three package formats, appimagetool
 //! for the `AppImage`.
 
 use std::collections::BTreeMap;

@@ -17,8 +17,8 @@ public sealed record BookRun(string Text, bool Matched);
 /// A fragment of an article, and the words in it the query matched.
 /// </summary>
 /// <remarks>
-/// The fragment is cut from the field the query matched — the body when the word is in the body,
-/// and the description or the title when the word is only there — with `…` where it was cut. The
+/// The fragment is cut from the field the query matched, the body when the word is in the body,
+/// and the description or the title when the word is only there, with `...` where it was cut. The
 /// field it came from is named so that a caller can say where a hit was found.
 /// <para>
 /// <see cref="Runs"/> is the fragment split at the matched words, which is what a renderer draws:
@@ -29,7 +29,7 @@ public sealed record BookRun(string Text, bool Matched);
 /// </remarks>
 /// <param name="Field">The field the fragment was cut from: <c>content</c>, <c>description</c>,
 /// <c>keywords</c>, <c>title</c> or <c>name</c>.</param>
-/// <param name="Text">The fragment's text, with <c>…</c> where it was cut.</param>
+/// <param name="Text">The fragment's text, with <c>...</c> where it was cut.</param>
 /// <param name="Spans">The matched words inside <paramref name="Text"/>, in characters.</param>
 public sealed record BookSnippet(string Field, string Text, IReadOnlyList<BookSpan> Spans)
 {
@@ -132,7 +132,7 @@ public sealed record BookHit(
 /// </summary>
 /// <remarks>
 /// This is the hand-written wrapper over the generated bindings, as <see cref="RolaIgnoreRules"/> is:
-/// what crosses is an opaque handle, and what this adds is the shape a caller wants — a book opened
+/// what crosses is an opaque handle, and what this adds is the shape a caller wants, a book opened
 /// from a path or located beside the program, hits as values rather than as pointers, and the native
 /// handle given back on <see cref="Dispose"/>.
 /// <para>
@@ -224,8 +224,8 @@ public sealed class RolaBookSearch : IDisposable
     /// <summary>The articles <paramref name="query"/> finds, best first, at most <paramref name="limit"/>.</summary>
     /// <remarks>
     /// A query is a word or a phrase in any language the book is written in. Every term the query
-    /// names has to be in an article for it to be a hit — Chinese is cut into characters and pairs,
-    /// so a phrase asks for the phrase — and the hits carry the description and the fragments the
+    /// names has to be in an article for it to be a hit, Chinese is cut into characters and pairs,
+    /// so a phrase asks for the phrase, and the hits carry the description and the fragments the
     /// query matched in them.
     /// </remarks>
     /// <param name="query">The words to find.</param>

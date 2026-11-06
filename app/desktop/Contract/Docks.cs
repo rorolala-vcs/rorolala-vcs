@@ -18,7 +18,7 @@ public enum DockOpenMode
 
 /// <summary>Where a dock is asked to go when it is opened or dropped.</summary>
 /// <remarks>
-/// No longer a place a dock sits — a dock's place is its group in the layout tree, which the host keeps and
+/// No longer a place a dock sits, a dock's place is its group in the layout tree, which the host keeps and
 /// the contract never names. This is the intent of a request: <see cref="Center"/> means "into the tabs of
 /// the target group", and an edge means "split the target group on that side". Which group is the target is
 /// the host's answer, so a plugin says what it wants done and not where the result ends up.
@@ -45,7 +45,7 @@ public enum DockSide
 /// What a dock remembers about itself between runs.
 /// </summary>
 /// <remarks>
-/// A dock's own state — which layout it is in, what it has open — belongs to the plugin that made the
+/// A dock's own state (which layout it is in, what it has open) belongs to the plugin that made the
 /// dock and is kept by the host: it is written into the dock layout beside the dock's placement, so a
 /// dock comes back where it was and as it was.
 /// <para>
@@ -82,7 +82,7 @@ public interface IDockState
 /// <remarks>
 /// A dock's header is the strip a person reaches for what the dock is showing rather than for what it shows:
 /// a command is drawn there as a button by the host, and a strip a plugin draws itself is put there as it is.
-/// The two are one list so that their order is the plugin's — what stands beside what is the plugin's answer,
+/// The two are one list so that their order is the plugin's, what stands beside what is the plugin's answer,
 /// and a plugin that wanted its own thing between two commands could not say so with two lists.
 /// <para>
 /// A strip is a control of the plugin's rather than a run of commands because what a plugin wants there is
@@ -91,7 +91,7 @@ public interface IDockState
 /// is the same trade the view itself makes.
 /// </para>
 /// <para>
-/// A header drawn as a menu — a dock in a window of its own, and a tab's own menu — carries the commands and
+/// A header drawn as a menu (a dock in a window of its own, and a tab's own menu) carries the commands and
 /// not the strips: a menu entry is a word and an action, and a strip is neither.
 /// </para>
 /// </remarks>
@@ -115,7 +115,7 @@ public sealed record DockHeaderCommand(string LabelKey, Action Command, string? 
 /// </summary>
 /// <remarks>
 /// The control is the plugin's own and the host neither reads nor rearranges it, so what a plugin needs of a
-/// header — a group, a modifier, a dropdown, a bar — it draws. Two things follow from that and are the
+/// header (a group, a modifier, a dropdown, a bar) it draws. Two things follow from that and are the
 /// plugin's to keep: the control is inserted into the host's tree, so it must come from the host's Avalonia
 /// copy like the view, and it may be taken out and put back when the header is rebuilt, so it holds no state
 /// that a parent's removing it would lose.
@@ -123,8 +123,8 @@ public sealed record DockHeaderCommand(string LabelKey, Action Command, string? 
 /// <param name="View">What to stand in the header.</param>
 /// <param name="Command">
 /// What a header drawn as a menu carries in its place, or nothing for a strip that has no one thing to lead
-/// with. A menu entry is a word and an action and a strip is neither, so a host with menus — a dock in a window
-/// of its own — would otherwise lose everything the strip holds: what it is given here is the one command the
+/// with. A menu entry is a word and an action and a strip is neither, so a host with menus, a dock in a window
+/// of its own, would otherwise lose everything the strip holds: what it is given here is the one command the
 /// strip's own first button is, so that the reader still reaches it there.
 /// </param>
 public sealed record DockHeaderView(Control View, DockHeaderCommand? Command = null)
@@ -150,8 +150,8 @@ public interface IDockView
     /// Takes what the dock remembered about itself, and does nothing with it by default.
     /// </summary>
     /// <remarks>
-    /// A view is made before it is told what it was, so that a dock with nothing to remember — every
-    /// dock the first time it is opened — is made the same way as one that has. A view that keeps
+    /// A view is made before it is told what it was, so that a dock with nothing to remember, every
+    /// dock the first time it is opened, is made the same way as one that has. A view that keeps
     /// nothing about itself therefore does not override this, and one that does reads its own keys.
     /// </remarks>
     /// <param name="state">What the dock kept, and where the next of it is kept.</param>
@@ -208,7 +208,7 @@ public interface IDockRegistry
 /// <remarks>
 /// A browser is one dock looked at in several windows: registered under one name and made again for another place, so
 /// a tab named by the registration says only what kind of dock it is, and two of them read the same. A dock that
-/// answers this says what it is looking at now — a directory, an address, a drive — and says when that has changed,
+/// answers this says what it is looking at now (a directory, an address, a drive) and says when that has changed,
 /// which is what the host draws in the dock's tab, in the window a dock of its own is shown in, and at the top of the
 /// menu its tab opens.
 /// <para>
@@ -225,8 +225,8 @@ public interface IDockTitle
     /// Where that is in full, for a hover, or nothing when the title is all there is to say.
     /// </summary>
     /// <remarks>
-    /// A title is what fits a tab and says which dock it is; a place has more of a name than that — the whole path, the
-    /// whole address — and what it is is worth having where there is room to read it. It is never required: a dock
+    /// A title is what fits a tab and says which dock it is; a place has more of a name than that, the whole path, the
+    /// whole address, and what it is is worth having where there is room to read it. It is never required: a dock
     /// whose title is its whole name states nothing here.
     /// </remarks>
     string? Detail { get; }

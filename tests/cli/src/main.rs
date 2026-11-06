@@ -2,7 +2,7 @@
 //!
 //! A program rather than a set of tests cargo runs, because what it checks is a program a caller
 //! meets: the built `rola`, started the way a terminal starts it, told things and read back. What
-//! is checked is what it exits with and what it says on each of the two streams — never how the
+//! is checked is what it exits with and what it says on each of the two streams, never how the
 //! library under it is shaped, which is the business of the module suites.
 //!
 //! Everything happens inside one sandbox, and the places the program keeps for the user are
@@ -1251,7 +1251,7 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
         &said(&ran),
     );
 
-    // A move no command of ours made — a shell `mv`, an editor saving elsewhere — is found again by
+    // A move no command of ours made (a shell `mv`, an editor saving elsewhere) is found again by
     // what the file holds, and `rola align --rename` writes down where it went.
     let renamed = "renamed.bin";
     fs::rename(work.join(moved), work.join(renamed)).expect("a move by hand");
@@ -1431,7 +1431,7 @@ fn ignore_rules(rola: &Rola, dir: &Path, checked: &mut Checked) {
     fs::write(dir.join("loose.txt"), "loose\n").expect("a file no rule governs");
 
     // The rules a Workspace is made with cover the platforms' own files, so one of them is never
-    // shown as work to confirm — even with a rule set of the run's own written beside it.
+    // shown as work to confirm, even with a rule set of the run's own written beside it.
     let made_with = rules.join("default");
     checked.wants(
         "the Workspace was made with the default rules",
@@ -1634,7 +1634,7 @@ fn explain(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
 /// What a run says about the frame a window would be drawn in, without opening one.
 ///
-/// The query is an environment probe, so what it answers is what the machine it is run on is drawn in —
+/// The query is an environment probe, so what it answers is what the machine it is run on is drawn in,
 /// which is one of three names, whichever machine this is. What is checked is that it answers one name and
 /// nothing else: a caller reading it is written against that.
 fn desktop(rola: &Rola, dir: &Path, checked: &mut Checked) {
@@ -1732,8 +1732,8 @@ fn language(rola: &Rola, ws: &Path, checked: &mut Checked) {
 ///
 /// Neither is refused, and that is the whole of what is asked here: a file operation is about this
 /// tree, and what the Vault's Layout names is changed by recording the change and sending it up, not
-/// by a file being put somewhere else or taken away. Ownership was once read here — the fetched copy's
-/// `owner` compared with the account the run acts as — and a move was refused for it, which made a
+/// by a file being put somewhere else or taken away. Ownership was once read here, the fetched copy's
+/// `owner` compared with the account the run acts as, and a move was refused for it, which made a
 /// browser's drag stop on a file somebody else held while changing nothing the refusal protected.
 ///
 /// The fixture is the shape a `layout fetch` leaves behind: the Workspace's own Layout names the paths,
@@ -1820,7 +1820,7 @@ fn held_by_another(rola: &Rola, dir: &Path, checked: &mut Checked) {
 /// What the Layout says about a Vault is what `hold` and `giveup` need, and a Workspace that tracks none is
 /// refused for that. What is checked is that the paths are read at all: the run has to be refused for the
 /// Vault it does not track rather than for the arguments it was given. It was refused for those, because the
-/// flag was picked before the paths were — the picker reads a command's arguments by position — so a path
+/// flag was picked before the paths were, the picker reads a command's arguments by position, so a path
 /// landed where the flag was looked for and the real argument was never named.
 fn ownership(rola: &Rola, dir: &Path, checked: &mut Checked) {
     fs::create_dir_all(dir.join("art")).expect("a place to claim in");
@@ -1902,7 +1902,7 @@ fn entry_named(rola: &Rola, dir: &Path, uuid: &str) -> bool {
 ///
 /// The fixture is the shape these commands need: a Workspace with an account, a file recorded twice
 /// so its entry has a chain, another file on a chain of its own, and the copy of a Vault's Layout a
-/// fetch would leave — which is what a `--change-upstream` word naming an entry upstream is read
+/// fetch would leave, which is what a `--change-upstream` word naming an entry upstream is read
 /// from, without a Vault being served.
 fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let ran = rola.run(dir, &["init"]);
@@ -2262,7 +2262,7 @@ fn copy_into(from: &Path, to: &Path) {
 /// been, and every reader opened it as a Layout holding nothing: `layout entries --layout
 /// truth@vault` printed an empty list and exited 0, which reads as "the Vault's Layout is empty"
 /// rather than "nothing was fetched". What is checked is that a directory with none of the Layout's
-/// own files in it is refused as nothing fetched — and that reading it made nothing in it.
+/// own files in it is refused as nothing fetched, and that reading it made nothing in it.
 fn empty_cache(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let ran = rola.run(dir, &["init"]);
     checked.exits("a Workspace is made where the cache is read", &ran, 0);
@@ -2294,7 +2294,7 @@ fn empty_cache(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     // A copy a fetch got part of the way through is no more a copy than an empty one: what is there of the
     // Layout is not all of it, and a Layout opened from it would hold some of what the Vault holds and none of
-    // the rest — which is worse than saying nothing was fetched.
+    // the rest, which is worse than saying nothing was fetched.
     fs::write(cache.join("log-0"), "half\n").expect("part of a copy");
     let ran = rola.run(dir, &["layout", "entries", "--layout", "truth@vault"]);
     checked.exits("a half-written copy is not a copy either", &ran, 192);
@@ -2345,7 +2345,7 @@ fn text(path: &Path) -> String {
 
 /// Whether what a run said names `path`, however that platform spells a separator.
 ///
-/// A place is written the way the program's path types write one — `/` — and an argument is
+/// A place is written the way the program's path types write one, `/`, and an argument is
 /// written the way the machine writes one, so the two are the same place spelled twice. A check
 /// that compared the spellings rather than the place would fail on Windows for that alone.
 fn names(said: &str, path: &Path) -> bool {
@@ -2392,7 +2392,7 @@ impl Checked {
         self.asked += 1;
 
         if !ok {
-            self.wrong.push(format!("{question} — {why}"));
+            self.wrong.push(format!("{question}, {why}"));
         }
     }
 

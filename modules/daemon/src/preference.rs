@@ -4,8 +4,8 @@
 //! that reason: a Vault says who may act on it, while this says what the daemon on this machine
 //! may be asked to do at all before any Vault is looked at.
 //!
-//! It is read by the one mode in which it decides anything — serving a connection that arrived
-//! through a shell — and it decides two things: whether such a connection is served at all, and
+//! It is read by the one mode in which it decides anything, serving a connection that arrived
+//! through a shell, and it decides two things: whether such a connection is served at all, and
 //! whether a name the Vault has never seen may be written into it. Both are switches rather than
 //! limits on what a Vault admits, since a Vault's own configuration is what says that.
 
@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 /// A file that is not there is a machine that has said nothing, which is what it defaults to: a
 /// feature that had to be configured before it could be used once would be one nobody turns on,
 /// and what the defaults say is the shape it was meant to have. What a machine that has said
-/// nothing means is also *written down* the first time anything asks — see [`read`](Self::read) —
+/// nothing means is also *written down* the first time anything asks, see [`read`](Self::read),
 /// so that the two switches are a file a person can find and change rather than something only
 /// this source knows about.
 #[derive(Debug, Clone, Default, Configure, Serialize, Deserialize)]
@@ -50,7 +50,7 @@ impl Preference {
     /// what it means is written to the file as those defaults, so that the switches are somewhere a
     /// person can find them. A file that is there is read and left alone, whatever it says.
     ///
-    /// A file that cannot be written — a read-only data directory, say — is not a reason to refuse
+    /// A file that cannot be written (a read-only data directory, say) is not a reason to refuse
     /// the session: the defaults are exactly what a machine that says nothing means, so the run
     /// goes on under them and the reason is said on the standard error. Only a file that is *there*
     /// and cannot be understood is a failure.
@@ -85,8 +85,8 @@ impl Preference {
 
         let preference = Self::default();
 
-        // Both failures are the same thing to a reader — the file is not there and cannot be made
-        // to be — so both are carried as the sentence the filesystem or the format gave.
+        // Both failures are the same thing to a reader, the file is not there and cannot be made
+        // to be, so both are carried as the sentence the filesystem or the format gave.
         let written: Result<(), String> = (|| {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -131,7 +131,7 @@ pub struct Security {
     /// has never seen.
     ///
     /// It is off by default. A name registered this way is registered because the far side proved
-    /// it holds the key, not because anyone decided to admit it — which is a thing to turn on
+    /// it holds the key, not because anyone decided to admit it, which is a thing to turn on
     /// deliberately, and which makes deleting the key file the wrong way to revoke it.
     auto_register_by_ssh: bool,
 }

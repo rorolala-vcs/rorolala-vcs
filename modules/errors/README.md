@@ -3,7 +3,7 @@
 The errors that cross the C ABI, and their conversions to and from the Rust errors they
 stand for.
 
-Some errors are foreign — `std::io::Error` and `bincode2::Error` both are — so they cannot
+Some errors are foreign, `std::io::Error` and `bincode2::Error` both are, so they cannot
 carry `#[lazyffi]`, and no exported signature can name them. Each gets a stand-in here
 that *can* be exported, holding what a caller actually reads: the message. The two
 convert into each other, so a Rust error becomes one of these at the boundary and can be

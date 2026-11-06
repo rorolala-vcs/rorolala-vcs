@@ -18,7 +18,7 @@ pub fn policy(name: &str) -> Option<&'static crate::PolicyEntry> {
 
 /// The policy claiming `extension`, if one does.
 ///
-/// One container is claimed by one policy at most — the build refuses two — so what cuts a file is
+/// One container is claimed by one policy at most, the build refuses two, so what cuts a file is
 /// never a matter of which policy was looked at first.
 #[must_use]
 pub fn claiming(extension: &str) -> Option<&'static crate::PolicyEntry> {

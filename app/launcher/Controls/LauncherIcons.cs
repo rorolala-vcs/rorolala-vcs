@@ -79,8 +79,8 @@ internal static class LauncherIcons
             IsHitTestVisible = false,
         };
 
-        // The file is drawn at several times the size it is shown at — see the icon set the Desktop program
-        // reads the same file from — so what is scaled here is a large bitmap being reduced: a filter that
+        // The file is drawn at several times the size it is shown at, see the icon set the Desktop program
+        // reads the same file from, so what is scaled here is a large bitmap being reduced: a filter that
         // samples a few of its pixels leaves a thin stroke broken.
         RenderOptions.SetBitmapInterpolationMode(glyph, BitmapInterpolationMode.HighQuality);
 
@@ -109,7 +109,7 @@ internal static class LauncherIcons
     /// </summary>
     /// <param name="resource">The name it is embedded under.</param>
     /// <returns>The picture.</returns>
-    // The picture is kept for as long as the program runs — it is cached by `Named` — so it is handed on
+    // The picture is kept for as long as the program runs, it is cached by `Named`, so it is handed on
     // rather than lost at the end of this scope.
     [SuppressMessage(
         "Reliability",

@@ -11,7 +11,7 @@ license.workspace = true
 
 # The registry is generated from the `impl Policy` blocks themselves, so a policy is added by adding
 # a file. `syn` sees exactly what a reader sees, and `just_template` keeps the wording of what is
-# generated in `tmpl/` rather than in the script — the same two `modules/daemon` builds its own
+# generated in `tmpl/` rather than in the script, the same two `modules/daemon` builds its own
 # generated files with.
 [build-dependencies]
 just_template.workspace = true

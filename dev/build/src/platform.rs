@@ -3,7 +3,7 @@
 //! Cargo names a Unix shared library with a `lib` prefix and a Windows one with a `.dll` suffix, so
 //! what a build hands over is normalised to one shape per platform. The table is written for every
 //! platform rather than for the one it is compiled on, so what each name is can be checked by a test
-//! on any machine — a spelling only the platform that never runs the tests would meet is the one
+//! on any machine, a spelling only the platform that never runs the tests would meet is the one
 //! that goes wrong unnoticed.
 
 /// The platform a build is for.
@@ -12,7 +12,7 @@ pub enum Platform {
     /// Windows: a `.dll` shared library, a `.lib` static one, and the import library a DLL is
     /// linked through.
     Windows,
-    /// macOS: a `.dylib` shared library, a `.a` static one, and no import library — a linker is
+    /// macOS: a `.dylib` shared library, a `.a` static one, and no import library, a linker is
     /// given the shared library itself.
     Darwin,
     /// The other Unixes: a `.so` shared library, a `.a` static one, no import library.
@@ -26,7 +26,7 @@ impl Platform {
         Self::of(std::env::consts::OS)
     }
 
-    /// The platform an operating system — a `std::env::consts::OS` value — builds for.
+    /// The platform an operating system, a `std::env::consts::OS` value, builds for.
     #[must_use]
     pub fn of(os: &str) -> Self {
         match os {
@@ -77,7 +77,7 @@ impl Platform {
     /// The name cargo writes the import library as, where the platform has one.
     ///
     /// A DLL is linked through the import library that names what it exports, and cargo writes that
-    /// one under the DLL's own name — `rorolala.dll.lib` — so that it does not take the static
+    /// one under the DLL's own name, `rorolala.dll.lib`, so that it does not take the static
     /// library's.
     #[must_use]
     pub fn cargo_import(self) -> Option<&'static str> {
@@ -117,8 +117,8 @@ impl Platform {
 /// were first laid down.
 ///
 /// The archive a release carries keeps the name it had, so this is not the spelling
-/// `std::env::consts::OS` gives: `macos` was `darwin`, and a Windows archive — which is never made,
-/// a Windows hand-off being an installer — was `windows_nt`.
+/// `std::env::consts::OS` gives: `macos` was `darwin`, and a Windows archive, which is never made,
+/// a Windows hand-off being an installer, was `windows_nt`.
 #[must_use]
 pub fn uname_os(os: &'static str) -> &'static str {
     match os {

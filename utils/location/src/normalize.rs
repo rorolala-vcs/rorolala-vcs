@@ -2,7 +2,7 @@
 //!
 //! A path that came from a person, an environment or a listing is not canonical: it may carry `.`
 //! components, a `..` that walks back over a named directory, or a separator at either end. What
-//! is done here is lexical — nothing is read from the filesystem — so a symbolic link is left as
+//! is done here is lexical, nothing is read from the filesystem, so a symbolic link is left as
 //! the name it is rather than resolved. That is what keeps it cheap enough to do per path, and it
 //! is also what keeps two spellings of one place equal when one of them went through a link.
 
@@ -10,7 +10,7 @@ use std::path::{Component, Path, PathBuf};
 
 /// `path` with `.` components dropped and `..` taken back over the name before it.
 ///
-/// A `..` with nothing to take back — at the root, or after another `..` — is kept, since only the
+/// A `..` with nothing to take back (at the root, or after another `..`) is kept, since only the
 /// filesystem can say whether it means anything above where the path starts. What is left names
 /// the same place, spelled the way a comparison wants it.
 #[must_use]

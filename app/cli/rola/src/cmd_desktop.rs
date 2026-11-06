@@ -1,15 +1,15 @@
 //! The `rola desktop` command: open the Desktop program that sits beside this one.
 //!
 //! The command line is a way to work without a window, and the Desktop program is the window
-//! for the work that suits. The two are exported together — this program at `bin/rola` and the
-//! Desktop program at `bin/desktop/` — so a run reaches it by starting from where this program
+//! for the work that suits. The two are exported together, this program at `bin/rola` and the
+//! Desktop program at `bin/desktop/`, so a run reaches it by starting from where this program
 //! was itself run from: nothing is named, and nothing is looked up beyond that.
 //!
 //! What the two would otherwise each work out for themselves is handed over with the program:
 //! the language this run speaks, the directory to open onto, and where this program itself is. The
 //! directory is the Workspace the run was made in rather than the run's own directory, since the work is
-//! the Workspace — the tree is rooted at its directory, and the Layouts and the ownership the browser
-//! shows are read against it — so a window opened onto a directory inside one would be a window onto part
+//! the Workspace, the tree is rooted at its directory, and the Layouts and the ownership the browser
+//! shows are read against it, so a window opened onto a directory inside one would be a window onto part
 //! of the work. A run no Workspace holds opens onto the directory it was made in, which is all there is
 //! to open onto. And this program's own path is what the window's file operations run, which is what makes
 //! them the operations of the program that was asked for the window rather than of whatever a `PATH` holds.
@@ -72,13 +72,13 @@ const DIRECTORY_ARG: &str = "-CurrentDir:";
 /// The Desktop carries its file operations out by running `rola`, and the command templates name the
 /// program through this rather than through the bare word: what is run beside this window is the program
 /// that was asked for the window, and a `PATH` is the machine's answer rather than this one's. It is the
-/// environment rather than an argument because a child of the window — the command itself — inherits it,
+/// environment rather than an argument because a child of the window, the command itself, inherits it,
 /// which is what lets a template name a program it was never told about.
 const EXE_ENV: &str = "ROLA_EXE";
 
 /// What the style the window's own frame is drawn in is handed over under.
 ///
-/// The three names are the Desktop program's own — `Windows`, `Mac`, `TillingWM` — and what a run writes is
+/// The three names are the Desktop program's own (`Windows`, `Mac`, `TillingWM`) and what a run writes is
 /// one of the three lower-case ones: what a person types and what two programs agree on need not be spelled
 /// the same way, and the one that is handed over is the one the program's own code names.
 const STYLE_ARG: &str = "-WindowStyle:";
@@ -87,7 +87,7 @@ const STYLE_ARG: &str = "-WindowStyle:";
 ///
 /// A flag rather than a name and a value, because what it says is one thing: the run is to be told when
 /// the window is up. The Desktop program says it on the standard output it shares with this program, which
-/// is why nothing here reads or writes that line — the two programs are one statement of the rule, and this
+/// is why nothing here reads or writes that line, the two programs are one statement of the rule, and this
 /// one only passes the request along.
 const READY_ARG: &str = "-Ready";
 
@@ -108,8 +108,8 @@ pub enum WindowStyle {
 impl WindowStyle {
     /// The style a written name is, or nothing when it names none of the three.
     ///
-    /// Read without regard to case, because the two spellings one name has — this one and the Desktop
-    /// program's — are one name to whoever wrote it.
+    /// Read without regard to case, because the two spellings one name has, this one and the Desktop
+    /// program's, are one name to whoever wrote it.
     fn named(name: &str) -> Option<Self> {
         match name.to_ascii_lowercase().as_str() {
             "windows" => Some(Self::Windows),
@@ -128,7 +128,7 @@ impl WindowStyle {
         }
     }
 
-    /// The name this style is written as where a run reads it — the spelling a person types.
+    /// The name this style is written as where a run reads it, the spelling a person types.
     fn written(self) -> &'static str {
         match self {
             Self::Windows => "windows",
@@ -162,7 +162,7 @@ impl WindowStyle {
 /// Recognized by what the four this program knows about leave behind rather than by asking the
 /// session, which is a conversation a program with no window yet has no way to have: three of them
 /// publish the socket they may be spoken to on as an environment variable of their own, and all four
-/// are named by the session when it names itself. It is a simple read on purpose — a window manager
+/// are named by the session when it names itself. It is a simple read on purpose, a window manager
 /// that is none of these is given the three marks, which is a frame drawn where one was already there
 /// rather than a window with nothing left to close it by.
 fn is_tiling(value: impl Fn(&str) -> Option<String>) -> bool {
@@ -214,12 +214,12 @@ const ARG_WINDOW_STYLE: PickerArg<'static, Option<String>> = arg![window_style: 
 ///
 /// It is the environment probe the Desktop program itself makes on a run that was told no style: what is
 /// asked is the machine, not the program, so the answer is written to standard output as the one name a
-/// person types — `windows`, `mac` or `tillingwm` — and nothing is opened.
+/// person types (`windows`, `mac` or `tillingwm`) and nothing is opened.
 const ARG_QUERY_WINDOW_STYLE: PickerArg<'static, Flag> = arg![query_window_style: Flag];
 
 /// The flag that asks the window to say when it is up.
 ///
-/// What it is for is a caller that has no window of its own to watch — a launcher — and would otherwise
+/// What it is for is a caller that has no window of its own to watch, a launcher, and would otherwise
 /// have to guess when the program it started has something on the screen: the window says so once, on the
 /// standard output it shares with this run, and a caller that reads that stream knows to let go. It changes
 /// nothing else: the run still waits for the window to close, and a run that wrote nothing gets the same
@@ -265,8 +265,8 @@ pub fn complete_desktop(ctx: ShellContext) -> Suggest {
 ///
 /// The Desktop program is where the work that a windowless run does not suit is done, so this is
 /// a way to it rather than a way to work: the program is started and the run ends, leaving it to
-/// the reader. It sits in a `desktop` directory beside the program that was run — the layout
-/// `cargo dev export` lays down — so a run reaches it without being told where it is.
+/// the reader. It sits in a `desktop` directory beside the program that was run, the layout
+/// `cargo dev export` lays down, so a run reaches it without being told where it is.
 ///
 /// There is one Desktop program per user, not one per run: a run that finds one already going does not
 /// open a second, it asks the one that is there to come forward and ends with `EC_DESKTOP_CALLED` (174).
@@ -277,14 +277,14 @@ pub fn complete_desktop(ctx: ShellContext) -> Suggest {
 /// when no Workspace holds it. See [`opening_at`] for what a Workspace is the answer rather than the
 /// run's own directory.
 ///
-/// `--window-style` chooses how the window's own frame is drawn — `windows` for the three buttons at the
+/// `--window-style` chooses how the window's own frame is drawn, `windows` for the three buttons at the
 /// right, `mac` for the three lights at the left, `tillingwm` for no buttons at all. Absent, the Desktop
 /// program draws the frame the machine it is opened on asks for.
 ///
 /// `--query-window-style` does not open anything: it answers how the machine this run is made on draws a
 /// frame, one name on standard output, which is the same answer a run that named no style would get. It is
 /// the environment probe the Desktop program makes for itself, offered to everything that has no window to
-/// ask — a launcher, a script, a test. The two flags say two different things and are refused together.
+/// ask, a launcher, a script, a test. The two flags say two different things and are refused together.
 ///
 /// `--ready` asks the window to say when it is up: one line on standard output, once, and nothing more. It
 /// is offered for a caller that starts this command and has no window of its own to watch, so that it can
@@ -393,7 +393,7 @@ pub fn handle_desktop(state: StateDesktop, language: &ResLanguage, cwd: &ResCurr
 
     // Run and waited for rather than started and left: the window is the whole of what this command does,
     // so the command lasts as long as the window does. What the program ended with is what this run ends
-    // with — the two are one thing to whoever asked for a window, and a caller that waits for a program is
+    // with, the two are one thing to whoever asked for a window, and a caller that waits for a program is
     // entitled to its answer.
     let mut told = vec![language_arg(language), directory_arg(&at)];
 
@@ -503,7 +503,7 @@ pub struct ResultDesktopEnded {
 ///
 /// A start that finds the program already going does not open a second window: it asks the one that is
 /// there to come forward and ends with `EC_DESKTOP_CALLED` (174). That is the one ending here that is not a
-/// failure and not a window either, so it is said rather than passed over in silence — a caller that waits
+/// failure and not a window either, so it is said rather than passed over in silence, a caller that waits
 /// for this command reads the code, and the person who ran it reads this line.
 const CALLED_NOTE: &str = "desktop.called";
 

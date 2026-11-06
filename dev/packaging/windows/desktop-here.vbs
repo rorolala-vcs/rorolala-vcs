@@ -1,11 +1,11 @@
 ' Opens the Desktop program at a directory, through the command line, with no console window.
 
 ' What the context menu runs. `rola desktop` is a console program, and a menu item that started one would flash a
-' window over whatever the reader was doing — so it is started by a script host instead of by a shell, and the
+' window over whatever the reader was doing, so it is started by a script host instead of by a shell, and the
 ' command line is asked for a window that is not shown.
 
 ' Hiding the window hides the console and nothing else: the Desktop program it starts is a window of its own, and
-' that one appears as it always does. What is hidden outlives the desktop window, and that is deliberate — `rola
+' that one appears as it always does. What is hidden outlives the desktop window, and that is deliberate, `rola
 ' desktop` waits for the window it opened, so it is the process that is alive for as long as the reader is looking
 ' at one.
 
@@ -16,7 +16,7 @@ Dim shell, here, rola, at
 Set shell = CreateObject("WScript.Shell")
 
 ' Where this script is, which is where the command line it runs is: the two are laid down beside each other, so
-' the layout is found rather than written out here — one install's path is not another's.
+' the layout is found rather than written out here, one install's path is not another's.
 here = Left(WScript.ScriptFullName, InStrRev(WScript.ScriptFullName, "\"))
 rola = here & "rola.exe"
 

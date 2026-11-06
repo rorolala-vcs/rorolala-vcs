@@ -2,18 +2,18 @@
 //!
 //! A log is written by appending and read by taking bytes off the front from where the reader last
 //! stopped. A record is appended as one write to a file opened to append, so what a write puts in
-//! the log is whole — a reader is never met part of the way through a record.
+//! the log is whole, a reader is never met part of the way through a record.
 //!
-//! A write — an append or a compaction — holds a lock on the file exclusively for as long as it
+//! A write, an append or a compaction, holds a lock on the file exclusively for as long as it
 //! runs, and a read holds it shared, so a log is never emptied while a writer is part of the way
 //! through appending to it, nor read while it is being rewritten. Appends are one at a time rather
 //! than concurrent: a shared lock would keep several going, but a writer may not hold one and still
-//! write — Windows denies a write to the range a shared lock covers, its own holder's included. The
-//! lock is the operating system's, so it holds across processes as well as threads — which is what
+//! write, Windows denies a write to the range a shared lock covers, its own holder's included. The
+//! lock is the operating system's, so it holds across processes as well as threads, which is what
 //! makes a compaction safe while other processes are writing.
 //!
 //! A compaction empties the log, which leaves every reader that had read up to some point of the old
-//! log holding an offset into a file that is no longer there — the bytes it counts are gone, and
+//! log holding an offset into a file that is no longer there, the bytes it counts are gone, and
 //! what it would read next is the middle of a record rather than one. So a compaction also **names
 //! the age it left behind**: a small file beside the log holds a number, raised by one every time the
 //! log is emptied, and a reader that sees the number it holds is not the one it read under starts
@@ -54,7 +54,7 @@ impl ShardLog {
     pub fn open(path: &Path) -> io::Result<Self> {
         // One handle for writing, truncating and locking, opened for reading as well. Windows
         // refuses `LockFileEx` on a handle that has neither `GENERIC_READ` nor `GENERIC_WRITE`, and
-        // refuses `SetEndOfFile` on a handle that only has append access — so a log written through
+        // refuses `SetEndOfFile` on a handle that only has append access, so a log written through
         // an append-only handle could be locked but never emptied, and a compaction is both. Appends
         // therefore seek to the end first, which they do with the lock held, so nothing can be
         // writing there at the same time.
@@ -80,7 +80,7 @@ impl ShardLog {
 
     /// Opens the log at `path`, which has to be there already.
     ///
-    /// A reader of a layout it did not make — a fetched copy, say — must not bring a log into being:
+    /// A reader of a layout it did not make (a fetched copy, say) must not bring a log into being:
     /// an empty directory would then open as a layout holding nothing, and "nothing was fetched"
     /// would read as "the layout is empty". What is not there is therefore
     /// [`io::ErrorKind::NotFound`] rather than a new file.
@@ -110,7 +110,7 @@ impl ShardLog {
     /// Appends `bytes`, and waits until they are on disk.
     ///
     /// The lock is held exclusively for as long as this runs, as a compaction's is, so the two
-    /// cannot overlap — and on Windows an exclusive lock is also what lets the one holding it write,
+    /// cannot overlap, and on Windows an exclusive lock is also what lets the one holding it write,
     /// a shared lock there denying writes even to its own holder.
     ///
     /// The end of the file is asked for under that lock rather than trusted from the handle's mode:
@@ -134,7 +134,7 @@ impl ShardLog {
     /// The bytes appended since the last read, without moving past them.
     ///
     /// A shared lock is held for as long as this runs, so what is read is not written over under it
-    /// — a compaction, which holds the lock exclusively, cannot empty the log mid-read — and, under
+    /// (a compaction, which holds the lock exclusively, cannot empty the log mid-read) and, under
     /// that same lock, the age of the log is read: a reader that meets an age it has not read under
     /// has been compacted away from its offset, and starts again from the beginning rather than
     /// reading on into the middle of a record.
@@ -164,7 +164,7 @@ impl ShardLog {
     /// the snapshot and emptying the log, so what is read here is all of the state before it or all
     /// of the state after it, never a snapshot from one and a log from the other.
     ///
-    /// A first value of no bytes is no snapshot at all — a shard nothing has been written down for —
+    /// A first value of no bytes is no snapshot at all, a shard nothing has been written down for,
     /// rather than a malformed one; the second is what the log holds past what this handle had read.
     ///
     /// # Errors
@@ -194,8 +194,8 @@ impl ShardLog {
     ///
     /// An exclusive lock is held for the whole of this, so no other process is part of the way
     /// through appending while the log is being emptied, and none reads it while it is being
-    /// rewritten. `replay` is handed the bytes appended since this log was last read — which the
-    /// caller is expected to fold into the whole it is about to write down — and the log is only
+    /// rewritten. `replay` is handed the bytes appended since this log was last read, which the
+    /// caller is expected to fold into the whole it is about to write down, and the log is only
     /// emptied after the age has been raised, so a compaction a crash cut short leaves a log that
     /// is replayed rather than an offset that points past what is left.
     ///
@@ -238,7 +238,7 @@ impl ShardLog {
     /// The bytes appended since the last read, with the caller already holding the lock.
     ///
     /// Read through the handle that holds the lock and never through the other one: Windows denies a
-    /// read of a range another handle holds exclusively — the same process's other handle included —
+    /// read of a range another handle holds exclusively, the same process's other handle included,
     /// so a compaction that read through the reader's handle would be a compaction that could not
     /// read the log it was compacting. The writer's handle is opened for reading, so it can.
     fn pending_locked(&mut self) -> io::Result<Vec<u8>> {
@@ -288,8 +288,8 @@ impl ShardLog {
     /// Empties the log, so what comes next starts at the beginning.
     ///
     /// Through the handle that holds the lock, and no other. Windows refuses to shorten a file that
-    /// another handle has a byte of locked — even when the lock is the caller's own, held through a
-    /// different handle — and a compaction runs with the log locked, so a handle of its own to
+    /// another handle has a byte of locked, even when the lock is the caller's own, held through a
+    /// different handle, and a compaction runs with the log locked, so a handle of its own to
     /// truncate through is a handle that cannot. Unix ignores the lock here and would let the third
     /// handle work, which is why this only ever failed on one of the two.
     fn empty_locked(&mut self) -> io::Result<()> {
@@ -303,7 +303,7 @@ impl ShardLog {
     }
 }
 
-/// What a log's age is written down beside it as — `log-0.wal` being aged by `log-0.epoch`.
+/// What a log's age is written down beside it as, `log-0.wal` being aged by `log-0.epoch`.
 const EPOCH_EXTENSION: &str = "epoch";
 
 /// The age written down at `path`, or none when nothing has aged it yet.

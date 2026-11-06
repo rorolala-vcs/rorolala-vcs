@@ -9,7 +9,7 @@ use rorolala_utils_lazyffi::lazyffi;
 /// The channel is a Rust-side type, but the errors it raises are not: they are what a
 /// caller outside Rust reads when a session could not be established, so the enum
 /// crosses the C ABI as [`RolaAuthError`]. The underlying stream's [`io::Error`] cannot
-/// cross — it is foreign and has no repr-C sibling — so what crosses instead is the
+/// cross, it is foreign and has no repr-C sibling, so what crosses instead is the
 /// stand-in [`IoError`] from `rorolala-errors`, which carries what it said.
 #[derive(Debug)]
 #[lazyffi(export = RolaAuthError)]

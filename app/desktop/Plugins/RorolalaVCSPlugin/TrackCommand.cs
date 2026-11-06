@@ -6,8 +6,8 @@ namespace RorolalaVCSPlugin;
 /// Running the command line's track: recording the working files' content as new versions.
 /// </summary>
 /// <remarks>
-/// The recording is the command line's — reading what changed, writing the versions, and moving the
-/// Layout's entries onto them — so this owns only the words that ask for one: the files and the message
+/// The recording is the command line's, reading what changed, writing the versions, and moving the
+/// Layout's entries onto them, so this owns only the words that ask for one: the files and the message
 /// they carry. The editor is never opened: a window has one line of its own where the message was written,
 /// and a run that opened an editor beside it would be asking the same question twice.
 /// <para>

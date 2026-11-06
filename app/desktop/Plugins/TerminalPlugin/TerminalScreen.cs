@@ -58,8 +58,8 @@ internal struct TerminalCell
 /// scrolled off.
 /// </summary>
 /// <remarks>
-/// The bytes a pseudo-terminal gives back are not text — they are text mixed with the sequences that
-/// move the cursor, set a colour, clear a line and so on — so what is kept is the state those bytes
+/// The bytes a pseudo-terminal gives back are not text, they are text mixed with the sequences that
+/// move the cursor, set a colour, clear a line and so on, so what is kept is the state those bytes
 /// leave behind. The sequences understood are the ones a shell, <c>less</c>, <c>top</c> and <c>vim</c>
 /// actually send; anything else is read and dropped rather than drawn as text.
 /// <para>
@@ -145,8 +145,8 @@ internal sealed class TerminalScreen
     /// The rows that have been erased since the cursor was last put somewhere.
     /// </summary>
     /// <remarks>
-    /// A screen cleared by a program is cleared by erasing each line in turn — PowerShell's
-    /// <c>Clear-Host</c> is exactly that — so a cursor put somewhere after every row has been erased is
+    /// A screen cleared by a program is cleared by erasing each line in turn, PowerShell's
+    /// <c>Clear-Host</c> is exactly that, so a cursor put somewhere after every row has been erased is
     /// a screen that was cleared, and the lines above it are not the reader's to keep.
     /// </remarks>
     private readonly HashSet<int> _erased = [];
@@ -716,7 +716,7 @@ internal sealed class TerminalScreen
                     break;
 
                 // The alternate screen: what a program that fills the window draws on. It is not a
-                // second buffer here — entering it clears, leaving it clears — which is enough for a
+                // second buffer here (entering it clears, leaving it clears) which is enough for a
                 // program that owns the whole screen while it runs.
                 case 47:
                 case 1047:

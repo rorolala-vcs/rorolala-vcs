@@ -3,7 +3,7 @@
 //! The other half of [`request-ownership`](crate::ActionRequestOwnership): a Layout names who holds
 //! each entry, and an account that is done with some asks the Vault to name nobody for each of them.
 //! Only the holder can: an entry another account holds is refused, and one nobody holds is already
-//! what was asked for. What the Workspace keeps a copy of is changed to match — the command that
+//! what was asked for. What the Workspace keeps a copy of is changed to match, the command that
 //! asked does that.
 //!
 //! As the other half is, the `Uuid`s are let go of in one run rather than one connection apiece.
@@ -19,16 +19,16 @@ use super::layout_remote::{giveup, ownership_batch};
 /// What to let go of, as JSON: an array of the words the bar is drawn under and the `Uuid`s of the
 /// entries, as text. The `Uuid`s belong to the caller, so they are read on the Workspace and cross to
 /// the Vault, which is the side that has a Layout to name them in; the words cross with them because
-/// the caller is the side that has them — see `ownership_batch`. A list is not a thing the C ABI can
+/// the caller is the side that has them, see `ownership_batch`. A list is not a thing the C ABI can
 /// hand over, so the pair crosses as one JSON string. Which account lets go is not input: the session
 /// already says.
 ///
 /// # Output
 ///
 /// What became of each, as JSON: an array of outcomes, one per `Uuid`, in the order they were asked
-/// for. Each is what one let-go answers on its own — the entry is now held by nobody, the Vault holds
+/// for. Each is what one let-go answers on its own, the entry is now held by nobody, the Vault holds
 /// no such entry, or another account holds it. It crosses as text because an action's output is what
-/// the C ABI hands back, and an outcome is not a type a C caller reads — [`Ownership`](super::layout_remote::Ownership)
+/// the C ABI hands back, and an outcome is not a type a C caller reads, [`Ownership`](super::layout_remote::Ownership)
 /// is.
 pub struct ActionGiveupOwnership;
 

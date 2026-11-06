@@ -1,7 +1,7 @@
 _version: 2
 
-# What the File System browser says. Every key is namespaced by the plugin's identity — the id with
-# dots underscored — which is the convention that keeps two plugins' keys apart.
+# What the File System browser says. Every key is namespaced by the plugin's identity, the id with
+# dots underscored, which is the convention that keeps two plugins' keys apart.
 
 rorolala_file_system:
   name:
@@ -46,7 +46,7 @@ rorolala_file_system:
     zh-CN: 此文件夹为空
 
   # What the switch in a listing's corner says: whether what the rules hide is shown, drawn fainter. It is a
-  # question of its own rather than a rule like the ones below — the rules say what is hidden, this says
+  # question of its own rather than a rule like the ones below, the rules say what is hidden, this says
   # whether the user is looking at it.
   hidden:
     en: Show hidden
@@ -175,7 +175,7 @@ rorolala_file_system:
       en: File operations
       zh-CN: 文件操作
     # What the presets above the four commands are called. Windows and Unix are this plugin's own; a
-    # dependent plugin adds its own beside them, and Custom is always last — the way to set each command
+    # dependent plugin adds its own beside them, and Custom is always last, the way to set each command
     # by hand, shown whenever the four match none of the presets.
     preset:
       windows:
@@ -226,7 +226,7 @@ rorolala_file_system:
     zh-CN: "`%{path}` 不是目录"
 
   # What the path bar says while an address is open whose prefix no plugin claimed. It names the prefix and not
-  # the whole address, because the prefix is the thing a plugin claims — a payload nobody reads is not what is
+  # the whole address, because the prefix is the thing a plugin claims, a payload nobody reads is not what is
   # missing.
   unknown_address:
     en: No plugin answers %{scheme}
