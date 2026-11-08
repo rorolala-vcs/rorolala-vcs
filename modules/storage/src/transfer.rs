@@ -450,7 +450,7 @@ mod tests {
 
         assert!(holds(&left, &key).await, "the content is now held");
         assert_eq!(
-            left.read_object(&key).await.ok(),
+            left.content(&key).await.ok().flatten(),
             Some(content),
             "what crossed is the content"
         );

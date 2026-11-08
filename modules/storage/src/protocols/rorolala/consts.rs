@@ -63,6 +63,26 @@ pub(super) const TEXT_CUT: Chunking = Chunking::Text {
     max: 16384,
 };
 
+/// Binary content at or above this many bytes is cut rather than kept whole.
+///
+/// Cutting needs enough content for the manifest that remembers the chunks to be worth having, so a
+/// binary that would come out as a handful of chunks is cheaper kept whole. Text has its own, much
+/// smaller threshold, because lines make even a small cut pay.
+pub(super) const BINARY_CUT_FROM: usize = 256 * 1024;
+
+/// The cut binary content no policy claims is written with once it is big enough to cut.
+///
+/// Binary content is edited in place rather than rewritten from the start, so the cut finds its own
+/// boundaries on the content instead of counting bytes: a fixed size would put every chunk after an
+/// insertion out of step with the one before it. The sizes are chosen for what a chunk costs besides
+/// its bytes, which is a 15-byte frame header, a 48-byte pack index record and a 40-byte manifest
+/// record, about 0.13% of a chunk of 80 KiB.
+pub(super) const BINARY_CUT: Chunking = Chunking::Cdc {
+    min: 16 * 1024,
+    average: 64 * 1024,
+    max: 256 * 1024,
+};
+
 /// Which of the two things a store keeps a pack holds.
 ///
 /// A pack holds one kind, and the kinds are told apart by where their indexes sit, see

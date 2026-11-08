@@ -27,7 +27,7 @@ async fn main() {
     let mut checked = Checked::default();
 
     round_trips(&sandbox, &store, &mut checked).await;
-    cuts_show_in_the_layout(&sandbox, &store, &mut checked).await;
+    cuts_show_in_the_layout(&sandbox, &mut checked).await;
     an_edit_disturbs_only_its_own_chunks(&sandbox, &store, &mut checked).await;
     a_container_is_cut_at_its_members(&sandbox, &store, &mut checked).await;
     a_text_file_costs_what_an_edit_moved(&sandbox, &store, &mut checked).await;
@@ -91,11 +91,10 @@ async fn round_trips(sandbox: &Sandbox, store: &RorolalaStorage, checked: &mut C
 }
 
 /// A cut content is put back together from a manifest; one that was not cut is not.
-async fn cuts_show_in_the_layout(
-    sandbox: &Sandbox,
-    store: &RorolalaStorage,
-    checked: &mut Checked,
-) {
+async fn cuts_show_in_the_layout(sandbox: &Sandbox, checked: &mut Checked) {
+    // A store of its own: the content written here is also a chunk of a longer repetition, and a
+    // store that already holds it as a chunk would not write it loose beside the pack.
+    let store = RorolalaStorage::create(sandbox.join("layout"));
     let content = repetitive(256 * 1024);
 
     let whole = sandbox.join("layout-whole");
@@ -160,12 +159,13 @@ async fn cuts_show_in_the_layout(
         manifest.len() >= 2,
         &format!("{} chunk(s)", manifest.len()),
     );
+    let mut chunks_held = true;
+    for chunk in manifest.chunks() {
+        chunks_held &= holds(&store, &chunk.key()).await;
+    }
     checked.wants(
-        "every chunk the manifest names is an object",
-        manifest
-            .chunks()
-            .iter()
-            .all(|chunk| store.object_path(&chunk.key()).is_file()),
+        "every chunk the manifest names is held",
+        chunks_held,
         "a chunk the manifest names is not there",
     );
     checked.wants(
@@ -256,12 +256,12 @@ async fn a_container_is_cut_at_its_members(
     let _ = store_file(store, &before)
         .await
         .expect("the deck before the edit is stored");
-    let stored = objects(sandbox);
+    let stored = objects(sandbox, store).await;
 
     let key = store_file(store, &after)
         .await
         .expect("the deck after the edit is stored");
-    let gained = objects(sandbox) - stored;
+    let gained = objects(sandbox, store).await - stored;
 
     // One member changed, so one member is new: the member the edit did not touch is the bytes it
     // already was, and the store already has them. The manifest is new as well, which is why this
@@ -314,12 +314,12 @@ async fn a_text_file_costs_what_an_edit_moved(
     let _ = store_file(store, &before)
         .await
         .expect("the text before the edit is stored");
-    let stored = objects(sandbox);
+    let stored = objects(sandbox, store).await;
 
     let key = store_file(store, &after)
         .await
         .expect("the text after the edit is stored");
-    let gained = objects(sandbox) - stored;
+    let gained = objects(sandbox, store).await - stored;
 
     checked.wants(
         "an added line costs a chunk or two, not the file",
@@ -638,7 +638,14 @@ async fn content_that_does_not_hold_together_is_refused(sandbox: &Sandbox, check
         .await
         .expect("the manifest is read")
         .expect("the entry is a manifest");
-    let chunk = store.object_path(&manifest.chunks()[0].key());
+    let first = manifest.chunks()[0].key();
+    let chunk = store.object_path(&first);
+
+    // The chunk is written into a pack by the content's own write, so taking it out of the pack is
+    // what leaves the loose path free for what this test puts there.
+    store.remove(&first).await.expect("the chunk is taken away");
+    fs::create_dir_all(chunk.parent().expect("the chunk has a directory"))
+        .expect("the chunk's directory is made");
 
     // Something else entirely where a chunk was: framing no build can read.
     fs::write(&chunk, b"not a chunk at all").expect("the chunk is written over");
@@ -755,7 +762,7 @@ async fn objects_gained(
     content: &[u8],
     choice: AlgorithmChoice,
 ) -> usize {
-    let before = objects(sandbox);
+    let before = objects(sandbox, store).await;
     let file = sandbox.join(name);
     fs::write(&file, content).expect("the content is written to a file");
 
@@ -764,12 +771,23 @@ async fn objects_gained(
         .await
         .expect("the content is written");
 
-    objects(sandbox) - before
+    objects(sandbox, store).await - before
 }
 
-/// How many objects the store of the sandbox holds under `obj/`.
-fn objects(sandbox: &Sandbox) -> usize {
-    files(&sandbox.join("store/obj")).len()
+/// How many objects the store of the sandbox holds, loose or in a pack.
+async fn objects(sandbox: &Sandbox, store: &RorolalaStorage) -> usize {
+    let loose = files(&sandbox.join("store/obj")).len();
+    let mut packed = 0;
+
+    for index in store.packs().await.expect("the packs are listed") {
+        // A pack of manifests has no object index under the pack's number, so what does not read
+        // there is the other kind rather than a pack gone wrong.
+        if let Ok(directory) = store.read_pack_index(index).await {
+            packed += directory.entries().len();
+        }
+    }
+
+    loose + packed
 }
 
 /// A packed container of `members`, stored rather than deflated.

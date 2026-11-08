@@ -12,6 +12,22 @@ The Version Graph no longer draws an edited file's local pill on the version its
 as well as on the draft. While the file has an unrecorded change, its draft is the one card that
 names it; the baseline version keeps the entries of the other sides.
 
+## Optimized
+
+### 1. [`modules`] [`chunking`] [`text`] Stop a text cut at the bound when a line runs past it
+
+A text cut was moved on to the end of the line it landed in with no bound, so a file of one enormous line, a minified script or a single-line JSON, had its first cut moved to the end of the file and was stored as a single chunk. The move now stops when the line has more than `max` left to run, and the line is cut through there.
+
+Short lines are unchanged: a chunk still ends at a line end, and may run past `max` by the line it moved over. No chunk is longer than twice `max`.
+
+### 2. [`modules`] [`storage`] Cut unclaimed binary content on its content, and write chunks in packs
+
+Binary content no policy claims and no ZIP signature marks was written whole, so an edit to a large PSB, TIFF, EXR, TGA, WAV or FBX binary rewrote the whole file. Content of at least 256 KiB is now cut on its content, with chunks of 16 KiB to 256 KiB, so an edit costs the chunks it fell in.
+
+A chunked write lays its chunks down in a pack rather than as one file each, and a chunked read plans every chunk before reading any of them, so a content of thousands of chunks no longer costs a file, a pack lookup and a pack open per chunk. The manifest is still written loose, and the chunks are published before it is written.
+
+Neither the cut nor its bounds are recorded in the store, so content written before this reads back unchanged. The first save after upgrading re-cuts a large binary once, and later versions share chunks with it.
+
 ## Feature
 
 ### 1. **\[BREAKING!\]** [`app`] [`rola`] [`tree`] Version a directory as one tree

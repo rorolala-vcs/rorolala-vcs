@@ -12,11 +12,14 @@ use rorolala_utils_constants::STORAGE_CONFIG_PATH;
 use rorolala_utils_location::Locate as _;
 
 use super::RorolalaStorage;
-use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind};
+use super::consts::{
+    BINARY_CUT, BINARY_CUT_FROM, MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind, TEXT_CUT,
+    TEXT_CUT_FROM,
+};
 use super::entry::key_of;
 use crate::{
     AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_VERSION, Frame, Key, Layout, Manifest,
-    StorageBackend as _, TransferableBackend as _, store_file, transfer,
+    StorageBackend as _, TransferableBackend as _, ZIP_MAGIC, store_file, transfer,
 };
 
 /// A directory of its own, emptied first so a rerun starts clean.
@@ -183,9 +186,71 @@ async fn a_cut_content_is_read_back_whole() {
     assert!(store.manifest_path(&key).is_file());
     assert!(holds(&store, &key).await);
 
+    // The chunks are laid down in a pack rather than as one file each, which is what keeps a
+    // content cut into thousands of chunks from being thousands of files.
+    assert!(store.index_path(PackKind::Object, 0).is_file());
+    for chunk in manifest.chunks() {
+        assert!(!store.object_path(&chunk.key()).is_file());
+    }
+
     let out = parent.join("out");
     store.extract_file(&key, &out).await.unwrap();
     assert_eq!(fs::read(&out).unwrap(), content);
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[test]
+fn what_a_store_cuts_by_the_bytes_it_was_handed() {
+    let (parent, store) = store("choose-cut");
+
+    // Binary content no policy claims is cut where the content says so, once it is big enough for
+    // the manifest that remembers the chunks to pay for itself.
+    let binary = vec![0_u8; BINARY_CUT_FROM];
+    assert_eq!(
+        store.choose_for(&binary, binary.len(), None).chunking(),
+        BINARY_CUT
+    );
+
+    // Below that a manifest costs more than the chunks it would describe, so the content is kept
+    // whole.
+    let small = vec![0_u8; BINARY_CUT_FROM - 1];
+    assert_eq!(
+        store.choose_for(&small, small.len(), None).chunking(),
+        Chunking::Whole
+    );
+
+    // Text is cut at its lines, at a much smaller size, because lines are what an edit moves.
+    let text = vec![b'a'; TEXT_CUT_FROM];
+    assert_eq!(
+        store.choose_for(&text, text.len(), None).chunking(),
+        TEXT_CUT
+    );
+
+    // A signature and a claim still win over what the content reads as: a container is taken apart
+    // by what it holds, and a claimed extension by the policy that knows the format.
+    let container = [ZIP_MAGIC.as_slice(), &[0_u8; 1024]].concat();
+    assert_eq!(
+        store
+            .choose_for(&container, container.len(), None)
+            .chunking(),
+        Chunking::Zip
+    );
+    assert_eq!(
+        store
+            .choose_for(&binary, binary.len(), Some("psd"))
+            .chunking(),
+        Chunking::Policy("psd-basic")
+    );
+
+    // A cut the store was told to use wins over all of them.
+    let forced = store.with_forced_cut(Chunking::Whole);
+    assert_eq!(
+        forced
+            .choose_for(&binary, binary.len(), Some("psd"))
+            .chunking(),
+        Chunking::Whole
+    );
 
     let _ = fs::remove_dir_all(&parent);
 }
@@ -349,9 +414,13 @@ async fn a_manifest_is_packed_among_the_manifests() {
     assert!(made, "the manifest was not packed");
 
     assert!(!store.manifest_path(&key).is_file());
-    assert!(store.index_path(PackKind::Manifest, 0).is_file());
-    assert!(!store.index_path(PackKind::Object, 0).exists());
-    assert!(store.pack_path(0).is_file());
+    // The chunks went into the object pack started by the write, so packing the manifest makes the
+    // next pack, and it is a pack of manifests rather than of objects.
+    assert!(store.index_path(PackKind::Manifest, 1).is_file());
+    assert!(!store.index_path(PackKind::Manifest, 0).exists());
+    assert!(store.index_path(PackKind::Object, 0).is_file());
+    assert!(!store.index_path(PackKind::Object, 1).exists());
+    assert!(store.pack_path(1).is_file());
 
     // The manifest still reads, is still listed, and still puts the content back together.
     assert!(store.read_manifest(&key).await.unwrap().is_some());
@@ -713,13 +782,13 @@ async fn the_choice_is_a_container_taken_apart_or_the_content_itself() {
         choice.chunking()
     );
 
-    // Content that is not text and is not a container is written as it came in, whole: neither
-    // compressing nor cutting is done unasked.
+    // Content that is neither text nor a container is encoded the way the store was told to, and
+    // cut on its content once it is big enough for a manifest to pay for itself.
     let binary = parent.join("binary");
     fs::write(&binary, vec![0_u8; 1 << 20]).unwrap();
     let choice = store.choose_algorithm(&binary);
     assert_eq!(choice.codec(), Codec::Raw);
-    assert_eq!(choice.chunking(), Chunking::Whole);
+    assert_eq!(choice.chunking(), BINARY_CUT);
 
     // A packed container is taken apart at its members wherever it is, however small it is,
     // and is not compressed: what it holds is compressed already.

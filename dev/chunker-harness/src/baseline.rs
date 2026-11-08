@@ -1,10 +1,9 @@
 //! The frozen yardsticks a strategy is measured against.
 //!
-//! These are the cuts the store falls back on: the ones it already had, unchanged and untuned. They
-//! are not selectable by name from the command line and they are not policies, a store reaches them
-//! through `/extension/nothing claims it`, not through a name. What makes them the yardsticks is
-//! exactly that: their numbers do not move when a strategy is written, so a score taken this year can
-//! be compared with one taken in three.
+//! These are the cuts the store has fallen back on: frozen, unchanged and untuned, whatever it
+//! chooses today. They are not selectable by name from the command line and they are not policies.
+//! What makes them the yardsticks is exactly that: their numbers do not move when a strategy or a
+//! fallback is written, so a score taken this year can be compared with one taken in three.
 //!
 //! The sizes are the ones a store's own constants use where there is one, `text` is
 //! `Chunking::Text { min: 1024, average: 4096, max: 16384 }`, because that is what a text write

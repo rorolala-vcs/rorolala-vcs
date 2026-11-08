@@ -8,6 +8,11 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited. [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-local-pill-on-the-draft-while-a-file-is-edited)
 
+## Optimized
+
+1. [`modules`] [`chunking`] [`text`] Stop a text cut at the bound when a line runs past it. [See details](dev/CHANGELOG-DETAILS.md#1-modules-chunking-text-stop-a-text-cut-at-the-bound-when-a-line-runs-past-it)
+2. [`modules`] [`storage`] Cut unclaimed binary content on its content, and write chunks in packs. [See details](dev/CHANGELOG-DETAILS.md#2-modules-storage-cut-unclaimed-binary-content-on-its-content-and-write-chunks-in-packs)
+
 ## Feature
 
 1. **\[BREAKING!\]** [`app`] [`rola`] [`tree`] Version a directory as one tree. [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rola-tree-version-a-directory-as-one-tree)

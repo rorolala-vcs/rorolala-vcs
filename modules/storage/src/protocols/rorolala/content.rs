@@ -310,13 +310,20 @@ impl RorolalaStorage {
     /// manifest is the only place that is written down, and one that disagrees with the objects it
     /// names is a store that does not hold together rather than content to be handed on.
     async fn assemble(&self, manifest: &Manifest) -> Result<Vec<u8>, Error> {
+        // The chunks are planned as one read rather than one read each: a batch finds every chunk
+        // and opens every pack once, where a read per chunk would walk the packs again for each of
+        // them. A content of fifty thousand chunks is fifty thousand walks otherwise.
+        //
         // Nothing is reserved from the total the manifest claims: a length is the manifest's to say
         // and this is not a number an allocator should be handed on trust. A manifest that reads is
         // bounded by `MAX_CONTENT_LEN`, see `Manifest::decode`, and what grows the buffer here is
         // the bytes that really came back, one chunk at a time.
+        let keys: Vec<Key> = manifest.chunks().iter().map(Chunk::key).collect();
+        let batch = self.open_objects(&keys).await?;
         let mut content = Vec::new();
+
         for chunk in manifest.chunks() {
-            let piece = self.read_object(&chunk.key()).await?;
+            let piece = batch.read(&chunk.key()).await?;
             if piece.len() as u64 != chunk.len() {
                 return Err(Error::Malformed);
             }
@@ -512,6 +519,11 @@ impl RorolalaStorage {
     ///
     /// This is a write with the file already in hand: what a caller has is bytes rather than a path
     /// to them, which is what a transfer has.
+    ///
+    /// The chunks are laid down through a [batch](RorolalaStorage::begin_batch), not one file each:
+    /// a content cut into thousands of chunks would otherwise be thousands of creates and renames,
+    /// which is where a large write spends its time. The manifest is written afterwards, and loose,
+    /// so that it is readable as soon as the chunks it names are published rather than before.
     pub(super) async fn write_content(
         &self,
         content: &[u8],
@@ -532,12 +544,26 @@ impl RorolalaStorage {
         }
 
         let mut manifest = Manifest::default();
+        let mut batch = self.begin_batch_with_codec(choice.codec()).await;
+
         for range in ranges {
             let chunk = &content[range];
-            let chunk_key = self.write_object(chunk, choice.codec()).await?;
+            let chunk_key = key_of(chunk);
+
+            // A chunk the store already holds is not written again, wherever it is held: a chunk is
+            // an object like any other, and writing it a second time would leave the same bytes in
+            // two places. The batch checks the run it is writing for the same reason.
+            if !self.holds_object(&chunk_key).await? {
+                batch.add(&chunk_key, chunk).await?;
+            }
 
             manifest.push(Chunk::new(chunk_key, chunk.len() as u64));
         }
+
+        // The chunks are published before the manifest is written: a manifest a reader can find
+        // before the chunks it names is a content the store claims and cannot put back together,
+        // while chunks with no manifest are objects nothing refers to.
+        batch.publish().await?;
 
         // The object a whole write would have left is deliberately left where it is: it may be a
         // chunk another manifest is speaking for, and a chunk is an object like any other.

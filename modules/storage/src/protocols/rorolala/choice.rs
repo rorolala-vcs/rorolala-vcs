@@ -13,7 +13,7 @@ use std::fs;
 use std::path::Path;
 
 use super::RorolalaStorage;
-use super::consts::{SNIFF_LEN, TEXT_CUT, TEXT_CUT_FROM};
+use super::consts::{BINARY_CUT, BINARY_CUT_FROM, SNIFF_LEN, TEXT_CUT, TEXT_CUT_FROM};
 use crate::{AlgorithmChoice, Chunking, Codec, ZIP_MAGIC};
 
 impl RorolalaStorage {
@@ -51,7 +51,7 @@ impl RorolalaStorage {
     /// Chooses how content is written, from a cut it was told, a container it claims, its opening and
     /// how long it is.
     ///
-    /// Four answers, in this order, and none of them needs to read the whole content to give one:
+    /// Six answers, in this order, and none of them needs to read the whole content to give one:
     ///
     /// - **A cut that was asked for** wins over every other answer: a store told which strategy a
     ///   write is to use is not being advised, so neither a claim nor a signature may overrule it.
@@ -65,14 +65,18 @@ impl RorolalaStorage {
     /// - **Text** is cut at the ends of its lines once there is enough of it to be worth a manifest,
     ///   so that what a chunk holds is whole lines. See [`Text`]: lines are what an edit moves, so a
     ///   few of them changed costs those chunks rather than the file.
-    /// - **Anything else** is written as it came in, whole: cutting it takes a manifest to say where
-    ///   the pieces are, and that is a cost nothing pays for itself. That is also what this store did
-    ///   before there were claims at all, so a store with no policy and nothing forced writes exactly
-    ///   what it used to.
+    /// - **Binary content** no claim and no signature took is cut where the content says so, once
+    ///   there is enough of it for a manifest to pay for itself. See [`Cdc`]: a binary is edited in
+    ///   place, so an edit then costs the chunks it fell in rather than the whole file.
+    /// - **Anything else** is written as it came in, whole: it is too small for the manifest that
+    ///   would say where the pieces are to pay for itself. That is also what this store did before
+    ///   there were claims at all, so a store with no policy and nothing forced writes exactly what
+    ///   it used to.
     ///
     /// What any answer comes to is not written down anywhere, so a store may be told to write
     /// differently tomorrow without a key changing.
     ///
+    /// [`Cdc`]: crate::Chunking::Cdc
     /// [`Text`]: crate::Chunking::Text
     pub(super) fn choose_for(
         &self,
@@ -120,6 +124,13 @@ impl RorolalaStorage {
 
         if is_text(magic) && size >= TEXT_CUT_FROM {
             return TEXT_CUT;
+        }
+
+        // What is left is content that does not read as text, so a cut on its content finds the
+        // edits a save makes rather than the lines a person wrote. A binary below the threshold is
+        // kept whole: a manifest for one or two chunks costs more than the deduplication it buys.
+        if !is_text(magic) && size >= BINARY_CUT_FROM {
+            return BINARY_CUT;
         }
 
         Chunking::Whole

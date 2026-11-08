@@ -9,7 +9,6 @@
 //! it does is what a person does with a terminal, and what it checks is what a program would say
 //! back.
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -873,18 +872,13 @@ async fn a_content_whose_chunks_were_packed_is_still_whole(
         .expect("the manifest is read")
         .expect("cut content has a manifest");
     let chunks: Vec<Key> = manifest.chunks().iter().map(|chunk| chunk.key()).collect();
-    // Repetition makes the chunks of a file equal to one another, and one content is one object
-    // however many chunks it fills, so what is loose is the distinct keys rather than the chunks.
-    let distinct: BTreeSet<Key> = chunks.iter().copied().collect();
 
+    // The chunks are laid down in a pack by the write rather than as one file each, so nothing is
+    // loose under `obj/` at any point; the manifest beside them is what is written loose.
     checked.wants(
-        "a cut content leaves its chunks loose",
-        objects(sandbox, "chunked") == distinct.len(),
-        &format!(
-            "{} objects for {} distinct chunks",
-            objects(sandbox, "chunked"),
-            distinct.len()
-        ),
+        "a cut content writes its chunks into a pack",
+        objects(sandbox, "chunked") == 0,
+        &format!("{} loose objects", objects(sandbox, "chunked")),
     );
 
     store
@@ -896,7 +890,7 @@ async fn a_content_whose_chunks_were_packed_is_still_whole(
         .expect("the chunks are packed");
 
     checked.wants(
-        "packing the chunks leaves none of them loose",
+        "packing packed chunks leaves nothing loose",
         objects(sandbox, "chunked") == 0,
         "a chunk was still loose after it was packed",
     );

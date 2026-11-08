@@ -51,7 +51,7 @@ The rolling hash depends only on byte values, so the same bytes always cut at th
 
 Cut points are found the way `Cdc` finds them, then each is moved forward to the end of the line so that a chunk contains whole lines. Inserting, deleting, or changing lines is what edits actually move; the lines on either side of an edit are unchanged and so are their bytes, so they are still the same chunk, in this version, in another version, or even in another file.
 
-A chunk may exceed `max` by up to one line, because a cut point landing mid-line is moved to the end of that line. When text reaches 4 KiB, storage uses line splitting by default; chunks range from about 1 KiB to 16 KiB, averaging 4 KiB. Small files are not split, because maintaining a manifest for them does not pay off.
+A chunk may exceed `max` by up to one line, because a cut point landing mid-line is moved to the end of that line. A line with more than `max` still to run is the one case the move does not wait for: it is cut through, so a file that is one enormous line is cut rather than becoming one chunk. When text reaches 4 KiB, storage uses line splitting by default; chunks run from about 1 KiB to 16 KiB, with about 5 KiB in the middle. Small files are not split, because maintaining a manifest for them does not pay off.
 
 ### Zip
 

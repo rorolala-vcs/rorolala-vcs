@@ -88,15 +88,15 @@ impl Chunker for Fixed {
 /// editing a large file cheap to store again, and why a content-defined cut is worth its cost
 /// where a [`Fixed`] one is not.
 ///
-/// `average` is the size a chunk tends towards; `min` and `max` bound how small and how large a
-/// chunk may get. None of them is written down anywhere, a reader reassembles from the
-/// manifest, so they may be tuned, or the whole algorithm replaced, without a store having to be
-/// rewritten.
+/// `average` is how far past `min` a cut is sought, rounded up to a power of two by the cut, so a
+/// chunk tends towards `min` plus `average`; `min` and `max` bound how small and how large a chunk
+/// may get. None of them is written down anywhere, a reader reassembles from the manifest, so they
+/// may be tuned, or the whole algorithm replaced, without a store having to be rewritten.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cdc {
     /// The smallest a chunk may be.
     min: u32,
-    /// The size a chunk tends towards.
+    /// How far past `min` a cut is sought, before rounding up to a power of two.
     average: u32,
     /// The largest a chunk may be.
     max: u32,
@@ -116,7 +116,7 @@ impl Cdc {
         self.min
     }
 
-    /// The size a chunk tends towards.
+    /// The interval after `min` a cut is sought over, before rounding.
     #[must_use]
     pub const fn average(&self) -> u32 {
         self.average
@@ -178,22 +178,24 @@ impl Chunker for Cdc {
 /// Text is also where a small cut pays for itself: a few lines changed in a large file costs the
 /// chunks those lines fall in rather than the file, which is why the sizes below are small.
 ///
-/// `min`, `average` and `max` bound the cuts the way [`Cdc`]'s do, with one allowance: a cut is
-/// moved on to the end of the line it lands in, so a chunk may come out up to one line longer than
-/// `max` where that line would otherwise be cut in two.
+/// `min`, `average` and `max` bound the cuts the way [`Cdc`]'s do. A cut is moved on to the end of
+/// the line it lands in, so a chunk may run past `max` to reach a line end; a line with more than
+/// `max` still to run is cut through instead, which is what keeps a file of one enormous line (a
+/// minified script, a single-line JSON) from becoming one chunk of its whole length. No chunk is
+/// longer than twice `max`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Text {
     /// The smallest a chunk may be.
     min: u32,
-    /// The size a chunk tends towards.
+    /// How far past `min` a cut is sought, before rounding up to a power of two.
     average: u32,
-    /// The largest a chunk may be.
+    /// The largest a chunk may be, bar the line a cut is moved on to.
     max: u32,
 }
 
 impl Text {
-    /// A chunker cutting at line ends, tending towards `average` and staying within `min` and
-    /// `max`.
+    /// A chunker cutting at line ends, tending towards `average` and bounded by `min` and `max` the
+    /// way [`Cdc`] is.
     #[must_use]
     pub const fn new(min: u32, average: u32, max: u32) -> Self {
         Self { min, average, max }
@@ -205,13 +207,13 @@ impl Text {
         self.min
     }
 
-    /// The size a chunk tends towards.
+    /// The interval after `min` a cut is sought over, before rounding.
     #[must_use]
     pub const fn average(&self) -> u32 {
         self.average
     }
 
-    /// The largest a chunk may be.
+    /// The largest a chunk may be, bar the line a cut is moved on to.
     #[must_use]
     pub const fn max(&self) -> u32 {
         self.max
@@ -223,12 +225,23 @@ impl Chunker for Text {
         // The cuts are found as content of this kind would find them, and then each is moved on to
         // the end of the line it landed in: a chunk that began or ended in the middle of a line
         // would be a chunk that the same lines could not share.
+        //
+        // A line with more than `max` still to run is the one case the move does not wait for: it is
+        // cut through at `max` instead. Without that, one enormous line (a minified script, a
+        // single-line JSON) would carry the first cut to the end of the file and leave the content
+        // as one chunk, which is the `Whole` cut this is meant to improve on.
         let cuts = Cdc::new(self.min, self.average, self.max).split(content);
+        let max = (self.max as usize).max(1);
         let mut ranges = Vec::with_capacity(cuts.len());
-        let mut at = 0;
+        let mut at = 0_usize;
 
         for cut in cuts.iter().take(cuts.len().saturating_sub(1)) {
-            let end = line_end_after(content, cut.end);
+            let line_end = line_end_after(content, cut.end);
+            let end = if line_end.saturating_sub(cut.end) > max {
+                at.saturating_add(max).min(content.len())
+            } else {
+                line_end
+            };
 
             if end > at {
                 ranges.push(at..end);
@@ -301,12 +314,15 @@ pub enum Chunking {
     Cdc {
         /// The smallest a chunk may be.
         min: u32,
-        /// The size a chunk tends towards.
+        /// How far past `min` a cut is sought, rounded up to a power of two.
         average: u32,
         /// The largest a chunk may be.
         max: u32,
     },
     /// The content is cut at the ends of its lines, so that what a chunk holds is whole lines.
+    ///
+    /// A line longer than `max` is cut through rather than waited for, since its end may be the end
+    /// of a file that has only the one line.
     ///
     /// This is the cut for text, see [`Text`](crate::Text), and it is what makes an edit to a
     /// few lines cost those lines rather than the file: the lines around them are the same bytes
@@ -314,9 +330,9 @@ pub enum Chunking {
     Text {
         /// The smallest a chunk may be.
         min: u32,
-        /// The size a chunk tends towards.
+        /// How far past `min` a cut is sought, rounded up to a power of two.
         average: u32,
-        /// The largest a chunk may be.
+        /// The largest a chunk may be, bar the line a cut is moved on to.
         max: u32,
     },
     /// The content is cut at the boundaries of the members it is packed of.
@@ -489,6 +505,20 @@ mod tests {
             // A cut moved on to the next line end may overshoot `max` by the line it moved over,
             // and no line here is anywhere near this long.
             assert!(range.len() <= 1024 + 32, "{range:?}");
+        }
+    }
+
+    #[test]
+    fn a_text_chunker_stops_at_the_bound_inside_one_enormous_line() {
+        // One line and nothing else: no line end tells the cut where it may stop, so the bound is the
+        // only thing standing between this and the whole content as one chunk.
+        let content = vec![b'x'; 100_000];
+        let ranges = Text::new(64, 256, 1024).split(&content);
+
+        assert!(covers(&ranges, content.len()));
+        assert!(ranges.len() > 1, "{ranges:?}");
+        for range in &ranges {
+            assert!(range.len() <= 2 * 1024, "{range:?} among {ranges:?}");
         }
     }
 

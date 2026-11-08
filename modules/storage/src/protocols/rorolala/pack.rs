@@ -516,13 +516,25 @@ impl RorolalaStorage {
     /// asking again here would be the per-entry cost the batch exists to avoid.
     #[must_use]
     pub async fn begin_batch(&self) -> Batch {
+        self.begin_batch_with_codec(self.codec).await
+    }
+
+    /// Begins a run of entries framed with `codec` rather than the store's own.
+    ///
+    /// The codec and the cut are two decisions taken together, see
+    /// [`AlgorithmChoice`](crate::AlgorithmChoice): text is compressed, a container is not, and a
+    /// content written as chunks is framed the one way throughout. A caller writing content that was
+    /// already decided about therefore brings that codec with it rather than letting the store's own
+    /// stand in for it.
+    #[must_use]
+    pub async fn begin_batch_with_codec(&self, codec: Codec) -> Batch {
         Batch {
             store: self.clone(),
             objects: None,
             manifests: None,
             written: BTreeSet::new(),
             max: self.max_pack_size().await,
-            codec: self.codec,
+            codec,
             entries: 0,
         }
     }

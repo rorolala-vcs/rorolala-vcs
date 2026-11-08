@@ -45,7 +45,7 @@ content
   ├─ choose chunking: Whole / Fixed / Cdc / Text / Zip / Policy
   └─ write
        ├─ one chunk: one object
-       └─ many chunks: one object per chunk, plus a manifest
+       └─ many chunks: one object per chunk, gathered into a pack, plus a manifest
 ```
 
 Codec and chunking are *two independent decisions*. The codec decides how the payload is compressed; the chunking decides how the content is split into chunks. **Neither is written into the key**, so the same content stored a different way is still the same key.
@@ -123,7 +123,8 @@ A storage that is *not told otherwise* decides chunking in this order:
 2. An extension claimed by a policy. A claim is the only answer that knows the format **without reading the content**, and it is also the fastest and most predictable one.
 3. Content beginning with the ZIP signature `PK\x03\x04`. It is chunked on member boundaries; see "About Chunk Objects".
 4. Text. If the first 8000 bytes contain no zero byte and the length is at least 4 KiB, it is chunked on line endings.
-5. Everything else is stored whole, unchunked.
+5. Binary content that reads as neither, once it is at least 256 KiB, is chunked on its content, with chunks of about 16 KiB to 256 KiB.
+6. Everything else is stored whole, unchunked: it is too small for the manifest that records the chunks to pay for itself.
 
 The choice of codec is *separate* from chunking:
 

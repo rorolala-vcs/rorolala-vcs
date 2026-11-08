@@ -2,8 +2,8 @@
 //!
 //! The model in [`measure`](crate::measure) predicts the bytes a chain costs. This is the same chain
 //! written into a store, so that the prediction can be checked rather than believed: every version is
-//! written, read back and compared with the file it came from, and then the store's own `obj/` and
-//! `manifest/` directories are measured.
+//! written, read back and compared with the file it came from, and then the store's own `obj/`,
+//! `manifest/` and `packed/` directories are measured.
 //!
 //! It is slower than the model by an order of magnitude, every byte goes through a file twice, which
 //! is why it is a flag and not the default. What it buys is that the numbers in a report are the
@@ -19,7 +19,8 @@ use crate::corpus::Pattern;
 /// What a store ended up holding.
 #[derive(Debug, Clone, Copy)]
 pub struct Written {
-    /// The bytes under the store's `obj/` and `manifest/`, which is everything it keeps.
+    /// The bytes under the store's `obj/` and `manifest/`, and in its packs, which is everything it
+    /// keeps.
     pub stored: u64,
     /// How many versions were written.
     pub versions: u64,
@@ -61,11 +62,35 @@ pub async fn measure(
         written.versions = written.versions.saturating_add(1);
     }
 
-    written.stored = bytes_under(&root.join("obj"))? + bytes_under(&root.join("manifest"))?;
+    // A chunk is laid down in a pack rather than as one file each, so what it costs is the pack file
+    // it is in. The index beside a pack says where the entries are rather than being one of them, so
+    // it is not counted: what the model predicts is entries, not the finding of them.
+    written.stored = bytes_under(&root.join("obj"))?
+        + bytes_under(&root.join("manifest"))?
+        + pack_bytes(&root.join("packed"))?;
 
     fs::remove_dir_all(&root)?;
 
     Ok(written)
+}
+
+/// Every byte the pack files under `directory` take, their indexes aside.
+fn pack_bytes(directory: &Path) -> Result<u64, std::io::Error> {
+    let mut total = 0_u64;
+
+    let Ok(entries) = fs::read_dir(directory) else {
+        return Ok(total);
+    };
+
+    for entry in entries {
+        let path = entry?.path();
+
+        if path.extension().is_some_and(|kind| kind == "pack") {
+            total = total.saturating_add(fs::metadata(&path)?.len());
+        }
+    }
+
+    Ok(total)
 }
 
 /// Every byte a file under `directory` takes, walked to the bottom.
