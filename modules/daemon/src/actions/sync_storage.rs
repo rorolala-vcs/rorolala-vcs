@@ -1293,6 +1293,34 @@ pub(crate) async fn carry_frame(
     }
 }
 
+/// Carries one run of bytes, reading it into the end of `into` when this side takes it.
+///
+/// It is [`carry_frame`] for a caller that is putting several frames together: the bytes arrive in
+/// the buffer the caller is building rather than in one of their own that the caller then copies.
+/// What is answered is how many bytes crossed, which both ends need to move a bar by the same
+/// amount.
+async fn carry_frame_into(
+    ctx: &mut ActionContext<'_>,
+    to: Side,
+    bytes: Option<&[u8]>,
+    into: &mut Vec<u8>,
+) -> Result<usize, ActionError> {
+    if bytes.is_some() != sending(ctx, to) {
+        return Err(ActionError::MissingValue);
+    }
+
+    if let Some(bytes) = bytes {
+        ctx.write_frame(&[bytes]).await?;
+
+        Ok(bytes.len())
+    } else {
+        let before = into.len();
+        ctx.read_frame_into(into).await?;
+
+        Ok(into.len() - before)
+    }
+}
+
 /// Carries one blob in the direction `to` names, and answers what arrived here.
 ///
 /// `blob` is what *this* side holds, and it is read only where this side is the one that has it: the
@@ -1364,12 +1392,10 @@ pub(crate) async fn carry_blob_moving(
             .map(|bytes| &bytes[start..bytes.len().min(start + PIECE)]);
 
         // What this piece is long: the side sending cut it, so it knows; the side taking is handed
-        // what the other side cut, so it learns it here. The two are the same number of bytes.
-        let mut crossed = outgoing.map_or(0, <[u8]>::len);
-        if let Some(piece) = carry_frame(ctx, to, outgoing).await? {
-            crossed = piece.len();
-            arrived.extend_from_slice(&piece);
-        }
+        // what the other side cut, so it learns it here. The two are the same number of bytes. A
+        // piece taken is read into the end of the blob being put together, not into a buffer of its
+        // own that is then copied behind it.
+        let crossed = carry_frame_into(ctx, to, outgoing, &mut arrived).await?;
 
         if let Some(task) = task.as_deref_mut() {
             task.advance_by(u64::try_from(crossed).unwrap_or(u64::MAX));

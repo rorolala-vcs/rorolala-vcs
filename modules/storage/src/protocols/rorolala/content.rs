@@ -6,12 +6,14 @@
 //! down of content that has already been decided about.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+use tokio::io::{AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _};
 
 use super::RorolalaStorage;
 use super::consts::{HOLDS_AT_ONCE, MANIFEST_DIR, PackKind};
-use super::entry::{collect, exists, key_of, plain_len_of, read_range, verify};
+use super::entry::{collect, exists, key_of, plain_len_of, read_range, temporary_beside, verify};
 use crate::{
     AlgorithmChoice, Chunk, Chunker as _, Codec, Error, FRAME_HEADER_LEN, FRAME_VERSION, Frame,
     Key, Layout, Manifest, PackIndex,
@@ -204,7 +206,7 @@ impl RorolalaStorage {
     ///
     /// Returns [`Error::Malformed`] if what is stored is not framed as this build can read.
     pub(crate) async fn read_manifest(&self, key: &Key) -> Result<Option<Manifest>, Error> {
-        let Some(bytes) = self.manifest_entry(key).await? else {
+        let Some(mut bytes) = self.manifest_entry(key).await? else {
             return Ok(None);
         };
         let (frame, header) = Frame::decode(&bytes)?;
@@ -213,8 +215,11 @@ impl RorolalaStorage {
             return Err(Error::Malformed);
         }
 
-        let payload = bytes.get(header..).ok_or(Error::Malformed)?;
-        let plain = frame.codec.decode(payload, plain_len_of(&frame)?)?;
+        // The payload is moved down inside the buffer it arrived in rather than copied out of it.
+        // A manifest is small, so the move is small, and the alternative is an allocation and a copy
+        // of every manifest this store reads.
+        bytes.drain(..header);
+        let plain = frame.codec.decode_moving(bytes, plain_len_of(&frame)?)?;
 
         Ok(Some(Manifest::decode(&plain)?))
     }
@@ -314,10 +319,16 @@ impl RorolalaStorage {
         // and opens every pack once, where a read per chunk would walk the packs again for each of
         // them. A content of fifty thousand chunks is fifty thousand walks otherwise.
         //
+        // Each chunk is checked against its own key, and the whole is checked against the content's
+        // key after this returns. Neither check can stand in for the other: a chunk that reads but
+        // holds another content is corrupt under its own key, and chunks that are each whole can
+        // still be in the wrong order, which only the whole check sees.
+        //
         // Nothing is reserved from the total the manifest claims: a length is the manifest's to say
         // and this is not a number an allocator should be handed on trust. A manifest that reads is
         // bounded by `MAX_CONTENT_LEN`, see `Manifest::decode`, and what grows the buffer here is
-        // the bytes that really came back, one chunk at a time.
+        // the bytes that really came back, one chunk at a time. A reserve that cannot be met is an
+        // I/O failure rather than an abort.
         let keys: Vec<Key> = manifest.chunks().iter().map(Chunk::key).collect();
         let batch = self.open_objects(&keys).await?;
         let mut content = Vec::new();
@@ -328,10 +339,153 @@ impl RorolalaStorage {
                 return Err(Error::Malformed);
             }
 
+            content
+                .try_reserve(piece.len())
+                .map_err(|error| Error::Io(std::io::Error::other(error)))?;
             content.extend_from_slice(&piece);
         }
 
         Ok(content)
+    }
+
+    /// Writes the content stored under `key` to `path`, one chunk at a time where it is cut.
+    ///
+    /// This is what a checkout does, and it is [`read_content`](Self::read_content) without the whole
+    /// content in hand: each chunk is written as it is read and hashed as it goes, so a large content
+    /// costs a buffer the size of one chunk rather than the size of the content. The file is laid
+    /// down beside where it belongs and moved into place only once the whole hashes to `key`, so a
+    /// failed extract leaves no half file.
+    ///
+    /// Which of the two a key is kept as is decided the same way a read decides it, and a chunked
+    /// content that cannot be put together falls back to the object beside it, the same way round.
+    ///
+    /// # Errors
+    ///
+    /// Returns what [`read_content`](Self::read_content) returns, and [`Error::Io`] if the file cannot
+    /// be written.
+    pub(super) async fn extract_content(&self, key: &Key, path: &Path) -> Result<(), Error> {
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        let manifest = match self.read_manifest(key).await {
+            Ok(manifest) => manifest,
+            // A manifest that will not read is answered with the object under the key, the same way
+            // round a read takes the two: only a key with nothing under it leaves the manifest's
+            // failure as the account.
+            Err(Error::Malformed) => {
+                return match self.extract_whole(key, path).await {
+                    Ok(()) => Ok(()),
+                    Err(Error::NotFound(_)) => Err(Error::Malformed),
+                    Err(error) => Err(error),
+                };
+            }
+            Err(error) => return Err(error),
+        };
+
+        if let Some(manifest) = manifest {
+            match self.extract_chunked(&manifest, key, path).await {
+                Ok(()) => return Ok(()),
+                // The chunks cannot be put back together, or what they make does not hash to the key.
+                // The object under the key is the same content, so it is tried, and its own failure
+                // decides what is reported, the same way `read_content` decides.
+                Err(error) => {
+                    return match self.extract_whole(key, path).await {
+                        Ok(()) => Ok(()),
+                        Err(Error::Io(failure)) => Err(Error::Io(failure)),
+                        Err(Error::Corrupt(corrupt)) => Err(Error::Corrupt(corrupt)),
+                        Err(_) => Err(error),
+                    };
+                }
+            }
+        }
+
+        self.extract_whole(key, path).await
+    }
+
+    /// Writes the content a manifest names to `path`, one chunk at a time.
+    async fn extract_chunked(
+        &self,
+        manifest: &Manifest,
+        key: &Key,
+        path: &Path,
+    ) -> Result<(), Error> {
+        let keys: Vec<Key> = manifest.chunks().iter().map(Chunk::key).collect();
+        let batch = self.open_objects(&keys).await?;
+        let temporary = temporary_beside(path)?;
+        let mut file = tokio::fs::File::create(&temporary).await?;
+        let mut hasher = blake3::Hasher::new();
+
+        let result = self
+            .write_chunks(manifest, &batch, &mut file, &mut hasher)
+            .await;
+
+        // The whole is checked against the key: a manifest is not covered by the key, so chunks that
+        // are each whole can still be in the wrong order, and the whole is what the key promises and
+        // the whole is what is checked.
+        let result = match result {
+            Ok(()) if Key::new(*hasher.finalize().as_bytes()) != *key => Err(Error::Corrupt(*key)),
+            result => result,
+        };
+
+        finish(temporary, path, file, result).await
+    }
+
+    /// Writes each chunk of `manifest` to `file`, hashing the bytes as they go.
+    async fn write_chunks(
+        &self,
+        manifest: &Manifest,
+        batch: &ObjectBatch,
+        file: &mut tokio::fs::File,
+        hasher: &mut blake3::Hasher,
+    ) -> Result<(), Error> {
+        for chunk in manifest.chunks() {
+            let piece = batch.read(&chunk.key()).await?;
+            if piece.len() as u64 != chunk.len() {
+                return Err(Error::Malformed);
+            }
+
+            hasher.update(&piece);
+            file.write_all(&piece).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Writes the whole object stored under `key` to `path`, streaming it when it is stored as it is.
+    async fn extract_whole(&self, key: &Key, path: &Path) -> Result<(), Error> {
+        let batch = self.open_objects(std::slice::from_ref(key)).await?;
+        let temporary = temporary_beside(path)?;
+        let mut file = tokio::fs::File::create(&temporary).await?;
+        let mut hasher = blake3::Hasher::new();
+
+        match batch.stream_raw(key, &mut hasher, &mut file).await {
+            Ok(true) => {
+                let result = if Key::new(*hasher.finalize().as_bytes()) == *key {
+                    Ok(())
+                } else {
+                    Err(Error::Corrupt(*key))
+                };
+
+                finish(temporary, path, file, result).await
+            }
+            // The bytes are not the content as they lie, a compressed entry, so the entry is read and
+            // decoded whole: a compressed object is the case a stream cannot serve, and it is the
+            // smaller of the two on disk for that reason.
+            Ok(false) => {
+                drop(file);
+                let _ = tokio::fs::remove_file(&temporary).await;
+
+                let content = batch.read(key).await?;
+                super::entry::write_whole(path, &content).await
+            }
+            Err(error) => {
+                drop(file);
+                let _ = tokio::fs::remove_file(&temporary).await;
+
+                Err(error)
+            }
+        }
     }
 
     /// Which of `keys` this store cannot produce again.
@@ -545,6 +699,9 @@ impl RorolalaStorage {
 
         let mut manifest = Manifest::default();
         let mut batch = self.begin_batch_with_codec(choice.codec()).await;
+        // The store is looked at once rather than once a chunk: every lookup a run makes shares the
+        // same root and the same packs, and `root_state` canonicalises the root for every call.
+        let state = self.root_state();
 
         for range in ranges {
             let chunk = &content[range];
@@ -553,7 +710,7 @@ impl RorolalaStorage {
             // A chunk the store already holds is not written again, wherever it is held: a chunk is
             // an object like any other, and writing it a second time would leave the same bytes in
             // two places. The batch checks the run it is writing for the same reason.
-            if !self.holds_object(&chunk_key).await? {
+            if !self.holds_object_in(&state, &chunk_key).await? {
                 batch.add(&chunk_key, chunk).await?;
             }
 
@@ -614,11 +771,23 @@ impl RorolalaStorage {
     /// answer with nothing rather than claim the object is there. See
     /// [`StorageBackend::contains_keys`](crate::StorageBackend::contains_keys).
     pub(super) async fn holds_object(&self, key: &Key) -> Result<bool, Error> {
+        self.holds_object_in(&self.root_state(), key).await
+    }
+
+    /// Whether an object is stored under `key`, under a state the caller already holds.
+    ///
+    /// It is [`holds_object`](Self::holds_object) for a run of lookups that shares one
+    /// [`root_state`](RorolalaStorage::root_state) rather than canonicalising the root once a chunk.
+    pub(super) async fn holds_object_in(
+        &self,
+        state: &super::pack::RootState,
+        key: &Key,
+    ) -> Result<bool, Error> {
         if exists(&self.object_path(key)).await? {
             return Ok(true);
         }
 
-        Ok(self.find_packed(key).await?.is_some())
+        Ok(self.find_packed_in(state, key).await?.is_some())
     }
 
     /// Whether the content stored under `key` is kept as a manifest of chunks.
@@ -748,14 +917,34 @@ impl ObjectBatch {
             return Err(Error::NotFound(*key));
         };
 
-        let bytes = match source {
-            Source::Loose(path) => match tokio::fs::read(path).await {
-                Ok(bytes) => bytes,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    return Err(Error::NotFound(*key));
+        let (frame, payload) = match source {
+            Source::Loose(path) => {
+                use tokio::io::AsyncReadExt as _;
+
+                let mut file = match tokio::fs::File::open(path).await {
+                    Ok(file) => file,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        return Err(Error::NotFound(*key));
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+                let total =
+                    usize::try_from(file.metadata().await?.len()).map_err(|_| Error::Malformed)?;
+
+                // The frame is read first, so the payload is read into the front of its own buffer
+                // rather than being moved down inside a buffer that holds both.
+                let mut header = vec![0_u8; total.min(FRAME_HEADER_LEN)];
+                file.read_exact(&mut header).await?;
+                let (frame, header) = Frame::decode(&header)?;
+                if header > total {
+                    return Err(Error::Malformed);
                 }
-                Err(error) => return Err(error.into()),
-            },
+
+                let mut payload = vec![0_u8; total - header];
+                file.read_exact(&mut payload).await?;
+
+                (frame, payload)
+            }
             Source::Packed { pack, offset, len } => {
                 let file = Arc::clone(self.open.get(pack).ok_or(Error::NotFound(*key))?);
                 let (offset, len) = (*offset, *len);
@@ -764,18 +953,26 @@ impl ObjectBatch {
                 // point of the batch is that the reads overlap, and awaiting a blocking read would put
                 // them one behind another.
                 let read = tokio::task::spawn_blocking(move || {
-                    let len = usize::try_from(len).map_err(|_| Error::Malformed)?;
-                    let mut bytes = vec![0_u8; len];
+                    let total = usize::try_from(len).map_err(|_| Error::Malformed)?;
+                    let mut header = vec![0_u8; total.min(FRAME_HEADER_LEN)];
 
-                    read_exact_at(&file, &mut bytes, offset)?;
+                    read_exact_at(&file, &mut header, offset)?;
+                    let (frame, header) = Frame::decode(&header)?;
+                    if header > total {
+                        return Err(Error::Malformed);
+                    }
 
-                    Ok::<_, Error>(bytes)
+                    let at = offset.checked_add(header as u64).ok_or(Error::Malformed)?;
+                    let mut payload = vec![0_u8; total - header];
+                    read_exact_at(&file, &mut payload, at)?;
+
+                    Ok::<_, Error>((frame, payload))
                 })
                 .await
                 .map_err(|error| Error::Io(std::io::Error::other(error)))?;
 
                 match read {
-                    Ok(bytes) => bytes,
+                    Ok(parts) => parts,
                     // The pack was taken away after the plan was made, what dropping a pack's last
                     // entry does. A key whose pack is gone has nothing under it, which is the same
                     // answer as a key the store never had.
@@ -787,19 +984,13 @@ impl ObjectBatch {
             }
         };
 
-        let (frame, header) = Frame::decode(&bytes)?;
-
         // An object is the content itself; a manifest is how content was put together, and it is
         // not stored where an object is.
         if frame.layout != Layout::Single {
             return Err(Error::Malformed);
         }
 
-        // The payload is moved down inside the buffer it arrived in rather than copied out of it: a
-        // payload stored as it is *is* the content, and the frame in front of it is a few dozen bytes.
-        let mut content = bytes;
-        content.drain(..header);
-        let content = frame.codec.decode_moving(content, plain_len_of(&frame)?)?;
+        let content = frame.codec.decode_moving(payload, plain_len_of(&frame)?)?;
 
         if check {
             verify(key, &content)?;
@@ -820,6 +1011,117 @@ impl ObjectBatch {
     /// As [`read`](Self::read), except [`Corrupt`](Error::Corrupt).
     pub async fn read_unchecked(&self, key: &Key) -> Result<Vec<u8>, Error> {
         self.read_where(key, false).await
+    }
+
+    /// Streams the object stored under `key` into `file` when it is stored as it is.
+    ///
+    /// `true` is the object having been written and every byte of it fed to `hasher`. `false` is an
+    /// entry whose bytes are not the content as they lie, a compressed one, which the caller has to
+    /// read and decode instead: this is the whole-object case of an extract, and the caller falls
+    /// back to [`read`](Self::read).
+    async fn stream_raw(
+        &self,
+        key: &Key,
+        hasher: &mut blake3::Hasher,
+        file: &mut tokio::fs::File,
+    ) -> Result<bool, Error> {
+        let Some(source) = self.plan.get(key) else {
+            return Err(Error::NotFound(*key));
+        };
+
+        let (mut reader, offset, total) = match source {
+            Source::Loose(path) => {
+                let file = match tokio::fs::File::open(path).await {
+                    Ok(file) => file,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        return Err(Error::NotFound(*key));
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+                let total = file.metadata().await?.len();
+
+                (file, 0, total)
+            }
+            Source::Packed { pack, offset, len } => {
+                // Opened afresh rather than shared with the batch's handles: this reads in order and
+                // moves the cursor, and a second stream over the same handle would share it.
+                let file = match tokio::fs::File::open(pack).await {
+                    Ok(file) => file,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        return Err(Error::NotFound(*key));
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+
+                (file, *offset, *len)
+            }
+        };
+
+        reader.seek(std::io::SeekFrom::Start(offset)).await?;
+
+        let total = usize::try_from(total).map_err(|_| Error::Malformed)?;
+        let mut header = vec![0_u8; total.min(FRAME_HEADER_LEN)];
+        reader.read_exact(&mut header).await?;
+        let (frame, header) = Frame::decode(&header)?;
+        if frame.layout != Layout::Single || frame.codec != Codec::Raw {
+            return Ok(false);
+        }
+        if header > total {
+            return Err(Error::Malformed);
+        }
+
+        let mut left = total - header;
+        if u64::try_from(left).unwrap_or(u64::MAX) != frame.plain_len {
+            return Err(Error::Malformed);
+        }
+
+        let mut buffer = vec![0_u8; 64 * 1024];
+        while left > 0 {
+            let take = left.min(buffer.len());
+            let read = reader.read(&mut buffer[..take]).await?;
+            if read == 0 {
+                return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
+            }
+
+            hasher.update(&buffer[..read]);
+            file.write_all(&buffer[..read]).await?;
+            left -= read;
+        }
+
+        Ok(true)
+    }
+}
+
+/// Flushes `file` and moves the temporary into place when the write succeeded, and drops it when it
+/// did not, so a failed extract leaves no half file and no temporary beside it.
+async fn finish(
+    temporary: PathBuf,
+    path: &Path,
+    mut file: tokio::fs::File,
+    result: Result<(), Error>,
+) -> Result<(), Error> {
+    let result = match result {
+        Ok(()) => file.flush().await.map_err(Error::from),
+        Err(error) => Err(error),
+    };
+    drop(file);
+
+    match result {
+        Ok(()) => match tokio::fs::rename(&temporary, path).await {
+            Ok(()) => Ok(()),
+            // A move that fails, the target being a directory or on another filesystem, leaves the
+            // written temporary beside it, which nothing will ever read.
+            Err(error) => {
+                let _ = tokio::fs::remove_file(&temporary).await;
+
+                Err(error.into())
+            }
+        },
+        Err(error) => {
+            let _ = tokio::fs::remove_file(&temporary).await;
+
+            Err(error)
+        }
     }
 }
 

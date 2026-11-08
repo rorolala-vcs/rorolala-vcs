@@ -72,6 +72,30 @@ impl ActionContext<'_> {
 
         read_frame(channel).await
     }
+
+    /// Takes one frame from the peer, appending its bytes to `into`.
+    ///
+    /// A caller putting several frames together, a blob carried in pieces, appends each piece to the
+    /// buffer it is building: the frame is read into that buffer's tail rather than into one of its
+    /// own that is then copied behind it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`NoChannel`](ActionError::NoChannel) if there is nothing to exchange over,
+    /// [`ValueTooLarge`](ActionError::ValueTooLarge) if the peer says it is sending more than a
+    /// frame carries or the buffer cannot hold what arrived, and [`Io`](ActionError::Io) if the
+    /// channel failed.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// ctx.read_frame_into(&mut arrived).await?;
+    /// ```
+    pub async fn read_frame_into(&mut self, into: &mut Vec<u8>) -> Result<(), ActionError> {
+        let channel = self.channel_mut().ok_or(ActionError::NoChannel)?;
+
+        read_frame_into(channel, into).await
+    }
 }
 
 /// Writes `parts` to `channel` as one frame: their total length, then each part in order.
@@ -117,6 +141,38 @@ pub async fn write_frame(channel: &mut Channel, parts: &[&[u8]]) -> Result<(), A
 /// [`MAX_FRAME`], and [`Io`](ActionError::Io) if the channel failed, a channel that ended partway
 /// through a frame included, which is an `UnexpectedEof` rather than a short value.
 pub async fn read_frame(channel: &mut Channel) -> Result<Vec<u8>, ActionError> {
+    let mut bytes = Vec::new();
+    read_frame_into(channel, &mut bytes).await?;
+
+    Ok(bytes)
+}
+
+/// Reads one frame from `channel` and appends its bytes to `into`.
+///
+/// The frame is read into the tail of `into` rather than into a buffer of its own that is then
+/// copied behind it, so a blob carried in pieces is assembled without a copy of every piece.
+///
+/// # Errors
+///
+/// Returns [`ValueTooLarge`](ActionError::ValueTooLarge) if the peer says it is sending more than
+/// [`MAX_FRAME`], or if the frame would take `into` past the largest `Vec` this build can hold, and
+/// [`Io`](ActionError::Io) if the channel failed, a channel that ended partway through a frame
+/// included, which is an `UnexpectedEof` rather than a short value.
+pub async fn read_frame_into(channel: &mut Channel, into: &mut Vec<u8>) -> Result<(), ActionError> {
+    let length = read_length(channel).await?;
+    let start = into.len();
+    let end = start
+        .checked_add(length)
+        .ok_or(ActionError::ValueTooLarge)?;
+
+    into.resize(end, 0);
+    channel.read_exact(&mut into[start..]).await?;
+
+    Ok(())
+}
+
+/// Reads the length in front of a frame, and refuses one this protocol cannot carry.
+async fn read_length(channel: &mut Channel) -> Result<usize, ActionError> {
     let mut header = [0_u8; LENGTH];
     channel.read_exact(&mut header).await?;
 
@@ -126,10 +182,7 @@ pub async fn read_frame(channel: &mut Channel) -> Result<Vec<u8>, ActionError> {
         return Err(ActionError::ValueTooLarge);
     }
 
-    let mut bytes = vec![0_u8; length];
-    channel.read_exact(&mut bytes).await?;
-
-    Ok(bytes)
+    Ok(length)
 }
 
 #[cfg(test)]
@@ -137,7 +190,7 @@ mod tests {
     use rorolala_auth::{KeyAlgorithm, MAX_PLAINTEXT, SecureStream, SigningKey};
     use tokio::io::{AsyncWriteExt as _, duplex};
 
-    use super::{MAX_FRAME, read_frame, write_frame};
+    use super::{MAX_FRAME, read_frame, read_frame_into, write_frame};
     use crate::{ActionError, Channel, Socket};
 
     /// A signing key from a fixed seed, so a test names the same identity twice.
@@ -188,6 +241,20 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(read_frame(&mut server).await.unwrap(), b"onetwo");
+    }
+
+    #[tokio::test]
+    async fn frames_read_into_one_buffer_append_to_what_is_there() {
+        let (mut client, mut server) = session_pair().await;
+
+        write_frame(&mut client, &[b"one"]).await.unwrap();
+        write_frame(&mut client, &[b"two"]).await.unwrap();
+
+        let mut into = b"head:".to_vec();
+        read_frame_into(&mut server, &mut into).await.unwrap();
+        read_frame_into(&mut server, &mut into).await.unwrap();
+
+        assert_eq!(into, b"head:onetwo");
     }
 
     #[tokio::test]

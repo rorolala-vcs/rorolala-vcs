@@ -146,34 +146,59 @@ impl Table {
     /// The bytes this table is written down as.
     #[must_use]
     pub fn encode(&self) -> Vec<u8> {
-        let mut body = Vec::new();
-        body.extend_from_slice(&width(self.covered.len()).to_be_bytes());
-        for key in &self.covered {
-            body.extend_from_slice(key.digest());
-        }
+        /// The magic, the format and the digest in front of the body.
+        const HEADER: usize = MAGIC.len() + std::mem::size_of::<u32>() + 32;
 
-        body.extend_from_slice(&width(self.entries.len()).to_be_bytes());
-        for (key, entry) in &self.entries {
-            body.extend_from_slice(key.digest());
-            if let Some(number) = entry.number {
-                body.push(1);
-                body.extend_from_slice(&number.to_be_bytes());
-            } else {
-                body.push(0);
-            }
+        // The body is built in the buffer it is written from, behind a header whose digest is filled
+        // in once the body is there: building the body apart and copying it behind the header would
+        // copy a table that may be tens of megabytes for the sake of forty-four bytes.
+        let body_len = std::mem::size_of::<u64>()
+            + self.covered.len() * 32
+            + std::mem::size_of::<u64>()
+            + self
+                .entries
+                .values()
+                .map(|entry| {
+                    32 + 1
+                        + if entry.number.is_some() {
+                            std::mem::size_of::<u64>()
+                        } else {
+                            0
+                        }
+                        + std::mem::size_of::<u64>()
+                        + entry.dependents.len() * (32 + 1)
+                })
+                .sum::<usize>();
+        let mut bytes = Vec::with_capacity(HEADER + body_len);
 
-            body.extend_from_slice(&width(entry.dependents.len()).to_be_bytes());
-            for (source, edge) in &entry.dependents {
-                body.extend_from_slice(source.digest());
-                body.push(edge.id());
-            }
-        }
-
-        let mut bytes = Vec::with_capacity(MAGIC.len() + 4 + 32 + body.len());
         bytes.extend_from_slice(MAGIC);
         bytes.extend_from_slice(&FORMAT.to_be_bytes());
-        bytes.extend_from_slice(blake3::hash(&body).as_bytes());
-        bytes.extend_from_slice(&body);
+        bytes.extend_from_slice(&[0_u8; 32]);
+
+        bytes.extend_from_slice(&width(self.covered.len()).to_be_bytes());
+        for key in &self.covered {
+            bytes.extend_from_slice(key.digest());
+        }
+
+        bytes.extend_from_slice(&width(self.entries.len()).to_be_bytes());
+        for (key, entry) in &self.entries {
+            bytes.extend_from_slice(key.digest());
+            if let Some(number) = entry.number {
+                bytes.push(1);
+                bytes.extend_from_slice(&number.to_be_bytes());
+            } else {
+                bytes.push(0);
+            }
+
+            bytes.extend_from_slice(&width(entry.dependents.len()).to_be_bytes());
+            for (source, edge) in &entry.dependents {
+                bytes.extend_from_slice(source.digest());
+                bytes.push(edge.id());
+            }
+        }
+
+        let digest: [u8; 32] = *blake3::hash(&bytes[HEADER..]).as_bytes();
+        bytes[MAGIC.len() + std::mem::size_of::<u32>()..HEADER].copy_from_slice(&digest);
 
         bytes
     }

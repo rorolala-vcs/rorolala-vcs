@@ -206,7 +206,7 @@ async fn sweep(directory: &Path, removed: &mut usize) -> Result<(), Error> {
 /// threads, two tasks, or one task's two writes, never write through each other's file rather than
 /// only across processes. It hangs off the whole name rather than replacing the extension, so a pack
 /// and the index beside it never share a temporary.
-fn temporary_beside(path: &Path) -> Result<PathBuf, Error> {
+pub(super) fn temporary_beside(path: &Path) -> Result<PathBuf, Error> {
     /// How many temporaries this process has named, so that no two are the same.
     static NAMED: AtomicU64 = AtomicU64::new(0);
 

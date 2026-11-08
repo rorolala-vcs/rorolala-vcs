@@ -102,7 +102,7 @@ where
     let mut their = Presence::all_missing(keys.len());
 
     write_frame(&mut stream, &keys_to_bytes(keys)).await?;
-    write_frame(&mut stream, &Vec::from(mine.clone())).await?;
+    write_frame(&mut stream, &mine).await?;
     read_presence(&mut stream, keys.len(), &mut their).await?;
 
     for (at, key) in keys.iter().enumerate() {
@@ -146,7 +146,7 @@ where
     let mut their = Presence::all_missing(keys.len());
 
     read_presence(&mut stream, keys.len(), &mut their).await?;
-    write_frame(&mut stream, &Vec::from(mine.clone())).await?;
+    write_frame(&mut stream, &mine).await?;
 
     for (at, key) in keys.iter().enumerate() {
         match (mine.held(at), their.held(at)) {

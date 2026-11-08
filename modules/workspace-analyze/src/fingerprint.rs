@@ -7,17 +7,117 @@
 //! whose `hash_chars` and `diffcore_count_changes` this is a port of.
 
 use std::collections::HashMap;
+use std::fs;
+use std::io::Read as _;
+use std::path::Path;
 
 /// How much of a file is looked at to tell text from binary.
 ///
 /// git's `FIRST_FEW_BYTES`: past this, a NUL is not looked for.
 const FIRST_FEW_BYTES: usize = 8000;
 
+/// How much of a file a streaming read hands the hasher at a time.
+const STREAM_CHUNK: usize = 64 * 1024;
+
 /// How long a span may be, when a line does not cut it first.
 const SPAN_LIMIT: u32 = 64;
 
 /// What a span's hash is folded by, keeping the multiset of spans small.
 const HASH_BASE: u32 = 107_927;
+
+/// What one file looked like when it was read: its digest, and the spans it reads as text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fingerprint {
+    /// The digest of the content.
+    digest: [u8; 32],
+    /// The spans the content was cut into, when it read as text.
+    spans: Option<Vec<(u32, u32)>>,
+    /// How many bytes were read.
+    len: u64,
+}
+
+impl Fingerprint {
+    /// The digest of the content.
+    #[must_use]
+    pub const fn digest(&self) -> [u8; 32] {
+        self.digest
+    }
+
+    /// The spans the content was cut into, when it read as text.
+    #[must_use]
+    pub fn spans(&self) -> Option<&[(u32, u32)]> {
+        self.spans.as_deref()
+    }
+
+    /// The spans, taken out of the fingerprint.
+    #[must_use]
+    pub fn into_spans(self) -> Option<Vec<(u32, u32)>> {
+        self.spans
+    }
+
+    /// How many bytes were read.
+    #[must_use]
+    pub const fn len(&self) -> u64 {
+        self.len
+    }
+
+    /// Whether the content held nothing.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
+/// Reads the file at `path` and works out what it holds.
+///
+/// Only the opening is kept to tell text from binary: a binary file is hashed as it streams past,
+/// so a large `PSD` is never held whole. A text file is held whole, because the spans a move is
+/// guessed from are cut out of the whole of it.
+///
+/// # Errors
+///
+/// Returns what opening or reading the file fails with.
+pub fn read(path: &Path) -> std::io::Result<Fingerprint> {
+    let mut file = fs::File::open(path)?;
+    let mut opening = Vec::with_capacity(FIRST_FEW_BYTES);
+    file.by_ref()
+        .take(u64::try_from(FIRST_FEW_BYTES).unwrap_or(u64::MAX))
+        .read_to_end(&mut opening)?;
+
+    if !is_binary(&opening) {
+        let mut bytes = opening;
+        file.read_to_end(&mut bytes)?;
+        let digest = digest(&bytes);
+        let spans = Some(spans(&bytes, false));
+
+        return Ok(Fingerprint {
+            digest,
+            spans,
+            len: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+        });
+    }
+
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(&opening);
+    let mut len = u64::try_from(opening.len()).unwrap_or(u64::MAX);
+    let mut buffer = vec![0_u8; STREAM_CHUNK];
+
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+
+        hasher.update(&buffer[..read]);
+        len = len.saturating_add(u64::try_from(read).unwrap_or(u64::MAX));
+    }
+
+    Ok(Fingerprint {
+        digest: *hasher.finalize().as_bytes(),
+        spans: None,
+        len,
+    })
+}
 
 /// Whether `bytes` reads as binary: whether a NUL is in its opening.
 #[must_use]
@@ -125,7 +225,7 @@ pub fn copied(source: &[(u32, u32)], destination: &[(u32, u32)]) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{copied, digest, is_binary, spans};
+    use super::{copied, digest, is_binary, read, spans};
 
     #[test]
     fn a_nul_in_the_opening_is_what_makes_a_file_binary() {
@@ -161,5 +261,36 @@ mod tests {
         assert_eq!(spans(b"a\nb\n", false), spans(b"a\r\nb\r\n", false),);
         // A binary file keeps them, so the two are not forced together there.
         assert_ne!(spans(b"a\nb\n", true), spans(b"a\r\nb\r\n", true));
+    }
+
+    #[test]
+    fn a_file_reads_the_same_way_as_its_bytes() {
+        let dir = std::env::temp_dir().join(format!(
+            "rorolala-workspace-analyze-fingerprint-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // A text file is held whole, since its spans are cut out of all of it.
+        let text = b"line one\nline two\n";
+        let text_path = dir.join("text");
+        std::fs::write(&text_path, text).unwrap();
+        let found = read(&text_path).unwrap();
+        assert_eq!(found.digest(), digest(text));
+        assert_eq!(found.spans(), Some(spans(text, false).as_slice()));
+        assert_eq!(found.len(), text.len() as u64);
+
+        // A binary file is hashed as it streams, and the NUL in its opening is what makes it binary.
+        let mut binary = vec![b'a'; 200_000];
+        binary[0] = 0;
+        let binary_path = dir.join("binary");
+        std::fs::write(&binary_path, &binary).unwrap();
+        let found = read(&binary_path).unwrap();
+        assert!(is_binary(&binary));
+        assert_eq!(found.digest(), digest(&binary));
+        assert_eq!(found.spans(), None);
+        assert_eq!(found.len(), binary.len() as u64);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -203,12 +203,8 @@ fn read_file(
     let (digest, spans) = if let Some(entry) = reused {
         (entry.digest(), entry.spans().map(<[(u32, u32)]>::to_vec))
     } else {
-        let bytes = fs::read(disk).map_err(|error| error.to_string())?;
-        let digest = fingerprint::digest(&bytes);
-        let binary = fingerprint::is_binary(&bytes);
-        let spans = (!binary).then(|| fingerprint::spans(&bytes, false));
-
-        (digest, spans)
+        let found = fingerprint::read(disk).map_err(|error| error.to_string())?;
+        (found.digest(), found.into_spans())
     };
 
     cache.insert(layout_path, Entry::new(seconds, nanos, size, digest, spans));

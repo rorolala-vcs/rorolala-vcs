@@ -446,17 +446,14 @@ fn read_together<'a>(
 
 /// What a file holds now, read from disk.
 fn read_entry(file: &scan::Found) -> Result<Entry, std::io::Error> {
-    let bytes = fs::read(&file.disk)?;
-    let digest = fingerprint::digest(&bytes);
-    let binary = fingerprint::is_binary(&bytes);
-    let spans = (!binary).then(|| fingerprint::spans(&bytes, false));
+    let found = fingerprint::read(&file.disk)?;
 
     Ok(Entry::new(
         file.seconds,
         file.nanos,
         file.size,
-        digest,
-        spans,
+        found.digest(),
+        found.into_spans(),
     ))
 }
 
@@ -639,17 +636,14 @@ pub fn remember_moved(
 pub fn entry_of(disk: &Path) -> Result<Entry, std::io::Error> {
     let meta = fs::metadata(disk)?;
     let (seconds, nanos) = crate::scan::stamp(&meta);
-    let bytes = fs::read(disk)?;
-    let digest = fingerprint::digest(&bytes);
-    let binary = fingerprint::is_binary(&bytes);
-    let spans = (!binary).then(|| fingerprint::spans(&bytes, false));
+    let found = fingerprint::read(disk)?;
 
     Ok(Entry::new(
         seconds,
         nanos,
-        u64::try_from(bytes.len()).unwrap_or(u64::MAX),
-        digest,
-        spans,
+        found.len(),
+        found.digest(),
+        found.into_spans(),
     ))
 }
 

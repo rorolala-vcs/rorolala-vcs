@@ -9,7 +9,7 @@ use std::path::Path;
 
 use super::RorolalaStorage;
 use super::consts::{HOLDS_AT_ONCE, MANIFEST_DIR, OBJECTS_DIR, PackKind, SNIFF_LEN};
-use super::entry::{collect, exists, verify, write_whole};
+use super::entry::{collect, exists, verify};
 use crate::{
     AlgorithmChoice, Error, Key, Presence, ProtocolMagic, StorageBackend, TransferableBackend,
 };
@@ -39,16 +39,10 @@ impl StorageBackend for RorolalaStorage {
     }
 
     async fn extract_file(&self, key: &Key, path: &Path) -> Result<(), Self::Error> {
-        // The content comes back checked against the key, `read_content` verifies the whole of it,
-        // whichever way it was laid down, so there is nothing left to verify here.
-        let content = self.read_content(key).await?;
-
-        // Laid down beside the target and moved into place, and a directory that is not there is
-        // made: a failed extract leaves no half file, which is what lets a caller tell "nothing was
-        // written" from "a file is half written".
-        write_whole(path, &content).await?;
-
-        Ok(())
+        // The content is written one chunk at a time, hashed as it goes and checked against the key
+        // before the file is moved into place, so a large checkout costs one chunk in hand rather
+        // than the whole content.
+        self.extract_content(key, path).await
     }
 
     async fn contains_keys(&self, keys: &[Key]) -> Result<Presence, Self::Error> {

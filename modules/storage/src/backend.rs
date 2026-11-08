@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::io::Read as _;
 use std::path::Path;
 
 use crate::{Key, Presence};
@@ -249,14 +250,25 @@ where
 ///
 /// This is the same key [`store_file`] would answer with, the hash of the file's content, so a
 /// caller that has to know whether content is already recorded, before deciding whether to write
-/// it, can ask here and write only what is new. The whole file is read and nothing of it is kept,
-/// which is the same reading a write makes; what is saved is the write itself.
+/// it, can ask here and write only what is new. The file is streamed through the hasher and never
+/// held whole, so asking about a gigabyte costs a buffer and not a gigabyte.
 ///
 /// # Errors
 ///
 /// Whatever reading `file` fails with.
 pub fn key_of_file(file: impl AsRef<Path>) -> std::io::Result<Key> {
-    let content = std::fs::read(file.as_ref())?;
+    let mut file = std::fs::File::open(file.as_ref())?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = vec![0_u8; 64 * 1024];
 
-    Ok(Key::new(*blake3::hash(&content).as_bytes()))
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+
+        hasher.update(&buffer[..read]);
+    }
+
+    Ok(Key::new(*hasher.finalize().as_bytes()))
 }

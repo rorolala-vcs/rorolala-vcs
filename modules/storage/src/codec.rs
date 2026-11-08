@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io;
 
 use crate::Error;
@@ -59,12 +60,17 @@ impl Codec {
 
     /// Encodes `plain` for storage.
     ///
+    /// A payload stored as it is is handed back as it was given: the frame in front of it already
+    /// says where it ends, so copying it into a buffer of its own would copy every byte of every
+    /// object the store writes. A compressed payload is a buffer of its own because the codec makes
+    /// one, and that is the only case where this allocates.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::Io`] if the codec itself fails.
-    pub fn encode(self, plain: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn encode(self, plain: &[u8]) -> Result<Cow<'_, [u8]>, Error> {
         match self {
-            Self::Raw => Ok(plain.to_vec()),
+            Self::Raw => Ok(Cow::Borrowed(plain)),
             Self::Lz4 => lz4::block::compress(
                 plain,
                 Some(lz4::block::CompressionMode::FAST(LZ4_LEVEL)),
@@ -72,8 +78,10 @@ impl Codec {
                 // to carry a length of its own.
                 false,
             )
+            .map(Cow::Owned)
             .map_err(|said| Error::Io(io::Error::other(said.to_string()))),
             Self::Zstd => zstd::bulk::compress(plain, ZSTD_LEVEL)
+                .map(Cow::Owned)
                 .map_err(|said| Error::Io(io::Error::other(said.to_string()))),
         }
     }

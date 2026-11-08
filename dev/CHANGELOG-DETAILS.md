@@ -20,13 +20,27 @@ A text cut was moved on to the end of the line it landed in with no bound, so a 
 
 Short lines are unchanged: a chunk still ends at a line end, and may run past `max` by the line it moved over. No chunk is longer than twice `max`.
 
-### 2. [`modules`] [`storage`] Cut unclaimed binary content on its content, and write chunks in packs
+### 2. [`modules`] [`inverse-index`] [`table`] Build the inverse index in the buffer it is written from
+
+`Table::encode` built the records in a buffer of their own and copied them behind the header, for a table that may be tens of megabytes. The records are now written directly behind the header and the digest is filled in afterwards.
+
+### 3. [`modules`] [`protocol`] [`frame`] Read a carried frame into the buffer it is being put together in
+
+A frame read for a blob carried in pieces allocated a buffer of its own and then copied it into the blob being assembled. `read_frame_into` reads the frame into the tail of the destination, so a large content crossing a sync is copied once rather than twice.
+
+### 4. [`modules`] [`storage`] Cut unclaimed binary content on its content, and write chunks in packs
 
 Binary content no policy claims and no ZIP signature marks was written whole, so an edit to a large PSB, TIFF, EXR, TGA, WAV or FBX binary rewrote the whole file. Content of at least 256 KiB is now cut on its content, with chunks of 16 KiB to 256 KiB, so an edit costs the chunks it fell in.
 
 A chunked write lays its chunks down in a pack rather than as one file each, and a chunked read plans every chunk before reading any of them, so a content of thousands of chunks no longer costs a file, a pack lookup and a pack open per chunk. The manifest is still written loose, and the chunks are published before it is written.
 
 Neither the cut nor its bounds are recorded in the store, so content written before this reads back unchanged. The first save after upgrading re-cuts a large binary once, and later versions share chunks with it.
+
+Reads and writes no longer copy content on the way through: a payload stored as it is is borrowed rather than encoded into a second buffer, an entry is read frame first with its payload into the front of its own buffer, a manifest is decoded in place, and a file's key is hashed as it streams. An extract writes each chunk to the file and hashes it as it goes rather than putting the whole content together in memory, and a chunked write canonicalises the store once rather than once a chunk.
+
+### 5. [`modules`] [`workspace-analyze`] [`fingerprint`] Stream a binary file through the status reading instead of holding it
+
+`rola status` read every changed file whole to fingerprint it, so a two gigabyte `PSD` took two gigabytes of memory. A file is now opened, sniffed on its first 8000 bytes, and hashed as it streams when it reads as binary; only a text file is held whole, because the spans a move is guessed from are cut out of all of it. The tree reading uses the same stream.
 
 ## Feature
 

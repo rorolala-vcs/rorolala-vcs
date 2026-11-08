@@ -932,13 +932,19 @@ impl RorolalaStorage {
         Ok(keys)
     }
 
-    /// The number of the object pack holding `key`, if one does.
-    pub(super) async fn find_packed(&self, key: &Key) -> Result<Option<u64>, Error> {
-        let state = self.root_state();
-
-        for index in self.packs_of(&state, PackKind::Object).await? {
+    /// The number of the object pack holding `key`, under a state the caller already holds.
+    ///
+    /// What a run of lookups shares is this: [`root_state`](Self::root_state) canonicalises the
+    /// store's root for every call, and a content of a thousand chunks would pay that a thousand
+    /// times for one answer.
+    pub(super) async fn find_packed_in(
+        &self,
+        state: &RootState,
+        key: &Key,
+    ) -> Result<Option<u64>, Error> {
+        for index in self.packs_of(state, PackKind::Object).await? {
             if self
-                .pack_index(&state, PackKind::Object, index)
+                .pack_index(state, PackKind::Object, index)
                 .await?
                 .is_some_and(|directory| directory.find(key).is_some())
             {
