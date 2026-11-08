@@ -11,9 +11,9 @@ use mingling::{
     res::ResExitCode,
 };
 
-use super::{ensure_clean, read_text, write_changelog};
+use super::{ensure_unmodified, read_text, write_changelog};
 use crate::document::Document;
-use crate::paths::Workspace;
+use crate::paths::{self, Workspace};
 use crate::setup::ResAllowDirty;
 use crate::{Error, Next, date, run_step};
 
@@ -42,7 +42,7 @@ pub fn handle_archive(
 /// Dates the newest open version, seals it, and regenerates the summary.
 fn archive_current(allow_dirty: bool) -> Result<(), Error> {
     let workspace = Workspace::discover()?;
-    ensure_clean(&workspace, allow_dirty)?;
+    ensure_unmodified(&workspace, allow_dirty, &[paths::DETAILS, paths::CHANGELOG])?;
 
     let date = date::today_utc()?;
     let original = read_text(&workspace.details())?;

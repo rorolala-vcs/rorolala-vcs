@@ -10,4 +10,4 @@ COMMANDS:
    archive                Date the newest Unreleased section, seal it and regenerate CHANGELOG.md
 
 GLOBAL FLAGS:
-   --allow-dirty          Go on where a command would refuse a dirty tree
+   --allow-dirty          Go on where a file a command rewrites has changes

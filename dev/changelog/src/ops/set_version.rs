@@ -13,8 +13,8 @@ use mingling::{
     res::ResExitCode,
 };
 
-use super::{ensure_clean, refuse_unmatched};
-use crate::paths::Workspace;
+use super::{ensure_unmodified, refuse_unmatched};
+use crate::paths::{self, Workspace};
 use crate::setup::ResAllowDirty;
 use crate::tool::Tool;
 use crate::version::Version;
@@ -73,7 +73,7 @@ pub fn handle_set_version(
 /// Sets the version and runs cargo, restoring both files when the run fails.
 fn set_the_version(version: &str, allow_dirty: bool) -> Result<(), Error> {
     let workspace = Workspace::discover()?;
-    ensure_clean(&workspace, allow_dirty)?;
+    ensure_unmodified(&workspace, allow_dirty, &[paths::MANIFEST, paths::LOCK])?;
 
     let manifest = workspace.manifest_path();
     let original = std::fs::read_to_string(&manifest).map_err(|error| Error::Io {
@@ -82,7 +82,7 @@ fn set_the_version(version: &str, allow_dirty: bool) -> Result<(), Error> {
     })?;
     let updated = manifest::set_version(&manifest, &original, version)?;
 
-    let lock = workspace.root().join("Cargo.lock");
+    let lock = workspace.root().join(paths::LOCK);
     let original_lock = read_optional(&lock)?;
 
     write_manifest(&workspace, updated.as_bytes())?;

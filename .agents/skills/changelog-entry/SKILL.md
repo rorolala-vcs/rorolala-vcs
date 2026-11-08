@@ -107,8 +107,9 @@ will be read.
 
 ## Writing the entry
 
-The commands write the tree, so it has to be clean unless `--allow-dirty` is given. The normal
-order is:
+`write` and `archive` replace `dev/CHANGELOG-DETAILS.md` and `CHANGELOG.md` whole, so neither of
+those two may have changes of its own unless `--allow-dirty` is given. A change to any other path
+does not block the run. The normal order is:
 
 1. Commit the content change.
 2. `cargo changelog write-reset` — create or reset `__CHANGELOG_DRAFT.md`.
@@ -117,11 +118,11 @@ order is:
    `dev/CHANGELOG-DETAILS.md`, and regenerate `CHANGELOG.md` from it.
 5. Review both files and commit them.
 
-If the content change is not committed yet and the user wants the entry now, the run needs
-`--allow-dirty`; ask before using it. If `dev/CHANGELOG-DETAILS.md` or `CHANGELOG.md` is new and
-still untracked, commit it first: an untracked file makes the tree dirty and `write` refuses it.
-The draft, backup and rewrite files start with `__` and are ignored by git, so they do not dirty the
-tree.
+A content change elsewhere in the tree does not have to be committed first. If the details or the
+summary has a change of its own, the run needs `--allow-dirty`; ask before using it. If either file
+is new and still untracked, commit it first: an untracked changelog file is a change of its own. The
+draft, backup and rewrite files are not among the paths a command rewrites, so they never block a
+run.
 
 `write` consumes the draft. For a second entry, run `write-reset` again: one draft is one entry,
 not one commit.

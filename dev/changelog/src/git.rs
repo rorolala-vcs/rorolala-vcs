@@ -1,12 +1,10 @@
-//! Whether the tree a rewrite would touch has changes in it.
+//! Whether the files a run rewrites have changes of their own.
 //!
 //! A changelog is rewritten by replacing the whole file, and a version is set by rewriting a
-//! manifest line. Both are safe only on a tree whose changes are the ones being made, so the check
-//! is a refusal rather than an attempt to guess which changes were the user's.
-//!
-//! The editor's own draft, backup and rewrite files are named with a leading `__` and are ignored by the
-//! repository; a tree that does not ignore them still has no changes worth refusing over, so the
-//! check leaves those paths out.
+//! manifest line. Both are safe only on files whose changes are the ones being made, so the check
+//! is a refusal rather than an attempt to guess which changes were the user's. The rest of the tree
+//! is not this check's business: a change to a path a run does not write is not one a rewrite would
+//! be mixed into.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -41,65 +39,78 @@ pub fn porcelain(root: &Path) -> Result<String, Error> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// Whether porcelain output describes a tree with changes in it.
+/// The porcelain lines naming one of `paths`, relative to the repository root.
 ///
-/// A line is one changed path, so a non-blank line that is not one of the editor's own scratch
-/// files is a change. The end-of-options marker and blank lines are not paths.
+/// A line names one changed path, and a rename names two: the one that left and the one that
+/// arrived. Either is a change to a file a run rewrites, so a line matching either end is answered
+/// with. A path no line names is not changed.
 #[must_use]
-pub fn is_dirty(porcelain: &str) -> bool {
+pub fn changed<'a>(porcelain: &'a str, paths: &[&str]) -> Vec<&'a str> {
     porcelain
         .lines()
-        .any(|line| !line.trim().is_empty() && !is_own_scratch(line))
+        .filter(|line| named_paths(line).iter().any(|path| paths.contains(path)))
+        .collect()
 }
 
-/// Whether a porcelain line names a file the editor writes for itself.
-fn is_own_scratch(line: &str) -> bool {
-    // Porcelain writes `XY path`; the path starts at the third byte. A path with spaces is quoted
-    // by git, so the quotes are trimmed before the name is compared.
-    let Some(path) = line.get(3..) else {
-        return false;
+/// The paths one porcelain line names, without its status and without git's quoting.
+fn named_paths(line: &str) -> Vec<&str> {
+    // Porcelain writes `XY path`; the path starts at the third byte. A blank line has none.
+    let Some(rest) = line.get(3..) else {
+        return Vec::new();
     };
-    let path = path.trim().trim_matches('"');
 
-    matches!(
-        path,
-        "__CHANGELOG_DRAFT.md"
-            | "__CHANGELOG_BACKUP.md"
-            | "__CHANGELOG_REWRITE.md"
-            | "__CHANGELOG_DETAILS_BACKUP.md"
-            | "__CHANGELOG_DETAILS_REWRITE.md"
-    )
+    rest.trim()
+        .split(" -> ")
+        .map(|path| path.trim().trim_matches('"'))
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::is_dirty;
+    use super::changed;
+
+    /// The files a changelog rewrite replaces.
+    const REWRITTEN: [&str; 2] = ["CHANGELOG.md", "dev/CHANGELOG-DETAILS.md"];
 
     #[test]
-    fn a_clean_tree_has_no_line() {
-        assert!(!is_dirty(""));
-        assert!(!is_dirty("  \n\n"));
-        assert!(!is_dirty(" \n\t\n"));
+    fn a_clean_tree_has_no_changed_rewrite() {
+        for porcelain in ["", "  \n\n", " \n\t\n"] {
+            assert_eq!(changed(porcelain, &REWRITTEN), Vec::<&str>::new());
+        }
     }
 
     #[test]
-    fn a_changed_path_is_a_dirty_tree() {
-        assert!(is_dirty(" M dev/changelog/src/git.rs\n"));
-        assert!(is_dirty("?? CHANGELOG.md\n"));
-        assert!(is_dirty("M  Cargo.toml\nM  Cargo.lock\n"));
+    fn a_rewritten_file_with_changes_is_named() {
+        assert_eq!(
+            changed(" M CHANGELOG.md\n", &REWRITTEN),
+            [" M CHANGELOG.md"]
+        );
+        assert_eq!(
+            changed("?? dev/CHANGELOG-DETAILS.md\n", &REWRITTEN),
+            ["?? dev/CHANGELOG-DETAILS.md"]
+        );
     }
 
     #[test]
-    fn the_editors_own_scratch_files_are_not_the_trees_changes() {
-        assert!(!is_dirty("?? __CHANGELOG_DRAFT.md\n"));
-        assert!(!is_dirty(
-            " M __CHANGELOG_BACKUP.md\n M __CHANGELOG_REWRITE.md\n"
-        ));
-        assert!(!is_dirty(
-            "?? __CHANGELOG_DETAILS_BACKUP.md\n?? __CHANGELOG_DETAILS_REWRITE.md\n"
-        ));
-        // A file that merely starts the same way is still the tree's.
-        assert!(is_dirty("?? __CHANGELOG_NOTE_BY_THE_USER.md\n"));
-        assert!(is_dirty("?? __CHANGELOG_DRAFT.md.bak\n"));
+    fn a_change_to_another_path_is_not_the_runs_business() {
+        for porcelain in [
+            " M README.md\n?? src/main.rs\n",
+            // A file whose name merely ends the same way is not the file itself.
+            " M dev/OLD-CHANGELOG-DETAILS.md\n",
+        ] {
+            assert_eq!(changed(porcelain, &REWRITTEN), Vec::<&str>::new());
+        }
+    }
+
+    #[test]
+    fn a_rename_of_a_rewritten_file_is_a_change() {
+        assert_eq!(
+            changed(
+                "R  dev/CHANGELOG-DETAILS.md -> dev/OLD-DETAILS.md\n",
+                &REWRITTEN
+            )
+            .len(),
+            1
+        );
     }
 }

@@ -2,8 +2,8 @@
 //!
 //! The summary is a function of the details, so this is the command to run after a hand edit of a
 //! title, a scope or the breaking flag, the parts the summary names. It writes the summary only
-//! when its bytes would change, and it does not refuse a dirty tree: a hand edit of the details is
-//! the input it is rendering rather than a change it would mix its rewrite into.
+//! when its bytes would change, and it does not refuse a file with changes of its own: a hand edit
+//! of the details is the input it is rendering rather than a change it would mix its rewrite into.
 
 use mingling::{
     Grouped,

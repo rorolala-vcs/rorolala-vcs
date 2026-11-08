@@ -19,17 +19,17 @@ pub struct ResAllowDirty {
 }
 
 impl ResAllowDirty {
-    /// Whether the run asked to go on over a dirty tree.
+    /// Whether the run asked to go on over a file it rewrites that already has changes.
     #[must_use]
     pub const fn allowed(&self) -> bool {
         self.allow
     }
 }
 
-/// Goes on where a command would otherwise refuse a dirty tree.
+/// Goes on where a command would otherwise refuse a file it rewrites that already has changes.
 const ARG_ALLOW_DIRTY: PickerArg<'static, Flag> = arg![allow_dirty: Flag];
 
-/// A [`ProgramSetup`] implementation that registers whether a dirty tree is allowed.
+/// A [`ProgramSetup`] implementation that registers whether a rewrite over changed files is allowed.
 pub struct AllowDirtySetup;
 
 impl<ThisProgram> ProgramSetup<ThisProgram> for AllowDirtySetup

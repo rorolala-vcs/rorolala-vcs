@@ -11,9 +11,9 @@ use mingling::{
     res::ResExitCode,
 };
 
-use super::{ensure_clean, read_text, write_changelog};
+use super::{ensure_unmodified, read_text, write_changelog};
 use crate::document::Document;
-use crate::paths::Workspace;
+use crate::paths::{self, Workspace};
 use crate::setup::ResAllowDirty;
 use crate::{Error, Next, draft, run_step};
 
@@ -50,7 +50,7 @@ fn write_draft(allow_dirty: bool) -> Result<(), Error> {
     let summary = entry.summary.clone();
     let version = workspace.version()?;
 
-    ensure_clean(&workspace, allow_dirty)?;
+    ensure_unmodified(&workspace, allow_dirty, &[paths::DETAILS, paths::CHANGELOG])?;
 
     let original = read_text(&workspace.details())?;
     let mut document = Document::parse(&original);

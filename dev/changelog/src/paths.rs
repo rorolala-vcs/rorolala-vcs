@@ -16,7 +16,7 @@ use crate::{Error, manifest, tool::Tool};
 pub const DETAILS: &str = "dev/CHANGELOG-DETAILS.md";
 
 /// The generated summary of the details, at the repository root.
-const CHANGELOG: &str = "CHANGELOG.md";
+pub const CHANGELOG: &str = "CHANGELOG.md";
 
 /// The draft a person fills in before `write`.
 const DRAFT: &str = "__CHANGELOG_DRAFT.md";
@@ -34,7 +34,10 @@ const DETAILS_BACKUP: &str = "__CHANGELOG_DETAILS_BACKUP.md";
 const DETAILS_REWRITE: &str = "__CHANGELOG_DETAILS_REWRITE.md";
 
 /// The workspace manifest, relative to the repository root.
-const MANIFEST: &str = "Cargo.toml";
+pub const MANIFEST: &str = "Cargo.toml";
+
+/// The lock file a version change is resolved into, relative to the repository root.
+pub const LOCK: &str = "Cargo.lock";
 
 /// The repository a run works on.
 #[derive(Clone, Debug)]

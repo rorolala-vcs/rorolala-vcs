@@ -1,8 +1,9 @@
 //! The commands, one to a module.
 //!
 //! A command turns its words into a state, and a chain handler does the work. What the handlers
-//! share, the refusal of a dirty tree, reading a file that may not be there, and writing the
-//! details with the summary regenerated from them, lives here rather than in each of them.
+//! share, the refusal of a rewrite over files that already have changes, reading a file that may
+//! not be there, and writing the details with the summary regenerated from them, lives here rather
+//! than in each of them.
 
 pub mod archive;
 pub mod get_version;
@@ -42,16 +43,26 @@ pub fn refuse_unmatched(words: &UnmatchedArgs, command: &'static str) -> Option<
     )
 }
 
-/// Refuses a tree with changes in it, unless the run asked to go on.
-pub fn ensure_clean(workspace: &Workspace, allow_dirty: bool) -> Result<(), Error> {
+/// Refuses a run when one of the files it rewrites already has changes of its own, unless the run
+/// asked to go on.
+///
+/// The paths are relative to the repository root, and the ones the command is about to replace:
+/// a change to any other path is not one the rewrite would be mixed into.
+pub fn ensure_unmodified(
+    workspace: &Workspace,
+    allow_dirty: bool,
+    rewritten: &[&str],
+) -> Result<(), Error> {
     if allow_dirty {
         return Ok(());
     }
 
     let porcelain = git::porcelain(workspace.root())?;
-    if git::is_dirty(&porcelain) {
-        return Err(Error::DirtyTree {
-            detail: porcelain.trim_end().to_owned(),
+    let changed = git::changed(&porcelain, rewritten);
+
+    if !changed.is_empty() {
+        return Err(Error::DirtyRewrite {
+            detail: changed.join("\n"),
         });
     }
 

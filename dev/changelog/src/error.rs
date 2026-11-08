@@ -51,9 +51,9 @@ pub enum Error {
         /// The status it ended with.
         code: i32,
     },
-    /// The tree has changes that a rewrite would be mixed into.
-    DirtyTree {
-        /// The paths `git status --porcelain` named, one per line.
+    /// A file a run rewrites has changes of its own, which the rewrite would be mixed into.
+    DirtyRewrite {
+        /// The porcelain lines naming the files that have changes.
         detail: String,
     },
     /// A draft is not the front matter and body the editor reads.
@@ -127,7 +127,7 @@ impl Error {
             | Self::ManifestVersionMissing { .. }
             | Self::Io { .. }
             | Self::Tool { .. }
-            | Self::DirtyTree { .. }
+            | Self::DirtyRewrite { .. }
             | Self::Draft { .. }
             | Self::InvalidVersion { .. }
             | Self::InvalidCategory { .. }
@@ -167,10 +167,10 @@ impl fmt::Display for Error {
             Self::Status { program, code } => {
                 write!(f, "{program} failed with exit code {code}")
             }
-            Self::DirtyTree { detail } => write!(
+            Self::DirtyRewrite { detail } => write!(
                 f,
-                "the working tree is not clean:\n{detail}\ncommit or stash the changes, or pass \
-                 --allow-dirty"
+                "a file this run rewrites has changes in it:\n{detail}\ncommit or stash them, or \
+                 pass --allow-dirty"
             ),
             Self::InvalidVersion { value, reason } => {
                 write!(f, "`{value}` is not a version: {reason}")
