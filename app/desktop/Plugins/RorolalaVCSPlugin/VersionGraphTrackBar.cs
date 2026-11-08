@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -109,6 +110,11 @@ internal sealed class VersionGraphTrackBar : Border
             Background = Brushes.Transparent,
             Padding = new Thickness(Room),
             VerticalContentAlignment = VerticalAlignment.Center,
+
+            // The field is the whole of the row's left side, not only the line the text sits on: the
+            // base theme puts the beam on the text part alone, which leaves the field's own room
+            // reading as ground. The cursor is inherited, so naming it here covers that room as well.
+            Cursor = new Cursor(StandardCursorType.Ibeam),
         };
 
         // The theme draws a ring and a line on the template's border once the field has the keyboard.
@@ -247,19 +253,32 @@ internal sealed class VersionGraphTrackBar : Border
         Paint();
     }
 
-    /// <summary>Gives the template's border the nothing every state of the field is drawn as.</summary>
+    /// <summary>Gives the template's frame and hint the values the row needs.</summary>
+    /// <remarks>
+    /// The frame is the nothing every state of the field is drawn as. The hint takes the field's own
+    /// font size, so a hint and a message make the row the same height.
+    /// </remarks>
     /// <param name="scope">The names the template was made with.</param>
     private static void Framed(INameScope scope)
     {
-        if (scope.Find<Border>("border") is not { } border)
+        if (scope.Find<Border>("border") is { } border)
         {
-            return;
+            border.BoxShadow = default;
+            border.BorderThickness = new Thickness(0);
+            border.CornerRadius = new CornerRadius(0);
+            border.BorderBrush = Brushes.Transparent;
         }
 
-        border.BoxShadow = default;
-        border.BorderThickness = new Thickness(0);
-        border.CornerRadius = new CornerRadius(0);
-        border.BorderBrush = Brushes.Transparent;
+        // The hint is a text block, so the base theme's text style gives it the body type rather
+        // than the field's: it would be taller than the line that replaces it, and the row would
+        // shrink by that much as soon as something was typed. The hint takes the field's own type
+        // so the two lines are the same height.
+        if (scope.Find<TextBlock>("placeholder") is { } placeholder)
+        {
+            placeholder[!TextBlock.FontSizeProperty] = new TemplateBinding(
+                TemplatedControl.FontSizeProperty
+            );
+        }
     }
 
     /// <summary>

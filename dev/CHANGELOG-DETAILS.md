@@ -12,6 +12,12 @@ The Version Graph no longer draws an edited file's local pill on the version its
 as well as on the draft. While the file has an unrecorded change, its draft is the one card that
 names it; the baseline version keeps the entries of the other sides.
 
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
+
+The message field under the Version Graph is the whole room beside the TRACK button, but the pointer read as text only over the line the message is drawn on: the padding around that line and the empty width after it read as ground, although a press there focused the field. The field now names the text cursor itself, so every part of its room inherits it.
+
+The hint is a text block and took the body type rather than the field's, so it was taller than the line that replaced it and the strip shrank when typing started. The hint now takes the field's own type, so a row showing the hint and a row showing a message are the same height.
+
 ## Optimized
 
 ### 1. [`modules`] [`chunking`] [`text`] Stop a text cut at the bound when a line runs past it
