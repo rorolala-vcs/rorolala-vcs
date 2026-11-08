@@ -1,9 +1,9 @@
 # rorolala-workspace-analyze
 
-What a Workspace's tree looks like beside the Layout it works from: what a Layout names that the
-tree no longer holds, what the tree holds that no Layout names, what moved, and what changed.
+## Introduction
 
-It only reads. What it finds is [`TreeDiff`], and what it remembers between readings is a cache
-under the Workspace's data directory, so a file that has not changed is not read again.
+The reading of a Workspace's tree against the Layout it works from: the paths lost, untagged, renamed and modified, with a cache so an unchanged file is not read again.
 
-See `tree_diff` for the analysis and `cache` for what is kept.
+## Boundary
+
+It owns the walk, the fingerprints that tell a move from a loss and a gain, the tree diff, and the cache the next reading starts from. It only reads: it writes no Layout and no index, and it changes no work. What a change means for a person, and which command settles it, is `modules/status`'s to say. The Layout itself is `modules/layout`'s and the index is `modules/vcs`'s.

@@ -18,8 +18,8 @@
 //! ```
 //!
 //! A version writes only the categories it has entries for. Within a category, the entries are
-//! rewritten in the order the README states: breaking first, then by the scope hierarchy, then by
-//! summary, with the numbers reassigned from one.
+//! rewritten in this order: breaking first, then by the scope hierarchy, then by summary, with the
+//! numbers reassigned from one.
 //!
 //! What is written here is the details: the document a person edits. The root `CHANGELOG.md` is
 //! derived from it by [`summary`], which keeps the title, versions and categories and turns each

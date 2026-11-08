@@ -1,0 +1,9 @@
+[package]
+name = "rola-worktree-check"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# A workspace of its own, as `dev/ci` and `dev/build` are, so the tool that reports on this tree is
+# not built with the programs' features. The alias in `.cargo/config.toml` names this manifest.
+[workspace]

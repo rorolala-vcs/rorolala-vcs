@@ -11,6 +11,9 @@ dev = "run --quiet --manifest-path dev/build/Cargo.toml --bin rola-build --"
 # The changelog editor, reached as `cargo changelog <command>`. Like the two above it, it is a
 # workspace of its own (see `dev/changelog/Cargo.toml` for why).
 changelog = "run --quiet --manifest-path dev/changelog/Cargo.toml --bin rola-changelog --"
+# The worktree report, reached as `cargo worktree-check`. Like the dev crates above it, it is a
+# workspace of its own, and it reports rather than gates.
+worktree-check = "run --quiet --manifest-path dev/worktree-check/Cargo.toml --bin rola-worktree-check --"
 
 # A build for a musl triple is linked with musl's own driver rather than the machine's `cc`: what `cc`
 # links is glibc's start files and C library, which would make a build asked to be musl a glibc one

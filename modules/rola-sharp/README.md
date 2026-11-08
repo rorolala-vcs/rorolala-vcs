@@ -1,30 +1,9 @@
 # rola-sharp
 
-The C# bindings to Rorolala's C ABI: `RolaSharp.dll`.
+## Introduction
 
-## What is here
+The C# bindings to Rorolala's C ABI: the generated `RorolalaBinding` surface and the hand-written wrappers the Desktop program calls.
 
-`RorolalaBinding.cs` is generated, not written. Every build of this project runs
-`rorolala-dev-rsharp-bindgen` over the C header the Rust side produces, and the file is rewritten,
-so it is never stale against the header, and never edited by hand: an edit is lost with the next
-build. It lists every export the header declares as a `[DllImport]` on
-`RolaSharp.RorolalaBinding`, along with the enums and structs they name, and every member is
-`internal`.
+## Boundary
 
-The public shape, the more OOP layer a caller is meant to use, which owns the marshalling and the
-releases the raw surface leaves open, is hand-written over these bindings, one file per thing it is
-about: `RolaWorkspace`, `RolaOwnership`, `RolaUser`, `RolaStatus`, `RolaVersionGraph`, `RolaIgnoreRules`
-and `RolaBookSearch`.
-
-## What it needs
-
-The C header is the Rust side's output, under `.cache/rs-target/<profile>/ffi_bindings/`, so Rust has
-to have been built first: a build of this project alone, before any Rust build, has nothing to read,
-and the target says so rather than compiling a stale file. `cargo ci check` and `cargo dev export`
-always build Rust first. The generator itself is a Rust program (`dev/rsharp-bindgen`), run by the
-build through `cargo`.
-
-## Where it goes
-
-An export lays `RolaSharp.dll` in `build/lib/`, beside `rorolala.so` / `rorolala.dll`. The two are
-one delivery: a consumer of the C ABI takes the library and the bindings together.
+It owns the `[DllImport]` surface generated from the C header, and the marshalling and release wrappers over it (`RolaWorkspace`, `RolaStatus`, `RolaBook`, `RolaIgnoreRules`, `RolaOwnership`, `RolaUser`, `RolaVariantGraph`, `RolaVersionGraph`, `RolaDesktopPty`). It does not own the header or the exports: both come from the Rust tree through `build.rs`, so Rust has to be built first, since the generator reads `.cache/rs-target/<profile>/ffi_bindings/`. It carries no VCS logic and decides no behaviour of its own.

@@ -3748,7 +3748,6 @@ dependencies = [
  "annotate-snippets",
  "proc-macro2",
  "quote",
- "rorolala-utils-lazyffi",
  "rorolala-utils-lazyffi-core",
  "syn 3.0.5",
 ]

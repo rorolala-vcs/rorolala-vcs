@@ -1,13 +1,9 @@
 # rola-jj
 
-Jujutsu, as a rola program: `rola jj` is `rola-jj`, reached the way every program beside `rola` is
-(see `app/cli/rola/src/external.rs`).
+## Introduction
 
-It is jj's own command line, the commands, their arguments and their help are `jj-cli`'s, so this
-program adds none of its own, run over a store that is rola's rather than Git's. What jj would
-reach Git for is left out of the build (`jj-lib` and `jj-cli` are depended on with
-`default-features = false`), and a backend named `rola` is registered in its place.
+`rola-jj` runs Jujutsu's own command line over a store that is Rorolala's rather than Git's, reached as `rola jj` like every program beside `rola`. The commands, arguments and help are `jj-cli`'s whole.
 
-That backend is a skeleton: every method of `jj_lib::backend::Backend` is a `todo!()`, so this
-program compiles and its command line answers, while anything that would actually read or write the
-repository stops where the work has not been done. See `src/backend.rs`.
+## Boundary
+
+It owns the entry point, the name and version it reports, the eight mebibytes of stack it gives the command line, and the `rola` backend it registers with jj. It does not own the command line's words or behaviour, which are `jj-cli`'s, nor the backend's work: `src/backend.rs` is a skeleton whose `jj_lib::backend::Backend` methods are `todo!()`, so anything that would read or write the repository stops there. Git support is left out of the build with `default-features = false`.

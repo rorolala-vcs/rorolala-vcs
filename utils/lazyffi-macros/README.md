@@ -1,6 +1,9 @@
 # rorolala-utils-lazyffi-macros
 
-Procedural macros for FFI export.
+## Introduction
 
-This crate is an implementation detail of `rorolala-utils-lazyffi`, which re-exports it.
-Depend on `rorolala-utils-lazyffi` instead of this crate.
+The procedural macros behind `#[lazyffi]`, which turn an annotated Rust item into its repr-C sibling and its `extern "C"` wrappers.
+
+## Boundary
+
+It owns only the token generation. The conversions and the runtime helpers belong to `rorolala-utils-lazyffi`, which re-exports this crate, so a caller depends on that crate and never on this one. The naming rules it follows come from `rorolala-utils-lazyffi-core`.

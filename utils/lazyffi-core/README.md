@@ -1,13 +1,9 @@
 # rorolala-utils-lazyffi-core
 
-The `#[lazyffi]` rules shared by the attribute macro and the C-header generator.
+## Introduction
 
-Both sides need the same answers to the same questions, what is the export name of a
-value-level item, of a type, of a method, of the parts of a data-carrying enum; which
-types have a repr-C sibling built in; when a variant's payload needs a companion
-struct, so those answers live here once. `rorolala-utils-lazyffi-macros` and
-`rorolala-dev-bindgen` both depend on this crate rather than repeating them.
+The `#[lazyffi]` naming and shape rules that the attribute macro and the C header generator both need.
 
-This crate deliberately has no dependency on `syn`: the one rule that is about syntax
-shapes, whether a variant's payload is wrapped, is expressed over [`VariantFields`], a
-three-case mirror of `syn::Fields` that both callers fill in.
+## Boundary
+
+It owns those shared answers: the export name of an item, a type, a method or a part of an enum, which types have a repr-C sibling, and when a variant needs a companion struct. It does not expand a macro or print a header: `rorolala-utils-lazyffi-macros` generates the Rust and `rorolala-dev-bindgen` writes the C, and both depend on this crate rather than repeating it.

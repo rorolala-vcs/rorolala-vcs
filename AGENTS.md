@@ -17,6 +17,9 @@ semantics may not.
   what it works around and when it can go.
 - Public items carry docs (`missing_docs` is enforced). The C header keeps only the first line and
   the `# FFI` section, so words meant for a C reader go under `# FFI`; see `dev/bindgen`.
+- A crate README states its `## Introduction` and its `## Boundary` and nothing else. The first
+  says what the crate is for, the second what it does not own and which crate owns that.
+  `dev/project-orientation/list.py` reads the first.
 
 ## Text and punctuation
 
@@ -69,6 +72,22 @@ reader.
 - `tests/<name>/`, integration suites, workspaces of their own, which run the real programs.
 - Generated files are never edited: the header comes from the root `build.rs` scanning `src`,
   `modules` and `utils`, not `app` or `dev`, so the FFI surface lives in those three trees.
+
+## Before writing code
+
+- Load the `project-orientation` skill the first time you write in, or need to understand, an area
+  you have not read. It names the command that lists every README's `## Introduction` and the order
+  to read the foundations in.
+- Run `cargo worktree-check --fetch` before the first edit. It reports the age of the last recorded
+  fetch, the `HEAD` branch and commit, whether it is detached, the staged, unstaged and untracked
+  paths, and the remotes, naming the one at `github.com/rorolala-vcs/rorolala-vcs`. The record is
+  `dev/worktree-check/__last_fetch`, which git ignores.
+- Work on a branch off `main`: `wip/<name>` for work in progress and `fix/<name>` for a fix. Look
+  for an issue in the official repository first, with `gh` where it is installed, then `curl` or a
+  fetch tool against
+  `https://api.github.com/search/issues?q=repo:rorolala-vcs/rorolala-vcs+<terms>`.
+- When the user asks to merge, squash or rebase and fast-forward. A merge commit is not wanted:
+  `main` stays linear. The `worktree-check` skill states the commands.
 
 ## FFI tests
 

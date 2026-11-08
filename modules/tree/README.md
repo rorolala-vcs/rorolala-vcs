@@ -1,11 +1,9 @@
 # rorolala-tree
 
-A directory versioned as one file: the tree structure a version names, and what a tree means to the
-rest of Rola.
+## Introduction
 
-The structure is the whole of a tree version's content: the paths it holds, what each of them is,
-and the stored content each file stands for. It is a flat, canonically ordered table written as one
-content object, so the same files always make the same key. Nothing here reads a Layout or a store
-yet: the object model is the foundation the rest of the tree work is built on.
+A directory versioned as one file: the structure a tree version records, and the reading, staging, status and merge a tree needs to produce it.
 
-See [`__PLAN_TREE_SYSTEM/`](../../__PLAN_TREE_SYSTEM/) for the design this crate implements.
+## Boundary
+
+It owns the canonically ordered structure object, the `.rolaignore` files a tree reads, the baseline copy kept beside it, its staging store, the scan that turns work into a structure, the path by path merge, and the status between those. It does not own the Layout that names the tree, which is `modules/layout`'s, or the index the version is written into, which is `modules/vcs`'s. The digest cache and diff it borrows are `modules/workspace-analyze`'s, and the commands that drive it live in `app/`.
