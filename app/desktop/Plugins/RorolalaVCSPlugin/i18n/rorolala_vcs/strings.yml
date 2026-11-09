@@ -557,8 +557,8 @@ rorolala_vcs:
   # System plugin offers it without knowing that Rorolala exists.
   hides:
     rola_ignored:
-      en: Rola ignore rules
-      zh-CN: Rola 忽略规则
+      en: Rola Ignored Files
+      zh-CN: Rola 忽略文件
 
   # What the Owner column is headed: who holds the entry, which is what the column says about one. The name
   # a held entry wears is a name rather than a phrase and so is not translated at all.

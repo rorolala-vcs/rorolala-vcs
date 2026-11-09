@@ -14,6 +14,18 @@ internal static partial class Icons
     /// <summary>The key the `visibility_off` picture is held under.</summary>
     public const string VisibilityOff = "rorolala_file_system.visibility_off";
 
+    /// <summary>The key the `radio_button_unchecked` picture is held under.</summary>
+    public const string RadioButtonUnchecked = "rorolala_file_system.radio_button_unchecked";
+
+    /// <summary>The key the `radio_button_checked` picture is held under.</summary>
+    public const string RadioButtonChecked = "rorolala_file_system.radio_button_checked";
+
+    /// <summary>The key the `circle` picture is held under.</summary>
+    public const string Circle = "rorolala_file_system.circle";
+
+    /// <summary>The key the `more_vert` picture is held under.</summary>
+    public const string MoreVert = "rorolala_file_system.more_vert";
+
     /// <summary>The key the `link` picture is held under.</summary>
     public const string Link = "rorolala_file_system.link";
 
@@ -67,6 +79,10 @@ internal static partial class Icons
     [
         (Visibility, "visibility"),
         (VisibilityOff, "visibility_off"),
+        (RadioButtonUnchecked, "radio_button_unchecked"),
+        (RadioButtonChecked, "radio_button_checked"),
+        (Circle, "circle"),
+        (MoreVert, "more_vert"),
         (Link, "link"),
         (LinkOff, "link_off"),
         (ArrowBack, "arrow_back"),

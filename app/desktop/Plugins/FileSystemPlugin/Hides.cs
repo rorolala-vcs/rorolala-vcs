@@ -3,6 +3,27 @@ using RorolalaDesktop.Contract;
 namespace FileSystemPlugin;
 
 /// <summary>
+/// How a rule treats the entries it matches.
+/// </summary>
+/// <remarks>
+/// A rule is one of three answers rather than a switch. <see cref="Show"/> leaves the entries as they are,
+/// <see cref="Gray"/> keeps them in the listing and draws them faded, and <see cref="Hide"/> takes them out
+/// of it. The eye beside the rules is not a fourth state: it says that the entries a <see cref="Hide"/>
+/// rule takes out are being looked at, and while it is on they are drawn as <see cref="Gray"/>.
+/// </remarks>
+public enum HideState
+{
+    /// <summary>The entries the rule matches are drawn as any other entry.</summary>
+    Show,
+
+    /// <summary>The entries the rule matches are drawn faded, and remain in the listing.</summary>
+    Gray,
+
+    /// <summary>The entries the rule matches are left out of the listing.</summary>
+    Hide,
+}
+
+/// <summary>
 /// One way of deciding that an entry is hidden.
 /// </summary>
 /// <remarks>
@@ -130,6 +151,17 @@ public sealed class HideRegistry
     public const string Setting = "Hides/providers";
 
     /// <summary>
+    /// The setting the providers drawn faded are kept under.
+    /// </summary>
+    /// <remarks>
+    /// Kept as one text value rather than declared as a second multi-choice setting. The preference panel
+    /// draws every declared setting, and a second list of the same providers would be a second place to
+    /// choose what the popup beside the listing already chooses in three states. A plugin may keep a setting
+    /// it never declared, so this is a file of its own that only the popup writes.
+    /// </remarks>
+    public const string GraySetting = "Hides/gray";
+
+    /// <summary>
     /// Every provider registered this run, in the order they are offered.
     /// </summary>
     /// <remarks>
@@ -221,8 +253,8 @@ public sealed class HideRegistry
     {
         ArgumentNullException.ThrowIfNull(host);
 
-        Register(new DotFileHide());
         Register(new DotDirHide());
+        Register(new DotFileHide());
         Register(new WindowsHiddenFileHide());
 
         // The options are the live list, mutable by `Register` until the window is shown, which is when a
@@ -306,7 +338,114 @@ public sealed class HideRegistry
             .ToArray();
     }
 
-    /// <summary>The directory a rule about an entry is read from when the caller names none.</summary>
+    /// <summary>
+    /// The providers drawn faded, as the setting says.
+    /// </summary>
+    /// <returns>The identities of the providers whose entries are drawn faded.</returns>
+    public IReadOnlySet<string> Gray() =>
+        (_config.ReadKeyAs<string>(GraySetting) ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>The state one provider is in, as the settings say.</summary>
+    /// <param name="id">The provider's identity.</param>
+    /// <returns>The state.</returns>
+    public HideState State(string id)
+    {
+        if (Selection().Contains(id))
+        {
+            return HideState.Hide;
+        }
+
+        return Gray().Contains(id) ? HideState.Gray : HideState.Show;
+    }
+
+    /// <summary>
+    /// Puts one provider in a state, and says whether that changed which providers hide.
+    /// </summary>
+    /// <remarks>
+    /// The two settings are kept apart, and only the one whose set changed is written where it can avoid a
+    /// write. Whether the hiding changed is answered because the choice is also a listener of the hiding
+    /// setting: a change to the faded set alone has no declared setting to raise it, and the caller has to
+    /// say the listing is to be staged again (see <see cref="Shared.Hidden"/>).
+    /// </remarks>
+    /// <param name="id">The provider's identity.</param>
+    /// <param name="state">The state to put it in.</param>
+    /// <returns>Whether the set of hiding providers changed.</returns>
+    public bool SetState(string id, HideState state)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+
+        var hiding = Selection().ToHashSet(StringComparer.Ordinal);
+        var gray = Gray().ToHashSet(StringComparer.Ordinal);
+        var wasHiding = hiding.Contains(id);
+
+        hiding.Remove(id);
+        gray.Remove(id);
+
+        switch (state)
+        {
+            case HideState.Gray:
+                gray.Add(id);
+
+                break;
+
+            case HideState.Hide:
+                hiding.Add(id);
+
+                break;
+        }
+
+        var changed = wasHiding != hiding.Contains(id);
+
+        if (changed)
+        {
+            _config.Keep(
+                Setting,
+                string.Join(',', Catalogue.Where(each => hiding.Contains(each.Id)).Select(each => each.Id))
+            );
+        }
+
+        _config.Keep(
+            GraySetting,
+            string.Join(',', Catalogue.Where(each => gray.Contains(each.Id)).Select(each => each.Id))
+        );
+
+        return changed;
+    }
+
+    /// <summary>Whether a provider in the faded set matches an entry.</summary>
+    /// <param name="entry">The entry to consider.</param>
+    /// <returns>Whether it is drawn faded.</returns>
+    public bool Dims(Entry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return Dims(entry, Holder(entry));
+    }
+
+    /// <summary>Whether a provider in the faded set matches an entry, read against a view's root.</summary>
+    /// <param name="entry">The entry to consider.</param>
+    /// <param name="root">The directory the view reading the entry is rooted at.</param>
+    /// <returns>Whether it is drawn faded.</returns>
+    public bool Dims(Entry entry, string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        if (root.Length == 0)
+        {
+            return false;
+        }
+
+        var gray = Gray();
+
+        return gray.Count > 0
+            && Catalogue.Any(provider => gray.Contains(provider.Id) && provider.Hides(entry, root));
+    }
+
+    /// <summary>
+    /// The directory a rule about an entry is read from when the caller names none.
+    /// </summary>
     /// <param name="entry">The entry to consider.</param>
     /// <returns>The directory holding it, or its own path where it holds nothing under one.</returns>
     private static string Holder(Entry entry) =>

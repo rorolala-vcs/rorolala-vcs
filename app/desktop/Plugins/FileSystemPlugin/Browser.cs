@@ -306,6 +306,17 @@ internal sealed class Browser : IDisposable
     /// <returns>Whether it is hidden.</returns>
     public bool Hides(Entry entry, string root) => _shared.Hides(entry, root);
 
+    /// <summary>Whether an entry is drawn faded, read against a view's root.</summary>
+    /// <param name="entry">The entry to consider.</param>
+    /// <param name="root">The directory the view reading the entry is rooted at.</param>
+    /// <returns>Whether it is drawn faded.</returns>
+    public bool Dims(Entry entry, string root) => _shared.Dims(entry, root);
+
+    /// <summary>Whether an entry is drawn faded, read against the directory holding it.</summary>
+    /// <param name="entry">The entry to consider.</param>
+    /// <returns>Whether it is drawn faded.</returns>
+    public bool Dims(Entry entry) => _shared.Dims(entry);
+
     /// <summary>
     /// The providers in force, which a view that reads a whole tree watches to know when to read again.
     /// </summary>
@@ -661,15 +672,16 @@ internal sealed class Browser : IDisposable
         // A rule that would run a program is not run here: the window's thread is where a listing is staged, and a
         // program behind it is the window that stops. Until every rule can answer, everything is shown, a listing
         // missing a column for a moment is better than one that stops the window, and the rules are read on a thread
-        // of their own, which draws the listing again when they are in.
-        var rules = !_shared.ShowHidden && HideRegistry.Ready(directory);
+        // of their own, which draws the listing again when they are in. The read is asked for even while the eye is
+        // on, because a rule in the faded state still has to say which entries it matches.
+        var rules = HideRegistry.Ready(directory);
 
-        if (!_shared.ShowHidden && !rules)
+        if (!rules)
         {
             Ask(directory);
         }
 
-        var shown = rules
+        var shown = rules && !_shared.ShowHidden
             ? entries.Where(entry => !Hides(entry)).ToArray()
             : [.. entries];
 

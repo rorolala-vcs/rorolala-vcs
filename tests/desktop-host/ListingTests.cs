@@ -1,5 +1,6 @@
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
+using FileSystemPlugin;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -99,6 +100,75 @@ public sealed class ListingTests
 
         Assert.Empty(hides.Selection());
         Assert.Equal([".hidden-dir", ".hidden.txt", "kept.txt"], Names(browser));
+    }
+
+    /// <summary>
+    /// A rule in the faded state stays in the listing, and the eye turns the entries a hiding rule takes out
+    /// into the same faded rows rather than changing that rule.
+    /// </summary>
+    [Fact]
+    public void AGrayRuleStaysAndTheEyeFadesWhatAHidingRuleTakesOut()
+    {
+        var directory = Scratch.New("listing-gray");
+        File.WriteAllText(Path.Combine(directory, "kept.txt"), "x");
+        File.WriteAllText(Path.Combine(directory, ".hidden.txt"), "x");
+        Directory.CreateDirectory(Path.Combine(directory, ".hidden-dir"));
+
+        var services = Host.Services();
+        var host = services.For(new PluginId(FileSystem.Identity), 1);
+        var config = host.Config;
+        var hides = new global::FileSystemPlugin.HideRegistry(config);
+
+        global::FileSystemPlugin.HideRegistry.Declare(host);
+
+        var shared = new global::FileSystemPlugin.Shared(directory, hides, config, new FileChanges());
+        var browser = new global::FileSystemPlugin.Browser(host.Log, shared, directory, host.LogicalViews);
+
+        config.Changed += setting =>
+        {
+            if (
+                string.Equals(setting, global::FileSystemPlugin.HideRegistry.Setting, StringComparison.Ordinal)
+                || string.Equals(setting, global::FileSystemPlugin.Shared.ShowSetting, StringComparison.Ordinal)
+            )
+            {
+                shared.Hidden();
+            }
+        };
+
+        var hidden = Path.Combine(directory, ".hidden.txt");
+        var hiddenDirectory = Path.Combine(directory, ".hidden-dir");
+
+        Assert.True(hides.SetState("dot_dir", HideState.Show));
+        Assert.True(hides.SetState("dot_file", HideState.Gray));
+
+        shared.ShowHidden = false;
+
+        Assert.Equal([".hidden-dir", ".hidden.txt", "kept.txt"], Names(browser));
+        Assert.True(shared.Dims(new Entry(hidden, EntryKind.File)));
+        Assert.False(shared.Hides(new Entry(hidden, EntryKind.File)));
+        Assert.False(shared.Dims(new Entry(hiddenDirectory, EntryKind.Directory)));
+
+        // A rule moved from shown to faded does not write the hiding setting, so the caller says the listing
+        // is to be staged again. A caller that forgot would leave the row drawn as it was.
+        Assert.False(hides.SetState("dot_dir", HideState.Gray));
+        shared.Hidden();
+        Assert.True(shared.Dims(new Entry(hiddenDirectory, EntryKind.Directory)));
+
+        // A rule moved back to hiding is taken out while the eye is off, and is drawn faded while it is on.
+        Assert.True(hides.SetState("dot_file", HideState.Hide));
+
+        Assert.Equal([".hidden-dir", "kept.txt"], Names(browser));
+
+        shared.ShowHidden = true;
+
+        Assert.Equal([".hidden-dir", ".hidden.txt", "kept.txt"], Names(browser));
+        Assert.True(shared.Dims(new Entry(hidden, EntryKind.File)));
+
+        // Shown wins over the eye: the rule is not one of the rules the eye is showing.
+        Assert.True(hides.SetState("dot_file", HideState.Show));
+
+        Assert.False(shared.Dims(new Entry(hidden, EntryKind.File)));
+        Assert.True(shared.Dims(new Entry(hiddenDirectory, EntryKind.Directory)));
     }
 
     /// <summary>What a listing shows, by name, in the order it shows it.</summary>

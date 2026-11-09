@@ -38,12 +38,18 @@ key = "rorolala_file_system"
 # not a direction: it is offered by the menu rather than by the toolbar, and a house is what the set draws
 # a place a user starts from with.
 #
+# `radio_button_unchecked`, `radio_button_checked` and `circle` are the three states a hide rule's popup
+# draws: shown, gray and hidden. `more_vert` opens that popup, beside the eye in the toolbar's own group.
 # The rest are what an entry's menu is read by: `launch` opens it or shows it where the system keeps it,
 # `file_copy` copies it or its path, `content_cut` cuts it, `content_paste` pastes onto it, `delete` removes
 # it, `local_offer` renames it, and `create_new_folder` makes a directory beside it.
 icons = [
     "visibility",
     "visibility_off",
+    "radio_button_unchecked",
+    "radio_button_checked",
+    "circle",
+    "more_vert",
     "link",
     "link_off",
     "arrow_back",

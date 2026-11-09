@@ -43,7 +43,7 @@ public sealed class PluginCatalogTests
         );
 
         Assert.Equal(
-            ["dot_file", "dot_dir", "windows_hidden"],
+            ["dot_dir", "dot_file", "windows_hidden"],
             HideRegistry.Providers.Select(option => option.Value).Take(3).ToArray()
         );
 
@@ -59,7 +59,7 @@ public sealed class PluginCatalogTests
         // Added after them rather than instead of one, which is what the options reading the live catalogue
         // are for.
         Assert.Equal(
-            ["dot_file", "dot_dir", "windows_hidden", "git_ignored"],
+            ["dot_dir", "dot_file", "windows_hidden", "git_ignored"],
             HideRegistry.Providers.Select(option => option.Value).ToArray()
         );
     }

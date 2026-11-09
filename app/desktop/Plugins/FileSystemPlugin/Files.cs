@@ -186,14 +186,14 @@ internal sealed class Files : Listing<Entry>
                 new TextBlock
                 {
                     Text = "\U0001F5C2",
-                    FontSize = 34,
+                    FontSize = 24,
                     Classes = { "faint" },
                     HorizontalAlignment = HorizontalAlignment.Center,
                 },
                 new TextBlock
                 {
                     Text = RolaI18N.Get("rorolala_file_system.empty"),
-                    Classes = { "muted" },
+                    Classes = { "empty" },
                     HorizontalAlignment = HorizontalAlignment.Center,
                 },
             },
@@ -210,14 +210,14 @@ internal sealed class Files : Listing<Entry>
     public override ContextMenu? Space(Control from) => _actions.Empty(from);
 
     /// <summary>
-    /// How faded a row is: one a hidden provider hides reads as secondary, and one that is cut as on its way out.
+    /// How faded a row is: one a rule draws in gray reads as secondary, and one that is cut as on its way out.
     /// </summary>
     /// <remarks>
     /// Both are said here rather than in two passes over the rows, because a row has one opacity and the second
     /// pass would be the one that decided it. Cut wins, because being on its way out is what the user just did.
     /// <para>
-    /// What is hidden is asked of the providers rather than carried on the entry, so a row drawn while a provider
-    /// was switched off is faded again the moment it is switched on. A provider that cannot answer without reading
+    /// What is faded is asked of the provider rather than carried on the entry, so a row drawn while a rule
+    /// was in another state is faded again the moment it changes. A provider that cannot answer without reading
     /// something, a repository's rules are a program run, is not asked here: nothing is faded until what it says
     /// is in, which is drawn again for that very reason (see <see cref="Browser"/>).
     /// </para>
@@ -227,7 +227,7 @@ internal sealed class Files : Listing<Entry>
     public override void Fade(Control row, Entry item) =>
         row.Opacity = _clip.IsCut(item.Path)
             ? _clip.Faded
-            : HideRegistry.Ready(_browser.Current) && _browser.Hides(item)
+            : HideRegistry.Ready(_browser.Current) && _browser.Dims(item)
                 ? EntryView.HiddenOpacity
                 : 1.0;
 

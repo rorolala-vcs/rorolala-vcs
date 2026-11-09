@@ -15,5 +15,5 @@ rorolala_git:
 rorolala_file_system:
   hides:
     git_ignored:
-      en: Hide what Git ignores
-      zh-CN: 隐藏 Git 忽略的文件
+      en: Git Ignored Files
+      zh-CN: Git 忽略文件

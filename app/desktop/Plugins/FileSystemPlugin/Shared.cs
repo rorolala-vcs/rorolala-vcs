@@ -214,7 +214,7 @@ internal sealed class Shared
     }
 
     /// <summary>
-    /// Whether the entries a provider hides are shown, faded.
+    /// Whether the entries a hiding rule takes out are shown, faded.
     /// </summary>
     /// <remarks>
     /// It is the plugin's rather than a dock's, because the listing is what it changes: two docks looking at
@@ -222,7 +222,8 @@ internal sealed class Shared
     /// dock's own state, so that one switch serves every dock and the choice outlives the dock it was made in.
     /// <para>
     /// Kept here and written through the plugin's settings in both directions, so that the preference panel
-    /// drawing it and a listing reading it are one answer.
+    /// drawing it and a listing reading it are one answer. A rule in the faded state is drawn faded whether
+    /// this is on or off: the switch is about the rules that hide.
     /// </para>
     /// </remarks>
     public bool ShowHidden
@@ -252,8 +253,9 @@ internal sealed class Shared
     /// What a dock shows is the one setting every dock reads, so a switch turned in one of them is turned
     /// in all.
     /// <para>
-    /// Asked of the registry rather than kept here, so that turning a provider off takes effect without a
-    /// second read of any directory: what the directory holds is unchanged, and only what is shown of it is.
+    /// Asked of the registry rather than kept here, so that changing a rule takes effect without a second
+    /// read of any directory: what the directory holds is unchanged, and only what is shown of it is. Only a
+    /// rule in the hiding state answers yes here; one in the faded state is handled by <see cref="Dims(Entry, string)"/>.
     /// </para>
     /// </remarks>
     /// <param name="entry">The entry to consider.</param>
@@ -272,6 +274,27 @@ internal sealed class Shared
     /// <param name="root">The directory the view reading the entry is rooted at.</param>
     /// <returns>Whether it is hidden.</returns>
     public bool Hides(Entry entry, string root) => HideRegistry.Hides(entry, root);
+
+    /// <summary>
+    /// Whether an entry is drawn faded, read against a view's root.
+    /// </summary>
+    /// <remarks>
+    /// A rule in the faded state draws its entries faded whether or not the eye is on. A rule in the hiding
+    /// state draws them faded only while the eye is on, because that is what the eye now says: the entries
+    /// the rules would leave out are being looked at, in gray rather than as ordinary entries.
+    /// </remarks>
+    /// <param name="entry">The entry to consider.</param>
+    /// <param name="root">The directory the view reading the entry is rooted at.</param>
+    /// <returns>Whether it is drawn faded.</returns>
+    public bool Dims(Entry entry, string root) =>
+        HideRegistry.Dims(entry, root) || (ShowHidden && HideRegistry.Hides(entry, root));
+
+    /// <summary>
+    /// Whether an entry is drawn faded, read against the directory holding it.
+    /// </summary>
+    /// <param name="entry">The entry to consider.</param>
+    /// <returns>Whether it is drawn faded.</returns>
+    public bool Dims(Entry entry) => HideRegistry.Dims(entry) || (ShowHidden && HideRegistry.Hides(entry));
 
     /// <summary>The registry itself, for the choice of which providers are in force.</summary>
     /// <remarks>

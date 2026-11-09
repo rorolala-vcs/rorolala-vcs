@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -222,8 +223,11 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>The dropdown that switches which providers hide what.</summary>
     private readonly Button _rules = new();
 
-    /// <summary>One box per provider, so that the boxes follow the choice rather than leading it.</summary>
-    private readonly List<(IEntryHideProvider Provider, CheckBox Box)> _hiders = [];
+    /// <summary>One row per provider, so that the mode each rule is in follows the settings.</summary>
+    private readonly List<(IEntryHideProvider Provider, Button Row, Border Glyph)> _hiders = [];
+
+    /// <summary>The three pictures a rule's mode is drawn with, in the order the mode is read.</summary>
+    private (Bitmap Show, Bitmap Gray, Bitmap Hide)? _marks;
 
     /// <summary>
     /// Whether this dock follows the whole, or looks at a directory of its own.
@@ -424,13 +428,34 @@ internal sealed class DirectoryControl : UserControl
         FillHidden();
         FillSync();
 
-        // What the toolbar keeps at its far end, in the order it reads: the rules first, then the switch that
-        // shows what they hide, then whether this dock follows the whole. The rules are to the left of the two
-        // switches because what is shown is read after what hides it, and the two switches are side by side
-        // because both are about this dock's own view.
-        _trailing.Children.Add(_rules);
-        _trailing.Children.Add(_show);
-        _trailing.Children.Add(_sync);
+        // What the toolbar keeps at its far end, in the order it reads: whether this dock follows the whole,
+        // then a rule, then the eye that shows what the hide rules take out and the more button that opens
+        // those rules. The eye and the more button are two answers about one subject and stand together, and
+        // the rule is what tells them from the link: the four are one run rather than four separate tools.
+        var rule = new Border
+        {
+            Width = 1,
+            Height = 16,
+            Margin = new Thickness(2, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        rule[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
+
+        var hides = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _show, _rules },
+        };
+        var tools = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _sync, rule, hides },
+        };
+
+        _trailing.Children.Add(tools);
 
         // A dock is a place the keyboard can be put, which is how the shell hands it to the thing being read: what
         // this dock answers is answered at the top of itself, so the shell putting the keyboard here is what makes
@@ -627,6 +652,11 @@ internal sealed class DirectoryControl : UserControl
             Icons.Picture(Icons.Visibility),
             Icons.Picture(Icons.VisibilityOff)
         );
+        _marks = (
+            Icons.Picture(Icons.RadioButtonUnchecked),
+            Icons.Picture(Icons.RadioButtonChecked),
+            Icons.Picture(Icons.Circle)
+        );
 
         _show.Classes.Add("tool");
         _show.VerticalAlignment = VerticalAlignment.Center;
@@ -639,8 +669,10 @@ internal sealed class DirectoryControl : UserControl
         _show.Click += (_, _) => _shared.ShowHidden = !_shared.ShowHidden;
 
         _rules.VerticalAlignment = VerticalAlignment.Center;
-        _rules.MinWidth = 120;
+        _rules.Classes.Add("tool");
+        _rules.Content = Icons.Inked(Icons.Picture(Icons.MoreVert), Icons.Tool);
         _rules.Flyout = new Flyout { Content = HiddenBoxes() };
+        AutomationProperties.SetName(_rules, RolaI18N.Get("rorolala_file_system.hides.providers"));
 
         RefreshHidden();
     }
@@ -673,47 +705,71 @@ internal sealed class DirectoryControl : UserControl
         _show.Classes.Set("on", shown);
     }
 
-    /// <summary>Builds the boxes the dropdown holds, one per provider.</summary>
+    /// <summary>Builds the rows the dropdown holds, one per provider.</summary>
     private StackPanel HiddenBoxes()
     {
-        var boxes = new StackPanel { Spacing = 4 };
+        var boxes = new StackPanel { Spacing = 2, Width = 240 };
 
         foreach (var provider in HideRegistry.All)
         {
-            var box = new CheckBox { Content = RolaI18N.Get(provider.LabelKey) };
-
-            // Ticking one is what puts a rule in force, so the set starts empty for every box: a box built
-            // already ticked would be a rule the user asked for by opening a menu.
-            box.IsCheckedChanged += (_, _) =>
+            var glyph = Icons.Inked(Icons.Picture(Icons.RadioButtonUnchecked), Icons.Tool);
+            var label = new TextBlock
             {
-                var chosen = _shared.HideRegistry.Selection().ToHashSet(StringComparer.Ordinal);
-
-                if (box.IsChecked == true)
-                {
-                    chosen.Add(provider.Id);
-                }
-                else
-                {
-                    chosen.Remove(provider.Id);
-                }
-
-                // Written through the config rather than kept here, because the setting is the user's and
-                // the file is where it lives: what this dock changed takes effect in every other dock.
-                _host.Config.Keep(
-                    HideRegistry.Setting,
-                    string.Join(',', HideRegistry.All.Where(each => chosen.Contains(each.Id)).Select(each => each.Id))
-                );
+                Text = RolaI18N.Get(provider.LabelKey),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                FontSize = 13,
+            };
+            var content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children = { glyph, label },
+            };
+            var row = new Button
+            {
+                Content = content,
+                Classes = { "ghost" },
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Padding = new Thickness(8, 4),
+                MinHeight = 28,
             };
 
-            _hiders.Add((provider, box));
-            boxes.Children.Add(box);
+            row.Click += (_, _) => Cycle(provider);
+            ToolTip.SetTip(row, RolaI18N.Get(provider.LabelKey));
+            AutomationProperties.SetName(row, RolaI18N.Get(provider.LabelKey));
+
+            _hiders.Add((provider, row, glyph));
+            boxes.Children.Add(row);
         }
 
         return boxes;
     }
 
+    /// <summary>Puts one rule into its next mode: shown, faded, then hidden.</summary>
+    /// <param name="provider">The rule to turn.</param>
+    private void Cycle(IEntryHideProvider provider)
+    {
+        var next = _shared.HideRegistry.State(provider.Id) switch
+        {
+            HideState.Show => HideState.Gray,
+            HideState.Gray => HideState.Hide,
+            _ => HideState.Show,
+        };
+
+        // The hiding setting is one the plugin listens to, and the faded one is not declared. A change that
+        // only moves a rule out of the hiding set therefore has nobody to tell the listing, so it is told here.
+        if (!_shared.HideRegistry.SetState(provider.Id, next))
+        {
+            _shared.Hidden();
+        }
+
+        RefreshHidden();
+    }
+
     /// <summary>
-    /// Says on the dropdown what is in force, and brings it and the switch in step with the settings.
+    /// Says on the dropdown what is in force, and brings its rows and the switch in step with the settings.
     /// </summary>
     /// <remarks>
     /// Read here rather than remembered, because the settings are changed in the preference panel and in other
@@ -722,27 +778,50 @@ internal sealed class DirectoryControl : UserControl
     /// </remarks>
     private void RefreshHidden()
     {
-        var chosen = _shared.HideRegistry.Selection();
+        var hiding = _shared.HideRegistry.Selection();
+        var gray = _shared.HideRegistry.Gray();
 
-        foreach (var (provider, box) in _hiders)
+        foreach (var (provider, _, glyph) in _hiders)
         {
-            box.IsChecked = chosen.Contains(provider.Id);
+            var state = hiding.Contains(provider.Id)
+                ? HideState.Hide
+                : gray.Contains(provider.Id)
+                    ? HideState.Gray
+                    : HideState.Show;
+
+            glyph.OpacityMask = new ImageBrush(Mark(state))
+            {
+                Stretch = Stretch.Uniform,
+            };
         }
 
         Show(_shared.ShowHidden);
 
         var named = HideRegistry
-            .All.Where(provider => chosen.Contains(provider.Id))
+            .All.Where(provider => hiding.Contains(provider.Id) || gray.Contains(provider.Id))
             .Select(provider => RolaI18N.Get(provider.LabelKey))
             .ToArray();
 
-        _rules.Content = named.Length switch
+        var summary = named.Length switch
         {
             0 => RolaI18N.Get("rorolala_file_system.hidden_none"),
             1 => named[0],
             _ => RolaI18N.Get("rorolala_file_system.hidden_many", named.Length),
         };
+
+        ToolTip.SetTip(_rules, summary);
     }
+
+    /// <summary>The picture a rule's mode wears.</summary>
+    /// <param name="state">The mode.</param>
+    /// <returns>The picture.</returns>
+    private Bitmap Mark(HideState state) =>
+        state switch
+        {
+            HideState.Show => _marks!.Value.Show,
+            HideState.Gray => _marks!.Value.Gray,
+            _ => _marks!.Value.Hide,
+        };
 
     /// <summary>
     /// Sets the sync toggle up, and what turning it does.
