@@ -168,7 +168,6 @@ internal sealed partial class VersionGraphView
             _themeVersion,
             _palette.Mid,
             _palette.Primary,
-            _palette.Accent,
             _palette.Front
         );
 

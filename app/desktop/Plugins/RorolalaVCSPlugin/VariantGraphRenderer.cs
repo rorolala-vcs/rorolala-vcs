@@ -51,7 +51,6 @@ internal static class GraphTint
 /// <param name="Pending">A merge in progress.</param>
 /// <param name="Danger">A change that must not be recorded.</param>
 /// <param name="Same">Two variants made of the same content.</param>
-/// <param name="Accent">The look's accent.</param>
 /// <param name="Primary">The look's primary.</param>
 /// <param name="ChipFill">A chip's fill.</param>
 /// <param name="ChipEdge">A chip's border.</param>
@@ -81,7 +80,6 @@ internal sealed record GraphInk(
     Color Pending,
     Color Danger,
     Color Same,
-    Color Accent,
     Color Primary,
     Color ChipFill,
     Color ChipEdge,
@@ -103,7 +101,7 @@ internal sealed record GraphInk(
     {
         ArgumentNullException.ThrowIfNull(palette);
 
-        var ground = palette.Mid;
+        var ground = palette.Dark;
         var card = palette.Bright;
         var front = palette.Front;
         var splitter = palette.Splitter;
@@ -112,21 +110,23 @@ internal sealed record GraphInk(
         return new GraphInk(
             Ground: ground,
             Card: card,
-            CardEdge: splitter,
+            CardEdge: GraphTint.Mix(splitter, front, 0.22),
             Text: front,
             Muted: GraphTint.Mix(front, ground, 0.45),
             Faint: GraphTint.Mix(front, ground, 0.28),
-            GridMajor: GraphTint.Alpha(palette.Accent, light ? (byte)26 : (byte)15),
-            GridMinor: GraphTint.Alpha(palette.Accent, light ? (byte)13 : (byte)8),
+            // A neutral grid at the strength of a hairline, because the graph is a well in the dock
+            // rather than a second program: a coloured grid made the canvas the one surface in the
+            // window drawn in a colour of its own. It is still there, and only just.
+            GridMajor: GraphTint.Alpha(splitter, light ? (byte)14 : (byte)18),
+            GridMinor: GraphTint.Alpha(splitter, light ? (byte)7 : (byte)9),
             BaseEdge: GraphTint.Mix(front, ground, light ? 0.34 : 0.18),
             JoinEdge: GraphTint.Mix(front, ground, light ? 0.44 : 0.30),
-            Local: palette.Accent,
-            Origin: palette.Primary,
-            Studio: Color.FromRgb(0xC0, 0x84, 0xFC),
+            Local: palette.Primary,
+            Origin: Color.FromRgb(0x2A, 0xA6, 0xA6),
+            Studio: Color.FromRgb(0xA7, 0x8B, 0xFA),
             Pending: Color.FromRgb(0xF5, 0x9E, 0x0B),
             Danger: Color.FromRgb(0xF8, 0x71, 0x71),
             Same: Color.FromRgb(0x22, 0xD3, 0xEE),
-            Accent: palette.Accent,
             Primary: palette.Primary,
             ChipFill: GraphTint.Mix(card, front, light ? 0.05 : 0.09),
             ChipEdge: GraphTint.Mix(splitter, front, 0.18),
@@ -407,7 +407,7 @@ internal sealed class VariantGraphRenderer
 
             if (onPointer)
             {
-                colour = ink.Accent;
+                colour = ink.Primary;
                 width = Math.Max(2.4, width * 1.9);
             }
 
@@ -723,12 +723,12 @@ internal sealed class VariantGraphRenderer
         var bottom = frame.Pan.Y + (card.Y * zoom) + (VariantGraphDrawing.CardHeight / 2 * zoom);
         var width = right - left;
         var height = bottom - top;
-        var radius = 12 * zoom;
+        var radius = 8 * zoom;
         var (fill, stroke, dash, thickness) = CardStyle(card, ink, onChain);
 
         if (endpoint)
         {
-            stroke = ink.Accent;
+            stroke = ink.Primary;
             dash = null;
             thickness = Math.Max(1.8, 2.2 * zoom);
         }
@@ -920,14 +920,13 @@ internal sealed class VariantGraphRenderer
     {
         var zoom = frame.Zoom;
         var middle = top + (VariantGraphDrawing.CardHeight / 2 * zoom);
-        var maker = GraphHue.For(card.Creator, 0.55, 0.43);
-        var tint = GraphTint.Mix(maker, ink.Text, 0.2);
 
         // The creator's name is written as text rather than in a pill of its own: the card has one pill
         // row already, and a second chip in the first row would read as another fact about the version
-        // instead of the name that signed it.
+        // instead of the name that signed it. It is metadata, so it takes the second ink and lets the
+        // message carry the card's own words.
         var nameLeft = left + (13 * zoom);
-        var name = Text(GraphFont.Creator, card.Creator, tint, zoom);
+        var name = Text(GraphFont.Creator, card.Creator, ink.Muted, zoom);
         context.DrawText(name, new Point(nameLeft, middle + (4 * zoom) - name.Baseline));
 
         if (card.Message.Length == 0)
@@ -1018,10 +1017,10 @@ internal sealed class VariantGraphRenderer
         var width = chip.Width * zoom;
         var height = VariantGraphDrawing.ChipHeight * zoom;
         var rect = new Rect(x, y, width, height);
-        var radius = 6 * zoom;
+        var radius = 5 * zoom;
         var side = chip.Entry is { } entry ? entry.Side : chip.Kind == GraphChipKind.File ? "local" : null;
         var sideColour = chip.Tracked
-            ? ink.Accent
+            ? ink.Primary
             : side switch
             {
                 null => ink.Muted,
@@ -1042,7 +1041,7 @@ internal sealed class VariantGraphRenderer
             ),
             _ => (
                 ink.ChipFill,
-                chip.Tracked ? ink.Accent : GraphTint.Mix(sideColour, ink.ChipEdge, 0.45),
+                chip.Tracked ? ink.Primary : GraphTint.Mix(sideColour, ink.ChipEdge, 0.45),
                 (DashStyle?)null
             ),
         };
@@ -1092,7 +1091,7 @@ internal sealed class VariantGraphRenderer
                 var name = Text(
                     GraphFont.Name,
                     chip.Name,
-                    chip.Tracked ? ink.Accent : chip.Strike ? ink.Muted : ink.Text,
+                    chip.Tracked ? ink.Primary : chip.Strike ? ink.Muted : ink.Text,
                     zoom
                 );
                 var nameX = x + ((8 + chip.TagWidth + 7) * zoom);

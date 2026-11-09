@@ -282,7 +282,7 @@ internal sealed partial class VersionGraphView : Control
     private GraphInk? _ink;
 
     /// <summary>What the colours were read from, so a changed one is noticed.</summary>
-    private (int Theme, Color Ground, Color Primary, Color Accent, Color Front) _inkFor;
+    private (int Theme, Color Ground, Color Primary, Color Front) _inkFor;
 
     /// <summary>Whether hovering a thing says what it is, which the switch in the corner turns.</summary>
     private bool _showInfo = true;

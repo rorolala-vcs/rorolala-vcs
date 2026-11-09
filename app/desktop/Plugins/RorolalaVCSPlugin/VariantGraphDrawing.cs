@@ -70,12 +70,12 @@ internal sealed class GraphMeasure
     internal static (Typeface Typeface, double Size) Face(GraphFont font) =>
         font switch
         {
-            GraphFont.Message => (FaceNormal, 13),
-            GraphFont.Creator => (FaceSemiBold, 10.5),
-            GraphFont.Tag => (FaceSemiBold, 9),
-            GraphFont.Name => (FaceNormal, 10.5),
-            GraphFont.Hash => (FaceMono, 10),
-            _ => (FaceExtraBold, 34),
+            GraphFont.Message => (FaceNormal, 12.5),
+            GraphFont.Creator => (FaceSemiBold, 11),
+            GraphFont.Tag => (FaceSemiBold, 10),
+            GraphFont.Name => (FaceNormal, 11),
+            GraphFont.Hash => (FaceMono, 10.5),
+            _ => (FaceExtraBold, 24),
         };
 
     /// <summary>How wide `text` is when set in a face, in content units.</summary>
