@@ -349,7 +349,7 @@ internal sealed class CheckinFlow
     private readonly ILog _log;
 
     /// <summary>What every command this plugin runs reports itself to.</summary>
-    private readonly ProgressHub _hub;
+    private readonly IProgressHub _hub;
 
     /// <summary>What the place read of a Layout, which a checkin's entries are read from.</summary>
     private readonly Func<UpstreamSource, UpstreamEntriesTree?> _tree;
@@ -362,7 +362,7 @@ internal sealed class CheckinFlow
     public CheckinFlow(
         IPluginHost host,
         ILog log,
-        ProgressHub hub,
+        IProgressHub hub,
         Func<UpstreamSource, UpstreamEntriesTree?> tree
     )
     {

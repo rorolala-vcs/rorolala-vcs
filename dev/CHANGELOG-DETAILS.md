@@ -6,13 +6,17 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Bugfix
 
-### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
+### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name
+
+A file tree row is now a three-column grid rather than a dock panel: the name gives way with an ellipsis, the badges keep their width at the row's right, and the row stretches to the tree's width at any panel width. The badges are drawn at twenty pixels, while the entry icon stays at sixteen.
+
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
 
 The Version Graph no longer draws an edited file's local pill on the version its draft is based on
 as well as on the draft. While the file has an unrecorded change, its draft is the one card that
 names it; the baseline version keeps the entries of the other sides.
 
-### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
 
 The message field under the Version Graph is the whole room beside the TRACK button, but the pointer read as text only over the line the message is drawn on: the padding around that line and the empty width after it read as ground, although a press there focused the field. The field now names the text cursor itself, so every part of its room inherits it.
 
@@ -56,21 +60,47 @@ Reads and writes no longer copy content on the way through: a payload stored as 
 
 Breaking: the Layout snapshot format is version 3 and its records carry a kind byte. A Workspace or Vault written by an earlier version cannot be read by this one, and a Vault written here cannot be read by an earlier one. A sync carries the kind of each entry it creates, so a Vault's Layout records trees as trees, and a path the two sides name as different things is refused rather than transferred.
 
-### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
+### 2. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`windows`] Own and restore floating dock windows
+
+A dock pulled into a window of its own is now owned by the main window. Closing the main window closes its children, minimizing it minimizes them with it, and restoring it gives each child back the state it had. The layout file is version 3 and records each floating window's dock, ordinal, own state, bounds and maximized state; version 2 files still load, with no floating windows. A window restored off screen is moved back onto the primary work area.
+
+### 3. [`app`] [`RorolalaDesktop`] [`menu`] Fold the menu bar into a button
+
+The title row no longer carries a menu bar. One button at its left opens the same top-level menus in a flyout, in their old order, with the Window menu still listing the docks and its commands. The button has a tooltip and an accessible name, and a press on it does not move the window.
+
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base
+
+A directory dock inside the tree's base is named by its part under that base, so a tab reads `art` or `art/shots` rather than the whole path, and its address bar starts at `.` for the base and adds one step for each directory under it. The detail a tab and a window title show on hover is still the full path, a directory outside the base keeps its full path, and a logical place keeps its address.
+
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree
+
+The file tree now supports the same choice as a directory listing: a plain press chooses one row, Ctrl toggles one, Shift takes a visible range, and Ctrl+A chooses every row on screen. A modified press on a directory changes the choice without navigating, while a plain press still opens it. Copy, cut, delete and the context menu act on the whole choice, and a tree read again keeps its choice by path.
+
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
 
 The TRACK button under the Version Graph turns red while Shift is held. A press then records
 the chosen changes with `rola track --force`, and a question names the files whose changes a plain
 track refuses before anything is written. Without Shift the button records the changes as before.
 
-### 3. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
+### 7. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
+
+A file browser's grid now shows a file's own preview where one can be made, and keeps the type icon where one cannot. The host asks its system source first and the plugins' renderers after it, keeps answers by path, write time and size, cancels a tile's request when the tile leaves the window, and reports a batch on the progress stack. Windows uses the Shell thumbnailer on a dedicated STA thread; Linux reads thumbnails the desktop has already cached.
+
+### 8. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
 
 `rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. A caller that cannot decode the structure format hands the bytes over instead of keeping a second copy of it, and text that is not hex or bytes that are not a structure answer as `null`, so an answer is always JSON. The string is freed with `free_string`.
 
-### 4. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+### 9. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
 
 The new `rorolala-tree` crate holds what a tree is: a canonical structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path. Content moves into the Workspace's store with `publish_from`, which carries manifests and their chunks without rewriting what is already there.
 
 `rola tree reset` puts the staging area back to the recorded version, for the whole tree or only the paths named, and leaves the work untouched; it has no hard or soft form, since `retrack` and `retrack --only-index` move the work and the record. `rola tree desc` opens the same editing file and editor as `rola track`, and stages what the editor wrote only after it ends successfully, so a cancelled edit leaves the staged description as it was. A rules file may sit in any directory of a tree, and the rules apply the way git's nested `.gitignore` files do: a pattern is relative to the file holding it, a deeper file decides after a shallower one, and the rules file itself stays tracked work. A Workspace whose root is a tree keeps that tree at the reserved root path, shown as `.`, and `rola status .` looks its version chain back with a draft above it while its work is unrecorded. A tree's structure names what its version holds, so a sync carries the head version's structure and its description and file content in a second exchange. A Workspace scan treats a directory holding a `.rola-tree` mark as one tree entry rather than the files under it, and the Layout, its records and its snapshot carry a kind so a file and a tree are told apart.
+
+## Refactor
+
+### 1. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack
+
+Progress is now the host's rather than the Rorolala plugin's. `IPluginHost.Progress` begins a run that every open window draws in a stack under its title row, and the plugin's commands use it without knowing which window is in front. The Overview no longer draws a panel of its own, and a run begun from any dock appears in the same stack.
 
 # 0.2.0 (2026-11-04)
 

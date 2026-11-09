@@ -1203,7 +1203,7 @@ internal sealed class DirectoryControl : UserControl
             || (_drawn is not null && _drawnAt != Location.Current)
         )
         {
-            ChosenFiles.Publish(drawn.Chosen());
+            ChosenEntries.Publish(drawn.Chosen());
         }
 
         // Said here rather than left to the view: whether the listing was drawn again is the other half of
@@ -1317,9 +1317,14 @@ internal sealed class DirectoryControl : UserControl
 
     /// <summary>What this dock is called, and where that is in full.</summary>
     /// <remarks>
-    /// The place itself in both views: the real path of a directory, and the address of a place a plugin answers for. A
-    /// name that is shorter than that would be a name the reader has to translate back into where the dock is, a part
-    /// below a base, or a provider's own words, and a tab is read to know where it goes.
+    /// A directory inside the tree's base is named by its part under that base, which is what a tab needs to tell two
+    /// places apart without spending the tab strip on a drive letter. The detail stays the whole path, since a tip and a
+    /// window title have room for it and the address bar already answers navigation with its own crumbs.
+    /// <para>
+    /// A place is named by its address in both, because an address is not a path and has no base to be short of. The
+    /// computer and a directory outside the base are named by the whole of what they are for the same reason: there is
+    /// nothing to shorten them against.
+    /// </para>
     /// </remarks>
     /// <returns>The title and the detail.</returns>
     private (string Title, string Detail) Where()
@@ -1344,10 +1349,62 @@ internal sealed class DirectoryControl : UserControl
             return (computer, computer);
         }
 
-        // The real path is what a reader of a browser wants: not a part of it relative to something else, which is the
-        // address bar's answer rather than the dock's name.
-        return (at, at);
+        var root = Location.BaseDir;
+
+        if (root.Length > 0 && Same(root, at))
+        {
+            return (Leaf(at), at);
+        }
+
+        return root.Length > 0 && Under(root, at) ? (Path.GetRelativePath(root, at), at) : (at, at);
     }
+
+    /// <summary>Whether two paths name the same directory, by the comparison the platform uses.</summary>
+    /// <param name="left">One path.</param>
+    /// <param name="right">The other path.</param>
+    /// <returns>Whether they are the same directory.</returns>
+    private static bool Same(string left, string right) =>
+        string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
+            PathComparison
+        );
+
+    /// <summary>Whether a path is strictly below a directory.</summary>
+    /// <param name="root">The directory.</param>
+    /// <param name="path">The path to test.</param>
+    /// <returns>Whether the path is below the directory and not the directory itself.</returns>
+    private static bool Under(string root, string path)
+    {
+        var basePath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+
+        if (string.Equals(basePath, full, PathComparison))
+        {
+            return false;
+        }
+
+        var relative = Path.GetRelativePath(basePath, full);
+
+        return !Path.IsPathRooted(relative)
+            && !string.Equals(relative, "..", StringComparison.Ordinal)
+            && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
+    }
+
+    /// <summary>The last part of a directory's path, or the path itself where it has no last part.</summary>
+    /// <param name="directory">The directory.</param>
+    /// <returns>The leaf, or the whole path for a root.</returns>
+    private static string Leaf(string directory)
+    {
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        var leaf = Path.GetFileName(full);
+
+        return leaf.Length > 0 ? leaf : full;
+    }
+
+    /// <summary>How paths are compared on the platform the program is running on.</summary>
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     /// <summary>
     /// Writes where this dock is, so that a dock left at a place comes back to it.

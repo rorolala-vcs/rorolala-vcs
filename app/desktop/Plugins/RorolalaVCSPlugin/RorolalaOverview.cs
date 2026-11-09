@@ -48,7 +48,7 @@ internal sealed class OverviewDock : IDockView
         ILog log,
         IFileChanges files,
         IRefocus refocus,
-        ProgressHub hub,
+        IProgressHub hub,
         SyncWatcher sync,
         VaultFetch fetch
     ) => _view = new OverviewView(host, log, files, refocus, hub, sync, fetch);
@@ -482,7 +482,7 @@ internal sealed class OverviewView : UserControl
         ILog log,
         IFileChanges files,
         IRefocus refocus,
-        ProgressHub hub,
+        IProgressHub hub,
         SyncWatcher sync,
         VaultFetch fetch
     )
@@ -522,7 +522,6 @@ internal sealed class OverviewView : UserControl
             () => _showIgnored,
             ToggleIgnored
         );
-        _panel = new ProgressPanel(hub, _host.Icons);
 
         var root = new Grid();
 
@@ -535,7 +534,6 @@ internal sealed class OverviewView : UserControl
         var reading = new Grid { Children = { _tableCell, _notice } };
 
         root.Children.Add(reading);
-        root.Children.Add(_panel);
 
         Content = root;
 
@@ -608,13 +606,8 @@ internal sealed class OverviewView : UserControl
     }
 
     /// <summary>Reads the work again when the runs end, which is what a fetch or a sync writes the reading from.</summary>
-    /// <param name="sender">What raised it.</param>
-    /// <param name="changed">The event.</param>
-    private void Sizing(object? sender, EventArgs changed)
+    private void Sizing()
     {
-        _ = sender;
-        _ = changed;
-
         // A run that has just ended is the fetch or the sync the reading was held for: what it wrote is what the
         // work is read from now, and nothing else will say so, see <see cref="Drawn"/>.
         if (_running && !_hub.Any)
@@ -639,13 +632,10 @@ internal sealed class OverviewView : UserControl
     private readonly SyncWatcher _sync;
 
     /// <summary>What every command this plugin runs reports itself to, which the capsule stack follows.</summary>
-    private readonly ProgressHub _hub;
+    private readonly IProgressHub _hub;
 
     /// <summary>The strip the dock's header carries.</summary>
     private readonly SyncStrip _strip;
-
-    /// <summary>What every command this plugin runs is drawn as, floating over the bottom right of the reading.</summary>
-    private readonly ProgressPanel _panel;
 
     /// <summary>
     /// Fetches the Vault's Layout and reads the work again, which is what the dock's own command asks for.

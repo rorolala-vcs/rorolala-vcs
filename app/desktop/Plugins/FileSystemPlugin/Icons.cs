@@ -47,6 +47,16 @@ internal static partial class Icons
     public const int Row = 16;
 
     /// <summary>
+    /// How wide and tall the marks a tree row wears at its right are.
+    /// </summary>
+    /// <remarks>
+    /// Larger than <see cref="Row"/> because a tree row gives its badges the far end of the row rather than a
+    /// corner of the icon, and the whole of a mark is read there: the badge is what says a state, and a state read
+    /// at the size of an icon beside it is a mark the eye passes over.
+    /// </remarks>
+    public const int Badge = 20;
+
+    /// <summary>
     /// How wide the column of icons is in a table, which is the design's own measure.
     /// </summary>
     /// <remarks>
@@ -269,9 +279,26 @@ internal static partial class Icons
     /// <param name="badge">The picture and what the contribution said about the entry.</param>
     /// <param name="size">How many pixels wide and tall the icon is.</param>
     /// <returns>What to stand on the arc.</returns>
-    public static Control Worn(EntryBadge badge, int size)
+    public static Control Worn(EntryBadge badge, int size) => Worn(badge, BadgeArc.Extent(size));
+
+    /// <summary>
+    /// One badge drawn at the size it is given, rather than at its share of an icon.
+    /// </summary>
+    /// <remarks>
+    /// A tree row gives its badges a column of their own rather than a corner of the icon, so the caller
+    /// states the size it wants instead of deriving it from the picture beside it.
+    /// </remarks>
+    /// <param name="badge">The picture and what the contribution said about the entry.</param>
+    /// <param name="size">How many pixels wide and tall the badge is.</param>
+    /// <returns>What to stand on the arc.</returns>
+    public static Control WornAt(EntryBadge badge, int size) => Worn(badge, (double)size);
+
+    /// <summary>One badge drawn at an extent.</summary>
+    /// <param name="badge">The picture and what the contribution said about the entry.</param>
+    /// <param name="extent">How many pixels wide and tall the badge is.</param>
+    /// <returns>What to stand on the arc.</returns>
+    private static Control Worn(EntryBadge badge, double extent)
     {
-        var extent = BadgeArc.Extent(size);
         var role = Ink(badge.Mark.Ink);
         var own = badge.Mark.Colour;
 

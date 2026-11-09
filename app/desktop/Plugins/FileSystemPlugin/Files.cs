@@ -123,7 +123,7 @@ internal sealed class Files : Listing<Entry>
     /// <param name="size">How many pixels wide and tall.</param>
     /// <returns>What to draw in the tile.</returns>
     public override Control Marked(Entry item, int size) =>
-        Icons.Marked(Icons.For(item, size), Badges(item), size);
+        new PreviewTile(Host.Previews, item, size, Badges(item));
 
     /// <inheritdoc />
     public override IReadOnlyList<EntryBadge> Badges(Entry item)
@@ -297,7 +297,7 @@ internal sealed class Files : Listing<Entry>
     public override void Touch() => _browser.Touch();
 
     /// <inheritdoc />
-    public override void Chosen(IReadOnlyList<Entry> chosen) => ChosenFiles.Publish(chosen);
+    public override void Chosen(IReadOnlyList<Entry> chosen) => ChosenEntries.Publish(chosen);
 
     /// <inheritdoc />
     public override void Clicked(Entry item)

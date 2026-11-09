@@ -62,7 +62,7 @@ internal sealed class VersionGraphTrackBar : Border
     private readonly IDialogs _dialogs;
 
     /// <summary>What every command this plugin runs reports itself to.</summary>
-    private readonly ProgressHub _hub;
+    private readonly IProgressHub _hub;
 
     /// <summary>Whether a track is going, which is what holds the button until it ends.</summary>
     private bool _busy;
@@ -79,7 +79,7 @@ internal sealed class VersionGraphTrackBar : Border
         IPluginHost host,
         VersionGraphView graph,
         StatusReadings statuses,
-        ProgressHub hub
+        IProgressHub hub
     )
     {
         ArgumentNullException.ThrowIfNull(host);

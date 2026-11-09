@@ -318,19 +318,65 @@ internal sealed class DockManager
         return made;
     }
 
+    /// <summary>
+    /// Restores one dock into a window of its own, with the state and instance number it was saved with.
+    /// </summary>
+    /// <param name="registration">The dock.</param>
+    /// <param name="kept">What the dock kept about itself.</param>
+    /// <param name="request">What the dock is opened with.</param>
+    /// <param name="window">The window it is in.</param>
+    /// <param name="ordinal">The instance number it had.</param>
+    /// <returns>The instance, or nothing when its view could not be made.</returns>
+    public DockInstance? RestoreInWindow(
+        DockRegistration registration,
+        IReadOnlyDictionary<string, string> kept,
+        DockRequest request,
+        string window,
+        int ordinal
+    )
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+        ArgumentNullException.ThrowIfNull(kept);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(window);
+
+        var made = Make(registration, kept, request, window, groupId: "", ordinal);
+
+        if (made is null)
+        {
+            return null;
+        }
+
+        if (_ordinals.TryGetValue(registration.DockNameId, out var high))
+        {
+            _ordinals[registration.DockNameId] = Math.Max(high, ordinal);
+        }
+        else
+        {
+            _ordinals[registration.DockNameId] = ordinal;
+        }
+
+        Raise();
+        Remember(made);
+
+        return made;
+    }
+
     /// <summary>Makes a new dock instance, told what that dock remembered last time.</summary>
     /// <param name="registration">The dock.</param>
     /// <param name="kept">What the dock kept about itself, by key.</param>
     /// <param name="request">What the dock is being opened with.</param>
     /// <param name="window">The window it is in, or nothing for the main one.</param>
     /// <param name="groupId">The group of the main window's tree it is in, or empty.</param>
+    /// <param name="ordinal">The instance number it had, or nothing for the next one.</param>
     /// <returns>The new instance, or nothing when its view could not be made.</returns>
     private DockInstance? Make(
         DockRegistration registration,
         IReadOnlyDictionary<string, string> kept,
         DockRequest request,
         string? window,
-        string groupId
+        string groupId,
+        int? ordinal = null
     )
     {
         IDockView view;
@@ -359,7 +405,7 @@ internal sealed class DockManager
         {
             Registration = registration,
             View = view,
-            Ordinal = NextOrdinal(registration.DockNameId),
+            Ordinal = ordinal ?? NextOrdinal(registration.DockNameId),
             Title = _i18n.Get(registration.DisplayNameKey),
             Detail = _i18n.Get(registration.DisplayNameKey),
             Request = request,

@@ -136,23 +136,56 @@ internal sealed class RatioConverter : JsonConverter<double>
     ) => writer.WriteNumberValue(Math.Round(value, 6));
 }
 
+/// <summary>One dock in a window of its own, and where that window was.</summary>
+/// <remarks>
+/// The layout writes this beside the main window's tree, because a dock pulled out of the main window is still
+/// part of what the user arranged: without it the next run comes back with the dock in the main window, which is
+/// a different arrangement from the one they left.
+/// </remarks>
+internal sealed class LayoutWindow
+{
+    /// <summary>The window's key, which is how a dock names the window it is in.</summary>
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = "";
+
+    /// <summary>The dock the window holds.</summary>
+    [JsonPropertyName("dock")]
+    public LayoutDock Dock { get; set; } = new();
+
+    /// <summary>Where the window's left edge was.</summary>
+    [JsonPropertyName("x")]
+    public int X { get; set; }
+
+    /// <summary>Where the window's top edge was.</summary>
+    [JsonPropertyName("y")]
+    public int Y { get; set; }
+
+    /// <summary>How wide the window was in its normal state.</summary>
+    [JsonPropertyName("width")]
+    public double Width { get; set; }
+
+    /// <summary>How tall the window was in its normal state.</summary>
+    [JsonPropertyName("height")]
+    public double Height { get; set; }
+
+    /// <summary>Whether the window was maximized.</summary>
+    [JsonPropertyName("maximized")]
+    public bool Maximized { get; set; }
+}
+
 /// <summary>
 /// The dock layout of the main window, as it survives a restart.
 /// </summary>
 /// <remarks>
-/// A tree of groups and splits, and the group that was last worked in. The record is the stable name id plus
-/// an instance ordinal rather than any runtime handle, so it keeps its meaning across versions of the program
-/// and versions of the plugins. What a dock kept about itself is written down with it, so that a dock comes
-/// back as it was and not only where it was.
-/// <para>
-/// A dock in a window of its own is not written down: the layout states what the main window's tree is, and
-/// which docks are in windows of their own is this run's arrangement rather than what a run starts with.
-/// </para>
+/// A tree of groups and splits, the group that was last worked in, and the docks that were in windows of their
+/// own. The record is the stable name id plus an instance ordinal rather than any runtime handle, so it keeps its
+/// meaning across versions of the program and versions of the plugins. What a dock kept about itself is written
+/// down with it, so that a dock comes back as it was and not only where it was.
 /// </remarks>
 internal sealed class DockLayout
 {
     /// <summary>The schema version this program reads and writes.</summary>
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
 
     /// <summary>
     /// The share of the area the starting layout gives to the group that holds the browser.
@@ -181,6 +214,10 @@ internal sealed class DockLayout
     /// <summary>The whole arrangement, or nothing when the main window holds no docks.</summary>
     [JsonPropertyName("root")]
     public LayoutNode? Root { get; set; }
+
+    /// <summary>The docks that were in windows of their own, and where those windows were.</summary>
+    [JsonPropertyName("windows")]
+    public List<LayoutWindow> Windows { get; set; } = [];
 
     /// <summary>
     /// One past the largest group number this run has given out.
@@ -281,10 +318,10 @@ internal static class LayoutStore
     /// <summary>Reads the layout, answering a fresh one when there is none to read.</summary>
     /// <remarks>
     /// The version is read before the layout is: a file written by an earlier build states one, and what it
-    /// states decides whether the rest of it is worth reading at all. This program reads version two and
-    /// nothing else, a version one file records a placement and four pixel widths, which cannot be turned
-    /// into a tree without inventing a window size, so an old file is left where it is, reported once, and
-    /// replaced by the next save.
+    /// states decides whether the rest of it is worth reading at all. This program reads version three and
+    /// version two, which is the same tree without the windows of docks' own; a version one file records a
+    /// placement and four pixel widths, which cannot be turned into a tree without inventing a window size, so
+    /// an old file is left where it is, reported once, and replaced by the next save.
     /// </remarks>
     /// <param name="log">Where a file that would not read, or is of another version, is reported.</param>
     /// <returns>What was read, or a fresh layout.</returns>
@@ -302,7 +339,7 @@ internal static class LayoutStore
             var text = File.ReadAllText(path);
             var version = VersionOf(text);
 
-            if (version != DockLayout.SchemaVersion)
+            if (version is not (2 or DockLayout.SchemaVersion))
             {
                 log.Record(
                     LogLevel.Warn,
@@ -321,6 +358,19 @@ internal static class LayoutStore
             {
                 return DockLayout.Starting();
             }
+
+            // A version two file has no windows, and that is the whole of its migration: a dock in a window of
+            // its own was not written down by the program that made it, so there is nothing to move in.
+            if (version == 2)
+            {
+                log.Record(
+                    LogLevel.Debug,
+                    Core.Source,
+                    "the dock layout was version 2 and is written as version 3 on the next save"
+                );
+            }
+
+            layout.Version = DockLayout.SchemaVersion;
 
             // A hand-edited file is normalized rather than trusted: it may hold an empty group, a dock
             // twice, an id nothing else agrees with, or a ratio of exactly one. What can be repaired is;

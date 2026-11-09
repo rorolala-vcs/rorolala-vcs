@@ -64,7 +64,7 @@ internal static class OwnershipActions
     /// on: the question is asked once per item every time a menu is offered, so it is answered from what a listing has
     /// already read rather than by opening the Layouts again.
     /// </param>
-    public static void Declare(IPluginHost host, ProgressHub hub, OwnershipReadings readings)
+    public static void Declare(IPluginHost host, IProgressHub hub, OwnershipReadings readings)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);
@@ -123,7 +123,7 @@ internal static class OwnershipActions
     /// <param name="order">Where it sits among the others of its kind.</param>
     private static void Add(
         IPluginHost host,
-        ProgressHub hub,
+        IProgressHub hub,
         OwnershipReadings readings,
         ContextMenuTarget target,
         string label,
@@ -165,7 +165,7 @@ internal static class OwnershipActions
         ContextTarget target,
         bool force,
         IPluginHost host,
-        ProgressHub hub
+        IProgressHub hub
     )
     {
         var program = Environment.GetEnvironmentVariable(Program);

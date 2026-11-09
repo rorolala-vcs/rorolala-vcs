@@ -428,6 +428,20 @@ internal sealed class NavigationBar : UserControl
             return;
         }
 
+        // Inside the tree's base the address is read from that base rather than from the drive: the base is the
+        // root of the work, and a reader who is inside it needs the steps under it, not the path that leads to
+        // it. The base itself is one crumb, `.`, which is also how a relative path names its own directory.
+        var root = _browser.BaseDir;
+        var current = _browser.Current;
+
+        if (root is { Length: > 0 } && current.Length > 0 && (Same(root, current) || Under(root, current)))
+        {
+            Relative(root);
+            Scrolled();
+
+            return;
+        }
+
         var chain = new List<string>();
 
         for (var path = _browser.Current; path.Length > 0; path = Path.GetDirectoryName(path) ?? string.Empty)
@@ -474,6 +488,90 @@ internal sealed class NavigationBar : UserControl
 
         Scrolled();
     }
+
+    /// <summary>Writes the address as the steps from the tree's base to where the browser is.</summary>
+    /// <remarks>
+    /// The base itself is `.`, and a step under it is the part of the path that names it. A crumb before the last
+    /// goes back to the directory it names, so the way back from a step is the step before it rather than a drive
+    /// the reader is no longer thinking about.
+    /// </remarks>
+    /// <param name="root">The tree's base.</param>
+    private void Relative(string root)
+    {
+        var chain = new List<string>();
+
+        for (var path = _browser.Current; path.Length > 0; path = Path.GetDirectoryName(path) ?? string.Empty)
+        {
+            chain.Add(path);
+
+            if (Same(path, root))
+            {
+                break;
+            }
+        }
+
+        chain.Reverse();
+
+        for (var at = 0; at < chain.Count; at++)
+        {
+            if (at > 0)
+            {
+                _crumbs.Children.Add(
+                    new TextBlock
+                    {
+                        Text = "/",
+                        Classes = { "faint" },
+                        VerticalAlignment = VerticalAlignment.Center,
+                    }
+                );
+            }
+
+            var name = at == 0 ? "." : Path.GetFileName(chain[at]);
+
+            if (name.Length == 0)
+            {
+                name = chain[at];
+            }
+
+            _crumbs.Children.Add(Crumb(name, chain[at], at == chain.Count - 1));
+        }
+    }
+
+    /// <summary>Whether two paths name the same directory, by the comparison the platform uses.</summary>
+    /// <param name="left">One path.</param>
+    /// <param name="right">The other path.</param>
+    /// <returns>Whether they are the same directory.</returns>
+    private static bool Same(string left, string right) =>
+        string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
+            PathComparison
+        );
+
+    /// <summary>Whether a path is strictly below a directory.</summary>
+    /// <param name="root">The directory.</param>
+    /// <param name="path">The path to test.</param>
+    /// <returns>Whether the path is below the directory and not the directory itself.</returns>
+    private static bool Under(string root, string path)
+    {
+        var basePath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+
+        if (string.Equals(basePath, full, PathComparison))
+        {
+            return false;
+        }
+
+        var relative = Path.GetRelativePath(basePath, full);
+
+        return !Path.IsPathRooted(relative)
+            && !string.Equals(relative, "..", StringComparison.Ordinal)
+            && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
+    }
+
+    /// <summary>How paths are compared on the platform the program is running on.</summary>
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     /// <summary>
     /// Scrolls the address to its end, once it has been laid out.

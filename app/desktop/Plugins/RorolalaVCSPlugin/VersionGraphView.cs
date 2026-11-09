@@ -49,7 +49,7 @@ internal sealed class VersionGraphDock : IDockView
         StatusReadings statuses,
         SyncWatcher sync,
         VaultFetch fetch,
-        ProgressHub hub
+        IProgressHub hub
     )
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -246,7 +246,7 @@ internal sealed partial class VersionGraphView : Control
     private readonly IDialogs _dialogs;
 
     /// <summary>What every command this plugin runs reports itself to.</summary>
-    private readonly ProgressHub _hub;
+    private readonly IProgressHub _hub;
 
     /// <summary>The host's windows, which a press on an entry asks to go to its file.</summary>
     private readonly IWindows _windows;
@@ -393,7 +393,7 @@ internal sealed partial class VersionGraphView : Control
         SyncWatcher sync,
         VaultFetch fetch,
         IDialogs dialogs,
-        ProgressHub hub,
+        IProgressHub hub,
         IWindows windows
     )
     {

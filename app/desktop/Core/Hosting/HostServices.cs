@@ -2,6 +2,8 @@ using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Logging;
 using RorolalaDesktop.Notifications;
+using RorolalaDesktop.Previews;
+using RorolalaDesktop.Progress;
 using RorolalaDesktop.Theming;
 // The one Avalonia type named here is aliased rather than taken wholesale: `Avalonia.Controls`
 // carries a `MenuItem` of its own, and the menu items this file registers are the contract's.
@@ -19,6 +21,12 @@ namespace RorolalaDesktop.Hosting;
 /// </remarks>
 internal sealed class HostServices
 {
+    /// <summary>The runs every window shows, in the order they began.</summary>
+    public required ProgressHub Progress { get; init; }
+
+    /// <summary>The previews a view may ask for, and where a plugin adds its renderer.</summary>
+    public required PreviewService Previews { get; init; }
+
     /// <summary>The host's one log.</summary>
     public required LogService Log { get; init; }
 
@@ -176,6 +184,15 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     public ILog Log { get; }
+
+    /// <inheritdoc />
+    public IProgressHub Progress => _services.Progress;
+
+    /// <inheritdoc />
+    public IPreviewService Previews => _services.Previews;
+
+    /// <inheritdoc />
+    public IPreviewRegistry PreviewSources => _services.Previews;
 
     /// <inheritdoc />
     public II18n I18n => _services.I18n;

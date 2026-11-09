@@ -52,11 +52,12 @@
                      The name of the one dock a window holds is added to this panel in code, because only the
                      window knows whether it is one, and it is put over the menu rather than beside it, since a
                      dock's name belongs in the room the row keeps clear of its menus. -->
-                <Grid x:Name="TitleRow">
-                    <Menu
-                        x:Name="MainMenu"
-                        Classes="menu-bar"
-                        Background="Transparent"
+                <Grid x:Name="TitleRow" ColumnDefinitions="Auto,*">
+                    <Button
+                        x:Name="MenuButton"
+                        Grid.Column="0"
+                        Classes="tool"
+                        VerticalAlignment="Center"
                     />
                 </Grid>
             </Border>
@@ -70,6 +71,16 @@
             HorizontalAlignment="Right"
             VerticalAlignment="Bottom"
             Margin="0,0,16,16"
+        />
+
+        <!-- The progress stack stands under the title row rather than in a dock: a run belongs to the window
+             that started it, and every window shows the same host-wide list. Its top is the title row's height
+             plus the gap the row needs to read as a row. -->
+        <Panel
+            x:Name="ProgressLayer"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Margin="0,37,16,0"
         />
     </Grid>
 </Window>

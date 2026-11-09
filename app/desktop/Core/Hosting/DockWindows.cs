@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
@@ -93,6 +94,30 @@ internal sealed class DockWindows : IWindows
     /// <summary>Whether the program is ending, so that the last window closing does not end it twice.</summary>
     private bool _ending;
 
+    /// <summary>Whether the main window is being closed, so its docks are not sent back into it.</summary>
+    private bool _closingMain;
+
+    /// <summary>Whether windows are being restored, which is not a change to save.</summary>
+    private bool _restoring;
+
+    /// <summary>The state each window was in before it was minimized, for the main window to restore.</summary>
+    private readonly Dictionary<string, WindowState> _lastState = new(StringComparer.Ordinal);
+
+    /// <summary>The size each window had while it was not maximized, which is what a restart restores.</summary>
+    private readonly Dictionary<string, Size> _normalSize = new(StringComparer.Ordinal);
+
+    /// <summary>The windows the main window minimized, so they are not left minimized when it comes back.</summary>
+    private readonly HashSet<string> _temporarilyMinimized = new(StringComparer.Ordinal);
+
+    /// <summary>The state the main window was in at the last look.</summary>
+    private WindowState _mainState = WindowState.Normal;
+
+    /// <summary>Waits for a drag or a resize to settle before the layout is written.</summary>
+    private readonly DispatcherTimer _saving = new() { Interval = TimeSpan.FromMilliseconds(400) };
+
+    /// <summary>Raised when a window moved, changed size or changed state.</summary>
+    public event Action? StateChanged;
+
     /// <summary>Makes the set of windows over what a window is drawn from.</summary>
     /// <param name="docks">The docks and where they are.</param>
     /// <param name="i18n">The host's translations.</param>
@@ -126,6 +151,12 @@ internal sealed class DockWindows : IWindows
         // rather than by the window because what a window holds is the docks' business, and a window that
         // watched for its own dock would be every window asking the same question.
         _docks.Changed += Settle;
+
+        _saving.Tick += (_, _) =>
+        {
+            _saving.Stop();
+            StateChanged?.Invoke();
+        };
     }
 
     /// <summary>
@@ -220,6 +251,14 @@ internal sealed class DockWindows : IWindows
 
     /// <summary>How many of the host's windows are up, the main one included.</summary>
     public int Count => _windows.Count + (_main is null ? 0 : 1);
+
+    /// <summary>The window a dock is in, or nothing when it is not in one of its own.</summary>
+    /// <param name="key">The window's key.</param>
+    /// <returns>The window, or nothing.</returns>
+    internal Window? WindowFor(string key) => _windows.GetValueOrDefault(key);
+
+    /// <summary>The windows of docks' own that are up.</summary>
+    internal IReadOnlyCollection<Window> FloatingWindows => _windows.Values;
 
     /// <summary>
     /// Closes a dock by its stable name id.
@@ -838,31 +877,47 @@ internal sealed class DockWindows : IWindows
         if (key is null)
         {
             _main = null;
+
+            // The owner relationship asks the children to close first, but a platform that does not is still
+            // answered: what the program must not leave is a window with no main window behind it.
+            if (_closingMain)
+            {
+                foreach (var child in _windows.Values.ToArray())
+                {
+                    child.Close();
+                }
+            }
         }
         else
         {
             _windows.Remove(key);
+            _lastState.Remove(key);
+            _normalSize.Remove(key);
+            _temporarilyMinimized.Remove(key);
 
-            foreach (var instance in _docks.Instances.Where(one => one.Window == key).ToArray())
+            if (!_closingMain)
             {
-                if (instance.OpenedHere && instance.OpenMode != DockOpenMode.Toggle)
+                foreach (var instance in _docks.Instances.Where(one => one.Window == key).ToArray())
                 {
+                    if (instance.OpenedHere && instance.OpenMode != DockOpenMode.Toggle)
+                    {
+                        _log.Record(
+                            LogLevel.Debug,
+                            Core.Source,
+                            $"`{instance.DockNameId}` was opened in `{key}`, which closed, and is let go of with it"
+                        );
+                        _docks.Discard(instance);
+
+                        continue;
+                    }
+
+                    _docks.Rehome(instance);
                     _log.Record(
                         LogLevel.Debug,
                         Core.Source,
-                        $"`{instance.DockNameId}` was opened in `{key}`, which closed, and is let go of with it"
+                        $"`{instance.DockNameId}` came back to the main window from `{key}`, which closed"
                     );
-                    _docks.Discard(instance);
-
-                    continue;
                 }
-
-                _docks.Rehome(instance);
-                _log.Record(
-                    LogLevel.Debug,
-                    Core.Source,
-                    $"`{instance.DockNameId}` came back to the main window from `{key}`, which closed"
-                );
             }
         }
 
@@ -898,24 +953,97 @@ internal sealed class DockWindows : IWindows
     /// </summary>
     /// <param name="key">The window's key, or nothing for the main one.</param>
     /// <param name="instance">The dock it is for, or nothing for the main window.</param>
+    /// <param name="saved">Where the window was, or nothing for a new one.</param>
     /// <returns>The window, or nothing when there is no way to make one.</returns>
-    private Window? Add(string? key, DockInstance? instance)
+    private Window? Add(string? key, DockInstance? instance, LayoutWindow? saved = null)
     {
         if (_make is null)
         {
             return null;
         }
 
+        // A window of a dock's own is a child of the main window: the main one is opened first where it is not up,
+        // so a child never outlives the window it belongs to.
+        if (key is not null && (_main is null || !_main.IsVisible))
+        {
+            OpenMain();
+        }
+
+        if (key is not null && _main is null)
+        {
+            return null;
+        }
+
         var window = _make(key, instance);
+
+        if (saved is not null)
+        {
+            window.WindowStartupLocation = WindowStartupLocation.Manual;
+            var area = window.Screens.Primary?.WorkingArea ?? new PixelRect(0, 0, 1280, 720);
+            var width = Math.Max(saved.Width, window.MinWidth);
+            var height = Math.Max(saved.Height, window.MinHeight);
+            var x = Math.Clamp(saved.X, area.X, Math.Max(area.X, area.Right - (int)width));
+            var y = Math.Clamp(saved.Y, area.Y, Math.Max(area.Y, area.Bottom - (int)height));
+
+            window.Position = new PixelPoint(x, y);
+            window.Width = width;
+            window.Height = height;
+        }
 
         // The key is read back off the window rather than closed over, so that every window of the set is
         // one window's answer to what it is: a list of keys beside a list of windows is a second truth to
         // keep in step, and the one thing that can disagree with it is the window itself.
         window.Closed += (_, _) => Gone(window);
+        window.PositionChanged += (_, _) => Remember(window);
+        window.SizeChanged += (_, _) => Remember(window);
+        window.PropertyChanged += (_, changed) =>
+        {
+            if (changed.Property == Window.WindowStateProperty)
+            {
+                Remember(window);
+            }
+        };
 
         if (key is not null)
         {
             _windows[key] = window;
+
+            // What the owner relationship is for: every window of a dock's own is a child of the main window,
+            // so closing the main one asks the children first and the program cannot be left with a window it
+            // has no main window for.
+            window.ClosingBehavior = WindowClosingBehavior.OwnerAndChildWindows;
+            window.Closing += (_, _) =>
+            {
+                // Nothing is written while a child is closing: the dock's own state has already been kept, and
+                // the window is about to leave the table the snapshot reads.
+            };
+        }
+        else
+        {
+            _mainState = window.WindowState;
+            window.Closing += (_, _) =>
+            {
+                _closingMain = true;
+                StateChanged?.Invoke();
+
+                // A child may still refuse to close, which cancels the main window's close after this handler
+                // has run. The flag is cleared once the close has had its answer, so the next attempt starts
+                // from a window that is still there rather than one already on its way out.
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (window.IsVisible)
+                    {
+                        _closingMain = false;
+                    }
+                });
+            };
+            window.PropertyChanged += (_, changed) =>
+            {
+                if (changed.Property == Window.WindowStateProperty)
+                {
+                    Follow(window);
+                }
+            };
         }
 
         // The shell names the window the host's own commands act on, which is where a question or a notice
@@ -925,6 +1053,7 @@ internal sealed class DockWindows : IWindows
         window.Activated += (_, _) =>
         {
             _shell.Window = window;
+            _closingMain = false;
 
             // A window coming forward is the work coming back to the dock it holds: a window of one dock is
             // that dock, and the main window answers with the dock it was already working in where that one is
@@ -933,7 +1062,19 @@ internal sealed class DockWindows : IWindows
             _docks.ActivateWindow(instance);
         };
 
-        window.Show();
+        if (key is null)
+        {
+            window.Show();
+        }
+        else
+        {
+            window.Show(_main!);
+        }
+
+        if (saved is { Maximized: true })
+        {
+            window.WindowState = WindowState.Maximized;
+        }
 
         // Said once more after the window is up, since a window that is shown is not always one that is heard
         // being activated, and a window of a dock's own is made for that dock.
@@ -964,6 +1105,180 @@ internal sealed class DockWindows : IWindows
 
         _shell.Window = window;
         window.Activate();
+    }
+
+    /// <summary>Writes down what the windows of docks' own are, to be restored on the next run.</summary>
+    /// <returns>The windows, their docks and their bounds.</returns>
+    public IReadOnlyList<LayoutWindow> SnapshotWindows()
+    {
+        var saved = new List<LayoutWindow>();
+
+        foreach (var (key, window) in _windows)
+        {
+            if (
+                !_held.TryGetValue(key, out var instance)
+                || !string.Equals(instance.Window, key, StringComparison.Ordinal)
+                || !_docks.Instances.Contains(instance)
+            )
+            {
+                continue;
+            }
+
+            var state = _lastState.GetValueOrDefault(key, WindowState.Normal);
+            var size = state == WindowState.Normal
+                ? new Size(window.Width, window.Height)
+                : _normalSize.GetValueOrDefault(key, new Size(window.Width, window.Height));
+
+            saved.Add(
+                new LayoutWindow
+                {
+                    Key = key,
+                    Dock = new LayoutDock
+                    {
+                        DockNameId = instance.DockNameId,
+                        Ordinal = instance.Ordinal,
+                        Meta = new Dictionary<string, string>(instance.Meta, StringComparer.Ordinal),
+                    },
+                    X = window.Position.X,
+                    Y = window.Position.Y,
+                    Width = size.Width,
+                    Height = size.Height,
+                    Maximized = state == WindowState.Maximized,
+                }
+            );
+        }
+
+        return saved;
+    }
+
+    /// <summary>Opens the windows a saved layout names, with their docks, bounds and state.</summary>
+    /// <remarks>
+    /// A dock that is no longer registered is skipped and the rest are opened: a plugin may have been removed,
+    /// and a run that refused every window for one missing dock would be worse than one that lost that window.
+    /// </remarks>
+    /// <param name="saved">The windows that were open.</param>
+    public void RestoreWindows(IReadOnlyList<LayoutWindow> saved)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+
+        if (saved.Count == 0)
+        {
+            return;
+        }
+
+        _restoring = true;
+
+        try
+        {
+            OpenMain();
+
+            foreach (var record in saved)
+            {
+                var registration = _docks.Registrations.FirstOrDefault(dock =>
+                    string.Equals(dock.DockNameId, record.Dock.DockNameId, StringComparison.Ordinal)
+                );
+
+                if (registration is null)
+                {
+                    _log.Record(
+                        LogLevel.Debug,
+                        Core.Source,
+                        $"the saved layout names `{record.Dock.DockNameId}`, which no dock registers, so its window was not restored"
+                    );
+
+                    continue;
+                }
+
+                var key = string.IsNullOrEmpty(record.Key) || _windows.ContainsKey(record.Key)
+                    ? $"dock-{++_made}"
+                    : record.Key;
+
+                if (key.StartsWith("dock-", StringComparison.Ordinal) && int.TryParse(key[5..], out var number))
+                {
+                    _made = Math.Max(_made, number);
+                }
+
+                var made = _docks.RestoreInWindow(
+                    registration,
+                    record.Dock.Meta,
+                    new DockRequest(registration.DockNameId, null),
+                    key,
+                    record.Dock.Ordinal
+                );
+
+                if (made is null)
+                {
+                    continue;
+                }
+
+                _held[key] = made;
+                Add(key, made, record);
+            }
+        }
+        finally
+        {
+            _restoring = false;
+        }
+    }
+
+    /// <summary>Writes down a window's own state, and says that the layout has changed.</summary>
+    /// <param name="window">The window that moved or changed.</param>
+    private void Remember(Window window)
+    {
+        var key = window.Tag as string;
+
+        if (_restoring || key is null)
+        {
+            return;
+        }
+
+        if (window.WindowState is WindowState.Normal or WindowState.Maximized)
+        {
+            _lastState[key] = window.WindowState;
+
+            if (window.WindowState == WindowState.Normal)
+            {
+                _normalSize[key] = new Size(window.Width, window.Height);
+            }
+        }
+
+        _saving.Stop();
+        _saving.Start();
+    }
+
+    /// <summary>Minimizes the children with the main window, and gives them their own state back.</summary>
+    /// <param name="main">The main window.</param>
+    private void Follow(Window main)
+    {
+        var state = main.WindowState;
+
+        if (state == WindowState.Minimized && _mainState != WindowState.Minimized)
+        {
+            foreach (var (key, window) in _windows)
+            {
+                if (window.WindowState == WindowState.Minimized)
+                {
+                    continue;
+                }
+
+                _temporarilyMinimized.Add(key);
+                window.WindowState = WindowState.Minimized;
+            }
+        }
+        else if (state != WindowState.Minimized && _mainState == WindowState.Minimized)
+        {
+            foreach (var key in _temporarilyMinimized)
+            {
+                if (_windows.TryGetValue(key, out var window))
+                {
+                    window.WindowState = _lastState.GetValueOrDefault(key, WindowState.Normal);
+                }
+            }
+
+            _temporarilyMinimized.Clear();
+        }
+
+        _mainState = state;
     }
 
     /// <summary>

@@ -24,11 +24,29 @@ window:
       en: Cancel
       zh-CN: 取消
 
+preview:
+  generate:
+    en: Generating previews
+    zh-CN: 正在生成预览
+
+progress:
+  waiting:
+    en: Waiting
+    zh-CN: 等待中
+  working:
+    en: Working
+    zh-CN: 处理中
+  row_up:
+    en: Sending
+    zh-CN: 正在发送
+  row_down:
+    en: Receiving
+    zh-CN: 正在接收
+
 menu:
   window:
     en: Window
-    zh-CN: 窗口
-  # What the Window menu holds besides the docks, which the window is built with rather than registered
+    zh-CN: 窗口  # What the Window menu holds besides the docks, which the window is built with rather than registered
   # under a key of its own: the way back to the main window, and what a dock's own tab offers.
   window_items:
     open_main:

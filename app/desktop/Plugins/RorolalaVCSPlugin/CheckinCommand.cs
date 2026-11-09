@@ -1,3 +1,4 @@
+using RorolalaDesktop.Contract;
 using System.Text.Json;
 
 namespace RorolalaVCSPlugin;

@@ -3,15 +3,15 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 
+using RorolalaDesktop;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
-
-using RorolalaVCSPlugin;
+using RorolalaDesktop.Progress;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// The Overview's progress stack: a capsule per command, and the capsule of a finished command leaving it.
+/// The host's progress stack: a capsule per run, and the capsule of a finished run leaving it.
 /// </summary>
 /// <remarks>
 /// The stack is a control over a window, so it is checked where a window is: what it holds is found in its visual
@@ -19,13 +19,13 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class ProgressPanelTests
 {
-    /// <summary>A started command gets a capsule, and the capsule goes when the command ends.</summary>
+    /// <summary>A started run gets a capsule, and the capsule goes when the run ends.</summary>
     [Fact]
-    public void ACapsuleIsDrawnForACommandAndLeavesWhenItEnds()
+    public void ACapsuleIsDrawnForARunAndLeavesWhenItEnds()
     {
-        var hub = new ProgressHub();
         var services = Host.Services();
-        var panel = new ProgressPanel(hub, services.Icons);
+        var hub = services.Progress;
+        var panel = new ProgressStack(hub, services.Icons);
         var window = new Window
         {
             Width = 520,
@@ -37,26 +37,24 @@ public sealed class ProgressPanelTests
 
         Pump();
 
-        Assert.False(panel.IsVisible, "the stack is drawn with no command running");
+        Assert.False(panel.IsVisible, "the stack is drawn with no run going");
 
-        var run = hub.Begin("rorolala_vcs.progress.sync");
+        var run = hub.Begin("rorolala_vcs.progress.sync", null);
 
-        run.Records.Read(
-            """{"signal":"begin","id":1,"what":"扫描索引","total":10}"""
-        );
+        run.Records.Read("""{"signal":"begin","id":1,"what":"扫描索引","total":10}""");
         run.Records.Read("""{"signal":"advance","id":1,"done":4}""");
-        hub.Touch();
+        run.Touch();
 
         Pump();
 
-        Assert.True(panel.IsVisible, "the stack is not drawn for a running command");
+        Assert.True(panel.IsVisible, "the stack is not drawn for a running run");
         Assert.Contains(
             panel.GetVisualDescendants().OfType<TextBlock>(),
-            text => text.Text == run.Title
+            text => text.Text == RolaI18N.Get(run.TitleKey)
         );
         Assert.Contains(panel.GetVisualDescendants().OfType<ProgressBar>(), bar => bar.Value == 4);
 
-        hub.End(run);
+        run.End();
 
         Pump();
 
@@ -67,6 +65,28 @@ public sealed class ProgressPanelTests
         Pump();
 
         Assert.False(panel.IsVisible, "the stack stayed after its last capsule left");
+    }
+
+    /// <summary>A main window carries the host's stack, which is what every window shows.</summary>
+    [Fact]
+    public void AMainWindowCarriesTheHostStack()
+    {
+        var services = Host.Services();
+        services.Windows.Make = (key, dock) => new MainWindow(services, key, dock);
+        services.Windows.OpenMain();
+
+        var main = services.Windows.Main;
+
+        try
+        {
+            var stack = main.GetVisualDescendants().OfType<ProgressStack>().Single();
+
+            Assert.False(stack.IsVisible);
+        }
+        finally
+        {
+            main.Close();
+        }
     }
 
     /// <summary>Lets the window run a few turns of its loop, which is what lays a control out and draws it.</summary>

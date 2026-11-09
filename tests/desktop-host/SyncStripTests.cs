@@ -6,6 +6,7 @@ using Avalonia.Styling;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Progress;
 using RorolalaDesktop.Theming;
 using RorolalaVCSPlugin;
 using Vcs = RorolalaVCSPlugin.RorolalaVCSPlugin;
@@ -189,9 +190,9 @@ public sealed class SyncStripTests
     [Fact]
     public void TheStackDrawsACapsuleForEveryRunAndAddsUpItsOwnPhases()
     {
-        var hub = new ProgressHub();
         var services = Host.Services();
-        var panel = new ProgressPanel(hub, services.Icons);
+        var hub = services.Progress;
+        var panel = new ProgressStack(hub, services.Icons);
 
         Assert.False(panel.IsVisible);
 
@@ -247,7 +248,7 @@ public sealed class SyncStripTests
     /// <summary>The capsules a panel has drawn, in the order the commands began.</summary>
     /// <param name="panel">The panel.</param>
     /// <returns>The capsules.</returns>
-    private static IReadOnlyList<Border> Capsules(ProgressPanel panel) =>
+    private static IReadOnlyList<Border> Capsules(ProgressStack panel) =>
         Assert.IsType<StackPanel>(panel.Children[0]).Children.OfType<Border>().ToArray();
 
     /// <summary>The bar for the whole of a command, at the head of its capsule.</summary>

@@ -25,3 +25,6 @@ window:
   close:
     en: Close
     zh-CN: 关闭
+  menu:
+    en: Menu
+    zh-CN: 菜单

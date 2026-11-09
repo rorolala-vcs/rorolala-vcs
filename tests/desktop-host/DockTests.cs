@@ -664,10 +664,41 @@ public sealed class DockTests
         Assert.Equal(1.0 / 3, Assert.IsType<LayoutSplit>(read.Root).Ratio, 6);
         Assert.Equal(DockLayout.SchemaVersion, read.Version);
         Assert.Contains(
-            "\"_version\": 2",
+            "\"_version\": 3",
             File.ReadAllText(ConfigPaths.Layout),
             StringComparison.Ordinal
         );
+    }
+
+    /// <summary>A version two layout has no windows and is read as a version three layout.</summary>
+    [Fact]
+    public void AVersionTwoLayoutStillLoads()
+    {
+        DataHome.Clean();
+        Given(
+            ConfigPaths.Layout,
+            """
+            {
+              "_version": 2,
+              "activeGroup": "g-1",
+              "root": {
+                "kind": "group",
+                "id": "g-1",
+                "active": 0,
+                "docks": [
+                  { "nameId": "it.dock.only", "ordinal": 0, "meta": { "key": "value" } }
+                ]
+              }
+            }
+            """
+        );
+
+        var log = new LogService(new NotificationService());
+        var layout = LayoutStore.Load(log);
+
+        Assert.Equal(DockLayout.SchemaVersion, layout.Version);
+        Assert.Empty(layout.Windows);
+        Assert.Equal("it.dock.only", Assert.Single(Assert.IsType<LayoutGroup>(layout.Root).Docks).DockNameId);
     }
 
     /// <summary>A layout written by an earlier build is not read, and the starting arrangement is used.</summary>

@@ -1,3 +1,4 @@
+using RorolalaDesktop.Contract;
 using System.Diagnostics;
 using System.Text;
 

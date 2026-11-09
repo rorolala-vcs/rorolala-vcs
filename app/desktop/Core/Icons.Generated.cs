@@ -29,6 +29,9 @@ internal static partial class Icons
     /// <summary>The key the `settings` picture is held under.</summary>
     public const string Settings = "rorolala.settings";
 
+    /// <summary>The key the `menu` picture is held under.</summary>
+    public const string Menu = "rorolala.menu";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
@@ -39,5 +42,6 @@ internal static partial class Icons
         (Extension, "extension"),
         (ListAlt, "list_alt"),
         (Settings, "settings"),
+        (Menu, "menu"),
     ];
 }

@@ -23,7 +23,7 @@ internal sealed class VaultFetch
     private readonly IPluginHost _host;
 
     /// <summary>What the run is drawn by, beside every other command this plugin runs.</summary>
-    private readonly ProgressHub _hub;
+    private readonly IProgressHub _hub;
 
     /// <summary>What asked to be read once the fetch is over, in the order they asked.</summary>
     private readonly List<Action> _after = [];
@@ -34,7 +34,7 @@ internal sealed class VaultFetch
     /// <summary>Makes the fetcher.</summary>
     /// <param name="host">The host, for the run's card and for what a failure is said with.</param>
     /// <param name="hub">What every command this plugin runs reports itself to.</param>
-    public VaultFetch(IPluginHost host, ProgressHub hub)
+    public VaultFetch(IPluginHost host, IProgressHub hub)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);

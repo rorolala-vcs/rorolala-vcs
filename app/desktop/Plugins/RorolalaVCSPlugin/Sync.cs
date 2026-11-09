@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;

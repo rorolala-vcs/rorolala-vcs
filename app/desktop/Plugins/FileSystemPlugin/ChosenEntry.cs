@@ -160,7 +160,7 @@ public static class ChosenFiles
     /// <summary>Says that the choice is nothing, which is a click away from every file.</summary>
     public static void Clear()
     {
-        ChosenDirectory.Clear();
+        ChosenEntries.Clear();
 
         if (Current.Count > 0)
         {
@@ -169,6 +169,21 @@ public static class ChosenFiles
         }
 
         Cleared?.Invoke();
+    }
+
+    /// <summary>Replaces the files without deriving them, which the whole choice does when it publishes.</summary>
+    /// <param name="files">The files the choice holds.</param>
+    internal static void Set(IReadOnlyList<Entry> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+
+        if (Same(Current, files))
+        {
+            return;
+        }
+
+        Current = files;
+        Changed?.Invoke();
     }
 
     /// <summary>
@@ -185,33 +200,100 @@ public static class ChosenFiles
     {
         ArgumentNullException.ThrowIfNull(chosen);
 
-        var files = chosen.Where(entry => entry.Kind == EntryKind.File).ToArray();
-        var place = chosen.FirstOrDefault(entry => entry.Kind == EntryKind.Directory);
-
-        // A directory chosen is what the click was about, and it is kept beside the file choice
-        // because it answers a different question, an action over a place rather than over one
-        // file. A choice of files takes the place's meaning away.
-        if (place is not null)
-        {
-            ChosenDirectory.Publish(place);
-        }
-        else if (files.Length > 0)
-        {
-            ChosenDirectory.Clear();
-        }
-
-        if (Same(Current, files))
-        {
-            return;
-        }
-
-        Current = files;
-        Changed?.Invoke();
+        ChosenEntries.Publish(chosen);
     }
 
     /// <summary>Whether two choices name the same files in the same order.</summary>
     /// <param name="left">One choice.</param>
     /// <param name="right">The other.</param>
+    /// <returns>Whether they are the same answer.</returns>
+    private static bool Same(IReadOnlyList<Entry> left, IReadOnlyList<Entry> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var at = 0; at < left.Count; at++)
+        {
+            if (!string.Equals(left[at].Path, right[at].Path, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+}
+
+/// <summary>
+/// The whole choice, files and directories in the order the view shows them.
+/// </summary>
+/// <remarks>
+/// A listing and a tree are two views of the same work, and what a menu, the clipboard and the work's own
+/// actions act on is one choice rather than the half of it a particular view happens to keep. The files and
+/// the one directory are derived here rather than published by each view, so the two can never name a
+/// different choice.
+/// </remarks>
+public static class ChosenEntries
+{
+    /// <summary>Every chosen entry, in the order the view shows it.</summary>
+    public static IReadOnlyList<Entry> Current { get; private set; } = [];
+
+    /// <summary>Raised when <see cref="Current"/> says something else.</summary>
+    public static event Action? Changed;
+
+    /// <summary>Replaces the whole choice and derives what the rest of the program reads from it.</summary>
+    /// <param name="chosen">The entries the view has chosen.</param>
+    public static void Publish(IReadOnlyList<Entry> chosen)
+    {
+        ArgumentNullException.ThrowIfNull(chosen);
+
+        var files = chosen.Where(entry => entry.Kind == EntryKind.File).ToArray();
+        var place = chosen.FirstOrDefault(entry => entry.Kind == EntryKind.Directory);
+
+        if (place is not null)
+        {
+            ChosenDirectory.Publish(place);
+        }
+        else
+        {
+            ChosenDirectory.Clear();
+        }
+
+        ChosenFiles.Set(files);
+
+        if (Same(Current, chosen))
+        {
+            return;
+        }
+
+        Current = chosen.ToArray();
+        Changed?.Invoke();
+    }
+
+    /// <summary>Says that nothing is chosen.</summary>
+    public static void Clear()
+    {
+        var was = Current.Count > 0;
+
+        Current = [];
+        ChosenDirectory.Clear();
+
+        if (ChosenFiles.Current.Count > 0)
+        {
+            ChosenFiles.Set([]);
+        }
+
+        if (was)
+        {
+            Changed?.Invoke();
+        }
+    }
+
+    /// <summary>Whether two choices name the same entries in the same order.</summary>
+    /// <param name="left">One choice.</param>
+    /// <param name="right">The other choice.</param>
     /// <returns>Whether they are the same answer.</returns>
     private static bool Same(IReadOnlyList<Entry> left, IReadOnlyList<Entry> right)
     {

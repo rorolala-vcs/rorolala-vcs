@@ -8,51 +8,56 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using System.Diagnostics.CodeAnalysis;
 using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
-namespace RorolalaVCSPlugin;
+namespace RorolalaDesktop.Progress;
 
 /// <summary>
-/// What the commands this plugin runs are doing, as a stack of capsules at the bottom right of the Overview.
+/// What the program is doing, as a stack of capsules at the top right of a window.
 /// </summary>
 /// <remarks>
-/// A capsule is one command: what it is called, how far its own phases have got, and, under the pointer, the
-/// phases themselves. The stack floats over the reading rather than taking a column of it, so the table keeps
-/// its width whether a run is going or not; a command that appears fades into the stack, and one that ends
-/// fades out of it.
+/// A capsule is one run: what it is called, how far its own phases have got, and, under the pointer, the phases
+/// themselves. The stack floats over the docks rather than taking a column of them, so a window keeps its layout
+/// whether a run is going or not; a run that begins fades into the stack, and one that ends fades out of it.
 /// <para>
-/// The runs come from the <see cref="ProgressHub"/>, which outlives every Overview: a run begun from a menu has
-/// to reach a panel that may not exist yet, and a panel opened after the run began has to see it. A capsule is
-/// drawn once per run and brought up to date afterwards, so a bar slides from where it was rather than from
-/// nothing on every record.
+/// The runs come from the <see cref="IProgressHub"/>, which outlives every window: a run begun from a menu has to
+/// reach a window that may not exist yet, and a window opened after the run began has to see it. A capsule is drawn
+/// once per run and brought up to date afterwards, so a bar slides from where it was rather than from nothing on
+/// every record.
 /// </para>
 /// </remarks>
-internal sealed class ProgressPanel : StackPanel
+[SuppressMessage(
+    "Naming",
+    "CA1711:Identifiers should not have incorrect suffix",
+    Justification = "the control is the stack the product calls the progress stack, and the name is the product's"
+)]
+public sealed class ProgressStack : StackPanel
 {
     /// <summary>How wide the stack is, which is what a name and a bar are read in.</summary>
     private const double WidthOfStack = 300;
 
-    /// <summary>How long a capsule takes to leave the stack after its command ends.</summary>
+    /// <summary>How long a capsule takes to leave the stack after its run ends.</summary>
     private static readonly TimeSpan Leaving = TimeSpan.FromMilliseconds(230);
 
     /// <summary>The pictures the capsule heads are drawn with.</summary>
     private readonly IIconLibrary _icons;
 
     /// <summary>What the stack is drawn from.</summary>
-    private readonly ProgressHub _hub;
+    private readonly IProgressHub _hub;
 
     /// <summary>The capsule drawn for each run being shown, and the runs that are leaving.</summary>
-    private readonly Dictionary<ProgressRun, Capsule> _drawn = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<IProgressRun, Capsule> _drawn = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>The rows the capsules stand in.</summary>
     private readonly StackPanel _capsules = new() { Spacing = 7 };
 
     /// <summary>Makes the stack.</summary>
     /// <param name="hub">What the stack is drawn from.</param>
-    /// <param name="icons">The pictures a command's capsule is headed with.</param>
-    public ProgressPanel(ProgressHub hub, IIconLibrary icons)
+    /// <param name="icons">The pictures a run's capsule is headed with.</param>
+    public ProgressStack(IProgressHub hub, IIconLibrary icons)
     {
         ArgumentNullException.ThrowIfNull(hub);
         ArgumentNullException.ThrowIfNull(icons);
@@ -62,8 +67,7 @@ internal sealed class ProgressPanel : StackPanel
 
         Width = WidthOfStack;
         HorizontalAlignment = HorizontalAlignment.Right;
-        VerticalAlignment = VerticalAlignment.Bottom;
-        Margin = new Thickness(0, 0, 18, 18);
+        VerticalAlignment = VerticalAlignment.Top;
         Spacing = 7;
         IsVisible = false;
 
@@ -82,19 +86,16 @@ internal sealed class ProgressPanel : StackPanel
 
     /// <summary>Draws again, which is what every change to the runs asks for.</summary>
     /// <param name="sender">What raised it.</param>
-    /// <param name="changed">The event.</param>
-    private void Redraw(object? sender, EventArgs changed)
-    {
-        _ = sender;
-        _ = changed;
-        Draw();
-    }
+    private void Redraw() => Draw();
 
     /// <summary>Draws a capsule for every run the hub holds, and takes away the ones it no longer does.</summary>
     internal void Draw()
     {
-        var runs = _hub.Runs;
-        var live = new HashSet<ProgressRun>(runs, ReferenceEqualityComparer.Instance);
+        // Five at once is what the stack can show without becoming a wall: a run older than the five newest is
+        // still going, but its capsule is not drawn. A "+N" capsule is the later refinement rather than a reason
+        // to draw a list of unknown height over the window.
+        var runs = _hub.Runs.TakeLast(5).ToArray();
+        var live = new HashSet<IProgressRun>(runs, ReferenceEqualityComparer.Instance);
 
         foreach (var gone in _drawn.Keys.Where(run => !live.Contains(run)).ToArray())
         {
@@ -117,7 +118,7 @@ internal sealed class ProgressPanel : StackPanel
         {
             if (!_drawn.TryGetValue(run, out var capsule))
             {
-                capsule = new Capsule(_icons, run.TitleKey);
+                capsule = new Capsule(_icons, run.IconKey);
                 _drawn[run] = capsule;
                 _capsules.Children.Add(capsule.Root);
             }
@@ -185,15 +186,15 @@ internal sealed class ProgressPanel : StackPanel
         private readonly Border _root;
 
         /// <summary>The command now drawn, which decides whether there are phases to show.</summary>
-        private ProgressRun? _run;
+        private IProgressRun? _run;
 
         /// <summary>Whether the fade out has begun, so it is not begun twice.</summary>
         public bool LeavingStarted { get; private set; }
 
-        /// <summary>Makes a capsule headed with the picture of its command.</summary>
-        /// <param name="icons">The pictures the commands are drawn with.</param>
-        /// <param name="titleKey">What the command is called, which is also what its picture is chosen by.</param>
-        public Capsule(IIconLibrary icons, string titleKey)
+        /// <summary>Makes a capsule headed with the picture of its run.</summary>
+        /// <param name="icons">The pictures the runs are drawn with.</param>
+        /// <param name="iconKey">The picture the run named, or nothing for a capsule with no picture.</param>
+        public Capsule(IIconLibrary icons, string? iconKey)
         {
             var glyph = new Border
             {
@@ -204,7 +205,7 @@ internal sealed class ProgressPanel : StackPanel
             };
             glyph[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Dark);
 
-            if (icons.Find(IconOf(titleKey)) is { } picture)
+            if (iconKey is { Length: > 0 } key && icons.Find(key) is { } picture)
             {
                 var mark = new Border
                 {
@@ -277,7 +278,7 @@ internal sealed class ProgressPanel : StackPanel
 
         /// <summary>Draws the capsule from its run, keeping the phase rows it already has.</summary>
         /// <param name="run">The run.</param>
-        public void Draw(ProgressRun run)
+        public void Draw(IProgressRun run)
         {
             _run = run;
 
@@ -297,13 +298,13 @@ internal sealed class ProgressPanel : StackPanel
 
             var focus = at >= 0 ? tops[at] : null;
 
-            _title.Text = run.Title;
+            _title.Text = RolaI18N.Get(run.TitleKey);
             _phase.IsVisible = focus is not null && tops.Length > 1;
             _phase.Text = focus is null || tops.Length < 2
                 ? string.Empty
                 : $"{at + 1}/{tops.Length}";
             _share.Text = tasks.Count == 0
-                ? RolaI18N.Get("rorolala_vcs.progress.waiting")
+                ? RolaI18N.Get("progress.waiting")
                 : focus?.Total is { } length
                     ? Share(focus.Done, length)
                     : "...";
@@ -359,9 +360,9 @@ internal sealed class ProgressPanel : StackPanel
                 ? named
                 : task.Aim switch
                 {
-                    MoveAim.Up => "↑ " + RolaI18N.Get("rorolala_vcs.progress.row_up"),
-                    MoveAim.Down => "↓ " + RolaI18N.Get("rorolala_vcs.progress.row_down"),
-                    _ => RolaI18N.Get("rorolala_vcs.progress.working"),
+                    MoveAim.Up => "鈫?" + RolaI18N.Get("progress.row_up"),
+                    MoveAim.Down => "鈫?" + RolaI18N.Get("progress.row_down"),
+                    _ => RolaI18N.Get("progress.working"),
                 };
 
         /// <summary>How far something has got, as a percentage.</summary>
@@ -372,26 +373,6 @@ internal sealed class ProgressPanel : StackPanel
             total == 0
                 ? "100%"
                 : ((done * 100) / total).ToString(CultureInfo.InvariantCulture) + "%";
-
-        /// <summary>The picture a command is headed with.</summary>
-        /// <param name="titleKey">What the command is called.</param>
-        /// <returns>The key of its picture.</returns>
-        private static string IconOf(string titleKey) => titleKey switch
-        {
-            "rorolala_vcs.progress.sync" => Icons.Sync,
-            "rorolala_vcs.progress.fetch" => Icons.CloudDownload,
-            "rorolala_vcs.progress.checkin" => Icons.CloudUpload,
-            "rorolala_vcs.progress.hold" => Icons.Lock,
-            "rorolala_vcs.progress.giveup" => Icons.LockOpen,
-            "rorolala_vcs.progress.track" => Icons.Add,
-            "rorolala_vcs.progress.retrack" => Icons.AltRoute,
-            "rorolala_vcs.progress.join" => Icons.Merge,
-            "rorolala_vcs.progress.restore" => Icons.Download,
-            "rorolala_vcs.progress.unmerge" => Icons.CallSplit,
-            "rorolala_vcs.progress.path_move" => Icons.ArrowRightAlt,
-            "rorolala_vcs.progress.path_remove" => Icons.Error,
-            _ => Icons.Work,
-        };
 
         /// <summary>One phase's row: its name, a thin bar and its share.</summary>
         private sealed class Phase

@@ -1,3 +1,4 @@
+using RorolalaDesktop.Progress;
 using FileSystemPlugin;
 using RorolalaDesktop.Contract;
 using RorolalaVCSPlugin;

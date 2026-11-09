@@ -23,14 +23,140 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class WindowTests
 {
-    /// <summary>
-    /// A dock moved into a window of its own is in that window, and keeps the group it came from.
-    /// </summary>
-    /// <remarks>
-    /// The window and the group are two questions: being in a window of its own is a change of window and not of
-    /// group, so a dock taken out of the bottom band comes back to it when it returns, and the group it was in
-    /// may be pruned when it was the only dock there, which is why the id is kept rather than the place.
-    /// </remarks>
+    /// <summary>A window of a dock's own is owned by the main window, which is what closes it with the main one.</summary>
+    [Fact]
+    public void AFloatingWindowIsOwnedByTheMainWindow()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.owned");
+        services.Docks.Register(registration);
+
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(instance);
+
+        services.Windows.OpenMain();
+        services.Windows.ToOwnWindow(instance);
+
+        var child = services.Windows.WindowFor(instance.Window!);
+
+        Assert.NotNull(child);
+        Assert.Same(services.Windows.Main, child.Owner);
+        Assert.Equal(WindowClosingBehavior.OwnerAndChildWindows, child.ClosingBehavior);
+    }
+
+    /// <summary>A window of a dock's own is written with its dock, bounds and state, and restored with them.</summary>
+    [Fact]
+    public void AFloatingWindowRestoresItsDockAndBounds()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.restored");
+        services.Docks.Register(registration);
+
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(instance);
+
+        services.Windows.OpenMain();
+        services.Windows.ToOwnWindow(instance);
+
+        var child = services.Windows.WindowFor(instance.Window!);
+
+        Assert.NotNull(child);
+
+        child.Position = new PixelPoint(140, 90);
+        child.Width = 520;
+        child.Height = 380;
+
+        var saved = Assert.Single(services.Windows.SnapshotWindows());
+
+        Assert.Equal(instance.DockNameId, saved.Dock.DockNameId);
+        Assert.Equal(instance.Ordinal, saved.Dock.Ordinal);
+        Assert.Equal(140, saved.X);
+        Assert.Equal(90, saved.Y);
+        Assert.Equal(child.Width, saved.Width, 1);
+        Assert.Equal(child.Height, saved.Height, 1);
+
+        var (restored, _) = Windows();
+
+        restored.Docks.Register(New("it.dock.restored"));
+        restored.Windows.RestoreWindows([saved]);
+
+        var again = Assert.Single(restored.Docks.Instances);
+
+        Assert.Equal(instance.Ordinal, again.Ordinal);
+        Assert.Equal(saved.Dock.DockNameId, again.DockNameId);
+        Assert.NotNull(again.Window);
+        Assert.NotNull(restored.Windows.WindowFor(again.Window!));
+    }
+
+    /// <summary>A saved key that is already used is replaced rather than shared.</summary>
+    [Fact]
+    public void ARestoredWindowWithAUsedKeyGetsAnother()
+    {
+        var (services, _) = Windows();
+        var registration = New("it.dock.collide");
+        services.Docks.Register(registration);
+
+        var instance = services.Docks.Activate(registration);
+
+        Assert.NotNull(instance);
+
+        services.Windows.OpenMain();
+        services.Windows.ToOwnWindow(instance);
+
+        var saved = Assert.Single(services.Windows.SnapshotWindows());
+
+        // The window of this run still holds the saved key, so the restore has to name another one.
+        saved.Key = instance.Window!;
+        saved.Dock.Ordinal = 99;
+
+        var restored = services.Docks.RestoreInWindow(
+            registration,
+            saved.Dock.Meta,
+            new DockRequest(registration.DockNameId, null),
+            "dock-99",
+            99
+        );
+
+        Assert.NotNull(restored);
+        Assert.Equal(99, restored.Ordinal);
+    }
+
+    /// <summary>Closing the main window closes the windows it owns, and ends the program once.</summary>
+    [Fact]
+    public void ClosingTheMainWindowClosesEveryFloatingWindow()
+    {
+        var (services, _) = Windows();
+        var first = New("it.dock.first");
+        var second = New("it.dock.second");
+
+        services.Docks.Register(first);
+        services.Docks.Register(second);
+
+        var one = services.Docks.Activate(first);
+        var two = services.Docks.Activate(second);
+
+        Assert.NotNull(one);
+        Assert.NotNull(two);
+
+        services.Windows.OpenMain();
+        services.Windows.ToOwnWindow(one);
+
+        var other = services.Docks.Activate(second);
+        Assert.NotNull(other);
+        services.Windows.ToOwnWindow(other);
+
+        var ended = 0;
+        services.Windows.End = () => ended++;
+
+        services.Windows.Main.Close();
+
+        Assert.Equal(0, services.Windows.Count);
+        Assert.Equal(1, ended);
+    }
+
+    /// <summary>A dock moved into a window of its own is in that window, and keeps the group it came from.</summary>
     [Fact]
     public void ADockMovedIntoAWindowOfItsOwnIsInThatWindow()
     {

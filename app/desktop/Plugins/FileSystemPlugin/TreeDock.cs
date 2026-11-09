@@ -176,8 +176,12 @@ internal sealed class TreeControl : UserControl
 
         // Nothing to read again, but what a provider answered may have landed since the rows were drawn: a badge
         // is asked for when a row is made, so a strip refilled only by a rebuild would be a badge that appears and
-        // then vanishes until the next rebuild. What is asked again is the badges, not the directories.
-        (_content.Content as TreeBrowser)?.RepaintBadges();
+        // then vanishes until the next rebuild. What is asked again is the badges and the words under the row,
+        // not the directories.
+        if (_content.Content is TreeBrowser tree)
+        {
+            tree.RepaintBadges();
+        }
     }
 
     /// <summary>
@@ -199,6 +203,18 @@ internal sealed class TreeControl : UserControl
 
         if (_content.Content is TreeBrowser tree)
         {
+            if (
+                e.Key == Key.A
+                && e.KeyModifiers.HasFlag(KeyModifiers.Control)
+                && !e.KeyModifiers.HasFlag(KeyModifiers.Alt)
+            )
+            {
+                tree.SelectAll();
+                e.Handled = true;
+
+                return;
+            }
+
             if (Keys.Forget(e, tree.Delete, _host.Log))
             {
                 return;
@@ -360,15 +376,20 @@ internal sealed class TreeBrowser : UserControl
     private Border? _marked;
 
     /// <summary>
-    /// The step that is chosen, or nothing where none is.
+    /// The steps that are chosen, in the order the tree shows them.
     /// </summary>
     /// <remarks>
     /// Kept here rather than read back from the toolkit's selection, because what choosing a row does here is go
-    /// there: a row is a step, and whether the toolkit also calls it selected is not something the clipboard's
-    /// keys can act on. It is remembered across a rebuild along with the open steps, since being read again is
-    /// what a rebuilt tree is.
+    /// there: a row is a step, and the clipboard's keys act on the whole choice. It is remembered across a rebuild
+    /// along with the open steps, since being read again is what a rebuilt tree is.
     /// </remarks>
-    private string? _chosen;
+    private IReadOnlyList<string> _chosen = [];
+
+    /// <summary>Where the last click landed, which a shift click measures its run from.</summary>
+    private int _anchor = -1;
+
+    /// <summary>Whether this view is putting a choice back, so that the toolkit's event is not a user choosing.</summary>
+    private bool _selecting;
 
     /// <summary>The press a drag of a step would begin from, while it may still become one.</summary>
     private PointerPressedEventArgs? _pressed;
@@ -403,7 +424,7 @@ internal sealed class TreeBrowser : UserControl
     /// repository it is rooted in had not been read yet (see <see cref="Resume"/>).
     /// </remarks>
     private readonly List<string> _opening = [];
-    private string? _choosing;
+    private IReadOnlyList<string>? _choosing;
 
     /// <summary>
     /// Whether the rows are being read again in place, so that what the toolkit calls selected is no choice.
@@ -496,7 +517,12 @@ internal sealed class TreeBrowser : UserControl
         _drops = new Drops(host, browser, Mark);
         _empty = Empty();
 
-        var tree = new TreeView { ContextMenu = actions.Empty(this) };
+        var tree = new TreeView
+        {
+            SelectionMode = SelectionMode.Multiple,
+            Focusable = true,
+            ContextMenu = actions.Empty(this),
+        };
         tree.Items.Add(Node(root));
         _tree = tree;
 
@@ -524,6 +550,11 @@ internal sealed class TreeBrowser : UserControl
         AddHandler(PointerPressedEvent, Pressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, Moved, RoutingStrategies.Tunnel);
         AddHandler(PointerReleasedEvent, Released, RoutingStrategies.Tunnel);
+
+        // Ctrl+A is the tree's own selection, which the toolkit does not provide on its own: the whole of what is
+        // on screen is chosen, not the step the keyboard happens to be on. Taken here as well as at the dock, since
+        // the keyboard may be on the tree or on a row within it.
+        AddHandler(KeyDownEvent, ChosenAll, RoutingStrategies.Tunnel);
 
         // Redrawn while on screen, like the listing beside it: a dock that was closed is not a view of anything
         // to keep in step. The box a new directory's name is typed in is heard for the same reason and only
@@ -766,8 +797,8 @@ internal sealed class TreeBrowser : UserControl
         return opened;
     }
 
-    /// <summary>The step that is chosen, or nothing where none is.</summary>
-    public string? Chosen() => _chosen;
+    /// <summary>The steps that are chosen, in the order the tree shows them.</summary>
+    public IReadOnlyList<string> Chosen() => _chosen;
 
     /// <summary>
     /// Shows a directory that has just been made.
@@ -867,8 +898,8 @@ internal sealed class TreeBrowser : UserControl
     /// </para>
     /// </remarks>
     /// <param name="opened">The paths of the steps to open, outermost first.</param>
-    /// <param name="chosen">The step to choose, or nothing where none was.</param>
-    public void Reopen(IReadOnlyList<string> opened, string? chosen)
+    /// <param name="chosen">The steps to choose, or nothing where none was.</param>
+    public void Reopen(IReadOnlyList<string> opened, IReadOnlyList<string>? chosen)
     {
         _opening.Clear();
         _opening.AddRange(opened);
@@ -921,18 +952,39 @@ internal sealed class TreeBrowser : UserControl
             }
         }
 
-        // The choice is put back once its row is drawn, which is after the reading holding it has landed. A choice
-        // whose row is not drawn once a reading has landed is one that is gone, and the reading that says a step is
-        // missing says it of this one too: it is let go of rather than kept for a row that will never be drawn.
-        if (_choosing is { } choose && Find(_tree.Items, choose) is { } pick)
+        // The choice is put back once its rows are drawn, which is after the reading holding them has landed. A
+        // path whose row is not drawn once a reading has landed is one that is gone, and the reading that says a
+        // step is missing says it of this one too: it is let go of rather than kept for a row that will never be
+        // drawn.
+        if (_choosing is { } choosing)
         {
-            _chosen = choose;
-            pick.IsSelected = true;
-            _choosing = null;
-        }
-        else if (landed)
-        {
-            _choosing = null;
+            var found = choosing
+                .Select(path => (Path: path, Item: Find(_tree.Items, path)))
+                .Where(one => one.Item is not null)
+                .ToArray();
+
+            if (found.Length == choosing.Count || landed)
+            {
+                _selecting = true;
+
+                try
+                {
+                    foreach (var (_, item) in found)
+                    {
+                        item!.IsSelected = true;
+                    }
+                }
+                finally
+                {
+                    _selecting = false;
+                }
+
+                _chosen = [.. found.Select(one => one.Path)];
+                _anchor = _chosen.Count > 0 ? IndexOf(_chosen[0]) : -1;
+                _choosing = null;
+
+                _listing.Chosen([.. _chosen.Select(Being)]);
+            }
         }
     }
 
@@ -1001,14 +1053,14 @@ internal sealed class TreeBrowser : UserControl
             _refreshing = false;
         }
 
-        if (chosen is not null)
+        if (chosen.Count > 0)
         {
             ChooseOnceDrawn(chosen);
         }
     }
 
     /// <summary>
-    /// Chooses the step a reader had chosen, once the rows read again have been laid out.
+    /// Chooses the steps a reader had chosen, once the rows read again have been laid out.
     /// </summary>
     /// <remarks>
     /// What is chosen is put back only if it is still what is chosen: a reader who has chosen another step while
@@ -1017,27 +1069,121 @@ internal sealed class TreeBrowser : UserControl
     /// the tree no longer holds (a step that was open is opened again by the reading, so a gone row is gone) and
     /// it is let go of rather than kept for a row that will never be drawn.
     /// </remarks>
-    /// <param name="chosen">The step that was chosen when the rows were read again.</param>
-    private void ChooseOnceDrawn(string chosen) =>
+    /// <param name="chosen">The steps that were chosen when the rows were read again.</param>
+    private void ChooseOnceDrawn(IReadOnlyList<string> chosen) =>
         Dispatcher.UIThread.Post(
             () =>
             {
-                if (!string.Equals(_chosen, chosen, StringComparison.Ordinal))
+                if (!Same(_chosen, chosen))
                 {
                     return;
                 }
 
-                if (Find(_tree.Items, chosen) is not { } pick)
+                var found = chosen
+                    .Select(path => (Path: path, Item: Find(_tree.Items, path)))
+                    .Where(one => one.Item is not null)
+                    .ToArray();
+
+                if (found.Length != chosen.Count)
                 {
-                    _chosen = null;
+                    _chosen = [.. found.Select(one => one.Path)];
+                    _listing.Chosen([.. _chosen.Select(Being)]);
 
                     return;
                 }
 
-                pick.IsSelected = true;
+                _selecting = true;
+
+                try
+                {
+                    foreach (var (_, item) in found)
+                    {
+                        item!.IsSelected = true;
+                    }
+                }
+                finally
+                {
+                    _selecting = false;
+                }
             },
             DispatcherPriority.Loaded
         );
+
+    /// <summary>The rows on screen, in the order the tree draws them.</summary>
+    /// <remarks>
+    /// A closed step contributes itself and nothing under it: a range is what the user can see, and a range that
+    /// reached into a closed step would choose rows no press could have shown.
+    /// </remarks>
+    /// <returns>The drawn rows, outermost first.</returns>
+    private IReadOnlyList<TreeViewItem> VisibleRows()
+    {
+        var rows = new List<TreeViewItem>();
+
+        if (_tree.Items.OfType<TreeViewItem>().FirstOrDefault() is { } root)
+        {
+            Flatten(root, rows);
+        }
+
+        return rows;
+    }
+
+    /// <summary>Gathers a row and, where it is open, the rows under it.</summary>
+    /// <param name="item">The row to gather.</param>
+    /// <param name="rows">Where the rows are gathered.</param>
+    private static void Flatten(TreeViewItem item, List<TreeViewItem> rows)
+    {
+        rows.Add(item);
+
+        if (!item.IsExpanded)
+        {
+            return;
+        }
+
+        foreach (var under in item.Items.OfType<TreeViewItem>())
+        {
+            Flatten(under, rows);
+        }
+    }
+
+    /// <summary>The place a path has among the rows on screen, or nothing where it is not drawn.</summary>
+    /// <param name="path">The path.</param>
+    /// <returns>The place, or <c>-1</c>.</returns>
+    private int IndexOf(string path)
+    {
+        var rows = VisibleRows();
+
+        for (var at = 0; at < rows.Count; at++)
+        {
+            if (string.Equals(rows[at].Tag as string, path, StringComparison.Ordinal))
+            {
+                return at;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>Whether two choices name the same steps in the same order.</summary>
+    /// <param name="left">One choice.</param>
+    /// <param name="right">The other choice.</param>
+    /// <returns>Whether they are the same answer.</returns>
+    private static bool Same(IReadOnlyList<string> left, IReadOnlyList<string> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var at = 0; at < left.Count; at++)
+        {
+            if (!string.Equals(left[at], right[at], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>Gathers the open steps under some items, outermost first.</summary>
     /// <param name="items">The items to walk.</param>
@@ -1119,8 +1265,8 @@ internal sealed class TreeBrowser : UserControl
     /// </summary>
     /// <remarks>
     /// Going there is the caller's, because choosing and going are one gesture here: what is done here is
-    /// remembering it, and having the row drawn as the chosen one so that what a copy or a cut is about is what the
-    /// eye says it is.
+    /// remembering it, and having the rows drawn as chosen so that what a copy or a cut is about is what the eye
+    /// says it is.
     /// <para>
     /// What is chosen is also what the rest of the program is told is chosen: a directory listing publishes its own
     /// choice and the entry that was clicked to a catalogue the version graph reads, and a tree is the same view of the
@@ -1130,24 +1276,43 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="path">The step to choose.</param>
     private void Choose(string path)
     {
-        _chosen = path;
-
-        if (Find(_tree.Items, path) is { } item)
+        if (_chosen.Count != 1 || !string.Equals(_chosen[0], path, StringComparison.Ordinal))
         {
-            item.IsSelected = true;
+            SelectOnly(path);
         }
 
-        var entry = Being(path);
-
-        _listing.Chosen([entry]);
-        _listing.Clicked(entry);
+        _listing.Clicked(Being(path));
     }
 
-    /// <summary>Keeps what the tree calls selected and what the keys act on the same step.</summary>
+    /// <summary>Makes one step the whole choice, which is what a plain press on a row does.</summary>
+    /// <param name="path">The step to choose.</param>
+    private void SelectOnly(string path)
+    {
+        _selecting = true;
+
+        try
+        {
+            _tree.SelectedItems?.Clear();
+
+            if (Find(_tree.Items, path) is { } item)
+            {
+                _tree.SelectedItems?.Add(item);
+            }
+        }
+        finally
+        {
+            _selecting = false;
+        }
+
+        _chosen = [path];
+        _anchor = IndexOf(path);
+        _listing.Chosen([Being(path)]);
+    }
+
+    /// <summary>Keeps what the tree calls selected and what the keys act on the same steps.</summary>
     /// <remarks>
-    /// A press on a row is `Choose`, which is the whole of a click: it marks the row, publishes what is chosen, and
-    /// says which entry was clicked. The arrows and a reading that puts a choice back move the toolkit's selection
-    /// without touching a row's own handler, and a step the eye reads as chosen has to be the step a key acts on, or
+    /// A press on a row is <see cref="Choose"/>, which is the whole of an unmodified click. A modified press and the
+    /// arrows are the toolkit's selection, and a step the eye reads as chosen has to be the step a key acts on, or
     /// Delete removes what was chosen one gesture ago. What is published is the choice alone and not a click, since a
     /// listing's arrows publish only that much.
     /// </remarks>
@@ -1156,60 +1321,121 @@ internal sealed class TreeBrowser : UserControl
         // Nothing while a reading is putting the choice back: `Resume` is the one that says what is chosen then, and
         // a selection it is making is not a user choosing anything. Nor while the rows are being read again in
         // place, where the selection goes only because the rows it was on are being made again.
-        if (_refreshing || _choosing is not null)
+        if (_refreshing || _selecting || _choosing is not null)
         {
             return;
         }
 
-        // The tree's own answer, which is nothing while nothing is selected: a cleared tree is a tree whose Delete
-        // does nothing rather than one that removes what was chosen before.
-        var path = (_tree.SelectedItem as TreeViewItem)?.Tag as string;
+        var picked = _tree.SelectedItems?
+            .OfType<TreeViewItem>()
+            .Select(item => item.Tag as string)
+            .OfType<string>()
+            .ToArray() ?? [];
 
-        if (string.Equals(path, _chosen, StringComparison.Ordinal))
+        if (Same(_chosen, picked))
         {
             return;
         }
 
-        _chosen = path;
+        _chosen = picked;
+        _anchor = picked.Length > 0 ? IndexOf(picked[^1]) : -1;
 
-        _listing.Chosen(path is null ? [] : [Being(path)]);
+        _listing.Chosen([.. picked.Select(Being)]);
     }
 
-    /// <summary>Copies the chosen step to the clipboard.</summary>
+    /// <summary>Chooses every row the tree is showing.</summary>
+    public void SelectAll()
+    {
+        var rows = VisibleRows();
+
+        _selecting = true;
+
+        try
+        {
+            _tree.SelectedItems?.Clear();
+
+            foreach (var row in rows)
+            {
+                _tree.SelectedItems?.Add(row);
+            }
+        }
+        finally
+        {
+            _selecting = false;
+        }
+
+        _chosen = [.. rows.Select(row => row.Tag as string).OfType<string>()];
+        _anchor = 0;
+
+        _listing.Chosen([.. _chosen.Select(Being)]);
+    }
+
+    /// <summary>Takes Ctrl+A as choosing every row on screen.</summary>
+    /// <param name="sender">The tree.</param>
+    /// <param name="e">The key.</param>
+    private void ChosenAll(object? sender, KeyEventArgs e)
+    {
+        if (
+            e.Key == Key.A
+            && e.KeyModifiers.HasFlag(KeyModifiers.Control)
+            && !e.KeyModifiers.HasFlag(KeyModifiers.Alt)
+        )
+        {
+            SelectAll();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>The chosen steps as entries, in the order the tree shows them.</summary>
+    /// <param name="withoutRoot">Whether to leave out the root and anything holding it.</param>
+    /// <returns>The entries.</returns>
+    private Entry[] ChosenEntries(bool withoutRoot = false) =>
+        [
+            .. _chosen
+                .Where(path => !withoutRoot || !HoldsRoot(path))
+                .Select(Being),
+        ];
+
+    /// <summary>Copies the chosen steps to the clipboard.</summary>
     public void Copy()
     {
-        if (Chosen() is { } path)
+        if (ChosenEntries() is { Length: > 0 } entries)
         {
-            _actions.Copy(this, [Being(path)]);
+            _actions.Copy(this, entries);
         }
     }
 
-    /// <summary>Cuts the chosen step to the clipboard, which a paste then moves.</summary>
+    /// <summary>Cuts the chosen steps to the clipboard, which a paste then moves.</summary>
     public void Cut()
     {
-        if (Chosen() is { } path)
+        if (ChosenEntries() is { Length: > 0 } entries)
         {
-            _actions.Cut(this, [Being(path)]);
+            _actions.Cut(this, entries);
         }
     }
 
     /// <summary>
-    /// Pastes what is on the clipboard into the chosen step.
+    /// Pastes what is on the clipboard into the chosen directory.
     /// </summary>
     /// <remarks>
-    /// Into the step that is chosen and not into the base: a tree is walked by choosing steps, so the step a user
-    /// last chose is the directory a paste here is about. With nothing chosen there is nowhere to paste, and
-    /// nothing happens.
+    /// Into the first chosen directory, because a directory is what a paste is into; a choice of files only is pasted
+    /// beside them, into the directory holding the first. With nothing chosen the base is the place, which is the
+    /// directory the tree is rooted at and the only one a tree always names.
     /// </remarks>
     public void Paste()
     {
-        if (Chosen() is { } path)
-        {
-            _actions.Paste(this, path);
-        }
+        var chosen = ChosenEntries();
+
+        var into = chosen.FirstOrDefault(entry => entry.Kind == EntryKind.Directory) is { } directory
+            ? directory.Path
+            : chosen
+                .Select(entry => Path.GetDirectoryName(entry.Path))
+                .FirstOrDefault(path => path is { Length: > 0 }) ?? _root;
+
+        _actions.Paste(this, into);
     }
 
-    /// <summary>Removes the chosen step, asking first unless told not to.</summary>
+    /// <summary>Removes the chosen steps, asking first unless told not to.</summary>
     /// <remarks>
     /// The root is left out: it is the row the tree stands on rather than a step of it, and removing it would
     /// leave the tree rooted at a directory that is no longer there. A step holding the root is left out for the
@@ -1224,21 +1450,26 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="ask">Whether to put the question to the user first.</param>
     public void Delete(bool ask)
     {
-        if (Chosen() is not { } path)
+        var chosen = ChosenEntries();
+
+        if (chosen.Length == 0)
         {
             _host.Log.Info("delete: nothing is chosen in the tree");
 
             return;
         }
 
-        if (HoldsRoot(path))
-        {
-            _host.Log.Info($"delete: `{path}` is what the tree stands on, or holds it, and is not removed");
+        var removable = chosen.Where(entry => !HoldsRoot(entry.Path)).ToArray();
 
-            return;
+        if (removable.Length != chosen.Length)
+        {
+            _host.Log.Info("delete: the tree's own root, or a step holding it, is not removed");
         }
 
-        _actions.Remove([Being(path)], ask);
+        if (removable.Length > 0)
+        {
+            _actions.Remove(removable, ask);
+        }
     }
 
     /// <summary>Whether removing a path would take the directory the tree stands on with it.</summary>
@@ -1477,7 +1708,11 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="path">The directory the step stands for.</param>
     private TreeViewItem Node(string path)
     {
-        var item = new TreeViewItem { Tag = path };
+        var item = new TreeViewItem
+        {
+            Tag = path,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
         var read = false;
 
         // A step with nothing under it is given no child at all, and that is what leaves it without an
@@ -1679,7 +1914,6 @@ internal sealed class TreeBrowser : UserControl
     {
         var path = entry.Path;
         var name = _listing.Name(entry);
-        var deletable = !string.Equals(path, _root, StringComparison.Ordinal);
 
         // Filled when it opens rather than when the row is made, which is how a listing's menu is made as
         // well (see `EntryView.Prepared`). What a menu holds is asked of the plugins, and what they answer
@@ -1688,8 +1922,26 @@ internal sealed class TreeBrowser : UserControl
         var menu = new ContextMenu();
         menu.Opening += (_, _) =>
         {
-            // Filled by the same actions a listing fills its menu with, with the base row left out of what may be removed.
-            _actions.Fill(menu, this, [entry], deletable);
+            // A right click inside the choice acts on the whole of it, with the row it landed on first; one outside
+            // it acts on that row alone, which is what a click that did not select anything is about. The base row
+            // is left out of what may be removed, and so is a step holding it.
+            var chosen = _chosen.Count > 0 && _chosen.Contains(path) ? _chosen : [path];
+            var order = VisibleRows()
+                .Select((row, at) => (Path: row.Tag as string, At: at))
+                .Where(one => one.Path is not null)
+                .ToDictionary(one => one.Path!, one => one.At, StringComparer.Ordinal);
+
+            var entries = chosen
+                .OrderBy(one => string.Equals(one, path, StringComparison.Ordinal) ? -1 : order.GetValueOrDefault(one))
+                .Select(Being)
+                .ToArray();
+
+            _actions.Fill(
+                menu,
+                this,
+                entries,
+                entries.All(one => !HoldsRoot(one.Path))
+            );
 
             // Offered by every row with steps under it, which is the same row that is given an expander, since
             // closing them all is worth offering where there is more than one to close. What is not offered is
@@ -1707,46 +1959,69 @@ internal sealed class TreeBrowser : UserControl
         // on the icon's corner: a tree is a list of names, and a badge drawn over a picture in it would be a mark
         // on the picture rather than an answer about the entry.
         var badges = Worn(entry);
-
-        DockPanel.SetDock(badges, Dock.Right);
+        badges.Name = "entry-badges";
 
         _worn.RemoveAll(one => string.Equals(one.Path, path, StringComparison.Ordinal));
         _worn.Add((path, badges));
 
-        var panel = new DockPanel { LastChildFill = true };
+        var icon = _listing.Icon(entry, Icons.Row);
+        icon.Name = "entry-icon";
 
+        var label = new TextBlock
+        {
+            Text = name.Length > 0 ? name : path,
+            Name = "entry-name",
+            Classes = { EntryName },
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            MinWidth = 0,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextWrapping = TextWrapping.NoWrap,
+            ClipToBounds = true,
+        };
+
+        // Three columns rather than a dock: the name column is the one that gives way, and a TextBlock in a
+        // DockPanel's last-child fill can draw past the width it was arranged in and cover the badges. The icon
+        // and the badges are measured before the name, so the name is trimmed rather than the badges clipped.
+        var panel = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            ColumnSpacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        Grid.SetColumn(icon, 0);
+        Grid.SetColumn(label, 1);
+        Grid.SetColumn(badges, 2);
+        panel.Children.Add(icon);
+        panel.Children.Add(label);
         panel.Children.Add(badges);
-
-        panel.Children.Add(
-            new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
-                Children =
-                {
-                    _listing.Icon(entry, Icons.Row),
-                    new TextBlock
-                    {
-                        Text = name.Length > 0 ? name : path,
-                        Classes = { EntryName },
-                        VerticalAlignment = VerticalAlignment.Center,
-                    },
-                },
-            }
-        );
 
         var row = new Border
         {
             Background = Brushes.Transparent,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             ContextMenu = menu,
             Child = panel,
         };
 
-        row.Tapped += (_, _) =>
+        row.Tapped += (_, tapped) =>
         {
             // A press that became a drag is not also a step: the drag took the pointer, and a hand letting go of
             // one is putting something down rather than choosing a place.
             if (_dragged)
+            {
+                return;
+            }
+
+            // A modified press is the toolkit's selection and nothing else: `Ctrl` toggles one row and `Shift` takes
+            // a range, and going to the place under either would take the whole tree with it for a gesture that was
+            // about choosing what to act on.
+            if (
+                tapped.KeyModifiers.HasFlag(KeyModifiers.Control)
+                || tapped.KeyModifiers.HasFlag(KeyModifiers.Shift)
+            )
             {
                 return;
             }
@@ -1841,7 +2116,7 @@ internal sealed class TreeBrowser : UserControl
 
         foreach (var badge in _listing.Badges(entry))
         {
-            strip.Children.Add(Icons.Worn(badge, Icons.Row));
+            strip.Children.Add(Icons.WornAt(badge, Icons.Badge));
         }
 
         // A row nothing speaks for wears nothing: a strip left in the layout would be room taken from a name for an
@@ -1869,7 +2144,11 @@ internal sealed class TreeBrowser : UserControl
     {
         // The row is made before its header, since a header is told which step it is: a file has none, because
         // nothing opens under a file.
-        var item = new TreeViewItem { Tag = entry.Path };
+        var item = new TreeViewItem
+        {
+            Tag = entry.Path,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
         item.Header = Header(entry, step: null, collapse: null);
 
         return item;

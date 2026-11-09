@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Threading;
 using RorolalaDesktop.Docking;
@@ -12,6 +13,7 @@ using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Logging;
 using RorolalaDesktop.Notifications;
+using RorolalaDesktop.Progress;
 // Named rather than imported whole, because the contract has a menu item of its own and the toolkit has one
 // too: what a window's menu is built from is the toolkit's, and only these two are the contract's.
 using DockHeaderCommand = RorolalaDesktop.Contract.DockHeaderCommand;
@@ -67,6 +69,12 @@ public partial class MainWindow : Window
     /// </para>
     /// </remarks>
     public const double TitleBarHeight = 29.0;
+
+    /// <summary>How large the menu button's picture is, which is the size a toolbar's tools are drawn at.</summary>
+    private const double MenuGlyphSize = 18;
+
+    /// <summary>How much of the toolbar size the menu's mark takes.</summary>
+    private const double MenuGlyphScale = 0.8;
 
     /// <summary>The label key of the menu the registered docks appear under.</summary>
     private const string WindowMenu = "menu.window";
@@ -134,6 +142,9 @@ public partial class MainWindow : Window
 
     /// <summary>The docks as they appear in the Window menu, so their checks can be kept in step.</summary>
     private readonly List<(DockRegistration Registration, MenuItem Entry)> _docks = [];
+
+    /// <summary>The menus the title row's button opens.</summary>
+    private readonly MenuFlyout _menus = new() { Placement = PlacementMode.BottomEdgeAlignedLeft };
 
     /// <summary>
     /// The drag the name of the one dock this window holds has begun, if it has begun one.
@@ -258,9 +269,33 @@ public partial class MainWindow : Window
         // title bar of its own, and this would take it away.
         WindowDecorationsTheme = _frame.Theme;
 
+        // The row no longer carries a menu bar: one button opens the same top-level menus as a flyout. The
+        // button is the row's own, so a press on it is answered by the button before the row asks whether to
+        // move the window, and the flyout is drawn over the docks rather than in the row's visual tree.
+        MenuButton.Flyout = _menus;
+        MenuButton[!TemplatedControl.ForegroundProperty] =
+            new DynamicResourceExtension(RorolalaDesktop.Contract.PaletteKeys.Front);
+        MenuButton.Content = MenuGlyph();
+
+        // The macOS frame puts its three lights at the left, so the menu belongs at the right. Every other
+        // frame leaves the left of the row free and keeps its buttons at the right.
+        var (menuColumn, menuSide, _) = TitlePlacement(Program.WindowStyle);
+
+        Grid.SetColumn(MenuButton, menuColumn);
+        MenuButton.HorizontalAlignment = menuSide;
+
+        // The macOS frame draws its own edge over the last few pixels of the row, so the button is kept clear of
+        // it rather than being clipped by the frame it sits in.
+        if (Program.WindowStyle == Theming.WindowStyle.Mac)
+        {
+            MenuButton.Margin = new Thickness(0, 0, 8, 0);
+        }
+        MenuButton.Click += (_, _) => _menus.ShowAt(MenuButton);
+        ToolTip.SetTip(MenuButton, _services.I18n.Get("window.menu"));
+        AutomationProperties.SetName(MenuButton, _services.I18n.Get("window.menu"));
+
         BuildMenu();
         Caption();
-
         // A window of one dock is named by that dock, and a dock that names itself by where it is names the window
         // again whenever it goes somewhere else. Subscribed after the row is drawn, since what it says is the row's.
         if (_dock is not null)
@@ -274,6 +309,10 @@ public partial class MainWindow : Window
             _services.Windows,
             _key
         );
+
+        // Every window shows the same host-wide runs: a command begun from a menu has to reach a window that may
+        // not exist yet, and a window opened after it began has to see it.
+        ProgressLayer.Children.Add(new ProgressStack(_services.Progress, _services.Icons));
 
         if (_key is null)
         {
@@ -414,6 +453,10 @@ public partial class MainWindow : Window
         caption.PointerCaptureLost += (_, _) => _drag = null;
 
         TitleRow.Children.Add(caption);
+
+        // The name stands where the frame's buttons are not: on the left under a macOS frame, on the right
+        // under the other two.
+        Grid.SetColumn(caption, TitlePlacement(Program.WindowStyle).CaptionColumn);
     }
 
     /// <summary>
@@ -434,21 +477,24 @@ public partial class MainWindow : Window
     /// <param name="press">What was pressed.</param>
     private void MoveOrMaximize(PointerPressedEventArgs press)
     {
-        // A press something inside the row has already taken means a menu or a button, and the window
-        // must not move out from under the thing that was aimed at.
+        // A press something inside the row has already taken means the menu button or a window button, and the
+        // window must not move out from under the thing that was aimed at. The menu's own items are in a flyout,
+        // outside this row, so a press there never reaches this handler at all. The menu button has not taken the
+        // press yet when this handler runs, because this one is on the way down, so it is recognised by what it is
+        // rather than by the press being handled.
         if (press.Handled || !press.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             return;
         }
 
-        // Nothing has taken a press on a menu's row yet, though, and nothing will before this: a menu
-        // answers the *release*, and the handler that opens it is subscribed when the menu is attached to
-        // the visual tree, which is after this window was built, and so after this handler. Moving the
-        // window here takes that release away with it: the submenu opens under a window being moved, the
-        // items in it cannot be clicked, and the second click of a double click maximizes the window. The
-        // name of the dock this window holds is the same question asked of the other part of the row: it
-        // begins a drag of that dock, and the window must not be moved by the same press.
-        if (ItemUnder(press.Source) is not null || RorolalaTheme.TitleUnder(press.Source))
+        if (ButtonUnder(press.Source) is not null)
+        {
+            return;
+        }
+
+        // The name of the dock this window holds begins a drag of that dock, and the window must not be moved by
+        // the same press.
+        if (RorolalaTheme.TitleUnder(press.Source))
         {
             return;
         }
@@ -465,27 +511,57 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// The menu item a press landed in, or nothing when it landed elsewhere on the row.
-    /// </summary>
+    /// <summary>The button a press landed in, or nothing when it landed elsewhere on the row.</summary>
     /// <remarks>
-    /// The same question the toolkit asks itself about a press it handles, its
-    /// <c>DefaultMenuInteractionHandler</c> walks the parents the same way, and answered the same way,
-    /// because what the pointer hit is a part of the item's own template rather than the item.
+    /// The press reaches the row before the button handles it, because the row's handler is on the way down and the
+    /// button's is on the way up. What the pointer hit is part of the button's own template rather than the button,
+    /// so the parents are walked.
     /// </remarks>
     /// <param name="pressed">What the press landed on.</param>
-    /// <returns>The menu item holding it, or nothing.</returns>
-    private static MenuItem? ItemUnder(object? pressed)
+    /// <returns>The button holding it, or nothing.</returns>
+    private static Button? ButtonUnder(object? pressed)
     {
         for (var at = pressed as StyledElement; at is not null; at = at.Parent)
         {
-            if (at is MenuItem item)
+            if (at is Button button)
             {
-                return item;
+                return button;
             }
         }
 
         return null;
+    }
+
+    /// <summary>The menu button's picture: the three dots of a vertical more menu, in the ordinary ink.</summary>
+    /// <remarks>
+    /// Drawn rather than read from the picture library, because this is the one mark in the row that is not a
+    /// window's button: a picture masked by a resource binding is a picture that can be present and still draw
+    /// nothing, and three dots are the whole of what the mark is.
+    /// </remarks>
+    /// <returns>The mark.</returns>
+    private static Control MenuGlyph()
+    {
+        var extent = MenuGlyphSize * MenuGlyphScale;
+        var dot = extent / 5;
+        var glyph = new Canvas { Width = extent, Height = extent };
+
+        for (var at = 0; at < 3; at++)
+        {
+            var mark = new Border
+            {
+                Width = dot,
+                Height = dot,
+                CornerRadius = new CornerRadius(dot / 2),
+            };
+
+            mark[!Border.BackgroundProperty] =
+                new DynamicResourceExtension(RorolalaDesktop.Contract.PaletteKeys.Front);
+            Canvas.SetLeft(mark, (extent - dot) / 2);
+            Canvas.SetTop(mark, (extent * (0.2 + (at * 0.3))) - (dot / 2));
+            glyph.Children.Add(mark);
+        }
+
+        return glyph;
     }
 
     /// <summary>
@@ -544,14 +620,18 @@ public partial class MainWindow : Window
     /// </para>
     /// </remarks>
     /// <param name="key">The key the picture is held under.</param>
+    /// <param name="extent">How large to draw it, or nothing for the frame's own size.</param>
     /// <returns>What to put in the button, or nothing.</returns>
-    private Control? Glyph(string key) =>
+    private Control? Glyph(string key, double? extent = null) =>
         WindowControls.Find(_services.Icons, key) is { } picture
             ? WindowControls.Glyph(
                 picture,
-                Program.WindowStyle == Theming.WindowStyle.Mac
-                    ? WindowControls.LightGlyphSize
-                    : WindowControls.GlyphSize
+                extent
+                    ?? (
+                        Program.WindowStyle == Theming.WindowStyle.Mac
+                            ? WindowControls.LightGlyphSize
+                            : WindowControls.GlyphSize
+                    )
             )
             : null;
 
@@ -592,6 +672,25 @@ public partial class MainWindow : Window
     /// first, and it is what a main window made before the plugins were initialized needs.
     /// </remarks>
     internal void RebuildMenu() => BuildMenu();
+
+    /// <summary>The top-level menus this window shows, in order, for the button and for tests.</summary>
+    internal IReadOnlyList<MenuItem> MenuItems => [.. _menus.Items.OfType<MenuItem>()];
+
+    /// <summary>Where the menu button and a one-dock name stand in the title row, by the frame's style.</summary>
+    /// <remarks>
+    /// A macOS frame draws its three lights at the window's left corner, so the menu moves to the right and the
+    /// dock's name takes the left, after the room the lights need. The other two styles are the other way round.
+    /// </remarks>
+    /// <param name="style">The frame's style.</param>
+    /// <returns>The menu's column and side, and the name's column.</returns>
+    internal static (
+        int MenuColumn,
+        HorizontalAlignment MenuSide,
+        int CaptionColumn
+    ) TitlePlacement(Theming.WindowStyle style) =>
+        style == Theming.WindowStyle.Mac
+            ? (1, HorizontalAlignment.Right, 0)
+            : (0, HorizontalAlignment.Left, 1);
 
     /// <summary>
     /// Ends the covering this window was made with, once the work behind it is done.
@@ -687,7 +786,7 @@ public partial class MainWindow : Window
     /// </remarks>
     private void BuildMenu()
     {
-        MainMenu.Items.Clear();
+        _menus.Items.Clear();
 
         // The entries the last bar was built with are gone with it, and a bar built again would add the
         // registrations to the ones it no longer shows: what is kept is the entries this bar holds, so it
@@ -711,7 +810,7 @@ public partial class MainWindow : Window
                 AddCommands(menu);
             }
 
-            MainMenu.Items.Add(menu);
+            _menus.Items.Add(menu);
         }
     }
 

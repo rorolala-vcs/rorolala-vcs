@@ -67,7 +67,10 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
 
         // What every command this plugin runs reports itself to: a card per command down the Overview, drawn by
         // whoever reached for the command (the strip, an entry's menu) and read by the Overview's panel.
-        var hub = new ProgressHub();
+        // What every command this plugin runs reports itself to: the host's own stack, drawn by whichever window
+        // is open. The same one is handed to the docks, so a run begun from a menu reaches the window that started
+        // it and every other window as well.
+        var hub = host.Progress;
 
         // One sync and one fetch between the two views of the work: a fetch brings the copy both read, and a
         // sync carries it, so two docks each holding their own would be two runs of the same thing. The graph

@@ -2,8 +2,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Reflection;
 using FileSystemPlugin;
 using RorolalaDesktop;
 using RorolalaDesktop.Configuration;
@@ -180,6 +183,97 @@ public sealed class DockIconTests
         );
     }
 
+    /// <summary>The menu stands where the frame leaves room: right on macOS, left elsewhere.</summary>
+    [Fact]
+    public void TheMenuStandsOnTheSideTheFrameLeavesFree()
+    {
+        var mac = MainWindow.TitlePlacement(WindowStyle.Mac);
+
+        Assert.Equal(1, mac.MenuColumn);
+        Assert.Equal(HorizontalAlignment.Right, mac.MenuSide);
+        Assert.Equal(0, mac.CaptionColumn);
+
+        var windows = MainWindow.TitlePlacement(WindowStyle.Windows);
+
+        Assert.Equal(0, windows.MenuColumn);
+        Assert.Equal(HorizontalAlignment.Left, windows.MenuSide);
+        Assert.Equal(1, windows.CaptionColumn);
+    }
+
+    /// <summary>The macOS menu button is drawn inside the row and carries its glyph.</summary>
+    [Fact]
+    public void TheMacMenuButtonIsInsideTheRow()
+    {
+        var original = Program.WindowStyle;
+        var style = typeof(Program).GetProperty(
+            nameof(Program.WindowStyle),
+            BindingFlags.Public | BindingFlags.Static
+        )!;
+
+        style.SetValue(null, WindowStyle.Mac);
+
+        try
+        {
+            var (_, main, _) = Open(DesktopIcons.Extension);
+            var button = main.GetVisualDescendants()
+                .OfType<Button>()
+                .Single(control => control.Name == "MenuButton");
+            var start = button.TranslatePoint(new Point(0, 0), main);
+
+            Assert.NotNull(start);
+            Assert.True(button.Bounds.Width >= 18, "the menu button is narrower than its glyph");
+            Assert.True(
+                start.Value.X + button.Bounds.Width <= main.Bounds.Width - 4,
+                "the menu button reaches past the window's right edge"
+            );
+
+            var glyph = Assert.IsAssignableFrom<Control>(button.Content);
+
+            Assert.Equal(14.4, glyph.Width, 1);
+            Assert.Equal(14.4, glyph.Height, 1);
+            Assert.Equal(3, Assert.IsType<Canvas>(glyph).Children.Count);
+        }
+        finally
+        {
+            style.SetValue(null, original);
+        }
+    }
+
+    /// <summary>The title row's button opens the same top-level menus the window built.</summary>
+    [Fact]
+    public void TheMenuButtonOpensEveryTopLevelMenu()
+    {
+        var (_, main, _) = Open(DesktopIcons.Extension);
+        var button = main.GetVisualDescendants()
+            .OfType<Button>()
+            .Single(control => control.Name == "MenuButton");
+        var flyout = Assert.IsType<MenuFlyout>(button.Flyout);
+        var glyph = Assert.IsAssignableFrom<Control>(button.Content);
+
+        Assert.Equal(14.4, glyph.Width, 1);
+        Assert.Equal(14.4, glyph.Height, 1);
+        Assert.Equal(3, Assert.IsType<Canvas>(glyph).Children.Count);
+
+        Assert.Equal(
+            main.MenuItems.Select(HeaderText),
+            flyout.Items.OfType<MenuItem>().Select(HeaderText)
+        );
+        Assert.Equal(
+            RorolalaDesktop.I18n.RolaI18N.Get("window.menu"),
+            Avalonia.Automation.AutomationProperties.GetName(button)
+        );
+
+        var point =
+            button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), main)
+            ?? throw new InvalidOperationException("the menu button is not drawn in the window");
+
+        main.MouseDown(point, MouseButton.Left);
+        main.MouseUp(point, MouseButton.Left);
+        Pump();
+
+        Assert.True(flyout.IsOpen, "a press on the menu button did not open its flyout");
+    }
+
     /// <summary>A dock's item is the height of every other item of the Window menu, and its word is the menu's size.</summary>
     /// <remarks>
     /// The look's base theme sets a menu's word through the presenter it draws it in, and a plain text block put into an
@@ -202,6 +296,15 @@ public sealed class DockIconTests
             var (_, main, _) = Open(DesktopIcons.Extension);
             var window = Window(main);
 
+            // The menu bar is a flyout now, so the items are drawn only once the button opens it. The flyout is
+            // shown at the button rather than by a press, because what is checked is the row's height and not the
+            // gesture that opens it.
+            var button = main.GetVisualDescendants()
+                .OfType<Button>()
+                .Single(control => control.Name == "MenuButton");
+            var flyout = Assert.IsType<MenuFlyout>(button.Flyout);
+
+            flyout.ShowAt(button);
             window.IsSubMenuOpen = true;
             Pump();
 
@@ -212,6 +315,8 @@ public sealed class DockIconTests
 
             Assert.Equal(plain.Bounds.Height, dock.Bounds.Height);
             Assert.Equal(Word(plain).FontSize, Word(dock).FontSize);
+
+            flyout.Hide();
         }
         finally
         {
@@ -234,7 +339,7 @@ public sealed class DockIconTests
     /// <param name="main">The window.</param>
     /// <returns>The menu.</returns>
     private static MenuItem Window(MainWindow main) =>
-        main.MainMenu.Items.OfType<MenuItem>().Single(item => HeaderText(item) == "menu.window");
+        main.MenuItems.Single(item => HeaderText(item) == "menu.window");
 
     /// <summary>The item a dock is opened by, as it stands before its menu is opened.</summary>
     /// <param name="main">The window.</param>

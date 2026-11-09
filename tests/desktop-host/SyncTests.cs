@@ -1,5 +1,6 @@
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Progress;
 using RorolalaVCSPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;

@@ -38,7 +38,122 @@ public sealed class TreeTests
     {
         DataHome.Clean();
         global::FileSystemPlugin.HideRegistry.Clear();
+        global::FileSystemPlugin.ChosenEntries.Clear();
+        global::FileSystemPlugin.ChosenFiles.Clear();
     }
+
+    /// <summary>A control press chooses one row, adds another with Ctrl, and takes it away again.</summary>
+    [Fact]
+    public void ACtrlClickAddsAndRemovesARow()
+    {
+        var directory = Scratch.New("tree-choice");
+        var alpha = Directory.CreateDirectory(Path.Combine(directory, "alpha")).FullName;
+        var beta = Directory.CreateDirectory(Path.Combine(directory, "beta")).FullName;
+
+        var (window, browser) = OpenAt(directory);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            Press(window, Row(Until(window, () => RowByPath(window, alpha))));
+            Assert.Equal([alpha], ChosenEntries().Select(entry => entry.Path));
+
+            Press(
+                window,
+                Row(Until(window, () => RowByPath(window, beta))),
+                RawInputModifiers.Control
+            );
+            Assert.Equal([alpha, beta], ChosenEntries().Select(entry => entry.Path));
+
+            Press(
+                window,
+                Row(Until(window, () => RowByPath(window, beta))),
+                RawInputModifiers.Control
+            );
+            Assert.Equal([alpha], ChosenEntries().Select(entry => entry.Path));
+            Assert.Equal(alpha, browser.Current);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>A Shift press takes the range of rows that are on screen.</summary>
+    [Fact]
+    public void AShiftClickSelectsTheVisibleRange()
+    {
+        var directory = Scratch.New("tree-range");
+        var alpha = Directory.CreateDirectory(Path.Combine(directory, "alpha")).FullName;
+        var beta = Directory.CreateDirectory(Path.Combine(directory, "beta")).FullName;
+        var gamma = Directory.CreateDirectory(Path.Combine(directory, "gamma")).FullName;
+
+        var (window, _) = OpenAt(directory);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            Press(window, Row(Until(window, () => RowByPath(window, alpha))));
+            Press(
+                window,
+                Row(Until(window, () => RowByPath(window, gamma))),
+                RawInputModifiers.Shift
+            );
+
+            Assert.Equal([alpha, beta, gamma], ChosenEntries().Select(entry => entry.Path));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>Ctrl+A chooses every row the tree shows, including the base row.</summary>
+    [Fact]
+    public void CtrlASelectsEveryVisibleRow()
+    {
+        var directory = Scratch.New("tree-select-all");
+
+        Directory.CreateDirectory(Path.Combine(directory, "alpha"));
+        File.WriteAllText(Path.Combine(directory, "hero.psd"), "x");
+
+        var (window, _) = OpenAt(directory);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var tree = window.GetVisualDescendants().OfType<TreeView>().First();
+
+            Assert.True(tree.Focus(), "the tree would not take the keyboard");
+            PumpFrames(window, 2);
+
+            window.KeyPress(Key.A, RawInputModifiers.Control, PhysicalKey.A, "a");
+            PumpFrames(window, 5);
+
+            Assert.Equal(3, ChosenEntries().Count);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>The choice is a list, which is what the rest of the program reads.</summary>
+    /// <returns>The current choice.</returns>
+    private static IReadOnlyList<Entry> ChosenEntries() =>
+        global::FileSystemPlugin.ChosenEntries.Current;
 
     /// <summary>The chevron opens a step and closes it again without touching the steps under it.</summary>
     /// <remarks>
@@ -428,7 +543,7 @@ public sealed class TreeTests
     /// </remarks>
     /// <param name="window">The window the control is drawn in.</param>
     /// <param name="at">The control to press.</param>
-    private static void Press(Window window, Visual at)
+    private static void Press(Window window, Visual at, RawInputModifiers modifiers = RawInputModifiers.None)
     {
         var middle =
             at.TranslatePoint(new Point(at.Bounds.Width / 2, at.Bounds.Height / 2), window)
@@ -436,8 +551,8 @@ public sealed class TreeTests
                 $"the control `{at.GetType().Name}` is not drawn in the window"
             );
 
-        window.MouseDown(middle, MouseButton.Left);
-        window.MouseUp(middle, MouseButton.Left);
+        window.MouseDown(middle, MouseButton.Left, modifiers);
+        window.MouseUp(middle, MouseButton.Left, modifiers);
     }
 
     /// <summary>Waits for something to be drawn, which happens a turn or so after it is asked for.</summary>

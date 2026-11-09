@@ -221,7 +221,7 @@ internal sealed class UpstreamPlace
     private readonly ILog _log;
 
     /// <summary>What every command this plugin runs reports itself to.</summary>
-    private readonly ProgressHub _hub;
+    private readonly IProgressHub _hub;
 
     /// <summary>The one fetch of the Vault's Layout.</summary>
     private readonly VaultFetch _fetch;
@@ -305,7 +305,7 @@ internal sealed class UpstreamPlace
     /// <param name="log">Where a base that is not a Workspace is judged.</param>
     /// <param name="hub">What every command this plugin runs reports itself to.</param>
     /// <param name="fetch">The one fetch of the Vault's Layout.</param>
-    public UpstreamPlace(IPluginHost host, ILog log, ProgressHub hub, VaultFetch fetch)
+    public UpstreamPlace(IPluginHost host, ILog log, IProgressHub hub, VaultFetch fetch)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(log);
@@ -337,7 +337,7 @@ internal sealed class UpstreamPlace
     /// <param name="host">The host, whose registry the place is offered to and whose windows it is opened through.</param>
     /// <param name="hub">What every command this plugin runs reports itself to.</param>
     /// <param name="fetch">The one fetch of the Vault's Layout.</param>
-    public static void Declare(IPluginHost host, ProgressHub hub, VaultFetch fetch)
+    public static void Declare(IPluginHost host, IProgressHub hub, VaultFetch fetch)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);

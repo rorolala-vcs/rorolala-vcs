@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace RorolalaVCSPlugin;
+namespace RorolalaDesktop.Contract;
 
 /// <summary>
 /// Which way one task's work moves, when it moves any.
@@ -10,7 +10,7 @@ namespace RorolalaVCSPlugin;
 /// up, and work arriving is down. A task that moves no data, reading the Layout, planning, writing the changes
 /// down, carries none, and is drawn without one.
 /// </remarks>
-internal enum MoveAim
+public enum MoveAim
 {
     /// <summary>Work leaving this side.</summary>
     Up,
@@ -28,7 +28,7 @@ internal enum MoveAim
 /// two directions of a transfer under the transfer, while a task that only names what its parent is moving is
 /// not: it is what the parent shows as a line of its own.
 /// </remarks>
-internal sealed class ProgressTask
+public sealed class ProgressTask
 {
     /// <summary>Makes a task from the record that opened it.</summary>
     /// <param name="what">What the record calls it.</param>
@@ -108,7 +108,7 @@ internal sealed class ProgressTask
 /// the window's, so the tasks are written under a lock and handed out as they are rather than as the list itself.
 /// </para>
 /// </remarks>
-internal sealed class ProgressRecords
+public sealed class ProgressRecords
 {
     /// <summary>What the tasks are written under, since the run writes them while the panel reads them.</summary>
     private readonly object _gate = new();
@@ -143,6 +143,29 @@ internal sealed class ProgressRecords
             _tasks.Clear();
             _byId.Clear();
         }
+    }
+
+    /// <summary>Opens a task without a JSON record, for work the host itself reports.</summary>
+    /// <remarks>
+    /// A command line writes its progress as JSON records, and a host task has no line to parse. It is the same
+    /// task either way: the view draws both from the list this keeps, and a second kind of task would be a second
+    /// drawing of a bar.
+    /// </remarks>
+    /// <param name="what">What the task is called.</param>
+    /// <param name="total">How long it is, or nothing when the work does not know.</param>
+    /// <returns>The task, which the caller advances and finishes.</returns>
+    public ProgressTask Open(string what, long? total = null)
+    {
+        ArgumentNullException.ThrowIfNull(what);
+
+        var task = new ProgressTask(what, aim: null, total, parent: null);
+
+        lock (_gate)
+        {
+            _tasks.Add(task);
+        }
+
+        return task;
     }
 
     /// <summary>Reads one record, which is one line of the run's own progress stream.</summary>
@@ -312,4 +335,62 @@ internal sealed class ProgressRecords
             "down" => MoveAim.Down,
             _ => null,
         };
+}
+
+/// <summary>
+/// One command or batch the program is running, as the host's progress stack reads it.
+/// </summary>
+/// <remarks>
+/// A run is the unit a capsule stands for: what it is called, the tasks it reports, and the moment it is over.
+/// The tasks are the command line's own or the host's, and the stack does not know which.
+/// </remarks>
+public interface IProgressRun
+{
+    /// <summary>The i18n key of what the run is called.</summary>
+    string TitleKey { get; }
+
+    /// <summary>The picture the capsule is headed with, or nothing for the host's own.</summary>
+    string? IconKey { get; }
+
+    /// <summary>What the run has said about its tasks.</summary>
+    ProgressRecords Records { get; }
+
+    /// <summary>Says that a task has changed, so that the stack is drawn again.</summary>
+    void Touch();
+
+    /// <summary>Says that the run is over, which takes its capsule away.</summary>
+    void End();
+}
+
+/// <summary>
+/// The progress runs the whole program is showing, in the order they began.
+/// </summary>
+/// <remarks>
+/// A plugin begins a run for the work it starts, and every window of the host draws the same list: a run begun
+/// from a menu has to reach a stack that may not exist yet, and a stack opened after the run began has to see it.
+/// The implementation is the host's, and a plugin sees only this.
+/// </remarks>
+public interface IProgressHub
+{
+    /// <summary>Raised on the window's thread when a run begins, changes or ends.</summary>
+    event Action? Changed;
+
+    /// <summary>The runs being shown, a copy taken from the hub.</summary>
+    IReadOnlyList<IProgressRun> Runs { get; }
+
+    /// <summary>Whether there is any run being shown at all.</summary>
+    bool Any { get; }
+
+    /// <summary>Begins a run.</summary>
+    /// <param name="titleKey">The i18n key of what the run is called.</param>
+    /// <param name="iconKey">The picture to head its capsule with, or nothing for the host's own.</param>
+    /// <returns>The run, which is what its records are written to and what ends it.</returns>
+    IProgressRun Begin(string titleKey, string? iconKey);
+
+    /// <summary>Says that a run has said something of itself, so that whoever draws does so again.</summary>
+    void Touch();
+
+    /// <summary>Ends a run, which takes its capsule away.</summary>
+    /// <param name="run">The run that has ended.</param>
+    void End(IProgressRun run);
 }

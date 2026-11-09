@@ -160,6 +160,9 @@ key = "rorolala"
 # Plugin Manager is a puzzle piece, the Log is a list of lines, and the Preferences are a machine's own cog. They
 # are the program's pictures for the same reason the buttons above are, the docks are the kernel's, and each is
 # worn by the item that opens its dock in the Window menu and at the left of the dock's tab.
+#
+# `menu` is the hamburger the title row's button wears: the row no longer draws a menu bar, and the one button
+# that opens it needs a picture that says so without a word.
 icons = [
     "minimize",
     "crop_square",
@@ -168,6 +171,7 @@ icons = [
     "extension",
     "list_alt",
     "settings",
+    "menu",
 ]
 
 [[set]]

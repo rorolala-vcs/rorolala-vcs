@@ -1,3 +1,4 @@
+using RorolalaDesktop.Contract;
 namespace RorolalaVCSPlugin;
 
 /// <summary>

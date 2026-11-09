@@ -8,6 +8,8 @@ using RorolalaDesktop.Hosting;
 using RorolalaDesktop.Logging;
 using RorolalaDesktop.Notifications;
 using RorolalaDesktop.Plugins;
+using RorolalaDesktop.Previews;
+using RorolalaDesktop.Progress;
 using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktop;
@@ -230,15 +232,19 @@ internal sealed class Desktop
                 // What a dock keeps about itself is written down as soon as it is kept, so that a run that
                 // ends badly is not the thing that loses it. Subscribed before the restore rather than after
                 // it, because restoring a dock is itself a dock keeping something.
-                _services.Docks.StateChanged += () =>
-                    LayoutStore.Save(_services.Log, _services.Docks.Snapshot());
+                _services.Docks.StateChanged += SaveLayout;
+                _services.Windows.StateChanged += SaveLayout;
                 break;
 
             case 3:
                 // The layout is restored once every dock is registered, since a saved layout addresses docks
-                // by name and a name nothing answers to is dropped. On a first run there is no layout and no
-                // dock is opened: which docks should start open is not something this program decides yet.
-                _services.Docks.Restore(_layout ?? DockLayout.Starting());
+                // by name and a name nothing answers to is dropped. The main window's tree is restored first:
+                // a dock in a window of its own was never in that tree, and restoring it first would put it
+                // there for a moment.
+                var layout = _layout ?? DockLayout.Starting();
+
+                _services.Docks.Restore(layout);
+                _services.Windows.RestoreWindows(layout.Windows);
                 break;
 
             default:
@@ -247,6 +253,14 @@ internal sealed class Desktop
                 Report(_services);
                 break;
         }
+    }
+
+    /// <summary>Writes the main window's tree and the windows of docks' own as one layout.</summary>
+    private void SaveLayout()
+    {
+        var layout = _services.Docks.Snapshot();
+        layout.Windows = [.. _services.Windows.SnapshotWindows()];
+        LayoutStore.Save(_services.Log, layout);
     }
 
     /// <summary>Makes the shared services, all over one deduplication service.</summary>
@@ -286,8 +300,22 @@ internal sealed class Desktop
         var icons = new IconLibrary();
         var refocus = new Refocus();
 
+        var progress = new ProgressHub();
+        var previews = new PreviewService(log.For("rorolala.previews"), progress);
+
+        if (OperatingSystem.IsWindows())
+        {
+            previews.RegisterSystem(new ShellPreviewSource());
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            previews.RegisterSystem(new FreedesktopPreviewSource());
+        }
+
         var services = new HostServices
         {
+            Progress = progress,
+            Previews = previews,
             Log = log,
             Popups = popups,
             Notifications = notices,

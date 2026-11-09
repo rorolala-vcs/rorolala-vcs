@@ -15,6 +15,22 @@ public interface IPluginHost
     /// <summary>Where the plugin writes what it wants to say.</summary>
     ILog Log { get; }
 
+    /// <summary>
+    /// The progress every window of the program shows.
+    /// </summary>
+    /// <remarks>
+    /// It is the program's rather than the plugin's: a run begun here is drawn by the stack of whichever windows
+    /// are open, and a run begun by another plugin is in the same list. What a plugin adds is its own runs, not a
+    /// panel of its own.
+    /// </remarks>
+    IProgressHub Progress { get; }
+
+    /// <summary>The program's previews, which a tile asks for and a source answers.</summary>
+    IPreviewService Previews { get; }
+
+    /// <summary>Where the plugin adds its own preview renderer, after the system's.</summary>
+    IPreviewRegistry PreviewSources { get; }
+
     /// <summary>Where the plugin adds the translations it carries.</summary>
     II18n I18n { get; }
 

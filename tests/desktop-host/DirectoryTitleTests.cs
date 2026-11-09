@@ -22,32 +22,64 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class DirectoryTitleTests
 {
-    /// <summary>A browser is named by the real path it is looking at, and the detail is the same path.</summary>
+    /// <summary>The address bar reads from the tree's base, which is `.`, rather than from the drive.</summary>
     [Fact]
-    public void ABrowserIsNamedByItsRealPath()
+    public void TheAddressBarIsRelativeToTheBase()
     {
-        var (root, whole, window, control) = Open();
+        var (root, _, whole, window, control) = Open();
+
+        try
+        {
+            var bar = control.GetVisualDescendants().OfType<NavigationBar>().Single();
+
+            Assert.Equal(["."], Crumbs(bar));
+
+            var art = Directory.CreateDirectory(Path.Combine(root, "art")).FullName;
+
+            whole.Go(art);
+            Pump();
+
+            Assert.Equal([".", "art"], Crumbs(bar));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>The words the address bar's crumbs say, in order.</summary>
+    /// <param name="bar">The address bar.</param>
+    /// <returns>The crumbs.</returns>
+    private static string[] Crumbs(NavigationBar bar) =>
+        [
+            .. bar.GetVisualDescendants()
+                .OfType<Button>()
+                .Where(button => button.Classes.Contains("ghost"))
+                .Select(button => button.Content as string)
+                .OfType<string>(),
+        ];
+
+    /// <summary>A browser inside the base is named by its part below the base, and the detail is the whole path.</summary>
+    [Fact]
+    public void ABrowserIsNamedRelativelyUnderTheBase()
+    {
+        var (root, shared, whole, window, control) = Open();
 
         try
         {
             var art = Directory.CreateDirectory(Path.Combine(root, "art")).FullName;
             var deep = Directory.CreateDirectory(Path.Combine(art, "shots")).FullName;
 
-            // The real path, at the base and below it: the tab's word is the path too, shortened at its front where it
-            // is too long for a strip of tabs.
-            Assert.Equal(root, control.Title);
-            Assert.Equal(root, control.Detail);
-
             whole.Go(art);
             Pump();
 
-            Assert.Equal(art, control.Title);
+            Assert.Equal(Path.GetRelativePath(shared.BaseDir, art), control.Title);
             Assert.Equal(art, control.Detail);
 
             whole.Go(deep);
             Pump();
 
-            Assert.Equal(deep, control.Title);
+            Assert.Equal(Path.GetRelativePath(shared.BaseDir, deep), control.Title);
             Assert.Equal(deep, control.Detail);
         }
         finally
@@ -56,11 +88,28 @@ public sealed class DirectoryTitleTests
         }
     }
 
-    /// <summary>A directory outside the base is named by the same real path, since that is what the title is.</summary>
+    /// <summary>The base itself is named by its last part, and the detail is the whole path.</summary>
+    [Fact]
+    public void ABrowserAtTheBaseIsNamedByTheBasesLeaf()
+    {
+        var (root, _, _, window, control) = Open();
+
+        try
+        {
+            Assert.Equal(Path.GetFileName(root), control.Title);
+            Assert.Equal(root, control.Detail);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>A directory outside the base is named by the same real path, since there is nothing to shorten it against.</summary>
     [Fact]
     public void ADirectoryOutsideTheBaseIsNamedByItsRealPath()
     {
-        var (_, whole, window, control) = Open();
+        var (_, _, whole, window, control) = Open();
         var elsewhere = Scratch.New("title-elsewhere");
 
         try
@@ -81,7 +130,7 @@ public sealed class DirectoryTitleTests
     [Fact]
     public void ADriveAndTheComputerHaveNames()
     {
-        var (root, whole, window, control) = Open();
+        var (root, _, whole, window, control) = Open();
         var drive = Path.GetPathRoot(root)!;
 
         try
@@ -108,7 +157,7 @@ public sealed class DirectoryTitleTests
     [Fact]
     public void APlaceIsNamedByItsAddress()
     {
-        var (_, whole, window, control) = Open();
+        var (_, _, whole, window, control) = Open();
 
         try
         {
@@ -158,13 +207,13 @@ public sealed class DirectoryTitleTests
         try
         {
             // The host was given the name the dock says, not the one it was registered as.
-            Assert.Equal(root, dock.Title);
+            Assert.Equal(Path.GetFileName(root), dock.Title);
             Assert.NotEqual("it_dock.title", dock.Title);
 
             whole.Go(art);
             Pump();
 
-            Assert.Equal(art, dock.Title);
+            Assert.Equal(Path.GetRelativePath(shared.BaseDir, art), dock.Title);
 
             var tab = main
                 .GetVisualDescendants()
@@ -173,7 +222,7 @@ public sealed class DirectoryTitleTests
 
             // The tab's word is the path, shortened at its front where a strip of tabs has no room for all of it.
             Assert.Equal(
-                RorolalaDesktop.Docking.DockArea.TabTitle(art),
+                RorolalaDesktop.Docking.DockArea.TabTitle(dock.Title!),
                 ((Grid)tab.Content!).Children.OfType<TextBlock>().First().Text
             );
         }
@@ -183,9 +232,36 @@ public sealed class DirectoryTitleTests
         }
     }
 
+    /// <summary>A base changed under a dock retitles the directory it is looking at.</summary>
+    [Fact]
+    public void ABaseChangeRetitlesTheSameDirectory()
+    {
+        var (root, shared, whole, window, control) = Open();
+        var elsewhere = Scratch.New("title-new-base");
+        var art = Directory.CreateDirectory(Path.Combine(root, "art")).FullName;
+
+        try
+        {
+            whole.Go(art);
+            Pump();
+
+            Assert.Equal(Path.GetRelativePath(shared.BaseDir, art), control.Title);
+
+            shared.BaseDir = elsewhere;
+            Pump();
+
+            Assert.Equal(art, control.Title);
+            Assert.Equal(art, control.Detail);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>A directory browser over a scratch root, on a headless window, drawn once.</summary>
-    /// <returns>The root, the location, the window, and the dock's control.</returns>
-    private static (string Root, Browser Browser, Window Window, DirectoryControl Dock) Open()
+    /// <returns>The root, the shared answers, the location, the window, and the dock's control.</returns>
+    private static (string Root, Shared Shared, Browser Browser, Window Window, DirectoryControl Dock) Open()
     {
         var root = Scratch.New("title");
         var services = Host.Services();
@@ -212,7 +288,7 @@ public sealed class DirectoryTitleTests
         window.Activate();
         Pump();
 
-        return (root, browser, window, control);
+        return (root, shared, browser, window, control);
     }
 
     /// <summary>Lets the window run a few turns of its loop, which is what lays a dock out and draws it.</summary>

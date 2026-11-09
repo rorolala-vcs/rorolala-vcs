@@ -1,6 +1,6 @@
 # The RorolalaDesktop pictures
 
-The pictures the `RorolalaDesktop` project draws: `minimize`, `crop_square`, `filter_none`, `close`, `extension`, `list_alt`, `settings`.
+The pictures the `RorolalaDesktop` project draws: `minimize`, `crop_square`, `filter_none`, `close`, `extension`, `list_alt`, `settings`, `menu`.
 
 They are Google's Material Design icons, taken from the maintained mirror of the set,
 [material-icons/material-icons](https://github.com/material-icons/material-icons), the same artwork as

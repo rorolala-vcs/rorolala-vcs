@@ -10,7 +10,7 @@ namespace RorolalaVCSPlugin;
 /// <remarks>
 /// One of these belongs to a dock's view, and the strip in the dock's header reads it: whether there is work to
 /// carry, whether a run is going, and why not when there is not. What the run says while it goes is not kept here
-/// but written to the <see cref="ProgressHub"/>, which is what the capsule stack in the Overview draws from:
+/// but written to the <see cref="IProgressHub"/>, which is what the capsule stack in the Overview draws from:
 /// the run's capsule stands under the capsules of every other command this plugin may be running.
 /// <para>
 /// The plan is asked for off the window's thread, because asking costs a fetch of the Vault's Layout: a dock
@@ -30,7 +30,7 @@ internal sealed class SyncWatcher
     private readonly ILog _log;
 
     /// <summary>What every run this plugin makes is gathered in, which the sync's own run joins.</summary>
-    private readonly ProgressHub _hub;
+    private readonly IProgressHub _hub;
 
     /// <summary>What brings the Vault's Layout over once a run has carried work.</summary>
     private readonly VaultFetch _fetch;
@@ -40,7 +40,7 @@ internal sealed class SyncWatcher
     /// <param name="log">Where a reading that could not be made is said.</param>
     /// <param name="hub">What every run this plugin makes is gathered in.</param>
     /// <param name="fetch">The one fetch of the Vault's Layout, which a carried run is followed by.</param>
-    public SyncWatcher(IPluginHost host, ILog log, ProgressHub hub, VaultFetch fetch)
+    public SyncWatcher(IPluginHost host, ILog log, IProgressHub hub, VaultFetch fetch)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(log);

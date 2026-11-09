@@ -75,7 +75,7 @@ internal static class RorolalaDocks
     public static void Declare(
         IPluginHost host,
         PluginId owner,
-        ProgressHub hub,
+        IProgressHub hub,
         StatusReadings statuses,
         SyncWatcher sync,
         VaultFetch fetch

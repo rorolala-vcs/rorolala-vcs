@@ -5,6 +5,8 @@ using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Logging;
 using RorolalaDesktop.Notifications;
+using RorolalaDesktop.Previews;
+using RorolalaDesktop.Progress;
 using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -51,8 +53,12 @@ internal static class Host
         // preference panel reads and writes, which is all a headless test has any use for.
         var making = ThemeService.Make(null, new ThemeConfiguration());
 
+        var progress = new ProgressHub();
+
         return new HostServices
         {
+            Progress = progress,
+            Previews = new PreviewService(log.For("rorolala.previews"), progress),
             Log = log,
             Popups = popups,
             Notifications = notices,
