@@ -320,6 +320,40 @@ pub fn publish_desktop(
     Ok(())
 }
 
+/// Publishes the host that starts the Desktop program into the directory named.
+///
+/// The host is published into the same directory as the Desktop and the launcher: it finds the
+/// Desktop beside itself and is found by `rola` in the same way. `self_contained` is the Desktop
+/// publish's, for the same reason: the two are one layout, not two programs that may disagree about
+/// which runtime they carry.
+///
+/// # Errors
+///
+/// Reports the restore or the publish.
+pub fn publish_host(workspace: &Workspace, into: &Path, self_contained: bool) -> Result<(), Error> {
+    let rid = runtime_identifier()?;
+    let project = workspace.host_project().to_string_lossy().into_owned();
+    let destination = into.to_string_lossy().into_owned();
+    let contained = if self_contained { "true" } else { "false" };
+
+    restore(workspace, &[&project, "-r", &rid])?;
+    Tool::dotnet().run([
+        "publish",
+        &project,
+        "-c",
+        CONFIGURATION,
+        "--no-restore",
+        "-r",
+        &rid,
+        "--self-contained",
+        contained,
+        "-o",
+        &destination,
+    ])?;
+
+    Ok(())
+}
+
 /// Publishes the launcher into the Desktop program's directory, and lays the banners beside it.
 ///
 /// The launcher is published after the Desktop program rather than before: the two share a

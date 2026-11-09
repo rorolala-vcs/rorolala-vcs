@@ -2,10 +2,10 @@
 //!
 //! The command line is a way to work without a window, and the Desktop program is the window
 //! for the work that suits. The two are exported together, this program at `bin/rola` and the
-//! Desktop program at `bin/desktop/`, so a run reaches it by starting from where this program
-//! was itself run from: nothing is named, and nothing is looked up beyond that.
+//! host that starts the Desktop at `bin/desktop/`, so a run reaches it by starting from where this
+//! program was itself run from: nothing is named, and nothing is looked up beyond that.
 //!
-//! What the two would otherwise each work out for themselves is handed over with the program:
+//! What the two would otherwise each work out for themselves is handed over with the host:
 //! the language this run speaks, the directory to open onto, and where this program itself is. The
 //! directory is the Workspace the run was made in rather than the run's own directory, since the work is
 //! the Workspace, the tree is rooted at its directory, and the Layouts and the ownership the browser
@@ -14,12 +14,17 @@
 //! to open onto. And this program's own path is what the window's file operations run, which is what makes
 //! them the operations of the program that was asked for the window rather than of whatever a `PATH` holds.
 //!
-//! The program is run as a child and **waited for** rather than started and left behind: this command
+//! The host is run as a child and **waited for** rather than started and left behind: this command
 //! is a way to the window, and a way to it lasts as long as the window does. What the window ends with
-//! is what this run ends with, so a caller that waits reads the window's own answer.
+//! is what this run ends with, so a caller that waits reads the window's own answer. The host forwards
+//! the line that says the window is up, and keeps the error stream of a run that ends badly, which is
+//! what lets a stack be read after the program that wrote it has stopped.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 use mingling::{
     Grouped, ShellContext, Suggest,
@@ -51,8 +56,12 @@ use crate::failure::failure;
 /// The directory, beside this program, the Desktop program is exported into.
 const DESKTOP_DIR: &str = "desktop";
 
-/// The Desktop program's name, before the suffix a platform gives a program.
-const DESKTOP_PROGRAM: &str = "RorolalaDesktop";
+/// The host program's name, before the suffix a platform gives a program.
+///
+/// The host is what `rola desktop` starts: it starts the Desktop itself, forwards the line that says
+/// the window is up, and keeps the Desktop's error stream so that a run which ends badly can still
+/// say why.
+const DESKTOP_PROGRAM: &str = "RorolalaDesktopHost";
 
 /// What the language this run speaks is handed over under.
 ///
@@ -408,12 +417,18 @@ pub fn handle_desktop(state: StateDesktop, language: &ResLanguage, cwd: &ResCurr
         told.push(READY_ARG.to_string());
     }
 
-    match Command::new(&program)
-        .current_dir(&at)
-        .env(EXE_ENV, &here)
-        .args(told)
-        .status()
-    {
+    let mut command = Command::new(&program);
+
+    command.current_dir(&at).env(EXE_ENV, &here).args(told);
+
+    // A window's host is a console program because it has to be able to print a report to the
+    // terminal that started it, while a launcher starts it with no console at all. Left alone, the
+    // host would make a console window of its own in that case; the flag says it has none, and the
+    // streams it writes are the ones this run already inherited.
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000);
+
+    match command.status() {
         Ok(status) => ResultDesktopEnded {
             code: status.code(),
         }
@@ -480,10 +495,11 @@ fn style_arg(style: WindowStyle) -> String {
     format!("{STYLE_ARG}{}", style.argument())
 }
 
-/// Where the Desktop program sits, given where this program was run from.
+/// Where the host program sits, given where this program was run from.
 ///
 /// A platform names a program with a suffix or without, so the name is put together rather than
-/// written out once per platform.
+/// written out once per platform. The Desktop itself is beside the host, which is what lets the host
+/// find it without a second path being told to it.
 fn desktop_program(here: &Path) -> PathBuf {
     let suffix = std::env::consts::EXE_SUFFIX;
     let name = format!("{DESKTOP_PROGRAM}{suffix}");

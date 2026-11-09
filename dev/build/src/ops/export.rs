@@ -136,6 +136,7 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
 
     let desktop = workspace.desktop_dir()?;
     dotnet::publish_desktop(&workspace, &desktop, self_contained)?;
+    dotnet::publish_host(&workspace, &desktop, self_contained)?;
     dotnet::publish_launcher(&workspace, &desktop, self_contained)?;
     dotnet::publish_plugins(&workspace, &desktop)?;
 

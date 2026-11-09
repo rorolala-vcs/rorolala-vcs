@@ -13,9 +13,9 @@ namespace RorolalaLauncher.Rola;
 /// <para>
 /// Both of the streams are drained while it runs. The output is where the line the window writes arrives; the
 /// error is drained as well, so that a program saying a great deal on it cannot fill a pipe and block against
-/// itself. Once this window is gone the other end of the error stream is nobody's to read, which is the Desktop
-/// program's own to survive and it does: what it writes there after its window is up is nothing, and the line it
-/// writes on the output is wrapped rather than allowed to end it.
+/// itself. The error stream is not the report a reader sees: the host beside the Desktop catches a run that
+/// ends badly, writes its own report and opens a window for it, which is what still reaches a reader after this
+/// window has closed. Draining is only what keeps the child from blocking on a stream nobody is reading.
 /// </para>
 /// </remarks>
 internal sealed class LaunchAttempt : IDisposable

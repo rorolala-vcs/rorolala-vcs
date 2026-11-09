@@ -60,6 +60,9 @@ const DESKTOP_IN_BUILD: &str = "bin/desktop";
 /// The Desktop program's project, from the workspace root.
 const DESKTOP_PROJECT: &str = "app/desktop/Core/RorolalaDesktop.csproj";
 
+/// The host that starts the Desktop program and reports a run that ends badly, from the workspace root.
+const HOST_PROJECT: &str = "app/desktop/Host/RorolalaDesktopHost.csproj";
+
 /// The plugins that ship with the Desktop program.
 const DESKTOP_PLUGINS: &str = "app/desktop/Plugins";
 
@@ -394,6 +397,12 @@ impl Workspace {
     #[must_use]
     pub fn desktop_project(&self) -> PathBuf {
         self.root.join(DESKTOP_PROJECT)
+    }
+
+    /// The host that starts the Desktop program.
+    #[must_use]
+    pub fn host_project(&self) -> PathBuf {
+        self.root.join(HOST_PROJECT)
     }
 
     /// The launcher's project.

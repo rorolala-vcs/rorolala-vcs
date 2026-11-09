@@ -71,6 +71,11 @@ class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Before anything else: what a window cannot print has to be reported by the program itself,
+        // and a crash in the configuration or in the shell is one the program would otherwise leave as
+        // an exit code with nothing behind it.
+        Crash.Install();
+
         // Recorded before Avalonia starts: what was handed over is state of the program, and a
         // reader asks for it without asking whether the answer has arrived yet.
         Record(args);
@@ -113,7 +118,14 @@ class Program
 
         State = state;
 
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            Crash.Report(error);
+        }
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.

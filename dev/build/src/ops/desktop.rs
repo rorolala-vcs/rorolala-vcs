@@ -40,6 +40,7 @@ pub fn lay_out_desktop() -> Result<(), crate::Error> {
 
     let directory = workspace.desktop_dir()?;
     dotnet::publish_desktop(&workspace, &directory, false)?;
+    dotnet::publish_host(&workspace, &directory, false)?;
     dotnet::publish_launcher(&workspace, &directory, false)?;
     dotnet::publish_plugins(&workspace, &directory)?;
 
