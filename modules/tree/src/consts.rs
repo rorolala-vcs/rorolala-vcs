@@ -6,6 +6,12 @@ pub const MARK: &str = ".rola-tree";
 /// The Workspace's own data directory, which is not part of a tree's work.
 pub const DATA: &str = ".rola";
 
+/// The Layout entry id the tree keeps for itself, inside the mark.
+///
+/// It is what a reading uses to tell a tree that moved from a tree that was lost and another that
+/// appeared: the directory carries the id wherever it goes.
+pub const ENTRY_ID: &str = rorolala_utils_constants::TREE_ENTRY_ID_FILE;
+
 /// The tree's staging store, inside the mark.
 pub const STAGING: &str = "staging";
 

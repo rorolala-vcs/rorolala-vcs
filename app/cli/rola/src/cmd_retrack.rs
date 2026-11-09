@@ -2761,6 +2761,10 @@ fn retrack_tree(asked: &RetrackTree<'_>) -> Next {
     if let Err(error) = baseline.write_entries(&scanned.cache) {
         return failed(error.to_string());
     }
+    // A tree recorded before the mark held its id gets one the next time it is recorded.
+    if let Err(error) = tree.write_local_id(asked.id) {
+        return failed(error.to_string());
+    }
 
     ResultRetrackTree {
         path: asked.path.as_str().to_owned(),

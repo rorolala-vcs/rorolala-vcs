@@ -2554,6 +2554,17 @@ fn commit_tree(
         .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
     let shown = crate::tree::cmd_tree::shown(tree)?;
 
+    // The id the tree keeps locally is the Layout entry's, so a reading that finds the entry lost
+    // and a directory holding a tree mark elsewhere can tell they are one tree moved. An entry the
+    // Layout already names has one to write before anything else, including a run that finds nothing
+    // to record.
+    let entry_id = layout.id_of(&path);
+    if let Some(id) = entry_id
+        && let Err(error) = tree.write_local_id(id)
+    {
+        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
+    }
+
     let recorded = runtime
         .block_on(tree.recorded(layout, index, store))
         .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
@@ -2680,12 +2691,10 @@ fn commit_tree(
     .with_kind(EntryKind::Tree);
 
     let mut batch = layout.batch();
-    let id = layout.id_of(&path);
-    let created = match id {
+    let entry_id = entry_id.unwrap_or_else(Uuid::new_v4);
+    let created = match layout.id_of(&path) {
         Some(id) => batch.update_entry(id, data).map(|()| false),
-        None => batch
-            .create_file(Uuid::new_v4(), data, &path)
-            .map(|()| true),
+        None => batch.create_file(entry_id, data, &path).map(|()| true),
     };
     if let Err(error) = created {
         return Err(failed(&error));
@@ -2699,6 +2708,9 @@ fn commit_tree(
         return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
     }
     if let Err(error) = baseline.write_entries(&scanned.cache) {
+        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
+    }
+    if let Err(error) = tree.write_local_id(entry_id) {
         return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
     }
 

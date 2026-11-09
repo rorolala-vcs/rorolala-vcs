@@ -15,7 +15,7 @@ use crate::tree_diff::FailedPath;
 const DATA_DIR: &str = ".rola";
 
 /// The directory that marks a directory as a tree, whose contents are one unit of work.
-const TREE_MARK: &str = ".rola-tree";
+pub const TREE_MARK: &str = ".rola-tree";
 
 /// The marker in the name of a conflict copy: what a merge left beside the file it conflicts with.
 const CONFLICT_MARK: &str = "~theirs";

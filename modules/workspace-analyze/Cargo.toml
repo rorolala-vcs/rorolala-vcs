@@ -10,6 +10,4 @@ rorolala-layout.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-location.workspace = true
 rorolala-workspace.workspace = true
-
-[dev-dependencies]
 uuid.workspace = true

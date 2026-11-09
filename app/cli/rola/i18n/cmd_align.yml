@@ -38,7 +38,7 @@ align:
             --delete             Confirm the **lost entry** is gone
             --rename             Confirm the **move**, and update the record to the new position
             --break              For a **non-deterministic move**, break it into a **lost entry** and an **untracked entry**
-            --move <FILE>        Assert that PATH moved to FILE, forming a **non-deterministic move**
+            --move <TO>          Assert that PATH moved to TO, forming a **non-deterministic move**
 
             --restore-move       Confirm the **move**, and restore it to its original position
             --restore-modify     Restore the file's content change
@@ -58,7 +58,7 @@ align:
             --delete             确认该 **丢失项** 已丢失
             --rename             确认该 **移动项**，并更新记录至到新位置
             --break              对于 **非确定性移动**，可以断开为 **丢失项** 和 **未标记项**
-            --move <FILE>        断言 PATH 移动到了 FILE，形成一个 **非确定性移动**
+            --move <TO>          断言 PATH 移动到了 TO，形成一个 **非确定性移动**
 
             --restore-move       确认该 **移动项**，并还原至原来的位置
             --restore-modify     还原该文件的内容变更
@@ -181,15 +181,19 @@ align:
     en: "`%{path}` is not a file inside this Workspace"
     zh-CN: "`%{path}` 不是本工作区内的文件"
 
+  err_move_not_a_tree:
+    en: "`%{path}` is not a tree inside this Workspace"
+    zh-CN: "`%{path}` 不是本工作区内的树"
+
   err_move_tracked:
     en: "The Layout already names `%{path}`"
     zh-CN: "布局已经命名了 `%{path}`"
 
   err_move_help:
     en: |
-        `--move` names the file a lost path moved to, which must be a file the Layout does not know
+        `--move` names the file or tree a lost path moved to, which must be one the Layout does not know
     zh-CN: |
-        `--move` 指定丢失路径移动到的文件，该文件必须是布局尚不认识的
+        `--move` 指定丢失路径移动到的文件或树，该内容必须是布局尚不认识的
 
   err_not_modified:
     en: "`%{path}` is not a change against a version the Layout names"

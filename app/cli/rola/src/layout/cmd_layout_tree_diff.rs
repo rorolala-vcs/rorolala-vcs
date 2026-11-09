@@ -193,13 +193,18 @@ pub fn handle_layout_tree_diff(
             .map(|path| serde_json::json!(path.as_str()))
             .collect(),
     );
-    format.set(
-        "untagged",
-        diff.untagged
+    format.set("untagged", {
+        let mut untagged: Vec<&librorolala::layout::LayoutPath> = diff
+            .untagged
+            .iter()
+            .chain(diff.untagged_trees.iter().filter(|path| !path.is_root()))
+            .collect();
+        untagged.sort_unstable();
+        untagged
             .iter()
             .map(|path| serde_json::json!(path.as_str()))
-            .collect(),
-    );
+            .collect()
+    });
     format.set(
         "modified",
         diff.modified
@@ -249,14 +254,20 @@ pub struct ResultLayoutTreeDiff {
 impl ResultLayoutTreeDiff {
     /// The result the reading described.
     fn of(diff: &librorolala::workspace_analyze::TreeDiff) -> Self {
+        let mut untagged: Vec<&librorolala::layout::LayoutPath> = diff
+            .untagged
+            .iter()
+            .chain(diff.untagged_trees.iter().filter(|path| !path.is_root()))
+            .collect();
+        untagged.sort_unstable();
+
         Self {
             lost: diff
                 .lost
                 .iter()
                 .map(|path| path.as_str().to_owned())
                 .collect(),
-            untagged: diff
-                .untagged
+            untagged: untagged
                 .iter()
                 .map(|path| path.as_str().to_owned())
                 .collect(),

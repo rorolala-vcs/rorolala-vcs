@@ -1437,6 +1437,12 @@ fn bring_in(
 
                 continue;
             }
+            // The id is what a later reading knows the tree by, wherever the directory is moved to.
+            if let Err(error) = tree.write_local_id(id) {
+                failed.push(format!("{id}: {error}"));
+
+                continue;
+            }
             if let Err(error) = batch.create_file(id, data, &path) {
                 failed.push(format!("{id}: {error}"));
 

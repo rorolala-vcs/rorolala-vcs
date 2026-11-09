@@ -51,6 +51,7 @@ fn main() {
     refusals(&rola, &ws, &mut checked);
     ignore_rules(&rola, &ws, &mut checked);
     root_tree(&rola, &ws, &mut checked);
+    tree_move(&rola, &ws, &mut checked);
 
     checked.report();
 }
@@ -760,6 +761,120 @@ fn root_tree(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(&root, &["tree", "status", "."]);
     checked.exits("the root tree's own reading is drawn", &ran, 0);
     checked.stdout_has("the root tree is named by the root", &ran, "Tree `.`");
+}
+
+/// A tree moved outside Rorolala is found again by the id it keeps in its mark.
+fn tree_move(rola: &Rola, ws: &Path, checked: &mut Checked) {
+    let source = ws.join("movable");
+    fs::create_dir_all(source.join("inner")).expect("a tree to move");
+    fs::write(source.join("a.psd"), b"moved").expect("a file in the tree");
+    fs::write(source.join("inner").join("b.psd"), b"inner").expect("a file under it");
+
+    let ran = rola.run(ws, &["tree", "init", "movable"]);
+    checked.exits("a tree to move is made", &ran, 0);
+
+    let ran = rola.run(ws, &["tree", "add", "movable"]);
+    checked.exits("the tree's work is staged", &ran, 0);
+
+    let ran = rola.run(ws, &["track", "movable", "--message", "movable"]);
+    checked.exits("the tree is recorded", &ran, 0);
+    checked.wants(
+        "the recorded tree keeps the id of its entry",
+        fs::read_to_string(source.join(".rola-tree").join("id"))
+            .is_ok_and(|text| !text.trim().is_empty()),
+        "the tree has no id in its mark",
+    );
+
+    fs::create_dir_all(ws.join("archive")).expect("a place to move the tree to");
+    fs::rename(&source, ws.join("archive").join("movable"))
+        .expect("the tree is moved outside Rorolala");
+
+    let ran = rola.run(ws, &["status"]);
+    checked.exits("the Workspace is read after the move", &ran, 0);
+    checked.stdout_has(
+        "the moved tree is one move",
+        &ran,
+        "> movable -> archive/movable",
+    );
+    checked.wants(
+        "the moved tree is not also a loss and a gain",
+        !ran.stdout.contains("movable (tree object)"),
+        "the tree is still drawn as a structural change",
+    );
+
+    let ran = rola.run(ws, &["layout", "tree-diff"]);
+    checked.exits("the reading is asked for as lines", &ran, 0);
+    checked.stdout_has(
+        "the tree-diff names the move",
+        &ran,
+        "rename movable -> archive/movable",
+    );
+
+    let ran = rola.run(ws, &["align", "movable", "--rename"]);
+    checked.exits("the move is confirmed", &ran, 0);
+
+    let ran = rola.run(ws, &["status"]);
+    checked.exits("the Workspace is read after the move is confirmed", &ran, 0);
+    checked.wants(
+        "the confirmed move is no longer a structural change",
+        !ran.stdout.contains("movable"),
+        "the moved tree is still read as a change",
+    );
+
+    let ran = rola.run(ws, &["tree", "status", "archive/movable"]);
+    checked.exits("the moved tree is read where it now sits", &ran, 0);
+    checked.stdout_has("the moved tree holds what it records", &ran, "clean");
+
+    // A tree recorded before the mark held its id has no id to be recognised by. It is shown as a
+    // loss and a gain, which a reader settles by connecting the two.
+    let legacy = ws.join("legacy");
+    fs::create_dir_all(&legacy).expect("a tree without an id");
+    fs::write(legacy.join("a.psd"), b"legacy").expect("a file in it");
+
+    let ran = rola.run(ws, &["tree", "init", "legacy"]);
+    checked.exits("the tree without an id is made", &ran, 0);
+
+    let ran = rola.run(ws, &["tree", "add", "legacy"]);
+    checked.exits("its work is staged", &ran, 0);
+
+    let ran = rola.run(ws, &["track", "legacy", "--message", "legacy"]);
+    checked.exits("it is recorded", &ran, 0);
+
+    fs::remove_file(legacy.join(".rola-tree").join("id")).expect("the id is taken away");
+    fs::rename(&legacy, ws.join("archive").join("legacy"))
+        .expect("the tree is moved outside Rorolala");
+
+    let ran = rola.run(ws, &["status"]);
+    checked.exits("the Workspace is read after the move without an id", &ran, 0);
+    checked.stdout_has("the tree that moved is lost", &ran, "- legacy (tree object)");
+    checked.stdout_has(
+        "where it moved to is a gain",
+        &ran,
+        "+ archive/legacy (tree object)",
+    );
+
+    let ran = rola.run(ws, &["layout", "tree-diff"]);
+    checked.exits("the tree-diff is read without an id", &ran, 0);
+    checked.stdout_has("the tree-diff names the loss", &ran, "lost legacy");
+    checked.stdout_has(
+        "the tree-diff names the gain the same way a file is named",
+        &ran,
+        "untagged archive/legacy",
+    );
+
+    let ran = rola.run(ws, &["align", "legacy", "--move", "archive/legacy"]);
+    checked.exits("a reader can connect the two", &ran, 0);
+
+    let ran = rola.run(ws, &["status"]);
+    checked.exits("the Workspace is read after the connection", &ran, 0);
+    checked.stdout_has(
+        "the connected tree is one move to confirm",
+        &ran,
+        "> legacy -> archive/legacy",
+    );
+
+    let ran = rola.run(ws, &["align", "legacy", "--rename"]);
+    checked.exits("the connected move is confirmed", &ran, 0);
 }
 
 /// A command that runs `rola`, working in `dir` and keeping the user's files in the sandbox.

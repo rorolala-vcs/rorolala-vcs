@@ -190,8 +190,9 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
 /// Exactly one of the modes is given. `--delete` confirms that a lost path is gone. `--rename`
 /// confirms a move the reading found, whether `PATH` is where it was or where it went. `--break`
 /// takes a move back, so the two paths become a loss and a gain again; a move of two identical files
-/// is a fact and is refused. `--move FILE` asserts that `PATH` moved to `FILE`, which is for a move
-/// the reading could not guess at; the next reading then sees it as one to confirm.
+/// is a fact and is refused. `--move TO` asserts that `PATH` moved to `TO`, whether a file or a tree,
+/// which is for a move the reading could not guess at; the next reading then sees it as one to
+/// confirm.
 ///
 /// `--restore-move` puts a moved file back where the Layout names it, `--restore-modify` writes the
 /// version the Layout names back over a changed file, and `--restore-delete` takes a deleted file
@@ -215,7 +216,7 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
 /// [`ErrorAlignRestoreExists`] when putting a file back would land on one already there,
 /// [`ErrorAlignIgnored`] when the path named is one the ignore rules govern,
 /// [`ErrorAlignRealMove`] when `--break` names a move of identical files, [`ErrorAlignMove`] when
-/// `--move` names somewhere that is not a fresh file, and [`ErrorAlignFailed`] otherwise.
+/// `--move` names somewhere that is not a fresh file or tree, and [`ErrorAlignFailed`] otherwise.
 #[command(node = "align", entry = EntryAlign)]
 pub fn align(args: EntryAlign) -> Next {
     let picked = args
@@ -353,8 +354,9 @@ pub fn handle_align(
     };
     let root = normalize(held.get_root());
 
-    // A tree is one unit of work: `--restore` puts the whole of it back to what the Layout records,
-    // rather than a file's content at a path, and the per-file modes have nothing to settle for it.
+    // A tree is one unit of work: `--restore` and `--restore-delete` put the whole of it back to
+    // what the Layout records, rather than a file's content at a path. A move is settled as one
+    // entry like a file's, so the modes that act on an entry go on to the reading below.
     //
     // Which paths are trees is read from the Layout rather than from the mark on disk: a tree whose
     // directory was deleted has no mark to find, and what a restore writes then is the whole tree
@@ -369,33 +371,40 @@ pub fn handle_align(
         .ok()
         .and_then(|relative| find_tracked_tree(&layout, relative));
     if let Some(tree_layout_path) = relative {
-        if !matches!(mode, Mode::Restore) {
-            return ErrorAlignTreeUnsupported.into();
+        if matches!(mode, Mode::Restore | Mode::RestoreDelete) {
+            let tree_root = root.join(tree_layout_path.to_path_buf());
+            let tree = match Tree::locate(&root, &tree_root) {
+                Ok(tree) if tree_root.is_dir() => tree,
+                _ => match prepare_tree(&root, &tree_layout_path) {
+                    Ok(tree) => tree,
+                    Err(next) => return next,
+                },
+            };
+
+            return match restore_tree(
+                held,
+                &layout,
+                &tree,
+                index.get_ref().as_ref(),
+                storage.get_ref().as_ref(),
+                completely,
+            ) {
+                Ok(()) => ResultAlignTree {
+                    path: tree_layout_path.as_str().to_owned(),
+                }
+                .into(),
+                Err(next) => next,
+            };
         }
 
-        let tree_root = root.join(tree_layout_path.to_path_buf());
-        let tree = match Tree::locate(&root, &tree_root) {
-            Ok(tree) if tree_root.is_dir() => tree,
-            _ => match prepare_tree(&root, &tree_layout_path) {
-                Ok(tree) => tree,
-                Err(next) => return next,
-            },
-        };
-
-        return match restore_tree(
-            held,
-            &layout,
-            &tree,
-            index.get_ref().as_ref(),
-            storage,
-            completely,
+        // A per-file content mode has nothing to settle for a tree, and a move the reading found is
+        // a move of the entry rather than of a file inside it.
+        if !matches!(
+            mode,
+            Mode::Rename | Mode::Delete | Mode::Move(_) | Mode::RestoreMove
         ) {
-            Ok(()) => ResultAlignTree {
-                path: tree_layout_path.as_str().to_owned(),
-            }
-            .into(),
-            Err(next) => next,
-        };
+            return ErrorAlignTreeUnsupported.into();
+        }
     }
 
     // Content a restore writes comes out of the store, and the store may not hold it: what is
@@ -431,11 +440,6 @@ pub fn handle_align(
         sources: sources.as_ref(),
     };
 
-    let selected = match select(&root, &path) {
-        Ok(selected) => selected,
-        Err(next) => return next,
-    };
-
     // The reading is taken unfiltered: a variant file the tree holds somewhere unexpected is found
     // among the untagged, and the ignore rules filtering them would hide exactly the files a merge
     // is waiting for. The rules' say over the run is made at the selection instead, below.
@@ -447,6 +451,11 @@ pub fn handle_align(
             }
             .into();
         }
+    };
+
+    let selected = match select(&root, &path, &diff) {
+        Ok(selected) => selected,
+        Err(next) => return next,
     };
 
     // What the ignore rules govern cannot be selected for settling: an entry the rules cover is
@@ -523,7 +532,7 @@ pub fn handle_align(
             assert_move(&layout, &diff, &path, &root, &target)
         }
         (Mode::RestoreMove, Selector::One(path)) => single(restore_move(
-            &layout, &diff, &path, &root, content, completely,
+            held, &layout, &diff, &path, &root, content, completely,
         )),
         (Mode::RestoreModify, Selector::One(path)) => {
             single(restore_modify(&layout, &diff, &path, &root, content))
@@ -532,10 +541,10 @@ pub fn handle_align(
             single(restore_delete(&layout, &diff, &path, &root, content))
         }
         (Mode::Restore, Selector::One(path)) => single(restore_whichever(
-            &layout, &diff, &path, &root, content, completely,
+            held, &layout, &diff, &path, &root, content, completely,
         )),
         (Mode::Restore, Selector::Under(prefix)) => {
-            restore_all(&layout, &diff, &prefix, &root, content, completely)
+            restore_all(held, &layout, &diff, &prefix, &root, content, completely)
         }
         // A directory or `.` names many files, and only putting them back acts on many at once.
         (_, Selector::Under(_)) => ErrorAlignArgument.into(),
@@ -565,13 +574,15 @@ enum Selector {
 ///
 /// What is written is a path where the run was made, as a shell would read it: `.` is the directory
 /// the run is in and everything under it, and `..` climbs from there. A name that lands on a
-/// directory, `.` always does, selects everything under it; anything else is the one path named.
+/// directory selects everything under it, except a directory the reading found to be a side of a
+/// move: a tree is a directory, and a move of one is settled as the one entry it is, not as every
+/// path under it.
 ///
 /// # Errors
 ///
 /// Answers with [`ErrorAlignArgument`] when the path reaches out of the Workspace, or names nothing
 /// a Layout could.
-fn select(root: &Path, given: &str) -> Result<Selector, Next> {
+fn select(root: &Path, given: &str, diff: &TreeDiff) -> Result<Selector, Next> {
     let cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,
         Err(error) => {
@@ -589,6 +600,15 @@ fn select(root: &Path, given: &str) -> Result<Selector, Next> {
     };
 
     if absolute.is_dir() {
+        if let Ok(path) = LayoutPath::from_relative(relative)
+            && diff
+                .renamed
+                .iter()
+                .any(|pair| pair.from == path || pair.to == path)
+        {
+            return Ok(Selector::One(path));
+        }
+
         return Ok(Selector::Under(prefix(relative)));
     }
 
@@ -941,7 +961,9 @@ fn take_back(layout: &Layout, diff: &TreeDiff, path: &LayoutPath, root: &Path) -
 ///
 /// The reading knows a path moved by what it wrote down about the path that is gone; what is
 /// written down here is what `target` holds now, so the two are the same to the next reading. What
-/// changes is the memory, not the Layout: `--rename` is still what moves the path.
+/// changes is the memory, not the Layout: `--rename` is still what moves the path. A tree has no
+/// content to write down, so what is written is the id of the lost entry taken into the tree's
+/// mark, which is the whole of what a tree moving takes with it.
 fn assert_move(
     layout: &Layout,
     diff: &TreeDiff,
@@ -955,6 +977,13 @@ fn assert_move(
         }
         .into();
     }
+
+    let Some(id) = layout.id_of(path) else {
+        return ErrorAlignNotLost {
+            path: path.as_str().to_owned(),
+        }
+        .into();
+    };
 
     let Ok(target) = LayoutPath::new(target) else {
         return ErrorAlignMove {
@@ -973,6 +1002,36 @@ fn assert_move(
     }
 
     let disk = root.join(target.to_path_buf());
+
+    // A tree is a directory, and what it moved with is the id in its mark: writing the lost entry's
+    // id there is what makes the next reading pair the two. A file is instead what it holds, which
+    // is what the reading remembers until it can pair the paths itself.
+    if layout
+        .entry(id)
+        .is_some_and(|data| data.kind() == EntryKind::Tree)
+    {
+        let Ok(tree) = Tree::open(root, &disk) else {
+            return ErrorAlignMove {
+                path: target.as_str().to_owned(),
+                kind: MoveError::NotATree,
+            }
+            .into();
+        };
+
+        if let Err(error) = tree.write_local_id(id) {
+            return ErrorAlignFailed {
+                cause: error.to_string(),
+            }
+            .into();
+        }
+
+        return ResultAlign::one(
+            AlignDid::Asserted,
+            format!("{} -> {}", path.as_str(), target.as_str()),
+        )
+        .into();
+    }
+
     if !disk.is_file() {
         return ErrorAlignMove {
             path: target.as_str().to_owned(),
@@ -1016,6 +1075,7 @@ fn assert_move(
 /// settle, unless `completely`, which puts the version the Layout names back over it too, so the
 /// move is undone in content as well as in place.
 fn restore_move(
+    held: &Workspace,
     layout: &Layout,
     diff: &TreeDiff,
     path: &LayoutPath,
@@ -1061,7 +1121,34 @@ fn restore_move(
     let what = format!("{} <- {}", pair.from.as_str(), pair.to.as_str());
 
     if completely {
-        put_version(layout, &pair.from, root, content)?;
+        // A tree moved whole, so what is at the old path is the tree again. Putting the version
+        // back over it is the tree's own restore, rather than a file's bytes at the path.
+        let tree = layout
+            .id_of(&pair.from)
+            .and_then(|id| layout.entry(id))
+            .is_some_and(|data| data.kind() == EntryKind::Tree);
+        if tree {
+            let tree = match Tree::open(root, &from_disk) {
+                Ok(tree) => tree,
+                Err(error) => {
+                    return Err(ErrorAlignFailed {
+                        cause: error.to_string(),
+                    }
+                    .into());
+                }
+            };
+            restore_tree(
+                held,
+                layout,
+                &tree,
+                content.index.as_ref(),
+                content.storage.as_ref(),
+                true,
+            )?;
+        } else {
+            put_version(layout, &pair.from, root, content)?;
+        }
+
         return Ok((AlignDid::RestoredCompletely, what));
     }
 
@@ -1114,6 +1201,36 @@ fn restore_delete(
     }
 
     put_version(layout, path, root, content)?;
+    Ok((AlignDid::RestoredDelete, path.as_str().to_owned()))
+}
+
+/// Puts a lost tree back whole, whether its directory is still there or was deleted.
+///
+/// It is the same work naming the tree does: the directory and its mark are made where nothing is,
+/// and the structure the Layout records is written over the paths it names.
+fn restore_lost_tree(
+    held: &Workspace,
+    layout: &Layout,
+    path: &LayoutPath,
+    root: &Path,
+    content: Content<'_, '_>,
+    completely: bool,
+) -> Result<(AlignDid, String), Next> {
+    let at = root.join(path.to_path_buf());
+    let tree = match Tree::locate(root, &at) {
+        Ok(tree) if at.is_dir() => tree,
+        _ => prepare_tree(root, path)?,
+    };
+
+    restore_tree(
+        held,
+        layout,
+        &tree,
+        content.index.as_ref(),
+        content.storage.as_ref(),
+        completely,
+    )?;
+
     Ok((AlignDid::RestoredDelete, path.as_str().to_owned()))
 }
 
@@ -1239,6 +1356,7 @@ fn align_failed(cause: impl Into<String>) -> Next {
 
 /// Puts the path back to what the Layout names, whichever of the three it needs.
 fn restore_whichever(
+    held: &Workspace,
     layout: &Layout,
     diff: &TreeDiff,
     path: &LayoutPath,
@@ -1247,7 +1365,7 @@ fn restore_whichever(
     completely: bool,
 ) -> Result<(AlignDid, String), Next> {
     if rename_of(diff, path).is_some() {
-        return restore_move(layout, diff, path, root, content, completely);
+        return restore_move(held, layout, diff, path, root, content, completely);
     }
 
     if diff.lost.contains(path) && layout.id_of(path).is_some() {
@@ -1271,6 +1389,7 @@ fn restore_whichever(
 /// holds, and one that changed where it is, is put back after. A path the tree holds and no Layout
 /// names (`untagged`) is left where it lies, since there is nothing it is to be put back to.
 fn restore_all(
+    held: &Workspace,
     layout: &Layout,
     diff: &TreeDiff,
     prefix: &str,
@@ -1285,14 +1404,32 @@ fn restore_all(
             continue;
         }
 
-        match restore_move(layout, diff, &pair.from, root, content, completely) {
+        match restore_move(held, layout, diff, &pair.from, root, content, completely) {
             Ok((did, what)) => items.push(AlignItem { did, what }),
             Err(next) => return next,
         }
     }
 
     for path in &diff.lost {
-        if !under(prefix, path) || layout.id_of(path).is_none() {
+        let Some(id) = layout.id_of(path) else {
+            continue;
+        };
+        if !under(prefix, path) {
+            continue;
+        }
+
+        // A lost tree is put back whole, as it is when the tree itself is named: what the version
+        // holds is a structure rather than a file's bytes, and writing it at the path would leave a
+        // structure object where a directory belongs.
+        if layout
+            .entry(id)
+            .is_some_and(|data| data.kind() == EntryKind::Tree)
+        {
+            match restore_lost_tree(held, layout, path, root, content, completely) {
+                Ok((did, what)) => items.push(AlignItem { did, what }),
+                Err(next) => return next,
+            }
+
             continue;
         }
 
@@ -1670,6 +1807,8 @@ pub struct ErrorAlignMove {
 pub enum MoveError {
     /// It is not a file inside the Workspace.
     Missing,
+    /// It is not a tree inside the Workspace.
+    NotATree,
     /// The Layout already names it.
     Tracked,
 }
@@ -1682,6 +1821,7 @@ impl Failure for ErrorAlignMove {
     fn reason(&self) -> String {
         let said = match self.kind {
             MoveError::Missing => t!("align.err_move_missing", path = self.path),
+            MoveError::NotATree => t!("align.err_move_not_a_tree", path = self.path),
             MoveError::Tracked => t!("align.err_move_tracked", path = self.path),
         };
 
@@ -1784,10 +1924,10 @@ fn restore_tree(
     layout: &Layout,
     tree: &Tree,
     index: Option<&VCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: Option<&RorolalaStorage>,
     completely: bool,
 ) -> Result<(), Next> {
-    let Some(store): Option<&RorolalaStorage> = storage.get_ref().as_ref() else {
+    let Some(store) = storage else {
         return Err(align_failed(t!("align.err_no_store").trim()));
     };
     let Some(index) = index else {
@@ -1906,6 +2046,10 @@ fn restore_tree(
         return Err(align_failed(error.to_string()));
     }
     if let Err(error) = baseline.write_entries(&scanned.cache) {
+        return Err(align_failed(error.to_string()));
+    }
+    // A tree put back is one the Layout still names, so the id it keeps locally is the entry's.
+    if let Err(error) = tree.write_local_id(id) {
         return Err(align_failed(error.to_string()));
     }
 

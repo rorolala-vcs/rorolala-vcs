@@ -49,6 +49,13 @@ pub const WORKSPACE_EDITING_PATH: &str = "./.rola/EDITING.md";
 #[lazyffi(export = ROLA_WORKSPACE_CACHE_DIR)]
 pub const WORKSPACE_CACHE_DIR: &str = "./.rola/cache/";
 
+/// The file, inside a tree's `.rola-tree` directory, that names the Layout entry it is recorded at
+///
+/// A tree is a directory, and a directory that is moved outside Rorolala takes its `.rola-tree`
+/// with it. What is written here is the `Uuid` of the Layout entry, so a reading that finds the
+/// entry lost and a directory marked as a tree elsewhere can tell the two are one tree moved.
+pub const TREE_ENTRY_ID_FILE: &str = "id";
+
 /// Path, inside the Workspace's cache, where remote Layouts are kept read-only
 ///
 /// A Layout fetched from a Vault is not one the Workspace works in: it is a copy of what the

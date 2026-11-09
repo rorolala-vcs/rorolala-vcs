@@ -28,7 +28,6 @@ use librorolala::tree::{Tree, TreeStatus};
 use librorolala::vcs::{LookbackError, VCSIndex, read_chain};
 use librorolala::workspace::{Merging, Pending, Workspace};
 use librorolala::workspace_analyze::tree_diff;
-use librorolala::workspace_analyze::walk;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -283,6 +282,7 @@ pub fn handle_status(
     let (trees_structural, trees_content) = match tree_reading(
         held,
         &layout,
+        &status,
         Some(index),
         Some(store),
         state.include_ignored,
@@ -291,11 +291,15 @@ pub fn handle_status(
         Err(error) => return ErrorLayoutFailed::new(error).into(),
     };
 
+    // A tree the reading found a move for is drawn once, as the move. What the tree's own reading
+    // and the walk of the marks say about the two paths is the same fact seen separately.
+    let (trees_structural, lost, untagged) = without_tree_duplicates(&status, trees_structural);
+
     ResultStatus {
         trees_structural,
         trees_content,
-        lost: status.lost,
-        untagged: status.untagged,
+        lost,
+        untagged,
         modified: status.modified,
         renamed: status
             .renamed
@@ -1024,6 +1028,7 @@ fn status_in_tree(
 fn tree_reading(
     held: &Workspace,
     layout: &Layout,
+    status: &Status,
     index: Option<&VCSIndex>,
     store: Option<&RorolalaStorage>,
     include_ignored: bool,
@@ -1037,7 +1042,6 @@ fn tree_reading(
 
     let runtime = tokio::runtime::Runtime::new().map_err(|error| error.to_string())?;
     let root = held.get_root();
-    let mut tracked: BTreeSet<String> = BTreeSet::new();
     let mut structural = Vec::new();
     let mut content = Vec::new();
 
@@ -1048,7 +1052,6 @@ fn tree_reading(
         let Some(path) = layout.path_of(id) else {
             continue;
         };
-        tracked.insert(path.as_str().to_owned());
 
         let disk = root.join(path.to_path_buf());
         if !disk.is_dir() {
@@ -1087,27 +1090,63 @@ fn tree_reading(
         });
     }
 
-    for found in walk(root).0 {
-        if found.kind != librorolala::layout::EntryKind::Tree || found.disk == root {
-            continue;
+    // The reading already says which marked directories the Layout does not name, so it is asked
+    // rather than the tree walked a second time: one list answers both a file and a tree, and what
+    // is a tree is the mark on disk.
+    for path in &status.untagged {
+        let disk = root.join(path);
+        if librorolala::tree::marked(&disk) {
+            structural.push(TreeStructuralLine {
+                path: path.clone(),
+                change: "added",
+            });
         }
-        let Ok(relative) = found.disk.strip_prefix(root) else {
-            continue;
-        };
-        let Ok(path) = LayoutPath::from_relative(relative) else {
-            continue;
-        };
-        if tracked.contains(path.as_str()) || layout.id_of(&path).is_some() {
-            continue;
-        }
-
-        structural.push(TreeStructuralLine {
-            path: path.as_str().to_owned(),
-            change: "added",
-        });
     }
 
     Ok((structural, content))
+}
+
+/// Takes the trees out of the path lists, since a tree's structural line is the whole of what the
+/// structural block says about it, and drops a structural line for a tree the reading found a move
+/// for: the move is drawn as the move rather than as its two ends.
+fn without_tree_duplicates(
+    status: &Status,
+    trees: Vec<TreeStructuralLine>,
+) -> (Vec<TreeStructuralLine>, Vec<String>, Vec<String>) {
+    let renamed_from: BTreeSet<&str> = status
+        .renamed
+        .iter()
+        .map(|rename| rename.from.as_str())
+        .collect();
+    let renamed_to: BTreeSet<&str> = status
+        .renamed
+        .iter()
+        .map(|rename| rename.to.as_str())
+        .collect();
+    let trees: Vec<TreeStructuralLine> = trees
+        .into_iter()
+        .filter(|tree| match tree.change {
+            "lost" => !renamed_from.contains(tree.path.as_str()),
+            "added" => !renamed_to.contains(tree.path.as_str()),
+            _ => true,
+        })
+        .collect();
+    let tree_paths: BTreeSet<&str> = trees.iter().map(|tree| tree.path.as_str()).collect();
+
+    let lost = status
+        .lost
+        .iter()
+        .filter(|path| !tree_paths.contains(path.as_str()))
+        .cloned()
+        .collect();
+    let untagged = status
+        .untagged
+        .iter()
+        .filter(|path| !tree_paths.contains(path.as_str()))
+        .cloned()
+        .collect();
+
+    (trees, lost, untagged)
 }
 
 /// Result: how a tree stands, as `rola status` draws it when the run is inside one.

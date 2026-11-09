@@ -17,6 +17,12 @@
 //! A file that moved and was edited is counted as a move *and* as a change: what it holds is not
 //! what the Layout names, so it is [`TreeDiff::modified`] as well as [`TreeDiff::renamed`].
 //!
+//! A tree has no content of its own to compare: its structure is the version's, and the work under
+//! it is the tree's own reading. What a tree does carry is the id of the Layout entry it is
+//! recorded at, written into its `.rola-tree` mark, so a lost tree and a marked directory elsewhere
+//! holding the same id are one tree moved. A tree whose id cannot be matched stays a loss and a
+//! gain, which is what a reader that shows the two can settle by hand.
+//!
 //! # What it remembers
 //!
 //! A move is worked out from what a lost path held, which is not on disk any more, so the reading
@@ -33,12 +39,14 @@ use std::path::{Path, PathBuf};
 
 use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{EntryKind, Layout, LayoutPath};
-use rorolala_utils_constants::WORKSPACE_CACHE_DIR;
+use rorolala_utils_constants::{TREE_ENTRY_ID_FILE, WORKSPACE_CACHE_DIR};
 use rorolala_utils_location::Locate as _;
 use rorolala_workspace::{Merging, Workspace};
+use uuid::Uuid;
 
 use crate::cache::{Cache, Entry};
 use crate::error::TreeDiffError;
+use crate::scan::TREE_MARK;
 use crate::{fingerprint, scan};
 
 /// A path that moved: where the Layout named it, and where the tree holds it now.
@@ -246,7 +254,7 @@ pub fn tree_diff(
         .filter(|path| !disk.contains_key(*path))
         .cloned()
         .collect();
-    let lost_trees: Vec<LayoutPath> = tracked_trees
+    let mut lost_trees: Vec<LayoutPath> = tracked_trees
         .iter()
         .filter(|path| !disk_trees.contains(*path))
         .cloned()
@@ -318,6 +326,35 @@ pub fn tree_diff(
         moved_to.insert(to.clone());
     }
 
+    // Third pass: a lost tree and a marked directory elsewhere keeping the same Layout entry id are
+    // one tree moved. The id is the whole of what a tree has to recognise itself by: its structure
+    // names paths under the tree, not where the tree itself sits.
+    for to in &untagged_trees {
+        if moved_to.contains(to) {
+            continue;
+        }
+        let Some(id) = local_id(root, to) else {
+            continue;
+        };
+        let Some(from) = lost_trees
+            .iter()
+            .find(|path| !moved_from.contains(*path) && layout.id_of(path) == Some(id))
+        else {
+            continue;
+        };
+
+        renamed.push(PathRename {
+            from: from.clone(),
+            to: to.clone(),
+            // The id is the one the Layout names the entry by, so the two are the same entry.
+            strong: true,
+        });
+        moved_from.insert(from.clone());
+        moved_to.insert(to.clone());
+    }
+    lost_trees.retain(|path| !moved_from.contains(path));
+    untagged_trees.retain(|path| !moved_to.contains(path));
+
     // A move is a change as well when what the new path holds is not what the Layout agreed with at
     // the old one, which a file that was edited before it moved is, however alike the two readings
     // of it are.
@@ -353,8 +390,8 @@ pub fn tree_diff(
     lost.retain(|path| !moved_from.contains(path));
     untagged.retain(|path| !moved_to.contains(path));
 
-    // A tree is never moved by the file reading: its move has no bytes to compare, and the path it
-    // was at is one loss and one gain until the Layout is told otherwise.
+    // A tree that did not move is a loss, since there are no bytes to compare it by. A tree whose
+    // id matched is one move already, and its two paths are out of the two lists they were in.
     lost.extend(lost_trees);
     lost.sort_unstable();
 
@@ -575,6 +612,21 @@ pub fn cache_path(root: &Path, layout: &Layout) -> PathBuf {
         .collect::<PathBuf>()
         .join(format!("{name}-analyze"))
         .join("entries")
+}
+
+/// The Layout entry id the marked directory at `path` keeps, when it keeps one that reads.
+///
+/// The file is the tree's own note, not part of its work, so a file that is missing or does not
+/// read as a `Uuid` is no id rather than a failure of the reading: the tree is still a gain, and a
+/// reader can pair it with a loss itself.
+fn local_id(root: &Path, path: &LayoutPath) -> Option<Uuid> {
+    let file = root
+        .join(path.to_path_buf())
+        .join(TREE_MARK)
+        .join(TREE_ENTRY_ID_FILE);
+    let text = fs::read_to_string(file).ok()?;
+
+    Uuid::parse_str(text.trim()).ok()
 }
 
 /// Writes down that a path the Layout names holds what it held where it was, a move having put it there.
@@ -964,6 +1016,53 @@ mod tests {
 
         assert_eq!(diff.lost, vec![path("main")], "{diff:?}");
         assert!(diff.untagged_trees.is_empty(), "{diff:?}");
+    }
+
+    #[test]
+    fn a_tracked_tree_moved_with_its_id_is_one_rename() {
+        let (dir, workspace) = workspace("tree-moved");
+        track_tree(&workspace, 1, &path("main"));
+        make_tree(&dir, "main");
+        fs::write(
+            dir.join("main").join(".rola-tree").join("id"),
+            Uuid::from_u128(1).to_string(),
+        )
+        .unwrap();
+
+        fs::create_dir_all(dir.join("archive")).unwrap();
+        fs::rename(dir.join("main"), dir.join("archive").join("main")).unwrap();
+
+        let layout = working(&workspace);
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+
+        assert_eq!(
+            diff.renamed,
+            vec![PathRename {
+                from: path("main"),
+                to: path("archive/main"),
+                strong: true,
+            }],
+            "{diff:?}"
+        );
+        assert!(diff.lost.is_empty(), "{diff:?}");
+        assert!(diff.untagged_trees.is_empty(), "{diff:?}");
+    }
+
+    #[test]
+    fn a_tracked_tree_moved_without_its_id_stays_a_loss_and_a_gain() {
+        let (dir, workspace) = workspace("tree-moved-unmarked");
+        track_tree(&workspace, 1, &path("main"));
+        make_tree(&dir, "main");
+
+        fs::create_dir_all(dir.join("archive")).unwrap();
+        fs::rename(dir.join("main"), dir.join("archive").join("main")).unwrap();
+
+        let layout = working(&workspace);
+        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+
+        assert_eq!(diff.lost, vec![path("main")], "{diff:?}");
+        assert_eq!(diff.untagged_trees, vec![path("archive/main")], "{diff:?}");
+        assert!(diff.renamed.is_empty(), "{diff:?}");
     }
 
     #[test]

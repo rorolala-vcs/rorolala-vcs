@@ -13,7 +13,8 @@ use uuid::Uuid;
 
 use crate::TreeError;
 use crate::baseline::Baseline;
-use crate::consts::{CONFLICT_MARK, DATA, MARK};
+use crate::consts::{CONFLICT_MARK, DATA, ENTRY_ID, MARK};
+use crate::files;
 use crate::rules::TreeRules;
 use crate::scan::{Scanned, scan};
 use crate::staging::Staging;
@@ -271,6 +272,32 @@ impl Tree {
         Baseline::new(&self.root)
     }
 
+    /// The Layout entry id the tree keeps in its mark, when one is written there and reads.
+    ///
+    /// The id is the one the Layout names the tree by, written down locally when the tree is
+    /// recorded. A file that does not read as a `Uuid` is answered as none rather than as a
+    /// failure: it is a local note, and a reading that cannot use it still has the tree.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::Io`] when the file is there and cannot be read.
+    pub fn local_id(&self) -> Result<Option<Uuid>, TreeError> {
+        let Some(text) = files::read_text(&self.local_id_path())? else {
+            return Ok(None);
+        };
+
+        Ok(Uuid::parse_str(text.trim()).ok())
+    }
+
+    /// Writes `id` down in the tree's mark as the Layout entry it is recorded at.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::Io`] when the file cannot be written.
+    pub fn write_local_id(&self, id: Uuid) -> Result<(), TreeError> {
+        files::write(&self.local_id_path(), id.to_string().as_bytes())
+    }
+
     /// The rules the tree's work is read by.
     ///
     /// # Errors
@@ -331,6 +358,11 @@ impl Tree {
         path.file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| name.contains(CONFLICT_MARK))
+    }
+
+    /// The file the tree's Layout entry id is kept in.
+    fn local_id_path(&self) -> PathBuf {
+        self.root.join(MARK).join(ENTRY_ID)
     }
 
     /// Whether `path` is the Workspace's own data rather than work.
@@ -474,6 +506,30 @@ mod tests {
         fs::create_dir_all(&dir).expect("a scratch directory");
 
         dir
+    }
+
+    /// The id a tree keeps is the Layout entry's, and a file that is not one is no id.
+    #[test]
+    fn a_tree_keeps_the_id_of_the_entry_it_is_recorded_at() {
+        let root = scratch("id");
+        fs::create_dir_all(root.join(crate::consts::MARK)).expect("a mark");
+        let tree = Tree::open(&root, &root).expect("a tree");
+
+        assert_eq!(tree.local_id().expect("a reading"), None);
+        tree.write_local_id(Uuid::from_u128(7)).expect("an id");
+        assert_eq!(
+            tree.local_id().expect("a reading"),
+            Some(Uuid::from_u128(7))
+        );
+
+        fs::write(
+            root.join(crate::consts::MARK).join(crate::consts::ENTRY_ID),
+            "not an id",
+        )
+        .expect("a file that is not an id");
+        assert_eq!(tree.local_id().expect("a reading"), None);
+
+        let _ = fs::remove_dir_all(&root);
     }
 
     /// A tree with nothing staged has nothing a commit would record.

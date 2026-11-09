@@ -320,6 +320,24 @@ impl Status {
             runtime.as_ref(),
         );
 
+        // A tree is one entry of the work, and a marked directory the Layout does not name is a
+        // gain the same way a file is. It is kept in the one list a reader pairs a loss with, so a
+        // tree whose id could not be matched can still be connected to where it moved from.
+        let mut untagged: Vec<String> = diff
+            .untagged
+            .iter()
+            .filter(|path| !moved.contains(*path))
+            .map(LayoutPath::as_str)
+            .map(str::to_owned)
+            .collect();
+        untagged.extend(
+            diff.untagged_trees
+                .iter()
+                .filter(|path| !path.is_root())
+                .map(|path| path.as_str().to_owned()),
+        );
+        untagged.sort_unstable();
+
         // Where every recorded path stands beside the Vault's own, which is one walk of the chain per path.
         // A reading without the copy, the index or a runtime has none of them: how two versions stand is not
         // known without the chain, and a reading that guessed would be saying something it does not hold.
@@ -337,13 +355,7 @@ impl Status {
                 .map(LayoutPath::as_str)
                 .map(str::to_owned)
                 .collect(),
-            untagged: diff
-                .untagged
-                .iter()
-                .filter(|path| !moved.contains(*path))
-                .map(LayoutPath::as_str)
-                .map(str::to_owned)
-                .collect(),
+            untagged,
             ignored: diff
                 .ignored
                 .iter()
@@ -655,7 +667,7 @@ mod tests {
     use std::time::Duration;
 
     use rorolala_ignore::IgnoreRuleSet;
-    use rorolala_layout::{Layout, LayoutPath, MutableData};
+    use rorolala_layout::{EntryKind, Layout, LayoutPath, MutableData};
     use rorolala_utils_constants::VAULT_LAYOUT_NAME;
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
@@ -718,6 +730,20 @@ mod tests {
             &IgnoreRuleSet::empty(),
         )
         .unwrap()
+    }
+
+    /// Makes the Layout name `text` as a tree entry.
+    fn track_tree(workspace: &Workspace, id: u128, text: &str) {
+        let layout = working(workspace);
+        layout
+            .create_entry(
+                Uuid::from_u128(id),
+                MutableData::new(None, [1; 32], String::new()).with_kind(EntryKind::Tree),
+            )
+            .unwrap();
+        layout
+            .create_path(&LayoutPath::new(text).unwrap(), Uuid::from_u128(id))
+            .unwrap();
     }
 
     /// What a reading says about a tree that holds what the Layout names.
@@ -823,6 +849,51 @@ mod tests {
         assert!(status.renamed[0].strong);
         assert_eq!(status.lost, Vec::<String>::new(), "{status:?}");
         assert_eq!(status.untagged, Vec::<String>::new(), "{status:?}");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A tree that moved with its id is one move, and its destination is answered where it now sits.
+    #[test]
+    fn a_tree_that_moved_with_its_id_is_one_move() {
+        let (dir, workspace) = workspace("tree-moved");
+        track_tree(&workspace, 1, "main");
+        fs::create_dir_all(dir.join("main").join(".rola-tree")).unwrap();
+        fs::write(
+            dir.join("main").join(".rola-tree").join("id"),
+            Uuid::from_u128(1).to_string(),
+        )
+        .unwrap();
+
+        fs::create_dir_all(dir.join("archive")).unwrap();
+        fs::rename(dir.join("main"), dir.join("archive").join("main")).unwrap();
+
+        let status = read(&workspace);
+
+        assert_eq!(status.renamed.len(), 1, "{status:?}");
+        assert_eq!(status.renamed[0].from, "main");
+        assert_eq!(status.renamed[0].to, "archive/main");
+        assert!(status.renamed[0].strong);
+        assert_eq!(status.lost, Vec::<String>::new(), "{status:?}");
+        assert_eq!(status.untagged, Vec::<String>::new(), "{status:?}");
+        assert_eq!(
+            status.state_of(&dir.join("archive/main")),
+            PathState::Renamed
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A marked directory the Layout does not name is a gain of the work, the same way a file is.
+    #[test]
+    fn a_tree_the_layout_does_not_name_is_untagged() {
+        let (dir, workspace) = workspace("tree-gain");
+        fs::create_dir_all(dir.join("main").join(".rola-tree")).unwrap();
+
+        let status = read(&workspace);
+
+        assert_eq!(status.untagged, vec!["main".to_owned()], "{status:?}");
+        assert_eq!(status.state_of(&dir.join("main")), PathState::Untagged);
 
         let _ = fs::remove_dir_all(&dir);
     }
