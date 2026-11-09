@@ -6,9 +6,10 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Bugfix
 
-1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name. [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-file-system-tree-keep-a-tree-rows-badges-clear-of-its-name)
-2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-local-pill-on-the-draft-while-a-file-is-edited)
-3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-message-fields-pointer-and-row-steady)
+1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges. [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-file-system-tree-draw-a-chosen-tree-row-once-and-centre-its-badges)
+2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-file-system-tree-keep-a-tree-rows-badges-clear-of-its-name)
+3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-local-pill-on-the-draft-while-a-file-is-edited)
+4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-message-fields-pointer-and-row-steady)
 
 ## Optimized
 
@@ -23,12 +24,14 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 1. **\[BREAKING!\]** [`app`] [`rola`] [`tree`] Version a directory as one tree. [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rola-tree-version-a-directory-as-one-tree)
 2. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`windows`] Own and restore floating dock windows. [See details](dev/CHANGELOG-DETAILS.md#2-breaking-app-rorolaladesktop-windows-own-and-restore-floating-dock-windows)
 3. [`app`] [`RorolalaDesktop`] [`menu`] Fold the menu bar into a button. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-menu-fold-the-menu-bar-into-a-button)
-4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-file-system-title-name-a-directory-and-its-address-relative-to-the-base)
-5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-file-system-tree-choose-several-entries-in-the-file-tree)
-6. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7). [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-rorolala-vcs-force-a-track-from-the-version-graph-with-shift-7)
-7. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background. [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolaladesktop-preview-generate-file-previews-in-the-background)
-8. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#8-librorolala-tree-read-a-tree-structures-entries-as-json-across-the-c-abi)
-9. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge. [See details](dev/CHANGELOG-DETAILS.md#9-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
+4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`hides`] Give each hide rule shown, gray and hidden states. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-file-system-hides-give-each-hide-rule-shown-gray-and-hidden-states)
+5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-file-system-title-name-a-directory-and-its-address-relative-to-the-base)
+6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-file-system-tree-choose-several-entries-in-the-file-tree)
+7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7). [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolaladesktop-plugins-rorolala-vcs-force-a-track-from-the-version-graph-with-shift-7)
+8. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background. [See details](dev/CHANGELOG-DETAILS.md#8-app-rorolaladesktop-preview-generate-file-previews-in-the-background)
+9. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash. [See details](dev/CHANGELOG-DETAILS.md#9-app-rorolaladesktophost-report-a-desktop-run-that-ends-with-a-crash)
+10. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#10-librorolala-tree-read-a-tree-structures-entries-as-json-across-the-c-abi)
+11. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge. [See details](dev/CHANGELOG-DETAILS.md#11-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
 
 ## Refactor
 

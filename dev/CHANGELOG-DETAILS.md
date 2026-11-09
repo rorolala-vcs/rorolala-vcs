@@ -6,17 +6,21 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Bugfix
 
-### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name
+### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges
+
+A chosen tree row is now one rounded wash over the whole step, rather than a wash on the row and a second one around its name and icon. The badges at the row's right are centred on the step, so the room above and below them is the same.
+
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name
 
 A file tree row is now a three-column grid rather than a dock panel: the name gives way with an ellipsis, the badges keep their width at the row's right, and the row stretches to the tree's width at any panel width. The badges are drawn at twenty pixels, while the entry icon stays at sixteen.
 
-### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
 
 The Version Graph no longer draws an edited file's local pill on the version its draft is based on
 as well as on the draft. While the file has an unrecorded change, its draft is the one card that
 names it; the baseline version keeps the entries of the other sides.
 
-### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
 
 The message field under the Version Graph is the whole room beside the TRACK button, but the pointer read as text only over the line the message is drawn on: the padding around that line and the empty width after it read as ground, although a press there focused the field. The field now names the text cursor itself, so every part of its room inherits it.
 
@@ -70,29 +74,37 @@ A dock pulled into a window of its own is now owned by the main window. Closing 
 
 The title row no longer carries a menu bar. One button at its left opens the same top-level menus in a flyout, in their old order, with the Window menu still listing the docks and its commands. The button has a tooltip and an accessible name, and a press on it does not move the window.
 
-### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`hides`] Give each hide rule shown, gray and hidden states
+
+Each hide rule now has three states rather than two. Shown leaves its entries as they are, Gray keeps them in the listing at 55% opacity, and Hidden leaves them out; a click on the rule cycles shown, gray, hidden. The popup lists the rules as Dot Directories, Dot Files, Windows Hidden Files, Git Ignored Files and Rola Ignored Files, and its eye and more button are one run at the toolbar's right, separated from the link by a 1 px rule. The eye shows the entries a hiding rule leaves out as gray without changing the rule's state.
+
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base
 
 A directory dock inside the tree's base is named by its part under that base, so a tab reads `art` or `art/shots` rather than the whole path, and its address bar starts at `.` for the base and adds one step for each directory under it. The detail a tab and a window title show on hover is still the full path, a directory outside the base keeps its full path, and a logical place keeps its address.
 
-### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree
 
 The file tree now supports the same choice as a directory listing: a plain press chooses one row, Ctrl toggles one, Shift takes a visible range, and Ctrl+A chooses every row on screen. A modified press on a directory changes the choice without navigating, while a plain press still opens it. Copy, cut, delete and the context menu act on the whole choice, and a tree read again keeps its choice by path.
 
-### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
+### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
 
 The TRACK button under the Version Graph turns red while Shift is held. A press then records
 the chosen changes with `rola track --force`, and a question names the files whose changes a plain
 track refuses before anything is written. Without Shift the button records the changes as before.
 
-### 7. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
+### 8. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
 
 A file browser's grid now shows a file's own preview where one can be made, and keeps the type icon where one cannot. The host asks its system source first and the plugins' renderers after it, keeps answers by path, write time and size, cancels a tile's request when the tile leaves the window, and reports a batch on the progress stack. Windows uses the Shell thumbnailer on a dedicated STA thread; Linux reads thumbnails the desktop has already cached.
 
-### 8. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
+### 9. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
+
+`rola desktop` now starts a host beside the Desktop rather than the Desktop itself. The host forwards the line that says the window is up, keeps the Desktop's error stream, and when the run ends with a non-zero code writes the report to a log and opens a window that shows it. A Desktop run that throws also writes the exception's stack to that stream, so the stack survives the window that wrote it. A start that found the Desktop already running, exit code 174, is passed through without a report.
+
+### 10. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
 
 `rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. A caller that cannot decode the structure format hands the bytes over instead of keeping a second copy of it, and text that is not hex or bytes that are not a structure answer as `null`, so an answer is always JSON. The string is freed with `free_string`.
 
-### 9. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+### 11. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
 
 The new `rorolala-tree` crate holds what a tree is: a canonical structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path. Content moves into the Workspace's store with `publish_from`, which carries manifests and their chunks without rewriting what is already there.
 
