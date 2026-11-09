@@ -69,7 +69,7 @@ internal sealed class ColourPlate : UserControl
         {
             Width = Wide,
             Height = Bar,
-            CornerRadius = new CornerRadius(4),
+            CornerRadius = new CornerRadius(5),
             Background = Along(),
             BorderThickness = new Thickness(1),
         };

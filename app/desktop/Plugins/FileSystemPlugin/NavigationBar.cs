@@ -150,7 +150,7 @@ internal sealed class NavigationBar : UserControl
 
         var band = new Border
         {
-            Height = 48,
+            Height = 32,
             Padding = new Thickness(12, 0),
             VerticalAlignment = VerticalAlignment.Top,
             BorderThickness = new Thickness(0, 0, 0, 1),

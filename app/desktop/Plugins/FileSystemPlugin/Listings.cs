@@ -2396,17 +2396,16 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         ScrollViewer.SetHorizontalScrollBarVisibility(List, ScrollBarVisibility.Disabled);
 
         // The item keeps the design's row height, and its own inset is taken off so that the header and the
-        // rows share one edge. The four pixels left between two rows are the line's room and the frame's: the
-        // rows are told apart by the line under each, and the room around it is the only place a press can
-        // land that is not on an entry, which is where a frame is begun from.
+        // rows share one edge. A row has no margin: the line under it is the only thing between two rows,
+        // and the room around that line is the row's own, not a gap the list adds.
         List.Styles.Add(
             new Style(selector => selector.OfType<ListBoxItem>())
             {
                 Setters =
                 {
                     new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                    new Setter(Layoutable.MarginProperty, new Thickness(0, 2, 0, 2)),
-                    new Setter(Layoutable.MinHeightProperty, 30.0),
+                    new Setter(Layoutable.MarginProperty, new Thickness(0)),
+                    new Setter(Layoutable.MinHeightProperty, 28.0),
                     new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
                 },
             }
@@ -2646,8 +2645,8 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         var band = new Border
         {
             Child = _header,
-            Padding = new Thickness(Inset, 7),
-            MinHeight = 30,
+            Padding = new Thickness(Inset, 0),
+            MinHeight = 28,
             BorderThickness = new Thickness(0, 0, 0, 1),
         };
         band[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Dark);

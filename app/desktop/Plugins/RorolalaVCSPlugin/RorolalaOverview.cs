@@ -288,7 +288,7 @@ internal sealed class OverviewView : UserControl
     private const double Widest = 420;
 
     /// <summary>How tall a row is, which is the height the browser gives one.</summary>
-    private const double RowHeight = 30.0;
+    private const double RowHeight = 28.0;
 
     /// <summary>How far a band and its rows are inset, which the browser insets its own by.</summary>
     private const double Inset = 12.0;
@@ -335,17 +335,22 @@ internal sealed class OverviewView : UserControl
     private static Color UnsettledFill => RorolalaColours.UnderWay;
 
     /// <summary>The theme resource for what has nothing to say about itself, which a note is read in.</summary>
-    private const string QuietFill = PaletteKeys.Faint;
+    /// <remarks>
+    /// The second step of the ink rather than the third: a note is a sentence about the work and is
+    /// read, where the third step is kept for what is drawn past. A table of changes has several notes
+    /// in a column, so a step too faint is a column the reader has to work at.
+    /// </remarks>
+    private const string QuietFill = PaletteKeys.Muted;
 
     /// <summary>
     /// The theme resource a path the ignore rules govern is read in.
     /// </summary>
     /// <remarks>
-    /// The look's faint ink, which it spends on what is not to be acted on: the work's own paths are drawn
-    /// in the ink the rest of the table is, and these are read past. The same colour the notes use, because
-    /// it is the same statement, there is nothing here to act on.
+    /// The look's second ink rather than its third, for the reason the notes use it: an ignored path is
+    /// still a path the reader may want to read, and a step that fails at 11 px is a step that reads as
+    /// disabled whether or not it is.
     /// </remarks>
-    private const string QuietInk = PaletteKeys.Faint;
+    private const string QuietInk = PaletteKeys.Muted;
 
     /// <summary>The theme resource a line told apart from the next is drawn in.</summary>
     private const string EdgeInk = PaletteKeys.Splitter;
@@ -1761,7 +1766,7 @@ internal sealed class OverviewView : UserControl
                 Setters =
                 {
                     new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
-                    new Setter(Layoutable.MarginProperty, new Thickness(0, 2, 0, 2)),
+                    new Setter(Layoutable.MarginProperty, new Thickness(0)),
                     new Setter(Layoutable.MinHeightProperty, RowHeight),
                     new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
                 },
@@ -1791,7 +1796,7 @@ internal sealed class OverviewView : UserControl
         var band = new Border
         {
             Child = heads,
-            Padding = new Thickness(Inset, 7),
+            Padding = new Thickness(Inset, 0),
             MinHeight = RowHeight,
             BorderThickness = new Thickness(0, 0, 0, 1),
         };
@@ -1906,11 +1911,11 @@ internal sealed class OverviewView : UserControl
     /// One pill: a rounded tag of its letters, in the state's own colour, with the whole of it said on hover.
     /// </summary>
     /// <remarks>
-    /// The line and the letters are the state's colour and the ground behind them is that colour laid thin, so
-    /// a pill is one thing said rather than a colour with a label stuck on it: the tint is what tells the pill
-    /// from the row it stands on, and the colour entire is what makes it a mark. Laid thin rather than mixed
-    /// down, so that one pill reads on the light look and the dark one without being told which it is on, what
-    /// stands behind the colour is whatever the row is drawn on.
+    /// The line is the state's colour at a third of its strength and the ground behind it is that colour
+    /// laid thin, so a pill is one thing said rather than a colour with a label stuck on it. The letters
+    /// are the look's front ink rather than the state's colour entire, because a state is fixed and the
+    /// two looks are not: a green that carries white letters on the dark ground does not carry them on
+    /// the light one, and the letters are what says which state it is.
     /// <para>
     /// Every pill is the same size, whatever its letters: they are read as a column of marks rather than as
     /// words, and a column whose marks grew and shrank with what they said would be one a reader has to measure
@@ -1929,14 +1934,16 @@ internal sealed class OverviewView : UserControl
             TextWrapping = TextWrapping.NoWrap,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
-            // The state's own colour rather than a shade of it, because the ground is that colour laid thin:
-            // words in a shade would be a third colour in a tag that is meant to be one.
-            Foreground = new SolidColorBrush(pill.Fill),
             // Heavier than the words around it, since a pill is a state said rather than a value read. A bold
             // face is also what makes one letter read as a mark rather than as the beginning of a word.
             FontWeight = FontWeight.Bold,
-            Classes = { "caption" },
+            Classes = { "pill" },
         };
+
+        // The look's own ink, because the tint behind it changes with the variant and the state's colour
+        // does not. The hue is still the pill's edge and wash, and the letters are what makes the state
+        // legible on either ground.
+        words[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(PaletteKeys.Front);
 
         var made = new Border
         {
@@ -1948,7 +1955,7 @@ internal sealed class OverviewView : UserControl
             CornerRadius = TagRadius,
             Background = new SolidColorBrush(WithAlpha(pill.Fill, PillWash)),
             BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(pill.Fill),
+            BorderBrush = new SolidColorBrush(WithAlpha(pill.Fill, PillEdge)),
             // The room a pill keeps around it is its own rather than the panel's, since a panel spaces lines
             // and not the things on them: what wraps onto the next line has to be told from the line above.
             Margin = new Thickness(0, 2, PillGap, 2),
@@ -1971,7 +1978,14 @@ internal sealed class OverviewView : UserControl
     /// stops being a tint of the row and starts being a surface of its own, which is the loudness a table of
     /// states does not want.
     /// </remarks>
-    private const byte PillWash = 0x22;
+    private const byte PillWash = 0x24;
+
+    /// <summary>How strong the line around a pill is, as the state's colour laid on.</summary>
+    /// <remarks>
+    /// A third of the colour: the wash says where the pill is and the line says where it ends, and a line
+    /// at full strength turns a column of marks into a column of filled tags.
+    /// </remarks>
+    private const byte PillEdge = 0x59;
 
     /// <summary>How round a pill is, which is the design's radius for a small control.</summary>
     private static readonly CornerRadius TagRadius = new(5);

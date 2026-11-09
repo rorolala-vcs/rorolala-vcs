@@ -61,7 +61,7 @@ internal sealed class NotificationCard : Border
         this[!BoxShadowProperty] = new DynamicResourceExtension(PaletteKeys.Shadow);
 
         BorderThickness = new Thickness(1);
-        CornerRadius = new CornerRadius(0);
+        CornerRadius = new CornerRadius(8);
         ClipToBounds = true;
 
         var stripe = new Border { Width = 3 };

@@ -102,9 +102,9 @@ internal static class ReportView
             _ => (Icons.LiveHelp, PaletteKeys.Add, PaletteKeys.AddBackground),
         };
 
-        // A code span inside a help box belongs to the box rather than to the program's accent: the green is
+        // A code span inside a help box belongs to the box rather than to the program's primary: the green is
         // what the reader knows the advice by, and the pale wash behind it is the same colour laid thinner.
-        var codeInk = block.Kind == ReportKind.Help ? inkKey : PaletteKeys.Accent;
+        var codeInk = block.Kind == ReportKind.Help ? inkKey : PaletteKeys.Primary;
         var codeGround =
             block.Kind == ReportKind.Help ? groundKey ?? PaletteKeys.AddBackground : PaletteKeys.Mid;
 
@@ -148,7 +148,7 @@ internal static class ReportView
 
         var box = new Border
         {
-            CornerRadius = new CornerRadius(6),
+            CornerRadius = new CornerRadius(8),
             BorderThickness = new Thickness(Edge),
             Padding = new Thickness(10, 8),
             Child = row,

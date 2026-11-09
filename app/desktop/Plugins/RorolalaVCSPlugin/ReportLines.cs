@@ -117,7 +117,7 @@ internal static class ReportLines
     /// <param name="into">Where the words go.</param>
     /// <param name="text">What was written.</param>
     /// <param name="ink">The colour or theme resource a named colour in it is drawn in, or nothing to leave it as it stands.</param>
-    /// <param name="codeInk">What a code span is written in, or the accent when nothing is stated.</param>
+    /// <param name="codeInk">What a code span is written in, or the primary when nothing is stated.</param>
     /// <param name="codeGround">What a code span is filled with, or the ground when nothing is stated.</param>
     public static void Draw(
         TextBlock into,
@@ -131,7 +131,7 @@ internal static class ReportLines
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(ink);
 
-        codeInk ??= PaletteKeys.Accent;
+        codeInk ??= PaletteKeys.Primary;
         codeGround ??= PaletteKeys.Mid;
 
         var inlines = into.Inlines ??= new InlineCollection();
@@ -175,7 +175,7 @@ internal static class ReportLines
 
         var pill = new Border
         {
-            CornerRadius = new CornerRadius(4),
+            CornerRadius = new CornerRadius(5),
             Padding = new Thickness(4, 0),
             VerticalAlignment = VerticalAlignment.Center,
             Child = words,

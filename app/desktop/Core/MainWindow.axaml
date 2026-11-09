@@ -80,7 +80,7 @@
             x:Name="ProgressLayer"
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
-            Margin="0,37,16,0"
+            Margin="0,40,16,0"
         />
     </Grid>
 </Window>

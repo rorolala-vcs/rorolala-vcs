@@ -232,7 +232,7 @@ internal sealed class AccountsPanel : UserControl
         var row = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"),
-            Height = 30,
+            Height = 28,
         };
 
         Grid.SetColumn(name, 0);

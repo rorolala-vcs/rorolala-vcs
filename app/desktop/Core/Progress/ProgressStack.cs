@@ -153,7 +153,7 @@ public sealed class ProgressStack : StackPanel
         private readonly TextBlock _phase = new()
         {
             Classes = { "muted" },
-            FontSize = 10,
+            FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
@@ -248,7 +248,7 @@ public sealed class ProgressStack : StackPanel
 
             _root = new Border
             {
-                CornerRadius = new CornerRadius(9),
+                CornerRadius = new CornerRadius(8),
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(10, 9),
                 Child = content,
@@ -380,7 +380,7 @@ public sealed class ProgressStack : StackPanel
             /// <summary>The name, in the left column.</summary>
             private readonly TextBlock _name = new()
             {
-                FontSize = 10.5,
+                FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
             };
@@ -397,7 +397,7 @@ public sealed class ProgressStack : StackPanel
             private readonly TextBlock _share = new()
             {
                 Classes = { "muted" },
-                FontSize = 10,
+                FontSize = 11,
                 Width = 34,
                 TextAlignment = TextAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,

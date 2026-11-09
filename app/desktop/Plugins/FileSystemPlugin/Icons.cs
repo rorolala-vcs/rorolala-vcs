@@ -532,7 +532,7 @@ internal static partial class Icons
         {
             Width = size,
             Height = size,
-            CornerRadius = new CornerRadius(3),
+            CornerRadius = new CornerRadius(5),
             Background = new SolidColorBrush(directory ? Directory : File),
             VerticalAlignment = VerticalAlignment.Center,
         };

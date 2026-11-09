@@ -66,14 +66,14 @@ internal sealed class LogView : UserControl
                 new TextBlock
                 {
                     Text = "\u2261",
-                    FontSize = 34,
+                    FontSize = 24,
                     Classes = { "faint" },
                     HorizontalAlignment = HorizontalAlignment.Center,
                 },
                 new TextBlock
                 {
                     Text = RolaI18N.Get("core.empty_log"),
-                    Classes = { "muted" },
+                    Classes = { "empty" },
                     HorizontalAlignment = HorizontalAlignment.Center,
                 },
             },
@@ -108,7 +108,7 @@ internal sealed class LogView : UserControl
     private static Border Head() =>
         new()
         {
-            Height = 30,
+            Height = 28,
             Padding = new Thickness(8, 0),
             BorderThickness = new Thickness(0, 0, 0, 1),
             [!Border.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.sunken"),
