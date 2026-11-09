@@ -68,7 +68,7 @@ public partial class MainWindow : Window
     /// would step as the eye moved between them.
     /// </para>
     /// </remarks>
-    public const double TitleBarHeight = 29.0;
+    public const double TitleBarHeight = 32.0;
 
     /// <summary>How large the menu button's picture is, which is the size a toolbar's tools are drawn at.</summary>
     private const double MenuGlyphSize = 18;
@@ -294,6 +294,16 @@ public partial class MainWindow : Window
         ToolTip.SetTip(MenuButton, _services.I18n.Get("window.menu"));
         AutomationProperties.SetName(MenuButton, _services.I18n.Get("window.menu"));
 
+        // The main window is the program, so its row carries the program's name and the workspace it was
+        // started on. A window of one dock is that dock, and its row already carries the dock's name.
+        if (_dock is null)
+        {
+            var brand = Brand();
+
+            Grid.SetColumn(brand, menuColumn == 0 ? 1 : 0);
+            TitleRow.Children.Add(brand);
+        }
+
         BuildMenu();
         Caption();
         // A window of one dock is named by that dock, and a dock that names itself by where it is names the window
@@ -405,6 +415,81 @@ public partial class MainWindow : Window
             caption.Text = instance.Title;
             ToolTip.SetTip(caption, instance.Detail);
         }
+    }
+
+    /// <summary>
+    /// The program's name and the workspace it was started on, in the row the window draws for itself.
+    /// </summary>
+    /// <remarks>
+    /// The name is written out rather than translated: it is the program's, and a translation of a name is a
+    /// second name. The workspace is the directory the program was started in, which is what the command line
+    /// hands over when it opens the window.
+    /// </remarks>
+    /// <returns>The row's brand.</returns>
+    private static Control Brand()
+    {
+        var brand = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+            Margin = new Thickness(10, 0, 0, 0),
+        };
+
+        brand.Children.Add(
+            new TextBlock
+            {
+                Text = "Rorolala",
+                Classes = { "title" },
+                VerticalAlignment = VerticalAlignment.Center,
+            }
+        );
+
+        var workspace = WorkspaceName();
+
+        if (workspace.Length == 0)
+        {
+            return brand;
+        }
+
+        var rule = new Border
+        {
+            Width = 1,
+            Height = 14,
+            Margin = new Thickness(2, 0, 2, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        rule[!Border.BackgroundProperty] = new DynamicResourceExtension(
+            RorolalaDesktop.Contract.PaletteKeys.Splitter
+        );
+
+        brand.Children.Add(rule);
+        brand.Children.Add(
+            new TextBlock
+            {
+                Text = workspace,
+                Classes = { "caption", "muted" },
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = 280,
+            }
+        );
+
+        return brand;
+    }
+
+    /// <summary>The name of the directory the program was started in, or that directory when it has no name.</summary>
+    /// <returns>The workspace's name.</returns>
+    private static string WorkspaceName()
+    {
+        var directory = string.IsNullOrWhiteSpace(Program.CurrentDirectory)
+            ? Environment.CurrentDirectory
+            : Program.CurrentDirectory;
+        var trimmed = Path.TrimEndingDirectorySeparator(directory);
+        var name = Path.GetFileName(trimmed);
+
+        return name.Length > 0 ? name : trimmed;
     }
 
     /// <summary>
