@@ -364,6 +364,7 @@ impl RorolalaStorage {
 
             forget_pack_index(state, *kind, *index);
             self.drop_entry(&from_index).await?;
+            Self::forget_packs(state, *kind);
             sync_directory(&self.index_directory(*kind)).await?;
         }
 
@@ -580,6 +581,10 @@ impl RorolalaStorage {
 
         forget_pack_index(state, kind, index);
         self.drop_entry(&index_path).await?;
+        // The pack is no longer one a listing may answer with. A directory's stamp is not enough to
+        // notice a file taken out of it on every filesystem, so the listing is forgotten here rather
+        // than left to a timestamp that may not have moved.
+        Self::forget_packs(state, kind);
         sync_directory(&self.index_directory(kind)).await?;
         self.drop_entry(&pack_path).await?;
 
@@ -824,6 +829,9 @@ impl RorolalaStorage {
             // with it, so that the number it frees is not answered with it. See `forget_pack_index`.
             forget_pack_index(state, kind, index);
             self.drop_entry(&index_path).await?;
+            // The listing may still name this index: a directory's stamp is length and modification
+            // time, and a file taken out of one does not move either on every filesystem.
+            Self::forget_packs(state, kind);
             // The index going is made durable before the pack itself goes, so that a crash cannot leave
             // an index naming a pack that is not there.
             sync_directory(&self.index_directory(kind)).await?;

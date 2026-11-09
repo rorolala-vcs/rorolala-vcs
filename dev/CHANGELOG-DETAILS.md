@@ -46,6 +46,8 @@ A chunked write lays its chunks down in a pack rather than as one file each, and
 
 Neither the cut nor its bounds are recorded in the store, so content written before this reads back unchanged. The first save after upgrading re-cuts a large binary once, and later versions share chunks with it.
 
+A pack left empty by a removal is dropped from the store and forgotten from the list of packs at once, rather than waiting for a directory timestamp to change, so a store that has let go of its last pack does not go on naming it.
+
 Reads and writes no longer copy content on the way through: a payload stored as it is is borrowed rather than encoded into a second buffer, an entry is read frame first with its payload into the front of its own buffer, a manifest is decoded in place, and a file's key is hashed as it streams. An extract writes each chunk to the file and hashes it as it goes rather than putting the whole content together in memory, and a chunked write canonicalises the store once rather than once a chunk.
 
 ### 5. [`modules`] [`workspace-analyze`] [`fingerprint`] Stream a binary file through the status reading instead of holding it
