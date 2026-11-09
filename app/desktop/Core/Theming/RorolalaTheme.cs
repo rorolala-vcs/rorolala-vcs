@@ -92,9 +92,11 @@ internal sealed class RorolalaTheme
         _primaryBright = Mix(_primary, Colors.White, 0.15);
 
         // The wash a chosen row is filled with. It is stated by the design as two alphas rather than
-        // derived, because a wash has to stay a wash on both grounds and a factor would not.
-        _selectionLight = WithAlpha(_primary, 0x59);
-        _selectionDark = WithAlpha(_primary, 0x4D);
+        // derived, because a wash has to stay a wash on both grounds and a factor would not. The alphas
+        // are low enough that the row's ink still reads at 4.5:1 and high enough that the row is told
+        // from a hover: a selection is a statement about an entry, not a surface of its own.
+        _selectionLight = WithAlpha(_primary, 0x24);
+        _selectionDark = WithAlpha(_primary, 0x30);
 
         // The ring a focused field wears. The design draws it as an outline two pixels out, which is
         // this: a shadow with a spread and no blur, drawn outside the border box.
@@ -250,8 +252,12 @@ internal sealed class RorolalaTheme
     /// <summary>The size every word is set at.</summary>
     private const double BodySize = 14.0;
 
-    /// <summary>The height of a row of a list, a tree, or a field.</summary>
-    private const double RowHeight = 30.0;
+    /// <summary>The height of a row of a list, a table, or a field.</summary>
+    /// <remarks>
+    /// Twenty-eight rather than thirty: a table of changes is read down a column, and the two pixels a
+    /// row gives back are two more rows in the window. A tree keeps its own smaller row below.
+    /// </remarks>
+    private const double RowHeight = 28.0;
 
     /// <summary>
     /// The height a step of a tree is held at, and the room left under the line it draws.
@@ -285,14 +291,14 @@ internal sealed class RorolalaTheme
     private const string Chevron = "PART_ExpandCollapseChevron";
 
     /// <summary>
-    /// The height of the menu bar, which is a fifth shorter than the other bands.
+    /// The height of the menu bar, which is the height of every other band.
     /// </summary>
     /// <remarks>
-    /// A menu bar is read and then left alone, where a strip carries the tabs and the commands that are
-    /// worked in all session: the same height made the one thing that is only looked at as heavy as the
-    /// things that are used.
+    /// The menu bar, a dock strip and a toolbar are one row of chrome at 32, so the top of the window
+    /// reads as one band rather than as a stack of three heights. A strip was 36 and the menu bar 29
+    /// before this, which put a seam under the menu that did not line up with anything.
     /// </remarks>
-    private const double MenuBarHeight = 29.0;
+    private const double MenuBarHeight = 32.0;
 
     /// <summary>How rounded a card is.</summary>
     private static readonly CornerRadius Radius = new(8);
@@ -625,9 +631,11 @@ internal sealed class RorolalaTheme
         /// </summary>
         /// <remarks>
         /// A small part of the way: enough to be told from the face at a glance on either ground, and not
-        /// so far that it reads as a chosen surface, which is the primary's wash's to say.
+        /// so far that it reads as a chosen surface, which is the primary's wash's to say. A hover is a
+        /// report of where the pointer is, and a selection is a statement about an entry, so the two
+        /// steps are far apart.
         /// </remarks>
-        private const double HoverStep = 0.15;
+        private const double HoverStep = 0.08;
 
         /// <summary>What was added, which is the green on either ground rather than one chosen.</summary>
         /// <remarks>
@@ -959,8 +967,25 @@ internal sealed class RorolalaTheme
                 selector => selector.OfType<TextBlock>().Class("label"),
                 new Setter(TextBlock.FontSizeProperty, 11.0),
                 new Setter(TextBlock.FontWeightProperty, FontWeight.Bold),
-                new Setter(TextBlock.LetterSpacingProperty, 0.9),
-                Brushed(TextBlock.ForegroundProperty, Faint)
+                new Setter(TextBlock.LetterSpacingProperty, 0.8),
+                // Muted rather than faint: a label is small and set in capitals, so it needs the
+                // contrast a step of ink gives rather than the step kept for what is read past.
+                Brushed(TextBlock.ForegroundProperty, Muted)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("pill"),
+                new Setter(TextBlock.FontSizeProperty, 11.0),
+                new Setter(TextBlock.FontWeightProperty, FontWeight.Bold)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("section"),
+                new Setter(TextBlock.FontSizeProperty, 13.0),
+                new Setter(TextBlock.FontWeightProperty, FontWeight.SemiBold)
+            ),
+            On(
+                selector => selector.OfType<TextBlock>().Class("empty"),
+                new Setter(TextBlock.FontSizeProperty, 20.0),
+                Brushed(TextBlock.ForegroundProperty, Muted)
             ),
             On(
                 selector => selector.OfType<TextBlock>().Class("caption"),
@@ -1074,7 +1099,10 @@ internal sealed class RorolalaTheme
 
             On(
                 selector => selector.OfType<TextBox>(),
-                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                // A field is a well in the panel rather than a second panel: the same fill as the
+                // strip would make the two read as one surface, and a field has to be told from what
+                // holds it.
+                Brushed(TemplatedControl.BackgroundProperty, Sunken),
                 new Setter(TemplatedControl.BorderThicknessProperty, Edge),
                 Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
                 new Setter(TemplatedControl.CornerRadiusProperty, Small),
@@ -1089,7 +1117,7 @@ internal sealed class RorolalaTheme
             ),
             On(
                 selector => selector.OfType<ComboBox>(),
-                Brushed(TemplatedControl.BackgroundProperty, Elevated),
+                Brushed(TemplatedControl.BackgroundProperty, Sunken),
                 new Setter(TemplatedControl.BorderThicknessProperty, Edge),
                 Brushed(TemplatedControl.BorderBrushProperty, BorderLine),
                 new Setter(TemplatedControl.CornerRadiusProperty, Small),
@@ -1118,6 +1146,20 @@ internal sealed class RorolalaTheme
                 new Setter(Layoutable.MinHeightProperty, RowHeight),
                 new Setter(TemplatedControl.CornerRadiusProperty, Small)
             ),
+            // One wash for every chosen row, named against the part the base theme paints rather than
+            // the item: the item's own background is what the template binds, and a style on the item
+            // would be a value the presenter could ignore. The base theme reaches for the accent itself
+            // here, which is a solid fill in some of its templates and a wash in others, so the wash is
+            // stated once for a listing and once for a tree.
+            On(
+                selector =>
+                    selector
+                        .OfType<ListBoxItem>()
+                        .Class(":selected")
+                        .Template()
+                        .Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BackgroundProperty, Selection)
+            ),
             // A tree is a pane rather than a card: the one edge it is read by is the ground the dock that
             // holds it draws, and no corner is rounded off. It used to be drawn with a radius, which read as a
             // surface laid on the dock rather than as the part of the window the steps are read in.
@@ -1135,7 +1177,10 @@ internal sealed class RorolalaTheme
                 // A step of a tree is a row of its own height rather than a listing's, and the room between two
                 // steps is stated below rather than being the difference between that height and what a step
                 // draws. See the two constants named here for why each is what it is.
-                new Setter(Layoutable.MinHeightProperty, TreeRowHeight)
+                new Setter(Layoutable.MinHeightProperty, TreeRowHeight),
+                // The base theme paints the chosen row on the SelectionBorder, which takes its corner from the
+                // item. The row is one rounded wash, the same as a chosen listing row, rather than a rectangle.
+                new Setter(TemplatedControl.CornerRadiusProperty, Small)
             ),
             // The room under a step, which is also the room between a step and whatever it holds: the presenter
             // is what the row's own line is drawn in, and the steps under it are laid out directly below it, so
@@ -1147,6 +1192,8 @@ internal sealed class RorolalaTheme
                 selector => selector.OfType<TreeViewItem>().Template().Name("PART_HeaderPresenter"),
                 new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 0, TreeRowRoom))
             ),
+            // The chosen row is painted once, by the base theme, on the SelectionBorder. A wash on the header
+            // presenter as well would be a second fill inside the first, and the row would read as two boxes.
             // The arrow says what the step is, and it says it from the step's own state: the base theme's
             // chevron is a toggle button bound to the step, so the state is already there to select on. The
             // two states are two style values rather than one binding, because a value a style hands a
@@ -1494,11 +1541,18 @@ internal sealed class RorolalaTheme
             // everywhere in the row except the empty space of the bar, which is where it is aimed. What is set
             // here is what a press cannot do without, the room a menu needs and the room on the right the
             // buttons are in.
+            // The row a window's menu and its own buttons share is the header step: a band across the
+            // top of the window, a step into the panels under it rather than at their face. It used to
+            // be the panel's own fill, which left the top row and the docks as one surface.
             On(
                 selector => selector.OfType<Border>().Class(TitleBarClass),
-                Brushed(Border.BackgroundProperty, Elevated),
+                Brushed(Border.BackgroundProperty, Sunken),
                 new Setter(Border.BorderThicknessProperty, new Thickness(0, 0, 0, 1)),
                 Brushed(Border.BorderBrushProperty, BorderLine),
+                // The room the window's own buttons take is kept by the row itself rather than by a menu
+                // inside it: the menu is a button now, and a row that left the room to a menu would draw
+                // its first word under the three lights on macOS or under the three marks on Windows.
+                new Setter(Border.PaddingProperty, MenuBarPadding),
                 new Setter(Layoutable.MinHeightProperty, MenuBarHeight)
             ),
             On(
@@ -1513,7 +1567,9 @@ internal sealed class RorolalaTheme
             On(
                 selector => selector.OfType<TextBlock>().Class(WindowTitleClass),
                 Brushed(TextBlock.BackgroundProperty, SunkenClear),
-                Brushed(TextBlock.ForegroundProperty, Muted),
+                Brushed(TextBlock.ForegroundProperty, Foreground),
+                new Setter(TextBlock.FontSizeProperty, 13.0),
+                new Setter(TextBlock.FontWeightProperty, FontWeight.SemiBold),
                 new Setter(TextBlock.PaddingProperty, new Thickness(8, 3)),
                 new Setter(Layoutable.VerticalAlignmentProperty, VerticalAlignment.Center)
             ),
@@ -1594,6 +1650,10 @@ internal sealed class RorolalaTheme
                 selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(DockArea.SelectedClass),
                 Brushed(TemplatedControl.BackgroundProperty, Elevated),
                 Brushed(TemplatedControl.ForegroundProperty, Foreground),
+                // The name of the tab being read is heavier than the names beside it: on the dark
+                // ground the two fills are one step apart, and the weight is what tells the reader
+                // which of them the panel below belongs to.
+                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold),
                 // Down by the line the strip draws along its foot, so that this tab is drawn over it: a tab
                 // that is read is joined to what it is a tab of, and the line is the row's rather than the
                 // tab's, so covering it is what leaves the join (see the strip's own rule). One pixel of
@@ -1615,6 +1675,28 @@ internal sealed class RorolalaTheme
                         .Class(DockArea.SelectedClass)
                         .Class(":pressed"),
                 Brushed(TemplatedControl.BackgroundProperty, Elevated)
+            ),
+
+            // A strip of one dock is a title, not a tab. A tab's fill and divider are what place it
+            // among other tabs, and with nothing beside it the fill reads as an empty tab: the header
+            // keeps the row, the drag area and the commands, and the name is drawn as a section title
+            // at the strip's own inset. The close still appears under the pointer.
+            On(
+                selector =>
+                    selector
+                        .OfType<Border>()
+                        .Class(DockArea.HeadersClass)
+                        .Class(DockArea.SingleClass)
+                        .Descendant()
+                        .OfType<Button>()
+                        .Class(DockArea.TitleClass),
+                Brushed(TemplatedControl.BackgroundProperty, TabClear),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(12, 0, 0, 0)),
+                new Setter(TemplatedControl.FontSizeProperty, 13.0),
+                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold),
+                new Setter(Layoutable.MarginProperty, new Thickness(0)),
+                Brushed(TemplatedControl.ForegroundProperty, Foreground)
             ),
 
             // The close a tab carries: nothing of its own, no ground behind it, no border, no ink, so that it
@@ -1695,40 +1777,8 @@ internal sealed class RorolalaTheme
                 Brushed(TemplatedControl.BackgroundProperty, SplitterAcrossHover)
             ),
 
-            // Where a column seam and a row seam meet, the two lines cross and a drag on the crossing resizes all
-            // the panels around it. The grip is given both lines so it reads as that crossing rather than as a
-            // third splitter lying over the docks; under the pointer the two turn to the accent, the same answer
-            // a single splitter gives.
-            On(
-                selector => selector.OfType<Rectangle>().Class(DockArea.CrossDownClass),
-                Brushed(Shape.FillProperty, SplitterDown)
-            ),
-            On(
-                selector => selector.OfType<Rectangle>().Class(DockArea.CrossAcrossClass),
-                Brushed(Shape.FillProperty, SplitterAcross)
-            ),
-            On(
-                selector =>
-                    selector
-                        .OfType<Panel>()
-                        .Class(DockArea.CrossClass)
-                        .Class(":pointerover")
-                        .Descendant()
-                        .OfType<Rectangle>()
-                        .Class(DockArea.CrossDownClass),
-                Brushed(Shape.FillProperty, SplitterDownHover)
-            ),
-            On(
-                selector =>
-                    selector
-                        .OfType<Panel>()
-                        .Class(DockArea.CrossClass)
-                        .Class(":pointerover")
-                        .Descendant()
-                        .OfType<Rectangle>()
-                        .Class(DockArea.CrossAcrossClass),
-                Brushed(Shape.FillProperty, SplitterAcrossHover)
-            ),
+            // A crossing is a hit area and not a drawing: the two seams already meet there, so the look
+            // paints nothing at the crossing itself.
 
             // The points a dragged dock may be put on, filling the group the drag is over: four isosceles trapezoids
             // around a centre rectangle. They are the answer rather than a hint, a drag that is on one of them can
@@ -1926,7 +1976,7 @@ internal sealed class RorolalaTheme
             On(
                 selector => selector.OfType<Border>().Class(PluginCard.WashClass),
                 Brushed(Border.BackgroundProperty, AccentWash),
-                new Setter(Border.CornerRadiusProperty, new CornerRadius(7)),
+                new Setter(Border.CornerRadiusProperty, new CornerRadius(8)),
                 new Setter(Visual.OpacityProperty, 0.0),
                 new Setter(Visual.TransitionsProperty, Fading())
             ),

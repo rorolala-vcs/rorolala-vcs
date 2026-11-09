@@ -56,10 +56,15 @@ public readonly record struct ThemePalette
         new()
         {
             Bright = Color.FromRgb(0xFF, 0xFF, 0xFF),
-            Mid = Color.FromRgb(0xF7, 0xF7, 0xF7),
-            Dark = Color.FromRgb(0xEC, 0xEC, 0xEC),
-            Front = Color.FromRgb(0x1D, 0x1D, 0x1D),
-            Splitter = Color.FromRgb(0xDC, 0xDC, 0xDC),
+            // The ground is a step away from the panel, because a dock is drawn on the panel and the
+            // ground is what shows between two of them. The three were within eight values of one
+            // another, which is a stack no screen shows.
+            Mid = Color.FromRgb(0xE9, 0xEA, 0xEE),
+            // The middle step: the title row, a dock strip, a table band and a well all sit here, one
+            // step into the panel rather than at its face or at the window's own edge.
+            Dark = Color.FromRgb(0xF3, 0xF4, 0xF7),
+            Front = Color.FromRgb(0x1B, 0x1C, 0x1F),
+            Splitter = Color.FromRgb(0xC9, 0xCC, 0xD3),
             Primary = DefaultPrimary,
             Accent = DefaultAccent,
         };
@@ -68,11 +73,11 @@ public readonly record struct ThemePalette
     public static ThemePalette DefaultDark =>
         new()
         {
-            Bright = Color.FromRgb(0x1C, 0x1C, 0x1C),
-            Mid = Color.FromRgb(0x14, 0x14, 0x14),
-            Dark = Color.FromRgb(0x0F, 0x0F, 0x0F),
-            Front = Color.FromRgb(0xE6, 0xE6, 0xE6),
-            Splitter = Color.FromRgb(0x2C, 0x2C, 0x2C),
+            Bright = Color.FromRgb(0x1A, 0x1B, 0x20),
+            Mid = Color.FromRgb(0x0D, 0x0E, 0x11),
+            Dark = Color.FromRgb(0x12, 0x13, 0x18),
+            Front = Color.FromRgb(0xE8, 0xE9, 0xEC),
+            Splitter = Color.FromRgb(0x34, 0x36, 0x3E),
             Primary = DefaultPrimary,
             Accent = DefaultAccent,
         };

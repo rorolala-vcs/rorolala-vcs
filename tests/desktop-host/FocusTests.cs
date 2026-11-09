@@ -13,20 +13,18 @@ using RorolalaDesktop.Hosting;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// Which dock the program is working in, and the mark drawn around it.
+/// Which dock the program is working in.
 /// </summary>
 /// <remarks>
-/// The record is the host's and the mark is the dock area's: what is checked here happens in real windows on
-/// the headless platform, because the mark is a control laid over a dock's area and nothing smaller than a
-/// window has one. The docks themselves are the fixtures with a control of their own, which is what a press
-/// lands in.
+/// The record is the host's: what is checked here happens in real windows on the headless platform, because
+/// a press in a dock's view is what moves it. The dock's tab is the only mark that says which one it is.
 /// </remarks>
 public sealed class FocusTests
 {
-    /// <summary>A press in a dock makes it the one being worked in, and the mark follows the press.</summary>
+    /// <summary>A press in a dock makes it the one being worked in.</summary>
     /// <remarks>
-    /// Two docks split side by side, so that the mark has somewhere to move to: what a reader has to be able to
-    /// tell is which of the two the work will go to, and a mark that stayed where it was would say the wrong one.
+    /// Two docks split side by side, so that the record has somewhere to move to: what a reader has to be able to
+    /// tell is which of the two the work will go to.
     /// </remarks>
     [Fact]
     public void ADockAPressLandsInIsTheOneWorkedIn()
@@ -51,16 +49,9 @@ public sealed class FocusTests
             plugin.Focus.Current
         );
 
-        var ring = Ring(main);
-
-        Assert.True(ring.IsVisible, "the dock worked in is not marked");
-        Assert.True(InArea(main, ring).Contains(Area(main, left)));
-
         Click(main, right);
 
         Assert.Equal("it.focus.right", services.Docks.Focus.Current?.DockNameId);
-        Assert.True(InArea(main, ring).Contains(Area(main, right)));
-        Assert.False(InArea(main, ring).Contains(Area(main, left)));
 
         // The last dock of each kind is kept apart from where the user is now: a plugin acting from one dock
         // needs the one the user left behind, which is what the Overview asks for.
@@ -68,7 +59,7 @@ public sealed class FocusTests
         Assert.Same(second, services.Docks.Recent(second.DockNameId));
     }
 
-    /// <summary>Choosing a dock's tab works in it, and the mark goes with the choice.</summary>
+    /// <summary>Choosing a dock's tab works in it, and the chosen tab is the one marked.</summary>
     [Fact]
     public void ChoosingATabIsWorkingInThatDock()
     {
@@ -105,10 +96,10 @@ public sealed class FocusTests
         Pump();
 
         Assert.Equal(first.DockNameId, services.Docks.Focus.Current?.DockNameId);
-        Assert.True(Ring(main).IsVisible, "the chosen dock is not marked");
+        Assert.Contains(DockArea.SelectedClass, header.Classes);
     }
 
-    /// <summary>A dock that is opened is the one being worked in, and the mark is drawn at once.</summary>
+    /// <summary>A dock that is opened is the one being worked in.</summary>
     [Fact]
     public void AnOpenedDockIsWorkedIn()
     {
@@ -117,7 +108,6 @@ public sealed class FocusTests
         var main = Open(services);
 
         Assert.Null(services.Docks.Focus.Current);
-        Assert.False(Ring(main).IsVisible, "a window with nothing worked in shows a mark");
 
         var dock = Activate(services, "it.focus.opened", "it_dock.opened", view);
 
@@ -127,12 +117,11 @@ public sealed class FocusTests
             new FocusedDock(dock.DockNameId, dock.Ordinal),
             services.Docks.Focus.Current
         );
-        Assert.True(Ring(main).IsVisible, "the opened dock is not marked");
     }
 
-    /// <summary>Closing the dock being worked in passes the mark to one that is still there, and lets it go when none is.</summary>
+    /// <summary>Closing the dock being worked in passes the focus to one that is still there, and lets it go when none is.</summary>
     [Fact]
-    public void ClosingTheDockWorkedInPassesTheMarkOn()
+    public void ClosingTheDockWorkedInPassesTheFocusOn()
     {
         var (services, _) = Hosts();
         var left = new Border { Background = Brushes.Gray };
@@ -149,7 +138,7 @@ public sealed class FocusTests
 
         Assert.Equal(second.DockNameId, services.Docks.Focus.Current?.DockNameId);
 
-        // The dock beside it, the other tab of its group, is what the work falls to, and what is marked.
+        // The dock beside it, the other tab of its group, is what the work falls to.
         services.Docks.Close(second);
 
         Assert.Equal(
@@ -159,24 +148,17 @@ public sealed class FocusTests
 
         Pump();
 
-        Assert.True(Ring(main).IsVisible, "the dock left standing is not marked");
-
         services.Docks.Close(first);
 
         Assert.Null(services.Docks.Focus.Current);
-
-        Pump();
-
-        Assert.False(Ring(main).IsVisible, "a mark outlived the dock it marked");
     }
 
     /// <summary>A dock moved into a window of its own is still the dock being worked in.</summary>
     /// <remarks>
-    /// The record is the program's rather than a window's, and the mark is each window's: the dock is the same
-    /// dock before and after the move, and the window it arrives in is the one that draws the mark around it.
+    /// The record is the program's rather than a window's: the dock is the same dock before and after the move.
     /// </remarks>
     [Fact]
-    public void ADockMovedToAWindowOfItsOwnKeepsTheMark()
+    public void ADockMovedToAWindowOfItsOwnKeepsTheFocus()
     {
         var (services, _) = Hosts();
         var view = new Border { Background = Brushes.Gray };
@@ -190,45 +172,9 @@ public sealed class FocusTests
 
         services.Windows.ToOwnWindow(dock);
 
-        var own = (MainWindow)services.Shell.Window!;
-
         Pump();
 
         Assert.Equal(dock.DockNameId, services.Docks.Focus.Current?.DockNameId);
-        Assert.True(Ring(own).IsVisible, "the dock in its own window is not marked");
-        Assert.False(Ring(main).IsVisible, "the window the dock left still marks it");
-    }
-
-    /// <summary>The mark is drawn in the primary the look publishes, and a change of it reaches the mark.</summary>
-    /// <remarks>
-    /// A colour the user changes while the program runs replaces a resource rather than a style, so what the mark
-    /// has to do is name the resource rather than read a colour when it is made. Checked by replacing the resource
-    /// the mark is drawn from, which is what the look does when the primary is changed.
-    /// </remarks>
-    [Fact]
-    public void TheMarkIsDrawnInThePrimary()
-    {
-        var (services, _) = Hosts();
-        var view = new Border { Background = Brushes.Gray };
-        var main = Open(services);
-
-        Activate(services, "it.focus.primary", "it_dock.primary", view);
-        Pump();
-        Click(main, view);
-
-        var ring = Ring(main);
-        var first = Color.Parse("#112233");
-        var second = Color.Parse("#445566");
-
-        main.Resources[PaletteKeys.Primary] = new SolidColorBrush(first);
-        Pump();
-
-        Assert.Equal(first, Colour(ring));
-
-        main.Resources[PaletteKeys.Primary] = new SolidColorBrush(second);
-        Pump();
-
-        Assert.Equal(second, Colour(ring));
     }
 
     /// <summary>A plugin reads the dock being worked in, and is told when it says something else.</summary>
@@ -256,42 +202,6 @@ public sealed class FocusTests
             plugin.Focus.Current
         );
         Assert.Contains(plugin.Focus.Current, seen);
-    }
-
-    /// <summary>The colour a border is drawn in, which is what a resource the look publishes answers.</summary>
-    /// <param name="border">The border.</param>
-    /// <returns>The colour.</returns>
-    private static Color Colour(Border border) =>
-        Assert.IsAssignableFrom<ISolidColorBrush>(border.BorderBrush).Color;
-
-    /// <summary>The mark drawn around the dock being worked in, in one window.</summary>
-    /// <param name="window">The window.</param>
-    /// <returns>The mark.</returns>
-    private static Border Ring(Window window) =>
-        window
-            .GetVisualDescendants()
-            .OfType<Border>()
-            .First(border => border.Classes.Contains(DockArea.FocusClass));
-
-    /// <summary>Where the mark is, in the dock area's own coordinates.</summary>
-    /// <param name="main">The main window, which is what holds the area.</param>
-    /// <param name="ring">The mark.</param>
-    /// <returns>The rectangle.</returns>
-    private static Rect InArea(MainWindow main, Border ring) =>
-        new(Canvas.GetLeft(ring), Canvas.GetTop(ring), ring.Width, ring.Height);
-
-    /// <summary>Where a control is drawn, in the dock area's own coordinates.</summary>
-    /// <param name="main">The main window, which is what holds the area.</param>
-    /// <param name="control">The control.</param>
-    /// <returns>The rectangle.</returns>
-    private static Rect Area(MainWindow main, Control control)
-    {
-        var area = main.GetVisualDescendants().OfType<DockArea>().First();
-        var origin = control.TranslatePoint(new Point(0, 0), area);
-
-        Assert.NotNull(origin);
-
-        return new Rect(origin.Value, control.Bounds.Size);
     }
 
     /// <summary>A press in the middle of a control, which is what makes its dock the one worked in.</summary>

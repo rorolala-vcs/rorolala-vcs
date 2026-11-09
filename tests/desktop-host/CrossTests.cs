@@ -17,8 +17,8 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The grip where two dock seams cross: one drag on it resizes every panel around the crossing.
 /// </summary>
 /// <remarks>
-/// The grip is drawn only where a column seam and a row seam overlap, which means the layout has to hold at
-/// least four groups. The docks are fixtures with a control of their own, and what is checked happens in a
+/// The grip is a hit area only where a column seam and a row seam overlap, which means the layout has to hold
+/// at least four groups. The docks are fixtures with a control of their own, and what is checked happens in a
 /// real window on the headless platform because the grip is a control over the dock area and nothing smaller
 /// than a window has one.
 /// </remarks>
@@ -72,9 +72,9 @@ public sealed class CrossTests
             grip.Bounds.Width > 0 && grip.Bounds.Height > 0,
             "the crossing grip has not been laid out"
         );
-        Assert.Equal(
-            2,
-            grip.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>().Count()
+        // The grip is the hit area; the crossing itself is the two seams meeting, so the grip draws nothing.
+        Assert.Empty(
+            grip.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>()
         );
 
         var root = Assert.IsType<LayoutSplit>(services.Docks.Layout.Root);

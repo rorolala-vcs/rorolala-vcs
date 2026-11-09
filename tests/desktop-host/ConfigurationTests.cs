@@ -54,16 +54,16 @@ public sealed class ConfigurationTests
         Assert.Contains("\"Theme/Accent\": \"#FF7EA2\"", written, StringComparison.Ordinal);
 
         // The ten a look is made of, in the spellings the panel shows and the reader reads.
-        Assert.Contains("\"Theme/Dark/Bright\": \"#1C1C1C\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Dark/Mid\": \"#141414\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Dark/Dark\": \"#0F0F0F\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Dark/Front\": \"#E6E6E6\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Dark/Splitter\": \"#2C2C2C\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Bright\": \"#1A1B20\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Mid\": \"#0D0E11\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Dark\": \"#121318\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Front\": \"#E8E9EC\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Splitter\": \"#34363E\"", written, StringComparison.Ordinal);
         Assert.Contains("\"Theme/Light/Bright\": \"#FFFFFF\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Light/Mid\": \"#F7F7F7\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Light/Dark\": \"#ECECEC\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Light/Front\": \"#1D1D1D\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Light/Splitter\": \"#DCDCDC\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Mid\": \"#E9EAEE\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Dark\": \"#F3F4F7\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Front\": \"#1B1C1F\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Splitter\": \"#C9CCD3\"", written, StringComparison.Ordinal);
 
         // And no ink: what is written on the primary is worked out from it, so a file that names none is a file
         // that is drawn correctly rather than one that is missing something.
