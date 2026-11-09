@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -92,7 +93,7 @@ internal sealed class TreeControl : UserControl
     /// a time and keeps what it read, so a hiding that changed is not something a repaint reaches, the rows
     /// themselves come and go, which is why it is compared here rather than faded where they are drawn.
     /// </remarks>
-    private (string Base, bool Shown, IReadOnlySet<string> Rules)? _drawn;
+    private (string Base, bool Shown, IReadOnlySet<string> Rules, IReadOnlySet<string> Gray)? _drawn;
 
     /// <summary>Makes the tree's control.</summary>
     /// <param name="host">The host, for what a drop cannot do.</param>
@@ -167,6 +168,7 @@ internal sealed class TreeControl : UserControl
             || !string.Equals(drawn.Base, _browser.BaseDir, StringComparison.Ordinal)
             || drawn.Shown != _browser.ShowHidden
             || !drawn.Rules.SetEquals(_browser.HideRegistry.Selection())
+            || !drawn.Gray.SetEquals(_browser.HideRegistry.Gray())
         )
         {
             Draw();
@@ -294,7 +296,8 @@ internal sealed class TreeControl : UserControl
         _drawn = (
             _browser.BaseDir,
             _browser.ShowHidden,
-            _browser.HideRegistry.Selection()
+            _browser.HideRegistry.Selection(),
+            _browser.HideRegistry.Gray()
         );
     }
 
@@ -1625,11 +1628,11 @@ internal sealed class TreeBrowser : UserControl
     }
 
     /// <summary>
-    /// Fades a row whose step is hidden or cut, so that it reads as a listing would draw it.
+    /// Fades a row whose step is drawn in gray or cut, so that it reads as a listing would draw it.
     /// </summary>
     /// <remarks>
-    /// Cut wins, as it does in a listing: being on its way out is what the user just did. A hidden row is
-    /// only ever drawn while the switch that shows what is hidden is on, and it is drawn fainter so that
+    /// Cut wins, as it does in a listing: being on its way out is what the user just did. A step a rule hides
+    /// is only ever drawn while the switch that shows what is hidden is on, and it is drawn fainter so that
     /// the eye passes over it rather than being left out of the tree.
     /// </remarks>
     /// <param name="row">The row.</param>
@@ -1637,7 +1640,7 @@ internal sealed class TreeBrowser : UserControl
     private void Fade(Border row, string path) =>
         row.Opacity = _clip.IsCut(path)
             ? _clip.Faded
-            : Hides(path)
+            : Dims(path)
                 ? EntryView.HiddenOpacity
                 : 1.0;
 
@@ -1651,6 +1654,12 @@ internal sealed class TreeBrowser : UserControl
     /// <returns>Whether a provider in force hides it.</returns>
     private bool Hides(string directory) =>
         _browser.Hides(new Entry(directory, EntryKind.Directory), _root);
+
+    /// <summary>Whether a directory is one the rules draw in gray, read against the base.</summary>
+    /// <param name="directory">The directory to consider.</param>
+    /// <returns>Whether it is drawn faded.</returns>
+    private bool Dims(string directory) =>
+        _browser.Dims(new Entry(directory, EntryKind.Directory), _root);
 
     /// <summary>Whether a directory is one the rules leave showing, or the switch shows what they hide.</summary>
     /// <param name="directory">The directory to consider.</param>
@@ -1685,14 +1694,14 @@ internal sealed class TreeBrowser : UserControl
                 new TextBlock
                 {
                     Text = "\U0001F5C2",
-                    FontSize = 34,
+                    FontSize = 24,
                     Classes = { "faint" },
                     HorizontalAlignment = HorizontalAlignment.Center,
                 },
                 new TextBlock
                 {
                     Text = RolaI18N.Get("rorolala_file_system.empty"),
-                    Classes = { "muted" },
+                    Classes = { "empty" },
                     HorizontalAlignment = HorizontalAlignment.Center,
                 },
             },
@@ -1713,6 +1722,9 @@ internal sealed class TreeBrowser : UserControl
             Tag = path,
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
+
+        Guides(item);
+
         var read = false;
 
         // A step with nothing under it is given no child at all, and that is what leaves it without an
@@ -2119,6 +2131,10 @@ internal sealed class TreeBrowser : UserControl
             strip.Children.Add(Icons.WornAt(badge, Icons.Badge));
         }
 
+        // Moved rather than arranged: the room the theme leaves under the row's line belongs to the line and
+        // to the steps below it, and the badges are the one thing in the row that is centred in the step.
+        strip.RenderTransform = new TranslateTransform(0, BadgeLift);
+
         // A row nothing speaks for wears nothing: a strip left in the layout would be room taken from a name for an
         // answer that is not there.
         strip.IsVisible = strip.Children.Count > 0;
@@ -2151,7 +2167,121 @@ internal sealed class TreeBrowser : UserControl
         };
         item.Header = Header(entry, step: null, collapse: null);
 
+        Guides(item);
+
         return item;
+    }
+
+    /// <summary>How far one step of the tree is indented, which the template's own margin uses too.</summary>
+    private const double Indent = 16.0;
+
+    /// <summary>How strong a guide line is against the row it stands in.</summary>
+    private const double Guide = 0.65;
+
+    /// <summary>The name the layer of guide lines carries, which a test reads.</summary>
+    private const string GuideName = "TreeGuides";
+
+    /// <summary>
+    /// How far a row's badges are moved down to sit on the row's own middle.
+    /// </summary>
+    /// <remarks>
+    /// The theme leaves the last three pixels of a step under its line, so a twenty-pixel mark centred in
+    /// what is left sits one pixel high and four low. Half that room puts it back on the row's middle
+    /// without moving the name, which is centred against the line rather than against the whole step.
+    /// </remarks>
+    private const double BadgeLift = 1.5;
+
+    /// <summary>
+    /// Draws the depth of a row in its indent: one vertical line for every level above it.
+    /// </summary>
+    /// <remarks>
+    /// The lines live in the room the template leaves for the indent, behind the header, so they are not
+    /// part of the row's content and do not take a press. A row at level n draws n lines, each at the middle
+    /// of an indent step; the rows above and below it draw the same lines, which is what makes them read as
+    /// one line down a level rather than as a mark on each row.
+    /// </remarks>
+    /// <param name="item">The row.</param>
+    private static void Guides(TreeViewItem item)
+    {
+        item.TemplateApplied += (_, _) => Dispatcher.UIThread.Post(() => DrawGuides(item));
+        item.AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => DrawGuides(item));
+
+        // The level is worked out from where the row stands in the tree, which can happen before or after
+        // the template is applied. Asking again when it changes is what makes the guides appear whichever
+        // of the two comes second.
+        item.PropertyChanged += (_, change) =>
+        {
+            if (change.Property == TreeViewItem.LevelProperty)
+            {
+                DrawGuides(item);
+            }
+        };
+    }
+
+    /// <summary>Puts the guide lines in a row's template once it has one.</summary>
+    /// <param name="item">The row.</param>
+    private static void DrawGuides(TreeViewItem item)
+    {
+        // The template's own margin reads Level, which is set when the row joins a tree; the ancestors
+        // answer the same question even when the event that asks is earlier than that, and the larger of
+        // the two is what the row will be drawn at.
+        var depth = Math.Max(
+            item.Level,
+            item.GetLogicalAncestors().OfType<TreeViewItem>().Count()
+        );
+
+        if (depth <= 0)
+        {
+            return;
+        }
+
+        var border = item
+            .GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(one => one.Name == "SelectionBorder");
+
+        if (border?.Child is not Grid header)
+        {
+            return;
+        }
+
+        if (header.Children.OfType<Panel>().Any(one => one.Name == GuideName))
+        {
+            return;
+        }
+
+        var guides = new Panel
+        {
+            Name = GuideName,
+            Width = depth * Indent,
+            Margin = new Thickness(-depth * Indent, 0, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            IsHitTestVisible = false,
+        };
+
+        for (var level = 1; level <= depth; level++)
+        {
+            var line = new Border
+            {
+                Width = 1,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Margin = new Thickness((level * Indent) - (Indent / 2), 0, 0, 0),
+                Opacity = Guide,
+                IsHitTestVisible = false,
+            };
+            line[!Border.BackgroundProperty] = new DynamicResourceExtension(
+                PaletteKeys.Splitter
+            );
+            guides.Children.Add(line);
+        }
+
+        // The guide layer is a child of the header grid and reaches left over the indent the grid's own
+        // margin leaves. It is behind the chevron and the content, so nothing has to be reparented.
+        Grid.SetColumn(guides, 0);
+        Grid.SetColumnSpan(guides, 2);
+        header.Children.Insert(0, guides);
     }
 
     /// <summary>Whether a path is a directory or a file, as the tree knows it when asked.</summary>

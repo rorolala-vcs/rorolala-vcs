@@ -1,13 +1,16 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FileSystemPlugin;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Theming;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -141,7 +144,163 @@ public sealed class TreeRowTests
         }
     }
 
-    /// <summary>A tree dock over a directory, shown in a window of a given width.</summary>
+    /// <summary>A chosen row is one rounded wash, with no second fill inside it.</summary>
+    [Fact]
+    public void AChosenRowIsOneRoundedWash()
+    {
+        var directory = Scratch.New("tree-selected");
+
+        File.WriteAllText(Path.Combine(directory, "hero.psd"), "x");
+
+        var (window, _) = OpenAt(directory, width: 400);
+
+        try
+        {
+            AppTheme(window);
+
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var row = Until(window, () => Row(window, Path.Combine(directory, "hero.psd")));
+
+            row.IsSelected = true;
+            PumpFrames(window, 20);
+
+            var border = row.GetVisualDescendants()
+                .OfType<Border>()
+                .FirstOrDefault(one => one.Name == "SelectionBorder");
+            var presenter = row.GetVisualDescendants()
+                .OfType<ContentPresenter>()
+                .FirstOrDefault(one => one.Name == "PART_HeaderPresenter");
+
+            Assert.NotNull(border);
+            Assert.NotNull(presenter);
+            Assert.Equal(new CornerRadius(5), border!.CornerRadius);
+            Assert.True(
+                presenter!.Background is null
+                    || presenter.Background is ISolidColorBrush { Color.A: 0 },
+                "the header presenter paints a second fill inside the chosen row"
+            );
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>A badge is centred in the step, not in the room the theme leaves under its line.</summary>
+    [Fact]
+    public void ABadgeIsCentredOnItsRow()
+    {
+        var directory = Scratch.New("tree-badge-centre");
+
+        File.WriteAllText(Path.Combine(directory, "hero.psd"), "x");
+
+        EntryMarkProviders.Register(new FixedMarks());
+
+        var (window, _) = OpenAt(directory, width: 400);
+
+        try
+        {
+            AppTheme(window);
+
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var row = Until(window, () => Row(window, Path.Combine(directory, "hero.psd")));
+            var badges = Named<StackPanel>(row, "entry-badges");
+            var top = badges.TranslatePoint(new Point(0, 0), row)?.Y ?? 0;
+            var bottom = row.Bounds.Height - top - badges.Bounds.Height;
+
+            Assert.InRange(Math.Abs(top - bottom), 0, 0.75);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>A row draws one guide line in its indent for every level above it.</summary>
+    [Fact]
+    public void ARowDrawsOneGuidePerLevel()
+    {
+        var directory = Scratch.New("tree-guide");
+        var nested = Path.Combine(directory, "one", "two");
+
+        Directory.CreateDirectory(nested);
+        File.WriteAllText(Path.Combine(nested, "hero.psd"), "x");
+
+        var (window, _) = OpenAt(directory, width: 400);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var one = Until(window, () => Row(window, Path.Combine(directory, "one")));
+
+            one.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var two = Until(window, () => Row(window, Path.Combine(directory, "one", "two")));
+
+            two.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var row = Until(window, () => Row(window, Path.Combine(nested, "hero.psd")));
+            var border = row.GetVisualDescendants()
+                .OfType<Border>()
+                .FirstOrDefault(one => one.Name == "SelectionBorder");
+
+            Assert.NotNull(border);
+
+            var header = Assert.IsType<Grid>(border!.Child);
+            var guides = header.Children
+                .OfType<Panel>()
+                .FirstOrDefault(one => one.Name == "TreeGuides");
+
+            Assert.NotNull(guides);
+            Assert.Equal(3, guides!.Children.Count);
+            Assert.Equal(row.Level, guides.Children.Count);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+
+    /// <summary>Paints a window with the program's own look, so that a row is measured as it is drawn.</summary>
+    /// <param name="window">The window to dress.</param>
+    private static void AppTheme(Window window)
+    {
+        var look = new RorolalaTheme(ThemePalette.DefaultDark, null, WindowStyle.Windows);
+
+        foreach (var style in look.Styles)
+        {
+            window.Styles.Add(style);
+        }
+
+        var dark = Assert.IsAssignableFrom<ResourceDictionary>(
+            look.Palette.ThemeDictionaries[ThemeVariant.Dark]
+        );
+        var resources = new ResourceDictionary();
+
+        foreach (var one in dark)
+        {
+            resources[one.Key] = one.Value;
+        }
+
+        window.Resources = resources;
+        window.RequestedThemeVariant = ThemeVariant.Dark;
+    }
+
     /// <param name="directory">The directory the tree is rooted at.</param>
     /// <param name="width">How wide the window is.</param>
     /// <returns>The window, and the location it reads.</returns>
