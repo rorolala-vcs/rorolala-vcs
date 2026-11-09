@@ -12,6 +12,7 @@ using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Theming;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
+using ShapePath = Avalonia.Controls.Shapes.Path;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -32,6 +33,7 @@ public sealed class TreeRowTests
         DataHome.Clean();
         HideRegistry.Clear();
         EntryMarkProviders.Clear();
+        EntryColourProviders.Clear();
     }
 
     /// <summary>A long name ends before the badges, which keep the width they need at the row's right.</summary>
@@ -276,6 +278,92 @@ public sealed class TreeRowTests
     }
 
 
+    /// <summary>A marked folder is one block behind its own row and everything under it.</summary>
+    [Fact]
+    public void AMarkedFolderIsOneBlockBehindItsWholeSubtree()
+    {
+        var directory = Scratch.New("tree-colour");
+        var marked = Directory.CreateDirectory(Path.Combine(directory, "marked")).FullName;
+        var child = Directory.CreateDirectory(Path.Combine(marked, "child")).FullName;
+        var file = Path.Combine(child, "hero.psd");
+        var plain = Directory.CreateDirectory(Path.Combine(directory, "plain")).FullName;
+
+        File.WriteAllText(file, "x");
+
+        EntryColourProviders.Register(new FixedColour("it.tree.row.red", marked, Colors.Red));
+
+        var (window, _) = OpenAt(directory, width: 500);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var markedRow = Until(window, () => Row(window, marked));
+            var blocks = window.GetVisualDescendants()
+                .OfType<Canvas>()
+                .First(canvas => canvas.Name == "TreeBlocks");
+
+            // The folder's own row carries no wash of its own: the mark is the block behind the rows.
+            Assert.Equal(0, Wash(markedRow).A);
+
+            var path = Assert.Single(blocks.Children.OfType<ShapePath>());
+            var fill = Assert.IsType<SolidColorBrush>(path.Fill).Color;
+
+            Assert.Equal(Colors.Red.R, fill.R);
+            Assert.True(fill.A > 0);
+
+            markedRow.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            path = Assert.Single(blocks.Children.OfType<ShapePath>());
+
+            var outer = Assert.IsType<GeometryGroup>(path.Data);
+            var whole = Assert.IsType<RectangleGeometry>(Assert.Single(outer.Children));
+
+            Assert.Equal(markedRow.Bounds.Height, whole.Rect.Height, 1);
+
+            // A marked folder inside a marked one replaces it rather than being laid over it: the inner block
+            // is a hole in the outer one, and a block of its own.
+            EntryColourProviders.Register(new FixedColour("it.tree.row.blue", child, Colors.Blue));
+
+            var childRow = Until(window, () => Row(window, child));
+
+            childRow.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var paths = blocks.Children.OfType<ShapePath>().ToList();
+
+            Assert.Equal(2, paths.Count);
+
+            var outerHole = Assert.IsType<GeometryGroup>(paths[0].Data);
+
+            Assert.Equal(2, outerHole.Children.Count);
+            Assert.Equal(Colors.Red.R, Assert.IsType<SolidColorBrush>(paths[0].Fill).Color.R);
+            Assert.Equal(Colors.Blue.R, Assert.IsType<SolidColorBrush>(paths[1].Fill).Color.R);
+
+            var plainRow = Until(window, () => Row(window, plain));
+
+            Assert.Equal(0, Wash(plainRow).A);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>The wash a row's header carries.</summary>
+    /// <param name="row">The row to ask.</param>
+    /// <returns>The wash, or a colour of no strength when the row carries none.</returns>
+    private static Color Wash(TreeViewItem row)
+    {
+        var header = Assert.IsType<Border>(row.Header);
+
+        return header.Background is ISolidColorBrush brush ? brush.Color : default;
+    }
+
     /// <summary>Paints a window with the program's own look, so that a row is measured as it is drawn.</summary>
     /// <param name="window">The window to dress.</param>
     private static void AppTheme(Window window)
@@ -423,5 +511,39 @@ public sealed class TreeRowTests
 
         /// <inheritdoc />
         public EntryMark Mark(Entry entry) => new(Text: "it", IconKey: Icons.CreateNewFolder, Ink: MarkInk.Accent);
+    }
+
+    /// <summary>A colour provider that marks one directory with one colour.</summary>
+    private sealed class FixedColour : IEntryColourProvider
+    {
+        /// <summary>The name the provider is known by.</summary>
+        private readonly string _id;
+
+        /// <summary>The directory the provider marks.</summary>
+        private readonly string _marked;
+
+        /// <summary>The colour the directory is marked with.</summary>
+        private readonly Color _colour;
+
+        /// <summary>Makes a provider that marks one directory.</summary>
+        /// <param name="id">The name the provider is known by.</param>
+        /// <param name="marked">The directory to mark.</param>
+        /// <param name="colour">The colour to mark it with.</param>
+        public FixedColour(string id, string marked, Color colour)
+        {
+            _id = id;
+            _marked = marked;
+            _colour = colour;
+        }
+
+        /// <inheritdoc />
+        public string Id => _id;
+
+        /// <inheritdoc />
+        public Color? Colour(Entry entry) =>
+            entry.Kind is EntryKind.Directory
+            && string.Equals(entry.Path, _marked, StringComparison.Ordinal)
+                ? _colour
+                : null;
     }
 }

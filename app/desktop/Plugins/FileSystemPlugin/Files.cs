@@ -107,6 +107,12 @@ internal sealed class Files : Listing<Entry>
     /// <inheritdoc />
     public override Control Icon(Entry item, int size) => Icons.For(item, size);
 
+    /// <inheritdoc />
+    public override Color? Wash(Entry item) => FolderColours.Wash(item);
+
+    /// <inheritdoc />
+    public override Color? Surface => FolderColours.Surface(_browser.Current);
+
     /// <summary>An entry's icon, with what every contributor marked worn around its top right corner.</summary>
     /// <remarks>
     /// Every provider that speaks for the directory is asked, rather than one of them: two badges say two

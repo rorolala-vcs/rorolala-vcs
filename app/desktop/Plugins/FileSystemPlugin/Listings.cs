@@ -361,6 +361,23 @@ internal abstract class Listing<TItem>
     /// <returns>What to draw in the tile.</returns>
     public virtual Control Marked(TItem item, int size) => Icon(item, size);
 
+    /// <summary>The wash a row or a tile of an item carries, or nothing when it carries none.</summary>
+    /// <remarks>
+    /// The wash is the listing's answer rather than the view's, because what an entry is marked with is a fact
+    /// about the entry: a place a plugin answers for has no marked entries, and says nothing here, which is what
+    /// the default does.
+    /// </remarks>
+    /// <param name="item">The item to ask about.</param>
+    /// <returns>The wash, or nothing.</returns>
+    public virtual Color? Wash(TItem item) => null;
+
+    /// <summary>The ground a listing is read on, or nothing for the ground it would be read on otherwise.</summary>
+    /// <remarks>
+    /// It is the listing's own directory that is inside a marked one, not an entry of it, so the surface is
+    /// asked once for the whole view rather than once for each row.
+    /// </remarks>
+    public virtual Color? Surface => null;
+
     /// <summary>What the contributions said about an item, in the order the badges are numbered.</summary>
     /// <remarks>
     /// A view that wears them somewhere other than the icon's corner asks for them here: the badges are the
@@ -897,8 +914,13 @@ internal abstract class EntryView<TItem> : EntryView
         _over.Children.Add(_band);
 
         // A ground of nothing rather than none at all, so that a press on the room between the entries reaches
-        // this view at all: what a frame is begun from is a press that landed on no entry.
-        var grid = new Grid { Background = Brushes.Transparent };
+        // this view at all: what a frame is begun from is a press that landed on no entry. A listing inside a
+        // marked directory wears that colour in the ground itself, so that the whole dock reads as inside it.
+        var ground = Source.Surface;
+        var grid = new Grid
+        {
+            Background = ground is { } wash ? new SolidColorBrush(wash) : Brushes.Transparent,
+        };
         grid.Children.Add(content);
 
         // The word is drawn over the empty space rather than in place of the list, so that the menu and the
@@ -2713,6 +2735,14 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         };
         row[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
 
+        // The wash is the entry's own answer, and a row that carries none is the dock's ground: the colour is
+        // laid over the row's own band, which is the same area the choice fills, so a marked entry reads as
+        // marked whether or not it is chosen.
+        if (Source.Wash(item) is { } wash)
+        {
+            row.Background = new SolidColorBrush(wash);
+        }
+
         return row;
     }
 
@@ -3135,16 +3165,26 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     /// <inheritdoc />
     private Control Tile(TItem item)
     {
-        // The surface a chosen tile wears is the item's; what is here is the content and the room around it.
-        return new Border
+        // The surface a chosen tile wears is the item's; what is here is the content and the room around it. A
+        // marked tile carries its wash in this surface, inside the item's rounded choice, so that the two are
+        // one shape rather than a square tint drawn in a rounded card.
+        var tile = new Border
         {
             Padding = new Thickness(Around),
+            CornerRadius = new CornerRadius(8),
             Child = new StackPanel
             {
                 Spacing = 8,
                 Children = { Source.Marked(item, _icon), Caption(item) },
             },
         };
+
+        if (Source.Wash(item) is { } wash)
+        {
+            tile.Background = new SolidColorBrush(wash);
+        }
+
+        return tile;
     }
 
     /// <summary>

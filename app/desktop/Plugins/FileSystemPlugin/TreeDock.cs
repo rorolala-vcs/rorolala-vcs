@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using ShapePath = Avalonia.Controls.Shapes.Path;
 
 namespace FileSystemPlugin;
 
@@ -183,6 +184,7 @@ internal sealed class TreeControl : UserControl
         if (_content.Content is TreeBrowser tree)
         {
             tree.RepaintBadges();
+            tree.RepaintColours();
         }
     }
 
@@ -340,6 +342,32 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>The tree itself, which the open steps are gathered from when it is built again.</summary>
     private readonly TreeView _tree;
 
+    /// <summary>The layer the marked directories are drawn in, behind the rows.</summary>
+    /// <remarks>
+    /// A mark covers a directory and everything under it, and what is under it is not one row: the rows have
+    /// room between them, and a background on each row would be a set of bands rather than the one block the
+    /// mark is. The layer is behind the tree so a chosen row is still drawn over the mark.
+    /// </remarks>
+    private readonly Canvas _blocks = new()
+    {
+        Name = "TreeBlocks",
+        IsHitTestVisible = false,
+        ClipToBounds = true,
+    };
+
+    /// <summary>What was drawn in the block layer, so that a layout that changed nothing draws nothing.</summary>
+    private IReadOnlyList<TreeBlock> _drawnBlocks = [];
+
+    /// <summary>Whether the block layer is being written, so that writing it does not write it again.</summary>
+    private bool _paintingBlocks;
+
+    /// <summary>One marked block: the directory it belongs to, its depth, where it is, and its colour.</summary>
+    /// <param name="Path">The directory's path, which says what is inside it.</param>
+    /// <param name="Level">How deep the directory is in the tree.</param>
+    /// <param name="Rect">The block, in the block layer's own coordinates.</param>
+    /// <param name="Colour">The colour the block is filled with.</param>
+    private readonly record struct TreeBlock(string Path, int Level, Rect Rect, Color Colour);
+
     /// <summary>
     /// What says that a step was opened or closed, which is what the tree is remembered by.
     /// </summary>
@@ -366,6 +394,9 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>Every row's badge strip, so that what it holds can be asked for again.</summary>
     private readonly List<(string Path, StackPanel Strip)> _worn = [];
+
+    /// <summary>What each row made is, so that a block does not have to ask the filesystem again.</summary>
+    private readonly Dictionary<string, EntryKind> _kinds = new(StringComparer.Ordinal);
 
     /// <summary>Every step on screen, so that the one a drag is over can be lit.</summary>
     /// <remarks>
@@ -529,6 +560,16 @@ internal sealed class TreeBrowser : UserControl
         tree.Items.Add(Node(root));
         _tree = tree;
 
+        // A mark covers the step it is on and every step under it, and both a layout and a scroll move where
+        // that block stands: the layer is written again whenever either has moved, and only when the blocks
+        // themselves have changed.
+        _tree.LayoutUpdated += (_, _) => PaintBlocks();
+        _tree.AddHandler(
+            ScrollViewer.ScrollChangedEvent,
+            (_, _) => PaintBlocks(),
+            RoutingStrategies.Bubble
+        );
+
         // What the tree calls selected is what the keys act on, and it is not always a row's own press: the
         // arrows move the toolkit's selection without touching a row, and a reading that lands puts the choice
         // back by selecting the row itself. Both are a step drawn as chosen, so both have to be the one the
@@ -577,6 +618,7 @@ internal sealed class TreeBrowser : UserControl
         _ghost = new Ghost(over);
 
         var grid = new Grid();
+        grid.Children.Add(_blocks);
         grid.Children.Add(tree);
         grid.Children.Add(_empty);
         grid.Children.Add(over);
@@ -1146,6 +1188,169 @@ internal sealed class TreeBrowser : UserControl
         {
             Flatten(under, rows);
         }
+    }
+
+    /// <summary>
+    /// Draws one block behind every marked step and everything under it.
+    /// </summary>
+    /// <remarks>
+    /// A step's own bounds are the block: the row and, while it is open, everything it holds, including the room
+    /// between rows that a background on each row would leave unpainted. A marked step inside another marked one
+    /// is taken out of the outer block's geometry, so the inner colour replaces the outer one rather than being
+    /// laid over it.
+    /// </remarks>
+    private void PaintBlocks()
+    {
+        if (_paintingBlocks)
+        {
+            return;
+        }
+
+        _paintingBlocks = true;
+
+        try
+        {
+            var blocks = new List<TreeBlock>();
+
+            foreach (var item in VisibleRows())
+            {
+                if (
+                    item.Tag is not string path
+                    || item.Bounds.Width <= 0
+                    || item.Bounds.Height <= 0
+                    || item.TranslatePoint(new Point(0, 0), _blocks) is not { } at
+                )
+                {
+                    continue;
+                }
+
+                var kind = _kinds.GetValueOrDefault(path, EntryKind.Directory);
+
+                if (FolderColours.Block(new Entry(path, kind)) is not { } colour)
+                {
+                    continue;
+                }
+
+                blocks.Add(
+                    new TreeBlock(
+                        path,
+                        item.Level,
+                        new Rect(at, new Size(item.Bounds.Width, item.Bounds.Height)),
+                        colour
+                    )
+                );
+            }
+
+            if (SameBlocks(blocks, _drawnBlocks))
+            {
+                return;
+            }
+
+            _drawnBlocks = blocks;
+            _blocks.Children.Clear();
+
+            foreach (var block in blocks)
+            {
+                var geometry = new GeometryGroup { FillRule = FillRule.EvenOdd };
+                geometry.Children.Add(new RectangleGeometry(block.Rect));
+
+                // A marked step inside this one is a hole in this block, not a second fill over it: the inner
+                // step's own colour is what should be drawn there.
+                foreach (var inner in blocks)
+                {
+                    if (Nearest(block, inner, blocks))
+                    {
+                        geometry.Children.Add(new RectangleGeometry(inner.Rect));
+                    }
+                }
+
+                _blocks.Children.Add(
+                    new ShapePath
+                    {
+                        Data = geometry,
+                        Fill = new SolidColorBrush(block.Colour),
+                        IsHitTestVisible = false,
+                    }
+                );
+            }
+        }
+        finally
+        {
+            _paintingBlocks = false;
+        }
+    }
+
+    /// <summary>Whether two sets of blocks are the same ones in the same places.</summary>
+    /// <param name="left">One set.</param>
+    /// <param name="right">The other.</param>
+    /// <returns>Whether they are the same.</returns>
+    private static bool SameBlocks(IReadOnlyList<TreeBlock> left, IReadOnlyList<TreeBlock> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var at = 0; at < left.Count; at++)
+        {
+            if (
+                !string.Equals(left[at].Path, right[at].Path, StringComparison.Ordinal)
+                || left[at].Level != right[at].Level
+                || left[at].Colour != right[at].Colour
+                || Math.Abs(left[at].Rect.X - right[at].Rect.X) > 0.5
+                || Math.Abs(left[at].Rect.Y - right[at].Rect.Y) > 0.5
+                || Math.Abs(left[at].Rect.Width - right[at].Rect.Width) > 0.5
+                || Math.Abs(left[at].Rect.Height - right[at].Rect.Height) > 0.5
+            )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Whether one marked block is the nearest marked one inside another.</summary>
+    /// <param name="outer">The block outside.</param>
+    /// <param name="inner">The block that may be inside it.</param>
+    /// <param name="all">Every block drawn.</param>
+    /// <returns>Whether <paramref name="inner"/> is directly under <paramref name="outer"/>.</returns>
+    private static bool Nearest(
+        TreeBlock outer,
+        TreeBlock inner,
+        IReadOnlyList<TreeBlock> all
+    )
+    {
+        if (inner.Level <= outer.Level || !Under(outer.Path, inner.Path))
+        {
+            return false;
+        }
+
+        foreach (var between in all)
+        {
+            if (
+                between.Level > outer.Level
+                && between.Level < inner.Level
+                && Under(outer.Path, between.Path)
+                && Under(between.Path, inner.Path)
+            )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Whether a path names something inside a directory.</summary>
+    /// <param name="directory">The directory.</param>
+    /// <param name="path">The path to ask about.</param>
+    /// <returns>Whether the path is under the directory.</returns>
+    private static bool Under(string directory, string path)
+    {
+        var prefix = Path.TrimEndingDirectorySeparator(directory) + Path.DirectorySeparatorChar;
+
+        return path.StartsWith(prefix, StringComparison.Ordinal);
     }
 
     /// <summary>The place a path has among the rows on screen, or nothing where it is not drawn.</summary>
@@ -1723,6 +1928,8 @@ internal sealed class TreeBrowser : UserControl
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
 
+        _kinds[path] = EntryKind.Directory;
+
         Guides(item);
 
         var read = false;
@@ -2153,6 +2360,13 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
+    /// <summary>Draws the blocks behind the rows again, without reading anything again.</summary>
+    /// <remarks>
+    /// A provider's answer is read when a block is drawn, so a rule that appeared since the last drawing is one
+    /// this asks for: the rows themselves are unchanged, and only what is behind them is not.
+    /// </remarks>
+    public void RepaintColours() => PaintBlocks();
+
     /// <summary>A row for a file, which opens onto nothing.</summary>
     /// <param name="entry">The file the row names.</param>
     /// <returns>The row.</returns>
@@ -2165,6 +2379,8 @@ internal sealed class TreeBrowser : UserControl
             Tag = entry.Path,
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
+
+        _kinds[entry.Path] = entry.Kind;
         item.Header = Header(entry, step: null, collapse: null);
 
         Guides(item);

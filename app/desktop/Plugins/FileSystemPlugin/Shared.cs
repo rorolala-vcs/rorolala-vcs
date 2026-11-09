@@ -153,6 +153,7 @@ internal sealed class Shared
         global::FileSystemPlugin.HideRegistry.Forget();
         EntryLockProviders.Forget();
         EntryMarkProviders.Forget();
+        EntryColourProviders.Forget();
         EntryColumns.Forget();
 
         Touched?.Invoke();

@@ -76,37 +76,43 @@ A dock pulled into a window of its own is now owned by the main window. Closing 
 
 The title row no longer carries a menu bar. One button at its left opens the same top-level menus in a flyout, in their old order, with the Window menu still listing the docks and its commands. The button has a tooltip and an accessible name, and a press on it does not move the window.
 
-### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`hides`] Give each hide rule shown, gray and hidden states
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`colour`] Mark folders with a colour from a plugin rule
+
+Entries can now be marked with a colour by a rule a plugin registers. A marked directory gives its colour to everything under it, the nearest marked directory wins, and the file tree draws one block behind the whole subtree, so the colour is one rectangle rather than a wash on each row. A marked file carries its own block. A directory listing draws a wash on the row of each entry the colour reaches, the entries under a marked directory darker than the directory itself, and the Directories dock's bright ground carries a share of the colour while it is inside a marked directory. Icons keep their own colours.
+
+The Rorolala plugin registers the first rule. It marks a rola-tree with the hue of the hash of the id in its `.rola-tree` mark, so the colour travels with the directory and a copy of one tree is the same colour.
+
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`hides`] Give each hide rule shown, gray and hidden states
 
 Each hide rule now has three states rather than two. Shown leaves its entries as they are, Gray keeps them in the listing at 55% opacity, and Hidden leaves them out; a click on the rule cycles shown, gray, hidden. The popup lists the rules as Dot Directories, Dot Files, Windows Hidden Files, Git Ignored Files and Rola Ignored Files, and its eye and more button are one run at the toolbar's right, separated from the link by a 1 px rule. The eye shows the entries a hiding rule leaves out as gray without changing the rule's state.
 
-### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base
 
 A directory dock inside the tree's base is named by its part under that base, so a tab reads `art` or `art/shots` rather than the whole path, and its address bar starts at `.` for the base and adds one step for each directory under it. The detail a tab and a window title show on hover is still the full path, a directory outside the base keeps its full path, and a logical place keeps its address.
 
-### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree
+### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree
 
 The file tree now supports the same choice as a directory listing: a plain press chooses one row, Ctrl toggles one, Shift takes a visible range, and Ctrl+A chooses every row on screen. A modified press on a directory changes the choice without navigating, while a plain press still opens it. Copy, cut, delete and the context menu act on the whole choice, and a tree read again keeps its choice by path.
 
-### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
+### 8. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
 
 The TRACK button under the Version Graph turns red while Shift is held. A press then records
 the chosen changes with `rola track --force`, and a question names the files whose changes a plain
 track refuses before anything is written. Without Shift the button records the changes as before.
 
-### 8. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
+### 9. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
 
 A file browser's grid now shows a file's own preview where one can be made, and keeps the type icon where one cannot. The host asks its system source first and the plugins' renderers after it, keeps answers by path, write time and size, cancels a tile's request when the tile leaves the window, and reports a batch on the progress stack. Windows uses the Shell thumbnailer on a dedicated STA thread; Linux reads thumbnails the desktop has already cached.
 
-### 9. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
+### 10. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
 
 `rola desktop` now starts a host beside the Desktop rather than the Desktop itself. The host forwards the line that says the window is up, keeps the Desktop's error stream, and when the run ends with a non-zero code writes the report to a log and opens a window that shows it. A Desktop run that throws also writes the exception's stack to that stream, so the stack survives the window that wrote it. A start that found the Desktop already running, exit code 174, is passed through without a report.
 
-### 10. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
+### 11. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
 
 `rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. A caller that cannot decode the structure format hands the bytes over instead of keeping a second copy of it, and text that is not hex or bytes that are not a structure answer as `null`, so an answer is always JSON. The string is freed with `free_string`.
 
-### 11. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+### 12. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
 
 The new `rorolala-tree` crate holds what a tree is: a canonical structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path. Content moves into the Workspace's store with `publish_from`, which carries manifests and their chunks without rewriting what is already there.
 
