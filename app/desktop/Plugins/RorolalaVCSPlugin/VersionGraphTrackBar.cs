@@ -70,6 +70,15 @@ internal sealed class VersionGraphTrackBar : Border
     /// <summary>Whether Shift is held, which makes the button a forced track and draws it red.</summary>
     private bool _shifted;
 
+    /// <summary>What each tree was read as, kept for the drawing between file changes.</summary>
+    private readonly Dictionary<string, RolaTreeStatus?> _trees = new(StringComparer.Ordinal);
+
+    /// <summary>The trees a reading is going for, so one tree is read once at a time.</summary>
+    private readonly HashSet<string> _askingTrees = new(StringComparer.Ordinal);
+
+    /// <summary>Which reading of the work the kept tree answers are of.</summary>
+    private int _treeGeneration;
+
     /// <summary>Makes the row.</summary>
     /// <param name="host">The host, which is what the button reaches to run and to report.</param>
     /// <param name="graph">The graph the message is a version of.</param>
@@ -191,6 +200,7 @@ internal sealed class VersionGraphTrackBar : Border
         ChosenFiles.Changed += Paint;
         ChosenEntry.Changed += Paint;
         ChosenDirectory.Changed += Paint;
+        _files.Changed += TreesChanged;
         _files.Redrawn += Paint;
 
         // Shift is held while the pointer is anywhere, so the key is watched on the window rather than on
@@ -211,6 +221,7 @@ internal sealed class VersionGraphTrackBar : Border
         ChosenFiles.Changed -= Paint;
         ChosenEntry.Changed -= Paint;
         ChosenDirectory.Changed -= Paint;
+        _files.Changed -= TreesChanged;
         _files.Redrawn -= Paint;
 
         if (TopLevel.GetTopLevel(this) is { } window)
@@ -218,6 +229,14 @@ internal sealed class VersionGraphTrackBar : Border
             window.RemoveHandler(InputElement.KeyDownEvent, KeyHeld);
             window.RemoveHandler(InputElement.KeyUpEvent, KeyLetGo);
         }
+    }
+
+    /// <summary>Drops the tree readings a file change may have made stale, then draws the row again.</summary>
+    private void TreesChanged()
+    {
+        _treeGeneration++;
+        _trees.Clear();
+        Paint();
     }
 
     /// <summary>Draws the button red while the key that forces the run is down.</summary>
@@ -427,9 +446,15 @@ internal sealed class VersionGraphTrackBar : Border
     {
         // A directory is a place, and what a track on it means is every untracked entry under it.
         // That is asked before the file choice because the click that made the place was about the
-        // place: a listing's previous files are not what the reader is pointing at any more.
+        // place: a listing's previous files are not what the reader is pointing at any more. A
+        // directory inside a tree is the tree's work, so it is the tree that is recorded.
         if (ChosenDirectory.Current is { } place)
         {
+            if (RolaTrees.RootOf(place.Path) is { } tree)
+            {
+                return TreeTarget(tree, force) is { } target ? [target] : [];
+            }
+
             return DirectoryTargets(place, force);
         }
 
@@ -442,9 +467,24 @@ internal sealed class VersionGraphTrackBar : Border
                 : [];
 
         var targets = new List<Target>(considered.Count);
+        var trees = new HashSet<string>(
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal
+        );
 
         foreach (var entry in considered)
         {
+            // A file or a directory inside a tree is the tree's work, and the tree is one entry:
+            // tracking any of them is tracking the tree once, rather than the path the click landed on.
+            if (RolaTrees.RootOf(entry.Path) is { } tree)
+            {
+                if (trees.Add(tree) && TreeTarget(tree, force) is { } treeTarget)
+                {
+                    targets.Add(treeTarget);
+                }
+
+                continue;
+            }
+
             if (
                 entry.Kind != EntryKind.File
                 || Path.GetDirectoryName(entry.Path) is not { Length: > 0 } directory
@@ -499,6 +539,83 @@ internal sealed class VersionGraphTrackBar : Border
         return targets;
     }
 
+    /// <summary>The target a track on a tree would record, when the tree has work to record.</summary>
+    /// <remarks>
+    /// A tree is one entry, so the run names the directory rather than a path inside it. Its work is
+    /// what its own status says is staged, changed, untracked or in conflict, and a staged description
+    /// is work even when every path still agrees with the record.
+    /// </remarks>
+    /// <param name="tree">The tree's directory.</param>
+    /// <param name="force">Whether a tree another account holds may be recorded anyway.</param>
+    /// <returns>The tree as one target, or nothing when it has nothing to record.</returns>
+    private Target? TreeTarget(string tree, bool force)
+    {
+        var reading = _statuses.Reading(tree);
+        var status = TreeStatus(tree);
+        var described = File.Exists(Path.Combine(tree, ".rola-tree", "description"));
+
+        if ((status is null || status.Clean) && !described)
+        {
+            return null;
+        }
+
+        var unowned =
+            reading is { } read
+            && read.Unowned.Any(named => StatusReadings.Names(read.Root, named, tree));
+
+        if (unowned && !force)
+        {
+            return null;
+        }
+
+        var diverged =
+            reading is { } standing && standing.SyncOf(tree) == SyncStanding.Diverged;
+
+        return new Target(tree, tree, diverged, unowned, Tree: true);
+    }
+
+    /// <summary>What a tree stands as, read once between file changes.</summary>
+    /// <remarks>
+    /// A tree's status walks the tree, so it is read on a thread of its own like the Work's own status.
+    /// Nothing is answered until it lands, and a drawing that asked in the meantime has no target and
+    /// keeps the button still; what lands is drawn again.
+    /// </remarks>
+    /// <param name="tree">The tree's directory.</param>
+    /// <returns>The reading, or nothing while it is being read or when it cannot be.</returns>
+    private RolaTreeStatus? TreeStatus(string tree)
+    {
+        if (_trees.TryGetValue(tree, out var known))
+        {
+            return known;
+        }
+
+        if (!_askingTrees.Add(tree))
+        {
+            return null;
+        }
+
+        var generation = _treeGeneration;
+
+        _ = Task.Run(() =>
+        {
+            var status = RolaTreeStatus.Locate(tree);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _askingTrees.Remove(tree);
+
+                if (generation == _treeGeneration)
+                {
+                    _trees[tree] = status;
+                }
+
+                Paint();
+            });
+        });
+
+        return null;
+    }
+
     /// <summary>The files a track on a directory would record: every recordable entry under it.</summary>
     /// <remarks>
     /// The reading is taken for the directory the place sits in rather than for the place itself:
@@ -529,9 +646,24 @@ internal sealed class VersionGraphTrackBar : Border
 
         var directory = Path.GetFullPath(place.Path);
         var targets = new List<Target>();
+        var trees = new HashSet<string>(
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal
+        );
 
         foreach (var file in RecordableUnder(read, directory, force))
         {
+            // A file under a tree is the tree's work, so a directory choice that reaches one records
+            // the tree once rather than each changed file in it.
+            if (RolaTrees.RootOf(file) is { } tree)
+            {
+                if (trees.Add(tree) && TreeTarget(tree, force) is { } target)
+                {
+                    targets.Add(target);
+                }
+
+                continue;
+            }
+
             targets.Add(
                 new Target(
                     directory,
@@ -657,11 +789,11 @@ internal sealed class VersionGraphTrackBar : Border
             _track.Background = Brushes.Transparent;
         }
 
-        var tip = RolaI18N.Get(
-            ChosenDirectory.Current is null
-                ? "rorolala_vcs.version_graph.track_tip"
-                : "rorolala_vcs.version_graph.track_directory_tip"
-        );
+        var tip = targets.Any(target => target.Tree)
+            ? RolaI18N.Get("rorolala_vcs.version_graph.track_tree_tip")
+            : ChosenDirectory.Current is null
+                ? RolaI18N.Get("rorolala_vcs.version_graph.track_tip")
+                : RolaI18N.Get("rorolala_vcs.version_graph.track_directory_tip");
 
         if (_shifted)
         {
@@ -694,5 +826,12 @@ internal sealed class VersionGraphTrackBar : Border
     /// <param name="File">The file, as the program names it.</param>
     /// <param name="Diverged">Whether tracking it makes a version the Vault's chain does not carry.</param>
     /// <param name="Forced">Whether it is a change a plain track refuses and only a forced one records.</param>
-    private sealed record Target(string Directory, string File, bool Diverged, bool Forced);
+    /// <param name="Tree">Whether the target is a rola-tree rather than a file.</param>
+    private sealed record Target(
+        string Directory,
+        string File,
+        bool Diverged,
+        bool Forced,
+        bool Tree = false
+    );
 }

@@ -74,6 +74,9 @@ internal static partial class Icons
     /// <summary>The key the `content_copy` picture is held under.</summary>
     public const string ContentCopy = "rorolala_vcs.content_copy";
 
+    /// <summary>The key the `park` picture is held under.</summary>
+    public const string Park = "rorolala_vcs.park";
+
     /// <summary>The key the `task_alt` picture is held under.</summary>
     public const string TaskAlt = "rorolala_vcs.task_alt";
 
@@ -111,6 +114,7 @@ internal static partial class Icons
         (Sync, "sync"),
         (MoreVert, "more_vert"),
         (ContentCopy, "content_copy"),
+        (Park, "park"),
         (TaskAlt, "task_alt"),
         (Work, "work"),
         (AltRoute, "alt_route"),

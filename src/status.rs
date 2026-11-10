@@ -13,6 +13,7 @@ use std::path::Path;
 
 use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::Layout;
+use rorolala_tree::{Tree, TreeStatus};
 use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
@@ -65,6 +66,45 @@ pub fn locate_status(directory: &Path) -> Option<Status> {
 /// The Layout a Workspace is working in, when it is working in one.
 fn working_layout(workspace: &Workspace) -> Option<Layout> {
     workspace.layout_if_there().ok().flatten()
+}
+
+/// How the rola-tree holding `directory` stands, as the JSON a caller reads.
+///
+/// The reading is the tree's own: what its staging area holds beside the version the Layout records, what
+/// the work under it changed without being staged, and what a merge left in conflict. A caller that read
+/// `.rola-tree` itself would be keeping a second copy of the format, so the answer crosses as data.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`, or `null` when there is nothing to read:
+/// no Workspace holds the directory, the directory is not inside a tree, the Workspace works in no Layout,
+/// the index or the store is not there, or the tree cannot be read.
+#[must_use]
+#[lazyffi(export = rola_tree_status_json)]
+pub fn tree_status_json(directory: &Path) -> String {
+    tree_status(directory).map_or_else(
+        || "null".to_owned(),
+        |status| serde_json::to_string(&status).unwrap_or_else(|_| "null".to_owned()),
+    )
+}
+
+/// The status of the tree holding `directory`, when there is one to read.
+fn tree_status(directory: &Path) -> Option<TreeStatus> {
+    let workspace = Workspace::locate(directory)?;
+    let layout = working_layout(&workspace)?;
+    let index = VCSIndex::locate(directory)?;
+    let store = workspace.get_current_rola_storage()?;
+    let rules = IgnoreRuleSet::load(
+        &workspace.get_root().join(WORKSPACE_IGNORE_RULES_DIR),
+        workspace.get_root(),
+    )
+    .unwrap_or_else(|_| IgnoreRuleSet::empty());
+    let tree = Tree::locate(workspace.get_root(), directory).ok()?;
+    let runtime = tokio::runtime::Runtime::new().ok()?;
+
+    runtime
+        .block_on(tree.status(&layout, &index, &store, rules, false))
+        .ok()
 }
 
 #[cfg(test)]

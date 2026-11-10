@@ -1,6 +1,7 @@
 using System.Diagnostics;
 
 using RolaSharp;
+using RorolalaDesktop.I18n;
 using RorolalaVCSPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -38,6 +39,125 @@ public sealed class VariantGraphTests
 
         Assert.Contains(Path.Combine(workspace, "art.txt"), under);
         Assert.Contains(Path.Combine(workspace, "art", "one.txt"), under);
+    }
+
+    /// <summary>A tree is one entry, and a file inside it is read as that entry.</summary>
+    [Fact]
+    public void ATreeAndAFileInsideItAreCentredOnTheTree()
+    {
+        var workspace = TreeRecorded("tree-focus");
+        var tree = Path.Combine(workspace, "tree");
+
+        Assert.Equal(tree, RolaTrees.RootOf(tree, workspace));
+        Assert.Equal(tree, RolaTrees.RootOf(Path.Combine(tree, "a.txt"), workspace));
+
+        var graph = RolaVariantGraph.Locate(
+            workspace,
+            new VariantGraphRequest
+            {
+                Focus = [new VariantGraphFocus("local", "tree")],
+            }
+        );
+
+        Assert.NotNull(graph);
+
+        var focus = Assert.Single(graph.Focus);
+        Assert.Equal("local", focus.Side);
+        Assert.Equal("tree", focus.Path);
+        Assert.NotNull(focus.Version);
+        Assert.NotNull(focus.Variant);
+
+        var entry = Assert.Single(graph.Entries, one => one.Path == "tree");
+        Assert.Equal(focus.Version, entry.Version);
+    }
+
+    /// <summary>A tree's staging area is read as a change, even though no file in it is modified.</summary>
+    [Fact]
+    public void ATreesStagingAreaIsAChange()
+    {
+        var workspace = TreeRecorded("tree-staging");
+        var tree = Path.Combine(workspace, "tree");
+
+        Assert.True(RolaTreeStatus.Locate(tree)?.Clean);
+
+        File.WriteAllText(Path.Combine(tree, "a.txt"), "two\n");
+        Given(workspace, "tree", "add", "tree");
+
+        var status = RolaTreeStatus.Locate(tree);
+
+        Assert.NotNull(status);
+        Assert.False(status.Clean);
+        Assert.Equal(1, status.Staged);
+    }
+
+    /// <summary>The tree's own entry, and not the file inside it, is what the graph is centred on.</summary>
+    [Fact]
+    public void AFileInsideATreeFocusesTheTree()
+    {
+        var workspace = TreeRecorded("tree-focus-file");
+        var tree = Path.Combine(workspace, "tree");
+
+        var focus = VersionGraphView.FocusOf(
+            [Path.Combine(tree, "a.txt")],
+            workspace
+        );
+
+        var one = Assert.Single(focus);
+        Assert.Equal("local", one.Side);
+        Assert.Equal("tree", one.Path);
+    }
+
+    /// <summary>A staged tree is a draft in the graph, even when the tree's files are unchanged.</summary>
+    [Fact]
+    public void AStagedTreeDrawsADraft()
+    {
+        var workspace = TreeRecorded("tree-draft");
+        var tree = Path.Combine(workspace, "tree");
+
+        File.WriteAllText(Path.Combine(tree, "a.txt"), "two\n");
+        Given(workspace, "tree", "add", "tree");
+
+        var graph = RolaVariantGraph.Locate(workspace);
+        using var status = RolaStatus.Locate(workspace);
+
+        Assert.NotNull(graph);
+        Assert.NotNull(status);
+
+        var drafts = VersionGraphView.DraftsOf(graph, status, workspace);
+        var draft = Assert.Single(drafts, one => one.Path == "tree");
+
+        Assert.True(draft.Tree);
+    }
+
+    /// <summary>A track with a tree's directory records the tree, not a path inside it.</summary>
+    [Fact]
+    public void ATrackOnATreeRecordsTheTree()
+    {
+        var workspace = TreeRecorded("tree-track");
+        var tree = Path.Combine(workspace, "tree");
+
+        File.WriteAllText(Path.Combine(tree, "a.txt"), "two\n");
+        Given(workspace, "tree", "add", "tree");
+
+        RolaI18N.SetTranslationDirectory(Scratch.New("i18n"));
+        Environment.SetEnvironmentVariable(Sync.Program, Program());
+
+        var (done, said) = TrackCommand.Run(tree, [tree], "second tree");
+
+        Assert.True(done, said);
+        Assert.True(RolaTreeStatus.Locate(tree)?.Clean);
+
+        var graph = RolaVariantGraph.Locate(
+            workspace,
+            new VariantGraphRequest
+            {
+                Focus = [new VariantGraphFocus("local", "tree")],
+            }
+        );
+
+        Assert.NotNull(graph);
+        Assert.NotNull(Assert.Single(graph.Focus).Version);
+        Assert.True(graph.Nodes.Count >= 2);
     }
 
     /// <summary>A chain of two versions is drawn with its entries, its words and its versions.</summary>
@@ -188,6 +308,7 @@ public sealed class VariantGraphTests
         var words = new GraphVocabulary(
             "DRAFT",
             "unrecorded",
+            "unrecorded tree",
             "wrong",
             "unowned",
             "draft",
@@ -284,6 +405,7 @@ public sealed class VariantGraphTests
         var words = new GraphVocabulary(
             "DRAFT",
             "unrecorded",
+            "unrecorded tree",
             "wrong",
             "unowned",
             "draft",
@@ -367,6 +489,7 @@ public sealed class VariantGraphTests
             new GraphVocabulary(
                 "DRAFT",
                 "unrecorded",
+                "unrecorded tree",
                 "wrong",
                 "unowned",
                 "draft",
@@ -527,6 +650,29 @@ public sealed class VariantGraphTests
 
         File.WriteAllText(Path.Combine(workspace, "art.txt"), "two\n");
         Given(workspace, "track", "art.txt", "--message", "second", "--no-editor");
+
+        return workspace;
+    }
+
+    /// <summary>A workspace whose one recorded entry is a tree.</summary>
+    /// <param name="label">The scratch directory's label.</param>
+    /// <returns>The workspace.</returns>
+    private static string TreeRecorded(string label)
+    {
+        var parent = Scratch.New($"variant-graph-{label}");
+        var workspace = Path.Combine(parent, "ws");
+        var tree = Path.Combine(workspace, "tree");
+
+        Given(parent, "create", workspace);
+        Given(workspace, "key", "generate", "--install", "alice");
+        Given(workspace, "account", "alice");
+
+        Directory.CreateDirectory(tree);
+        File.WriteAllText(Path.Combine(tree, "a.txt"), "one\n");
+
+        Given(workspace, "tree", "init", "tree");
+        Given(workspace, "tree", "add", "tree");
+        Given(workspace, "track", "tree", "--message", "first tree", "--no-editor");
 
         return workspace;
     }

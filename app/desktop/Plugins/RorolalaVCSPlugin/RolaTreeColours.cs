@@ -39,8 +39,9 @@ internal sealed class RolaTreeColours : IEntryColourProvider
         ArgumentNullException.ThrowIfNull(entry);
 
         // A tree is a directory: a file has no mark of its own to read, and what it inherits is the answer of
-        // the directory it is in rather than a second question about the file.
-        if (entry.Kind is not EntryKind.Directory)
+        // the directory it is in rather than a second question about the file. The platform's own root, the
+        // computer, has no path to hold a mark, so it is not asked of the filesystem.
+        if (entry.Kind is not EntryKind.Directory || string.IsNullOrEmpty(entry.Path))
         {
             return null;
         }

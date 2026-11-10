@@ -316,7 +316,7 @@ impl Sides {
         let version = self
             .named(&focus.side)
             .and_then(|layout| {
-                LayoutPath::new(&focus.path)
+                LayoutPath::from_stored(&focus.path)
                     .ok()
                     .and_then(|path| layout.data_of(&path))
             })

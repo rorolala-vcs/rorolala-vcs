@@ -278,6 +278,46 @@ public sealed class TreeRowTests
     }
 
 
+    /// <summary>A mark that says what a folder is is worn beside its row, in the badge the others use.</summary>
+    [Fact]
+    public void ATreeMarkIsWornBesideTheRow()
+    {
+        var directory = Scratch.New("tree-park");
+        var marked = Directory.CreateDirectory(Path.Combine(directory, "marked")).FullName;
+
+        EntryMarkProviders.Register(new FixedPark(marked));
+
+        var (window, _) = OpenAt(directory, width: 400);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var row = Until(window, () => Row(window, marked));
+            var strip = Named<StackPanel>(row, "entry-badges");
+            var badge = Assert.Single(strip.Children);
+            var ring = badge.GetVisualDescendants()
+                .OfType<Border>()
+                .FirstOrDefault(border => border.BorderBrush is ISolidColorBrush);
+
+            Assert.NotNull(ring);
+            Assert.Equal(
+                Colors.Red,
+                Assert.IsType<SolidColorBrush>(ring!.BorderBrush).Color
+            );
+            Assert.Empty(
+                Named<Control>(row, "entry-icon").GetVisualDescendants().OfType<BadgeArc>()
+            );
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>A marked folder is one block behind its own row and everything under it.</summary>
     [Fact]
     public void AMarkedFolderIsOneBlockBehindItsWholeSubtree()
@@ -545,5 +585,33 @@ public sealed class TreeRowTests
             && string.Equals(entry.Path, _marked, StringComparison.Ordinal)
                 ? _colour
                 : null;
+    }
+
+    /// <summary>A mark provider that puts one fixed picture on one directory's icon.</summary>
+    private sealed class FixedPark : IEntryMarkProvider
+    {
+        /// <summary>The directory the provider marks.</summary>
+        private readonly string _marked;
+
+        /// <summary>Makes a provider that marks one directory.</summary>
+        /// <param name="marked">The directory to mark.</param>
+        public FixedPark(string marked) => _marked = marked;
+
+        /// <inheritdoc />
+        public string Id => "it.tree.row.park";
+
+        /// <inheritdoc />
+        public bool Applies(string directory) => true;
+
+        /// <inheritdoc />
+        public EntryMark Mark(Entry entry) =>
+            entry.Kind is EntryKind.Directory
+            && string.Equals(entry.Path, _marked, StringComparison.Ordinal)
+                ? new EntryMark(
+                    IconKey: Icons.CreateNewFolder,
+                    Colour: Colors.Red,
+                    Tagged: true
+                )
+                : new EntryMark();
     }
 }

@@ -29,6 +29,8 @@ public sealed class FolderColourTests
     {
         DataHome.Clean();
         EntryColourProviders.Clear();
+        EntryMarkProviders.Clear();
+        ChosenEntry.Clear();
     }
 
     /// <summary>A listing inside a marked folder wears the colour in its ground and in the row of an entry.</summary>
@@ -87,6 +89,118 @@ public sealed class FolderColourTests
             Assert.Equal(
                 FolderColours.Wash(entry),
                 Assert.IsType<SolidColorBrush>(tile!.Background).Color
+            );
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>A showing that names a directory chooses it rather than entering it.</summary>
+    [Fact]
+    public void AShowingChoosesADirectory()
+    {
+        var root = Scratch.New("folder-colour-showing");
+        var tree = Directory.CreateDirectory(Path.Combine(root, "tree")).FullName;
+
+        var services = Host.Services();
+        var host = services.For(new PluginId(FileSystem.Identity), 1);
+        var shared = new Shared(root, new HideRegistry(host.Config), host.Config, host.Files);
+        var browser = new Browser(host.Log, shared, root, host.LogicalViews);
+        var control = new DirectoryControl(
+            host,
+            shared,
+            browser,
+            new Clip(host.Log),
+            new LogicalClip()
+        );
+        var window = new Window
+        {
+            Width = 900,
+            Height = 600,
+            Content = control,
+        };
+
+        window.Show();
+        window.Activate();
+        Pump();
+
+        try
+        {
+            control.OpenAt(root);
+            Pump();
+            control.RevealSelected(tree);
+            Pump();
+
+            Assert.Equal(tree, ChosenDirectory.Current?.Path);
+
+            var view = window.GetVisualDescendants().OfType<EntryView<Entry>>().First();
+            var list = view.GetVisualDescendants().OfType<ListBox>().First();
+            var entry = Assert.Single(list.Items.OfType<Entry>(), item => item.Path == tree);
+
+            Assert.Same(entry, list.SelectedItem);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>A tree's park is worn on its folder tile, in the colour its id names.</summary>
+    [Fact]
+    public void ATreeMarkIsWornOnTheFolderTile()
+    {
+        var root = Scratch.New("folder-colour-park");
+        var tree = Directory.CreateDirectory(Path.Combine(root, "tree")).FullName;
+
+        Mark(tree, "11111111-1111-1111-1111-111111111111");
+
+        var colours = new RolaTreeColours();
+
+        EntryMarkProviders.Register(new RolaTreeIcon(colours));
+
+        var services = Host.Services();
+        var host = services.For(new PluginId(FileSystem.Identity), 1);
+        var shared = new Shared(root, new HideRegistry(host.Config), host.Config, host.Files);
+        var browser = new Browser(host.Log, shared, root, host.LogicalViews);
+
+        RorolalaVCSPlugin.Icons.Declare(host.Icons);
+
+        var control = new DirectoryControl(
+            host,
+            shared,
+            browser,
+            new Clip(host.Log),
+            new LogicalClip()
+        );
+        var window = new Window
+        {
+            Width = 900,
+            Height = 600,
+            Content = control,
+        };
+
+        window.Show();
+        window.Activate();
+        Pump();
+
+        try
+        {
+            var view = window.GetVisualDescendants().OfType<EntryView<Entry>>().First();
+            var list = view.GetVisualDescendants().OfType<ListBox>().First();
+            var entry = Assert.Single(list.Items.OfType<Entry>(), item => item.Path == tree);
+            var container = Assert.IsType<ListBoxItem>(list.ContainerFromItem(entry));
+            var arc = Assert.Single(container.GetVisualDescendants().OfType<BadgeArc>());
+            var badge = Assert.Single(arc.Children);
+            var ring = badge.GetVisualDescendants()
+                .OfType<Border>()
+                .FirstOrDefault(border => border.BorderBrush is ISolidColorBrush);
+
+            Assert.NotNull(ring);
+            Assert.Equal(
+                colours.Colour(new Entry(tree, EntryKind.Directory)),
+                Assert.IsType<SolidColorBrush>(ring!.BorderBrush).Color
             );
         }
         finally

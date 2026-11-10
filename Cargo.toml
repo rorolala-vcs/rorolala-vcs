@@ -276,6 +276,7 @@ rorolala-vcs.workspace = true
 rorolala-workspace.workspace = true
 rola-desktop-pty.workspace = true
 serde_json.workspace = true
+tokio.workspace = true
 
 [build-dependencies]
 rorolala-dev-bindgen.workspace = true

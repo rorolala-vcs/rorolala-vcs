@@ -21,7 +21,7 @@ namespace RorolalaVCSPlugin;
 /// The Version Graph dock: the variants of the work, their versions and the entries naming them.
 /// </summary>
 /// <remarks>
-/// A card is a variant, a lane is the file whose chain it stands on, and a column is its version
+/// A card is a variant, a lane is the entry whose chain it stands on, and a column is its version
 /// depth; the drawing is the desktop's own geometry and every card is where the reading puts it, not
 /// the command line's character grid. The graph stands on the entries chosen in a directory listing,
 /// or on the whole work when nothing is chosen (see <see cref="VersionGraphView"/>), and the row under
@@ -457,6 +457,7 @@ internal sealed partial class VersionGraphView : Control
         _words ??= new GraphVocabulary(
             DraftLabel: RolaI18N.Get("rorolala_vcs.version_graph.draft_label"),
             DraftMessage: RolaI18N.Get("rorolala_vcs.version_graph.draft_message"),
+            DraftTreeMessage: RolaI18N.Get("rorolala_vcs.version_graph.draft_tree_message"),
             DraftWrongMessage: RolaI18N.Get("rorolala_vcs.version_graph.draft_wrong_message"),
             DraftUnownedMessage: RolaI18N.Get("rorolala_vcs.version_graph.draft_unowned_message"),
             DraftBadge: RolaI18N.Get("rorolala_vcs.version_graph.draft_badge"),
@@ -479,6 +480,7 @@ internal sealed partial class VersionGraphView : Control
         // outlives every dock, and a dock that was closed has no reason to be told what was clicked.
         _chosenCount = ChosenFiles.Current.Count;
         ChosenEntry.Changed += EntryChanged;
+        ChosenDirectory.Changed += EntryChanged;
         ChosenFiles.Changed += ChoiceChanged;
         BaseDirectory.Changed += Refresh;
         _files.Changed += Refresh;
@@ -497,6 +499,7 @@ internal sealed partial class VersionGraphView : Control
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         ChosenEntry.Changed -= EntryChanged;
+        ChosenDirectory.Changed -= EntryChanged;
         ChosenFiles.Changed -= ChoiceChanged;
         BaseDirectory.Changed -= Refresh;
         _files.Changed -= Refresh;
@@ -662,7 +665,9 @@ internal sealed partial class VersionGraphView : Control
     private static Entry? Subject() =>
         ChosenFiles.Current.Count switch
         {
-            0 => ChosenEntry.Current,
+            0 => ChosenDirectory.Current is { } place && RolaTrees.RootOf(place.Path) is { } tree
+                ? new Entry(tree, EntryKind.Directory)
+                : ChosenEntry.Current,
             1 => ChosenFiles.Current[0],
             _ => null,
         };
@@ -677,16 +682,38 @@ internal sealed partial class VersionGraphView : Control
     {
         var chosen = ChosenFiles.Current.Count > 0
             ? ChosenFiles.Current
-            : ChosenEntry.Current is { } one
-                ? [one]
-                : [];
+            : ChosenDirectory.Current is { } place && RolaTrees.RootOf(place.Path) is not null
+                ? [place]
+                : ChosenEntry.Current is { } one
+                    ? [one]
+                    : [];
 
         if (BaseDirectory.Current is not { Length: > 0 } browsed)
         {
             return chosen;
         }
 
-        return [.. chosen.Where(entry => Under(browsed, entry.Path))];
+        return [.. chosen.Where(entry => Related(browsed, entry))];
+    }
+
+    /// <summary>Whether a chosen entry is about the place being browsed.</summary>
+    /// <remarks>
+    /// A tree is one object, so a file inside the tree being browsed and the tree's own directory are both
+    /// about that place, even when the listing is below the tree's root and the chosen directory is above
+    /// it. A file of another tree, or of another directory altogether, is not.
+    /// </remarks>
+    /// <param name="browsed">The directory being browsed.</param>
+    /// <param name="entry">The chosen entry.</param>
+    /// <returns>Whether the choice is about the browsed place.</returns>
+    private static bool Related(string browsed, Entry entry)
+    {
+        if (Under(browsed, entry.Path))
+        {
+            return true;
+        }
+
+        return RolaTrees.RootOf(entry.Path) is { } tree
+            && (Under(tree, browsed) || Under(browsed, tree));
     }
 
     /// <summary>Whether a file lies under a directory.</summary>
@@ -859,7 +886,7 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="files">The files the choice names, as the program names them.</param>
     /// <param name="root">Where the Workspace is rooted, or nothing when it was not read yet.</param>
     /// <returns>The focus the native side is asked for; empty stands on the whole work.</returns>
-    private static List<VariantGraphFocus> FocusOf(IReadOnlyList<string> files, string? root)
+    internal static List<VariantGraphFocus> FocusOf(IReadOnlyList<string> files, string? root)
     {
         var focus = new List<VariantGraphFocus>(files.Count);
 
@@ -870,9 +897,24 @@ internal sealed partial class VersionGraphView : Control
 
         foreach (var file in files)
         {
-            var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+            // A file inside a tree is a way into the tree: the Layout names the tree's directory, and the
+            // graph can only stand on an entry the Layout names.
+            var tree = RolaTrees.RootOf(file, root);
+            var target = tree ?? file;
+            var relative = Path.GetRelativePath(root, target).Replace('\\', '/');
 
-            if (relative is "." or { Length: 0 } || relative.StartsWith("..", StringComparison.Ordinal))
+            if (relative is "." or { Length: 0 })
+            {
+                // The Workspace root is an entry only when it is a tree; a bare root is the whole work,
+                // which is what an empty focus already stands for.
+                if (tree is null)
+                {
+                    continue;
+                }
+
+                relative = string.Empty;
+            }
+            else if (relative.StartsWith("..", StringComparison.Ordinal))
             {
                 continue;
             }
@@ -894,7 +936,7 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="status">What the work says about its files.</param>
     /// <param name="root">Where the Workspace is rooted.</param>
     /// <returns>The drafts, one per changed local entry.</returns>
-    private static List<DraftFact> DraftsOf(RolaVariantGraph graph, RolaStatus status, string root)
+    internal static List<DraftFact> DraftsOf(RolaVariantGraph graph, RolaStatus status, string root)
     {
         var numbers = new Dictionary<string, ulong>(StringComparer.Ordinal);
         var variants = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -935,6 +977,38 @@ internal sealed partial class VersionGraphView : Control
 
             var absolute = Path.Combine(root, entry.Path);
             PathState state;
+
+            // A tree is one entry, and its unrecorded work is its staging area rather than a file's content:
+            // the tree's own reading says whether there is anything there to record, and a staged description
+            // is a change to record even when every path still agrees.
+            if (Directory.Exists(Path.Combine(absolute, ".rola-tree")))
+            {
+                var staged = RolaTreeStatus.Locate(absolute);
+                var described = File.Exists(Path.Combine(absolute, ".rola-tree", "description"));
+
+                if ((staged is null || staged.Clean) && !described)
+                {
+                    continue;
+                }
+
+                var treeUnowned = status.Unowned.Any(named =>
+                    StatusReadings.Names(status.Root, named, absolute)
+                );
+                var treeShould = ShouldBe(beside, recorded, variants, numbers);
+
+                drafts.Add(
+                    new DraftFact(
+                        VariantGraphDrawing.Normalize(entry.Path),
+                        recorded,
+                        Wrong: treeUnowned,
+                        Unowned: treeUnowned,
+                        ShouldBeVersionHash: treeShould,
+                        Tree: true
+                    )
+                );
+
+                continue;
+            }
 
             try
             {
@@ -1362,7 +1436,8 @@ internal sealed partial class VersionGraphView : Control
         _windows.Reveal(
             new DockRequest(
                 global::FileSystemPlugin.FileSystemPlugin.DirectoryDockNameId,
-                path
+                path,
+                Select: Directory.Exists(path)
             )
         );
     }

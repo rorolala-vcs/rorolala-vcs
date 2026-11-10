@@ -1781,6 +1781,16 @@ internal static partial class RorolalaBinding
     internal static extern nint locate_rola_status(nint directory);
 
     /// <summary>
+    /// How the rola-tree holding `directory` stands, as the JSON a caller reads.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, or `null` when there is nothing to read:
+    /// no Workspace holds the directory, the directory is not inside a tree, the Workspace works in no Layout,
+    /// the index or the store is not there, or the tree cannot be read.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_status_json(nint directory);
+
+    /// <summary>
     /// Opens the book at `path`.
     ///
     /// Answers with a `RolaBookSearch` the caller releases with `free_rola_book_search`, or with a

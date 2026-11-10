@@ -580,7 +580,7 @@ internal sealed partial class VersionGraphView
         if (
             _root is { Length: > 0 } root
             && card.Entries.FirstOrDefault(entry =>
-                entry.Side == "local" && !entry.Deprecated && entry.Path.Length > 0
+                entry.Side == "local" && !entry.Deprecated
             ) is { } entry
         )
         {

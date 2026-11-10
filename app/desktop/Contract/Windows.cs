@@ -19,6 +19,11 @@ namespace RorolalaDesktop.Contract;
 /// than made twice, while a browser is made again: the two answers follow the registration, so nothing is
 /// asked for here unless a caller has a reason to disagree with it.
 /// </param>
+/// <param name="Select">
+/// Whether a directory at <paramref name="StartAt"/> is the row to choose rather than a place to enter.
+/// A file is chosen either way, by going to its directory; a directory is opened by a showing unless this
+/// says that the directory itself is what the reader is being sent to.
+/// </param>
 /// <remarks>
 /// The dock is named by its stable id rather than by the registration, because this is what a plugin
 /// reaches the host's windows through and a registration is the host's: what is asked for is a dock, and
@@ -27,7 +32,8 @@ namespace RorolalaDesktop.Contract;
 public sealed record DockRequest(
     string DockNameId,
     string? StartAt = null,
-    DockOpenMode? OpenMode = null
+    DockOpenMode? OpenMode = null,
+    bool Select = false
 );
 
 /// <summary>

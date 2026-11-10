@@ -304,17 +304,20 @@ internal sealed record GraphGhost(double X, double Y, int Target);
 /// <param name="Wrong">Whether a track would fork rather than continue the file's record.</param>
 /// <param name="Unowned">Whether the change is another account's.</param>
 /// <param name="ShouldBeVersionHash">The version the file should record, when the Vault has moved past it.</param>
+/// <param name="Tree">Whether the draft belongs to a rola-tree rather than to a file.</param>
 internal sealed record DraftFact(
     string Path,
     string VersionHash,
     bool Wrong,
     bool Unowned,
-    string? ShouldBeVersionHash
+    string? ShouldBeVersionHash,
+    bool Tree = false
 );
 
 /// <summary>The words the layout writes, taken from the UI's translations.</summary>
 /// <param name="DraftLabel">What a draft's big faint label reads.</param>
 /// <param name="DraftMessage">What a draft based on the record says.</param>
+/// <param name="DraftTreeMessage">What a draft of a tree says.</param>
 /// <param name="DraftWrongMessage">What a draft that would fork says.</param>
 /// <param name="DraftUnownedMessage">What a draft another account holds says.</param>
 /// <param name="DraftBadge">What a recordable draft's state pill says.</param>
@@ -326,6 +329,7 @@ internal sealed record DraftFact(
 internal sealed record GraphVocabulary(
     string DraftLabel,
     string DraftMessage,
+    string DraftTreeMessage,
     string DraftWrongMessage,
     string DraftUnownedMessage,
     string DraftBadge,
@@ -718,7 +722,9 @@ internal sealed class VariantGraphDrawing
                 ? words.DraftUnownedMessage
                 : draft.Wrong
                     ? words.DraftWrongMessage
-                    : words.DraftMessage;
+                    : draft.Tree
+                        ? words.DraftTreeMessage
+                        : words.DraftMessage;
 
             draftCards.Add(
                 new Work

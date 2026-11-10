@@ -7,9 +7,8 @@ namespace FileSystemPlugin;
 /// </summary>
 /// <remarks>
 /// The listing is this plugin's, and a view of one file's history is another plugin's: what crosses
-/// is the one answer both can agree on, which file the most recent click was on. A click on a
-/// directory says nothing here, since a version chain hangs from a file and not from a place, and
-/// the file clicked before it stays the answer.
+/// is the one answer both can agree on, which file the most recent click was on. A click on a directory says
+/// nothing here: a tree's history is the directory's own, and the directory's answer is what carries it.
 /// <para>
 /// It is a catalogue rather than a member of a control because there are several listings, every
 /// directory dock, and every one taken out of step, and the most recent click between them is one
@@ -76,7 +75,7 @@ public static class ChosenEntry
 /// A click on a file says nothing here: what this is for is a choice of a place, which some actions,
 /// recording every untracked entry under it, say, act on as a whole. It is kept apart from
 /// <see cref="ChosenEntry"/> and <see cref="ChosenFiles"/> because neither of those can name a
-/// directory: a version chain hangs from a file, and a multi-file choice leaves places out.
+/// directory: a file's history hangs from a file, and a tree's from the directory itself.
 /// </remarks>
 public static class ChosenDirectory
 {

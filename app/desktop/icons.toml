@@ -138,6 +138,9 @@ icons = [
     "sync",
     "more_vert",
     "content_copy",
+    # `park` is what a rola-tree's folder icon wears, in the colour the tree's own id names: the set draws one
+    # tree, which is what the directory is rather than what is in it.
+    "park",
     # The pictures the docks this plugin registers are drawn as, which is what the Window menu lists each of
     # them by and what the left of its tab wears: the Overview is a checklist with its last line ticked, a
     # reading of the work that is done rather than a task, the Workspace is the work as a case, the Version

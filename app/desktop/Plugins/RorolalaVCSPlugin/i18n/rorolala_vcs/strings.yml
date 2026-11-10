@@ -28,6 +28,12 @@ rorolala_vcs:
       en: Accounts
       zh-CN: 账户管理
 
+  # What the park on a folder icon says when the pointer rests on it: the folder is one tree rather than a
+  # directory of loose entries, and the picture is its own answer to that.
+  tree_badge:
+    en: This directory is a rola-tree
+    zh-CN: 该目录是一棵 rola-tree
+
   # What the Version Graph says when it has nothing to draw: no Workspace holds the directory, no
   # Layout is being worked in, or nothing in it records a version yet. The graph itself needs no click
   # to say something: with no file chosen it stands on the whole work.
@@ -44,6 +50,9 @@ rorolala_vcs:
     draft_message:
       en: Unrecorded change
       zh-CN: 未记录的修改
+    draft_tree_message:
+      en: Unrecorded changes in this tree
+      zh-CN: 这棵树中有未记录的修改
     draft_wrong_message:
       en: Change based on an older version
       zh-CN: 基于旧版本的修改
@@ -290,6 +299,9 @@ rorolala_vcs:
     track_directory_tip:
       en: Record every unrecorded change under the chosen directory as new versions
       zh-CN: 将所选目录下所有未记录的修改记录为新版本
+    track_tree_tip:
+      en: Record the tree's unrecorded changes as one new version
+      zh-CN: 将这棵树中未记录的修改记录为一个新版本
     track_diverged:
       en: some chosen changes have parted from the Vault's chain and will be confirmed first
       zh-CN: 选中的部分修改已与保险库的链分叉，追踪前会再次确认

@@ -28,5 +28,11 @@ int main(void) {
     want(strcmp(not_a_structure, "null") == 0, "bytes that are not a structure read as null");
     free_string(not_a_structure);
 
+    /* A directory no Workspace holds has no tree to read, and the answer is the JSON that says so. */
+    char *no_workspace = rola_tree_status_json("/nonexistent/rola/tree");
+    want(no_workspace != NULL, "a tree status answer comes back as text");
+    want(strcmp(no_workspace, "null") == 0, "a directory outside a Workspace reads as null");
+    free_string(no_workspace);
+
     return finish();
 }

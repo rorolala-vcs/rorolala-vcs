@@ -37,8 +37,12 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
 
         // What a tree is marked with: its own hue, read from the id it keeps in its mark. The File System
         // plugin lays the mark on the tree's row and everything under it, and this plugin is where the rule
-        // belongs, since what a tree is is Rorolala's to say.
-        EntryColourProviders.Register(new RolaTreeColours());
+        // belongs, since what a tree is is Rorolala's to say. The park on its folder icon is the same answer,
+        // read from the same id.
+        var treeColours = new RolaTreeColours();
+
+        EntryColourProviders.Register(treeColours);
+        EntryMarkProviders.Register(new RolaTreeIcon(treeColours));
 
         // What a state is coloured is this plugin's answer rather than the theme's, so the four colours are its
         // own settings: declaring them is what puts them in the preference panel, and what draws them reads

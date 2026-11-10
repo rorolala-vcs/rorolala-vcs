@@ -76,6 +76,13 @@ internal sealed class DirectoryDock : IDockView, IDockOpened, IDockTitle
             return;
         }
 
+        if (request.Select)
+        {
+            _view.RevealSelected(at);
+
+            return;
+        }
+
         if (again)
         {
             _view.Reveal(at);
@@ -596,6 +603,48 @@ internal sealed class DirectoryControl : UserControl
             _revealing = null;
             Refused(full);
         }
+    }
+
+    /// <summary>
+    /// Shows a directory as the row to choose, with the directory holding it open.
+    /// </summary>
+    /// <remarks>
+    /// A directory is normally a place a showing enters, which is what a reader asking for a folder means
+    /// there. A caller that is sending the reader to the directory itself, a tree whose version is being
+    /// read, needs the parent open and the directory chosen; what is shown is still one step of the dock's
+    /// own work rather than a new place of its own.
+    /// </remarks>
+    /// <param name="at">The directory to choose.</param>
+    public void RevealSelected(string at)
+    {
+        if (LogicalAddress.TryRead(at, out _))
+        {
+            Reveal(at);
+
+            return;
+        }
+
+        var full = Path.GetFullPath(Browser.Expand(at));
+
+        if (System.IO.Directory.Exists(full))
+        {
+            var holding = Path.GetDirectoryName(full);
+
+            if (holding is { Length: > 0 } && System.IO.Directory.Exists(holding))
+            {
+                _revealing = full;
+
+                if (!Location.Go(holding))
+                {
+                    _revealing = null;
+                    Refused(full);
+                }
+
+                return;
+            }
+        }
+
+        Reveal(at);
     }
 
     /// <summary>
@@ -1304,7 +1353,7 @@ internal sealed class DirectoryControl : UserControl
     }
 
     /// <summary>
-    /// Chooses the file this dock was last told to show, where this drawing is the one that has it.
+    /// Chooses the entry this dock was last told to show, where this drawing is the one that has it.
     /// </summary>
     /// <remarks>
     /// Read and let go of here rather than kept: a showing is one navigation and one choice, and a path left over would
@@ -1334,7 +1383,7 @@ internal sealed class DirectoryControl : UserControl
         // A path whose file is gone, or which a hide rule leaves out of the listing, is shown by its directory alone:
         // what the user asked for is where it is, and a dock that refused to move over a row it cannot draw would be
         // refusing the half of the showing it can do.
-        if (entry is not { Kind: EntryKind.File })
+        if (entry is not { Kind: EntryKind.File or EntryKind.Directory })
         {
             return false;
         }
@@ -1343,8 +1392,10 @@ internal sealed class DirectoryControl : UserControl
 
         // The one answer a view of a file's history follows: a row chosen from elsewhere is the file the program is
         // about in exactly the way a click is, and a second notion of "the file last went to" would be a second one
-        // to keep in step.
+        // to keep in step. A directory is that answer as well where it is a tree, which is a versioned object of its
+        // own, and the directory's own choice is what carries it.
         ChosenEntry.Publish(entry);
+        ChosenDirectory.Publish(entry);
 
         return true;
     }
