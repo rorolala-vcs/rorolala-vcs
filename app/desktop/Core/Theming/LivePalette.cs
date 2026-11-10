@@ -44,5 +44,8 @@ internal sealed class LivePalette : IPalette
     public Color Accent => _inForce().Accent;
 
     /// <inheritdoc />
+    public SemanticPalette Semantic => _inForce().Semantic;
+
+    /// <inheritdoc />
     public Color PrimaryText => RorolalaTheme.InkOn(_inForce().Primary);
 }

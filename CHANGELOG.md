@@ -35,9 +35,10 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 9. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing. [See details](dev/CHANGELOG-DETAILS.md#9-app-rorolaladesktop-plugins-rorolala-vcs-columns-show-a-trees-status-and-staging-in-a-directory-listing)
 10. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph. [See details](dev/CHANGELOG-DETAILS.md#10-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-follow-a-rola-trees-history-in-the-version-graph)
 11. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background. [See details](dev/CHANGELOG-DETAILS.md#11-app-rorolaladesktop-preview-generate-file-previews-in-the-background)
-12. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash. [See details](dev/CHANGELOG-DETAILS.md#12-app-rorolaladesktophost-report-a-desktop-run-that-ends-with-a-crash)
-13. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#13-librorolala-tree-read-a-tree-structures-entries-as-json-across-the-c-abi)
-14. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge. [See details](dev/CHANGELOG-DETAILS.md#14-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
+12. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette. [See details](dev/CHANGELOG-DETAILS.md#12-app-rorolaladesktop-theme-state-the-programs-colours-in-one-semantic-palette)
+13. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash. [See details](dev/CHANGELOG-DETAILS.md#13-app-rorolaladesktophost-report-a-desktop-run-that-ends-with-a-crash)
+14. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#14-librorolala-tree-read-a-tree-structures-entries-as-json-across-the-c-abi)
+15. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge. [See details](dev/CHANGELOG-DETAILS.md#15-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
 
 ## Refactor
 

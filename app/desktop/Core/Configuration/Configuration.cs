@@ -25,8 +25,8 @@ internal enum ColorMode
 /// The look itself is not one of them. It is the program's own, rectangles, one-pixel edges, hover in
 /// the variant's ink and the two colours spent on what is selected and what asks for attention, and it
 /// is what makes the program look like one thing rather than like whatever it was assembled out of. What
-/// is left to choose is the variant it is drawn in, the two colours it is drawn with, and the ten
-/// grounds the two variants are made of.
+/// is left to choose is the variant it is drawn in, the two colours it is drawn with, the ten
+/// grounds the two variants are made of, and the twelve semantic states the program says.
 /// <para>
 /// Every field is optional, and a field that is not there is the default: the file holds only what the
 /// user chose, so taking a choice back is removing it rather than writing the default down.
@@ -39,10 +39,10 @@ internal enum ColorMode
 /// beside them.
 /// </para>
 /// <para>
-/// The ten grounds are stated twice over, once per variant, because that is what they are: a surface is
-/// not the same colour on the light ground and the dark one, and one entry per role shared between the
-/// two would be one of the two variants drawn wrong. The two colours that do not follow the window,
-/// the primary and the accent, are stated once.
+/// The ten grounds and the twelve semantic states are stated twice over, once per variant, because that
+/// is what they are: a surface is not the same colour on the light ground and the dark one, and one entry
+/// per role shared between the two would be one of the two variants drawn wrong. The two colours that do
+/// not follow the window, the primary and the accent, are stated once.
 /// </para>
 /// </remarks>
 internal sealed class ThemeConfiguration
@@ -101,6 +101,34 @@ internal sealed class ThemeConfiguration
     /// <summary>The identity the accent is kept under.</summary>
     public const string AccentKey = "Theme/Accent";
 
+    /// <summary>The identities the dark variant's semantic colours are kept under.</summary>
+    public const string DarkDisabledKey = "Theme/Dark/Disabled";
+    public const string DarkModifyKey = "Theme/Dark/Modify";
+    public const string DarkWarningKey = "Theme/Dark/Warning";
+    public const string DarkErrorKey = "Theme/Dark/Error";
+    public const string DarkFailKey = "Theme/Dark/Fail";
+    public const string DarkSuccessKey = "Theme/Dark/Success";
+    public const string DarkAllowKey = "Theme/Dark/Allow";
+    public const string DarkDisallowKey = "Theme/Dark/Disallow";
+    public const string DarkForceKey = "Theme/Dark/Force";
+    public const string DarkStatusAlphaKey = "Theme/Dark/StatusAlpha";
+    public const string DarkStatusBetaKey = "Theme/Dark/StatusBeta";
+    public const string DarkStatusDeltaKey = "Theme/Dark/StatusDelta";
+
+    /// <summary>The identities the light variant's semantic colours are kept under.</summary>
+    public const string LightDisabledKey = "Theme/Light/Disabled";
+    public const string LightModifyKey = "Theme/Light/Modify";
+    public const string LightWarningKey = "Theme/Light/Warning";
+    public const string LightErrorKey = "Theme/Light/Error";
+    public const string LightFailKey = "Theme/Light/Fail";
+    public const string LightSuccessKey = "Theme/Light/Success";
+    public const string LightAllowKey = "Theme/Light/Allow";
+    public const string LightDisallowKey = "Theme/Light/Disallow";
+    public const string LightForceKey = "Theme/Light/Force";
+    public const string LightStatusAlphaKey = "Theme/Light/StatusAlpha";
+    public const string LightStatusBetaKey = "Theme/Light/StatusBeta";
+    public const string LightStatusDeltaKey = "Theme/Light/StatusDelta";
+
     /// <summary>The variant the program is drawn in, or nothing when the file names none.</summary>
     public ColorMode? Mode { get; set; }
 
@@ -145,6 +173,34 @@ internal sealed class ThemeConfiguration
     /// <summary>The light variant's line, or nothing to use the default.</summary>
     public Color? ThemeLightSplitter { get; set; }
 
+    /// <summary>The dark variant's semantic colours, or nothing to use the defaults.</summary>
+    public Color? ThemeDarkDisabled { get; set; }
+    public Color? ThemeDarkModify { get; set; }
+    public Color? ThemeDarkWarning { get; set; }
+    public Color? ThemeDarkError { get; set; }
+    public Color? ThemeDarkFail { get; set; }
+    public Color? ThemeDarkSuccess { get; set; }
+    public Color? ThemeDarkAllow { get; set; }
+    public Color? ThemeDarkDisallow { get; set; }
+    public Color? ThemeDarkForce { get; set; }
+    public Color? ThemeDarkStatusAlpha { get; set; }
+    public Color? ThemeDarkStatusBeta { get; set; }
+    public Color? ThemeDarkStatusDelta { get; set; }
+
+    /// <summary>The light variant's semantic colours, or nothing to use the defaults.</summary>
+    public Color? ThemeLightDisabled { get; set; }
+    public Color? ThemeLightModify { get; set; }
+    public Color? ThemeLightWarning { get; set; }
+    public Color? ThemeLightError { get; set; }
+    public Color? ThemeLightFail { get; set; }
+    public Color? ThemeLightSuccess { get; set; }
+    public Color? ThemeLightAllow { get; set; }
+    public Color? ThemeLightDisallow { get; set; }
+    public Color? ThemeLightForce { get; set; }
+    public Color? ThemeLightStatusAlpha { get; set; }
+    public Color? ThemeLightStatusBeta { get; set; }
+    public Color? ThemeLightStatusDelta { get; set; }
+
     /// <summary>The variant in force, which is the default when the file names none.</summary>
     public ColorMode ModeOrDefault => Mode ?? DefaultMode;
 
@@ -153,6 +209,56 @@ internal sealed class ThemeConfiguration
 
     /// <summary>The accent in force, which is the default when the file names none.</summary>
     public Color AccentOrDefault => Accent ?? ThemePalette.DefaultAccent;
+
+    /// <summary>The dark variant's semantic colours, with every default filled in.</summary>
+    private SemanticPalette DarkSemantic
+    {
+        get
+        {
+            var fallback = ThemePalette.DefaultDark.Semantic;
+
+            return new SemanticPalette
+            {
+                Disabled = ThemeDarkDisabled ?? fallback.Disabled,
+                Modify = ThemeDarkModify ?? fallback.Modify,
+                Warning = ThemeDarkWarning ?? fallback.Warning,
+                Error = ThemeDarkError ?? fallback.Error,
+                Fail = ThemeDarkFail ?? fallback.Fail,
+                Success = ThemeDarkSuccess ?? fallback.Success,
+                Allow = ThemeDarkAllow ?? fallback.Allow,
+                Disallow = ThemeDarkDisallow ?? fallback.Disallow,
+                Force = ThemeDarkForce ?? fallback.Force,
+                StatusAlpha = ThemeDarkStatusAlpha ?? fallback.StatusAlpha,
+                StatusBeta = ThemeDarkStatusBeta ?? fallback.StatusBeta,
+                StatusDelta = ThemeDarkStatusDelta ?? fallback.StatusDelta,
+            };
+        }
+    }
+
+    /// <summary>The light variant's semantic colours, with every default filled in.</summary>
+    private SemanticPalette LightSemantic
+    {
+        get
+        {
+            var fallback = ThemePalette.DefaultLight.Semantic;
+
+            return new SemanticPalette
+            {
+                Disabled = ThemeLightDisabled ?? fallback.Disabled,
+                Modify = ThemeLightModify ?? fallback.Modify,
+                Warning = ThemeLightWarning ?? fallback.Warning,
+                Error = ThemeLightError ?? fallback.Error,
+                Fail = ThemeLightFail ?? fallback.Fail,
+                Success = ThemeLightSuccess ?? fallback.Success,
+                Allow = ThemeLightAllow ?? fallback.Allow,
+                Disallow = ThemeLightDisallow ?? fallback.Disallow,
+                Force = ThemeLightForce ?? fallback.Force,
+                StatusAlpha = ThemeLightStatusAlpha ?? fallback.StatusAlpha,
+                StatusBeta = ThemeLightStatusBeta ?? fallback.StatusBeta,
+                StatusDelta = ThemeLightStatusDelta ?? fallback.StatusDelta,
+            };
+        }
+    }
 
     /// <summary>
     /// What is written on a surface filled with the primary, or nothing to work one out by contrast.
@@ -170,7 +276,7 @@ internal sealed class ThemeConfiguration
     /// The two variants and the two colours the look is built from, with every default filled in.
     /// </summary>
     /// <remarks>
-    /// It is worked out as it is read rather than kept, because it is a reading of the twelve fields and
+    /// It is worked out as it is read rather than kept, because it is a reading of the fields and
     /// nothing else: a copy would be a second statement of them that could disagree with them.
     /// </remarks>
     public ThemePalette Theme =>
@@ -183,6 +289,7 @@ internal sealed class ThemeConfiguration
             Dark = ThemeDarkDark ?? ThemePalette.DefaultDark.Dark,
             Front = ThemeDarkFront ?? ThemePalette.DefaultDark.Front,
             Splitter = ThemeDarkSplitter ?? ThemePalette.DefaultDark.Splitter,
+            Semantic = DarkSemantic,
         };
 
     /// <summary>
@@ -203,6 +310,7 @@ internal sealed class ThemeConfiguration
             Dark = ThemeLightDark ?? ThemePalette.DefaultLight.Dark,
             Front = ThemeLightFront ?? ThemePalette.DefaultLight.Front,
             Splitter = ThemeLightSplitter ?? ThemePalette.DefaultLight.Splitter,
+            Semantic = LightSemantic,
         };
 
     /// <summary>

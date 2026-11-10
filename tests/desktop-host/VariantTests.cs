@@ -65,7 +65,7 @@ public sealed class VariantTests
         Assert.Equal(string.Empty, VariantFiles.Head(string.Empty));
     }
 
-    /// <summary>A variant file's tile wears the merge badge, in the amber of work under way.</summary>
+    /// <summary>A variant file's tile wears the merge badge, in the semantic warning colour.</summary>
     /// <remarks>
     /// The badge is a picture rather than a word, so what it is drawn as is the icon library's to hold and
     /// what it means is on it: which variant is waiting, which is the one thing about the file that no path
@@ -79,7 +79,7 @@ public sealed class VariantTests
         var mark = RorolalaMergeBadge.Say(Held("art/hero.1a2b3c.txt"));
 
         Assert.Equal(VcsIcons.Merge, mark.IconKey);
-        Assert.Equal(MarkInk.Warn, mark.Ink);
+        Assert.Equal(RorolalaColours.Warning, mark.Colour);
 
         // Worn on the badge's own ground, as every mark of a tile is: a bar picture beside a badge would be
         // two kinds of mark about one file.

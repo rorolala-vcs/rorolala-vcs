@@ -126,15 +126,19 @@ A tree's unrecorded work is drawn as a draft above its chain, including changes 
 
 A file browser's grid now shows a file's own preview where one can be made, and keeps the type icon where one cannot. The host asks its system source first and the plugins' renderers after it, keeps answers by path, write time and size, cancels a tile's request when the tile leaves the window, and reports a batch on the progress stack. Windows uses the Shell thumbnailer on a dedicated STA thread; Linux reads thumbnails the desktop has already cached.
 
-### 12. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
+### 12. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette
+
+The look now publishes the colours the program says a state is: disabled, modify, warning, error, fail, success, allow, disallow, force and three status colours, each stated apart for the light and dark variants. Each is a field in `theme.json` and a row in the look's preferences, so the light and dark answers are chosen rather than copied into a plugin. The Rorolala VCS plugin's own four colour settings are gone, and its states read the look's set instead: new work is success, a change is modify, a wrong change is fail, a move is the first status colour, a suspected move is the second, a merge is the third, a lock this account holds is allow and one another holds is disallow, and a forced run is force. The same answers reach the list dots, tile badges, the Overview's fills, the merge badge and the standing arrows. A settled colour also asks the open listings and tree to draw their marks again, since a badge is built from a colour value rather than a resource and would otherwise keep the colour it was made with.
+
+### 13. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
 
 `rola desktop` now starts a host beside the Desktop rather than the Desktop itself. The host forwards the line that says the window is up, keeps the Desktop's error stream, and when the run ends with a non-zero code writes the report to a log and opens a window that shows it. A Desktop run that throws also writes the exception's stack to that stream, so the stack survives the window that wrote it. A start that found the Desktop already running, exit code 174, is passed through without a report.
 
-### 13. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
+### 14. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
 
 `rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. A caller that cannot decode the structure format hands the bytes over instead of keeping a second copy of it, and text that is not hex or bytes that are not a structure answer as `null`, so an answer is always JSON. The string is freed with `free_string`.
 
-### 14. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+### 15. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
 
 The new `rorolala-tree` crate holds what a tree is: a canonical structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path. Content moves into the Workspace's store with `publish_from`, which carries manifests and their chunks without rewriting what is already there.
 

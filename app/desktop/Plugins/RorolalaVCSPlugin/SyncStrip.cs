@@ -39,7 +39,7 @@ internal sealed class SyncStrip : StackPanel
     private const string Rule = PaletteKeys.Splitter;
 
     /// <summary>What the three are drawn in while the key that changes what a run does is held.</summary>
-    private const string Held = PaletteKeys.Del;
+    private const string Held = PaletteKeys.Force;
 
     /// <summary>
     /// How wide and tall a mark is, and how much room a button keeps around it.

@@ -65,9 +65,9 @@ internal static class ReportView
             ? colour
             : colour.ToLowerInvariant() switch
             {
-                "red" => PaletteKeys.Del,
-                "yellow" => PaletteKeys.Warn,
-                "green" => PaletteKeys.Add,
+                "red" => PaletteKeys.Error,
+                "yellow" => PaletteKeys.Warning,
+                "green" => PaletteKeys.Success,
                 _ => null,
             };
 
@@ -98,8 +98,8 @@ internal static class ReportView
         var (key, inkKey, groundKey) = block.Kind switch
         {
             ReportKind.Error => (Icons.Error, PaletteKeys.Front, (string?)null),
-            ReportKind.Warning => (Icons.Warning, PaletteKeys.Warn, PaletteKeys.WarnBackground),
-            _ => (Icons.LiveHelp, PaletteKeys.Add, PaletteKeys.AddBackground),
+            ReportKind.Warning => (Icons.Warning, PaletteKeys.Warning, PaletteKeys.WarnBackground),
+            _ => (Icons.LiveHelp, PaletteKeys.Success, PaletteKeys.AddBackground),
         };
 
         // A code span inside a help box belongs to the box rather than to the program's primary: the green is

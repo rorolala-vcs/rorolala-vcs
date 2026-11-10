@@ -50,6 +50,9 @@ public interface IPalette
     /// <summary>The second colour, spent on what must not read as a choice.</summary>
     Color Accent { get; }
 
+    /// <summary>The states the program draws, as one set for the look in force.</summary>
+    SemanticPalette Semantic { get; }
+
     /// <summary>What is written on <see cref="Primary"/>.</summary>
     Color PrimaryText { get; }
 }

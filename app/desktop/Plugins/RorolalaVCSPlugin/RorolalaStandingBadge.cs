@@ -111,7 +111,7 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
             // Ahead of what the Vault was told of: this side holds work the other has not been given.
             StandingRelation.Ahead => new EntryMark(
                 IconKey: Upload,
-                Ink: MarkInk.Add,
+                Colour: RorolalaColours.Success,
                 Tagged: true,
                 Text: RorolalaStanding.Said(standing)
             ),
@@ -120,7 +120,7 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
             // that would count the versions between is here.
             StandingRelation.Behind => new EntryMark(
                 IconKey: Download,
-                Ink: MarkInk.Error,
+                Colour: RorolalaColours.Fail,
                 Tagged: true,
                 Text: RorolalaStanding.Said(standing)
             ),
@@ -128,7 +128,7 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
             // Both moved on: neither is based on the other, so there is no side the work could move to.
             StandingRelation.Apart => new EntryMark(
                 IconKey: Split,
-                Ink: MarkInk.Error,
+                Colour: RorolalaColours.Fail,
                 Tagged: true,
                 Text: RorolalaStanding.Said(standing)
             ),

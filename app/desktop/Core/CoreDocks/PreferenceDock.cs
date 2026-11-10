@@ -274,7 +274,7 @@ internal sealed class PreferenceView : UserControl
         return rows;
     }
 
-    /// <summary>One variant's five grounds, each as a row that goes back to its default.</summary>
+    /// <summary>One variant's five grounds and twelve semantic colours, each as a row that goes back to its default.</summary>
     /// <param name="theme">What the user chose, edited in place.</param>
     /// <param name="light">Which of the two variants these are.</param>
     private Control Grounds(ThemeConfiguration theme, bool light)
@@ -294,6 +294,8 @@ internal sealed class PreferenceView : UserControl
             rows.Children.Add(ColourRow($"{prefix}.front", theme.ThemeLightFront ?? ThemePalette.DefaultLight.Front, chosen => theme.ThemeLightFront = chosen));
             rows.Children.Add(ColourRow($"{prefix}.splitter", theme.ThemeLightSplitter ?? ThemePalette.DefaultLight.Splitter, chosen => theme.ThemeLightSplitter = chosen));
 
+            AddSemanticRows(rows, theme, light: true);
+
             return rows;
         }
 
@@ -303,7 +305,50 @@ internal sealed class PreferenceView : UserControl
         rows.Children.Add(ColourRow($"{prefix}.front", theme.ThemeDarkFront ?? ThemePalette.DefaultDark.Front, chosen => theme.ThemeDarkFront = chosen));
         rows.Children.Add(ColourRow($"{prefix}.splitter", theme.ThemeDarkSplitter ?? ThemePalette.DefaultDark.Splitter, chosen => theme.ThemeDarkSplitter = chosen));
 
+        AddSemanticRows(rows, theme, light: false);
+
         return rows;
+    }
+
+    /// <summary>Adds the twelve semantic colours of one variant to its rows.</summary>
+    /// <param name="rows">The rows to add to.</param>
+    /// <param name="theme">What the user chose, edited in place.</param>
+    /// <param name="light">Which of the two variants these are.</param>
+    private void AddSemanticRows(StackPanel rows, ThemeConfiguration theme, bool light)
+    {
+        var fallback = light ? ThemePalette.DefaultLight.Semantic : ThemePalette.DefaultDark.Semantic;
+        var prefix = "core.setting.semantic";
+
+        if (light)
+        {
+            rows.Children.Add(ColourRow($"{prefix}.disabled", theme.ThemeLightDisabled ?? fallback.Disabled, chosen => theme.ThemeLightDisabled = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.modify", theme.ThemeLightModify ?? fallback.Modify, chosen => theme.ThemeLightModify = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.warning", theme.ThemeLightWarning ?? fallback.Warning, chosen => theme.ThemeLightWarning = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.error", theme.ThemeLightError ?? fallback.Error, chosen => theme.ThemeLightError = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.fail", theme.ThemeLightFail ?? fallback.Fail, chosen => theme.ThemeLightFail = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.success", theme.ThemeLightSuccess ?? fallback.Success, chosen => theme.ThemeLightSuccess = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.allow", theme.ThemeLightAllow ?? fallback.Allow, chosen => theme.ThemeLightAllow = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.disallow", theme.ThemeLightDisallow ?? fallback.Disallow, chosen => theme.ThemeLightDisallow = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.force", theme.ThemeLightForce ?? fallback.Force, chosen => theme.ThemeLightForce = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.status_alpha", theme.ThemeLightStatusAlpha ?? fallback.StatusAlpha, chosen => theme.ThemeLightStatusAlpha = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.status_beta", theme.ThemeLightStatusBeta ?? fallback.StatusBeta, chosen => theme.ThemeLightStatusBeta = chosen));
+            rows.Children.Add(ColourRow($"{prefix}.status_delta", theme.ThemeLightStatusDelta ?? fallback.StatusDelta, chosen => theme.ThemeLightStatusDelta = chosen));
+
+            return;
+        }
+
+        rows.Children.Add(ColourRow($"{prefix}.disabled", theme.ThemeDarkDisabled ?? fallback.Disabled, chosen => theme.ThemeDarkDisabled = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.modify", theme.ThemeDarkModify ?? fallback.Modify, chosen => theme.ThemeDarkModify = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.warning", theme.ThemeDarkWarning ?? fallback.Warning, chosen => theme.ThemeDarkWarning = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.error", theme.ThemeDarkError ?? fallback.Error, chosen => theme.ThemeDarkError = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.fail", theme.ThemeDarkFail ?? fallback.Fail, chosen => theme.ThemeDarkFail = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.success", theme.ThemeDarkSuccess ?? fallback.Success, chosen => theme.ThemeDarkSuccess = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.allow", theme.ThemeDarkAllow ?? fallback.Allow, chosen => theme.ThemeDarkAllow = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.disallow", theme.ThemeDarkDisallow ?? fallback.Disallow, chosen => theme.ThemeDarkDisallow = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.force", theme.ThemeDarkForce ?? fallback.Force, chosen => theme.ThemeDarkForce = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.status_alpha", theme.ThemeDarkStatusAlpha ?? fallback.StatusAlpha, chosen => theme.ThemeDarkStatusAlpha = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.status_beta", theme.ThemeDarkStatusBeta ?? fallback.StatusBeta, chosen => theme.ThemeDarkStatusBeta = chosen));
+        rows.Children.Add(ColourRow($"{prefix}.status_delta", theme.ThemeDarkStatusDelta ?? fallback.StatusDelta, chosen => theme.ThemeDarkStatusDelta = chosen));
     }
 
     /// <summary>

@@ -114,6 +114,46 @@ core:
     splitter:
       en: Line
       zh-CN: 分隔线
+
+    # What the twelve semantic colours are called. They are the look roles a plugin reads rather than
+    # ones a surface is named by, so they are named by the state they stand for.
+    semantic:
+      disabled:
+        en: Disabled
+        zh-CN: 禁用
+      modify:
+        en: Modify
+        zh-CN: 修改
+      warning:
+        en: Warning
+        zh-CN: 警告
+      error:
+        en: Error
+        zh-CN: 错误
+      fail:
+        en: Fail
+        zh-CN: 失败
+      success:
+        en: Success
+        zh-CN: 成功
+      allow:
+        en: Allow
+        zh-CN: 允许
+      disallow:
+        en: Disallow
+        zh-CN: 禁止
+      force:
+        en: Force
+        zh-CN: 强制
+      status_alpha:
+        en: Status Alpha
+        zh-CN: 状态甲
+      status_beta:
+        en: Status Beta
+        zh-CN: 状态乙
+      status_delta:
+        en: Status Delta
+        zh-CN: 状态丙
     mode:
       en: Appearance
       zh-CN: 明暗模式

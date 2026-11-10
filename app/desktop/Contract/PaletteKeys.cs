@@ -94,4 +94,43 @@ public static class PaletteKeys
 
     /// <inheritdoc cref="Warn" />
     public const string WarnBackground = "rorolala.warn.bg";
+
+    /// <summary>The core semantic states, one name for each answer the program gives.</summary>
+    public const string Disabled = "rorolala.semantic.disabled";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string Modify = "rorolala.semantic.modify";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string Warning = "rorolala.semantic.warning";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string Error = "rorolala.semantic.error";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string Fail = "rorolala.semantic.fail";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string Success = "rorolala.semantic.success";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string Allow = "rorolala.semantic.allow";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string Disallow = "rorolala.semantic.disallow";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string Force = "rorolala.semantic.force";
+
+    /// <summary>The force colour laid thin, for the surface a forced action is drawn on.</summary>
+    public const string ForceWash = "rorolala.semantic.force.wash";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string StatusAlpha = "rorolala.semantic.status.alpha";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string StatusBeta = "rorolala.semantic.status.beta";
+
+    /// <inheritdoc cref="Disabled" />
+    public const string StatusDelta = "rorolala.semantic.status.delta";
 }

@@ -8,7 +8,8 @@ namespace RorolalaDesktop.Contract;
 /// <remarks>
 /// Two sets of five, and two more that are one each: the face of a surface, the ground it stands on,
 /// the hollow it sits in, the ink on it and the line that tells it from what is beside it, once for
-/// each variant; and the primary and the accent, which do not follow the window. It is what
+/// each variant; and the primary and the accent, which do not follow the window. The semantic states are
+/// one set per variant too, because what a state is coloured is not a preference. It is what
 /// <c>theme.json</c> states, with the defaults filled in.
 /// <para>
 /// It is a value rather than a live reader on purpose: what a caller holds is the colours a look was
@@ -67,6 +68,7 @@ public readonly record struct ThemePalette
             Splitter = Color.FromRgb(0xC9, 0xCC, 0xD3),
             Primary = DefaultPrimary,
             Accent = DefaultAccent,
+            Semantic = SemanticPalette.Light,
         };
 
     /// <summary>What the dark variant is drawn in when nothing states otherwise.</summary>
@@ -80,6 +82,7 @@ public readonly record struct ThemePalette
             Splitter = Color.FromRgb(0x34, 0x36, 0x3E),
             Primary = DefaultPrimary,
             Accent = DefaultAccent,
+            Semantic = SemanticPalette.Dark,
         };
 
     /// <summary>The face a card is: what a surface that stands out from the ground is filled with.</summary>
@@ -102,6 +105,9 @@ public readonly record struct ThemePalette
 
     /// <summary>The drag marks, which are one colour for the same reason.</summary>
     public required Color Accent { get; init; }
+
+    /// <summary>The states the program draws, as the look's own words for them.</summary>
+    public required SemanticPalette Semantic { get; init; }
 
     /// <summary>This palette with the two configured colours replaced, or kept where nothing is given.</summary>
     /// <param name="primary">The primary to use, or nothing to keep this one.</param>

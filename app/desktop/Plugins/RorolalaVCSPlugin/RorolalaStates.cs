@@ -290,8 +290,8 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// What a state is drawn as: a dot in its colour, and the word for it said on the dot.
     /// </summary>
     /// <remarks>
-    /// The colour is this plugin's own, see <see cref="RorolalaColours"/>, and the line around the mark is a
-    /// shade of it chosen by the ground, since a mark that is its own edge on one ground is a smudge on the
+    /// The colour is the look's semantic state, see <see cref="RorolalaColours"/>, and the line around the mark
+    /// is a shade of it chosen by the ground, since a mark that is its own edge on one ground is a smudge on the
     /// other. The words are handed in rather than worked out here, because what a state means is the reading's
     /// to say and what it is drawn as is this mark's: one function answers a colour, the other a sentence.
     /// </remarks>
@@ -305,8 +305,8 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
             PathState.Modified => Dot(RorolalaColours.UnderWay, words),
             PathState.Wrong => Dot(RorolalaColours.Wrong, words),
             PathState.Renamed => Dot(RorolalaColours.Moved, words),
-            PathState.RenamedLikely => Dot(RorolalaColours.Moved, words),
-            PathState.Merging => Dot(RorolalaColours.UnderWay, words),
+            PathState.RenamedLikely => Dot(RorolalaColours.StatusBeta, words),
+            PathState.Merging => Dot(RorolalaColours.StatusDelta, words),
             _ => new EntryColumnMark(),
         };
 
@@ -330,8 +330,8 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
             PathState.Modified => Worn(Icons.EditNote, RorolalaColours.UnderWay, words),
             PathState.Wrong => Worn(Icons.PriorityHigh, RorolalaColours.Wrong, words),
             PathState.Renamed => Worn(Icons.ArrowRightAlt, RorolalaColours.Moved, words),
-            PathState.RenamedLikely => Worn(Icons.ArrowRightAlt, RorolalaColours.Moved, words),
-            PathState.Merging => Worn(Icons.EditNote, RorolalaColours.UnderWay, words),
+            PathState.RenamedLikely => Worn(Icons.ArrowRightAlt, RorolalaColours.StatusBeta, words),
+            PathState.Merging => Worn(Icons.EditNote, RorolalaColours.StatusDelta, words),
             _ => new EntryMark(),
         };
 

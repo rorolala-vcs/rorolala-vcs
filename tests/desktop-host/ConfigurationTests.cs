@@ -3,6 +3,7 @@ using FileSystemPlugin;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
+using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -65,9 +66,60 @@ public sealed class ConfigurationTests
         Assert.Contains("\"Theme/Light/Front\": \"#1B1C1F\"", written, StringComparison.Ordinal);
         Assert.Contains("\"Theme/Light/Splitter\": \"#C9CCD3\"", written, StringComparison.Ordinal);
 
+        // The semantic states are stated per variant too, since a light and a dark one are not the same
+        // colour, and a file that names none is still drawn in the defaults.
+        Assert.Contains("\"Theme/Dark/Modify\": \"#FFC857\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Modify\": \"#B58600\"", written, StringComparison.Ordinal);
+        Assert.Equal(ThemePalette.DefaultDark.Semantic.Modify, theme.Theme.Semantic.Modify);
+        Assert.Equal(ThemePalette.DefaultLight.Semantic.Modify, theme.LightTheme.Semantic.Modify);
+
         // And no ink: what is written on the primary is worked out from it, so a file that names none is a file
         // that is drawn correctly rather than one that is missing something.
         Assert.DoesNotContain("primaryText", written, StringComparison.Ordinal);
+    }
+
+    /// <summary>A semantic colour is read back as the role it names, in the variant it names.</summary>
+    /// <remarks>
+    /// The semantic set is stated per variant like the grounds, so a file that names one is a file the
+    /// preference panel can edit and the look takes, rather than a second table hidden in the program.
+    /// </remarks>
+    [Fact]
+    public void ASemanticColourIsReadBackAsItsRole()
+    {
+        Given(
+            ConfigPaths.Theme,
+            """
+            {"_version": 1, "Theme/Dark/Modify": "#010203", "Theme/Light/Allow": "#040506"}
+            """
+        );
+
+        var theme = ConfigurationLoader.LoadTheme();
+
+        Assert.Equal(Color.Parse("#010203"), theme.ThemeDarkModify);
+        Assert.Equal(Color.Parse("#040506"), theme.ThemeLightAllow);
+        Assert.Equal(Color.Parse("#010203"), theme.Theme.Semantic.Modify);
+        Assert.Equal(Color.Parse("#040506"), theme.LightTheme.Semantic.Allow);
+
+        ConfigurationLoader.WriteTheme(theme);
+
+        var written = File.ReadAllText(ConfigPaths.Theme);
+        Assert.Contains("\"Theme/Dark/Modify\": \"#010203\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Allow\": \"#040506\"", written, StringComparison.Ordinal);
+    }
+
+    /// <summary>Saving the look announces it once, after the write, so marks built from a colour can be drawn again.</summary>
+    [Fact]
+    public void SavingTheLookAnnouncesItOnce()
+    {
+        var theme = ConfigurationLoader.LoadTheme();
+        var (service, _) = ThemeService.Make(null, theme);
+        var raised = 0;
+
+        service.Settled += (_, _) => raised++;
+
+        service.Save();
+
+        Assert.Equal(1, raised);
     }
 
     /// <summary>

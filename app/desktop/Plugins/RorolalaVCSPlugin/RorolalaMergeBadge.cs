@@ -83,7 +83,7 @@ internal sealed class RorolalaMergeBadge : IEntryMarkProvider
 
         return new EntryMark(
             IconKey: Join,
-            Ink: MarkInk.Warn,
+            Colour: RorolalaColours.Warning,
             Tagged: true,
             Text: RolaI18N.Get("rorolala_vcs.variant.pending", VariantFiles.Head(merge.Variant))
         );

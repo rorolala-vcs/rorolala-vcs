@@ -317,11 +317,11 @@ internal sealed class OverviewView : UserControl
         new(OperationsColumn, GridUnitType.Pixel),
     ];
 
-    /// <summary>The colour a mark of one kind is filled with, which is this plugin's own.</summary>
+    /// <summary>The colour a mark of one kind is filled with, which is the look's semantic state.</summary>
     /// <remarks>
     /// Four colours and nothing else: what is not recorded yet, what is under way, what must not be recorded,
-    /// and what is somewhere else than the Layout says. They are named here rather than read from the look,
-    /// because what a state is coloured is the state, see <see cref="RorolalaColours"/>.
+    /// and what is somewhere else than the Layout says. They are read from the look's semantic set rather than
+    /// kept here, because what a state is coloured is the state, see <see cref="RorolalaColours"/>.
     /// </remarks>
     private static Color WrongFill => RorolalaColours.Wrong;
 
@@ -333,6 +333,9 @@ internal sealed class OverviewView : UserControl
 
     /// <summary>What is not settled: what is under way, and what has to be read twice.</summary>
     private static Color UnsettledFill => RorolalaColours.UnderWay;
+
+    /// <summary>What is waiting for a variant to be joined into it.</summary>
+    private static Color MergeFill => RorolalaColours.StatusDelta;
 
     /// <summary>The theme resource for what has nothing to say about itself, which a note is read in.</summary>
     /// <remarks>
@@ -1094,7 +1097,7 @@ internal sealed class OverviewView : UserControl
         new(
             State.Merging,
             "J",
-            UnsettledFill,
+            MergeFill,
             RolaI18N.Get("rorolala_vcs.variant.pending", VariantFiles.Head(variant))
         );
 
@@ -1422,6 +1425,7 @@ internal sealed class OverviewView : UserControl
         {
             BaseDirectory.Changed += Touched;
             _files.Changed += Touched;
+            _files.Redrawn += Redraw;
             _refocus.Regained += Touched;
             _again.Start();
         }
@@ -1429,6 +1433,7 @@ internal sealed class OverviewView : UserControl
         {
             BaseDirectory.Changed -= Touched;
             _files.Changed -= Touched;
+            _files.Redrawn -= Redraw;
             _refocus.Regained -= Touched;
             _again.Stop();
         }

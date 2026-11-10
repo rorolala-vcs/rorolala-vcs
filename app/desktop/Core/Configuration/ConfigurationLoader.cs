@@ -105,6 +105,30 @@ internal static class ConfigurationLoader
                 ThemeLightDark = ThemePalette.DefaultLight.Dark,
                 ThemeLightFront = ThemePalette.DefaultLight.Front,
                 ThemeLightSplitter = ThemePalette.DefaultLight.Splitter,
+                ThemeDarkDisabled = ThemePalette.DefaultDark.Semantic.Disabled,
+                ThemeDarkModify = ThemePalette.DefaultDark.Semantic.Modify,
+                ThemeDarkWarning = ThemePalette.DefaultDark.Semantic.Warning,
+                ThemeDarkError = ThemePalette.DefaultDark.Semantic.Error,
+                ThemeDarkFail = ThemePalette.DefaultDark.Semantic.Fail,
+                ThemeDarkSuccess = ThemePalette.DefaultDark.Semantic.Success,
+                ThemeDarkAllow = ThemePalette.DefaultDark.Semantic.Allow,
+                ThemeDarkDisallow = ThemePalette.DefaultDark.Semantic.Disallow,
+                ThemeDarkForce = ThemePalette.DefaultDark.Semantic.Force,
+                ThemeDarkStatusAlpha = ThemePalette.DefaultDark.Semantic.StatusAlpha,
+                ThemeDarkStatusBeta = ThemePalette.DefaultDark.Semantic.StatusBeta,
+                ThemeDarkStatusDelta = ThemePalette.DefaultDark.Semantic.StatusDelta,
+                ThemeLightDisabled = ThemePalette.DefaultLight.Semantic.Disabled,
+                ThemeLightModify = ThemePalette.DefaultLight.Semantic.Modify,
+                ThemeLightWarning = ThemePalette.DefaultLight.Semantic.Warning,
+                ThemeLightError = ThemePalette.DefaultLight.Semantic.Error,
+                ThemeLightFail = ThemePalette.DefaultLight.Semantic.Fail,
+                ThemeLightSuccess = ThemePalette.DefaultLight.Semantic.Success,
+                ThemeLightAllow = ThemePalette.DefaultLight.Semantic.Allow,
+                ThemeLightDisallow = ThemePalette.DefaultLight.Semantic.Disallow,
+                ThemeLightForce = ThemePalette.DefaultLight.Semantic.Force,
+                ThemeLightStatusAlpha = ThemePalette.DefaultLight.Semantic.StatusAlpha,
+                ThemeLightStatusBeta = ThemePalette.DefaultLight.Semantic.StatusBeta,
+                ThemeLightStatusDelta = ThemePalette.DefaultLight.Semantic.StatusDelta,
             };
 
             WriteTheme(defaults);
@@ -217,6 +241,30 @@ internal static class ConfigurationLoader
             LightDark = Hex(config.ThemeLightDark),
             LightFront = Hex(config.ThemeLightFront),
             LightSplitter = Hex(config.ThemeLightSplitter),
+            DarkDisabled = Hex(config.ThemeDarkDisabled),
+            DarkModify = Hex(config.ThemeDarkModify),
+            DarkWarning = Hex(config.ThemeDarkWarning),
+            DarkError = Hex(config.ThemeDarkError),
+            DarkFail = Hex(config.ThemeDarkFail),
+            DarkSuccess = Hex(config.ThemeDarkSuccess),
+            DarkAllow = Hex(config.ThemeDarkAllow),
+            DarkDisallow = Hex(config.ThemeDarkDisallow),
+            DarkForce = Hex(config.ThemeDarkForce),
+            DarkStatusAlpha = Hex(config.ThemeDarkStatusAlpha),
+            DarkStatusBeta = Hex(config.ThemeDarkStatusBeta),
+            DarkStatusDelta = Hex(config.ThemeDarkStatusDelta),
+            LightDisabled = Hex(config.ThemeLightDisabled),
+            LightModify = Hex(config.ThemeLightModify),
+            LightWarning = Hex(config.ThemeLightWarning),
+            LightError = Hex(config.ThemeLightError),
+            LightFail = Hex(config.ThemeLightFail),
+            LightSuccess = Hex(config.ThemeLightSuccess),
+            LightAllow = Hex(config.ThemeLightAllow),
+            LightDisallow = Hex(config.ThemeLightDisallow),
+            LightForce = Hex(config.ThemeLightForce),
+            LightStatusAlpha = Hex(config.ThemeLightStatusAlpha),
+            LightStatusBeta = Hex(config.ThemeLightStatusBeta),
+            LightStatusDelta = Hex(config.ThemeLightStatusDelta),
             Primary = Hex(config.Primary),
             Accent = Hex(config.Accent),
         };
@@ -403,8 +451,8 @@ internal static class ConfigurationLoader
             config.Accent = ParseColour(accent, "accent", path);
         }
 
-        // The twelve a look is made of, read by the identity each is kept under rather than by position:
-        // one reader serves all twelve, and the identity is what says which field it lands in.
+        // The colours a look is made of, read by the identity each is kept under rather than by position:
+        // one reader serves all of them, and the identity is what says which field it lands in.
         var fields = new Dictionary<string, Action<Color>>(StringComparer.Ordinal)
         {
             [ThemeConfiguration.DarkBrightKey] = colour => config.ThemeDarkBright = colour,
@@ -417,6 +465,30 @@ internal static class ConfigurationLoader
             [ThemeConfiguration.LightDarkKey] = colour => config.ThemeLightDark = colour,
             [ThemeConfiguration.LightFrontKey] = colour => config.ThemeLightFront = colour,
             [ThemeConfiguration.LightSplitterKey] = colour => config.ThemeLightSplitter = colour,
+            [ThemeConfiguration.DarkDisabledKey] = colour => config.ThemeDarkDisabled = colour,
+            [ThemeConfiguration.DarkModifyKey] = colour => config.ThemeDarkModify = colour,
+            [ThemeConfiguration.DarkWarningKey] = colour => config.ThemeDarkWarning = colour,
+            [ThemeConfiguration.DarkErrorKey] = colour => config.ThemeDarkError = colour,
+            [ThemeConfiguration.DarkFailKey] = colour => config.ThemeDarkFail = colour,
+            [ThemeConfiguration.DarkSuccessKey] = colour => config.ThemeDarkSuccess = colour,
+            [ThemeConfiguration.DarkAllowKey] = colour => config.ThemeDarkAllow = colour,
+            [ThemeConfiguration.DarkDisallowKey] = colour => config.ThemeDarkDisallow = colour,
+            [ThemeConfiguration.DarkForceKey] = colour => config.ThemeDarkForce = colour,
+            [ThemeConfiguration.DarkStatusAlphaKey] = colour => config.ThemeDarkStatusAlpha = colour,
+            [ThemeConfiguration.DarkStatusBetaKey] = colour => config.ThemeDarkStatusBeta = colour,
+            [ThemeConfiguration.DarkStatusDeltaKey] = colour => config.ThemeDarkStatusDelta = colour,
+            [ThemeConfiguration.LightDisabledKey] = colour => config.ThemeLightDisabled = colour,
+            [ThemeConfiguration.LightModifyKey] = colour => config.ThemeLightModify = colour,
+            [ThemeConfiguration.LightWarningKey] = colour => config.ThemeLightWarning = colour,
+            [ThemeConfiguration.LightErrorKey] = colour => config.ThemeLightError = colour,
+            [ThemeConfiguration.LightFailKey] = colour => config.ThemeLightFail = colour,
+            [ThemeConfiguration.LightSuccessKey] = colour => config.ThemeLightSuccess = colour,
+            [ThemeConfiguration.LightAllowKey] = colour => config.ThemeLightAllow = colour,
+            [ThemeConfiguration.LightDisallowKey] = colour => config.ThemeLightDisallow = colour,
+            [ThemeConfiguration.LightForceKey] = colour => config.ThemeLightForce = colour,
+            [ThemeConfiguration.LightStatusAlphaKey] = colour => config.ThemeLightStatusAlpha = colour,
+            [ThemeConfiguration.LightStatusBetaKey] = colour => config.ThemeLightStatusBeta = colour,
+            [ThemeConfiguration.LightStatusDeltaKey] = colour => config.ThemeLightStatusDelta = colour,
             [ThemeConfiguration.PrimaryKey] = colour => config.Primary = colour,
             [ThemeConfiguration.AccentKey] = colour => config.Accent = colour,
         };
@@ -673,7 +745,7 @@ internal static class ConfigurationLoader
     /// <summary>How <c>theme.json</c> is written: only the fields that are set.</summary>
     /// <remarks>
     /// A field is named for the identity it is kept under, which is what lets one reader and one writer
-    /// serve all twelve: the name a person edits is the name the panel shows, and nothing anywhere
+    /// serve all of them: the name a person edits is the name the panel shows, and nothing anywhere
     /// translates between two spellings of one field.
     /// </remarks>
     private sealed class ThemeDto
@@ -724,6 +796,102 @@ internal static class ConfigurationLoader
         [JsonPropertyName(ThemeConfiguration.LightSplitterKey)]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? LightSplitter { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkDisabledKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkDisabled { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkModifyKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkModify { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkWarningKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkWarning { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkErrorKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkError { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkFailKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkFail { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkSuccessKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkSuccess { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkAllowKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkAllow { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkDisallowKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkDisallow { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkForceKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkForce { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkStatusAlphaKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkStatusAlpha { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkStatusBetaKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkStatusBeta { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.DarkStatusDeltaKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? DarkStatusDelta { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightDisabledKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightDisabled { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightModifyKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightModify { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightWarningKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightWarning { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightErrorKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightError { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightFailKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightFail { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightSuccessKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightSuccess { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightAllowKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightAllow { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightDisallowKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightDisallow { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightForceKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightForce { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightStatusAlphaKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightStatusAlpha { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightStatusBetaKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightStatusBeta { get; set; }
+
+        [JsonPropertyName(ThemeConfiguration.LightStatusDeltaKey)]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LightStatusDelta { get; set; }
 
         [JsonPropertyName(ThemeConfiguration.PrimaryKey)]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

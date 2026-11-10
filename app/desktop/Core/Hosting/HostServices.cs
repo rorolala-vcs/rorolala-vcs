@@ -258,6 +258,13 @@ internal sealed class PluginHost
     public IPalette Palette => _services.Palette;
 
     /// <inheritdoc />
+    public event EventHandler? ThemeChanged
+    {
+        add => _services.Theme.Settled += value;
+        remove => _services.Theme.Settled -= value;
+    }
+
+    /// <inheritdoc />
     void IMenuRegistry.AddTopLevel(string labelKey, int order) =>
         _services.Menu.AddTopLevel(_id, _position, labelKey, order);
 

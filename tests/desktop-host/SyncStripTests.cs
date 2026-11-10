@@ -117,22 +117,22 @@ public sealed class SyncStripTests
     }
 
     /// <summary>
-    /// The three are drawn in the ordinary ink, and in the colour of what must not be done while Shift is held.
+    /// The three are drawn in the ordinary ink, and in the semantic force colour while Shift is held.
     /// </summary>
     /// <remarks>
     /// A run made with the key held changes history rather than refusing, which is the one thing a reader has to
     /// see before pressing rather than after: the strip says so by turning the three and the rule around them
-    /// the colour the look spends on what must not be done. What is checked is the colour actually drawn on
+    /// the colour the look states for a forced run. What is checked is the colour actually drawn on
     /// screen, which is the look's answer and not this test's.
     /// </remarks>
     [Fact]
-    public void TheThreeTurnRedWhileTheKeyThatChangesARunIsHeld()
+    public void TheThreeTurnToTheForceColourWhileTheKeyThatChangesARunIsHeld()
     {
         var (strip, window, resources) = Drawn();
 
         var plain = Fill(resources, PaletteKeys.Front);
         var rule = Fill(resources, PaletteKeys.Splitter);
-        var held = Fill(resources, PaletteKeys.Del);
+        var held = Fill(resources, PaletteKeys.Force);
 
         Assert.NotEqual(plain, held);
 

@@ -101,6 +101,18 @@ public interface IPluginHost
     IPalette Palette { get; }
 
     /// <summary>
+    /// Raised when the look has been written and its colours replaced, after an edit in the panel is settled.
+    /// </summary>
+    /// <remarks>
+    /// The resources a control names in a <c>DynamicResource</c> follow a colour on their own. A mark that was
+    /// built from a colour value, which is what a badge or a state dot is, does not, so this is the point at
+    /// which a plugin draws those again. It is raised after the write rather than on every drag of the plate:
+    /// what a reader is choosing is the settled colour, and a redraw per pointer move would be a redraw for
+    /// colours that were passed through.
+    /// </remarks>
+    event EventHandler? ThemeChanged;
+
+    /// <summary>
     /// The picture the program is known by, for the windows the plugin shows of its own.
     /// </summary>
     /// <remarks>

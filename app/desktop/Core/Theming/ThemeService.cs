@@ -132,6 +132,17 @@ internal sealed class ThemeService
     }
 
     /// <summary>
+    /// Raised after <see cref="Save"/> has written the look and replaced its colours.
+    /// </summary>
+    /// <remarks>
+    /// A control that names a colour as a resource follows the replacement by itself. A mark built from a
+    /// colour value does not, so this is what tells a plugin to draw those again. It is raised on the settled
+    /// write rather than on every <see cref="Apply"/>, because a plate being dragged applies colours the user
+    /// is only passing through.
+    /// </remarks>
+    public event EventHandler? Settled;
+
+    /// <summary>
     /// Writes what the user chose and applies it, which is what an edit in the panel does.
     /// </summary>
     /// <remarks>
@@ -142,6 +153,7 @@ internal sealed class ThemeService
     {
         ConfigurationLoader.WriteTheme(_theme);
         Apply();
+        Settled?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

@@ -118,7 +118,7 @@ public sealed class ThemeTests
     }
 
     /// <summary>
-    /// The five a plugin reads, and the names it may name instead, are the same colours.
+    /// The roles a plugin reads, and the names it may name instead, are the same colours.
     /// </summary>
     /// <remarks>
     /// A plugin reads a colour as a value through <c>IPalette</c> where it has to paint with it, and as a
@@ -144,6 +144,18 @@ public sealed class ThemeTests
             (PaletteKeys.Splitter, light.Splitter, dark.Splitter),
             (PaletteKeys.Primary, light.Primary, dark.Primary),
             (PaletteKeys.Accent, light.Accent, dark.Accent),
+            (PaletteKeys.Disabled, light.Semantic.Disabled, dark.Semantic.Disabled),
+            (PaletteKeys.Modify, light.Semantic.Modify, dark.Semantic.Modify),
+            (PaletteKeys.Warning, light.Semantic.Warning, dark.Semantic.Warning),
+            (PaletteKeys.Error, light.Semantic.Error, dark.Semantic.Error),
+            (PaletteKeys.Fail, light.Semantic.Fail, dark.Semantic.Fail),
+            (PaletteKeys.Success, light.Semantic.Success, dark.Semantic.Success),
+            (PaletteKeys.Allow, light.Semantic.Allow, dark.Semantic.Allow),
+            (PaletteKeys.Disallow, light.Semantic.Disallow, dark.Semantic.Disallow),
+            (PaletteKeys.Force, light.Semantic.Force, dark.Semantic.Force),
+            (PaletteKeys.StatusAlpha, light.Semantic.StatusAlpha, dark.Semantic.StatusAlpha),
+            (PaletteKeys.StatusBeta, light.Semantic.StatusBeta, dark.Semantic.StatusBeta),
+            (PaletteKeys.StatusDelta, light.Semantic.StatusDelta, dark.Semantic.StatusDelta),
         };
 
         foreach (var (key, onLight, onDark) in names)
@@ -154,13 +166,13 @@ public sealed class ThemeTests
     }
 
     /// <summary>
-    /// The twelve a person may change are the roles they name, in both variants.
+    /// Every colour a person may change is the role it names, in both variants.
     /// </summary>
     /// <remarks>
     /// Each is chosen as a colour no default is, so that a field read into the wrong role, or into
-    /// neither, is a failure rather than a coincidence: the ten grounds and the two configured colours
-    /// are the whole of what the panel edits, and a look built from them has to be built from all of
-    /// them.
+    /// neither, is a failure rather than a coincidence: the ten grounds, the semantic states and the two
+    /// configured colours are the whole of what the panel edits, and a look built from them has to be built
+    /// from all of them.
     /// </remarks>
     [Fact]
     public void EveryColourTheUserChoosesReachesTheRoleItNames()
@@ -179,6 +191,8 @@ public sealed class ThemeTests
             ThemeLightDark = Color.Parse("#262728"),
             ThemeLightFront = Color.Parse("#292A2B"),
             ThemeLightSplitter = Color.Parse("#2C2D2E"),
+            ThemeDarkModify = Color.Parse("#2F3031"),
+            ThemeLightAllow = Color.Parse("#323334"),
         };
 
         var look = new RorolalaTheme(chosen.LightTheme, null, WindowStyle.Windows);
@@ -188,6 +202,7 @@ public sealed class ThemeTests
         Assert.Equal(chosen.ThemeLightDark, Fill(Variant(look, ThemeVariant.Light), PaletteKeys.Dark));
         Assert.Equal(chosen.ThemeLightFront, Fill(Variant(look, ThemeVariant.Light), PaletteKeys.Front));
         Assert.Equal(chosen.ThemeLightSplitter, Fill(Variant(look, ThemeVariant.Light), PaletteKeys.Splitter));
+        Assert.Equal(chosen.ThemeLightAllow, Fill(Variant(look, ThemeVariant.Light), PaletteKeys.Allow));
 
         var dark = new RorolalaTheme(chosen.Theme, null, WindowStyle.Windows);
 
@@ -196,6 +211,7 @@ public sealed class ThemeTests
         Assert.Equal(chosen.ThemeDarkDark, Fill(Variant(dark, ThemeVariant.Dark), PaletteKeys.Dark));
         Assert.Equal(chosen.ThemeDarkFront, Fill(Variant(dark, ThemeVariant.Dark), PaletteKeys.Front));
         Assert.Equal(chosen.ThemeDarkSplitter, Fill(Variant(dark, ThemeVariant.Dark), PaletteKeys.Splitter));
+        Assert.Equal(chosen.ThemeDarkModify, Fill(Variant(dark, ThemeVariant.Dark), PaletteKeys.Modify));
 
         // The two that do not follow the window are one colour each, in both variants.
         Assert.Equal(chosen.Primary, Fill(Variant(look, ThemeVariant.Light), PaletteKeys.Primary));

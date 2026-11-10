@@ -287,14 +287,20 @@ public sealed class ColumnTests
         Assert.Equal("it", RorolalaStates.Say(PathState.RenamedLikely, "it").Hint);
         Assert.Equal("it", RorolalaStates.Say(PathState.Merging, "it").Hint);
 
-        // The colours are this plugin's own four, and every one of them is a dot with a line of its own: the
+        // The colours are the look's semantic set, and every one of them is a dot with a line of its own: the
         // colour is what a row is scanned by, and the line is what makes the mark read against its ground.
         Assert.Equal(RorolalaColours.Untagged, RorolalaStates.Say(PathState.Untagged, "it").Colour);
         Assert.Equal(RorolalaColours.UnderWay, RorolalaStates.Say(PathState.Modified, "it").Colour);
         Assert.Equal(RorolalaColours.Wrong, RorolalaStates.Say(PathState.Wrong, "it").Colour);
         Assert.Equal(RorolalaColours.Moved, RorolalaStates.Say(PathState.Renamed, "it").Colour);
-        Assert.Equal(RorolalaColours.Moved, RorolalaStates.Say(PathState.RenamedLikely, "it").Colour);
-        Assert.Equal(RorolalaColours.UnderWay, RorolalaStates.Say(PathState.Merging, "it").Colour);
+        Assert.Equal(
+            RorolalaColours.StatusBeta,
+            RorolalaStates.Say(PathState.RenamedLikely, "it").Colour
+        );
+        Assert.Equal(
+            RorolalaColours.StatusDelta,
+            RorolalaStates.Say(PathState.Merging, "it").Colour
+        );
 
         foreach (var state in new[]
         {
@@ -423,20 +429,20 @@ public sealed class ColumnTests
 
         var ahead = RorolalaStandingBadge.Say(new Standing(StandingRelation.Ahead, 2));
         Assert.Equal(VcsIcons.Upload, ahead.IconKey);
-        Assert.Equal(MarkInk.Add, ahead.Ink);
+        Assert.Equal(RorolalaColours.Success, ahead.Colour);
 
         // Behind is one answer with the count and without it: what a reader does about either is fetch.
         var behind = RorolalaStandingBadge.Say(new Standing(StandingRelation.Behind, 1));
         Assert.Equal(VcsIcons.Download, behind.IconKey);
-        Assert.Equal(MarkInk.Error, behind.Ink);
+        Assert.Equal(RorolalaColours.Fail, behind.Colour);
 
         var untold = RorolalaStandingBadge.Say(new Standing(StandingRelation.Behind, null));
         Assert.Equal(VcsIcons.Download, untold.IconKey);
-        Assert.Equal(MarkInk.Error, untold.Ink);
+        Assert.Equal(RorolalaColours.Fail, untold.Colour);
 
         var apart = RorolalaStandingBadge.Say(new Standing(StandingRelation.Apart, null));
         Assert.Equal(VcsIcons.CallSplit, apart.IconKey);
-        Assert.Equal(MarkInk.Error, apart.Ink);
+        Assert.Equal(RorolalaColours.Fail, apart.Colour);
 
         // Every one of them is worn on the badge's own ground, and says on itself the very sentence the column's
         // cell is hovered for: the count is what the cell is for and the sentence is what to do about it, and a

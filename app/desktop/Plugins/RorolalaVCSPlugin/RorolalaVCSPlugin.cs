@@ -44,10 +44,15 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         EntryColourProviders.Register(treeColours);
         EntryMarkProviders.Register(new RolaTreeIcon(treeColours));
 
-        // What a state is coloured is this plugin's answer rather than the theme's, so the four colours are its
-        // own settings: declaring them is what puts them in the preference panel, and what draws them reads
-        // them as it draws, so a colour chosen there is a colour the next pill or dot is drawn in.
-        RorolalaColours.Declare(host.Config);
+        // What a state is coloured is the look's semantic answer rather than this plugin's four settings: the
+        // set is stated apart for the light and dark variants in the Core theme, so a colour is read from the
+        // look in force as the marks are drawn.
+        RorolalaColours.Bind(host.Palette);
+
+        // A badge and a state dot are built from a colour value, so replacing the look's resources does not
+        // recolour them on its own. The file system redraw is what asks the views for their marks again without
+        // reading a directory: what changed is the answer a mark is drawn from, not the work on disk.
+        host.ThemeChanged += (_, _) => host.Files.Redraw();
 
         // And what a sync carries, which is the same kind of answer: the command line takes a sync apart into
         // the index, the Layout and the storage, and which of the three a run is to carry is the user's, so the

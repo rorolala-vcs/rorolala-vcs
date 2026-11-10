@@ -40,8 +40,8 @@ internal sealed class VersionGraphTrackBar : Border
     /// <summary>The room the field keeps inside itself, which is the whole of its frame.</summary>
     private const double Room = 16;
 
-    /// <summary>What the button is drawn in while Shift is held: the colour the look spends on what must not be done.</summary>
-    private const string Held = PaletteKeys.Del;
+    /// <summary>What the button is drawn in while Shift is held: the semantic force.</summary>
+    private const string Held = PaletteKeys.Force;
 
     /// <summary>The message the new versions are to carry.</summary>
     private readonly TextBox _message;
@@ -781,7 +781,7 @@ internal sealed class VersionGraphTrackBar : Border
         if (held)
         {
             _track[!TemplatedControl.BackgroundProperty] = new DynamicResourceExtension(
-                PaletteKeys.DelWash
+                PaletteKeys.ForceWash
             );
         }
         else

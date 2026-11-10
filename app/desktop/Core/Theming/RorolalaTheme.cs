@@ -126,10 +126,6 @@ internal sealed class RorolalaTheme
             ["ScrollBarThickness"] = 12.0,
             ["ScrollBarThumbThickness"] = 7.0,
 
-            // The mark a warning is raised with. It is the one amber, fixed rather than chosen, and it
-            // is picked to carry on either ground: what a warning is coloured is not a preference.
-            [Warn] = Fill(WarnColour),
-
             ThemeDictionaries =
             {
                 [ThemeVariant.Light] = _light,
@@ -403,15 +399,6 @@ internal sealed class RorolalaTheme
     private const string Warn = "rorolala.warn";
 
     /// <summary>
-    /// The one amber, which is what a warning is drawn in on either ground.
-    /// </summary>
-    /// <remarks>
-    /// Fixed rather than chosen: it is picked to carry on both the light ground and the dark one, and what a
-    /// warning is coloured is not a preference. A named constant because its wash is the same colour laid thin.
-    /// </remarks>
-    private static readonly Color WarnColour = Color.FromRgb(0xD4, 0xA0, 0x17);
-
-    /// <summary>
     /// The three lights of a macOS frame, in the order they are drawn from the window's edge.
     /// </summary>
     /// <remarks>
@@ -637,32 +624,20 @@ internal sealed class RorolalaTheme
         /// </remarks>
         private const double HoverStep = 0.08;
 
-        /// <summary>What was added, which is the green on either ground rather than one chosen.</summary>
-        /// <remarks>
-        /// Fixed, like the failure's red below and for the same reason: what a recorded thing is
-        /// coloured is not a preference. Each is picked to carry on its own ground, which is why there
-        /// are two of each rather than one that reads on both.
-        /// </remarks>
-        public Color Add { get; init; }
+        /// <summary>The semantics the look states, which do not follow the five the user chooses.</summary>
+        public Contract.SemanticPalette Semantic => palette.Semantic;
 
-        /// <summary>What was removed or failed.</summary>
-        public Color Del { get; init; }
+        /// <summary>What was added, which is the semantic success on either ground.</summary>
+        public Color Add => Semantic.Success;
+
+        /// <summary>What was removed or failed, which is the semantic error.</summary>
+        public Color Del => Semantic.Error;
 
         /// <summary>The light ground: the one the design ships, in the colours the user chose for it.</summary>
-        public static Grounds Light(Contract.ThemePalette palette) =>
-            new(palette)
-            {
-                Add = Color.FromRgb(0x1F, 0x8A, 0x3B),
-                Del = Color.FromRgb(0xC0, 0x36, 0x2C),
-            };
+        public static Grounds Light(Contract.ThemePalette palette) => new(palette);
 
         /// <summary>The dark ground.</summary>
-        public static Grounds Dark(Contract.ThemePalette palette) =>
-            new(palette)
-            {
-                Add = Color.FromRgb(0x5F, 0xD0, 0x7A),
-                Del = Color.FromRgb(0xFF, 0x7A, 0x6B),
-            };
+        public static Grounds Dark(Contract.ThemePalette palette) => new(palette);
 
         /// <summary>The soft shadow the design raises a surface with.</summary>
         /// <remarks>
@@ -857,20 +832,30 @@ internal sealed class RorolalaTheme
             [Selection] = Fill(selection),
             [Shadow] = grounds.Raised,
             [Ring] = _ring,
-            // The semantic pairs, at the two alphas a mark and the surface behind it are drawn at: the
-            // grounds are the colour laid thin rather than a second, paler colour per ground, so that a
-            // mark and its wash are one family on either look and neither had to be picked twice.
-            [Contract.PaletteKeys.Add] = Fill(grounds.Add),
-            [Contract.PaletteKeys.AddBackground] = Fill(WithAlpha(grounds.Add, 0x24)),
-            // The mark a warning is raised with, and the wash it stands on: its own amber laid thin rather
-            // than a second colour, since what a warning is coloured is not a preference, and neither is the
-            // ground it is read against. Both variants hold it, so that what names the mark, a contributed
-            // column asking for the warn ink, is answered wherever the look is asked.
-            [Warn] = Fill(WarnColour),
-            [Contract.PaletteKeys.WarnBackground] = Fill(WithAlpha(WarnColour, 30)),
-            [DelInk] = Fill(grounds.Del),
-            [DelBackground] = Fill(WithAlpha(grounds.Del, 0x24)),
-            [DelWash] = Fill(WithAlpha(grounds.Del, 0x2E)),
+            // The semantic states, in the set the variant states. What a state is coloured is not a preference,
+            // and the light and dark sets are apart because a colour that reads on one ground is not the one
+            // that reads on the other. The older pairs point at the same answers so a mark that names one of
+            // them is drawn in the semantic colour too.
+            [Contract.PaletteKeys.Add] = Fill(grounds.Semantic.Success),
+            [Contract.PaletteKeys.AddBackground] = Fill(WithAlpha(grounds.Semantic.Success, 0x24)),
+            [Warn] = Fill(grounds.Semantic.Warning),
+            [Contract.PaletteKeys.WarnBackground] = Fill(WithAlpha(grounds.Semantic.Warning, 30)),
+            [DelInk] = Fill(grounds.Semantic.Error),
+            [DelBackground] = Fill(WithAlpha(grounds.Semantic.Error, 0x24)),
+            [DelWash] = Fill(WithAlpha(grounds.Semantic.Error, 0x2E)),
+            [Contract.PaletteKeys.Disabled] = Fill(grounds.Semantic.Disabled),
+            [Contract.PaletteKeys.Modify] = Fill(grounds.Semantic.Modify),
+            [Contract.PaletteKeys.Warning] = Fill(grounds.Semantic.Warning),
+            [Contract.PaletteKeys.Error] = Fill(grounds.Semantic.Error),
+            [Contract.PaletteKeys.Fail] = Fill(grounds.Semantic.Fail),
+            [Contract.PaletteKeys.Success] = Fill(grounds.Semantic.Success),
+            [Contract.PaletteKeys.Allow] = Fill(grounds.Semantic.Allow),
+            [Contract.PaletteKeys.Disallow] = Fill(grounds.Semantic.Disallow),
+            [Contract.PaletteKeys.Force] = Fill(grounds.Semantic.Force),
+            [Contract.PaletteKeys.ForceWash] = Fill(WithAlpha(grounds.Semantic.Force, 0x2E)),
+            [Contract.PaletteKeys.StatusAlpha] = Fill(grounds.Semantic.StatusAlpha),
+            [Contract.PaletteKeys.StatusBeta] = Fill(grounds.Semantic.StatusBeta),
+            [Contract.PaletteKeys.StatusDelta] = Fill(grounds.Semantic.StatusDelta),
         };
 
     /// <summary>
