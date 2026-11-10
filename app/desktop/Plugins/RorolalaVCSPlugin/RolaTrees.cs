@@ -33,12 +33,30 @@ internal static class RolaTrees
     {
         ArgumentNullException.ThrowIfNull(path);
 
+        // The computer is a place with no path, and the process's own directory is not it.
+        if (path.Length == 0)
+        {
+            return null;
+        }
+
         var root = workspace is null
             ? null
             : Path.TrimEndingDirectorySeparator(Path.GetFullPath(workspace));
-        var at = Directory.Exists(path)
-            ? Path.GetFullPath(path)
-            : Path.GetDirectoryName(Path.GetFullPath(path));
+        string? at;
+
+        try
+        {
+            at = Directory.Exists(path)
+                ? Path.GetFullPath(path)
+                : Path.GetDirectoryName(Path.GetFullPath(path));
+        }
+        catch (Exception error)
+            when (error is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // A place a browser opens is not always a filesystem path: an address has its own answerer,
+            // and a path the platform refuses is not inside any tree.
+            return null;
+        }
 
         var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase

@@ -578,6 +578,36 @@ rorolala_vcs:
     en: Owner
     zh-CN: 持有者
 
+  # What the two columns of a directory inside a tree are headed: what the path is to the tree, and how
+  # much of its work the staging area holds.
+  column_tree_status:
+    en: Status
+    zh-CN: 状态
+  column_tree_staged:
+    en: Staged
+    zh-CN: 暂存
+
+  # What the Status column says about a path in a tree, and what its badge is hovered for.
+  tree_work:
+    added:
+      en: Added
+      zh-CN: 新增
+    modified:
+      en: Modified
+      zh-CN: 修改
+
+  # What the Staged column says about a path in a tree, and what its badge is hovered for.
+  tree_staged:
+    all:
+      en: All staged
+      zh-CN: 全部暂存
+    partial:
+      en: Partially staged
+      zh-CN: 部分暂存
+    none:
+      en: Not staged
+      zh-CN: 未暂存
+
   # What the Upstream column is headed: where the Vault names the entry the work names here. The
   # column is only there where Rorolala answers, and it says nothing about an entry the Vault's copy
   # does not name, one this side has never told it of.

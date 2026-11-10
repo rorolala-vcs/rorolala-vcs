@@ -1,6 +1,8 @@
 using System.Diagnostics;
 
+using FileSystemPlugin;
 using RolaSharp;
+using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 using RorolalaVCSPlugin;
 
@@ -87,7 +89,7 @@ public sealed class VariantGraphTests
 
         Assert.NotNull(status);
         Assert.False(status.Clean);
-        Assert.Equal(1, status.Staged);
+        Assert.Single(status.Staged);
     }
 
     /// <summary>The tree's own entry, and not the file inside it, is what the graph is centred on.</summary>
@@ -127,6 +129,41 @@ public sealed class VariantGraphTests
         var draft = Assert.Single(drafts, one => one.Path == "tree");
 
         Assert.True(draft.Tree);
+    }
+
+    /// <summary>A directory in a tree is what the changes under it add up to.</summary>
+    [Fact]
+    public void ATreesChangesRollUpToItsDirectory()
+    {
+        var workspace = TreeRecorded("tree-rollup");
+        var tree = Path.Combine(workspace, "tree");
+        var sub = Directory.CreateDirectory(Path.Combine(tree, "sub")).FullName;
+
+        File.WriteAllText(Path.Combine(sub, "new.txt"), "one\n");
+        Given(workspace, "tree", "add", "tree");
+
+        var entry = new Entry(sub, EntryKind.Directory);
+        var status = RolaTreeStatus.Locate(tree);
+
+        Assert.NotNull(status);
+
+        var staged = RolaTreeWork.Of(status, tree, entry);
+
+        Assert.NotNull(staged);
+        Assert.Equal(TreeWorkStatus.Added, staged.Status);
+        Assert.Equal(TreeWorkStage.Staged, staged.Stage);
+
+        File.WriteAllText(Path.Combine(sub, "new.txt"), "two\n");
+
+        status = RolaTreeStatus.Locate(tree);
+
+        Assert.NotNull(status);
+
+        var partial = RolaTreeWork.Of(status, tree, entry);
+
+        Assert.NotNull(partial);
+        Assert.Equal(TreeWorkStatus.Modified, partial.Status);
+        Assert.Equal(TreeWorkStage.Partial, partial.Stage);
     }
 
     /// <summary>A track with a tree's directory records the tree, not a path inside it.</summary>

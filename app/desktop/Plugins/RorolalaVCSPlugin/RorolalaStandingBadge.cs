@@ -46,7 +46,8 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
     public string Id => "rorolala.standing.badge";
 
     /// <inheritdoc />
-    public bool Applies(string directory) => _readings.Reading(directory) is not null;
+    public bool Applies(string directory) =>
+        RolaTrees.RootOf(directory) is null && _readings.Reading(directory) is not null;
 
     /// <inheritdoc />
     public EntryMark Mark(Entry entry)

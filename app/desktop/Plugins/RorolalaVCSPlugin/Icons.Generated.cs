@@ -77,6 +77,15 @@ internal static partial class Icons
     /// <summary>The key the `park` picture is held under.</summary>
     public const string Park = "rorolala_vcs.park";
 
+    /// <summary>The key the `check_circle` picture is held under.</summary>
+    public const string CheckCircle = "rorolala_vcs.check_circle";
+
+    /// <summary>The key the `radio_button_checked` picture is held under.</summary>
+    public const string RadioButtonChecked = "rorolala_vcs.radio_button_checked";
+
+    /// <summary>The key the `radio_button_unchecked` picture is held under.</summary>
+    public const string RadioButtonUnchecked = "rorolala_vcs.radio_button_unchecked";
+
     /// <summary>The key the `task_alt` picture is held under.</summary>
     public const string TaskAlt = "rorolala_vcs.task_alt";
 
@@ -115,6 +124,9 @@ internal static partial class Icons
         (MoreVert, "more_vert"),
         (ContentCopy, "content_copy"),
         (Park, "park"),
+        (CheckCircle, "check_circle"),
+        (RadioButtonChecked, "radio_button_checked"),
+        (RadioButtonUnchecked, "radio_button_unchecked"),
         (TaskAlt, "task_alt"),
         (Work, "work"),
         (AltRoute, "alt_route"),

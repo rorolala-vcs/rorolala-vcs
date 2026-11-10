@@ -41,7 +41,8 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     public string ColumnKey => "rorolala_vcs.column_ownership";
 
     /// <inheritdoc />
-    public bool Applies(string directory) => _readings.Knows(directory);
+    public bool Applies(string directory) =>
+        RolaTrees.RootOf(directory) is null && _readings.Knows(directory);
 
     /// <inheritdoc />
     public EntryMark Mark(Entry entry) =>

@@ -61,12 +61,17 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // edit from it, and a reading shared is a reading not made twice.
         var statuses = new StatusReadings(host.Log, host.Files);
 
+        // What each tree stands as, for the columns and badges a path inside one has, read once per tree
+        // rather than once per row and refreshed with the rest when the files may have changed.
+        var trees = new TreeReadings(host.Log, host.Files);
+
         // What the Vault's copy says about the entries of a directory, read once for everything that asks: the Ownership
         // column, the badges, and what an entry's menu offers. One set rather than each asking for itself, and every
         // answer read off the window's thread (see OwnershipReadings).
         var ownership = new OwnershipReadings(host.Log, host.Files);
 
         RorolalaLocks.Declare(host, statuses, ownership);
+        RorolalaTreeColumns.Declare(trees);
 
         // And what the browser leaves out: the entries a Workspace's ignore rules govern. The rules are
         // Rorolala's, kept in its data directory, fetched from the Vaults, matched by the native

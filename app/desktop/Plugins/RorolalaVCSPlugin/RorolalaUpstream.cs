@@ -70,8 +70,11 @@ internal sealed class RorolalaUpstream : IEntryColumnProvider
     /// <param name="directory">The directory being listed.</param>
     /// <returns>Whether the column is shown.</returns>
     public bool Applies(string directory) =>
-        _readings.Knows(directory)
-        || _status.Reading(directory) is { Merging.Count: > 0 };
+        RolaTrees.RootOf(directory) is null
+        && (
+            _readings.Knows(directory)
+            || _status.Reading(directory) is { Merging.Count: > 0 }
+        );
 
     /// <inheritdoc />
     public EntryColumnMark Value(Entry entry)

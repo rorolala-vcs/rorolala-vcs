@@ -128,6 +128,69 @@ public sealed class ColumnTests
     }
 
     /// <summary>
+    /// A directory inside a tree has the tree's own two columns instead of the work's three.
+    /// </summary>
+    /// <remarks>
+    /// The Layout names the tree rather than the paths under it, so Upstream, Standing and Owner have
+    /// nothing to say about a path inside one. What the reader is looking at there is the tree's own work,
+    /// which is what the Status and Staged columns answer.
+    /// </remarks>
+    [Fact]
+    public void ADirectoryInsideATreeHasTheTreesColumns()
+    {
+        var services = Host.Services();
+        var plugin = new Vcs();
+
+        plugin.Initialize(services.For(plugin.Manifest.Id, 1));
+
+        var tree = Scratch.New("column-tree");
+        var inside = Directory.CreateDirectory(Path.Combine(tree, "inside")).FullName;
+
+        Directory.CreateDirectory(Path.Combine(inside, ".rola-tree"));
+
+        var columns = EntryColumns.For(inside);
+
+        Assert.Contains(columns, column => column.Id == "rorolala.tree.status");
+        Assert.Contains(columns, column => column.Id == "rorolala.tree.staged");
+        Assert.DoesNotContain(columns, column => column.Id == "rorolala.upstream");
+        Assert.DoesNotContain(columns, column => column.Id == "rorolala.standing");
+        Assert.DoesNotContain(columns, column => column.Id == "rorolala.states");
+    }
+
+    /// <summary>The two tree badges are the pictures and colours the user reads them as.</summary>
+    [Fact]
+    public void TreeBadgesUseTheTreePicturesAndColours()
+    {
+        _ = Host.Services();
+
+        var added = RorolalaTreeStatusColumn.Badge(TreeWorkStatus.Added);
+        var modified = RorolalaTreeStatusColumn.Badge(TreeWorkStatus.Modified);
+        var all = RorolalaTreeStagedColumn.Badge(TreeWorkStage.Staged);
+        var partial = RorolalaTreeStagedColumn.Badge(TreeWorkStage.Partial);
+        var none = RorolalaTreeStagedColumn.Badge(TreeWorkStage.Unstaged);
+
+        Assert.Equal(VcsIcons.Add, added.IconKey);
+        Assert.Equal(RorolalaColours.Untagged, added.Colour);
+        Assert.True(added.Tagged);
+
+        Assert.Equal(VcsIcons.EditNote, modified.IconKey);
+        Assert.Equal(RorolalaColours.UnderWay, modified.Colour);
+        Assert.True(modified.Tagged);
+
+        Assert.Equal(VcsIcons.CheckCircle, all.IconKey);
+        Assert.Equal(RorolalaColours.Untagged, all.Colour);
+        Assert.True(all.Tagged);
+
+        Assert.Equal(VcsIcons.RadioButtonChecked, partial.IconKey);
+        Assert.Equal(RorolalaColours.UnderWay, partial.Colour);
+        Assert.True(partial.Tagged);
+
+        Assert.Equal(VcsIcons.RadioButtonUnchecked, none.IconKey);
+        Assert.Null(none.Colour);
+        Assert.True(none.Tagged);
+    }
+
+    /// <summary>
     /// Rorolala contributes the Upstream column beside the name, which is where a second name is read.
     /// </summary>
     /// <remarks>
