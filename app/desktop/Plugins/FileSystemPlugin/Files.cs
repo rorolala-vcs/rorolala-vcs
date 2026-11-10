@@ -108,10 +108,7 @@ internal sealed class Files : Listing<Entry>
     public override Control Icon(Entry item, int size) => Icons.For(item, size);
 
     /// <inheritdoc />
-    public override Color? Wash(Entry item) => FolderColours.Wash(item);
-
-    /// <inheritdoc />
-    public override Color? Surface => FolderColours.Surface(_browser.Current);
+    public override Color? Band(Entry item) => FolderColours.Band(item);
 
     /// <summary>An entry's icon, with what every contributor marked worn around its top right corner.</summary>
     /// <remarks>

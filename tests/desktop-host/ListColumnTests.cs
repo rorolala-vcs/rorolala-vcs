@@ -97,6 +97,46 @@ public sealed class ListColumnTests
     private static List<Grid> Sheets(Control browser) =>
         [.. browser.GetVisualDescendants().OfType<Grid>().Where(grid => grid.ColumnDefinitions.Count == Columns)];
 
+    /// <summary>A marked row wears its colour as a strip at the table's left edge.</summary>
+    [Fact]
+    public void AMarkedRowWearsItsColourAsALeftStrip()
+    {
+        var services = Host.Services();
+        var host = services.For(new PluginId("test"), 1);
+        var browser = new ListBrowser<string>(host, new Banded(host));
+        var window = new Window
+        {
+            Width = 700,
+            Height = 300,
+            Content = browser,
+        };
+
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+
+        try
+        {
+            var list = window.GetVisualDescendants().OfType<ListBox>().First();
+            var container = Assert.IsType<ListBoxItem>(list.ContainerFromIndex(0));
+            var strip = container.GetVisualDescendants()
+                .OfType<Border>()
+                .FirstOrDefault(border =>
+                    border.Width == 3 && border.Background is ISolidColorBrush
+                );
+
+            Assert.NotNull(strip);
+            Assert.Equal(
+                Colors.Red,
+                Assert.IsType<SolidColorBrush>(strip!.Background).Color
+            );
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>Puts a table of a few entries on a headless window of a given width.</summary>
     /// <param name="width">How wide the window is.</param>
     /// <param name="window">The window, which the caller closes.</param>
@@ -139,6 +179,30 @@ public sealed class ListColumnTests
                 new Column<string>("rorolala_file_system.column_owner", 90, entry => entry.Length.ToString(), Placement: ColumnPlacement.BesideName),
                 new Column<string>("rorolala_file_system.column_size", 70, entry => $"{entry.Length} B", Placement: ColumnPlacement.BeforeValues),
             ];
+
+        /// <inheritdoc />
+        public override object Key(string item) => item;
+
+        /// <inheritdoc />
+        public override string Name(string item) => item;
+
+        /// <inheritdoc />
+        public override Control Icon(string item, int size) =>
+            new Border { Width = size, Height = size, Background = Brushes.Gray };
+
+        /// <inheritdoc />
+        public override void Open(string item) { }
+
+        /// <inheritdoc />
+        public override void Fill(ContextMenu menu, Control from, IReadOnlyList<string> chosen, bool force) { }
+    }
+
+    /// <summary>A listing whose first row is marked red and whose others are not marked.</summary>
+    private sealed class Banded(IPluginHost host)
+        : Listing<string>(host, ["marked.psd", "plain.psd"])
+    {
+        /// <inheritdoc />
+        public override Color? Band(string item) => item == "marked.psd" ? Colors.Red : null;
 
         /// <inheritdoc />
         public override object Key(string item) => item;

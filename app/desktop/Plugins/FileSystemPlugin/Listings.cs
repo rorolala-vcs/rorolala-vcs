@@ -361,22 +361,15 @@ internal abstract class Listing<TItem>
     /// <returns>What to draw in the tile.</returns>
     public virtual Control Marked(TItem item, int size) => Icon(item, size);
 
-    /// <summary>The wash a row or a tile of an item carries, or nothing when it carries none.</summary>
+    /// <summary>The colour an item's mark is drawn in, or nothing when it carries none.</summary>
     /// <remarks>
-    /// The wash is the listing's answer rather than the view's, because what an entry is marked with is a fact
+    /// The mark is the listing's answer rather than the view's, because what an entry is marked with is a fact
     /// about the entry: a place a plugin answers for has no marked entries, and says nothing here, which is what
-    /// the default does.
+    /// the default does. A list draws it as the strip at its left, and a grid as the line under its caption.
     /// </remarks>
     /// <param name="item">The item to ask about.</param>
-    /// <returns>The wash, or nothing.</returns>
-    public virtual Color? Wash(TItem item) => null;
-
-    /// <summary>The ground a listing is read on, or nothing for the ground it would be read on otherwise.</summary>
-    /// <remarks>
-    /// It is the listing's own directory that is inside a marked one, not an entry of it, so the surface is
-    /// asked once for the whole view rather than once for each row.
-    /// </remarks>
-    public virtual Color? Surface => null;
+    /// <returns>The colour, or nothing.</returns>
+    public virtual Color? Band(TItem item) => null;
 
     /// <summary>What the contributions said about an item, in the order the badges are numbered.</summary>
     /// <remarks>
@@ -914,13 +907,9 @@ internal abstract class EntryView<TItem> : EntryView
         _over.Children.Add(_band);
 
         // A ground of nothing rather than none at all, so that a press on the room between the entries reaches
-        // this view at all: what a frame is begun from is a press that landed on no entry. A listing inside a
-        // marked directory wears that colour in the ground itself, so that the whole dock reads as inside it.
-        var ground = Source.Surface;
-        var grid = new Grid
-        {
-            Background = ground is { } wash ? new SolidColorBrush(wash) : Brushes.Transparent,
-        };
+        // this view at all: what a frame is begun from is a press that landed on no entry. A marked directory is
+        // drawn by a line at the row or beside the tree, so the listing's own ground stays the dock's own.
+        var grid = new Grid { Background = Brushes.Transparent };
         grid.Children.Add(content);
 
         // The word is drawn over the empty space rather than in place of the list, so that the menu and the
@@ -2723,24 +2712,44 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         var grid = new Grid { ColumnDefinitions = Definitions() };
         Place(grid, cells);
 
+        var bandColour = Source.Band(item);
+
         // Every row but the last wears the line that tells it from the next, so that the table ends in the
         // card's own edge rather than in a line drawn against nothing.
         var last = Items.Count > 0 && Equals(Source.Key(item), Source.Key(Items[^1]));
 
         var row = new Border
         {
-            Child = grid,
             Padding = new Thickness(Inset, 0),
             BorderThickness = last ? new Thickness(0) : new Thickness(0, 0, 0, 1),
         };
         row[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
 
-        // The wash is the entry's own answer, and a row that carries none is the dock's ground: the colour is
-        // laid over the row's own band, which is the same area the choice fills, so a marked entry reads as
-        // marked whether or not it is chosen.
-        if (Source.Wash(item) is { } wash)
+        // The strip is at the row's own left edge, outside the column grid's inset: it is a mark of the
+        // row rather than a value in one of its columns. The grid keeps the inset as a margin so the columns
+        // are laid out where the header has them, and the strip takes the room that was padding.
+        if (bandColour is { } colour)
         {
-            row.Background = new SolidColorBrush(wash);
+            var band = new Border
+            {
+                Width = 3,
+                Background = new SolidColorBrush(colour),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                IsHitTestVisible = false,
+            };
+            var surface = new Grid
+            {
+                Children = { band, grid },
+            };
+
+            grid.Margin = new Thickness(Inset, 0);
+            row.Padding = new Thickness(0);
+            row.Child = surface;
+        }
+        else
+        {
+            row.Child = grid;
         }
 
         return row;
@@ -2940,14 +2949,22 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         foreach (var (_, row) in Rows)
         {
             // A row is the card's cell border with the table's grid inside it, so the grid is what the widths
-            // are written to.
-            if (row is Border { Child: Grid grid })
+            // are written to. A marked row puts the strip and the table in a surface of its own, so the table
+            // is the grid under that surface rather than the border's direct child.
+            if (row is Border { Child: { } child } && Table(child) is { } table)
             {
-                Into(grid);
+                Into(table);
             }
         }
 
         return;
+
+        Grid? Table(Control child) =>
+            child is Grid grid && grid.ColumnDefinitions.Count == _shown.Length
+                ? grid
+                : child.GetVisualDescendants()
+                    .OfType<Grid>()
+                    .FirstOrDefault(one => one.ColumnDefinitions.Count == _shown.Length);
 
         void Into(Grid grid)
         {
@@ -3165,9 +3182,9 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     /// <inheritdoc />
     private Control Tile(TItem item)
     {
-        // The surface a chosen tile wears is the item's; what is here is the content and the room around it. A
-        // marked tile carries its wash in this surface, inside the item's rounded choice, so that the two are
-        // one shape rather than a square tint drawn in a rounded card.
+        // The surface a chosen tile wears is the item's; what is here is the content and the room around it.
+        // A marked tile carries its colour as the line under its caption rather than as a wash on this
+        // surface, so the picture and the name stand on the dock's own ground.
         var tile = new Border
         {
             Padding = new Thickness(Around),
@@ -3178,11 +3195,6 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
                 Children = { Source.Marked(item, _icon), Caption(item) },
             },
         };
-
-        if (Source.Wash(item) is { } wash)
-        {
-            tile.Background = new SolidColorBrush(wash);
-        }
 
         return tile;
     }
@@ -3211,6 +3223,19 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
             HorizontalAlignment = HorizontalAlignment.Center,
         };
 
-        return name;
+        if (Source.Band(item) is not { } colour)
+        {
+            return name;
+        }
+
+        // The mark is the line under the name rather than a fill behind it: the picture, the name and the
+        // colour read as one caption instead of as a coloured card holding a picture.
+        return new Border
+        {
+            Child = name,
+            BorderBrush = new SolidColorBrush(colour),
+            BorderThickness = new Thickness(0, 0, 0, 3),
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
     }
 }

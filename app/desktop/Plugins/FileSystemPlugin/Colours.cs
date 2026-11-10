@@ -131,30 +131,20 @@ public static class EntryColourProviders
 /// </summary>
 /// <remarks>
 /// A directory that a provider marks gives its colour to everything under it, and the nearest marked directory
-/// wins, which is the rule a marked folder inside another marked folder follows. A tree draws that as one block
-/// behind the marked row and every row under it, and a listing draws it as a wash on the row of each entry it
-/// reaches. A row that inherited its colour carries a darker wash than the folder it inherited from, as Godot's
-/// file system dock draws it, so that the folder itself reads as the place the colour belongs to and the rows
-/// under it as being inside that place.
+/// wins, which is the rule a marked folder inside another marked folder follows. A tree draws that as one line
+/// beside the marked step and through the height it covers, a list as a strip at a row's left edge, and a grid
+/// as a line under a tile's caption. A row that inherited its colour carries a darker shade than the folder it
+/// inherited from, as Godot's file system dock draws it, so that the folder itself reads as the place the colour
+/// belongs to and the rows under it as being inside that place.
 /// <para>
-/// The wash is a share of the colour over the row's own ground rather than an opaque fill, so that the choice a
-/// row already wears stays readable through it, and a look changed while the program runs changes the ground
-/// under a wash that stays the same share.
+/// Nothing is filled behind a row or a tile: the mark is a line in the colour, and the name and the picture stay
+/// on the ground the dock is drawn on.
 /// </para>
 /// </remarks>
 internal static class FolderColours
 {
-    /// <summary>How much of a marked colour an inherited row's wash keeps.</summary>
+    /// <summary>How much of a marked colour an inherited row keeps.</summary>
     private const double InheritedShare = 0.70;
-
-    /// <summary>How much of a marked colour the block behind a tree's step adds.</summary>
-    private const double BlockShare = 0.24;
-
-    /// <summary>How much of a marked colour a listing row's wash adds.</summary>
-    private const double WashShare = 0.12;
-
-    /// <summary>How much of a marked colour the ground of a listing inside it adds.</summary>
-    private const double SurfaceShare = 0.06;
 
     /// <summary>What was worked out for an entry, and whether it was its own colour or an inherited one.</summary>
     private readonly record struct Found(Color Colour, bool Own);
@@ -162,50 +152,32 @@ internal static class FolderColours
     /// <summary>What was worked out for an entry, so that a directory walked for every row is walked once.</summary>
     private static readonly Dictionary<Entry, Found?> Effective = [];
 
-    /// <summary>The block a marked directory or file is drawn as, or nothing when it is not marked itself.</summary>
+    /// <summary>The colour a marked directory or file is drawn as, at the strength a line wears.</summary>
     /// <remarks>
-    /// The answer is the entry's own colour rather than one it inherits: a block behind a marked directory already
-    /// covers what is under it, and a second block for an inherited row would be a second fill over the first.
+    /// The answer is the entry's own colour rather than one it inherits, and an inherited row keeps the
+    /// darker shade the tree's rule gives it: the line is the mark, so it is the one thing about a marked
+    /// row that is fully the colour's own.
     /// </remarks>
     /// <param name="entry">The entry to ask about.</param>
-    /// <returns>The colour to lay behind the block, or nothing.</returns>
-    public static Color? Block(Entry entry) =>
-        EntryColourProviders.Of(entry) is { } own ? WithAlpha(own, BlockShare) : null;
-
-    /// <summary>The wash a row of an entry carries, or nothing when no colour reaches it.</summary>
-    /// <param name="entry">The entry to ask about.</param>
-    /// <returns>The wash, or nothing.</returns>
-    public static Color? Wash(Entry entry)
+    /// <returns>The colour to draw the row's mark in, or nothing when it is not marked.</returns>
+    public static Color? Band(Entry entry)
     {
         if (EffectiveOf(entry) is not { } found)
         {
             return null;
         }
 
-        var colour = found.Own ? found.Colour : Darken(found.Colour);
-
-        return WithAlpha(colour, WashShare);
+        return found.Own ? found.Colour : Darken(found.Colour);
     }
 
-    /// <summary>The ground a listing of a directory that is inside a marked one adds, or nothing.</summary>
+    /// <summary>The colour an entry itself is marked with, and nothing for one that only inherits it.</summary>
     /// <remarks>
-    /// It is a share of the colour and nothing else, laid over the bright surface the dock is drawn on, rather
-    /// than an opaque mix of the two: a look changed while the program runs changes that surface, and a colour
-    /// that had the old one mixed in would draw the old ground under the new look.
+    /// A tree draws one line for the step that is marked and lets it run the whole subtree, so a descendant
+    /// that only inherits the colour would be a second line beside the same subtree rather than a deeper one.
     /// </remarks>
-    /// <param name="directory">The directory the listing is of.</param>
-    /// <returns>The colour to lay over the ground, or nothing when no colour reaches the directory.</returns>
-    public static Color? Surface(string directory)
-    {
-        if (string.IsNullOrEmpty(directory))
-        {
-            return null;
-        }
-
-        return EffectiveOf(new Entry(directory, EntryKind.Directory)) is { } found
-            ? WithAlpha(found.Colour, SurfaceShare)
-            : null;
-    }
+    /// <param name="entry">The entry to ask about.</param>
+    /// <returns>The colour of its own mark, or nothing.</returns>
+    public static Color? Mark(Entry entry) => EntryColourProviders.Of(entry);
 
     /// <summary>Lets go of what was worked out, so that the next drawing asks the providers again.</summary>
     internal static void Forget() => Effective.Clear();
@@ -266,11 +238,4 @@ internal static class FolderColours
             (byte)(colour.G * InheritedShare),
             (byte)(colour.B * InheritedShare)
         );
-
-    /// <summary>A colour at a share of its strength, for a row wash.</summary>
-    /// <param name="colour">The colour.</param>
-    /// <param name="share">How much of the row is the colour, from nothing to one.</param>
-    /// <returns>The colour with that share as its alpha.</returns>
-    private static Color WithAlpha(Color colour, double share) =>
-        Color.FromArgb((byte)Math.Round(share * 255), colour.R, colour.G, colour.B);
 }

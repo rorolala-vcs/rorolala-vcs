@@ -10,7 +10,6 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
-using ShapePath = Avalonia.Controls.Shapes.Path;
 
 namespace FileSystemPlugin;
 
@@ -342,11 +341,12 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>The tree itself, which the open steps are gathered from when it is built again.</summary>
     private readonly TreeView _tree;
 
-    /// <summary>The layer the marked directories are drawn in, behind the rows.</summary>
+    /// <summary>The layer the marked directories' lines are drawn in, over the rows.</summary>
     /// <remarks>
-    /// A mark covers a directory and everything under it, and what is under it is not one row: the rows have
-    /// room between them, and a background on each row would be a set of bands rather than the one block the
-    /// mark is. The layer is behind the tree so a chosen row is still drawn over the mark.
+    /// The line belongs to the indent beside a marked step, which a row's hover or choice wash also covers:
+    /// drawn behind the rows, it would disappear from the row the pointer is on. The layer therefore stands over
+    /// the tree and holds only the line, which is why it takes no press and lets the row's own content show
+    /// through everywhere else.
     /// </remarks>
     private readonly Canvas _blocks = new()
     {
@@ -618,8 +618,8 @@ internal sealed class TreeBrowser : UserControl
         _ghost = new Ghost(over);
 
         var grid = new Grid();
-        grid.Children.Add(_blocks);
         grid.Children.Add(tree);
+        grid.Children.Add(_blocks);
         grid.Children.Add(_empty);
         grid.Children.Add(over);
 
@@ -1191,13 +1191,13 @@ internal sealed class TreeBrowser : UserControl
     }
 
     /// <summary>
-    /// Draws one block behind every marked step and everything under it.
+    /// Draws one coloured line beside every marked step, through the height it covers.
     /// </summary>
     /// <remarks>
-    /// A step's own bounds are the block: the row and, while it is open, everything it holds, including the room
-    /// between rows that a background on each row would leave unpainted. A marked step inside another marked one
-    /// is taken out of the outer block's geometry, so the inner colour replaces the outer one rather than being
-    /// laid over it.
+    /// The line stands at the step's own indent, where the tree already reads its depth, and runs the whole
+    /// height of the step and what it holds while open. A marked step inside another draws its line at its own
+    /// deeper indent, so the two colours stand side by side rather than one replacing the other. No fill is laid
+    /// behind a row, which leaves the picture and the name on the dock's own ground.
     /// </remarks>
     private void PaintBlocks()
     {
@@ -1226,7 +1226,7 @@ internal sealed class TreeBrowser : UserControl
 
                 var kind = _kinds.GetValueOrDefault(path, EntryKind.Directory);
 
-                if (FolderColours.Block(new Entry(path, kind)) is not { } colour)
+                if (FolderColours.Mark(new Entry(path, kind)) is not { } colour)
                 {
                     continue;
                 }
@@ -1251,32 +1251,59 @@ internal sealed class TreeBrowser : UserControl
 
             foreach (var block in blocks)
             {
-                var geometry = new GeometryGroup { FillRule = FillRule.EvenOdd };
-                geometry.Children.Add(new RectangleGeometry(block.Rect));
-
-                // A marked step inside this one is a hole in this block, not a second fill over it: the inner
-                // step's own colour is what should be drawn there.
-                foreach (var inner in blocks)
+                // The mark is the vertical line at the block's indent, not a fill behind the rows: the
+                // line is where the tree already reads its depth, and it runs the block's whole height.
+                var line = new Border
                 {
-                    if (Nearest(block, inner, blocks))
-                    {
-                        geometry.Children.Add(new RectangleGeometry(inner.Rect));
-                    }
-                }
+                    Width = BandWidth,
+                    Height = block.Rect.Height,
+                    Background = new SolidColorBrush(block.Colour),
+                    IsHitTestVisible = false,
+                };
 
-                _blocks.Children.Add(
-                    new ShapePath
-                    {
-                        Data = geometry,
-                        Fill = new SolidColorBrush(block.Colour),
-                        IsHitTestVisible = false,
-                    }
+                Canvas.SetLeft(
+                    line,
+                    Math.Max(
+                        0,
+                        block.Rect.X + (block.Level * Indent) - (Indent / 2) - (BandWidth / 2)
+                    )
                 );
+                Canvas.SetTop(line, block.Rect.Y);
+                _blocks.Children.Add(line);
             }
+
+            RepaintGuides();
         }
         finally
         {
             _paintingBlocks = false;
+        }
+    }
+
+    /// <summary>Rebuilds the guide layer of every row, which is where a coloured line replaces a grey one.</summary>
+    private void RepaintGuides()
+    {
+        foreach (var item in VisibleRows())
+        {
+            var border = item
+                .GetVisualDescendants()
+                .OfType<Border>()
+                .FirstOrDefault(one => one.Name == "SelectionBorder");
+
+            if (border?.Child is not Grid header)
+            {
+                continue;
+            }
+
+            if (
+                header.Children.OfType<Panel>().FirstOrDefault(one => one.Name == GuideName)
+                is { } existing
+            )
+            {
+                header.Children.Remove(existing);
+            }
+
+            DrawGuides(item);
         }
     }
 
@@ -1308,49 +1335,6 @@ internal sealed class TreeBrowser : UserControl
         }
 
         return true;
-    }
-
-    /// <summary>Whether one marked block is the nearest marked one inside another.</summary>
-    /// <param name="outer">The block outside.</param>
-    /// <param name="inner">The block that may be inside it.</param>
-    /// <param name="all">Every block drawn.</param>
-    /// <returns>Whether <paramref name="inner"/> is directly under <paramref name="outer"/>.</returns>
-    private static bool Nearest(
-        TreeBlock outer,
-        TreeBlock inner,
-        IReadOnlyList<TreeBlock> all
-    )
-    {
-        if (inner.Level <= outer.Level || !Under(outer.Path, inner.Path))
-        {
-            return false;
-        }
-
-        foreach (var between in all)
-        {
-            if (
-                between.Level > outer.Level
-                && between.Level < inner.Level
-                && Under(outer.Path, between.Path)
-                && Under(between.Path, inner.Path)
-            )
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>Whether a path names something inside a directory.</summary>
-    /// <param name="directory">The directory.</param>
-    /// <param name="path">The path to ask about.</param>
-    /// <returns>Whether the path is under the directory.</returns>
-    private static bool Under(string directory, string path)
-    {
-        var prefix = Path.TrimEndingDirectorySeparator(directory) + Path.DirectorySeparatorChar;
-
-        return path.StartsWith(prefix, StringComparison.Ordinal);
     }
 
     /// <summary>The place a path has among the rows on screen, or nothing where it is not drawn.</summary>
@@ -2391,6 +2375,9 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>How far one step of the tree is indented, which the template's own margin uses too.</summary>
     private const double Indent = 16.0;
 
+    /// <summary>How wide the coloured line beside a marked step is.</summary>
+    private const double BandWidth = 4.0;
+
     /// <summary>How strong a guide line is against the row it stands in.</summary>
     private const double Guide = 0.65;
 
@@ -2417,7 +2404,7 @@ internal sealed class TreeBrowser : UserControl
     /// one line down a level rather than as a mark on each row.
     /// </remarks>
     /// <param name="item">The row.</param>
-    private static void Guides(TreeViewItem item)
+    private void Guides(TreeViewItem item)
     {
         item.TemplateApplied += (_, _) => Dispatcher.UIThread.Post(() => DrawGuides(item));
         item.AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => DrawGuides(item));
@@ -2436,7 +2423,7 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>Puts the guide lines in a row's template once it has one.</summary>
     /// <param name="item">The row.</param>
-    private static void DrawGuides(TreeViewItem item)
+    private void DrawGuides(TreeViewItem item)
     {
         // The template's own margin reads Level, which is set when the row joins a tree; the ancestors
         // answer the same question even when the event that asks is earlier than that, and the larger of
@@ -2478,6 +2465,16 @@ internal sealed class TreeBrowser : UserControl
 
         for (var level = 1; level <= depth; level++)
         {
+            // A coloured line already stands at this level for the marked step this row is under. Drawing the
+            // look's grey guide over it would put a grey stripe inside the colour; the colour is the guide there.
+            if (
+                item.Tag is string path
+                && _drawnBlocks.Any(block => block.Level == level && Covers(block.Path, path))
+            )
+            {
+                continue;
+            }
+
             var line = new Border
             {
                 Width = 1,
@@ -2498,6 +2495,21 @@ internal sealed class TreeBrowser : UserControl
         Grid.SetColumn(guides, 0);
         Grid.SetColumnSpan(guides, 2);
         header.Children.Insert(0, guides);
+    }
+
+    /// <summary>Whether a path names a tree or something under it.</summary>
+    /// <param name="tree">The marked step's path.</param>
+    /// <param name="path">The row's path.</param>
+    /// <returns>Whether the row is inside the marked step.</returns>
+    private static bool Covers(string tree, string path)
+    {
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var prefix = Path.TrimEndingDirectorySeparator(tree) + Path.DirectorySeparatorChar;
+
+        return string.Equals(tree, path, comparison)
+            || path.StartsWith(prefix, comparison);
     }
 
     /// <summary>Whether a path is a directory or a file, as the tree knows it when asked.</summary>

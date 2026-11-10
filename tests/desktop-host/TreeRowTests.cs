@@ -318,9 +318,9 @@ public sealed class TreeRowTests
         }
     }
 
-    /// <summary>A marked folder is one block behind its own row and everything under it.</summary>
+    /// <summary>A marked folder is one coloured line beside its own row and everything under it.</summary>
     [Fact]
-    public void AMarkedFolderIsOneBlockBehindItsWholeSubtree()
+    public void AMarkedFolderIsOneLineBesideItsWholeSubtree()
     {
         var directory = Scratch.New("tree-colour");
         var marked = Directory.CreateDirectory(Path.Combine(directory, "marked")).FullName;
@@ -346,27 +346,30 @@ public sealed class TreeRowTests
                 .OfType<Canvas>()
                 .First(canvas => canvas.Name == "TreeBlocks");
 
-            // The folder's own row carries no wash of its own: the mark is the block behind the rows.
+            // The folder's own row carries no fill of its own: the mark is the line beside the rows.
             Assert.Equal(0, Wash(markedRow).A);
 
-            var path = Assert.Single(blocks.Children.OfType<ShapePath>());
-            var fill = Assert.IsType<SolidColorBrush>(path.Fill).Color;
+            var line = Assert.Single(blocks.Children.OfType<Border>());
 
-            Assert.Equal(Colors.Red.R, fill.R);
-            Assert.True(fill.A > 0);
+            Assert.True(line.Width > 2);
+            Assert.Equal(Colors.Red.R, Assert.IsType<SolidColorBrush>(line.Background).Color.R);
 
             markedRow.IsExpanded = true;
             PumpFrames(window, 20);
 
-            path = Assert.Single(blocks.Children.OfType<ShapePath>());
+            line = Assert.Single(blocks.Children.OfType<Border>());
 
-            var outer = Assert.IsType<GeometryGroup>(path.Data);
-            var whole = Assert.IsType<RectangleGeometry>(Assert.Single(outer.Children));
+            Assert.Equal(markedRow.Bounds.Height, line.Height, 1);
 
-            Assert.Equal(markedRow.Bounds.Height, whole.Rect.Height, 1);
+            var guides = markedRow.GetVisualDescendants()
+                .OfType<Panel>()
+                .FirstOrDefault(one => one.Name == "TreeGuides");
 
-            // A marked folder inside a marked one replaces it rather than being laid over it: the inner block
-            // is a hole in the outer one, and a block of its own.
+            Assert.NotNull(guides);
+            Assert.Empty(guides!.Children);
+
+            // A marked folder inside another draws its line at its own deeper indent: the two colours stand
+            // beside one another rather than one replacing the other.
             EntryColourProviders.Register(new FixedColour("it.tree.row.blue", child, Colors.Blue));
 
             var childRow = Until(window, () => Row(window, child));
@@ -374,15 +377,20 @@ public sealed class TreeRowTests
             childRow.IsExpanded = true;
             PumpFrames(window, 20);
 
-            var paths = blocks.Children.OfType<ShapePath>().ToList();
+            var lines = blocks.Children.OfType<Border>().ToList();
 
-            Assert.Equal(2, paths.Count);
+            Assert.Equal(2, lines.Count);
 
-            var outerHole = Assert.IsType<GeometryGroup>(paths[0].Data);
+            var outer = Assert.Single(
+                lines,
+                one => Assert.IsType<SolidColorBrush>(one.Background).Color.R == Colors.Red.R
+            );
+            var inner = Assert.Single(
+                lines,
+                one => Assert.IsType<SolidColorBrush>(one.Background).Color.R == Colors.Blue.R
+            );
 
-            Assert.Equal(2, outerHole.Children.Count);
-            Assert.Equal(Colors.Red.R, Assert.IsType<SolidColorBrush>(paths[0].Fill).Color.R);
-            Assert.Equal(Colors.Blue.R, Assert.IsType<SolidColorBrush>(paths[1].Fill).Color.R);
+            Assert.True(Canvas.GetLeft(inner) > Canvas.GetLeft(outer));
 
             var plainRow = Until(window, () => Row(window, plain));
 

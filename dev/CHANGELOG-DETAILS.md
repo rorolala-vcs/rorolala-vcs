@@ -134,7 +134,11 @@ The new `rorolala-tree` crate holds what a tree is: a canonical structure object
 
 ## Refactor
 
-### 1. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack
+### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`colour`] Draw folder colours as lines rather than filled blocks
+
+A marked folder or file is now drawn with a line rather than a fill. The folder tree draws one thick coloured line beside a marked step, through the whole height of its open subtree, with an inner marked step standing at its own deeper indent. A directory list draws the colour as a strip at the row's left edge, and a directory grid draws it as a thick line under the caption. The row and tile fills and the ground tint inside a marked directory are gone, so names and pictures stand on the dock's own ground.
+
+### 2. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack
 
 Progress is now the host's rather than the Rorolala plugin's. `IPluginHost.Progress` begins a run that every open window draws in a stack under its title row, and the plugin's commands use it without knowing which window is in front. The Overview no longer draws a panel of its own, and a run begun from any dock appears in the same stack.
 

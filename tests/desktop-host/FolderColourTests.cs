@@ -33,7 +33,7 @@ public sealed class FolderColourTests
         ChosenEntry.Clear();
     }
 
-    /// <summary>A listing inside a marked folder wears the colour in its ground and in the row of an entry.</summary>
+    /// <summary>A listing inside a marked folder keeps the colour on the ground and under a tile's caption.</summary>
     [Fact]
     public void AListingInsideAMarkedFolderWearsItsColour()
     {
@@ -74,9 +74,8 @@ public sealed class FolderColourTests
 
             var view = window.GetVisualDescendants().OfType<EntryView<Entry>>().First();
             var ground = Assert.IsType<Grid>(view.Content);
-            var surface = Assert.IsType<SolidColorBrush>(ground.Background).Color;
 
-            Assert.Equal(FolderColours.Surface(marked), surface);
+            Assert.Equal(0, Assert.IsAssignableFrom<ISolidColorBrush>(ground.Background).Color.A);
 
             var list = view.GetVisualDescendants().OfType<ListBox>().First();
             var entry = Assert.Single(list.Items.OfType<Entry>(), item => item.Path == file);
@@ -86,9 +85,16 @@ public sealed class FolderColourTests
                 .FirstOrDefault(border => border.Child is StackPanel && border.Padding.Left > 0);
 
             Assert.NotNull(tile);
+            Assert.Null(tile!.Background);
+
+            var underline = tile.GetVisualDescendants()
+                .OfType<Border>()
+                .FirstOrDefault(border => border.BorderThickness.Bottom > 0);
+
+            Assert.NotNull(underline);
             Assert.Equal(
-                FolderColours.Wash(entry),
-                Assert.IsType<SolidColorBrush>(tile!.Background).Color
+                FolderColours.Band(entry),
+                Assert.IsType<SolidColorBrush>(underline!.BorderBrush).Color
             );
         }
         finally

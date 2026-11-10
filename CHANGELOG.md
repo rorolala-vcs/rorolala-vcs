@@ -39,7 +39,8 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Refactor
 
-1. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack. [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-progress-show-progress-in-a-host-level-stack)
+1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`colour`] Draw folder colours as lines rather than filled blocks. [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-file-system-colour-draw-folder-colours-as-lines-rather-than-filled-blocks)
+2. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-progress-show-progress-in-a-host-level-stack)
 
 # 0.2.0 (2026-11-04)
 
