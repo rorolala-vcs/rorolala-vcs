@@ -187,22 +187,27 @@ public sealed class ColumnTests
         Assert.Equal(VcsIcons.Add, added.IconKey);
         Assert.Equal(RorolalaColours.Untagged, added.Colour);
         Assert.True(added.Tagged);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_work.added_hover"), added.Hover());
 
         Assert.Equal(VcsIcons.EditNote, modified.IconKey);
         Assert.Equal(RorolalaColours.UnderWay, modified.Colour);
         Assert.True(modified.Tagged);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_work.modified_hover"), modified.Hover());
 
         Assert.Equal(VcsIcons.CheckCircle, all.IconKey);
         Assert.Equal(RorolalaColours.Untagged, all.Colour);
         Assert.True(all.Tagged);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_staged.all_hover"), all.Hover());
 
         Assert.Equal(VcsIcons.RadioButtonChecked, partial.IconKey);
         Assert.Equal(RorolalaColours.UnderWay, partial.Colour);
         Assert.True(partial.Tagged);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_staged.partial_hover"), partial.Hover());
 
         Assert.Equal(VcsIcons.RadioButtonUnchecked, none.IconKey);
         Assert.Null(none.Colour);
         Assert.True(none.Tagged);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_staged.none_hover"), none.Hover());
     }
 
     /// <summary>

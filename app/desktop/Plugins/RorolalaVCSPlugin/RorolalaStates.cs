@@ -140,7 +140,11 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
         Badge(
             work.Status == TreeWorkStatus.Added ? PathState.Untagged : PathState.Modified,
             TreeWords(work.Status)
-        );
+        ) with
+        {
+            Text = null,
+            HoverKey = TreeHover(work.Status),
+        };
 
     /// <summary>What a tree's own state is said as.</summary>
     /// <param name="status">The state.</param>
@@ -151,6 +155,14 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
                 ? "rorolala_vcs.tree_work.added"
                 : "rorolala_vcs.tree_work.modified"
         );
+
+    /// <summary>The sentence a tree's own state badge is hovered for.</summary>
+    /// <param name="status">The state.</param>
+    /// <returns>The i18n key of its explanation.</returns>
+    private static string TreeHover(TreeWorkStatus status) =>
+        status == TreeWorkStatus.Added
+            ? "rorolala_vcs.tree_work.added_hover"
+            : "rorolala_vcs.tree_work.modified_hover";
 
     /// <summary>What a reading says about one entry: the state it is in, and what that state is said as.</summary>
     /// <param name="State">What the reading says about the entry.</param>

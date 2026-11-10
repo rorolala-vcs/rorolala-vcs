@@ -80,12 +80,15 @@ public sealed record EntryMark(
     /// places: a column beside a name says only the name, while a badge that is a picture of a lock says nothing
     /// about who holds it until it is given the words. The mark's own words are the argument, so a phrase can be
     /// written around a name without the renderer having to know which part of it is the name, and one place in
-    /// a phrase is all the translation formatter takes.
+    /// a phrase is all the translation formatter takes. A picture with no words of its own still reads its
+    /// phrase, with no argument: a state badge has to explain itself without a column beside it.
     /// </remarks>
     /// <returns>What to say, which is the mark's own words when it names no phrase of its own.</returns>
     public string? Hover() =>
-        HoverKey is { Length: > 0 } key && Said() is { Length: > 0 } said
-            ? RolaI18N.Get(key, said)
+        HoverKey is { Length: > 0 } key
+            ? Said() is { Length: > 0 } said
+                ? RolaI18N.Get(key, said)
+                : RolaI18N.Get(key)
             : Said();
 }
 

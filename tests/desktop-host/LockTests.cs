@@ -1,6 +1,7 @@
 using FileSystemPlugin;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
+using RorolalaDesktop.I18n;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -52,6 +53,18 @@ public sealed class LockTests
     {
         Assert.Equal("alice", new EntryMark(Text: "alice").Hover());
         Assert.Null(new EntryMark().Hover());
+    }
+
+    /// <summary>A picture with no words of its own is still hovered for the phrase that explains it.</summary>
+    [Fact]
+    public void AnIconOnlyMarkIsHoveredForItsPhrase()
+    {
+        _ = Host.Services();
+
+        var mark = new EntryMark(IconKey: "it.icon", HoverKey: "rorolala_vcs.tree_badge");
+
+        Assert.Null(mark.Said());
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_badge"), mark.Hover());
     }
 
     /// <summary>A provider is the one a listing asks only for the directory it speaks for.</summary>

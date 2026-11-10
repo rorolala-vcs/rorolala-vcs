@@ -137,7 +137,7 @@ internal sealed class RorolalaTreeStatusColumn : RorolalaTreeColumn
             IconKey: status == TreeWorkStatus.Added ? Icons.Add : Icons.EditNote,
             Colour: Colour(status),
             Tagged: true,
-            HoverKey: Key(status)
+            HoverKey: HoverKey(status)
         );
 
     /// <summary>The words a status is said as.</summary>
@@ -147,6 +147,14 @@ internal sealed class RorolalaTreeStatusColumn : RorolalaTreeColumn
         status == TreeWorkStatus.Added
             ? "rorolala_vcs.tree_work.added"
             : "rorolala_vcs.tree_work.modified";
+
+    /// <summary>The sentence a status badge is hovered for.</summary>
+    /// <param name="status">The status.</param>
+    /// <returns>The i18n key of its explanation.</returns>
+    private static string HoverKey(TreeWorkStatus status) =>
+        status == TreeWorkStatus.Added
+            ? "rorolala_vcs.tree_work.added_hover"
+            : "rorolala_vcs.tree_work.modified_hover";
 
     /// <summary>What a status is coloured.</summary>
     /// <param name="status">The status.</param>
@@ -199,7 +207,7 @@ internal sealed class RorolalaTreeStagedColumn : RorolalaTreeColumn
             IconKey: Icon(stage),
             Colour: Colour(stage),
             Tagged: true,
-            HoverKey: Key(stage)
+            HoverKey: HoverKey(stage)
         );
 
     /// <summary>The words a stage is said as.</summary>
@@ -211,6 +219,17 @@ internal sealed class RorolalaTreeStagedColumn : RorolalaTreeColumn
             TreeWorkStage.Staged => "rorolala_vcs.tree_staged.all",
             TreeWorkStage.Partial => "rorolala_vcs.tree_staged.partial",
             _ => "rorolala_vcs.tree_staged.none",
+        };
+
+    /// <summary>The sentence a stage badge is hovered for.</summary>
+    /// <param name="stage">The stage.</param>
+    /// <returns>The i18n key of its explanation.</returns>
+    private static string HoverKey(TreeWorkStage stage) =>
+        stage switch
+        {
+            TreeWorkStage.Staged => "rorolala_vcs.tree_staged.all_hover",
+            TreeWorkStage.Partial => "rorolala_vcs.tree_staged.partial_hover",
+            _ => "rorolala_vcs.tree_staged.none_hover",
         };
 
     /// <summary>The picture a stage wears: a full, half or empty circle.</summary>

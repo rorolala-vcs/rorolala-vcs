@@ -31,8 +31,8 @@ rorolala_vcs:
   # What the park on a folder icon says when the pointer rests on it: the folder is one tree rather than a
   # directory of loose entries, and the picture is its own answer to that.
   tree_badge:
-    en: This directory is a rola-tree
-    zh-CN: 该目录是一棵 rola-tree
+    en: This directory is a tree object. Its contents and structure are recorded as one.
+    zh-CN: 此目录为树对象，目录内容和结构会视作一体
 
   # What the Version Graph says when it has nothing to draw: no Workspace holds the directory, no
   # Layout is being worked in, or nothing in it records a version yet. The graph itself needs no click
@@ -588,6 +588,12 @@ rorolala_vcs:
     modified:
       en: Modified
       zh-CN: 修改
+    added_hover:
+      en: A new entry in this tree. Track it to create the entry.
+      zh-CN: 新的条目，追踪以创建它
+    modified_hover:
+      en: The entry is modified. Track it to record this change.
+      zh-CN: 条目已修改，追踪以记录此次修改
 
   # What the Staged column says about a path in a tree, and what its badge is hovered for.
   tree_staged:
@@ -600,6 +606,15 @@ rorolala_vcs:
     none:
       en: Not staged
       zh-CN: 未暂存
+    all_hover:
+      en: All of this file's content is staged.
+      zh-CN: 该文件所有内容已暂存
+    partial_hover:
+      en: Part of this file is staged, or its staged content has changed since.
+      zh-CN: 文件部分被暂存或暂存后内容被修改
+    none_hover:
+      en: This file has not been staged yet.
+      zh-CN: 该文件暂未暂存
 
   # What the Upstream column is headed: where the Vault names the entry the work names here. The
   # column is only there where Rorolala answers, and it says nothing about an entry the Vault's copy
@@ -646,8 +661,8 @@ rorolala_vcs:
   # the reading holds, and this is the answer for a change whose reason is neither of them.
   state:
     wrong:
-      en: Wrong change
-      zh-CN: 错误修改
+      en: This file has a change that is wrong. Deal with it before recording the work.
+      zh-CN: 本文件产生了错误的修改，请处理！
 
   # What a variant file is called, and what is said about it. A variant file is one the Layout does not
   # name, it holds content waiting to be joined into a file the Layout does name, so it has no name of
