@@ -49,6 +49,11 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // look in force as the marks are drawn.
         RorolalaColours.Bind(host.Palette);
 
+        // The folder a listing makes can be made a tree instead, which is this plugin's answer rather than
+        // the file system's: the mark and the rules that make one are Rorolala's, and the file system only
+        // offers the kind.
+        RorolalaTreeCreate.Declare(host);
+
         // A badge and a state dot are built from a colour value, so replacing the look's resources does not
         // recolour them on its own. The file system redraw is what asks the views for their marks again without
         // reading a directory: what changed is the answer a mark is drawn from, not the work on disk.

@@ -127,6 +127,21 @@ public sealed class ColumnTests
         Assert.Equal(1, readAgain);
     }
 
+    /// <summary>The VCS plugin offers a tree as a kind of folder the file system's menu may make.</summary>
+    [Fact]
+    public void TheVcsPluginOffersANewTreeFolder()
+    {
+        var services = Host.Services();
+        var plugin = new Vcs();
+
+        plugin.Initialize(services.For(plugin.Manifest.Id, 1));
+
+        var variant = Assert.Single(services.FolderVariants.All());
+        Assert.Equal("rorolala_vcs.new_tree", variant.LabelKey);
+        Assert.Equal("rorolala_vcs.new_tree_name", variant.NameKey);
+        Assert.Equal(RorolalaVCSPlugin.Icons.Park, variant.IconKey);
+    }
+
     /// <summary>
     /// A directory inside a tree has the tree's own two columns instead of the work's three.
     /// </summary>

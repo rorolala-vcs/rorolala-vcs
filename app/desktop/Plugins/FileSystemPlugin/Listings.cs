@@ -449,7 +449,8 @@ internal abstract class Listing<TItem>
     public virtual void Delete(IReadOnlyList<TItem> chosen, bool ask) { }
 
     /// <summary>Makes a directory in the listing, which is then named where it is drawn.</summary>
-    public virtual void NewFolder() { }
+    /// <param name="variant">What the folder is to become, or nothing for a plain folder.</param>
+    public virtual void NewFolder(FolderVariant? variant = null) { }
 
     /// <summary>Takes what a name was edited to.</summary>
     /// <param name="item">What is being renamed.</param>
@@ -1123,12 +1124,13 @@ internal abstract class EntryView<TItem> : EntryView
     public void Delete(bool ask) => Source.Delete([.. Offered().Where(Source.Removable)], ask);
 
     /// <summary>Makes a directory in the listing, which is then named where it is drawn.</summary>
+    /// <param name="variant">What the folder is to become, or nothing for a plain folder.</param>
     /// <remarks>
     /// The name is not asked for here: making one reads the listing again, and the view that reading builds is the one
     /// whose row the box goes in (see <see cref="Naming"/>). Asking here would take the hand-off on this view, whose
     /// rows are from before the making, where the new one is not.
     /// </remarks>
-    public void NewFolder() => Source.NewFolder();
+    public void NewFolder(FolderVariant? variant = null) => Source.NewFolder(variant);
 
     /// <summary>The box a name is being edited in, and the entry it is about, while one is.</summary>
     /// <remarks>

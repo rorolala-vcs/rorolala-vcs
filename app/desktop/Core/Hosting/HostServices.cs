@@ -114,6 +114,9 @@ internal sealed class HostServices
     /// <summary>The icon badge providers.</summary>
     public required IconBadgeRegistry IconBadges { get; init; }
 
+    /// <summary>The other kinds of folder a menu may make, offered by the plugins that know them.</summary>
+    public FolderVariants FolderVariants { get; } = new();
+
     /// <summary>The pictures plugins contribute, which is what an <c>IconKey</c> is answered from.</summary>
     public required IconLibrary Icons { get; init; }
 
@@ -234,6 +237,9 @@ internal sealed class PluginHost
     public IIconBadgeRegistry IconBadges => this;
 
     /// <inheritdoc />
+    public IFolderVariants FolderVariants => _services.FolderVariants;
+
+    /// <inheritdoc />
     public IIconLibrary Icons => _services.Icons;
 
     /// <inheritdoc />
@@ -321,6 +327,29 @@ internal sealed class PluginHost
     /// <inheritdoc />
     void IIconBadgeRegistry.Add(IIconBadgeProvider provider) =>
         _services.IconBadges.Add(_id, _position, provider);
+}
+
+/// <summary>The other kinds of folder a menu may make.</summary>
+/// <remarks>
+/// Registration is by plugin load order, which is what makes the plain folder the file system draws itself
+/// come before anything a plugin adds: the reader sees the ordinary answer first and the specialised one
+/// beside it.
+/// </remarks>
+internal sealed class FolderVariants : IFolderVariants
+{
+    /// <summary>The kinds registered, in the order they are offered.</summary>
+    private readonly List<FolderVariant> _variants = [];
+
+    /// <inheritdoc />
+    public void Add(FolderVariant variant)
+    {
+        ArgumentNullException.ThrowIfNull(variant);
+
+        _variants.Add(variant);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<FolderVariant> All() => _variants;
 }
 /// <summary>
 /// One plugin's cache directory, made when it is first asked for.

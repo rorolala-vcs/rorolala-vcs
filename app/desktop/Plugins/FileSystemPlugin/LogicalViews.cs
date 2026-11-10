@@ -99,7 +99,7 @@ internal sealed class Places : Listing<LogicalEntry>
     /// What the place made is not named here: making a folder reads the place again, and the listing that reading
     /// builds is the one whose rows the name box goes in (see <see cref="Pending"/>).
     /// </remarks>
-    public override void NewFolder()
+    public override void NewFolder(FolderVariant? variant = null)
     {
         if (Editor() is not { } editor || !editor.NewFolder(_place.Address))
         {
@@ -342,7 +342,7 @@ internal sealed class Places : Listing<LogicalEntry>
             && editor.MakesFolders(_place.Address)
         )
         {
-            menu.Items.Add(BrowserActions.Item("rorolala_file_system.new_folder", view.NewFolder));
+            menu.Items.Add(BrowserActions.Item("rorolala_file_system.new_folder", () => view.NewFolder()));
         }
 
         menu.Items.Add(BrowserActions.Item("rorolala_file_system.refresh", _browser.Refresh));

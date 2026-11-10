@@ -212,10 +212,17 @@ internal sealed class BrowserActions
     /// A directory is made here rather than by a command, because there is no word of Rorolala's for it yet
     /// and a folder that took a shell to make would be a folder that shell's syntax decides. It is named by
     /// the plugin because the caller has not been asked for a name; the row it makes is where one is typed.
+    /// <para>
+    /// A variant is a folder that becomes something once it exists. The directory is still this side's to
+    /// make and name, which is why the variant is told what was made rather than making it: the listing
+    /// around it is the one that starts the name box, and a second maker would be a second directory with
+    /// its own row.
+    /// </para>
     /// </remarks>
     /// <param name="into">The directory to make it in.</param>
+    /// <param name="variant">What the folder is to become, or nothing for a plain folder.</param>
     /// <returns>The path made, or nothing when none was.</returns>
-    public string? NewFolder(string into)
+    public string? NewFolder(string into, FolderVariant? variant = null)
     {
         if (Browser.IsComputer(into))
         {
@@ -224,11 +231,16 @@ internal sealed class BrowserActions
             return null;
         }
 
-        var made = Path.Combine(into, FreeName(into));
+        var made = Path.Combine(into, FreeName(into, variant?.NameKey));
 
         try
         {
             Directory.CreateDirectory(made);
+
+            // After the directory is there, because what a variant adds is what the folder becomes: a tree
+            // is a directory with a mark in it, and a mark written before the directory would be a mark in
+            // no folder.
+            variant?.Made(made);
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
@@ -257,9 +269,10 @@ internal sealed class BrowserActions
 
     /// <summary>The first name beside `into` that nothing holds, from the plain one and then numbered.</summary>
     /// <param name="into">The directory the name is to be free in.</param>
-    private static string FreeName(string into)
+    /// <param name="nameKey">The key naming the plain name, or nothing for a folder's own.</param>
+    private static string FreeName(string into, string? nameKey = null)
     {
-        var plain = RolaI18N.Get("rorolala_file_system.new_folder_name");
+        var plain = RolaI18N.Get(nameKey ?? "rorolala_file_system.new_folder_name");
 
         for (var at = 1; ; at++)
         {
@@ -427,10 +440,12 @@ internal sealed class BrowserActions
         {
             var step = entries[0].Path;
             menu.Items.Add(Item("rorolala_file_system.new_folder", () => grower.NewFolder(step)));
+            AddVariants(menu, variant => grower.NewFolder(step, variant));
         }
         else if (from is EntryView<Entry> maker)
         {
-            menu.Items.Add(Item("rorolala_file_system.new_folder", maker.NewFolder));
+            menu.Items.Add(Item("rorolala_file_system.new_folder", () => maker.NewFolder()));
+            AddVariants(menu, variant => maker.NewFolder(variant));
         }
 
         if (entries.Count == 1)
@@ -544,6 +559,30 @@ internal sealed class BrowserActions
         }
     }
 
+    /// <summary>Adds the other kinds of folder a plugin offers, beside the plain one.</summary>
+    /// <remarks>
+    /// The picture is the library's, because it belongs to the plugin that drew it: a kind registered here
+    /// names a key rather than carrying a picture, so a plugin's own artwork is not copied into this one.
+    /// A key the library does not hold leaves the item without a picture rather than without a menu.
+    /// </remarks>
+    /// <param name="menu">The menu to add to.</param>
+    /// <param name="make">What makes a folder of the kind.</param>
+    private void AddVariants(ContextMenu menu, Action<FolderVariant?> make)
+    {
+        foreach (var variant in _host.FolderVariants.All())
+        {
+            var item = new MenuItem { Header = RolaI18N.Get(variant.LabelKey) };
+
+            if (_host.Icons.Find(variant.IconKey) is { } picture)
+            {
+                item.Icon = Icons.Inked(picture, Icons.Menu, typeof(MenuItem));
+            }
+
+            item.Click += (_, _) => make(variant);
+            menu.Items.Add(item);
+        }
+    }
+
     /// <summary>One action a plugin registered, as an item in the menu.</summary>
     /// <param name="item">What it registered.</param>
     /// <param name="was">What the menu was opened on.</param>
@@ -597,6 +636,7 @@ internal sealed class BrowserActions
             if (from is EntryView)
             {
                 menu.Items.Add(Item("rorolala_file_system.new_folder", () => NewFolder(here)));
+                AddVariants(menu, variant => NewFolder(here, variant));
             }
 
             // The top of the platform, which is where the tree is rooted by its own button as well: a tree

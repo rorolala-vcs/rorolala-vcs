@@ -1694,7 +1694,9 @@ internal sealed class TreeBrowser : UserControl
     /// directory.
     /// </remarks>
     /// <param name="into">The directory to make it in.</param>
-    public void NewFolder(string into) => _actions.NewFolder(into);
+    /// <param name="variant">What the folder is to become, or nothing for a plain folder.</param>
+    public void NewFolder(string into, FolderVariant? variant = null) =>
+        _actions.NewFolder(into, variant);
 
     /// <summary>
     /// Puts the name of a step into a box, where the tree draws it.

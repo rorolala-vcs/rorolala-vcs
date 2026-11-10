@@ -1114,7 +1114,7 @@ internal sealed class DirectoryControl : UserControl
 
             _ = Keys.Clipboard(
                 e,
-                new Clipboard(view.Copy, view.Cut, view.Paste, view.NewFolder),
+                new Clipboard(view.Copy, view.Cut, view.Paste, () => view.NewFolder()),
                 _host.Log
             );
 
@@ -1133,7 +1133,7 @@ internal sealed class DirectoryControl : UserControl
 
             _ = Keys.Clipboard(
                 e,
-                new Clipboard(place.Copy, place.Cut, place.Paste, place.NewFolder),
+                new Clipboard(place.Copy, place.Cut, place.Paste, () => place.NewFolder()),
                 _host.Log
             );
         }

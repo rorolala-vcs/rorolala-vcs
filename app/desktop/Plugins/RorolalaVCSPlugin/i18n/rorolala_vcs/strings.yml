@@ -547,6 +547,16 @@ rorolala_vcs:
       en: Rorolala file operations
       zh-CN: Rorolala 文件操作
 
+  # What the other kind of folder a listing may make is called, and the name a new one is given until it
+  # is named. Both are the plugin's copy rather than the file system's: the plain folder's name is not a
+  # tree's, and a menu that said "New folder" for a tree would be a menu that hid what it makes.
+  new_tree:
+    en: New tree
+    zh-CN: 新建树
+  new_tree_name:
+    en: New Tree
+    zh-CN: 新树
+
   # What the hide provider is called where the File System plugin offers its hiding rules. The key is
   # namespaced as this plugin's, since the option is the provider this plugin registers, the File
   # System plugin offers it without knowing that Rorolala exists.

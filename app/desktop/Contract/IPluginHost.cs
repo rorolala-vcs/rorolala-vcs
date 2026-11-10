@@ -70,6 +70,9 @@ public interface IPluginHost
     /// <summary>Where the plugin adds icon badges.</summary>
     IIconBadgeRegistry IconBadges { get; }
 
+    /// <summary>Where the plugin offers another kind of folder the file system's menus may make.</summary>
+    IFolderVariants FolderVariants { get; }
+
     /// <summary>Where the plugin adds the pictures the program draws, and reads them back.</summary>
     IIconLibrary Icons { get; }
 

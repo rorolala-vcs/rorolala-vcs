@@ -266,7 +266,8 @@ internal sealed class Files : Listing<Entry>
     public override void Delete(IReadOnlyList<Entry> chosen, bool ask) => _actions.Remove(chosen, ask);
 
     /// <inheritdoc />
-    public override void NewFolder() => _actions.NewFolder(_browser.Current);
+    public override void NewFolder(FolderVariant? variant = null) =>
+        _actions.NewFolder(_browser.Current, variant);
 
     /// <inheritdoc />
     public override void Rename(Entry item, string name) => _actions.Rename(item, name);
