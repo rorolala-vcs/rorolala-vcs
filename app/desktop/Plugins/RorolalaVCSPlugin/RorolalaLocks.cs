@@ -92,11 +92,18 @@ internal sealed class RorolalaLocks : IEntryLockProvider
     /// What the Vault's copy says about the entries being listed, shared with the menus: what an entry's menu offers is
     /// judged by whether there is a copy to act on, and that is the answer a listing's column reads.
     /// </param>
-    public static void Declare(IPluginHost host, StatusReadings statuses, OwnershipReadings readings)
+    /// <param name="trees">What each tree says about itself, for the state a tree's own row wears.</param>
+    public static void Declare(
+        IPluginHost host,
+        StatusReadings statuses,
+        OwnershipReadings readings,
+        TreeReadings trees
+    )
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(statuses);
         ArgumentNullException.ThrowIfNull(readings);
+        ArgumentNullException.ThrowIfNull(trees);
 
         Icons.Declare(host.Icons);
 
@@ -114,13 +121,13 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         // edit. The Upstream column reads it as well, because a variant file is the one file that column can
         // name and the Vault cannot.
         EntryColumns.Register(new RorolalaUpstream(readings, statuses));
-        EntryColumns.Register(new RorolalaStates(statuses));
+        EntryColumns.Register(new RorolalaStates(statuses, trees));
         EntryColumns.Register(new RorolalaStanding(statuses));
 
         // A state is worn on a tile as well as drawn in the list's own column, and it is worn before the rest:
         // what a file of the work is, is the first thing about it, who holds it and how far it has come are
         // read after that.
-        EntryMarkProviders.Register(new RorolalaStates(statuses));
+        EntryMarkProviders.Register(new RorolalaStates(statuses, trees));
 
         // How far a version has come is a different question about the same file as who holds it, so it is a
         // badge of its own, worn after the lock: a file may be somebody else's and be behind, and neither

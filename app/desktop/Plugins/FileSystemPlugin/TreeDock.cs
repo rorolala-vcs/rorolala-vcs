@@ -361,6 +361,9 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Whether the block layer is being written, so that writing it does not write it again.</summary>
     private bool _paintingBlocks;
 
+    /// <summary>Whether a guide refresh is already posted, so a resize posts one rather than one per row.</summary>
+    private bool _guidesPosted;
+
     /// <summary>One marked block: the directory it belongs to, its depth, where it is, and its colour.</summary>
     /// <param name="Path">The directory's path, which says what is inside it.</param>
     /// <param name="Level">How deep the directory is in the tree.</param>
@@ -1281,30 +1284,29 @@ internal sealed class TreeBrowser : UserControl
     }
 
     /// <summary>Rebuilds the guide layer of every row, which is where a coloured line replaces a grey one.</summary>
+    /// <remarks>
+    /// It is posted rather than drawn where it is called: the call comes from a layout pass, and changing the
+    /// children of the rows' header grids while they are being arranged is what a resize must not do. What the
+    /// posted pass changes is only whether each existing line is shown, so it does not rebuild the rows.
+    /// </remarks>
     private void RepaintGuides()
     {
-        foreach (var item in VisibleRows())
+        if (_guidesPosted)
         {
-            var border = item
-                .GetVisualDescendants()
-                .OfType<Border>()
-                .FirstOrDefault(one => one.Name == "SelectionBorder");
-
-            if (border?.Child is not Grid header)
-            {
-                continue;
-            }
-
-            if (
-                header.Children.OfType<Panel>().FirstOrDefault(one => one.Name == GuideName)
-                is { } existing
-            )
-            {
-                header.Children.Remove(existing);
-            }
-
-            DrawGuides(item);
+            return;
         }
+
+        _guidesPosted = true;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            _guidesPosted = false;
+
+            foreach (var item in VisibleRows())
+            {
+                DrawGuides(item);
+            }
+        });
     }
 
     /// <summary>Whether two sets of blocks are the same ones in the same places.</summary>
@@ -2416,7 +2418,7 @@ internal sealed class TreeBrowser : UserControl
         {
             if (change.Property == TreeViewItem.LevelProperty)
             {
-                DrawGuides(item);
+                Dispatcher.UIThread.Post(() => DrawGuides(item));
             }
         };
     }
@@ -2448,8 +2450,15 @@ internal sealed class TreeBrowser : UserControl
             return;
         }
 
-        if (header.Children.OfType<Panel>().Any(one => one.Name == GuideName))
+        var path = item.Tag as string;
+        var existing = header
+            .Children.OfType<Panel>()
+            .FirstOrDefault(one => one.Name == GuideName);
+
+        if (existing is not null)
         {
+            WearGuides(existing, depth, path);
+
             return;
         }
 
@@ -2465,28 +2474,16 @@ internal sealed class TreeBrowser : UserControl
 
         for (var level = 1; level <= depth; level++)
         {
-            // A coloured line already stands at this level for the marked step this row is under. Drawing the
-            // look's grey guide over it would put a grey stripe inside the colour; the colour is the guide there.
-            if (
-                item.Tag is string path
-                && _drawnBlocks.Any(block => block.Level == level && Covers(block.Path, path))
-            )
-            {
-                continue;
-            }
-
             var line = new Border
             {
                 Width = 1,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Stretch,
                 Margin = new Thickness((level * Indent) - (Indent / 2), 0, 0, 0),
-                Opacity = Guide,
                 IsHitTestVisible = false,
             };
-            line[!Border.BackgroundProperty] = new DynamicResourceExtension(
-                PaletteKeys.Splitter
-            );
+
+            WearGuide(line, Covered(level, path));
             guides.Children.Add(line);
         }
 
@@ -2495,6 +2492,47 @@ internal sealed class TreeBrowser : UserControl
         Grid.SetColumn(guides, 0);
         Grid.SetColumnSpan(guides, 2);
         header.Children.Insert(0, guides);
+    }
+
+    /// <summary>Shows or hides the existing lines of a guide layer for what now covers them.</summary>
+    /// <param name="guides">The layer.</param>
+    /// <param name="depth">How many lines it holds.</param>
+    /// <param name="path">The row's path, or nothing when it has none.</param>
+    private void WearGuides(Panel guides, int depth, string? path)
+    {
+        for (var level = 1; level <= depth && level <= guides.Children.Count; level++)
+        {
+            if (guides.Children[level - 1] is Border line)
+            {
+                WearGuide(line, Covered(level, path));
+            }
+        }
+    }
+
+    /// <summary>Whether a coloured line already stands at a row's level.</summary>
+    /// <param name="level">The tree level.</param>
+    /// <param name="path">The row's path, or nothing when it has none.</param>
+    /// <returns>Whether the colour replaces the look's guide there.</returns>
+    private bool Covered(int level, string? path) =>
+        path is not null
+        && _drawnBlocks.Any(block => block.Level == level && Covers(block.Path, path));
+
+    /// <summary>Paints one guide line as shown in the look's grey or hidden under a coloured line.</summary>
+    /// <param name="line">The line.</param>
+    /// <param name="covered">Whether a coloured line stands there instead.</param>
+    private static void WearGuide(Border line, bool covered)
+    {
+        line.IsVisible = !covered;
+
+        if (covered)
+        {
+            line.Opacity = 0;
+
+            return;
+        }
+
+        line[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
+        line.Opacity = Guide;
     }
 
     /// <summary>Whether a path names a tree or something under it.</summary>

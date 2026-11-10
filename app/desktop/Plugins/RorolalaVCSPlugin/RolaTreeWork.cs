@@ -172,7 +172,8 @@ internal static class RolaTreeWork
     private static bool Under(string directory, string? path) =>
         path is { Length: > 0 }
         && (
-            string.Equals(path, directory, StringComparison.Ordinal)
+            directory.Length == 0
+            || string.Equals(path, directory, StringComparison.Ordinal)
             || (
                 path.Length > directory.Length
                 && path.StartsWith(directory, StringComparison.Ordinal)

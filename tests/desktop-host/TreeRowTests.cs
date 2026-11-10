@@ -226,6 +226,44 @@ public sealed class TreeRowTests
         }
     }
 
+    /// <summary>A coloured tree is resized without its lines taking the layout down.</summary>
+    [Fact]
+    public void AColouredTreeSurvivesResize()
+    {
+        var directory = Scratch.New("tree-resize");
+        var marked = Directory.CreateDirectory(Path.Combine(directory, "marked")).FullName;
+        var child = Directory.CreateDirectory(Path.Combine(marked, "child")).FullName;
+
+        File.WriteAllText(Path.Combine(child, "hero.psd"), "x");
+
+        EntryColourProviders.Register(new FixedColour("it.tree.resize.red", marked, Colors.Red));
+
+        var (window, _) = OpenAt(directory, width: 500);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var markedRow = Until(window, () => Row(window, marked));
+
+            markedRow.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            for (var width = 240; width <= 640; width += 80)
+            {
+                window.Width = width;
+                PumpFrames(window, 20);
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>A row draws one guide line in its indent for every level above it.</summary>
     [Fact]
     public void ARowDrawsOneGuidePerLevel()
@@ -366,7 +404,7 @@ public sealed class TreeRowTests
                 .FirstOrDefault(one => one.Name == "TreeGuides");
 
             Assert.NotNull(guides);
-            Assert.Empty(guides!.Children);
+            Assert.False(Assert.IsType<Border>(Assert.Single(guides!.Children)).IsVisible);
 
             // A marked folder inside another draws its line at its own deeper indent: the two colours stand
             // beside one another rather than one replacing the other.

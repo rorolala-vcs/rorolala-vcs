@@ -153,6 +153,12 @@ public sealed class VariantGraphTests
         Assert.Equal(TreeWorkStatus.Added, staged.Status);
         Assert.Equal(TreeWorkStage.Staged, staged.Stage);
 
+        var rootWork = RolaTreeWork.Of(status, tree, new Entry(tree, EntryKind.Directory));
+
+        Assert.NotNull(rootWork);
+        Assert.Equal(TreeWorkStatus.Added, rootWork.Status);
+        Assert.Equal(TreeWorkStage.Staged, rootWork.Stage);
+
         File.WriteAllText(Path.Combine(sub, "new.txt"), "two\n");
 
         status = RolaTreeStatus.Locate(tree);
@@ -164,6 +170,12 @@ public sealed class VariantGraphTests
         Assert.NotNull(partial);
         Assert.Equal(TreeWorkStatus.Modified, partial.Status);
         Assert.Equal(TreeWorkStage.Partial, partial.Stage);
+
+        var rootPartial = RolaTreeWork.Of(status, tree, new Entry(tree, EntryKind.Directory));
+
+        Assert.NotNull(rootPartial);
+        Assert.Equal(TreeWorkStatus.Modified, rootPartial.Status);
+        Assert.Equal(TreeWorkStage.Partial, rootPartial.Stage);
     }
 
     /// <summary>A track with a tree's directory records the tree, not a path inside it.</summary>

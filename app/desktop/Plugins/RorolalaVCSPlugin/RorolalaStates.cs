@@ -31,9 +31,17 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// <summary>What the work says about the directories being listed, shared with the standing column.</summary>
     private readonly StatusReadings _readings;
 
+    /// <summary>What each tree says about itself, when the entry is the tree rather than a path in it.</summary>
+    private readonly TreeReadings? _trees;
+
     /// <summary>Makes the provider.</summary>
     /// <param name="readings">What the work says about the directories being listed.</param>
-    public RorolalaStates(StatusReadings readings) => _readings = readings;
+    /// <param name="trees">What each tree says about itself.</param>
+    public RorolalaStates(StatusReadings readings, TreeReadings? trees = null)
+    {
+        _readings = readings;
+        _trees = trees;
+    }
 
     /// <inheritdoc />
     public string Id => "rorolala.states";
@@ -72,9 +80,11 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        return Answer(entry) is { } stated
-            ? Say(stated.State, stated.Words)
-            : new EntryColumnMark();
+        return TreeWork(entry) is { } tree
+            ? TreeSay(tree)
+            : Answer(entry) is { } stated
+                ? Say(stated.State, stated.Words)
+                : new EntryColumnMark();
     }
 
     /// <inheritdoc />
@@ -82,10 +92,65 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        return Answer(entry) is { } stated
-            ? Badge(stated.State, stated.Words)
-            : new EntryMark();
+        return TreeWork(entry) is { } tree
+            ? TreeBadge(tree)
+            : Answer(entry) is { } stated
+                ? Badge(stated.State, stated.Words)
+                : new EntryMark();
     }
+
+    /// <summary>What a tree says about its own work, when the entry is the tree itself.</summary>
+    /// <remarks>
+    /// A tree is one entry of the Layout rather than a directory of files, so its state is read from its own
+    /// status: the yellow of a change and the green of something new are the same two answers a file's dot
+    /// gives, and the tree's own status is what decides which of them it is.
+    /// </remarks>
+    /// <param name="entry">The entry to ask about.</param>
+    /// <returns>What the tree's work is, or nothing when the entry is not a tree.</returns>
+    private TreeWork? TreeWork(Entry entry)
+    {
+        if (
+            _trees is null
+            || entry.Kind is not EntryKind.Directory
+            || entry.Path.Length == 0
+            || !Directory.Exists(Path.Combine(entry.Path, ".rola-tree"))
+        )
+        {
+            return null;
+        }
+
+        return _trees.Reading(entry.Path) is { } status
+            ? RolaTreeWork.Of(status, entry.Path, entry)
+            : null;
+    }
+
+    /// <summary>The dot a tree's own work is drawn as.</summary>
+    /// <param name="work">What the tree says.</param>
+    /// <returns>The green dot of something new, or the yellow of something changed.</returns>
+    private static EntryColumnMark TreeSay(TreeWork work) =>
+        Say(
+            work.Status == TreeWorkStatus.Added ? PathState.Untagged : PathState.Modified,
+            TreeWords(work.Status)
+        );
+
+    /// <summary>The badge a tree's own work is worn as on a tile.</summary>
+    /// <param name="work">What the tree says.</param>
+    /// <returns>The green plus of something new, or the yellow pencil of something changed.</returns>
+    private static EntryMark TreeBadge(TreeWork work) =>
+        Badge(
+            work.Status == TreeWorkStatus.Added ? PathState.Untagged : PathState.Modified,
+            TreeWords(work.Status)
+        );
+
+    /// <summary>What a tree's own state is said as.</summary>
+    /// <param name="status">The state.</param>
+    /// <returns>The words of the tree's Status column.</returns>
+    private static string TreeWords(TreeWorkStatus status) =>
+        RolaI18N.Get(
+            status == TreeWorkStatus.Added
+                ? "rorolala_vcs.tree_work.added"
+                : "rorolala_vcs.tree_work.modified"
+        );
 
     /// <summary>What a reading says about one entry: the state it is in, and what that state is said as.</summary>
     /// <param name="State">What the reading says about the entry.</param>

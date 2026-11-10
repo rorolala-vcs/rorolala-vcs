@@ -18,13 +18,17 @@ A chosen tree row is now one rounded wash over the whole step, rather than a was
 
 A file tree row is now a three-column grid rather than a dock panel: the name gives way with an ellipsis, the badges keep their width at the row's right, and the row stretches to the tree's width at any panel width. The badges are drawn at twenty pixels, while the entry icon stays at sixteen.
 
-### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's guide layer out of the arrange pass while resizing
+
+Resizing the folder tree rebuilt the guide layer of every row while the rows' header grids were being arranged, which could end the program with a null reference inside the grid's arrange. The guide layer is now refreshed after the layout pass, and a line covered by a tree's coloured line is hidden rather than removed, so a resize changes only what is shown and never the row's children.
+
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
 
 The Version Graph no longer draws an edited file's local pill on the version its draft is based on
 as well as on the draft. While the file has an unrecorded change, its draft is the one card that
 names it; the baseline version keeps the entries of the other sides.
 
-### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
 
 The message field under the Version Graph is the whole room beside the TRACK button, but the pointer read as text only over the line the message is drawn on: the padding around that line and the empty width after it read as ground, although a press there focused the field. The field now names the text cursor itself, so every part of its room inherits it.
 
@@ -136,7 +140,7 @@ The new `rorolala-tree` crate holds what a tree is: a canonical structure object
 
 ### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`colour`] Draw folder colours as lines rather than filled blocks
 
-A marked folder or file is now drawn with a line rather than a fill. The folder tree draws one thick coloured line beside a marked step, through the whole height of its open subtree, with an inner marked step standing at its own deeper indent. A directory list draws the colour as a strip at the row's left edge, and a directory grid draws it as a thick line under the caption. The row and tile fills and the ground tint inside a marked directory are gone, so names and pictures stand on the dock's own ground.
+A marked folder or file is now drawn with a line rather than a fill. The folder tree draws one thick coloured line beside a marked step, through the whole height of its open subtree, with an inner marked step standing at its own deeper indent. A directory list draws the colour as a strip at the row's left edge, and a directory grid draws it as a thick line under the caption. The row and tile fills and the ground tint inside a marked directory are gone, so names and pictures stand on the dock's own ground. A tree's own row also wears the state a file's row does: the green dot of something new or the yellow dot of something changed, read from the tree's status.
 
 ### 2. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack
 

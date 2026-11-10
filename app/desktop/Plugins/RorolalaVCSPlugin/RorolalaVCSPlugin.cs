@@ -70,7 +70,7 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // answer read off the window's thread (see OwnershipReadings).
         var ownership = new OwnershipReadings(host.Log, host.Files);
 
-        RorolalaLocks.Declare(host, statuses, ownership);
+        RorolalaLocks.Declare(host, statuses, ownership, trees);
         RorolalaTreeColumns.Declare(trees);
 
         // And what the browser leaves out: the entries a Workspace's ignore rules govern. The rules are
