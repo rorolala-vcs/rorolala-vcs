@@ -4,13 +4,14 @@
 </p>
 
 <p align="center">
-    <b>R</b>eality-<b>O</b>riented, <b>L</b>ayout-<b>A</b>gnostic 
+    <b>ROLA</b> <b>O</b>ffer <b>L</b>ittle <b>A</b>bility
 </p>
 
 <p align="center">
   <a href="https://github.com/rorolala-vcs/rorolala-vcs/stargazers"><img src="https://img.shields.io/github/stars/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub stars"></a>
   <a href="https://github.com/rorolala-vcs/rorolala-vcs/network/members"><img src="https://img.shields.io/github/forks/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub forks"></a>
   <a href="https://github.com/rorolala-vcs/rorolala-vcs/releases/latest"><img src="https://img.shields.io/github/v/release/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub release"></a>
+  <a href="https://github.com/rorolala-vcs/rorolala-vcs/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/rorolala-vcs/rorolala-vcs/ci.yml?style=for-the-badge" alt="CI status"></a>
 </p>
 
 This article is available in multiple languages: [English](./README.md)|[中文](./README_zh_CN.md)
