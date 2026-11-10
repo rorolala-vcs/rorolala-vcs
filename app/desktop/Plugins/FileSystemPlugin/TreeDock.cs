@@ -2391,10 +2391,12 @@ internal sealed class TreeBrowser : UserControl
     /// </summary>
     /// <remarks>
     /// The theme leaves the last three pixels of a step under its line, so a twenty-pixel mark centred in
-    /// what is left sits one pixel high and four low. Half that room puts it back on the row's middle
-    /// without moving the name, which is centred against the line rather than against the whole step.
+    /// what is left sits one pixel high and four low. A whole two pixels puts it back on the row's middle
+    /// without moving the name, which is centred against the line rather than against the whole step. It is
+    /// a whole number rather than one and a half because the badges are moved with a render transform, and a
+    /// half-pixel transform is a layer the compositor resamples, which is what made the pictures in them soft.
     /// </remarks>
-    private const double BadgeLift = 1.5;
+    private const double BadgeLift = 2.0;
 
     /// <summary>
     /// Draws the depth of a row in its indent: one vertical line for every level above it.

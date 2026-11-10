@@ -308,15 +308,20 @@ internal static partial class Icons
         {
             // The picture is taken off the badge's own edge, and the badge's line is the ground's edge rather
             // than the picture's: a mark drawn to the very edge of what holds it reads as a picture with a
-            // border drawn over it rather than as a picture inside something.
+            // border drawn over it rather than as a picture inside something. The picture's own edge is whole
+            // pixels, so a mask that is a few pixels across is scaled once to its size rather than to a
+            // fraction of one.
             var room = Math.Max(BallLeast, extent * BallInset);
-            var glyph = Picture(badge.Picture, extent - (2 * room));
-            glyph.CornerRadius = new CornerRadius(glyph.Width / 2);
+            var glyph = Picture(
+                badge.Picture,
+                Math.Max(1, Math.Round(extent - (2 * room), MidpointRounding.AwayFromZero))
+            );
 
             var worn = new Border
             {
                 Width = extent,
                 Height = extent,
+                UseLayoutRounding = true,
                 // A hairline of the ring, since the badge is a few pixels across: a line as heavy as the
                 // letter tags wear would be a third of the badge and would crowd the picture inside it.
                 BorderThickness = new Thickness(BallEdge),
@@ -423,13 +428,15 @@ internal static partial class Icons
     /// <returns>What to draw, which is a picture and no colour.</returns>
     private static Border Picture(Bitmap picture, double extent)
     {
+        var side = Math.Max(1, (int)Math.Round(extent));
         var glyph = new Border
         {
             Width = extent,
             Height = extent,
+            UseLayoutRounding = true,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
+            OpacityMask = new ImageBrush(Reduced(picture, side)) { Stretch = Stretch.Uniform },
         };
 
         // Every picture this plugin draws is read at many times the size it is shown at, so what the mask
@@ -567,6 +574,41 @@ internal static partial class Icons
 
     /// <summary>Every picture read so far, so that one asked for twice is read once.</summary>
     private static readonly Dictionary<string, Bitmap> Read = new(StringComparer.Ordinal);
+
+    /// <summary>The smaller copies of pictures, one for each size they are drawn at.</summary>
+    /// <remarks>
+    /// The set is drawn at 96 pixels, and a badge is often a dozen or fewer: letting the compositor reduce it
+    /// each time leaves the thin strokes sampled from whatever pixels the scale happens to land on. A copy is
+    /// made once at the whole size the badge asks for, and what is drawn is that copy, so the mask is read at
+    /// its own size rather than reduced by a fraction every frame.
+    /// </remarks>
+    private static readonly Dictionary<(Bitmap Picture, int Side), Bitmap> Smaller = [];
+
+    /// <summary>A picture reduced to the whole size it is to be drawn at, or the picture itself.</summary>
+    /// <param name="picture">The picture.</param>
+    /// <param name="side">How many pixels wide and tall it is to be drawn.</param>
+    /// <returns>The copy, which is kept for the next drawing at that size.</returns>
+    private static Bitmap Reduced(Bitmap picture, int side)
+    {
+        if (side >= picture.PixelSize.Width)
+        {
+            return picture;
+        }
+
+        if (Smaller.TryGetValue((picture, side), out var known))
+        {
+            return known;
+        }
+
+        var smaller = picture.CreateScaledBitmap(
+            new PixelSize(side, side),
+            BitmapInterpolationMode.HighQuality
+        );
+
+        Smaller[(picture, side)] = smaller;
+
+        return smaller;
+    }
 
     /// <summary>
     /// A picture this plugin draws, by the key the manifest gives it.

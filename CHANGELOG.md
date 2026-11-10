@@ -7,11 +7,12 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 ## Bugfix
 
 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Colour a tagged badge's ground from the theme's dark role. [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-file-system-icons-colour-a-tagged-badges-ground-from-the-themes-dark-role)
-2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-file-system-tree-draw-a-chosen-tree-row-once-and-centre-its-badges)
-3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-file-system-tree-keep-a-tree-rows-badges-clear-of-its-name)
-4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's guide layer out of the arrange pass while resizing. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-file-system-tree-keep-a-trees-guide-layer-out-of-the-arrange-pass-while-resizing)
-5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-local-pill-on-the-draft-while-a-file-is-edited)
-6. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-message-fields-pointer-and-row-steady)
+2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Draw badge pictures at whole pixels and without a circular clip. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-file-system-icons-draw-badge-pictures-at-whole-pixels-and-without-a-circular-clip)
+3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-file-system-tree-draw-a-chosen-tree-row-once-and-centre-its-badges)
+4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-file-system-tree-keep-a-tree-rows-badges-clear-of-its-name)
+5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's guide layer out of the arrange pass while resizing. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-file-system-tree-keep-a-trees-guide-layer-out-of-the-arrange-pass-while-resizing)
+6. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-local-pill-on-the-draft-while-a-file-is-edited)
+7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady. [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-message-fields-pointer-and-row-steady)
 
 ## Optimized
 

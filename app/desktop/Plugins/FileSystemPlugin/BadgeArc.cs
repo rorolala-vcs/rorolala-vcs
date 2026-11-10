@@ -77,7 +77,8 @@ internal sealed class BadgeArc : Panel
     /// <summary>How large one badge is at an icon of `size`.</summary>
     /// <param name="size">How many pixels wide and tall the icon is.</param>
     /// <returns>How many pixels wide and tall the badge is.</returns>
-    public static double Extent(double size) => Math.Max(BadgeLeast, size * BadgeShare);
+    public static double Extent(double size) =>
+        Math.Round(Math.Max(BadgeLeast, size * BadgeShare));
 
     /// <summary>
     /// How far the badges stand from the middle of the icon's top right quarter, at an icon of `size`.

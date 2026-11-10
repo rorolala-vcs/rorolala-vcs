@@ -218,7 +218,9 @@ public sealed class TreeRowTests
             var top = badges.TranslatePoint(new Point(0, 0), row)?.Y ?? 0;
             var bottom = row.Bounds.Height - top - badges.Bounds.Height;
 
-            Assert.InRange(Math.Abs(top - bottom), 0, 0.75);
+            // A whole-pixel lift leaves at most one pixel more room below than above; a half-pixel one would
+            // centre it exactly but would make the compositor resample every picture in the strip.
+            Assert.InRange(Math.Abs(top - bottom), 0, 1.25);
         }
         finally
         {
