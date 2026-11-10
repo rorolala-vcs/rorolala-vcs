@@ -2,7 +2,7 @@
 
 This document records all Changelog entries for Rorolala VCS starting from 0.1.0, managed by the `cargo changelog` command built into this project.
 
-# 0.2.1 (Unreleased)
+# 0.3.0 (Unreleased)
 
 ## Bugfix
 
