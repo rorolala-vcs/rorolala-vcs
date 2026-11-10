@@ -361,6 +361,14 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Whether the block layer is being written, so that writing it does not write it again.</summary>
     private bool _paintingBlocks;
 
+    /// <summary>Whether a block refresh is already posted, so a resize posts one rather than one per row.</summary>
+    /// <remarks>
+    /// The lines are written after the layout pass that moved the rows, not inside it. A row's position read
+    /// while the tree is still arranging is a position it is about to leave, and clearing the layer for that
+    /// answer is the line disappearing for a frame.
+    /// </remarks>
+    private bool _blocksPosted;
+
     /// <summary>Whether a guide refresh is already posted, so a resize posts one rather than one per row.</summary>
     private bool _guidesPosted;
 
@@ -566,10 +574,10 @@ internal sealed class TreeBrowser : UserControl
         // A mark covers the step it is on and every step under it, and both a layout and a scroll move where
         // that block stands: the layer is written again whenever either has moved, and only when the blocks
         // themselves have changed.
-        _tree.LayoutUpdated += (_, _) => PaintBlocks();
+        _tree.LayoutUpdated += (_, _) => PostPaintBlocks();
         _tree.AddHandler(
             ScrollViewer.ScrollChangedEvent,
-            (_, _) => PaintBlocks(),
+            (_, _) => PostPaintBlocks(),
             RoutingStrategies.Bubble
         );
 
@@ -1193,6 +1201,31 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
+    /// <summary>Schedules the coloured lines for after the layout that moved the rows.</summary>
+    /// <remarks>
+    /// A resize raises a layout update for every row it moves, and the rows are still being arranged while it
+    /// does. Reading their places then and clearing the layer for an answer that is already stale is what makes
+    /// a line vanish for a frame; one posted pass reads the places the rows settled at.
+    /// </remarks>
+    private void PostPaintBlocks()
+    {
+        if (_blocksPosted)
+        {
+            return;
+        }
+
+        _blocksPosted = true;
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _blocksPosted = false;
+                PaintBlocks();
+            },
+            DispatcherPriority.Loaded
+        );
+    }
+
     /// <summary>
     /// Draws one coloured line beside every marked step, through the height it covers.
     /// </summary>
@@ -1214,6 +1247,7 @@ internal sealed class TreeBrowser : UserControl
         try
         {
             var blocks = new List<TreeBlock>();
+            var incomplete = false;
 
             foreach (var item in VisibleRows())
             {
@@ -1221,9 +1255,17 @@ internal sealed class TreeBrowser : UserControl
                     item.Tag is not string path
                     || item.Bounds.Width <= 0
                     || item.Bounds.Height <= 0
-                    || item.TranslatePoint(new Point(0, 0), _blocks) is not { } at
                 )
                 {
+                    continue;
+                }
+
+                if (item.TranslatePoint(new Point(0, 0), _blocks) is not { } at)
+                {
+                    // A row with a size but no place on the layer is still being laid out: keeping the lines
+                    // that are there is better than clearing them for a place that is about to be answered.
+                    incomplete = true;
+
                     continue;
                 }
 
@@ -1244,8 +1286,29 @@ internal sealed class TreeBrowser : UserControl
                 );
             }
 
+            if (incomplete)
+            {
+                return;
+            }
+
             if (SameBlocks(blocks, _drawnBlocks))
             {
+                return;
+            }
+
+            // A resize moves the rows but does not change which ones are marked. Moving the lines already
+            // drawn keeps the layer whole for the frame, where clearing it and putting the same number back
+            // is a blank the eye catches even when both happen in one pass.
+            if (Reusable(blocks, _drawnBlocks))
+            {
+                for (var at = 0; at < blocks.Count; at++)
+                {
+                    Wear((Border)_blocks.Children[at], blocks[at]);
+                }
+
+                _drawnBlocks = blocks;
+                RepaintGuides();
+
                 return;
             }
 
@@ -1256,22 +1319,9 @@ internal sealed class TreeBrowser : UserControl
             {
                 // The mark is the vertical line at the block's indent, not a fill behind the rows: the
                 // line is where the tree already reads its depth, and it runs the block's whole height.
-                var line = new Border
-                {
-                    Width = BandWidth,
-                    Height = block.Rect.Height,
-                    Background = new SolidColorBrush(block.Colour),
-                    IsHitTestVisible = false,
-                };
+                var line = new Border { IsHitTestVisible = false };
 
-                Canvas.SetLeft(
-                    line,
-                    Math.Max(
-                        0,
-                        block.Rect.X + (block.Level * Indent) - (Indent / 2) - (BandWidth / 2)
-                    )
-                );
-                Canvas.SetTop(line, block.Rect.Y);
+                Wear(line, block);
                 _blocks.Children.Add(line);
             }
 
@@ -1309,10 +1359,63 @@ internal sealed class TreeBrowser : UserControl
         });
     }
 
-    /// <summary>Whether two sets of blocks are the same ones in the same places.</summary>
+    /// <summary>Whether the lines already drawn can be moved to the new blocks rather than made again.</summary>
+    /// <remarks>
+    /// The same marked steps in the same order are the same lines: what a resize changes is where they stand,
+    /// which is a property of the border rather than of the layer's children. A colour is reusable too, since
+    /// it is the border's brush; a mark appearing or going is not.
+    /// </remarks>
+    /// <param name="blocks">What is to be drawn.</param>
+    /// <param name="drawn">What is drawn.</param>
+    /// <returns>Whether every line can be moved to its block.</returns>
+    private bool Reusable(IReadOnlyList<TreeBlock> blocks, IReadOnlyList<TreeBlock> drawn)
+    {
+        if (blocks.Count != drawn.Count || _blocks.Children.Count != blocks.Count)
+        {
+            return false;
+        }
+
+        for (var at = 0; at < blocks.Count; at++)
+        {
+            if (
+                !string.Equals(blocks[at].Path, drawn[at].Path, StringComparison.Ordinal)
+                || blocks[at].Level != drawn[at].Level
+            )
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Puts one line where a block is, reusing its brush when the colour has not changed.</summary>
+    /// <param name="line">The line.</param>
+    /// <param name="block">The block it stands for.</param>
+    private static void Wear(Border line, TreeBlock block)
+    {
+        line.Width = BandWidth;
+        line.Height = block.Rect.Height;
+
+        if (line.Background is not ISolidColorBrush brush || brush.Color != block.Colour)
+        {
+            line.Background = new SolidColorBrush(block.Colour);
+        }
+
+        Canvas.SetLeft(
+            line,
+            Math.Max(
+                0,
+                block.Rect.X + (block.Level * Indent) - (Indent / 2) - (BandWidth / 2)
+            )
+        );
+        Canvas.SetTop(line, block.Rect.Y);
+    }
+
+    /// <summary>Whether two sets of blocks are the same answer.</summary>
     /// <param name="left">One set.</param>
     /// <param name="right">The other.</param>
-    /// <returns>Whether they are the same.</returns>
+    /// <returns>Whether every block is where the other set has it.</returns>
     private static bool SameBlocks(IReadOnlyList<TreeBlock> left, IReadOnlyList<TreeBlock> right)
     {
         if (left.Count != right.Count)
@@ -2353,7 +2456,7 @@ internal sealed class TreeBrowser : UserControl
     /// A provider's answer is read when a block is drawn, so a rule that appeared since the last drawing is one
     /// this asks for: the rows themselves are unchanged, and only what is behind them is not.
     /// </remarks>
-    public void RepaintColours() => PaintBlocks();
+    public void RepaintColours() => PostPaintBlocks();
 
     /// <summary>A row for a file, which opens onto nothing.</summary>
     /// <param name="entry">The file the row names.</param>

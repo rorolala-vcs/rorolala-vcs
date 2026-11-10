@@ -228,6 +228,37 @@ public sealed class TreeRowTests
         }
     }
 
+    /// <summary>A row wearing a badge is resized without its strip taking the layout down.</summary>
+    [Fact]
+    public void ABadgeRowSurvivesResize()
+    {
+        var directory = Scratch.New("tree-badge-resize");
+
+        File.WriteAllText(Path.Combine(directory, "hero.psd"), "x");
+
+        EntryMarkProviders.Register(new FixedMarks());
+
+        var (window, _) = OpenAt(directory, width: 500);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            for (var width = 240; width <= 640; width += 40)
+            {
+                window.Width = width;
+                PumpFrames(window, 20);
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>A coloured tree is resized without its lines taking the layout down.</summary>
     [Fact]
     public void AColouredTreeSurvivesResize()
@@ -259,6 +290,15 @@ public sealed class TreeRowTests
                 window.Width = width;
                 PumpFrames(window, 20);
             }
+
+            // The line is still there after the layout that moved its row, which is what a posted paint is
+            // for: a resize that cleared the layer and waited for the next frame would leave this empty.
+            var blocks = window
+                .GetVisualDescendants()
+                .OfType<Canvas>()
+                .First(canvas => canvas.Name == "TreeBlocks");
+
+            Assert.NotEmpty(blocks.Children);
         }
         finally
         {

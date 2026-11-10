@@ -137,6 +137,27 @@ public sealed class ListColumnTests
         }
     }
 
+    /// <summary>A table is resized without its column writes taking the layout down.</summary>
+    [Fact]
+    public void ATableSurvivesResize()
+    {
+        _ = Show(700, out var window);
+
+        try
+        {
+            for (var width = 240; width <= 640; width += 20)
+            {
+                window.Width = width;
+                Dispatcher.UIThread.RunJobs();
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>Puts a table of a few entries on a headless window of a given width.</summary>
     /// <param name="width">How wide the window is.</param>
     /// <param name="window">The window, which the caller closes.</param>

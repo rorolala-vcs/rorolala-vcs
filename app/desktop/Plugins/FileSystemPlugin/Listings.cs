@@ -2449,7 +2449,10 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         // The band of headings follows the width of the rows as they are made and as they change: the rows are as
         // wide as the list's viewport, the band is above the list rather than in it, and the two differ by whatever
         // the toolkit takes for a scrollbar. See `Fit`.
-        row.SizeChanged += (_, _) => Fit(row);
+        // The width is read after the layout that produced it rather than inside it: writing the table's column
+        // widths while the header is arranging changes the definitions the arrange pass is walking, which is what
+        // the toolkit answers with a null in the middle of `Grid.ArrangeOverride`.
+        row.SizeChanged += (_, _) => Dispatcher.UIThread.Post(() => Fit(row));
 
         return row;
     }
