@@ -182,14 +182,14 @@ internal static partial class Icons
     private const double BallEdge = 1.5;
 
     /// <summary>
-    /// The ground a tagged mark is drawn on, which is the dark one on either look.
+    /// The ground a tagged mark is drawn on, which is the dark role of the look it is drawn in.
     /// </summary>
     /// <remarks>
-    /// A colour of its own rather than a wash of the ink, because a badge on a picture is not a surface of the
-    /// program: what it is drawn on decides how the ink on it reads, and the ink does not change with the look.
-    /// A wash would be the theme's answer, which is the thing a mark worn on a picture must not have.
+    /// The badge is always drawn inside a dark variant scope, so this never resolves to the light look's
+    /// pale dark role: it is the dark that the palette in force names, which is what lets the ground follow
+    /// a theme rather than sit at one colour no theme can change.
     /// </remarks>
-    private static readonly Color TagGround = Color.Parse("#1A1A1A");
+    private const string TagGround = PaletteKeys.Dark;
 
     /// <summary>The theme resource a contributed mark is drawn in.</summary>
     /// <remarks>
@@ -323,11 +323,11 @@ internal static partial class Icons
                 CornerRadius = new CornerRadius(extent / 2),
                 Child = glyph,
             };
-            // The ground is the mark's own and always the dark one, whatever the program is drawn on: a badge
-            // worn on a picture is part of the picture, and one that turned pale on the light look would be a
-            // mark that changed what it is when the user changed their colours. What says which mark it is is
-            // the ring and the picture, both in the one colour the contribution asked for.
-            worn.Background = new SolidColorBrush(TagGround);
+            // The ground is the dark role of the look, read inside the badge's dark scope: a badge worn on a
+            // picture is part of the picture, so it stays dark on the light look while following the dark the
+            // palette in force names. What says which mark it is is the ring and the picture, both in the one
+            // colour the contribution asked for.
+            worn[!Border.BackgroundProperty] = new DynamicResourceExtension(TagGround);
             Painted(glyph, Border.BackgroundProperty, own, role);
             Painted(worn, Border.BorderBrushProperty, own, role);
 
