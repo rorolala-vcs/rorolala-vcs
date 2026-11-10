@@ -134,7 +134,12 @@ internal sealed class RorolalaTreeStatusColumn : RorolalaTreeColumn
     /// <returns>The picture in the status's colour, on the badge's ground.</returns>
     internal static EntryMark Badge(TreeWorkStatus status) =>
         new(
-            IconKey: status == TreeWorkStatus.Added ? Icons.Add : Icons.EditNote,
+            IconKey: status switch
+            {
+                TreeWorkStatus.Added => Icons.Add,
+                TreeWorkStatus.Wrong => Icons.PriorityHigh,
+                _ => Icons.EditNote,
+            },
             Colour: Colour(status),
             Tagged: true,
             HoverKey: HoverKey(status)
@@ -144,25 +149,34 @@ internal sealed class RorolalaTreeStatusColumn : RorolalaTreeColumn
     /// <param name="status">The status.</param>
     /// <returns>The i18n key of its words.</returns>
     private static string Key(TreeWorkStatus status) =>
-        status == TreeWorkStatus.Added
-            ? "rorolala_vcs.tree_work.added"
-            : "rorolala_vcs.tree_work.modified";
+        status switch
+        {
+            TreeWorkStatus.Added => "rorolala_vcs.tree_work.added",
+            TreeWorkStatus.Wrong => "rorolala_vcs.tree_work.wrong",
+            _ => "rorolala_vcs.tree_work.modified",
+        };
 
     /// <summary>The sentence a status badge is hovered for.</summary>
     /// <param name="status">The status.</param>
     /// <returns>The i18n key of its explanation.</returns>
     private static string HoverKey(TreeWorkStatus status) =>
-        status == TreeWorkStatus.Added
-            ? "rorolala_vcs.tree_work.added_hover"
-            : "rorolala_vcs.tree_work.modified_hover";
+        status switch
+        {
+            TreeWorkStatus.Added => "rorolala_vcs.tree_work.added_hover",
+            TreeWorkStatus.Wrong => "rorolala_vcs.tree_work.wrong_hover",
+            _ => "rorolala_vcs.tree_work.modified_hover",
+        };
 
     /// <summary>What a status is coloured.</summary>
     /// <param name="status">The status.</param>
-    /// <returns>The green of what is new, or the amber of what changed.</returns>
+    /// <returns>The green of what is new, the amber of what changed, or the red of a wrong change.</returns>
     private static Avalonia.Media.Color Colour(TreeWorkStatus status) =>
-        status == TreeWorkStatus.Added
-            ? RorolalaColours.Untagged
-            : RorolalaColours.UnderWay;
+        status switch
+        {
+            TreeWorkStatus.Added => RorolalaColours.Untagged,
+            TreeWorkStatus.Wrong => RorolalaColours.Wrong,
+            _ => RorolalaColours.UnderWay,
+        };
 }
 
 /// <summary>How much of a path's work inside a tree the staging area holds.</summary>

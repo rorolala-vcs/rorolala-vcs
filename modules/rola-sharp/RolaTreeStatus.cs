@@ -43,26 +43,36 @@ public sealed class RolaTreeStatus
     /// <summary>Paths a merge left in conflict.</summary>
     public IReadOnlyList<RolaTreeConflict> Conflicts { get; }
 
+    /// <summary>Whether the tree's own Layout entry is a change that must not be recorded.</summary>
+    public bool Wrong { get; }
+
     /// <summary>Whether the tree has nothing staged, changed or in conflict.</summary>
     public bool Clean =>
-        Staged.Count == 0 && Unstaged.Count == 0 && Untracked.Count == 0 && Conflicts.Count == 0;
+        Staged.Count == 0
+        && Unstaged.Count == 0
+        && Untracked.Count == 0
+        && Conflicts.Count == 0
+        && !Wrong;
 
     /// <summary>Makes the value from the lists the native side answered.</summary>
     /// <param name="staged">What the staging area changed from the record.</param>
     /// <param name="unstaged">What the work changed from the staging area.</param>
     /// <param name="untracked">What the work holds and the staging area does not.</param>
     /// <param name="conflicts">What a merge left in conflict.</param>
+    /// <param name="wrong">Whether the tree's own Layout entry is a wrong change.</param>
     private RolaTreeStatus(
         IReadOnlyList<RolaTreeChange> staged,
         IReadOnlyList<RolaTreeChange> unstaged,
         IReadOnlyList<RolaTreeUntracked> untracked,
-        IReadOnlyList<RolaTreeConflict> conflicts
+        IReadOnlyList<RolaTreeConflict> conflicts,
+        bool wrong
     )
     {
         Staged = staged;
         Unstaged = unstaged;
         Untracked = untracked;
         Conflicts = conflicts;
+        Wrong = wrong;
     }
 
     /// <summary>
@@ -92,7 +102,9 @@ public sealed class RolaTreeStatus
                 Changes(root, "staged"),
                 Changes(root, "unstaged"),
                 ReadUntracked(root),
-                ReadConflicts(root)
+                ReadConflicts(root),
+                root.TryGetProperty("wrong", out var wrong)
+                    && wrong.ValueKind == JsonValueKind.True
             );
         }
         catch (JsonException)

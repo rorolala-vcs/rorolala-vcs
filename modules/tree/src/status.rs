@@ -91,6 +91,13 @@ pub struct TreeStatus {
 
     /// Paths a merge left in conflict.
     pub conflicts: Vec<Conflict>,
+
+    /// Whether the tree's own Layout entry is a change that must not be recorded.
+    ///
+    /// A tree is one entry of the Layout, so a base another side has moved past, or a lock another account
+    /// holds, makes every change under it the wrong change rather than this account's work. The tree's own
+    /// reading does not know the Layout, so the answer is filled in by the reader that does.
+    pub wrong: bool,
 }
 
 impl TreeStatus {
@@ -101,6 +108,7 @@ impl TreeStatus {
             && self.unstaged.is_empty()
             && self.untracked.is_empty()
             && self.conflicts.is_empty()
+            && !self.wrong
     }
 }
 
@@ -132,6 +140,7 @@ pub fn compare(
                 theirs: conflict_copy(path),
             })
             .collect(),
+        wrong: false,
     }
 }
 
@@ -507,6 +516,7 @@ mod shape_tests {
                 path: "c.psd".to_owned(),
                 theirs: "c~theirs.psd".to_owned(),
             }],
+            wrong: false,
         };
 
         let value = serde_json::to_value(&status).expect("the reading as data");

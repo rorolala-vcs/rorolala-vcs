@@ -101,6 +101,9 @@ tree:
     staged_header:
       en: "Staged:"
       zh-CN: 已暂存：
+    wrong:
+      en: "This tree is a wrong change: another account holds it, or the version it is based on is behind upstream."
+      zh-CN: 该树是错误的修改：它由其他账户持有，或其基准版本落后于上游。
     unstaged_header:
       en: "Not staged:"
       zh-CN: 未暂存：
@@ -429,6 +432,9 @@ tree:
     header:
       en: "%{before} -> %{after}: %{count} changes"
       zh-CN: "%{before} -> %{after}：%{count} 项变化"
+    wrong:
+      en: "This tree is a wrong change: another account holds it, or the version it is based on is behind upstream."
+      zh-CN: 该树是错误的修改：它由其他账户持有，或其基准版本落后于上游。
     counts:
       en: "  added %{added}, modified %{modified}, deleted %{deleted}, metadata %{metadata}, type changed %{type_changed}"
       zh-CN: "  新增 %{added}，内容 %{modified}，删除 %{deleted}，元数据 %{metadata}，类型 %{type_changed}"

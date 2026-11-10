@@ -1,5 +1,11 @@
 //! The `rola layout tree-diff` command: what the working tree holds beside a Layout.
 
+// The handler reads the Layout, the working tree, and the trees inside it in one answer, so its length is
+// the questions the comparison answers rather than one step written long.
+#![allow(clippy::too_many_lines)]
+
+use librorolala::layout::EntryKind;
+use librorolala::tree::Tree;
 use librorolala::workspace_analyze::tree_diff;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
@@ -12,13 +18,15 @@ use mingling::{
     picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::ResWorkspace;
+use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResWorkspace};
 use rorolala_utils_cli_theme::{err_line, trd};
 use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
+use rorolala_utils_location::Locate as _;
 use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
+use crate::account::ResCurrentAccount;
 use crate::complete::{filling_flag, layout_names, offer, positional, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_FORMAT, EC_HELP};
 use crate::format::ResFormat;
@@ -131,6 +139,9 @@ pub struct StateLayoutTreeDiff {
 pub fn handle_layout_tree_diff(
     state: StateLayoutTreeDiff,
     workspace: &mut LazyRes<ResWorkspace>,
+    account: &mut LazyRes<ResCurrentAccount>,
+    index: &mut LazyRes<ResVCSIndex>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
     format: &mut ResFormat,
 ) -> Next {
     let StateLayoutTreeDiff {
@@ -233,7 +244,87 @@ pub fn handle_layout_tree_diff(
             .collect(),
     );
 
-    ResultLayoutTreeDiff::of(&diff).into()
+    let (trees_modified, wrong) =
+        tree_changes(held, &layout, account, index, storage, include_ignored);
+
+    format.set(
+        "trees_modified",
+        trees_modified
+            .iter()
+            .map(|path| serde_json::json!(path))
+            .collect(),
+    );
+    format.set(
+        "wrong",
+        wrong.iter().map(|path| serde_json::json!(path)).collect(),
+    );
+
+    ResultLayoutTreeDiff::of(&diff, trees_modified, wrong).into()
+}
+
+/// The trees whose own work changed, and the ones among them that are wrong changes.
+///
+/// A tree is one Layout entry, so its contents are not a file comparison: the tree's own reading is what
+/// says whether it holds unrecorded work, and the Layout's copy of its entry is what says whether that work
+/// is this account's to record.
+fn tree_changes(
+    held: &librorolala::workspace::Workspace,
+    layout: &librorolala::layout::Layout,
+    account: &mut LazyRes<ResCurrentAccount>,
+    index: &mut LazyRes<ResVCSIndex>,
+    storage: &mut LazyRes<ResRorolalaStorage>,
+    include_ignored: bool,
+) -> (Vec<String>, Vec<String>) {
+    let (Some(index), Some(store)) = (index.get_ref().as_ref(), storage.get_ref().as_ref()) else {
+        return (Vec::new(), Vec::new());
+    };
+    let Ok(runtime) = tokio::runtime::Runtime::new() else {
+        return (Vec::new(), Vec::new());
+    };
+    let me = account.get_ref().must_bind().ok();
+
+    let mut modified = Vec::new();
+    let mut wrong = Vec::new();
+
+    for (path, id) in layout.paths() {
+        let Some(data) = layout.entry(id) else {
+            continue;
+        };
+
+        if data.kind() != EntryKind::Tree {
+            continue;
+        }
+
+        let disk = held.get_root().join(path.to_path_buf());
+        let Ok(tree) = Tree::open(held.get_root(), &disk) else {
+            continue;
+        };
+        let rules = crate::ignore::rules(held, include_ignored);
+        let Ok(status) =
+            runtime.block_on(tree.status(layout, index, store, rules, include_ignored))
+        else {
+            continue;
+        };
+
+        if status.is_clean() {
+            continue;
+        }
+
+        if librorolala::status::tree_is_wrong(
+            held,
+            layout,
+            &tree,
+            me.as_deref(),
+            Some(index),
+            &runtime,
+        ) {
+            wrong.push(path.as_str().to_owned());
+        }
+
+        modified.push(path.as_str().to_owned());
+    }
+
+    (modified, wrong)
 }
 
 /// Result: the tree was read beside a Layout.
@@ -245,6 +336,10 @@ pub struct ResultLayoutTreeDiff {
     untagged: Vec<String>,
     /// Paths that stayed where they were and changed.
     modified: Vec<String>,
+    /// Trees whose own work changed.
+    trees_modified: Vec<String>,
+    /// Trees whose change must not be recorded.
+    wrong: Vec<String>,
     /// Paths that moved.
     renamed: Vec<RenameItem>,
     /// Paths that could not be read.
@@ -253,7 +348,11 @@ pub struct ResultLayoutTreeDiff {
 
 impl ResultLayoutTreeDiff {
     /// The result the reading described.
-    fn of(diff: &librorolala::workspace_analyze::TreeDiff) -> Self {
+    fn of(
+        diff: &librorolala::workspace_analyze::TreeDiff,
+        trees_modified: Vec<String>,
+        wrong: Vec<String>,
+    ) -> Self {
         let mut untagged: Vec<&librorolala::layout::LayoutPath> = diff
             .untagged
             .iter()
@@ -276,6 +375,8 @@ impl ResultLayoutTreeDiff {
                 .iter()
                 .map(|path| path.as_str().to_owned())
                 .collect(),
+            trees_modified,
+            wrong,
             renamed: diff
                 .renamed
                 .iter()
@@ -344,6 +445,14 @@ pub fn render_result_layout_tree_diff(
         }
         for path in &result.modified {
             r_println!("modified {path}");
+        }
+        for path in &result.trees_modified {
+            if !result.wrong.contains(path) {
+                r_println!("modified {path}");
+            }
+        }
+        for path in &result.wrong {
+            r_println!("wrong {path}");
         }
         for rename in &result.renamed {
             r_println!("rename {} -> {}", rename.from, rename.to);

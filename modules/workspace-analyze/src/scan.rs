@@ -45,12 +45,13 @@ pub struct Found {
 ///
 /// The walk skips the data directory and anything held by a directory that keeps one, ignores
 /// symbolic links, and takes only plain files. A directory that keeps a `.rola-tree` of its own is a
-/// tree: it is answered as one entry of kind [`EntryKind::Tree`] and not walked into, so what is
-/// inside it is the tree's own reading rather than this one's. An empty file is a file like any
-/// other. A name that does not read as a path a Layout may name is not walked past: it is recorded,
-/// since the caller is the one that has to say what to do about it. A directory that cannot be read
-/// is recorded the same way rather than failing the whole walk: one unreadable directory is
-/// something to be told about, not a reason the tree has nothing to say.
+/// tree: it is answered as one entry of kind [`EntryKind::Tree`] and its own files are not walked, since
+/// they are that tree's reading rather than this one's. Its directories are still looked through, so a
+/// tree nested inside it is found as the entry the Layout names rather than left out as a loss. An empty
+/// file is a file like any other. A name that does not read as a path a Layout may name is not walked
+/// past: it is recorded, since the caller is the one that has to say what to do about it. A directory
+/// that cannot be read is recorded the same way rather than failing the whole walk: one unreadable
+/// directory is something to be told about, not a reason the tree has nothing to say.
 #[must_use]
 pub fn walk(root: &Path) -> (Vec<Found>, Vec<FailedPath>) {
     let mut found = Vec::new();
@@ -71,6 +72,8 @@ pub fn walk(root: &Path) -> (Vec<Found>, Vec<FailedPath>) {
                 error.to_string(),
             )),
         }
+
+        nested(root, root, &mut found, &mut failed);
 
         return (found, failed);
     }
@@ -152,6 +155,8 @@ pub fn walk(root: &Path) -> (Vec<Found>, Vec<FailedPath>) {
                         )),
                     }
 
+                    nested(root, &disk, &mut found, &mut failed);
+
                     continue;
                 }
 
@@ -174,6 +179,78 @@ pub fn walk(root: &Path) -> (Vec<Found>, Vec<FailedPath>) {
     }
 
     (found, failed)
+}
+
+/// Finds the trees inside `directory`, which is itself inside a tree rooted at `root`.
+///
+/// A tree's files are that tree's own reading, so only its directories are walked here: a nested tree is a
+/// Layout entry of its own, and a directory that holds nothing marked is still a way to a tree deeper in.
+fn nested(root: &Path, directory: &Path, found: &mut Vec<Found>, failed: &mut Vec<FailedPath>) {
+    let entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) => {
+            failed.push(FailedPath::new(
+                directory.display().to_string(),
+                error.to_string(),
+            ));
+
+            return;
+        }
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                failed.push(FailedPath::new(
+                    directory.display().to_string(),
+                    error.to_string(),
+                ));
+
+                continue;
+            }
+        };
+
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+
+        if kind.is_symlink() || !kind.is_dir() {
+            continue;
+        }
+
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            failed.push(FailedPath::new(
+                entry.path().display().to_string(),
+                "the name does not read as UTF-8".to_owned(),
+            ));
+
+            continue;
+        };
+
+        if name == DATA_DIR || name == TREE_MARK || name.contains(CONFLICT_MARK) {
+            continue;
+        }
+
+        let disk = entry.path();
+
+        if disk.join(DATA_DIR).is_dir() {
+            continue;
+        }
+
+        if disk.join(TREE_MARK).is_dir() {
+            match found_beside(root, &disk, EntryKind::Tree) {
+                Some(entry) => found.push(entry),
+                None => failed.push(FailedPath::new(
+                    disk.display().to_string(),
+                    "the name does not read as a path".to_owned(),
+                )),
+            }
+        }
+
+        nested(root, &disk, found, failed);
+    }
 }
 
 /// The entry `disk` makes, named against `root`, if both its path and its metadata read.
@@ -210,4 +287,46 @@ pub fn stamp(meta: &fs::Metadata) -> (u64, u32) {
         .ok()
         .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
         .map_or((0, 0), |since| (since.as_secs(), since.subsec_nanos()))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::{TREE_MARK, walk};
+
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> PathBuf {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rorolala-scan-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        dir
+    }
+
+    /// A tree inside a tree is still an entry of its own, not a loss left by the outer tree's scan.
+    #[test]
+    fn a_tree_inside_a_tree_is_found() {
+        let root = scratch("nested");
+        fs::create_dir_all(root.join(TREE_MARK)).unwrap();
+        fs::create_dir_all(root.join("inner").join(TREE_MARK)).unwrap();
+        fs::write(root.join("inner").join("a.psd"), b"a").unwrap();
+
+        let (found, failed) = walk(&root);
+        let paths: Vec<&str> = found.iter().map(|entry| entry.path.as_str()).collect();
+
+        assert_eq!(paths, ["", "inner"]);
+        assert!(failed.is_empty(), "{failed:?}");
+
+        fs::remove_dir_all(&root).unwrap();
+    }
 }

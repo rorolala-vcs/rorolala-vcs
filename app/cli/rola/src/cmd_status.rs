@@ -14,6 +14,9 @@
 // index, the merge in progress, and gathering them into one value would only move the count
 // somewhere else.
 #![allow(clippy::too_many_arguments)]
+// A status handler answers the tree a run stands in, a target it names, and the Workspace reading after
+// both, so its length is the questions a run can ask rather than one step written long.
+#![allow(clippy::too_many_lines)]
 
 use std::collections::BTreeSet;
 
@@ -196,6 +199,8 @@ pub struct StateStatus {
     include_ignored: bool,
 }
 
+// The handler is the command's reading end to end: the tree it may be standing in, the target it names,
+// and the Workspace reading that follows both.
 #[chain(routeify)]
 pub fn handle_status(
     state: StateStatus,
@@ -219,7 +224,14 @@ pub fn handle_status(
     // A run standing in a tree reads the tree rather than the Workspace: what a tree holds is one
     // unit of work, and what there is to do about it is what `tree status` says.
     if state.target.is_none()
-        && let Some(next) = status_in_tree(held, &layout, index, storage, state.include_ignored)
+        && let Some(next) = status_in_tree(
+            held,
+            &layout,
+            account,
+            index,
+            storage,
+            state.include_ignored,
+        )
     {
         return next;
     }
@@ -987,6 +999,7 @@ pub fn render_error_status_tree_file(error: ErrorStatusTreeFile, ec: &mut ResExi
 fn status_in_tree(
     held: &Workspace,
     layout: &Layout,
+    account: &mut LazyRes<ResCurrentAccount>,
     index: &mut LazyRes<ResVCSIndex>,
     storage: &mut LazyRes<ResRorolalaStorage>,
     include_ignored: bool,
@@ -1002,15 +1015,20 @@ fn status_in_tree(
     };
 
     let rules = crate::ignore::rules(held, include_ignored);
+    let me = account.get_ref().must_bind().ok();
+    let me = me.as_deref();
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => return Some(ErrorLayoutFailed::new(error.to_string()).into()),
     };
+    let wrong = librorolala::status::tree_is_wrong(held, layout, &tree, me, Some(index), &runtime);
 
-    let status = match runtime.block_on(tree.status(layout, index, store, rules, include_ignored)) {
-        Ok(status) => status,
-        Err(error) => return Some(ErrorLayoutFailed::new(error.to_string()).into()),
-    };
+    let mut status =
+        match runtime.block_on(tree.status(layout, index, store, rules, include_ignored)) {
+            Ok(status) => status,
+            Err(error) => return Some(ErrorLayoutFailed::new(error.to_string()).into()),
+        };
+    status.wrong = wrong;
 
     match shown(&tree) {
         Ok(path) => Some(ResultStatusTree { path, status }.into()),

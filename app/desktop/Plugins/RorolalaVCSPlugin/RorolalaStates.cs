@@ -126,24 +126,29 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
 
     /// <summary>The dot a tree's own work is drawn as.</summary>
     /// <param name="work">What the tree says.</param>
-    /// <returns>The green dot of something new, or the yellow of something changed.</returns>
+    /// <returns>The dot of the state the tree is in, with its colour.</returns>
     private static EntryColumnMark TreeSay(TreeWork work) =>
-        Say(
-            work.Status == TreeWorkStatus.Added ? PathState.Untagged : PathState.Modified,
-            TreeWords(work.Status)
-        );
+        Say(TreeState(work.Status), RolaI18N.Get(TreeHover(work.Status)));
 
     /// <summary>The badge a tree's own work is worn as on a tile.</summary>
     /// <param name="work">What the tree says.</param>
-    /// <returns>The green plus of something new, or the yellow pencil of something changed.</returns>
+    /// <returns>The picture of the state the tree is in, with its colour.</returns>
     private static EntryMark TreeBadge(TreeWork work) =>
-        Badge(
-            work.Status == TreeWorkStatus.Added ? PathState.Untagged : PathState.Modified,
-            TreeWords(work.Status)
-        ) with
+        Badge(TreeState(work.Status), TreeWords(work.Status)) with
         {
             Text = null,
             HoverKey = TreeHover(work.Status),
+        };
+
+    /// <summary>The state a tree's own work is drawn as.</summary>
+    /// <param name="status">What the tree says.</param>
+    /// <returns>The path state the tree's mark is coloured and pictured by.</returns>
+    private static PathState TreeState(TreeWorkStatus status) =>
+        status switch
+        {
+            TreeWorkStatus.Added => PathState.Untagged,
+            TreeWorkStatus.Wrong => PathState.Wrong,
+            _ => PathState.Modified,
         };
 
     /// <summary>What a tree's own state is said as.</summary>
@@ -151,18 +156,24 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// <returns>The words of the tree's Status column.</returns>
     private static string TreeWords(TreeWorkStatus status) =>
         RolaI18N.Get(
-            status == TreeWorkStatus.Added
-                ? "rorolala_vcs.tree_work.added"
-                : "rorolala_vcs.tree_work.modified"
+            status switch
+            {
+                TreeWorkStatus.Added => "rorolala_vcs.tree_work.added",
+                TreeWorkStatus.Wrong => "rorolala_vcs.state.wrong",
+                _ => "rorolala_vcs.tree_work.modified",
+            }
         );
 
     /// <summary>The sentence a tree's own state badge is hovered for.</summary>
     /// <param name="status">The state.</param>
     /// <returns>The i18n key of its explanation.</returns>
     private static string TreeHover(TreeWorkStatus status) =>
-        status == TreeWorkStatus.Added
-            ? "rorolala_vcs.tree_work.added_hover"
-            : "rorolala_vcs.tree_work.modified_hover";
+        status switch
+        {
+            TreeWorkStatus.Added => "rorolala_vcs.tree_work.added_hover",
+            TreeWorkStatus.Wrong => "rorolala_vcs.tree_work.wrong_hover",
+            _ => "rorolala_vcs.tree_work.modified_hover",
+        };
 
     /// <summary>What a reading says about one entry: the state it is in, and what that state is said as.</summary>
     /// <param name="State">What the reading says about the entry.</param>

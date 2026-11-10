@@ -26,6 +26,7 @@ use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
+use crate::account::ResCurrentAccount;
 use crate::complete::strip_written;
 use crate::exit_codes::{EC_ERR_TREE_ARGUMENT, EC_ERR_TREE_FAILED, EC_HELP};
 use crate::failure::failure;
@@ -125,6 +126,7 @@ pub fn handle_tree_diff_stat(
     state: StateTreeDiffStat,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
+    account: &mut LazyRes<ResCurrentAccount>,
     storage: &mut LazyRes<ResRorolalaStorage>,
     index: &mut LazyRes<ResVCSIndex>,
     format: &mut ResFormat,
@@ -150,7 +152,10 @@ pub fn handle_tree_diff_stat(
         Err(error) => return ErrorTreeDiffStatFailed::new(error.to_string()).into(),
     };
 
-    match compare(held, &layout, store, index, &operands, staged, &runtime) {
+    let me = account.get_ref().must_bind().ok();
+    let me = me.as_deref();
+
+    match compare(held, &layout, store, index, &operands, staged, me, &runtime) {
         Ok(result) => {
             let rows = result
                 .changes
@@ -194,11 +199,14 @@ fn compare(
     index: &VCSIndex,
     operands: &[String],
     staged: bool,
+    me: Option<&str>,
     runtime: &tokio::runtime::Runtime,
 ) -> Result<ResultTreeDiffStat, Next> {
-    let (before, before_name, after, after_name) = match operands {
+    let (before, before_name, after, after_name, wrong) = match operands {
         [] => {
             let tree = locate(held, None)?;
+            let wrong =
+                librorolala::status::tree_is_wrong(held, layout, &tree, me, Some(index), runtime);
 
             let recorded = match runtime.block_on(tree.recorded_structure(layout, index, store)) {
                 Ok(recorded) => recorded,
@@ -241,10 +249,13 @@ fn compare(
                 },
                 scanned.structure,
                 "working".to_owned(),
+                wrong,
             )
         }
         [one] => {
             let tree = locate(held, Some(one))?;
+            let wrong =
+                librorolala::status::tree_is_wrong(held, layout, &tree, me, Some(index), runtime);
             let recorded = match runtime.block_on(tree.recorded_structure(layout, index, store)) {
                 Ok(recorded) => recorded,
                 Err(error) => {
@@ -266,14 +277,14 @@ fn compare(
 
             let after = resolve_structure(held, layout, store, index, Some(one.as_str()), runtime)?;
 
-            (before, before_name, after, one.clone())
+            (before, before_name, after, one.clone(), wrong)
         }
         [one, two] => {
             let before =
                 resolve_structure(held, layout, store, index, Some(one.as_str()), runtime)?;
             let after = resolve_structure(held, layout, store, index, Some(two.as_str()), runtime)?;
 
-            (before, one.clone(), after, two.clone())
+            (before, one.clone(), after, two.clone(), false)
         }
         _ => return Err(ErrorTreeDiffStatArgument.into()),
     };
@@ -282,6 +293,7 @@ fn compare(
         before: before_name,
         after: after_name,
         changes: diff(&before, &after),
+        wrong,
     })
 }
 
@@ -294,6 +306,8 @@ pub struct ResultTreeDiffStat {
     after: String,
     /// The paths that hold apart.
     changes: Vec<Change>,
+    /// Whether the tree's own Layout entry is a change that must not be recorded.
+    wrong: bool,
 }
 
 #[renderer(buffer)]
@@ -311,6 +325,10 @@ pub fn render_result_tree_diff_stat(
             }
         }
     } else {
+        if result.wrong {
+            r_println!("{}", t!("tree.diff_stat.wrong").trim());
+        }
+
         r_println!(
             "{}",
             t!(

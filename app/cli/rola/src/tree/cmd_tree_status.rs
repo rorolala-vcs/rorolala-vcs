@@ -5,6 +5,7 @@
 #![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
 use librorolala::layout::Layout;
+use librorolala::status::tree_is_wrong;
 use librorolala::storage::RorolalaStorage;
 use librorolala::tree::{ChangeKind, Tree, TreeStatus};
 use librorolala::vcs::VCSIndex;
@@ -25,6 +26,7 @@ use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
 use crate::Next;
+use crate::account::ResCurrentAccount;
 use crate::complete::{strip_written, typing_flag};
 use crate::exit_codes::EC_HELP;
 use crate::layout::chosen;
@@ -113,6 +115,7 @@ pub fn handle_tree_status(
     state: StateTreeStatus,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
+    account: &mut LazyRes<ResCurrentAccount>,
     storage: &mut LazyRes<ResRorolalaStorage>,
     index: &mut LazyRes<ResVCSIndex>,
 ) -> Next {
@@ -133,7 +136,10 @@ pub fn handle_tree_status(
     let tree = locate(held, target.as_deref())?;
     let path = shown(&tree)?;
 
-    let status = match status_of(held, &tree, &layout, storage, index, include_ignored) {
+    let me = account.get_ref().must_bind().ok();
+    let me = me.as_deref();
+
+    let status = match status_of(held, &tree, &layout, storage, index, include_ignored, me) {
         Ok(status) => status,
         Err(next) => return next,
     };
@@ -149,6 +155,7 @@ fn status_of(
     storage: &mut LazyRes<ResRorolalaStorage>,
     index: &mut LazyRes<ResVCSIndex>,
     include_ignored: bool,
+    me: Option<&str>,
 ) -> Result<TreeStatus, Next> {
     let Some(store): Option<&RorolalaStorage> = storage.get_ref().as_ref() else {
         return Err(ErrorTreeFailed::new(t!("tree.err_no_store").trim().to_string()).to_chain());
@@ -163,8 +170,14 @@ fn status_of(
     };
 
     let rules = crate::ignore::rules(held, include_ignored);
+    let wrong = tree_is_wrong(held, layout, tree, me, Some(index), &runtime);
+
     match runtime.block_on(tree.status(layout, index, store, rules, include_ignored)) {
-        Ok(status) => Ok(status),
+        Ok(mut status) => {
+            status.wrong = wrong;
+
+            Ok(status)
+        }
         Err(error) => Err(ErrorTreeFailed::new(error.to_string()).to_chain()),
     }
 }
@@ -196,6 +209,10 @@ pub fn render_result_tree_status(result: ResultTreeStatus, ec: &mut ResExitCode)
 /// The lines one reading is drawn as.
 pub fn lines(status: &TreeStatus) -> Vec<String> {
     let mut lines = Vec::new();
+
+    if status.wrong {
+        lines.push(t!("tree.status.wrong").trim().to_string());
+    }
 
     if !status.conflicts.is_empty() {
         lines.push(String::new());

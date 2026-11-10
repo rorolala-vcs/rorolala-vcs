@@ -588,12 +588,18 @@ rorolala_vcs:
     modified:
       en: Modified
       zh-CN: 修改
+    wrong:
+      en: Wrong
+      zh-CN: 错误
     added_hover:
       en: A new entry in this tree. Track it to create the entry.
       zh-CN: 新的条目，追踪以创建它
     modified_hover:
       en: The entry is modified. Track it to record this change.
       zh-CN: 条目已修改，追踪以记录此次修改
+    wrong_hover:
+      en: "This tree is a wrong change: another account holds it, or the version it is based on is behind upstream."
+      zh-CN: 该树是错误的修改：它由其他账户持有，或其基准版本落后于上游。
 
   # What the Staged column says about a path in a tree, and what its badge is hovered for.
   tree_staged:

@@ -68,6 +68,48 @@ fn working_layout(workspace: &Workspace) -> Option<Layout> {
     workspace.layout_if_there().ok().flatten()
 }
 
+/// Whether a tree's own Layout entry is a change that must not be recorded.
+///
+/// A tree is one entry of the Layout, so its owner and the version it is based on are facts about the tree
+/// rather than about the paths inside it. The tree's own reading does not know the Layout, and this is the
+/// side that does: a tree another account holds, or one based on a version upstream has moved past, is a
+/// wrong change whatever its contents say.
+///
+/// # Errors
+///
+/// Nothing: a tree whose Layout path cannot be read, or a reading that cannot be made, is answered as not
+/// wrong rather than as a failure, because the caller is already showing the tree's own reading.
+#[must_use]
+pub fn tree_is_wrong(
+    workspace: &Workspace,
+    layout: &Layout,
+    tree: &Tree,
+    me: Option<&str>,
+    index: Option<&VCSIndex>,
+    runtime: &tokio::runtime::Runtime,
+) -> bool {
+    let Ok(path) = tree.layout_path() else {
+        return false;
+    };
+    let Some(copy) = rorolala_status::vault_copy(workspace) else {
+        return false;
+    };
+    let Some(id) = layout.id_of(&path) else {
+        return false;
+    };
+
+    if me.is_some_and(|me| copy.entry(id).is_some_and(|data| data.owner() != Some(me))) {
+        return true;
+    }
+
+    let Some(index) = index else {
+        return false;
+    };
+
+    !rorolala_status::wrong_base(layout, &copy, index, runtime, std::slice::from_ref(&path))
+        .is_empty()
+}
+
 /// How the rola-tree holding `directory` stands, as the JSON a caller reads.
 ///
 /// The reading is the tree's own: what its staging area holds beside the version the Layout records, what
@@ -101,10 +143,21 @@ fn tree_status(directory: &Path) -> Option<TreeStatus> {
     .unwrap_or_else(|_| IgnoreRuleSet::empty());
     let tree = Tree::locate(workspace.get_root(), directory).ok()?;
     let runtime = tokio::runtime::Runtime::new().ok()?;
+    let wrong = tree_is_wrong(
+        &workspace,
+        &layout,
+        &tree,
+        auth::current_account().as_deref(),
+        Some(&index),
+        &runtime,
+    );
 
-    runtime
+    let mut status = runtime
         .block_on(tree.status(&layout, &index, &store, rules, false))
-        .ok()
+        .ok()?;
+    status.wrong = wrong;
+
+    Some(status)
 }
 
 #[cfg(test)]

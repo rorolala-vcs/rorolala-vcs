@@ -12,6 +12,9 @@ internal enum TreeWorkStatus
 
     /// <summary>It is in both places, and what it is or holds changed.</summary>
     Modified,
+
+    /// <summary>It changed, but the tree is not this account's to record, or its base is behind upstream.</summary>
+    Wrong,
 }
 
 /// <summary>How much of a path's work the tree's staging area holds.</summary>
@@ -138,7 +141,11 @@ internal static class RolaTreeWork
         };
 
         return new TreeWork(
-            added && !modified ? TreeWorkStatus.Added : TreeWorkStatus.Modified,
+            status.Wrong
+                ? TreeWorkStatus.Wrong
+                : added && !modified
+                    ? TreeWorkStatus.Added
+                    : TreeWorkStatus.Modified,
             stage
         );
     }

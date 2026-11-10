@@ -180,6 +180,7 @@ public sealed class ColumnTests
 
         var added = RorolalaTreeStatusColumn.Badge(TreeWorkStatus.Added);
         var modified = RorolalaTreeStatusColumn.Badge(TreeWorkStatus.Modified);
+        var wrong = RorolalaTreeStatusColumn.Badge(TreeWorkStatus.Wrong);
         var all = RorolalaTreeStagedColumn.Badge(TreeWorkStage.Staged);
         var partial = RorolalaTreeStagedColumn.Badge(TreeWorkStage.Partial);
         var none = RorolalaTreeStagedColumn.Badge(TreeWorkStage.Unstaged);
@@ -193,6 +194,11 @@ public sealed class ColumnTests
         Assert.Equal(RorolalaColours.UnderWay, modified.Colour);
         Assert.True(modified.Tagged);
         Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_work.modified_hover"), modified.Hover());
+
+        Assert.Equal(VcsIcons.PriorityHigh, wrong.IconKey);
+        Assert.Equal(RorolalaColours.Wrong, wrong.Colour);
+        Assert.True(wrong.Tagged);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_work.wrong_hover"), wrong.Hover());
 
         Assert.Equal(VcsIcons.CheckCircle, all.IconKey);
         Assert.Equal(RorolalaColours.Untagged, all.Colour);
