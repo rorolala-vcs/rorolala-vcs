@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use rorolala_storage::{
     Batch, LockError, Lockable, LockingGuard, RorolalaStorage, StorageBackend as _, store_file,
 };
+use rorolala_utils_location::mark_hidden;
 
 use crate::TreeError;
 use crate::consts::{CONFLICTS, DESCRIPTION, LOCK, MARK, STAGED_TREE, STAGING};
@@ -47,6 +48,10 @@ impl Staging {
     /// the store cannot be made in it.
     pub fn ensure_store(&self) -> Result<RorolalaStorage, TreeError> {
         fs::create_dir_all(self.directory())?;
+
+        // The mark is a tree's own directory, not its work: on Windows that is an attribute rather
+        // than the leading dot, which is what this sets. A store that exists is a mark that exists.
+        let _ = mark_hidden(&self.root.join(MARK));
         let store = RorolalaStorage::create(self.directory());
 
         // A store that could not be made answers nothing when it is looked for, which is what

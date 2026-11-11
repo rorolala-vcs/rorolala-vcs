@@ -14,61 +14,65 @@ Removing a tree through the local Layout unbound the path but left the tree's en
 
 The first `rola tree add` of a large tree wrote two loose entries per file, so a tree of about 660 files and 11 MB took about 24 seconds before anything could be tracked. Staging now reads each file once and hands whole content, chunks and manifests to one batch, which publishes them as a few packs; `track` then carries those packs into the Workspace store instead of publishing hundreds of loose entries. The same tree's first add fell to about 0.4 seconds and its first track from about 6 seconds to about 1 second. A second add still leaves entries already staged alone, and only the entries whose work changed are read again.
 
-### 3. [`app`] [`modules`] [`workspace-analyze`] [`tree`] Find a tree nested inside another tree
+### 3. [`app`] [`cli`] [`tree`] [`utils`] Hide a tree's mark on Windows
+
+A tree's `.rola-tree` was a dot-named directory, which Windows shows like any other, so a tree's own data sat beside its work. A tree's mark is now given the platform's hidden attribute where the platform has one, and a platform without it is left as it was.
+
+### 4. [`app`] [`modules`] [`workspace-analyze`] [`tree`] Find a tree nested inside another tree
 
 A scan stopped at the first tree it met, so a tree nested inside another was never seen on disk and the Layout's entry for it read as a loss. The scan now looks through the directories of a tree for nested trees without reading that tree's files, so the inner tree is the entry the Layout names rather than a loss beside its parent.
 
-### 4. [`app`] [`RorolalaDesktop`] [`cli`] [`tree`] [`storage`] Stage only the tree entries whose work changed
+### 5. [`app`] [`RorolalaDesktop`] [`cli`] [`tree`] [`storage`] Stage only the tree entries whose work changed
 
 `rola tree add` read and stored every file of a tree on every run, even when the staged structure already held exactly that work, so staging a large tree that had not changed took as long as staging it for the first time. The scan already answers with each file's content key: an entry whose scanned work is the entry already staged is left alone, and only a new or changed entry is read into the staging store. The staging store is also made once for a run rather than once per file. On the large tree left for testing, a repeated add fell from about 24 seconds to about a tenth of a second; the first add of a new tree still writes every file and is the remaining cost.
 
-### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Write a table's column widths after its layout pass
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Write a table's column widths after its layout pass
 
 A table row wrote the column widths into the header and every row from its own size change, which is inside the layout pass the header was still arranging. The write is now posted after that pass, so resizing a window no longer changes the definitions the arrange is walking.
 
-### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Colour a tagged badge's ground from the theme's dark role
+### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Colour a tagged badge's ground from the theme's dark role
 
 A mark worn on a picture had its ground fixed at `#1A1A1A`, so it did not follow the dark theme a reader chose. The ground is now the look's dark role, read inside the badge's dark scope, so the park on a tree's folder and every other tagged badge take the dark the palette in force names while staying dark on the light look.
 
-### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Draw badge pictures at whole pixels and without a circular clip
+### 8. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Draw badge pictures at whole pixels and without a circular clip
 
 A badge's picture was clipped to a circle and scaled to a fractional size, so a small mark lost its corners and read as a blur. The picture now keeps its square mask, is scaled to a whole number of pixels, and the badge is laid out on whole pixels; the badge's own ground remains the circle. The picture is also reduced once to the size it is drawn at and kept, rather than being reduced by the compositor every time it is shown. A tree row's badges are moved down by a whole pixel rather than a half, so the render transform that centres them no longer resamples their pictures.
 
-### 8. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`rorolala-vcs`] Explain every file badge on hover
+### 9. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`rorolala-vcs`] Explain every file badge on hover
 
 Every badge a file wears now says what it means when the pointer rests on it. A picture with no words of its own reads its phrase without an argument, and the tree's own state, the tree's status, and the tree's staging badges have a sentence of their own rather than a word: a new or modified entry says what tracking it would record, a staged badge says how much of the content is staged, a tree badge says the directory is one object, and a wrong change says it has to be dealt with. The lock, standing, and merge badges already had full sentences.
 
-### 9. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`rorolala-vcs`] [`tree`] Report a tree's wrong change in its status and diff
+### 10. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`rorolala-vcs`] [`tree`] Report a tree's wrong change in its status and diff
 
 A tree is one Layout entry, so a version another side has moved past, or a lock another account holds, make every change under it a change that must not be recorded. The tree's own status, the lines `rola tree status` and `rola status` draw inside a tree, the comparisons `rola tree diff-stat` and `rola layout tree-diff` make, and the tree's GUI badge now say that, rather than presenting the change as ordinary modified work. The tree status reading carries the answer as data, so the Desktop reads the same one rather than deciding it again.
 
-### 10. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges
+### 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges
 
 A chosen tree row is now one rounded wash over the whole step, rather than a wash on the row and a second one around its name and icon. The badges at the row's right are centred on the step, so the room above and below them is the same.
 
-### 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name
+### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name
 
 A file tree row is now a three-column grid rather than a dock panel: the name gives way with an ellipsis, the badges keep their width at the row's right, and the row stretches to the tree's width at any panel width. The badges are drawn at twenty pixels, while the entry icon stays at sixteen.
 
-### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's colour stripe while the tree is resized
+### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's colour stripe while the tree is resized
 
 A tree's colour layer was written from the layout update that moved its rows, and a row whose place was not answered yet cleared the layer for a frame. The layer is now written after that layout, and an incomplete answer keeps the lines already drawn until the row has a place.
 
-### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's guide layer out of the arrange pass while resizing
+### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's guide layer out of the arrange pass while resizing
 
 Resizing the folder tree rebuilt the guide layer of every row while the rows' header grids were being arranged, which could end the program with a null reference inside the grid's arrange. The guide layer is now refreshed after the layout pass, and a line covered by a tree's coloured line is hidden rather than removed, so a resize changes only what is shown and never the row's children.
 
-### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Do not draw a tree with no work as a draft
+### 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Do not draw a tree with no work as a draft
 
 A tree whose own Layout entry is a wrong change has no work to record when nothing is staged and no file has changed, but the Version Graph read its wrong state as a change and drew a draft saying the tree had unrecorded work. A tree now draws a draft only when its staging area, its files or its description has something to record; being wrong is still what the tree's own badge and status say, and a draft of an actually changed tree still carries the wrong mark.
 
-### 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
+### 16. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
 
 The Version Graph no longer draws an edited file's local pill on the version its draft is based on
 as well as on the draft. While the file has an unrecorded change, its draft is the one card that
 names it; the baseline version keeps the entries of the other sides.
 
-### 16. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
+### 17. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
 
 The message field under the Version Graph is the whole room beside the TRACK button, but the pointer read as text only over the line the message is drawn on: the padding around that line and the empty width after it read as ground, although a press there focused the field. The field now names the text cursor itself, so every part of its room inherits it.
 

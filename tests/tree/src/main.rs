@@ -85,6 +85,23 @@ fn creation(rola: &Rola, ws: &Path, checked: &mut Checked) {
         "the mark is not there",
     );
 
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt as _;
+
+        let mark = ws.join("main").join(".rola-tree");
+        let hidden = fs::metadata(&mark)
+            .expect("the tree's mark")
+            .file_attributes()
+            & 0x2;
+
+        checked.wants(
+            "the tree's mark is hidden on Windows",
+            hidden != 0,
+            "the mark is not hidden",
+        );
+    }
+
     let ran = rola.run(ws, &["tree", "add", "main"]);
     checked.exits("the work of the tree is staged", &ran, 0);
     checked.stdout_has("what was staged is said", &ran, "added");

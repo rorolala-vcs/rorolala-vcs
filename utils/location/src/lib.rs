@@ -15,6 +15,9 @@ pub use data_home::*;
 mod helper;
 pub use helper::*;
 
+mod hidden;
+pub use hidden::*;
+
 mod normalize;
 pub use normalize::*;
 
