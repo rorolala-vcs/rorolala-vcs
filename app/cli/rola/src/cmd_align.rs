@@ -29,7 +29,7 @@ use librorolala::layout::{EntryKind, Layout, LayoutPath};
 use librorolala::status::{VariantMove, tracked_vault, variant_moves};
 use librorolala::storage::RorolalaStorage;
 use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
-use librorolala::tree::{EntryKind as TreeEntryKind, Staging, Tree, read_structure};
+use librorolala::tree::{EntryKind as TreeEntryKind, Staging, Tree, TreeStructure, read_structure};
 use librorolala::vcs::VCSIndex;
 use librorolala::workspace::{Merging, Pending, Workspace};
 use librorolala::workspace_analyze::{
@@ -107,6 +107,9 @@ const ARG_RESTORE_MOVE: PickerArg<'static, Flag> = arg![restore_move: Flag];
 /// Put a changed file back to the version the Layout names.
 const ARG_RESTORE_MODIFY: PickerArg<'static, Flag> = arg![restore_modify: Flag];
 
+/// Put a file inside a tree back to what the tree has staged for it.
+const ARG_RESTORE_STAGED: PickerArg<'static, Flag> = arg![restore_staged: Flag];
+
 /// Put a deleted file back, taking the version the Layout names out of the store.
 const ARG_RESTORE_DELETE: PickerArg<'static, Flag> = arg![restore_delete: Flag];
 
@@ -131,6 +134,8 @@ enum Mode {
     RestoreMove,
     /// A changed file is put back to the version the Layout names.
     RestoreModify,
+    /// A file inside a tree is put back to what the tree has staged for it.
+    RestoreStaged,
     /// A deleted file is put back, taken out of the store.
     RestoreDelete,
     /// Whichever of the three the path needs is done.
@@ -165,6 +170,7 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
                 ARG_MOVE_TO: t!("align.complete.move"),
                 ARG_RESTORE_MOVE: t!("align.complete.restore_move"),
                 ARG_RESTORE_MODIFY: t!("align.complete.restore_modify"),
+                ARG_RESTORE_STAGED: t!("align.complete.restore_staged"),
                 ARG_RESTORE_DELETE: t!("align.complete.restore_delete"),
                 ARG_RESTORE: t!("align.complete.restore"),
                 ARG_COMPLETELY: t!("align.complete.completely"),
@@ -195,10 +201,11 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
 /// confirm.
 ///
 /// `--restore-move` puts a moved file back where the Layout names it, `--restore-modify` writes the
-/// version the Layout names back over a changed file, and `--restore-delete` takes a deleted file
-/// back out of the store and puts it where the Layout names it; `--restore` does whichever of the
-/// three the path needs. A move that was edited as well is put back first, so it is left changed at
-/// its old path for `--restore-modify` to settle.
+/// version the Layout names back over a changed file, `--restore-staged` writes what a tree has staged
+/// back over a changed file inside it, and `--restore-delete` takes a deleted file back out of the
+/// store and puts it where the Layout names it; `--restore` does whichever of the three the path needs.
+/// A move that was edited as well is put back first, so it is left changed at its old path for
+/// `--restore-modify` to settle.
 ///
 /// A name that lands on a directory, `.` always does, and `--restore` are what act on many paths
 /// at once: every path under it is put back by what it needs, one line each, and nothing under it
@@ -213,6 +220,7 @@ pub fn complete_align(ctx: ShellContext) -> Suggest {
 /// [`ErrorAlignCompletely`] when `--completely` was given for something it cannot mean,
 /// [`ErrorAlignNotLost`] or [`ErrorAlignNoRename`] when the path is not what the mode acts on,
 /// [`ErrorAlignNotModified`] or [`ErrorAlignNotRestorable`] when there is nothing to put back,
+/// [`ErrorAlignNotStaged`] when `--restore-staged` names a path a tree has not staged,
 /// [`ErrorAlignRestoreExists`] when putting a file back would land on one already there,
 /// [`ErrorAlignIgnored`] when the path named is one the ignore rules govern,
 /// [`ErrorAlignRealMove`] when `--break` names a move of identical files, [`ErrorAlignMove`] when
@@ -226,6 +234,7 @@ pub fn align(args: EntryAlign) -> Next {
         .pick(ARG_MOVE_TO)
         .pick(ARG_RESTORE_MOVE)
         .pick(ARG_RESTORE_MODIFY)
+        .pick(ARG_RESTORE_STAGED)
         .pick(ARG_RESTORE_DELETE)
         .pick(ARG_RESTORE)
         .pick(ARG_COMPLETELY)
@@ -240,6 +249,7 @@ pub fn align(args: EntryAlign) -> Next {
         move_to,
         restore_move,
         restore_modify,
+        restore_staged,
         restore_delete,
         restore,
         completely,
@@ -279,6 +289,9 @@ pub fn align(args: EntryAlign) -> Next {
     }
     if matches!(restore_modify, Flag::Active) {
         modes.push(Mode::RestoreModify);
+    }
+    if matches!(restore_staged, Flag::Active) {
+        modes.push(Mode::RestoreStaged);
     }
     if matches!(restore_delete, Flag::Active) {
         modes.push(Mode::RestoreDelete);
@@ -391,6 +404,38 @@ pub fn handle_align(
             ) {
                 Ok(()) => ResultAlignTree {
                     path: tree_layout_path.as_str().to_owned(),
+                }
+                .into(),
+                Err(next) => next,
+            };
+        }
+
+        // A file inside a tree is one path of the tree's structure, not the tree's entry: the two
+        // content modes write what the tree records or what it has staged back over that file.
+        if matches!(mode, Mode::RestoreModify | Mode::RestoreStaged) {
+            let tree_root = root.join(tree_layout_path.to_path_buf());
+
+            if target_path == tree_root {
+                return ErrorAlignTreeUnsupported.into();
+            }
+
+            let tree = match Tree::locate(&root, &tree_root) {
+                Ok(tree) if tree_root.is_dir() => tree,
+                _ => return ErrorAlignTreeUnsupported.into(),
+            };
+
+            return match restore_tree_file(
+                &layout,
+                &tree,
+                &tree_root,
+                &target_path,
+                &mode,
+                index.get_ref().as_ref(),
+                storage.get_ref().as_ref(),
+            ) {
+                Ok(()) => ResultAlignTreeFile {
+                    path: target_path.display().to_string(),
+                    staged: matches!(mode, Mode::RestoreStaged),
                 }
                 .into(),
                 Err(next) => next,
@@ -537,6 +582,10 @@ pub fn handle_align(
         (Mode::RestoreModify, Selector::One(path)) => {
             single(restore_modify(&layout, &diff, &path, &root, content))
         }
+        (Mode::RestoreStaged, Selector::One(path)) => ErrorAlignNotStaged {
+            path: path.as_str().to_owned(),
+        }
+        .into(),
         (Mode::RestoreDelete, Selector::One(path)) => {
             single(restore_delete(&layout, &diff, &path, &root, content))
         }
@@ -1708,6 +1757,34 @@ pub fn render_error_align_not_modified(error: ErrorAlignNotModified, ec: &mut Re
     ec.exit_code = EC_ERR_ALIGN_ARGUMENT;
 }
 
+/// Error: a tree has nothing staged for the path named.
+#[derive(Grouped)]
+pub struct ErrorAlignNotStaged {
+    /// What was named.
+    path: String,
+}
+
+impl Failure for ErrorAlignNotStaged {
+    fn name(&self) -> &'static str {
+        "error_align_not_staged"
+    }
+
+    fn reason(&self) -> String {
+        t!("align.err_not_staged", path = self.path)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorAlignNotStaged);
+
+#[renderer(buffer)]
+pub fn render_error_align_not_staged(error: ErrorAlignNotStaged, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("align.err_not_staged_help").trim()));
+    ec.exit_code = EC_ERR_ALIGN_ARGUMENT;
+}
+
 /// Error: putting a moved file back would land on one already there.
 #[derive(Grouped)]
 pub struct ErrorAlignRestoreExists {
@@ -1915,6 +1992,129 @@ fn prepare_tree(root: &Path, path: &LayoutPath) -> Result<Tree, Next> {
     Tree::open(root, &tree_root).map_err(|error| align_failed(error.to_string()))
 }
 
+/// Puts one file inside a tree back to what the tree records or what it has staged.
+///
+/// A tree is one Layout entry, but a file inside it has two structures of its own to come from: the
+/// version the Layout names, and the staging area that version is being changed into. `--restore`
+/// names the whole tree, so this is the per-file answer, and a path the chosen structure does not
+/// name is taken out of the work rather than left as a change against it.
+fn restore_tree_file(
+    layout: &Layout,
+    tree: &Tree,
+    tree_root: &Path,
+    target: &Path,
+    mode: &Mode,
+    index: Option<&VCSIndex>,
+    storage: Option<&RorolalaStorage>,
+) -> Result<(), Next> {
+    let Some(store) = storage else {
+        return Err(align_failed(t!("align.err_no_store").trim()));
+    };
+    let Some(index) = index else {
+        return Err(align_failed(t!("align.err_no_index").trim()));
+    };
+    let runtime =
+        tokio::runtime::Runtime::new().map_err(|error| align_failed(error.to_string()))?;
+
+    match mode {
+        Mode::RestoreModify => {
+            let Some(recorded) = runtime
+                .block_on(tree.recorded(layout, index, store))
+                .map_err(|error| align_failed(error.to_string()))?
+            else {
+                return Err(align_failed(t!("align.err_not_recorded").trim()));
+            };
+
+            write_tree_entry(tree_root, target, &recorded.structure, store, &runtime)?;
+        }
+        Mode::RestoreStaged => {
+            let staging = tree.staging();
+            let Some(structure) = staging
+                .structure()
+                .map_err(|error| align_failed(error.to_string()))?
+            else {
+                return Err(ErrorAlignNotStaged {
+                    path: target.display().to_string(),
+                }
+                .into());
+            };
+            let Some(staged) = staging.store() else {
+                return Err(ErrorAlignNotStaged {
+                    path: target.display().to_string(),
+                }
+                .into());
+            };
+
+            write_tree_entry(tree_root, target, &structure, &staged, &runtime)?;
+        }
+        _ => return Err(ErrorAlignTreeUnsupported.into()),
+    }
+
+    Ok(())
+}
+
+/// Writes the entry `structure` holds for `target`, or takes `target` away when it holds none.
+fn write_tree_entry(
+    tree_root: &Path,
+    target: &Path,
+    structure: &TreeStructure,
+    store: &RorolalaStorage,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<(), Next> {
+    let relative = target
+        .strip_prefix(tree_root)
+        .ok()
+        .and_then(Path::to_str)
+        .map(|path| path.replace('\\', "/"))
+        .ok_or_else(|| align_failed(t!("align.err_tree_unsupported").trim()))?;
+
+    let Some(entry) = structure.entry(&relative) else {
+        if target.is_file() || target.is_symlink() {
+            fs::remove_file(target).map_err(|error| align_failed(error.to_string()))?;
+        }
+
+        return Ok(());
+    };
+
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|error| align_failed(error.to_string()))?;
+    }
+
+    match entry.kind() {
+        TreeEntryKind::File => {
+            let Some(key) = entry.storage() else {
+                return Err(align_failed(t!("align.err_tree_unsupported").trim()));
+            };
+            if target.is_dir() {
+                return Err(align_failed(t!("align.err_tree_unsupported").trim()));
+            }
+            runtime
+                .block_on(store.extract_file(key, target))
+                .map_err(|error| align_failed(error.to_string()))?;
+        }
+        TreeEntryKind::Symlink => {
+            let Some(link) = entry.target() else {
+                return Err(align_failed(t!("align.err_tree_unsupported").trim()));
+            };
+            if target.exists() {
+                let _ = fs::remove_file(target);
+            }
+
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(link, target)
+                .map_err(|error| align_failed(error.to_string()))?;
+            #[cfg(windows)]
+            std::os::windows::fs::symlink_file(link, target)
+                .map_err(|error| align_failed(error.to_string()))?;
+        }
+        TreeEntryKind::Directory => {
+            return Err(ErrorAlignTreeUnsupported.into());
+        }
+    }
+
+    Ok(())
+}
+
 /// Puts the work of a tree back to the structure the Layout records.
 ///
 /// What the version holds is written over the paths it names; `--completely` also takes out what the
@@ -2051,6 +2251,27 @@ fn restore_tree(
     }
 
     Ok(())
+}
+
+/// Result: one file inside a tree was put back.
+#[derive(Grouped)]
+pub struct ResultAlignTreeFile {
+    /// The file as a person knows it.
+    path: String,
+    /// Whether it was put back to the staging area rather than the recorded version.
+    staged: bool,
+}
+
+#[renderer(buffer)]
+pub fn render_result_align_tree_file(result: ResultAlignTreeFile, ec: &mut ResExitCode) {
+    let key = if result.staged {
+        "align.result_tree_file_staged"
+    } else {
+        "align.result_tree_file"
+    };
+
+    r_println!("{}", t!(key, path = result.path).trim());
+    let _ = ec;
 }
 
 /// Result: the work of a tree was put back.

@@ -20,6 +20,9 @@ align:
     restore_modify:
       en: Revert the content change, which loses the edited content
       zh-CN: 撤回内容变更，这会丢失已编辑的内容
+    restore_staged:
+      en: Put a file inside a tree back to what the tree has staged
+      zh-CN: 把树内文件还原到树的暂存内容
     restore_delete:
       en: Rebuild the lost entry's file
       zh-CN: 重建丢失项的文件
@@ -42,6 +45,7 @@ align:
 
             --restore-move       Confirm the **move**, and restore it to its original position
             --restore-modify     Restore the file's content change
+            --restore-staged     Restore a file inside a tree to what the tree staged
             --restore-delete     Rebuild a **lost entry**'s file
             --restore            Do one of the three above, as PATH needs
             --completely         Restore the content as well as the position, meaningful only for restoring a move
@@ -62,6 +66,7 @@ align:
 
             --restore-move       确认该 **移动项**，并还原至原来的位置
             --restore-modify     还原该文件的内容变更
+            --restore-staged     把树内文件还原到树的暂存内容
             --restore-delete     重建某条 **丢失项** 的文件
             --restore            按 PATH 需要，执行上面三者中的一个
             --completely         在还原位置的同时还原内容，只对还原移动有意义
@@ -207,6 +212,18 @@ align:
         移动的目的地没有自己的版本
         请先用 `--restore-move` 把移动放回
 
+  err_not_staged:
+    en: "`%{path}` is not a file the tree has staged"
+    zh-CN: "`%{path}` 不是树已暂存的文件"
+
+  err_not_staged_help:
+    en: |
+        Stage the tree's work first with `rola tree add`
+        A file the tree has not staged has nothing to be put back to
+    zh-CN: |
+        请先用 `rola tree add` 暂存树的工作
+        树没有暂存的文件没有可还原的内容
+
   err_restore_exists:
     en: "Putting the file back would land on `%{path}`, which is already there"
     zh-CN: "放回文件会落在已存在的 `%{path}` 上"
@@ -248,12 +265,18 @@ align:
   result_tree:
     en: "Tree `%{path}` is back to what it records"
     zh-CN: "树 `%{path}` 已还原到记录的版本"
+  result_tree_file:
+    en: "`%{path}` is back to what the tree records"
+    zh-CN: "`%{path}` 已还原到树记录的版本"
+  result_tree_file_staged:
+    en: "`%{path}` is back to what the tree has staged"
+    zh-CN: "`%{path}` 已还原到树的暂存内容"
   err_tree_unsupported:
-    en: A tree is settled with `--restore`, not a per-file mode
-    zh-CN: 树只能用 `--restore` 处理，不能用逐文件模式
+    en: A tree is settled with `--restore`, or a file inside it with `--restore-modify` or `--restore-staged`
+    zh-CN: 树用 `--restore` 处理，树内文件用 `--restore-modify` 或 `--restore-staged` 处理
   err_tree_unsupported_help:
-    en: Give `--restore` to put the whole tree back, or name a file outside a tree
-    zh-CN: 请用 `--restore` 还原整棵树，或给出树外的文件
+    en: Give `--restore` to put the whole tree back, or name a file inside it for the content modes
+    zh-CN: 请用 `--restore` 还原整棵树，或给出树内文件以使用内容模式
 
   err_not_recorded:
     en: The tree records no version yet

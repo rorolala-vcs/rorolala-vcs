@@ -80,6 +80,38 @@ public sealed class RorolalaDockTests
         );
     }
 
+    /// <summary>A file inside a tree offers the tree's two versions, and a file outside one offers neither.</summary>
+    [Fact]
+    public void AFileInsideATreeOffersBothTreeRestores()
+    {
+        var services = Host.Services();
+        var plugin = new Vcs();
+
+        plugin.Initialize(services.For(plugin.Manifest.Id, 1));
+
+        var tree = Directory.CreateDirectory(Path.Combine(Scratch.New("tree-restore-menu"), "tree")).FullName;
+        Directory.CreateDirectory(Path.Combine(tree, ".rola-tree"));
+        var file = Path.Combine(tree, "a.txt");
+        File.WriteAllText(file, "one\n");
+
+        var items = services.ContextMenus.Items(ContextMenuTarget.File);
+        var baseline = Assert.Single(items, item => item.LabelKey == "rorolala_vcs.tree_restore.baseline");
+        var staged = Assert.Single(items, item => item.LabelKey == "rorolala_vcs.tree_restore.staged");
+
+        Assert.True(baseline.Applies!(new ContextTarget(tree, [new Entry(file, EntryKind.File)])));
+        Assert.True(staged.Applies!(new ContextTarget(tree, [new Entry(file, EntryKind.File)])));
+        var outside = Scratch.New("tree-restore-outside");
+        File.WriteAllText(Path.Combine(outside, "a.txt"), "one\n");
+        Assert.False(
+            baseline.Applies!(
+                new ContextTarget(
+                    outside,
+                    [new Entry(Path.Combine(outside, "a.txt"), EntryKind.File)]
+                )
+            )
+        );
+    }
+
     /// <summary>A base directory no Workspace holds is said so rather than left blank.</summary>
     /// <remarks>
     /// A scratch directory is under no Workspace, and a directory that was never said, nothing, or the

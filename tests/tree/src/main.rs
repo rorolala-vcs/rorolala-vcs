@@ -43,6 +43,7 @@ fn main() {
     retrack(&rola, &ws, &mut checked);
     conflicts(&rola, &ws, &mut checked);
     restore(&rola, &ws, &mut checked);
+    file_restore(&rola, &ws, &mut checked);
     missing_tree(&rola, &ws, &mut checked);
     workspace_rows(&rola, &ws, &mut checked);
     mixed_track(&rola, &ws, &mut checked);
@@ -372,6 +373,33 @@ fn restore(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["tree", "status", "main"]);
     checked.exits("the tree is read after the restore", &ran, 0);
     checked.stdout_has("the rest of the work matches what the tree records", &ran, "clean");
+}
+
+/// One file inside a tree is put back to what the tree staged, or to what it records.
+fn file_restore(rola: &Rola, ws: &Path, checked: &mut Checked) {
+    let file = ws.join("main").join("a.psd");
+
+    fs::write(&file, b"staged").expect("the work is changed");
+    let ran = rola.run(ws, &["tree", "add", "main"]);
+    checked.exits("the changed file is staged", &ran, 0);
+
+    fs::write(&file, b"unstaged").expect("the work is changed again");
+    let ran = rola.run(ws, &["align", "main/a.psd", "--restore-staged"]);
+    checked.exits("the file is put back to the staging area", &ran, 0);
+    checked.wants(
+        "the file holds what the tree staged",
+        fs::read(&file).ok().as_deref() == Some(b"staged".as_slice()),
+        "the file still holds the later change",
+    );
+
+    fs::write(&file, b"again").expect("the work is changed");
+    let ran = rola.run(ws, &["align", "main/a.psd", "--restore-modify"]);
+    checked.exits("the file is put back to the recorded version", &ran, 0);
+    checked.wants(
+        "the file holds what the tree records",
+        fs::read(&file).ok().as_deref() == Some(b"hello".as_slice()),
+        "the file still holds the staged change",
+    );
 }
 
 /// A tree whose directory was deleted is put back whole by `align --restore`.

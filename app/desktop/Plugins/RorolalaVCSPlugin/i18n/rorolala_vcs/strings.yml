@@ -1230,6 +1230,31 @@ rorolala_vcs:
   # directory, the command line takes a directory recursively, so the two are said apart. The forced
   # pair is shown while Shift is held: what it does is past the checks the plain pair makes, which is
   # worth saying twice, in the words and in the red the look gives it.
+  # What a file inside a tree offers about putting it back. The tree is one entry, so the two versions
+  # named here are the tree's recorded version and its staging area rather than the file's own.
+  tree_restore:
+    baseline:
+      en: Restore to baseline
+      zh-CN: 还原至基准
+    staged:
+      en: Restore to staged
+      zh-CN: 还原至暂存
+    baseline_confirm_title:
+      en: Restore to the recorded version?
+      zh-CN: 要还原至基准吗？
+    baseline_confirm_message:
+      en: "`%{file}` will be put back to the version the tree records. The change in the work will be lost."
+      zh-CN: "`%{file}` 将还原到树记录的版本。工作区中的改动会丢失。"
+    staged_confirm_title:
+      en: Restore to the staged version?
+      zh-CN: 要还原至暂存吗？
+    staged_confirm_message:
+      en: "`%{file}` will be put back to what the tree has staged. The change in the work will be lost."
+      zh-CN: "`%{file}` 将还原到树暂存的内容。工作区中的改动会丢失。"
+    failed:
+      en: The file could not be restored
+      zh-CN: 无法还原该文件
+
   ownership_menu:
     hold_file:
       en: Take ownership of this file

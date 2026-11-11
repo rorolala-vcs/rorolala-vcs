@@ -20,6 +20,18 @@ internal static class AlignCommand
     public static IReadOnlyList<string> RestoreArguments(string path) =>
         ["--theme-choice=" + Sync.Theme, "--json", "align", "--restore", path];
 
+    /// <summary>The arguments a restore of a tree file to its recorded version is run with.</summary>
+    /// <param name="path">The file to put back.</param>
+    /// <returns>The arguments.</returns>
+    public static IReadOnlyList<string> RestoreBaselineArguments(string path) =>
+        ["--theme-choice=" + Sync.Theme, "--json", "align", "--restore-modify", path];
+
+    /// <summary>The arguments a restore of a tree file to its staging area is run with.</summary>
+    /// <param name="path">The file to put back.</param>
+    /// <returns>The arguments.</returns>
+    public static IReadOnlyList<string> RestoreStagedArguments(string path) =>
+        ["--theme-choice=" + Sync.Theme, "--json", "align", "--restore-staged", path];
+
     /// <summary>The arguments the removal of a variant file is run with, after the program's name.</summary>
     /// <param name="variant">The variant file to remove.</param>
     /// <returns>The arguments.</returns>
@@ -46,6 +58,30 @@ internal static class AlignCommand
         ArgumentNullException.ThrowIfNull(path);
 
         return Run(directory, RestoreArguments(path));
+    }
+
+    /// <summary>Runs a restore of a tree file to the version the tree records.</summary>
+    /// <param name="directory">Where the work is rooted, and where the run is made.</param>
+    /// <param name="path">The file to put back.</param>
+    /// <returns>Whether it ended well, and what to say when it did not.</returns>
+    public static (bool Done, string Said) RestoreBaseline(string directory, string path)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(path);
+
+        return Run(directory, RestoreBaselineArguments(path));
+    }
+
+    /// <summary>Runs a restore of a tree file to what the tree has staged.</summary>
+    /// <param name="directory">Where the work is rooted, and where the run is made.</param>
+    /// <param name="path">The file to put back.</param>
+    /// <returns>Whether it ended well, and what to say when it did not.</returns>
+    public static (bool Done, string Said) RestoreStaged(string directory, string path)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(path);
+
+        return Run(directory, RestoreStagedArguments(path));
     }
 
     /// <summary>Ends a merge: the variant file goes, and the record with it.</summary>

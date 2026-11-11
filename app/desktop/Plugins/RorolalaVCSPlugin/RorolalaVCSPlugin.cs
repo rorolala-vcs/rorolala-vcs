@@ -112,6 +112,10 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // which reports itself to the hub while it goes.
         OwnershipActions.Declare(host, hub, ownership);
 
+        // What a file inside a tree offers: the tree's recorded version and its staging area, which are
+        // the two structures a tree's file can be put back to.
+        TreeRestoreActions.Declare(host, hub);
+
         // And the work's upstream, which is not a dock of its own: it is a place the browser opens by address, read by
         // the very same listing a directory is. Declaring it is registering the prefix it answers for, the way into it
         // from the work's own menus, and what a drag of its entries means when it is let go on a directory.
