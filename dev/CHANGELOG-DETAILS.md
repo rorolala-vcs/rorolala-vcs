@@ -6,111 +6,55 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Bugfix
 
-### 1. [`app`] [`cli`] [`layout`] [`tree`] Remove a tree's entry when its Layout path is removed
+### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Draw badge pictures at whole pixels and without a circular clip
 
-Removing a tree through the local Layout unbound the path but left the tree's entry, which a Layout listing shows as `.`. A path naming a tree now removes that tree's entry, path and all, while a file's path still unbinds as before.
+A badge's picture was clipped to a circle and scaled to a fractional size, so a small mark lost its corners and read as a blur. The picture now keeps its square mask, is scaled to a whole number of pixels, and the badge is laid out on whole pixels; the badge's own ground remains the circle. The picture is also reduced once to the size it is drawn at and kept, rather than being reduced by the compositor every time it is shown.
 
-### 2. [`app`] [`cli`] [`tree`] [`storage`] Stage a tree's first content into packs
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges
 
-The first `rola tree add` of a large tree wrote two loose entries per file, so a tree of about 660 files and 11 MB took about 24 seconds before anything could be tracked. Staging now reads each file once and hands whole content, chunks and manifests to one batch, which publishes them as a few packs; `track` then carries those packs into the Workspace store instead of publishing hundreds of loose entries. The same tree's first add fell to about 0.4 seconds and its first track from about 6 seconds to about 1 second. A second add still leaves entries already staged alone, and only the entries whose work changed are read again.
+A chosen tree row is one rounded wash over the whole step, rather than a wash on the row and a second one around its name and icon. The badges at the row's right are centred on the step, so the room above and below them is the same.
 
-### 3. [`app`] [`cli`] [`tree`] [`utils`] Hide a tree's mark on Windows
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
 
-A tree's `.rola-tree` was a dot-named directory, which Windows shows like any other, so a tree's own data sat beside its work. A tree's mark is now given the platform's hidden attribute where the platform has one, and a platform without it is left as it was.
+The Version Graph no longer draws an edited file's local pill on the version its draft is based on as well as on the draft. While the file has an unrecorded change, its draft is the one card that names it; the baseline version keeps the entries of the other sides.
 
-### 4. [`app`] [`modules`] [`workspace-analyze`] [`tree`] Find a tree nested inside another tree
-
-A scan stopped at the first tree it met, so a tree nested inside another was never seen on disk and the Layout's entry for it read as a loss. The scan now looks through the directories of a tree for nested trees without reading that tree's files, so the inner tree is the entry the Layout names rather than a loss beside its parent.
-
-### 5. [`app`] [`RorolalaDesktop`] [`cli`] [`tree`] [`storage`] Stage only the tree entries whose work changed
-
-`rola tree add` read and stored every file of a tree on every run, even when the staged structure already held exactly that work, so staging a large tree that had not changed took as long as staging it for the first time. The scan already answers with each file's content key: an entry whose scanned work is the entry already staged is left alone, and only a new or changed entry is read into the staging store. The staging store is also made once for a run rather than once per file. On the large tree left for testing, a repeated add fell from about 24 seconds to about a tenth of a second; the first add of a new tree still writes every file and is the remaining cost.
-
-### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Write a table's column widths after its layout pass
-
-A table row wrote the column widths into the header and every row from its own size change, which is inside the layout pass the header was still arranging. The write is now posted after that pass, so resizing a window no longer changes the definitions the arrange is walking.
-
-### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Colour a tagged badge's ground from the theme's dark role
-
-A mark worn on a picture had its ground fixed at `#1A1A1A`, so it did not follow the dark theme a reader chose. The ground is now the look's dark role, read inside the badge's dark scope, so the park on a tree's folder and every other tagged badge take the dark the palette in force names while staying dark on the light look.
-
-### 8. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Draw badge pictures at whole pixels and without a circular clip
-
-A badge's picture was clipped to a circle and scaled to a fractional size, so a small mark lost its corners and read as a blur. The picture now keeps its square mask, is scaled to a whole number of pixels, and the badge is laid out on whole pixels; the badge's own ground remains the circle. The picture is also reduced once to the size it is drawn at and kept, rather than being reduced by the compositor every time it is shown. A tree row's badges are moved down by a whole pixel rather than a half, so the render transform that centres them no longer resamples their pictures.
-
-### 9. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`rorolala-vcs`] Explain every file badge on hover
-
-Every badge a file wears now says what it means when the pointer rests on it. A picture with no words of its own reads its phrase without an argument, and the tree's own state, the tree's status, and the tree's staging badges have a sentence of their own rather than a word: a new or modified entry says what tracking it would record, a staged badge says how much of the content is staged, a tree badge says the directory is one object, and a wrong change says it has to be dealt with. The lock, standing, and merge badges already had full sentences.
-
-### 10. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`rorolala-vcs`] [`tree`] Report a tree's wrong change in its status and diff
-
-A tree is one Layout entry, so a version another side has moved past, or a lock another account holds, make every change under it a change that must not be recorded. The tree's own status, the lines `rola tree status` and `rola status` draw inside a tree, the comparisons `rola tree diff-stat` and `rola layout tree-diff` make, and the tree's GUI badge now say that, rather than presenting the change as ordinary modified work. The tree status reading carries the answer as data, so the Desktop reads the same one rather than deciding it again.
-
-### 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges
-
-A chosen tree row is now one rounded wash over the whole step, rather than a wash on the row and a second one around its name and icon. The badges at the row's right are centred on the step, so the room above and below them is the same.
-
-### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name
-
-A file tree row is now a three-column grid rather than a dock panel: the name gives way with an ellipsis, the badges keep their width at the row's right, and the row stretches to the tree's width at any panel width. The badges are drawn at twenty pixels, while the entry icon stays at sixteen.
-
-### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's colour stripe while the tree is resized
-
-A tree's colour layer was written from the layout update that moved its rows, and a row whose place was not answered yet cleared the layer for a frame. The layer is now written after that layout, and an incomplete answer keeps the lines already drawn until the row has a place.
-
-### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's guide layer out of the arrange pass while resizing
-
-Resizing the folder tree rebuilt the guide layer of every row while the rows' header grids were being arranged, which could end the program with a null reference inside the grid's arrange. The guide layer is now refreshed after the layout pass, and a line covered by a tree's coloured line is hidden rather than removed, so a resize changes only what is shown and never the row's children.
-
-### 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Do not draw a tree with no work as a draft
-
-A tree whose own Layout entry is a wrong change has no work to record when nothing is staged and no file has changed, but the Version Graph read its wrong state as a change and drew a draft saying the tree had unrecorded work. A tree now draws a draft only when its staging area, its files or its description has something to record; being wrong is still what the tree's own badge and status say, and a draft of an actually changed tree still carries the wrong mark.
-
-### 16. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
-
-The Version Graph no longer draws an edited file's local pill on the version its draft is based on
-as well as on the draft. While the file has an unrecorded change, its draft is the one card that
-names it; the baseline version keeps the entries of the other sides.
-
-### 17. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
 
 The message field under the Version Graph is the whole room beside the TRACK button, but the pointer read as text only over the line the message is drawn on: the padding around that line and the empty width after it read as ground, although a press there focused the field. The field now names the text cursor itself, so every part of its room inherits it.
 
 The hint is a text block and took the body type rather than the field's, so it was taller than the line that replaced it and the strip shrank when typing started. The hint now takes the field's own type, so a row showing the hint and a row showing a message are the same height.
 
+### 5. [`modules`] [`storage`] [`pack`] Forget a pack's listing when its last index goes
+
+A pack left empty by a removal is dropped from the store and from the list of packs at once, rather than waiting for a directory timestamp that a file taken out does not move on every filesystem, so a store that has let go of its last pack does not go on naming it.
+
 ## Optimized
 
-### 1. [`app`] [`cli`] [`tree`] Retrack a tree by writing only the paths its version changes
-
-A tree retrack wrote every file of the version it moved to, even when almost every one was the same file the tree already held, so a version one step back over a tree of several hundred files took about nine seconds. The work is now compared with the structure the tree recorded, and only a path the two versions differ in is fetched and written; the rest are left as they are. The same tree's one-step retrack fell to about half a second. `--force` still writes every path, since its work is what is being discarded.
-
-### 2. [`modules`] [`chunking`] [`text`] Stop a text cut at the bound when a line runs past it
+### 1. [`modules`] [`chunking`] [`text`] Stop a text cut at the bound when a line runs past it
 
 A text cut was moved on to the end of the line it landed in with no bound, so a file of one enormous line, a minified script or a single-line JSON, had its first cut moved to the end of the file and was stored as a single chunk. The move now stops when the line has more than `max` left to run, and the line is cut through there.
 
 Short lines are unchanged: a chunk still ends at a line end, and may run past `max` by the line it moved over. No chunk is longer than twice `max`.
 
-### 3. [`modules`] [`inverse-index`] [`table`] Build the inverse index in the buffer it is written from
+### 2. [`modules`] [`inverse-index`] [`table`] Build the inverse index in the buffer it is written from
 
 `Table::encode` built the records in a buffer of their own and copied them behind the header, for a table that may be tens of megabytes. The records are now written directly behind the header and the digest is filled in afterwards.
 
-### 4. [`modules`] [`protocol`] [`frame`] Read a carried frame into the buffer it is being put together in
+### 3. [`modules`] [`protocol`] [`frame`] Read a carried frame into the buffer it is being put together in
 
 A frame read for a blob carried in pieces allocated a buffer of its own and then copied it into the blob being assembled. `read_frame_into` reads the frame into the tail of the destination, so a large content crossing a sync is copied once rather than twice.
 
-### 5. [`modules`] [`storage`] Cut unclaimed binary content on its content, and write chunks in packs
+### 4. [`modules`] [`storage`] Cut unclaimed binary content on its content, and write chunks in packs
 
 Binary content no policy claims and no ZIP signature marks was written whole, so an edit to a large PSB, TIFF, EXR, TGA, WAV or FBX binary rewrote the whole file. Content of at least 256 KiB is now cut on its content, with chunks of 16 KiB to 256 KiB, so an edit costs the chunks it fell in.
 
-A chunked write lays its chunks down in a pack rather than as one file each, and a chunked read plans every chunk before reading any of them, so a content of thousands of chunks no longer costs a file, a pack lookup and a pack open per chunk. The manifest is still written loose, and the chunks are published before it is written.
+A chunked write lays its chunks down in a pack rather than as one file each, and a chunked read plans every chunk before reading any of them, so a content of thousands of chunks no longer costs a file, a pack lookup and a pack open per chunk. A pack lookup takes the root state the caller already holds, so the store is canonicalised once for a content rather than once per chunk. The manifest is still written loose, and the chunks are published before it is written.
 
 Neither the cut nor its bounds are recorded in the store, so content written before this reads back unchanged. The first save after upgrading re-cuts a large binary once, and later versions share chunks with it.
 
-A pack left empty by a removal is dropped from the store and forgotten from the list of packs at once, rather than waiting for a directory timestamp to change, so a store that has let go of its last pack does not go on naming it.
+Reads and writes no longer copy content on the way through: a payload stored as it is is borrowed rather than encoded into a second buffer, a manifest is decoded in place, and a file's key is hashed as it streams. An extract writes each chunk to the file and hashes it as it goes rather than putting the whole content together in memory.
 
-Reads and writes no longer copy content on the way through: a payload stored as it is is borrowed rather than encoded into a second buffer, an entry is read frame first with its payload into the front of its own buffer, a manifest is decoded in place, and a file's key is hashed as it streams. An extract writes each chunk to the file and hashes it as it goes rather than putting the whole content together in memory, and a chunked write canonicalises the store once rather than once a chunk.
-
-### 6. [`modules`] [`workspace-analyze`] [`fingerprint`] Stream a binary file through the status reading instead of holding it
+### 5. [`modules`] [`workspace-analyze`] [`fingerprint`] Stream a binary file through the status reading instead of holding it
 
 `rola status` read every changed file whole to fingerprint it, so a two gigabyte `PSD` took two gigabytes of memory. A file is now opened, sniffed on its first 8000 bytes, and hashed as it streams when it reads as binary; only a text file is held whole, because the spans a move is guessed from are cut out of all of it. The tree reading uses the same stream.
 
@@ -118,41 +62,53 @@ Reads and writes no longer copy content on the way through: a payload stored as 
 
 ### 1. **\[BREAKING!\]** [`app`] [`rola`] [`tree`] Version a directory as one tree
 
-`rola tree` is a new namespace for directories that are versions in their own right: `init`, `status`, `add`, `rm`, `desc`, `write-desc`, `cat-desc`, `ls-tree`, `ls-staging-tree` and `diff-stat`. A directory with a `.rola-tree` mark is one unit of work, `rola track` records its staged structure as one version, and it is named and described in the same list as a file: the group message, its own `--file-message` by position, and the same editor sections all work for it, Running `rola status` inside a tree reads the tree itself, while naming a tree draws its version chain the way naming a file does, with a draft above the chain while its work is unrecorded. From outside a tree, its work is one row among the Workspace's structural and content changes, a tree object beside the paths, with trees drawn before the files and the parts that are zero left out. Aligning a tree with `--restore`, and moving its record back with `rola retrack`, put the whole directory back from a version. A tree whose directory was deleted is restored whole as well: which paths are trees is read from the Layout rather than from a mark that is gone, so the directory, its `.rola-tree` skeleton and its baseline are recreated, a path inside the tree names the tree, and a file sitting where the tree belongs is replaced. Naming a tree or anything under it in `rola hold` or `rola giveup` names the tree's one entry, so its ownership moves as one thing. A tree merges with `rola checkin --join <VARIANT> --tree-merge`, which compares two structures over their shared version and leaves `~theirs` copies beside the work for what both sides changed. The C ABI gains `rola_tree_entries_json`.
+`rola tree` is the namespace for a directory that is a version in its own right: `init`, `status`, `add`, `rm`, `reset`, `desc`, `write-desc`, `cat-desc`, `ls-tree`, `ls-staging-tree` and `diff-stat`. A directory holding `.rola-tree` is one unit of work, `rola track` records its staged structure as one version, and it is named and described in the same list as a file: the group message, its own `--file-message` by position and the same editor sections all work for it. `rola status` inside a tree reads the tree itself, while naming a tree draws its version chain the way naming a file does, with a draft above the chain while its work is unrecorded. From outside a tree, its work is one row among the Workspace's structural and content changes, a tree object beside the paths, with trees drawn before files and zero parts left out. The tree commands end with exit code 94 for arguments they cannot use, 95 for a path outside every tree, and 99 for a tree that cannot be read or written.
 
-A tree records the id of the Layout entry it is at in its `.rola-tree` mark, so a directory moved outside Rorolala is found again as one move by `rola status` and `rola layout tree-diff`. A tree with no id to match is read as a loss and a gain, and `rola align --move` connects the two so the next reading pairs them.
+`rola tree reset` puts the staging area back to the recorded version, for the whole tree or only the paths named, and leaves the work untouched. `rola tree desc` opens the same editing file and editor as `rola track` and stages what the editor wrote only after it ends successfully, so a cancelled edit leaves the staged description as it was.
 
-Breaking: the Layout snapshot format is version 3 and its records carry a kind byte. A Workspace or Vault written by an earlier version cannot be read by this one, and a Vault written here cannot be read by an earlier one. A sync carries the kind of each entry it creates, so a Vault's Layout records trees as trees, and a path the two sides name as different things is refused rather than transferred.
+A tree records the Layout entry it is at in `.rola-tree/id`, so a directory moved outside Rorolala is found again as one move by `rola status` and `rola layout tree-diff`; a tree with no id to match reads as a loss and a gain, and `rola align --move` connects the two so the next reading pairs them. The mark is given the hidden attribute where the platform has one, so Windows no longer shows a tree's own data beside its work. A scan that meets a tree looks through its directories for trees nested inside it rather than stopping at the first, so the inner tree is the entry the Layout names. A `.rolaignore` file in any directory of a tree applies to that directory and its children, a deeper file deciding after a shallower one, as `gitignore` does. A Workspace whose root is a tree keeps it at the reserved root path, shown as `.`.
 
-### 2. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`windows`] Own and restore floating dock windows
+`rola align --restore` puts a whole tree back from a version, and a tree whose directory was deleted is restored whole: which paths are trees is read from the Layout rather than from a mark that is gone, so the directory, its `.rola-tree` skeleton and its baseline are recreated, a path inside the tree names the tree, and a file sitting where the tree belongs is replaced.
 
-A dock pulled into a window of its own is now owned by the main window. Closing the main window closes its children, minimizing it minimizes them with it, and restoring it gives each child back the state it had. The layout file is version 3 and records each floating window's dock, ordinal, own state, bounds and maximized state; version 2 files still load, with no floating windows. A window restored off screen is moved back onto the primary work area.
+The first `rola tree add` of a large tree reads each file once and publishes whole content, chunks and manifests as a few packs; `track` carries those packs into the Workspace store instead of publishing loose entries. A later add leaves an entry whose scanned content key matches the staged entry alone and reads only what changed. A tree of about 660 files and 11 MB fell from about 24 seconds to about 0.4 seconds for its first add and from about 6 seconds to about 1 second for its first track, and a repeated add fell from about 24 seconds to about a tenth of a second.
 
-### 3. [`app`] [`cli`] [`RorolalaDesktop`] [`plugins`] [`tree`] Restore a tree's file to its baseline or its staging area
+A tree whose own Layout entry is a wrong change says so in `rola tree status`, in the lines `rola status` draws inside it, in `rola tree diff-stat` and `rola layout tree-diff`, and in its GUI badge, rather than presenting the change as ordinary modified work. Removing a tree's path from the local Layout removes the tree's entry with it; a file's path still unbinds as before.
 
-A file inside a tree could only be put back as part of the whole tree, while a file outside one had its own restore. The command line now takes `--restore-modify` for a file inside a tree, which writes the version the tree records over it, and `--restore-staged`, which writes what the tree has staged. The file menu a tree holds offers the two as `还原至基准` and `还原至暂存`, asks before the work is overwritten, and reports a run that fails.
+Naming a tree or anything under it in `rola hold` or `rola giveup` names the tree's one entry, so its ownership moves as one thing. A tree merges with `rola checkin --join <VARIANT> --tree-merge`, which compares two structures over their shared version and leaves `~theirs` copies beside the work for what both sides changed.
 
-### 4. [`app`] [`cli`] [`RorolalaDesktop`] [`plugins`] [`tree`] Retrack a tree to a version, an entry, or a fork
+Breaking: the Layout snapshot format is version 3 and its records carry a kind byte. A Workspace or Vault written by an earlier version cannot be read by this one, and a Vault written here cannot be read by an earlier one. A sync carries the kind of each entry it creates, so a Vault's Layout records trees as trees, and a path the two sides name as different things is refused rather than transferred. A tree's structure names what its version holds, so a sync carries the head version's structure and its description and file content in a second exchange.
 
-A tree's retrack moved only its pointer to another version; a file's also took another entry's `Uuid` or forked a fresh one. `rola retrack` now does all three for a tree: a version writes the tree's recorded structure over the work, an entry makes the path record that tree and writes or keeps the content as the two versions stand, and `--fork` gives the tree a new `Uuid` and writes the id its mark keeps. The Version Graph's fork of a local entry now runs that retrack rather than changing only the Layout, so the tree's mark and its Layout entry stay one identity. A file inside a tree names the tree for a retrack in both the command line and the graph, since the Layout holds the tree as one entry. Content a tree version names but this store does not hold is brought from the Vault before the tree's work is written over.
+### 2. [`app`] [`cli`] [`RorolalaDesktop`] [`plugins`] [`tree`] Restore a tree's file to its baseline or its staging area
 
-### 5. [`app`] [`RorolalaDesktop`] [`menu`] Fold the menu bar into a button
+A file inside a tree could only be put back as part of the whole tree, while a file outside one had its own restore. `rola align` now takes `--restore-modify` for a file inside a tree, which writes the version the tree records over it, and `--restore-staged`, which writes what the tree has staged. The file menu a tree holds offers the two as `Restore to baseline` and `Restore to staged`, asks before the work is overwritten, and reports a run that fails.
 
-The title row no longer carries a menu bar. One button at its left opens the same top-level menus in a flyout, in their old order, with the Window menu still listing the docks and its commands. The button has a tooltip and an accessible name, and a press on it does not move the window.
+### 3. [`app`] [`cli`] [`RorolalaDesktop`] [`plugins`] [`tree`] Retrack a tree to a version, an entry, or a fork
 
-### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`colour`] Mark folders with a colour from a plugin rule
+A tree's retrack moved only its pointer to another version; a file's also took another entry's `Uuid` or forked a fresh one. `rola retrack` now does all three for a tree: a version writes the tree's recorded structure over the work, an entry makes the path record that tree and writes or keeps the content as the two versions stand, and `--fork` gives the tree a new `Uuid` and writes the id its mark keeps. The Version Graph's fork of a local entry runs that retrack rather than changing only the Layout, so the tree's mark and its Layout entry stay one identity. A file inside a tree names the tree for a retrack in both the command line and the graph, since the Layout holds the tree as one entry. Content a tree version names but this store does not hold is brought from the Vault before the tree's work is written over.
 
-Entries can now be marked with a colour by a rule a plugin registers. A marked directory gives its colour to everything under it, the nearest marked directory wins, and the file tree draws one block behind the whole subtree, so the colour is one rectangle rather than a wash on each row. A marked file carries its own block. A directory listing draws a wash on the row of each entry the colour reaches, the entries under a marked directory darker than the directory itself, and the Directories dock's bright ground carries a share of the colour while it is inside a marked directory. Icons keep their own colours, except for the park a rola-tree wears: it is drawn in the colour the tree's own id names, in the badge column at a tree row's right and on the folder's corner in a directory listing, so a tree is told from a plain directory before its name is read.
+A retrack compares the version it moves to with the structure the tree recorded and fetches and writes only a path the two differ in; `--force` still writes every path. A one-step retrack over a tree of several hundred files fell from about nine seconds to about half a second.
+
+### 4. [`app`] [`RorolalaDesktop`] [`menu`] Fold the menu bar into a button
+
+The title row no longer carries a menu bar. One button in the row opens the same top-level menus in a flyout, in their old order, with the Window menu still listing the docks and its commands. The button has a tooltip and an accessible name, and a press on it does not move the window.
+
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`colour`] Mark folders with a colour from a plugin rule
+
+Entries can be marked with a colour by a rule a plugin registers. A marked directory gives its colour to everything under it, and the nearest marked directory wins. The file tree draws one thick line beside the marked step through the whole height of its open subtree, a listing draws a strip at the row's left edge, and a grid draws a line under the caption; nothing fills behind a row or a tile, so names and pictures stay on the dock's own ground. Icons keep their own colours, except for the park a rola-tree wears: it is drawn in the colour the tree's own id names, in the badge column at a tree row's right and on the folder's corner in a listing. The colour layer is written after the layout pass, and a row whose place is not answered yet keeps the lines already drawn, so a resize does not clear the stripe for a frame.
 
 The Rorolala plugin registers the first rule. It marks a rola-tree with the hue of the hash of the id in its `.rola-tree` mark, so the colour travels with the directory and a copy of one tree is the same colour.
 
-### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`hides`] Give each hide rule shown, gray and hidden states
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`hides`] Give each hide rule shown, gray and hidden states
 
-Each hide rule now has three states rather than two. Shown leaves its entries as they are, Gray keeps them in the listing at 55% opacity, and Hidden leaves them out; a click on the rule cycles shown, gray, hidden. The popup lists the rules as Dot Directories, Dot Files, Windows Hidden Files, Git Ignored Files and Rola Ignored Files, and its eye and more button are one run at the toolbar's right, separated from the link by a 1 px rule. The eye shows the entries a hiding rule leaves out as gray without changing the rule's state.
+Each hide rule now has three states rather than two. Shown leaves its entries as they are, Gray keeps them in the listing at 55% opacity, and Hidden leaves them out; a click on the rule cycles shown, gray, hidden. The popup lists the rules as Dot Directories, Dot Files, Windows Hidden Files, Git Ignored Files and Rola Ignored Files, and its eye and more button are one run at the toolbar's right, separated from the link by a 1 px rule. The eye shows the entries a hiding rule leaves out as gray without changing the rule's state, and a rule in the gray state fades its rows in the file tree without taking them out.
+
+### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Explain every file badge on hover
+
+Every badge a file wears now says what it means when the pointer rests on it. A picture with no words of its own reads its phrase without an argument, so an icon only mark can explain itself. The tree's own state, its status and its staging badges take a sentence of their own rather than repeating the word of the column beside them: a new or modified entry says what tracking it would record, a staged badge says how much of the content is staged, a tree badge says the directory is one object, and a wrong change says it has to be dealt with. The lock, standing and merge badges already had full sentences.
 
 ### 8. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`rorolala-vcs`] Offer a tree as a kind of folder a listing can make
 
-A folder tree's menu and a directory's menu now offer a tree beside the plain folder. The file system still makes and names the directory; Rorolala VCS then makes it a tree through `rola tree init`, and the row is read again for the mark. The item wears the park picture the tree already wears, and a new one is called "New Tree" until it is named.
+A folder tree's menu and a directory's menu now offer a tree beside the plain folder. The file system still makes and names the directory; Rorolala VCS then makes it a tree through `rola tree init`, and the row is read again for the mark. The item wears the park picture the tree already wears, and a new one is called `New Tree` until it is named.
 
 ### 9. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base
 
@@ -162,57 +118,81 @@ A directory dock inside the tree's base is named by its part under that base, so
 
 The file tree now supports the same choice as a directory listing: a plain press chooses one row, Ctrl toggles one, Shift takes a visible range, and Ctrl+A chooses every row on screen. A modified press on a directory changes the choice without navigating, while a plain press still opens it. Copy, cut, delete and the context menu act on the whole choice, and a tree read again keeps its choice by path.
 
-### 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
+### 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a tree's levels as guides and its status on its row
 
-The TRACK button under the Version Graph turns red while Shift is held. A press then records
-the chosen changes with `rola track --force`, and a question names the files whose changes a plain
-track refuses before anything is written. Without Shift the button records the changes as before.
+A row at level n draws n vertical lines in its indent, one at the middle of each step, so a level reads as one line down the tree. The lines stand behind the row's header and take no press. A resize posts the refresh once and shows or hides the lines rather than rebuilding the row's children, so a tree being resized no longer ends with a null reference inside the grid's arrange.
 
-### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show owners and move ownership in the upstream view
+A tree's own row wears the mark its status names rather than the one the paths under it would add up to: a green plus for something new and a yellow edit note for something changed, read from the tree's status.
+
+### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
+
+The TRACK button under the Version Graph turns red while Shift is held. A press then records the chosen changes with `rola track --force`, and a question names the files whose changes a plain track refuses before anything is written. Without Shift the button records the changes as before.
+
+### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show owners and move ownership in the upstream view
 
 The upstream view had an owner column but no owner badge, and its ownership item only said where a held entry was. Its rows now wear the same pencil and lock the work's own rows wear, the owner column is headed the way the work's is, and a right click over one row or many offers taking and giving up ownership as one batch. Those items run `rola layout req-ownership` and `rola layout giveup-ownership`, so ownership moves in the Vault without a version being made.
 
-### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing
+### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing
 
-Inside a rola-tree, the Directories dock now shows Status and Staged columns in place of Upstream, Standing and Owner. Status says whether a path is new or changed, and Staged says whether all of it, some of it or none of it is staged. Each answer is also worn on the path's icon: a green plus for new, a yellow pencil for changed, and a full, half or empty circle for the three staging states.
+Inside a rola-tree, the Directories dock shows Status and Staged columns in place of Upstream, Standing and Owner. Status says whether a path is new, changed or a wrong change, and Staged says whether all of it, some of it or none of it is staged. Each answer is also worn on the path's icon: a plus for new, an edit note for changed, a red priority mark for a wrong change, and a full, half or empty circle for the three staging states. The column widths are written after the layout pass, so resizing a window no longer changes the definitions the arrange is walking. A tree's status is read once per listing through `TreeReadings`, off the window's thread, rather than once per row.
 
-### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph
+### 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph
 
-The Version Graph now treats a rola-tree as one versioned entry. Choosing the tree's directory, or any file inside it, centres the graph on the tree's own chain rather than on a path the Layout does not name. Choosing a version's local entry pill opens the tree's parent and selects the tree directory, so the graph and the listing agree on the object being read. The same message field and TRACK button under the graph record the tree when its directory or anything under it is chosen.
+The Version Graph treats a rola-tree as one versioned entry. Choosing the tree's directory, or any file inside it, centres the graph on the tree's own chain rather than on a path the Layout does not name. Choosing a version's local entry pill opens the tree's parent and selects the tree directory, so the graph and the listing agree on the object being read. The same message field and TRACK button under the graph record the tree when its directory or anything under it is chosen.
 
-A tree's unrecorded work is drawn as a draft above its chain, including changes that are only in the tree's staging area and a staged description with no changed path. The C ABI gains `rola_tree_status_json`, the desktop reads it through `RolaTreeStatus`, and a focus on the Workspace root is accepted as the root tree's entry.
+A tree's unrecorded work is drawn as a draft above its chain, including changes that are only in the tree's staging area and a staged description with no changed path. A tree whose own Layout entry is a wrong change has nothing to record when nothing is staged and no file has changed, so it draws no draft; being wrong stays with the tree's badge and status, and a draft of an actually changed tree still carries the wrong mark. The graph reads the tree's status across the C ABI, and a focus on the Workspace root is accepted as the root tree's entry.
 
-### 15. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
+### 16. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
 
 A file browser's grid now shows a file's own preview where one can be made, and keeps the type icon where one cannot. The host asks its system source first and the plugins' renderers after it, keeps answers by path, write time and size, cancels a tile's request when the tile leaves the window, and reports a batch on the progress stack. Windows uses the Shell thumbnailer on a dedicated STA thread; Linux reads thumbnails the desktop has already cached.
 
-### 16. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette
+### 17. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette
 
-The look now publishes the colours the program says a state is: disabled, modify, warning, error, fail, success, allow, disallow, force and three status colours, each stated apart for the light and dark variants. Each is a field in `theme.json` and a row in the look's preferences, so the light and dark answers are chosen rather than copied into a plugin. The Rorolala VCS plugin's own four colour settings are gone, and its states read the look's set instead: new work is success, a change is modify, a wrong change is fail, a move is the first status colour, a suspected move is the second, a merge is the third, a lock this account holds is allow and one another holds is disallow, and a forced run is force. The same answers reach the list dots, tile badges, the Overview's fills, the merge badge and the standing arrows. A settled colour also asks the open listings and tree to draw their marks again, since a badge is built from a colour value rather than a resource and would otherwise keep the colour it was made with.
+The look now publishes twelve semantic colours: disabled, modify, warning, error, fail, success, allow, disallow, force and three status colours, each stated apart for the light and dark variants. Each is a field in `theme.json` and a row in the look's preferences, so the light and dark answers are chosen rather than copied into a plugin. The Rorolala VCS plugin's own four colour settings are gone, and its states read the look's set instead: new work is success, a change is modify, a wrong change is fail, a move is the first status colour, a suspected move is the second, a merge is the third, a lock this account holds is allow and one another holds is disallow, and a forced run is force. The same answers reach the list dots, tile badges, the Overview's fills, the merge badge and the standing arrows. A settled colour also asks the open listings and tree to draw their marks again, since a badge is built from a colour value rather than a resource and would otherwise keep the colour it was made with.
 
-### 17. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
+A tagged badge's ground is the look's dark role, read inside the badge's dark scope, so the park on a tree's folder and every other tagged badge take the dark the palette in force names while staying dark on the light look.
+
+### 18. [`app`] [`RorolalaDesktop`] [`window`] Name the program and workspace in the title row
+
+The main window's title row carries the wordmark `Rorolala`, a 1 px rule and the name of the directory the program was started in, trimmed with an ellipsis at 280 pixels. A window of one dock keeps that dock's name instead, and the row is 32 pixels high.
+
+### 19. [`app`] [`RorolalaDesktop`] [`windows`] Own and restore floating dock windows
+
+A dock pulled into a window of its own is now owned by the main window. Closing the main window closes its children, minimizing it minimizes them with it, and restoring it gives each child back the state it had. The layout file is version 3 and records each floating window's dock, ordinal, own state, bounds and maximized state; version 2 files still load, with no floating windows. A window restored off screen is moved back onto the primary work area.
+
+### 20. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
 
 `rola desktop` now starts a host beside the Desktop rather than the Desktop itself. The host forwards the line that says the window is up, keeps the Desktop's error stream, and when the run ends with a non-zero code writes the report to a log and opens a window that shows it. A Desktop run that throws also writes the exception's stack to that stream, so the stack survives the window that wrote it. A start that found the Desktop already running, exit code 174, is passed through without a report.
 
-### 18. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
+### 21. [`librorolala`] [`tree`] Read a tree's entries and status as JSON across the C ABI
 
-`rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. A caller that cannot decode the structure format hands the bytes over instead of keeping a second copy of it, and text that is not hex or bytes that are not a structure answer as `null`, so an answer is always JSON. The string is freed with `free_string`.
+`rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. `rola_tree_status_json` takes a directory and answers with the tree's status as JSON: what its staging area holds beside the recorded version, what the work changed without being staged, what the work holds and the staging area does not, what a merge left in conflict and whether the tree is a wrong change. A caller that cannot decode `.rola-tree` hands the bytes or the directory over instead of keeping a second copy of the format. Text that is not hex or bytes that are not a structure answer as `null`, and a directory with no tree or no readable status answers as `null`, so an answer is always JSON. The strings are freed with `free_string`.
 
-### 19. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+### 22. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
 
-The new `rorolala-tree` crate holds what a tree is: a canonical structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path. Content moves into the Workspace's store with `publish_from`, which carries manifests and their chunks without rewriting what is already there.
+The new `rorolala-tree` crate holds what a tree is: a canonically ordered structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path; a path both sides changed differently becomes a conflict copy.
 
-`rola tree reset` puts the staging area back to the recorded version, for the whole tree or only the paths named, and leaves the work untouched; it has no hard or soft form, since `retrack` and `retrack --only-index` move the work and the record. `rola tree desc` opens the same editing file and editor as `rola track`, and stages what the editor wrote only after it ends successfully, so a cancelled edit leaves the staged description as it was. A rules file may sit in any directory of a tree, and the rules apply the way git's nested `.gitignore` files do: a pattern is relative to the file holding it, a deeper file decides after a shallower one, and the rules file itself stays tracked work. A Workspace whose root is a tree keeps that tree at the reserved root path, shown as `.`, and `rola status .` looks its version chain back with a draft above it while its work is unrecorded. A tree's structure names what its version holds, so a sync carries the head version's structure and its description and file content in a second exchange. A Workspace scan treats a directory holding a `.rola-tree` mark as one tree entry rather than the files under it, and the Layout, its records and its snapshot carry a kind so a file and a tree are told apart.
+`TreeRules` loads the Workspace's ignore rules and the tree's own `.rolaignore` files, and the rules file itself stays tracked work.
 
 ## Refactor
 
-### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`colour`] Draw folder colours as lines rather than filled blocks
+### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a file tree row as a three-column grid
 
-A marked folder or file is now drawn with a line rather than a fill. The folder tree draws one thick coloured line beside a marked step, through the whole height of its open subtree, with an inner marked step standing at its own deeper indent. A directory list draws the colour as a strip at the row's left edge, and a directory grid draws it as a thick line under the caption. The row and tile fills and the ground tint inside a marked directory are gone, so names and pictures stand on the dock's own ground. A tree's own row also wears the state a file's row does: the green dot of something new or the yellow dot of something changed, read from the tree's status.
+A file tree row is a three-column grid rather than a dock panel: the name gives way with an ellipsis, the badges keep their width at the row's right, and the row stretches to the tree's width at any panel width. The badges are drawn at twenty pixels, while the entry icon stays at sixteen.
 
-### 2. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Draw the Version Graph in the look's own hues
+
+The graph's grid is laid in the splitter rather than in the accent, a hover and an endpoint take the primary, and each side has a hue of its own while the accent is left to a drag in flight. The type is smaller, a card's radius is 8 rather than 12, and a creator's name is read in the second ink rather than in a tint of its own.
+
+### 3. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack
 
 Progress is now the host's rather than the Rorolala plugin's. `IPluginHost.Progress` begins a run that every open window draws in a stack under its title row, and the plugin's commands use it without knowing which window is in front. The Overview no longer draws a panel of its own, and a run begun from any dock appears in the same stack.
+
+### 4. [`app`] [`RorolalaDesktop`] [`theme`] Restate the look and dock chrome
+
+The ground, the panel and the middle step are moved apart, and the selection wash is lowered so that it is a statement about an entry rather than a surface of its own. A row is 28 pixels and the chrome 32, a field is filled as a well, the strip of a single dock is read as a title, and the active dock is marked by its selected tab rather than by a ring. A crossing of two seams is a hit area only.
+
+The docks' rows, bands, radii and empty states are set at the look's new steps. Code spans take the primary, a pill's letters take the front ink and its edge a third of the state's hue, and notes and ignored paths take the second step of the ink.
 
 # 0.2.0 (2026-11-04)
 
