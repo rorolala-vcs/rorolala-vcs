@@ -45,13 +45,14 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 9. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base. [See details](dev/CHANGELOG-DETAILS.md#9-app-rorolaladesktop-plugins-file-system-title-name-a-directory-and-its-address-relative-to-the-base)
 10. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree. [See details](dev/CHANGELOG-DETAILS.md#10-app-rorolaladesktop-plugins-file-system-tree-choose-several-entries-in-the-file-tree)
 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7). [See details](dev/CHANGELOG-DETAILS.md#11-app-rorolaladesktop-plugins-rorolala-vcs-force-a-track-from-the-version-graph-with-shift-7)
-12. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing. [See details](dev/CHANGELOG-DETAILS.md#12-app-rorolaladesktop-plugins-rorolala-vcs-columns-show-a-trees-status-and-staging-in-a-directory-listing)
-13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph. [See details](dev/CHANGELOG-DETAILS.md#13-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-follow-a-rola-trees-history-in-the-version-graph)
-14. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background. [See details](dev/CHANGELOG-DETAILS.md#14-app-rorolaladesktop-preview-generate-file-previews-in-the-background)
-15. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette. [See details](dev/CHANGELOG-DETAILS.md#15-app-rorolaladesktop-theme-state-the-programs-colours-in-one-semantic-palette)
-16. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash. [See details](dev/CHANGELOG-DETAILS.md#16-app-rorolaladesktophost-report-a-desktop-run-that-ends-with-a-crash)
-17. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#17-librorolala-tree-read-a-tree-structures-entries-as-json-across-the-c-abi)
-18. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge. [See details](dev/CHANGELOG-DETAILS.md#18-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
+12. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show owners and move ownership in the upstream view. [See details](dev/CHANGELOG-DETAILS.md#12-app-rorolaladesktop-plugins-rorolala-vcs-show-owners-and-move-ownership-in-the-upstream-view)
+13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing. [See details](dev/CHANGELOG-DETAILS.md#13-app-rorolaladesktop-plugins-rorolala-vcs-columns-show-a-trees-status-and-staging-in-a-directory-listing)
+14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph. [See details](dev/CHANGELOG-DETAILS.md#14-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-follow-a-rola-trees-history-in-the-version-graph)
+15. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background. [See details](dev/CHANGELOG-DETAILS.md#15-app-rorolaladesktop-preview-generate-file-previews-in-the-background)
+16. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette. [See details](dev/CHANGELOG-DETAILS.md#16-app-rorolaladesktop-theme-state-the-programs-colours-in-one-semantic-palette)
+17. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash. [See details](dev/CHANGELOG-DETAILS.md#17-app-rorolaladesktophost-report-a-desktop-run-that-ends-with-a-crash)
+18. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#18-librorolala-tree-read-a-tree-structures-entries-as-json-across-the-c-abi)
+19. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge. [See details](dev/CHANGELOG-DETAILS.md#19-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
 
 ## Refactor
 

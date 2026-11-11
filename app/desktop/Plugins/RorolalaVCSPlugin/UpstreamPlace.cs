@@ -186,7 +186,11 @@ internal static class UpstreamBringing
 /// </para>
 /// </remarks>
 internal sealed class UpstreamPlace
-    : ILogicalViewProvider, IDropTarget, ILogicalRefusal, ILogicalFolderEditor
+    : ILogicalViewProvider,
+        ILogicalMenuProvider,
+        IDropTarget,
+        ILogicalRefusal,
+        ILogicalFolderEditor
 {
     /// <summary>The prefix the place's addresses begin with.</summary>
     public const string Scheme = "rola";
@@ -1085,7 +1089,7 @@ internal sealed class UpstreamPlace
                 BesideName: true
             ),
             new LogicalColumn(
-                "rorolala_vcs.place.column_owner",
+                "rorolala_vcs.column_ownership",
                 140,
                 entry => Facts(entry)?.Owner ?? string.Empty,
                 Avalonia.Media.TextAlignment.Right
@@ -1630,10 +1634,151 @@ internal sealed class UpstreamPlace
             Opens: spot.Folder ? Of(source.Domain, source.Name, spot.Path) : null,
             Menu: Menu(source, spot),
             Data: new UpstreamCarry(source, spot.Path, spot.Entry),
+            Badges: Badges(spot),
             Picture: spot.Folder
                 ? size => EntryIcons.For(spot.Path, EntryKind.Directory, size)
                 : size => EntryIcons.For(spot.Path, EntryKind.File, size)
         );
+    }
+
+    /// <summary>The owner's badge a row wears, the same two answers the work's own rows carry.</summary>
+    /// <param name="spot">The row.</param>
+    /// <returns>The badge, or nothing when no account holds the entry.</returns>
+    internal IReadOnlyList<LogicalBadge> Badges(UpstreamSpot spot)
+    {
+        ArgumentNullException.ThrowIfNull(spot);
+
+        if (spot.Entry is not { Owner: { Length: > 0 } owner } || spot.Folder)
+        {
+            return [];
+        }
+
+        var mine = _account.Length > 0 && string.Equals(owner, _account, StringComparison.Ordinal);
+
+        return
+        [
+            new LogicalBadge(
+                IconKey: mine ? Icons.Create : Icons.Lock,
+                Colour: mine ? RorolalaColours.Allow : RorolalaColours.Disallow,
+                Text: mine ? null : owner,
+                TextKey: mine ? "rorolala_vcs.ownership.mine" : null,
+                HoverKey: mine
+                    ? "rorolala_vcs.ownership.mine_hover"
+                    : "rorolala_vcs.ownership.held_by"
+            ),
+        ];
+    }
+
+    /// <summary>What the place offers for every row chosen together.</summary>
+    /// <remarks>
+    /// The row's own menu is built around one entry, which is what a word about that entry needs. Ownership
+    /// is about the whole choice, so it is added here once for every entry chosen: the Vault's own door takes
+    /// a batch of `Uuid`s, and taking or letting go of them is one run rather than one per row.
+    /// </remarks>
+    /// <param name="address">The place the menu was opened in.</param>
+    /// <param name="chosen">The chosen rows, the row the menu was opened on first.</param>
+    /// <returns>The items, or nothing when the place offers none.</returns>
+    public IReadOnlyList<ContextMenuItem>? Menu(
+        LogicalAddress address,
+        IReadOnlyList<LogicalEntry> chosen
+    )
+    {
+        ArgumentNullException.ThrowIfNull(address);
+        ArgumentNullException.ThrowIfNull(chosen);
+
+        var carries = chosen
+            .Select(item => item.Data)
+            .OfType<UpstreamCarry>()
+            .ToArray();
+
+        if (carries.Length == 0)
+        {
+            return null;
+        }
+
+        var source = carries[0].Source;
+        var first = chosen[0];
+        var spot = new UpstreamSpot(
+            carries[0].Path,
+            first.Name,
+            first.Opens is not null,
+            carries[0].Entry
+        );
+        var items = Menu(source, spot)?.ToList() ?? [];
+
+        if (source.Vault.Length == 0)
+        {
+            return items;
+        }
+
+        var ids = carries
+            .Where(carry => carry.Entry is not null)
+            .Select(carry => carry.Entry!.Uuid)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (ids.Length == 0)
+        {
+            return items;
+        }
+
+        items.Add(
+            new ContextMenuItem(
+                "rorolala_vcs.place.take_ownership",
+                15,
+                _ => BeginOwnership(source, ids, take: true),
+                Icons.Lock
+            )
+        );
+        items.Add(
+            new ContextMenuItem(
+                "rorolala_vcs.place.giveup_ownership",
+                16,
+                _ => BeginOwnership(source, ids, take: false),
+                Icons.Lock
+            )
+        );
+
+        return items;
+    }
+
+    /// <summary>Runs the Vault's own ownership door over the entries chosen.</summary>
+    /// <param name="source">The Vault's copy the entries are of.</param>
+    /// <param name="ids">The entries, by `Uuid`.</param>
+    /// <param name="take">Whether they are taken or let go.</param>
+    private void BeginOwnership(UpstreamSource source, IReadOnlyList<string> ids, bool take)
+    {
+        if (BaseDirectory.Current is not { Length: > 0 } directory)
+        {
+            return;
+        }
+
+        var run = _hub.Begin("rorolala_vcs.progress.ownership");
+
+        _ = Task.Run(() =>
+        {
+            var (done, said) = OwnershipCommand.Run(directory, source.Vault, ids, take);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _hub.End(run);
+                _host.Files.Touch();
+
+                if (!done)
+                {
+                    FailureNotice.Show(
+                        _host.Dialogs,
+                        _host.Icons,
+                        RolaI18N.Get(
+                            take
+                                ? "rorolala_vcs.place.take_ownership_failed"
+                                : "rorolala_vcs.place.giveup_ownership_failed"
+                        ),
+                        said
+                    );
+                }
+            });
+        });
     }
 
     /// <summary>What a row offers, which is what may be done with the entry it is.</summary>
@@ -2017,6 +2162,17 @@ internal sealed class UpstreamPlace
         }
 
         _accountTried = true;
+
+        // A badge says whether the holder is this account, so a name that landed after the rows were drawn
+        // is one more thing to draw: a redraw reads the kept account rather than asking for it again.
+        if (!string.Equals(_account, current, StringComparison.Ordinal))
+        {
+            _account = current;
+            _host.Files.Redraw();
+
+            return;
+        }
+
         _account = current;
     }
 

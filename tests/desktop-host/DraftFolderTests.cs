@@ -207,6 +207,57 @@ public sealed class DraftFolderTests
         Assert.Null(place.Pending(inNew));
     }
 
+    /// <summary>The place offers both ownership doors for every entry chosen, in one menu.</summary>
+    [Fact]
+    public void ThePlaceOffersOwnershipForTheWholeChoice()
+    {
+        var place = Place();
+        var one = new LayoutEntry("Assets/hero.psd", "a", "v1", "alice", string.Empty, false);
+        var two = new LayoutEntry("Assets/bg.psd", "b", "v2", "bob", string.Empty, false);
+        var chosen = new LogicalEntry[]
+        {
+            new("hero.psd", Data: new UpstreamCarry(Origin, one.Path, one)),
+            new("bg.psd", Data: new UpstreamCarry(Origin, two.Path, two)),
+        };
+
+        var items = ((ILogicalMenuProvider)place).Menu(
+            UpstreamPlace.Of(UpstreamPlace.Vaults, "origin"),
+            chosen
+        );
+
+        Assert.NotNull(items);
+        Assert.Contains(items, item => item.LabelKey == "rorolala_vcs.place.take_ownership");
+        Assert.Contains(items, item => item.LabelKey == "rorolala_vcs.place.giveup_ownership");
+    }
+
+    /// <summary>A row held by somebody else wears the lock the work's own row wears.</summary>
+    [Fact]
+    public void AnUpstreamRowWearsTheOwnersBadge()
+    {
+        var place = Place();
+        var entry = new LayoutEntry("Assets/hero.psd", "a", "v1", "alice", string.Empty, false);
+        var badge = Assert.Single(
+            place.Badges(new UpstreamSpot(entry.Path, "hero.psd", Folder: false, Entry: entry))
+        );
+
+        Assert.Equal(RorolalaVCSPlugin.Icons.Lock, badge.IconKey);
+        Assert.Equal("rorolala_vcs.ownership.held_by", badge.HoverKey);
+    }
+
+    /// <summary>The ownership menu runs the Vault's own door, not a checkin.</summary>
+    [Fact]
+    public void OwnershipRunsTheVaultsOwnDoor()
+    {
+        var take = OwnershipCommand.Arguments("origin", ["a", "b"], take: true);
+        var give = OwnershipCommand.Arguments("origin", ["a"], take: false);
+
+        Assert.Contains("layout", take);
+        Assert.Contains("req-ownership", take);
+        Assert.Contains("giveup-ownership", give);
+        Assert.DoesNotContain("checkin", take);
+        Assert.DoesNotContain("checkin", give);
+    }
+
     /// <summary>An entry as the copy names it, with a path and the `Uuid` it is known by.</summary>
     /// <param name="path">The path.</param>
     /// <param name="uuid">The `Uuid`.</param>

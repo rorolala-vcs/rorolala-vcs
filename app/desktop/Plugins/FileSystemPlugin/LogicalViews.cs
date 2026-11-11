@@ -292,7 +292,12 @@ internal sealed class Places : Listing<LogicalEntry>
             return;
         }
 
-        if (chosen[0].Menu is { Count: > 0 } items)
+        var offered =
+            _place.Provider is ILogicalMenuProvider place
+                ? place.Menu(_place.Address, chosen) ?? chosen[0].Menu
+                : chosen[0].Menu;
+
+        if (offered is { Count: > 0 } items)
         {
             foreach (var item in items.OrderBy(item => item.Order))
             {
@@ -577,14 +582,43 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <returns>What to draw where the picture goes.</returns>
     private Control Picture(LogicalEntry item, int size)
     {
-        if (item.Picture is { } make)
+        var icon = item.Picture is { } make
+            ? make(size)
+            : item.IconKey is { Length: > 0 } key && Host.Icons.Find(key) is { } picture
+                ? Icons.Glyph(picture, Icons.PlainInk, size)
+                : EntryIcons.Folder(size);
+
+        if (item.Badges is not { Count: > 0 } badges)
         {
-            return make(size);
+            return icon;
         }
 
-        return item.IconKey is { Length: > 0 } key && Host.Icons.Find(key) is { } picture
-            ? Icons.Glyph(picture, Icons.PlainInk, size)
-            : EntryIcons.Folder(size);
+        var worn = new List<EntryBadge>(badges.Count);
+
+        foreach (var badge in badges)
+        {
+            if (Host.Icons.Find(badge.IconKey) is not { } badgePicture)
+            {
+                continue;
+            }
+
+            worn.Add(
+                new EntryBadge(
+                    badgePicture,
+                    new EntryMark(
+                        TextKey: badge.TextKey,
+                        Text: badge.Text,
+                        IconKey: badge.IconKey,
+                        TextInk: MarkInk.Plain,
+                        Tagged: true,
+                        HoverKey: badge.HoverKey,
+                        Colour: badge.Colour
+                    )
+                )
+            );
+        }
+
+        return worn.Count == 0 ? icon : Icons.Marked(icon, worn, size);
     }
 
     /// <summary>One contributed menu item, as the menu draws it.</summary>

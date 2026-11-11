@@ -921,6 +921,18 @@ rorolala_vcs:
     column_uuid:
       en: Uuid
       zh-CN: UUID
+    take_ownership:
+      en: Take ownership
+      zh-CN: 获取所有权
+    giveup_ownership:
+      en: Give up ownership
+      zh-CN: 放弃所有权
+    take_ownership_failed:
+      en: Ownership could not be taken
+      zh-CN: 无法获取所有权
+    giveup_ownership_failed:
+      en: Ownership could not be given up
+      zh-CN: 无法放弃所有权
     column_owner:
       en: Owner
       zh-CN: 持有人

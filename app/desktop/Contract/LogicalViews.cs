@@ -113,6 +113,7 @@ public sealed record LogicalAddress(string Scheme, string Payload)
 /// than instead of it: a key is a picture the library already holds, and a maker is one the answer draws for the
 /// size it is asked for.
 /// </param>
+/// <param name="Badges">The marks the row wears, drawn by the browser the way a file's badges are.</param>
 /// <remarks>
 /// What an entry looks like when neither is given is the view's answer, and it is the folder the icon set in force
 /// draws: a place's rows are places and things, and a thing drawn as nothing is a row a reader has to read rather
@@ -125,8 +126,46 @@ public sealed record LogicalEntry(
     LogicalAddress? Opens = null,
     IReadOnlyList<ContextMenuItem>? Menu = null,
     object? Data = null,
-    Func<int, Control>? Picture = null
+    Func<int, Control>? Picture = null,
+    IReadOnlyList<LogicalBadge>? Badges = null
 );
+
+/// <summary>One mark a logical row's picture wears, beside the picture itself.</summary>
+/// <remarks>
+/// A logical row is not a file, so the mark providers that read a physical entry are not asked about it: a
+/// place says what its own rows wear, and the browser draws that answer with the same mark a file's badge is
+/// drawn by.
+/// </remarks>
+/// <param name="IconKey">The key of the picture the badge draws.</param>
+/// <param name="Colour">What the badge is drawn in.</param>
+/// <param name="Text">What the mark says when it is a name rather than a key.</param>
+/// <param name="TextKey">The key of what the mark says when it is not a name.</param>
+/// <param name="HoverKey">The phrase the badge is hovered for, with what the mark says as its argument.</param>
+public sealed record LogicalBadge(
+    string IconKey,
+    Color Colour,
+    string? Text = null,
+    string? TextKey = null,
+    string? HoverKey = null
+);
+
+/// <summary>What a place offers for the rows chosen together.</summary>
+/// <remarks>
+/// A row's own menu is built around one entry, which is enough for a word about that entry and not for an
+/// operation over several: the place is asked with the whole choice, and what its items do is the place's
+/// answer rather than a command that has to find the choice again.
+/// </remarks>
+public interface ILogicalMenuProvider
+{
+    /// <summary>The items the place offers for `chosen`.</summary>
+    /// <param name="address">The place the menu was opened in.</param>
+    /// <param name="chosen">The chosen rows, the row the menu was opened on first.</param>
+    /// <returns>The items, or nothing when the place offers none.</returns>
+    IReadOnlyList<ContextMenuItem>? Menu(
+        LogicalAddress address,
+        IReadOnlyList<LogicalEntry> chosen
+    );
+}
 
 /// <summary>
 /// What a plugin answers about the places it offers.

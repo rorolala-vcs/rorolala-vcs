@@ -164,33 +164,37 @@ The TRACK button under the Version Graph turns red while Shift is held. A press 
 the chosen changes with `rola track --force`, and a question names the files whose changes a plain
 track refuses before anything is written. Without Shift the button records the changes as before.
 
-### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing
+### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show owners and move ownership in the upstream view
+
+The upstream view had an owner column but no owner badge, and its ownership item only said where a held entry was. Its rows now wear the same pencil and lock the work's own rows wear, the owner column is headed the way the work's is, and a right click over one row or many offers taking and giving up ownership as one batch. Those items run `rola layout req-ownership` and `rola layout giveup-ownership`, so ownership moves in the Vault without a version being made.
+
+### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing
 
 Inside a rola-tree, the Directories dock now shows Status and Staged columns in place of Upstream, Standing and Owner. Status says whether a path is new or changed, and Staged says whether all of it, some of it or none of it is staged. Each answer is also worn on the path's icon: a green plus for new, a yellow pencil for changed, and a full, half or empty circle for the three staging states.
 
-### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph
+### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph
 
 The Version Graph now treats a rola-tree as one versioned entry. Choosing the tree's directory, or any file inside it, centres the graph on the tree's own chain rather than on a path the Layout does not name. Choosing a version's local entry pill opens the tree's parent and selects the tree directory, so the graph and the listing agree on the object being read. The same message field and TRACK button under the graph record the tree when its directory or anything under it is chosen.
 
 A tree's unrecorded work is drawn as a draft above its chain, including changes that are only in the tree's staging area and a staged description with no changed path. The C ABI gains `rola_tree_status_json`, the desktop reads it through `RolaTreeStatus`, and a focus on the Workspace root is accepted as the root tree's entry.
 
-### 14. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
+### 15. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
 
 A file browser's grid now shows a file's own preview where one can be made, and keeps the type icon where one cannot. The host asks its system source first and the plugins' renderers after it, keeps answers by path, write time and size, cancels a tile's request when the tile leaves the window, and reports a batch on the progress stack. Windows uses the Shell thumbnailer on a dedicated STA thread; Linux reads thumbnails the desktop has already cached.
 
-### 15. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette
+### 16. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette
 
 The look now publishes the colours the program says a state is: disabled, modify, warning, error, fail, success, allow, disallow, force and three status colours, each stated apart for the light and dark variants. Each is a field in `theme.json` and a row in the look's preferences, so the light and dark answers are chosen rather than copied into a plugin. The Rorolala VCS plugin's own four colour settings are gone, and its states read the look's set instead: new work is success, a change is modify, a wrong change is fail, a move is the first status colour, a suspected move is the second, a merge is the third, a lock this account holds is allow and one another holds is disallow, and a forced run is force. The same answers reach the list dots, tile badges, the Overview's fills, the merge badge and the standing arrows. A settled colour also asks the open listings and tree to draw their marks again, since a badge is built from a colour value rather than a resource and would otherwise keep the colour it was made with.
 
-### 16. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
+### 17. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
 
 `rola desktop` now starts a host beside the Desktop rather than the Desktop itself. The host forwards the line that says the window is up, keeps the Desktop's error stream, and when the run ends with a non-zero code writes the report to a log and opens a window that shows it. A Desktop run that throws also writes the exception's stack to that stream, so the stack survives the window that wrote it. A start that found the Desktop already running, exit code 174, is passed through without a report.
 
-### 17. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
+### 18. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
 
 `rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. A caller that cannot decode the structure format hands the bytes over instead of keeping a second copy of it, and text that is not hex or bytes that are not a structure answer as `null`, so an answer is always JSON. The string is freed with `free_string`.
 
-### 18. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+### 19. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
 
 The new `rorolala-tree` crate holds what a tree is: a canonical structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path. Content moves into the Workspace's store with `publish_from`, which carries manifests and their chunks without rewriting what is already there.
 
