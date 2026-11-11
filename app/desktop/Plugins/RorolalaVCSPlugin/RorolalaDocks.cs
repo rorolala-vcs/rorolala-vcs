@@ -15,8 +15,11 @@ namespace RorolalaVCSPlugin;
 /// The Overview is the view of the work that is there, how it stands beside the Layout it works from,
 /// which is the reading `rola status` makes (see <see cref="OverviewDock"/>). The Version Graph is the
 /// work's variants: a card per variant, a lane per file and a column per version depth, laid out from
-/// the index's own reading of them (see <see cref="VersionGraphDock"/>). The Workspace dock is still to
-/// be written, and what it carries while it is is a line about where the tree is rooted. The Accounts
+/// the index's own reading of them (see <see cref="VersionGraphDock"/>). The Tree dock is one tree's
+/// staging area and the description of its next version (see <see cref="TreePanelDock"/>), and it is
+/// the only work it does: recording the tree is the Version Graph's, and how the work stands is the
+/// Overview's. The Workspace dock is still to be written, and what it carries while it is is a line
+/// about where the tree is rooted. The Accounts
 /// dock is the machine's own key pairs, which account the work acts as, and what may be done about
 /// them (see <see cref="AccountsDock"/>), which is not about one work but about the person, and so is
 /// a dock of its own rather than a part of the Overview.
@@ -42,6 +45,10 @@ internal static class RorolalaDocks
     /// <remarks>Written into dock layout, so it must not change once shipped.</remarks>
     public const string VersionGraphNameId = "rorolala.vcs.version_graph";
 
+    /// <summary>The stable name of the Tree dock.</summary>
+    /// <remarks>Written into dock layout, so it must not change once shipped.</remarks>
+    public const string TreeNameId = "rorolala.vcs.tree";
+
     /// <summary>The stable name of the Accounts dock.</summary>
     /// <remarks>Written into dock layout, so it must not change once shipped.</remarks>
     public const string AccountsNameId = "rorolala.vcs.accounts";
@@ -54,6 +61,9 @@ internal static class RorolalaDocks
 
     /// <summary>What the Window menu lists the Version Graph dock as.</summary>
     private const string VersionGraphKey = "rorolala_vcs.dock.version_graph";
+
+    /// <summary>What the Window menu lists the Tree dock as.</summary>
+    private const string TreeKey = "rorolala_vcs.dock.tree";
 
     /// <summary>What the Window menu lists the Accounts dock as.</summary>
     private const string AccountsKey = "rorolala_vcs.dock.accounts";
@@ -70,6 +80,7 @@ internal static class RorolalaDocks
     /// <param name="owner">This plugin, which is what the registrations are attributed to.</param>
     /// <param name="hub">What every command this plugin runs reports itself to, which the Overview draws.</param>
     /// <param name="statuses">What the work says about a file, which the graph reads an edit from.</param>
+    /// <param name="trees">What each tree stands as, which the Tree dock reads its staging from.</param>
     /// <param name="sync">What a sync would carry, read by both views of the work.</param>
     /// <param name="fetch">The one fetch of the Vault's Layout, asked for by both views.</param>
     public static void Declare(
@@ -77,6 +88,7 @@ internal static class RorolalaDocks
         PluginId owner,
         IProgressHub hub,
         StatusReadings statuses,
+        TreeReadings trees,
         SyncWatcher sync,
         VaultFetch fetch
     )
@@ -84,6 +96,7 @@ internal static class RorolalaDocks
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);
         ArgumentNullException.ThrowIfNull(statuses);
+        ArgumentNullException.ThrowIfNull(trees);
         ArgumentNullException.ThrowIfNull(sync);
         ArgumentNullException.ThrowIfNull(fetch);
 
@@ -103,6 +116,14 @@ internal static class RorolalaDocks
             VersionGraphKey,
             Icons.AltRoute,
             () => new VersionGraphDock(host, statuses, sync, fetch, hub)
+        );
+        Add(
+            host,
+            owner,
+            TreeNameId,
+            TreeKey,
+            Icons.Park,
+            () => new TreePanelDock(host, hub, trees)
         );
         Add(host, owner, AccountsNameId, AccountsKey, Icons.ManageAccounts, () => new AccountsDock(host));
     }

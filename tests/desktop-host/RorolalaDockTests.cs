@@ -42,6 +42,7 @@ public sealed class RorolalaDockTests
                 ("rorolala.vcs.overview", "rorolala_vcs.dock.overview"),
                 ("rorolala.vcs.workspace", "rorolala_vcs.dock.workspace"),
                 ("rorolala.vcs.version_graph", "rorolala_vcs.dock.version_graph"),
+                ("rorolala.vcs.tree", "rorolala_vcs.dock.tree"),
                 ("rorolala.vcs.accounts", "rorolala_vcs.dock.accounts"),
             ],
             services.Docks.Registrations.Select(dock => (dock.DockNameId, dock.DisplayNameKey))
@@ -141,9 +142,9 @@ public sealed class RorolalaDockTests
     /// <remarks>
     /// The judgement and the control are two halves, and a dock that decides rightly and carries nothing
     /// is a window the user reads as an empty work: what is checked here is that what the registration
-    /// makes is a control with content in it. The two views that are not the Overview say the words as
-    /// their only line; the Overview draws the work when there is work to draw, so what it carries is
-    /// checked by <see cref="TheOverviewSaysABaseOutsideEveryWorkspaceIsNotOne"/>.
+    /// makes is a control with content in it. The Workspace dock says the words as its only line; every
+    /// other dock draws its own view, and the Overview's is checked by
+    /// <see cref="TheOverviewSaysABaseOutsideEveryWorkspaceIsNotOne"/>.
     /// <para>
     /// Nothing about a Workspace is asked, since the base published by an earlier test of this run is no
     /// more a Workspace than a fresh one is, and the line is what a base outside every Workspace comes
@@ -163,30 +164,19 @@ public sealed class RorolalaDockTests
 
         foreach (var registration in services.Docks.Registrations)
         {
-            var view = registration.Create().View;
-
-            Assert.NotNull(view);
-
-            // The three docks that show something of their own rather than a line about the base: the
-            // Overview's table, the Accounts dock, which is about the machine rather than about a base
-            // at all, and the Version Graph, which draws one file's chain. What they show is their own
-            // control rather than a `UserControl` holding one line, so what is checked about them is
-            // that the registration made something; the words are checked for the docks made of a line.
-            if (
-                registration.DockNameId == RorolalaDocks.OverviewNameId
-                || registration.DockNameId == RorolalaDocks.AccountsNameId
-                || registration.DockNameId == RorolalaDocks.VersionGraphNameId
-            )
-            {
-                continue;
-            }
-
-            var dock = Assert.IsAssignableFrom<UserControl>(view);
-            var line = Assert.IsType<TextBlock>(dock.Content);
-
-            Assert.True(line.IsVisible);
-            Assert.False(string.IsNullOrEmpty(line.Text));
+            Assert.NotNull(registration.Create().View);
         }
+
+        // The Workspace dock is the one that says where the base is; the other docks show something
+        // of their own, and what they show is checked by their own tests.
+        var workspace = services.Docks.Registrations.Single(dock =>
+            dock.DockNameId == RorolalaDocks.WorkspaceNameId
+        );
+        var dock = Assert.IsAssignableFrom<UserControl>(workspace.Create().View);
+        var line = Assert.IsType<TextBlock>(dock.Content);
+
+        Assert.True(line.IsVisible);
+        Assert.False(string.IsNullOrEmpty(line.Text));
     }
 
     /// <summary>

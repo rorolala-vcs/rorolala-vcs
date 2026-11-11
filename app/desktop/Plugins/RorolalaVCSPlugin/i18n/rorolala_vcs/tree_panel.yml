@@ -1,0 +1,108 @@
+_version: 2
+
+# What the Tree panel says: the dock's name, the description field, the two lists it draws, the
+# commands it offers and the runs it begins. Every key is under the plugin's identity, the id with
+# dots underscored, as the rest of this plugin's words are.
+
+rorolala_vcs:
+  dock:
+    tree:
+      en: Tree
+      zh-CN: 树
+
+  tree_panel:
+    refresh:
+      en: Refresh
+      zh-CN: 刷新
+    failed:
+      en: The tree could not be changed
+      zh-CN: 无法修改该树
+    no_words:
+      en: The command said nothing about why it failed.
+      zh-CN: 命令没有说明失败的原因。
+
+    description:
+      placeholder:
+        en: Description of this tree
+        zh-CN: 对该树的描述
+      failed:
+        en: The description could not be written
+        zh-CN: 无法写入描述
+
+    staged:
+      en: Staged
+      zh-CN: 已暂存
+    changes:
+      en: Changes
+      zh-CN: 改动
+
+    stage:
+      en: Stage
+      zh-CN: 暂存
+    unstage:
+      en: Unstage
+      zh-CN: 取消暂存
+    unstage_all:
+      en: Unstage all
+      zh-CN: 全部取消暂存
+    stage_all:
+      en: Stage all
+      zh-CN: 全部暂存
+    restore:
+      en: Restore
+      zh-CN: 还原
+    rebuild:
+      en: Rebuild
+      zh-CN: 重建
+    reset:
+      en: Reset staging
+      zh-CN: 重置暂存区
+    reset_title:
+      en: "Reset the staging area?"
+      zh-CN: 要重置暂存区吗？
+    reset_message:
+      en: "The staged structure, conflicts and description are cleared. The work is not touched."
+      zh-CN: 会清空已暂存的结构、冲突和描述，不会改动工作区中的文件。
+    theirs:
+      en: Show theirs
+      zh-CN: 查看对方版本
+    reveal:
+      en: Show in the listing
+      zh-CN: 在列表中显示
+    conflict:
+      en: conflict
+      zh-CN: 冲突
+
+    change:
+      added:
+        en: new
+        zh-CN: 新增
+      modified:
+        en: modified
+        zh-CN: 修改
+      metadata:
+        en: metadata
+        zh-CN: 元数据
+      deleted:
+        en: deleted
+        zh-CN: 删除
+      type_changed:
+        en: type changed
+        zh-CN: 类型变更
+      renamed:
+        en: renamed
+        zh-CN: 重命名
+
+  progress:
+    tree_stage:
+      en: Staging
+      zh-CN: 暂存中
+    tree_unstage:
+      en: Unstaging
+      zh-CN: 取消暂存中
+    tree_reset:
+      en: Resetting staging
+      zh-CN: 重置暂存区中
+    tree_restore:
+      en: Restoring
+      zh-CN: 还原中

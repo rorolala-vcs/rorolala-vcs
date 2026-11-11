@@ -128,47 +128,53 @@ A tree's own row wears the mark its status names rather than the one the paths u
 
 The TRACK button under the Version Graph turns red while Shift is held. A press then records the chosen changes with `rola track --force`, and a question names the files whose changes a plain track refuses before anything is written. Without Shift the button records the changes as before.
 
-### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show owners and move ownership in the upstream view
+### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Manage a tree's staging area and description in a Tree dock
+
+The Tree dock shows one tree the browser points at, named by the tree in its tab. The description of the next version fills the five lines at the top, on the look's darker ground and over a splitter line. The staged tree and the work's changes fill the rest in two equal parts, one above the other, or side by side once the dock is wider than 320 pixels; each part is a collapsible tree with its own scrollbar, and each is drawn as a region on the darker ground with the splitter for an edge. The Staged and Changes areas each carry a checkbox that stages or unstages the whole of them, and each path carries a checkbox that stages or unstages that path. A path's letter says what changed: `A` for new, `M` for modified, `m` for a metadata change, `D` for deleted, `R` for renamed, `T` for a change of kind, and `C` for a conflict. A changed path's context menu offers putting it back to the version the tree records, which also recreates a path the work has deleted, and showing it in the listing.
+
+The description is written to `.rola-tree/description` as it is typed, with no save button. The dock records nothing: the Version Graph's TRACK button records the tree, and the Overview says how the work stands.
+
+### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show owners and move ownership in the upstream view
 
 The upstream view had an owner column but no owner badge, and its ownership item only said where a held entry was. Its rows now wear the same pencil and lock the work's own rows wear, the owner column is headed the way the work's is, and a right click over one row or many offers taking and giving up ownership as one batch. Those items run `rola layout req-ownership` and `rola layout giveup-ownership`, so ownership moves in the Vault without a version being made.
 
-### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing
+### 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing
 
 Inside a rola-tree, the Directories dock shows Status and Staged columns in place of Upstream, Standing and Owner. Status says whether a path is new, changed or a wrong change, and Staged says whether all of it, some of it or none of it is staged. Each answer is also worn on the path's icon: a plus for new, an edit note for changed, a red priority mark for a wrong change, and a full, half or empty circle for the three staging states. The column widths are written after the layout pass, so resizing a window no longer changes the definitions the arrange is walking. A tree's status is read once per listing through `TreeReadings`, off the window's thread, rather than once per row.
 
-### 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph
+### 16. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph
 
 The Version Graph treats a rola-tree as one versioned entry. Choosing the tree's directory, or any file inside it, centres the graph on the tree's own chain rather than on a path the Layout does not name. Choosing a version's local entry pill opens the tree's parent and selects the tree directory, so the graph and the listing agree on the object being read. The same message field and TRACK button under the graph record the tree when its directory or anything under it is chosen.
 
 A tree's unrecorded work is drawn as a draft above its chain, including changes that are only in the tree's staging area and a staged description with no changed path. A tree whose own Layout entry is a wrong change has nothing to record when nothing is staged and no file has changed, so it draws no draft; being wrong stays with the tree's badge and status, and a draft of an actually changed tree still carries the wrong mark. The graph reads the tree's status across the C ABI, and a focus on the Workspace root is accepted as the root tree's entry.
 
-### 16. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
+### 17. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
 
 A file browser's grid now shows a file's own preview where one can be made, and keeps the type icon where one cannot. The host asks its system source first and the plugins' renderers after it, keeps answers by path, write time and size, cancels a tile's request when the tile leaves the window, and reports a batch on the progress stack. Windows uses the Shell thumbnailer on a dedicated STA thread; Linux reads thumbnails the desktop has already cached.
 
-### 17. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette
+### 18. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette
 
 The look now publishes twelve semantic colours: disabled, modify, warning, error, fail, success, allow, disallow, force and three status colours, each stated apart for the light and dark variants. Each is a field in `theme.json` and a row in the look's preferences, so the light and dark answers are chosen rather than copied into a plugin. The Rorolala VCS plugin's own four colour settings are gone, and its states read the look's set instead: new work is success, a change is modify, a wrong change is fail, a move is the first status colour, a suspected move is the second, a merge is the third, a lock this account holds is allow and one another holds is disallow, and a forced run is force. The same answers reach the list dots, tile badges, the Overview's fills, the merge badge and the standing arrows. A settled colour also asks the open listings and tree to draw their marks again, since a badge is built from a colour value rather than a resource and would otherwise keep the colour it was made with.
 
 A tagged badge's ground is the look's dark role, read inside the badge's dark scope, so the park on a tree's folder and every other tagged badge take the dark the palette in force names while staying dark on the light look.
 
-### 18. [`app`] [`RorolalaDesktop`] [`window`] Name the program and workspace in the title row
+### 19. [`app`] [`RorolalaDesktop`] [`window`] Name the program and workspace in the title row
 
 The main window's title row carries the wordmark `Rorolala`, a 1 px rule and the name of the directory the program was started in, trimmed with an ellipsis at 280 pixels. A window of one dock keeps that dock's name instead, and the row is 32 pixels high.
 
-### 19. [`app`] [`RorolalaDesktop`] [`windows`] Own and restore floating dock windows
+### 20. [`app`] [`RorolalaDesktop`] [`windows`] Own and restore floating dock windows
 
 A dock pulled into a window of its own is now owned by the main window. Closing the main window closes its children, minimizing it minimizes them with it, and restoring it gives each child back the state it had. The layout file is version 3 and records each floating window's dock, ordinal, own state, bounds and maximized state; version 2 files still load, with no floating windows. A window restored off screen is moved back onto the primary work area.
 
-### 20. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
+### 21. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
 
 `rola desktop` now starts a host beside the Desktop rather than the Desktop itself. The host forwards the line that says the window is up, keeps the Desktop's error stream, and when the run ends with a non-zero code writes the report to a log and opens a window that shows it. A Desktop run that throws also writes the exception's stack to that stream, so the stack survives the window that wrote it. A start that found the Desktop already running, exit code 174, is passed through without a report.
 
-### 21. [`librorolala`] [`tree`] Read a tree's entries and status as JSON across the C ABI
+### 22. [`librorolala`] [`tree`] Read a tree's entries and status as JSON across the C ABI
 
 `rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. `rola_tree_status_json` takes a directory and answers with the tree's status as JSON: what its staging area holds beside the recorded version, what the work changed without being staged, what the work holds and the staging area does not, what a merge left in conflict and whether the tree is a wrong change. A caller that cannot decode `.rola-tree` hands the bytes or the directory over instead of keeping a second copy of the format. Text that is not hex or bytes that are not a structure answer as `null`, and a directory with no tree or no readable status answers as `null`, so an answer is always JSON. The strings are freed with `free_string`.
 
-### 22. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+### 23. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
 
 The new `rorolala-tree` crate holds what a tree is: a canonically ordered structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path; a path both sides changed differently becomes a conflict copy.
 

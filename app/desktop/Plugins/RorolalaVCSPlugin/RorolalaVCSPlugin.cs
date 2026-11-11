@@ -102,11 +102,12 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         var fetch = new VaultFetch(host, hub);
         var watch = new SyncWatcher(host, host.Log, hub, fetch);
 
-        // And what the work is looked at through: the three docks, which are this plugin's own windows
+        // And what the work is looked at through: the docks, which are this plugin's own windows
         // rather than anything the File System plugin is asked for. What they will hold is Rorolala's,
         // while the base directory they are read against is that plugin's, which is why the two are one
-        // plugin depending on another (see RorolalaDocks).
-        RorolalaDocks.Declare(host, Manifest.Id, hub, statuses, watch, fetch);
+        // plugin depending on another (see RorolalaDocks). The reading of each tree is shared with the
+        // columns, so a listing and the Tree dock read the same answer.
+        RorolalaDocks.Declare(host, Manifest.Id, hub, statuses, trees, watch, fetch);
 
         // What an entry's menu offers about who holds it: the two ownership commands, plain and forced, each of
         // which reports itself to the hub while it goes.
