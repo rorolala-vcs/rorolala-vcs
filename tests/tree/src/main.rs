@@ -54,6 +54,7 @@ fn main() {
     root_tree(&rola, &ws, &mut checked);
     tree_move(&rola, &ws, &mut checked);
     tree_removal(&rola, &ws, &mut checked);
+    missing_tree_delete(&rola, &ws, &mut checked);
 
     checked.report();
 }
@@ -495,6 +496,41 @@ fn missing_tree(rola: &Rola, ws: &Path, checked: &mut Checked) {
         "the Workspace has nothing left to confirm",
         !ran.stdout.contains("structural"),
         "a structural change is still read",
+    );
+}
+
+/// A tree whose directory was deleted is confirmed gone by `align --delete`.
+fn missing_tree_delete(rola: &Rola, ws: &Path, checked: &mut Checked) {
+    let dir = ws.join("main");
+
+    // The tree's entry is what is confirmed here, whether or not its staging area had work in it.
+    fs::remove_dir_all(&dir).expect("the tree's directory is gone");
+
+    let ran = rola.run(ws, &["status"]);
+    checked.exits("the Workspace reads the second lost tree", &ran, 0);
+
+    let ran = rola.run(ws, &["align", "main", "--delete"]);
+    checked.exits("the lost tree is confirmed gone", &ran, 0);
+    checked.wants(
+        "confirming the loss leaves nothing on disk",
+        !dir.exists(),
+        "the tree is back",
+    );
+
+    let ran = rola.run(ws, &["layout", "entries", "--json"]);
+    checked.exits("the Layout is read after the tree is confirmed gone", &ran, 0);
+    checked.wants(
+        "the Layout no longer names the lost tree",
+        !ran.stdout.contains("\"main\""),
+        "the Layout still names the tree",
+    );
+
+    let ran = rola.run(ws, &["status"]);
+    checked.exits("the Workspace is read after the tree is confirmed gone", &ran, 0);
+    checked.wants(
+        "the lost tree is gone from the reading",
+        !ran.stdout.contains("main"),
+        &said(&ran),
     );
 }
 
