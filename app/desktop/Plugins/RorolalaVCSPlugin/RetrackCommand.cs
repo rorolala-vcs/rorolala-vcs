@@ -63,6 +63,37 @@ internal static class RetrackCommand
         return arguments;
     }
 
+    /// <summary>The arguments a fork of a path's entry is run with.</summary>
+    /// <param name="file">The path whose entry is to be given a fresh `Uuid`.</param>
+    /// <returns>The arguments.</returns>
+    public static IReadOnlyList<string> ForkArguments(string file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+
+        return ["--theme-choice=" + Sync.Theme, "--json", "retrack", file, "--fork"];
+    }
+
+    /// <summary>Runs a fork, answering whether it ended well and what it said.</summary>
+    /// <param name="directory">Where the work is rooted, and where the run is made.</param>
+    /// <param name="file">The path whose entry is to be given a fresh `Uuid`.</param>
+    /// <returns>Whether it ended well, and what to say when it did not.</returns>
+    public static (bool Done, string Said) Fork(string directory, string file)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(file);
+
+        var program = Environment.GetEnvironmentVariable(Sync.Program);
+
+        if (string.IsNullOrEmpty(program))
+        {
+            return (false, RolaI18N.Get("rorolala_vcs.sync.no_program"));
+        }
+
+        var (done, said, _) = Sync.Asked(program, ForkArguments(file), directory);
+
+        return (done, said);
+    }
+
     /// <summary>Runs a retrack, answering whether it ended well and what it said.</summary>
     /// <remarks>
     /// Run off the window's thread: a retrack may reach for a Vault when the content of the version it goes to

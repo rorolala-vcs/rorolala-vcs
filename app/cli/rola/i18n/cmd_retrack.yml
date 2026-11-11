@@ -9,17 +9,17 @@ retrack:
       en: Refuse a version or an entry that is not on the way to what the path records
       zh-CN: 拒绝不在通往当前记录路径上的版本或条目
     fork:
-      en: Give the file's entry a fresh Uuid, holding what it records now
-      zh-CN: 给文件的条目换一个新的 Uuid，保持一致所记录的内容
+      en: Give the path's entry a fresh Uuid, holding what it records now
+      zh-CN: 给路径的条目换一个新的 Uuid，保持一致所记录的内容
   help:
     en: |
-        Record a version, or another entry, for a file's path
+        Record a version, or another entry, for a path, file or tree
 
         **Usage**: rola retrack <PATH> [TARGET]
         **Flags**:
             --only-index         Move the record and leave the file on disk as it is
             --deny-jump          Refuse a version or an entry that is not on the way to what the path records
-            --fork               Give the file's entry a fresh Uuid, holding what it records now
+            --fork               Give the path's entry a fresh Uuid, holding what it records now
             --force              Discard unrecorded changes or end a merge, and forcibly switch the content
             --offline            Do not reach for a Vault: use only what is already here
             --concurrency <N>    Carry the content N units at a time (default 4)
@@ -30,14 +30,14 @@ retrack:
         **标识**：
             --only-index         只移动记录，磁盘上的文件保持原样
             --deny-jump          拒绝不在通往当前记录路径上的版本或条目
-            --fork               给文件的条目换一个新的 Uuid，保持一致所记录的内容
+            --fork               给路径的条目换一个新的 Uuid，保持一致所记录的内容
             --force              丢弃未记录的改动或结束合并，强制切换内容
             --offline            不连接保险库，只使用本地已有的内容与版本
             --concurrency <N>    每次同时搬运 N 份内容（默认 4）
 
   description:
-    en: Record a version, or another entry, for a file's path
-    zh-CN: 为文件的路径记录一个版本，或另一个条目
+    en: Record a version, or another entry, for a path, file or tree
+    zh-CN: 为路径、文件或树记录一个版本，或另一个条目
 
   result_retracked:
     en: "path %{path} retracked to %{version}"
@@ -334,12 +334,6 @@ retrack:
   result_tree:
     en: "Tree `%{path}` records version %{version} now"
     zh-CN: "树 `%{path}` 现在记录的版本是 %{version}"
-  err_tree_unsupported:
-    en: A tree is only retracked to a version
-    zh-CN: 树只能回退到某个版本
-  err_tree_unsupported_help:
-    en: Name a step count, a version number or a version hash
-    zh-CN: 请给出步数、版本号或版本哈希
   err_tree_dirty:
     en: "Tree `%{path}` holds work that was never recorded"
     zh-CN: "树 `%{path}` 有从未记录的改动"

@@ -410,16 +410,22 @@ internal sealed partial class VersionGraphView
     {
         if (Subject() is { } chosen)
         {
-            return chosen.Path;
+            return RecordTarget(chosen.Path);
         }
 
         if (LocalAt(card, path) is { } local && _root is { Length: > 0 } root)
         {
-            return Path.Combine(root, local.Path);
+            return RecordTarget(Path.Combine(root, local.Path));
         }
 
         return null;
     }
+
+    /// <summary>The path the Layout records for a chosen file: the tree holding it when one does.</summary>
+    /// <param name="path">The file, as the program names it.</param>
+    /// <returns>The tree's directory, or the file when no tree holds it.</returns>
+    private string RecordTarget(string path) =>
+        _root is { Length: > 0 } root ? RolaTrees.RootOf(path, root) ?? path : path;
 
     /// <summary>Puts the switching of an edited file's record to the user, since content may be lost.</summary>
     /// <remarks>
@@ -501,7 +507,7 @@ internal sealed partial class VersionGraphView
 
         _ = Task.Run(() =>
         {
-            var (done, said) = LayoutPathNewUuidCommand.Run(directory, path);
+            var (done, said) = RetrackCommand.Fork(directory, path);
 
             Dispatcher.UIThread.Post(() =>
             {
@@ -584,10 +590,10 @@ internal sealed partial class VersionGraphView
             ) is { } entry
         )
         {
-            return Path.Combine(root, entry.Path);
+            return RecordTarget(Path.Combine(root, entry.Path));
         }
 
-        return _target;
+        return _target is { Length: > 0 } target ? RecordTarget(target) : _target;
     }
 
     /// <summary>The file a draft belongs to, as the program names it.</summary>

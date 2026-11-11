@@ -120,65 +120,69 @@ A dock pulled into a window of its own is now owned by the main window. Closing 
 
 A file inside a tree could only be put back as part of the whole tree, while a file outside one had its own restore. The command line now takes `--restore-modify` for a file inside a tree, which writes the version the tree records over it, and `--restore-staged`, which writes what the tree has staged. The file menu a tree holds offers the two as `还原至基准` and `还原至暂存`, asks before the work is overwritten, and reports a run that fails.
 
-### 4. [`app`] [`RorolalaDesktop`] [`menu`] Fold the menu bar into a button
+### 4. [`app`] [`cli`] [`RorolalaDesktop`] [`plugins`] [`tree`] Retrack a tree to a version, an entry, or a fork
+
+A tree's retrack moved only its pointer to another version; a file's also took another entry's `Uuid` or forked a fresh one. `rola retrack` now does all three for a tree: a version writes the tree's recorded structure over the work, an entry makes the path record that tree and writes or keeps the content as the two versions stand, and `--fork` gives the tree a new `Uuid` and writes the id its mark keeps. The Version Graph's fork of a local entry now runs that retrack rather than changing only the Layout, so the tree's mark and its Layout entry stay one identity. A file inside a tree names the tree for a retrack in both the command line and the graph, since the Layout holds the tree as one entry. Content a tree version names but this store does not hold is brought from the Vault before the tree's work is written over.
+
+### 5. [`app`] [`RorolalaDesktop`] [`menu`] Fold the menu bar into a button
 
 The title row no longer carries a menu bar. One button at its left opens the same top-level menus in a flyout, in their old order, with the Window menu still listing the docks and its commands. The button has a tooltip and an accessible name, and a press on it does not move the window.
 
-### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`colour`] Mark folders with a colour from a plugin rule
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`colour`] Mark folders with a colour from a plugin rule
 
 Entries can now be marked with a colour by a rule a plugin registers. A marked directory gives its colour to everything under it, the nearest marked directory wins, and the file tree draws one block behind the whole subtree, so the colour is one rectangle rather than a wash on each row. A marked file carries its own block. A directory listing draws a wash on the row of each entry the colour reaches, the entries under a marked directory darker than the directory itself, and the Directories dock's bright ground carries a share of the colour while it is inside a marked directory. Icons keep their own colours, except for the park a rola-tree wears: it is drawn in the colour the tree's own id names, in the badge column at a tree row's right and on the folder's corner in a directory listing, so a tree is told from a plain directory before its name is read.
 
 The Rorolala plugin registers the first rule. It marks a rola-tree with the hue of the hash of the id in its `.rola-tree` mark, so the colour travels with the directory and a copy of one tree is the same colour.
 
-### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`hides`] Give each hide rule shown, gray and hidden states
+### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`hides`] Give each hide rule shown, gray and hidden states
 
 Each hide rule now has three states rather than two. Shown leaves its entries as they are, Gray keeps them in the listing at 55% opacity, and Hidden leaves them out; a click on the rule cycles shown, gray, hidden. The popup lists the rules as Dot Directories, Dot Files, Windows Hidden Files, Git Ignored Files and Rola Ignored Files, and its eye and more button are one run at the toolbar's right, separated from the link by a 1 px rule. The eye shows the entries a hiding rule leaves out as gray without changing the rule's state.
 
-### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`rorolala-vcs`] Offer a tree as a kind of folder a listing can make
+### 8. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`rorolala-vcs`] Offer a tree as a kind of folder a listing can make
 
 A folder tree's menu and a directory's menu now offer a tree beside the plain folder. The file system still makes and names the directory; Rorolala VCS then makes it a tree through `rola tree init`, and the row is read again for the mark. The item wears the park picture the tree already wears, and a new one is called "New Tree" until it is named.
 
-### 8. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base
+### 9. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`title`] Name a directory and its address relative to the base
 
 A directory dock inside the tree's base is named by its part under that base, so a tab reads `art` or `art/shots` rather than the whole path, and its address bar starts at `.` for the base and adds one step for each directory under it. The detail a tab and a window title show on hover is still the full path, a directory outside the base keeps its full path, and a logical place keeps its address.
 
-### 9. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree
+### 10. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree
 
 The file tree now supports the same choice as a directory listing: a plain press chooses one row, Ctrl toggles one, Shift takes a visible range, and Ctrl+A chooses every row on screen. A modified press on a directory changes the choice without navigating, while a plain press still opens it. Copy, cut, delete and the context menu act on the whole choice, and a tree read again keeps its choice by path.
 
-### 10. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
+### 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Force a track from the Version Graph with Shift (#7)
 
 The TRACK button under the Version Graph turns red while Shift is held. A press then records
 the chosen changes with `rola track --force`, and a question names the files whose changes a plain
 track refuses before anything is written. Without Shift the button records the changes as before.
 
-### 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing
+### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing
 
 Inside a rola-tree, the Directories dock now shows Status and Staged columns in place of Upstream, Standing and Owner. Status says whether a path is new or changed, and Staged says whether all of it, some of it or none of it is staged. Each answer is also worn on the path's icon: a green plus for new, a yellow pencil for changed, and a full, half or empty circle for the three staging states.
 
-### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph
+### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph
 
 The Version Graph now treats a rola-tree as one versioned entry. Choosing the tree's directory, or any file inside it, centres the graph on the tree's own chain rather than on a path the Layout does not name. Choosing a version's local entry pill opens the tree's parent and selects the tree directory, so the graph and the listing agree on the object being read. The same message field and TRACK button under the graph record the tree when its directory or anything under it is chosen.
 
 A tree's unrecorded work is drawn as a draft above its chain, including changes that are only in the tree's staging area and a staged description with no changed path. The C ABI gains `rola_tree_status_json`, the desktop reads it through `RolaTreeStatus`, and a focus on the Workspace root is accepted as the root tree's entry.
 
-### 13. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
+### 14. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background
 
 A file browser's grid now shows a file's own preview where one can be made, and keeps the type icon where one cannot. The host asks its system source first and the plugins' renderers after it, keeps answers by path, write time and size, cancels a tile's request when the tile leaves the window, and reports a batch on the progress stack. Windows uses the Shell thumbnailer on a dedicated STA thread; Linux reads thumbnails the desktop has already cached.
 
-### 14. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette
+### 15. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette
 
 The look now publishes the colours the program says a state is: disabled, modify, warning, error, fail, success, allow, disallow, force and three status colours, each stated apart for the light and dark variants. Each is a field in `theme.json` and a row in the look's preferences, so the light and dark answers are chosen rather than copied into a plugin. The Rorolala VCS plugin's own four colour settings are gone, and its states read the look's set instead: new work is success, a change is modify, a wrong change is fail, a move is the first status colour, a suspected move is the second, a merge is the third, a lock this account holds is allow and one another holds is disallow, and a forced run is force. The same answers reach the list dots, tile badges, the Overview's fills, the merge badge and the standing arrows. A settled colour also asks the open listings and tree to draw their marks again, since a badge is built from a colour value rather than a resource and would otherwise keep the colour it was made with.
 
-### 15. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
+### 16. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash
 
 `rola desktop` now starts a host beside the Desktop rather than the Desktop itself. The host forwards the line that says the window is up, keeps the Desktop's error stream, and when the run ends with a non-zero code writes the report to a log and opens a window that shows it. A Desktop run that throws also writes the exception's stack to that stream, so the stack survives the window that wrote it. A start that found the Desktop already running, exit code 174, is passed through without a report.
 
-### 16. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
+### 17. [`librorolala`] [`tree`] Read a tree structure's entries as JSON across the C ABI
 
 `rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. A caller that cannot decode the structure format hands the bytes over instead of keeping a second copy of it, and text that is not hex or bytes that are not a structure answer as `null`, so an answer is always JSON. The string is freed with `free_string`.
 
-### 17. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+### 18. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
 
 The new `rorolala-tree` crate holds what a tree is: a canonical structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path. Content moves into the Workspace's store with `publish_from`, which carries manifests and their chunks without rewriting what is already there.
 

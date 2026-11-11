@@ -314,6 +314,34 @@ fn retrack(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["tree", "status", "main"]);
     checked.exits("the tree is read after the forced move", &ran, 0);
     checked.stdout_has("the work matches what the tree records again", &ran, "clean");
+
+    let id = ws.join("main").join(".rola-tree").join("id");
+    let before = fs::read_to_string(&id).expect("the tree's local id");
+
+    let ran = rola.run(ws, &["retrack", "main", "--fork"]);
+    checked.exits("the tree's entry is forked", &ran, 0);
+
+    let after = fs::read_to_string(&id).expect("the tree's local id");
+    checked.wants(
+        "the fork writes the tree's new local id",
+        after.trim() != before.trim(),
+        "the local id still names the old entry",
+    );
+
+    let ran = rola.run(ws, &["tree", "status", "main"]);
+    checked.exits("the tree is read after the fork", &ran, 0);
+    checked.stdout_has("the fork leaves the work as it records it", &ran, "clean");
+
+    let before = fs::read_to_string(&id).expect("the tree's local id");
+    let ran = rola.run(ws, &["retrack", "main/a.psd", "--fork"]);
+    checked.exits("a file inside a tree retracks the tree", &ran, 0);
+
+    let after = fs::read_to_string(&id).expect("the tree's local id");
+    checked.wants(
+        "a path inside a tree names the tree's entry",
+        after.trim() != before.trim(),
+        "the tree's local id was not written",
+    );
 }
 
 /// A conflict a merge left is read, and staging the path settles it.

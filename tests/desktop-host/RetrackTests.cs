@@ -76,4 +76,20 @@ public sealed class RetrackTests
 
         Assert.DoesNotContain("--force", indexOnlyForced);
     }
+
+    /// <summary>A fork names the path and asks for a fresh entry, with no version target.</summary>
+    [Fact]
+    public void AForkNamesThePathAndNoTarget()
+    {
+        var fork = RetrackCommand.ForkArguments("/work/tree");
+
+        Assert.Contains("retrack", fork);
+        Assert.Contains("/work/tree", fork);
+        Assert.Contains("--fork", fork);
+
+        // A fork is what the path records now, so there is no second word for a version.
+        Assert.DoesNotContain("~1", fork);
+        Assert.DoesNotContain("--only-index", fork);
+        Assert.DoesNotContain("--force", fork);
+    }
 }
