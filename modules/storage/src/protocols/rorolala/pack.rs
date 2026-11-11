@@ -17,14 +17,18 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::time::SystemTime;
 
+use rorolala_chunking::Chunker as _;
 use tokio::sync::Mutex as AsyncMutex;
 
 use super::RorolalaStorage;
 use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, PackKind};
-use super::entry::{collect, is_directory, read_range, sync_directory, write_whole_durably};
+use super::entry::{
+    collect, is_directory, key_of, read_range, sync_directory, write_whole_durably,
+};
 use super::paths::index_of_pack;
 use crate::{
-    Codec, Error, FRAME_VERSION, Frame, Key, Layout, LockingGuard, Manifest, PackEntry, PackIndex,
+    AlgorithmChoice, Chunk as ManifestChunk, Codec, Error, FRAME_VERSION, Frame, Key, Layout,
+    LockingGuard, Manifest, PackEntry, PackIndex,
 };
 
 impl LockingGuard<RorolalaStorage> {
@@ -1153,6 +1157,66 @@ impl Batch {
         self.put(PackKind::Object, key, Layout::Single, plain).await
     }
 
+    /// Writes `plain` as the object kept under `key`, encoded with `codec`.
+    ///
+    /// A caller that has the choice the content would have been written with uses this rather than
+    /// [`add`](Self::add): a batch's own codec is one answer for every entry, while a store writing a
+    /// file chooses a codec per file, and a pack is read back by the frame's own codec.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the pack cannot be written.
+    pub async fn add_with_codec(
+        &mut self,
+        codec: Codec,
+        key: &Key,
+        plain: &[u8],
+    ) -> Result<(), Error> {
+        self.put_with_codec(PackKind::Object, key, Layout::Single, plain, codec)
+            .await
+    }
+
+    /// Writes `content` as the store would, but into this batch's packs.
+    ///
+    /// The cut is the choice's, not the batch's, so a caller that read a file and chose how it is
+    /// written gets the same chunks and manifest a loose write would have made. Both go into packs:
+    /// a run of many small files is then a few pack files rather than two loose entries each, which
+    /// is where a first staging of a tree spends its time.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if a pack cannot be written.
+    pub async fn add_content(
+        &mut self,
+        content: &[u8],
+        choice: AlgorithmChoice,
+    ) -> Result<Key, Error> {
+        let key = key_of(content);
+        let ranges = choice.chunking().split(content);
+
+        if ranges.len() < 2 {
+            self.add_with_codec(choice.codec(), &key, content).await?;
+
+            return Ok(key);
+        }
+
+        let mut manifest = Manifest::default();
+
+        for range in ranges {
+            let chunk = &content[range];
+            let chunk_key = key_of(chunk);
+
+            self.add_with_codec(choice.codec(), &chunk_key, chunk)
+                .await?;
+            manifest.push(ManifestChunk::new(chunk_key, chunk.len() as u64));
+        }
+
+        self.add_manifest_with_codec(choice.codec(), &key, &manifest)
+            .await?;
+
+        Ok(key)
+    }
+
     /// Writes `manifest` as how the content under `key` is put back together.
     ///
     /// # Errors
@@ -1162,6 +1226,23 @@ impl Batch {
         let plain = manifest.encode();
 
         self.put(PackKind::Manifest, key, Layout::Chunked, &plain)
+            .await
+    }
+
+    /// Writes `manifest` as how the content under `key` is put back together, encoded with `codec`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if the pack cannot be written.
+    pub async fn add_manifest_with_codec(
+        &mut self,
+        codec: Codec,
+        key: &Key,
+        manifest: &Manifest,
+    ) -> Result<(), Error> {
+        let plain = manifest.encode();
+
+        self.put_with_codec(PackKind::Manifest, key, Layout::Chunked, &plain, codec)
             .await
     }
 
@@ -1214,18 +1295,31 @@ impl Batch {
         layout: Layout,
         plain: &[u8],
     ) -> Result<(), Error> {
+        self.put_with_codec(kind, key, layout, plain, self.codec)
+            .await
+    }
+
+    /// Writes one entry framed with `codec` rather than the batch's own.
+    async fn put_with_codec(
+        &mut self,
+        kind: PackKind,
+        key: &Key,
+        layout: Layout,
+        plain: &[u8],
+        codec: Codec,
+    ) -> Result<(), Error> {
         if !self.written.insert((kind, *key)) {
             return Ok(());
         }
 
         let frame = Frame {
             version: FRAME_VERSION,
-            codec: self.codec,
+            codec,
             layout,
             plain_len: plain.len() as u64,
         };
         let header = frame.encode();
-        let payload = self.codec.encode(plain)?;
+        let payload = codec.encode(plain)?;
         let len = u64::try_from(header.len().saturating_add(payload.len())).unwrap_or(u64::MAX);
 
         // A pack is closed once the next entry would take it over the size the store allows. An

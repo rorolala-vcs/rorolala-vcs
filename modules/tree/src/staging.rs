@@ -3,7 +3,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rorolala_storage::{LockError, Lockable, LockingGuard, RorolalaStorage, store_file};
+use rorolala_storage::{
+    Batch, LockError, Lockable, LockingGuard, RorolalaStorage, StorageBackend as _, store_file,
+};
 
 use crate::TreeError;
 use crate::consts::{CONFLICTS, DESCRIPTION, LOCK, MARK, STAGED_TREE, STAGING};
@@ -189,6 +191,35 @@ impl Staging {
         path: &str,
     ) -> Result<TreeEntry, TreeError> {
         let key = store_file(store, disk)
+            .await
+            .map_err(|error| TreeError::Store(error.to_string()))?;
+        let meta = fs::metadata(disk)?;
+
+        Ok(TreeEntry::file(path, mode_of(&meta), key))
+    }
+
+    /// Stages a file whose content the store can keep in packs, rather than as loose entries.
+    ///
+    /// A staging run over a large tree writes hundreds of small files, and each loose entry is a
+    /// directory, a temporary file, a flush and a rename. A batch puts both whole content and the chunks
+    /// and manifest of a cut one into packs, so what a run pays for is a few files there instead of two
+    /// files per entry.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::Io`] when the file cannot be read, and [`TreeError::Store`] when the batch
+    /// cannot take it.
+    pub async fn stage_file_batch(
+        &self,
+        store: &RorolalaStorage,
+        batch: &mut Batch,
+        disk: &Path,
+        path: &str,
+    ) -> Result<TreeEntry, TreeError> {
+        let choice = store.choose_algorithm(disk);
+        let content = fs::read(disk)?;
+        let key = batch
+            .add_content(&content, choice)
             .await
             .map_err(|error| TreeError::Store(error.to_string()))?;
         let meta = fs::metadata(disk)?;

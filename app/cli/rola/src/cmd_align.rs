@@ -1973,15 +1973,12 @@ fn restore_tree(
                 let Some(storage_key) = entry.storage() else {
                     continue;
                 };
-                let bytes = runtime
-                    .block_on(store.read_object(storage_key))
-                    .map_err(|error| align_failed(error.to_string()))?;
                 if let Some(parent) = disk.parent()
                     && let Err(error) = fs::create_dir_all(parent)
                 {
                     return Err(align_failed(error.to_string()));
                 }
-                if let Err(error) = fs::write(&disk, bytes) {
+                if let Err(error) = runtime.block_on(store.extract_file(storage_key, &disk)) {
                     return Err(align_failed(error.to_string()));
                 }
             }

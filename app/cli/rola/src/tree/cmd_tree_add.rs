@@ -192,6 +192,7 @@ fn stage(
         Ok(store) => store,
         Err(error) => return Err(ErrorTreeAddFailed::new(error.to_string()).into()),
     };
+    let mut staging_batch = runtime.block_on(staging_store.begin_batch());
 
     let base = match staging.structure() {
         Ok(Some(staged)) => staged,
@@ -248,6 +249,7 @@ fn stage(
             let staged = stage_entry(
                 &staging,
                 &staging_store,
+                &mut staging_batch,
                 &tree_root,
                 &entry,
                 entries.get(&relative),
@@ -282,6 +284,7 @@ fn stage(
                 let staged = stage_entry(
                     &staging,
                     &staging_store,
+                    &mut staging_batch,
                     &tree_root,
                     entry,
                     entries.get(entry.path()),
@@ -305,6 +308,10 @@ fn stage(
         }
     }
 
+    if let Err(error) = runtime.block_on(staging_batch.publish()) {
+        return Err(ErrorTreeAddFailed::new(error.to_string()).into());
+    }
+
     let structure = match TreeStructure::build(None, entries.values().cloned()) {
         Ok(structure) => structure,
         Err(error) => return Err(ErrorTreeAddFailed::new(error.to_string()).into()),
@@ -326,6 +333,7 @@ fn stage(
 fn stage_entry(
     staging: &librorolala::tree::Staging,
     staging_store: &librorolala::storage::RorolalaStorage,
+    staging_batch: &mut librorolala::storage::Batch,
     tree_root: &Path,
     entry: &TreeEntry,
     known: Option<&TreeEntry>,
@@ -340,9 +348,12 @@ fn stage_entry(
 
     let disk = tree_root.join(entry.path());
     let result = match entry.kind() {
-        EntryKind::File => {
-            runtime.block_on(staging.stage_file_into(staging_store, &disk, entry.path()))
-        }
+        EntryKind::File => runtime.block_on(staging.stage_file_batch(
+            staging_store,
+            staging_batch,
+            &disk,
+            entry.path(),
+        )),
         EntryKind::Symlink => staging.stage_symlink(&disk, entry.path()),
         EntryKind::Directory => return Ok(entry.clone()),
     };
