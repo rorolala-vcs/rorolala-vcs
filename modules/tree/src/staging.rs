@@ -168,7 +168,27 @@ impl Staging {
     /// content cannot be written into the staging store.
     pub async fn stage_file(&self, disk: &Path, path: &str) -> Result<TreeEntry, TreeError> {
         let store = self.ensure_store()?;
-        let key = store_file(&store, disk)
+
+        self.stage_file_into(&store, disk, path).await
+    }
+
+    /// Stages a file into a store the caller already made.
+    ///
+    /// A run that stages many files makes the staging store once and hands it to every file, rather than
+    /// making it again for each: making one reads what is there, which is what a tree's first staging would
+    /// otherwise pay once per file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::Store`] when the content cannot be written, and [`TreeError::Io`] when the
+    /// file cannot be read.
+    pub async fn stage_file_into(
+        &self,
+        store: &RorolalaStorage,
+        disk: &Path,
+        path: &str,
+    ) -> Result<TreeEntry, TreeError> {
+        let key = store_file(store, disk)
             .await
             .map_err(|error| TreeError::Store(error.to_string()))?;
         let meta = fs::metadata(disk)?;

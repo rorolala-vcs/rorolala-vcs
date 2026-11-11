@@ -188,6 +188,10 @@ fn stage(
         Ok(guard) => guard,
         Err(error) => return Err(ErrorTreeAddFailed::new(error.to_string()).into()),
     };
+    let staging_store = match staging.ensure_store() {
+        Ok(store) => store,
+        Err(error) => return Err(ErrorTreeAddFailed::new(error.to_string()).into()),
+    };
 
     let base = match staging.structure() {
         Ok(Some(staged)) => staged,
@@ -241,12 +245,19 @@ fn stage(
         }
 
         if let Some(entry) = scanned.structure.entry(&relative).cloned() {
-            stage_entry(&staging, &tree_root, &entry, runtime)?;
+            let staged = stage_entry(
+                &staging,
+                &staging_store,
+                &tree_root,
+                &entry,
+                entries.get(&relative),
+                runtime,
+            )?;
             // A whole directory brings the work under it; a file brings itself.
             if entry.kind() == EntryKind::Directory {
                 scopes.push(relative);
             } else {
-                entries.insert(entry.path().to_owned(), entry);
+                entries.insert(staged.path().to_owned(), staged);
                 resolve_conflict(&staging, &tree_root, &mut conflicts, &relative);
             }
             continue;
@@ -268,8 +279,15 @@ fn stage(
     if !scopes.is_empty() {
         for entry in scanned.structure.entries() {
             if scopes.iter().any(|scope| under(scope, entry.path())) {
-                stage_entry(&staging, &tree_root, entry, runtime)?;
-                entries.insert(entry.path().to_owned(), entry.clone());
+                let staged = stage_entry(
+                    &staging,
+                    &staging_store,
+                    &tree_root,
+                    entry,
+                    entries.get(entry.path()),
+                    runtime,
+                )?;
+                entries.insert(staged.path().to_owned(), staged);
             }
         }
 
@@ -304,23 +322,32 @@ fn stage(
     })
 }
 
-/// Hands one scanned entry into the staging store.
+/// Hands one scanned entry into the staging store, unless what is already staged is the same work.
 fn stage_entry(
     staging: &librorolala::tree::Staging,
+    staging_store: &librorolala::storage::RorolalaStorage,
     tree_root: &Path,
     entry: &TreeEntry,
+    known: Option<&TreeEntry>,
     runtime: &tokio::runtime::Runtime,
-) -> Result<(), Next> {
+) -> Result<TreeEntry, Next> {
+    // The scan already read the file and knows the key its content would be stored under. When the staged
+    // structure has the same entry, that content is already in the store it names, and reading the file
+    // again would copy what is there over itself.
+    if known == Some(entry) {
+        return Ok(entry.clone());
+    }
+
     let disk = tree_root.join(entry.path());
     let result = match entry.kind() {
-        EntryKind::File => runtime.block_on(staging.stage_file(&disk, entry.path())),
+        EntryKind::File => {
+            runtime.block_on(staging.stage_file_into(staging_store, &disk, entry.path()))
+        }
         EntryKind::Symlink => staging.stage_symlink(&disk, entry.path()),
-        EntryKind::Directory => return Ok(()),
+        EntryKind::Directory => return Ok(entry.clone()),
     };
 
-    result
-        .map(|_| ())
-        .map_err(|error| ErrorTreeAddFailed::new(error.to_string()).into())
+    result.map_err(|error| ErrorTreeAddFailed::new(error.to_string()).into())
 }
 
 /// Removes a path from the conflict list, and the copy a merge left beside it, when it was in it.
