@@ -72,21 +72,25 @@ The hint is a text block and took the body type rather than the field's, so it w
 
 ## Optimized
 
-### 1. [`modules`] [`chunking`] [`text`] Stop a text cut at the bound when a line runs past it
+### 1. [`app`] [`cli`] [`tree`] Retrack a tree by writing only the paths its version changes
+
+A tree retrack wrote every file of the version it moved to, even when almost every one was the same file the tree already held, so a version one step back over a tree of several hundred files took about nine seconds. The work is now compared with the structure the tree recorded, and only a path the two versions differ in is fetched and written; the rest are left as they are. The same tree's one-step retrack fell to about half a second. `--force` still writes every path, since its work is what is being discarded.
+
+### 2. [`modules`] [`chunking`] [`text`] Stop a text cut at the bound when a line runs past it
 
 A text cut was moved on to the end of the line it landed in with no bound, so a file of one enormous line, a minified script or a single-line JSON, had its first cut moved to the end of the file and was stored as a single chunk. The move now stops when the line has more than `max` left to run, and the line is cut through there.
 
 Short lines are unchanged: a chunk still ends at a line end, and may run past `max` by the line it moved over. No chunk is longer than twice `max`.
 
-### 2. [`modules`] [`inverse-index`] [`table`] Build the inverse index in the buffer it is written from
+### 3. [`modules`] [`inverse-index`] [`table`] Build the inverse index in the buffer it is written from
 
 `Table::encode` built the records in a buffer of their own and copied them behind the header, for a table that may be tens of megabytes. The records are now written directly behind the header and the digest is filled in afterwards.
 
-### 3. [`modules`] [`protocol`] [`frame`] Read a carried frame into the buffer it is being put together in
+### 4. [`modules`] [`protocol`] [`frame`] Read a carried frame into the buffer it is being put together in
 
 A frame read for a blob carried in pieces allocated a buffer of its own and then copied it into the blob being assembled. `read_frame_into` reads the frame into the tail of the destination, so a large content crossing a sync is copied once rather than twice.
 
-### 4. [`modules`] [`storage`] Cut unclaimed binary content on its content, and write chunks in packs
+### 5. [`modules`] [`storage`] Cut unclaimed binary content on its content, and write chunks in packs
 
 Binary content no policy claims and no ZIP signature marks was written whole, so an edit to a large PSB, TIFF, EXR, TGA, WAV or FBX binary rewrote the whole file. Content of at least 256 KiB is now cut on its content, with chunks of 16 KiB to 256 KiB, so an edit costs the chunks it fell in.
 
@@ -98,7 +102,7 @@ A pack left empty by a removal is dropped from the store and forgotten from the 
 
 Reads and writes no longer copy content on the way through: a payload stored as it is is borrowed rather than encoded into a second buffer, an entry is read frame first with its payload into the front of its own buffer, a manifest is decoded in place, and a file's key is hashed as it streams. An extract writes each chunk to the file and hashes it as it goes rather than putting the whole content together in memory, and a chunked write canonicalises the store once rather than once a chunk.
 
-### 5. [`modules`] [`workspace-analyze`] [`fingerprint`] Stream a binary file through the status reading instead of holding it
+### 6. [`modules`] [`workspace-analyze`] [`fingerprint`] Stream a binary file through the status reading instead of holding it
 
 `rola status` read every changed file whole to fingerprint it, so a two gigabyte `PSD` took two gigabytes of memory. A file is now opened, sniffed on its first 8000 bytes, and hashed as it streams when it reads as binary; only a text file is held whole, because the spans a move is guessed from are cut out of all of it. The tree reading uses the same stream.
 

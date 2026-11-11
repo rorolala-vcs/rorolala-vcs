@@ -2767,10 +2767,17 @@ fn retrack_tree(asked: &mut RetrackTree<'_>) -> Next {
     }
 
     if !asked.only_index {
-        if let Err(error) = bring_tree_content(asked, &target) {
+        if let Err(error) = bring_tree_content(asked, &target, &recorded, !asked.force) {
             return error;
         }
-        if let Err(error) = put_back(&tree_root, &target, &recorded, asked.store, asked.runtime) {
+        if let Err(error) = put_back(
+            &tree_root,
+            &target,
+            &recorded,
+            asked.store,
+            asked.runtime,
+            !asked.force,
+        ) {
             return error;
         }
 
@@ -2832,12 +2839,19 @@ fn put_back(
     old: &TreeStructure,
     store: &RorolalaStorage,
     runtime: &tokio::runtime::Runtime,
+    skip_unchanged: bool,
 ) -> Result<(), Next> {
     if let Err(error) = fs::create_dir_all(root) {
         return Err(failed(error.to_string()));
     }
 
     for entry in target.entries() {
+        // What the old structure already held is what the work already holds: a move of the record
+        // that leaves a path as it was does not read it, write it, or make its directory again.
+        if skip_unchanged && old.entry(entry.path()) == Some(entry) {
+            continue;
+        }
+
         let disk = root.join(entry.path());
 
         match entry.kind() {
@@ -3036,8 +3050,11 @@ fn retrack_tree_entry(asked: &mut RetrackTree<'_>, entry: &EntryTarget) -> Next 
         let Some(wanted) = wanted.as_ref() else {
             return failed("the target structure was not read");
         };
+        let Some(recorded) = recorded.as_ref() else {
+            return failed("the recorded structure was not read");
+        };
 
-        if let Err(error) = bring_tree_content(asked, wanted) {
+        if let Err(error) = bring_tree_content(asked, wanted, recorded, !asked.force) {
             return error;
         }
     }
@@ -3052,7 +3069,14 @@ fn retrack_tree_entry(asked: &mut RetrackTree<'_>, entry: &EntryTarget) -> Next 
             return failed("the target structure was not read");
         };
 
-        if let Err(next) = put_back(&tree_root, wanted, recorded, asked.store, asked.runtime) {
+        if let Err(next) = put_back(
+            &tree_root,
+            wanted,
+            recorded,
+            asked.store,
+            asked.runtime,
+            !asked.force,
+        ) {
             return next;
         }
         let staging = Staging::new(&tree_root);
@@ -3102,10 +3126,16 @@ fn retrack_tree_entry(asked: &mut RetrackTree<'_>, entry: &EntryTarget) -> Next 
 // The account failure is the command's own kind, and this is where it becomes the run's answer; `?` has no
 // conversion from it.
 #[allow(clippy::question_mark)]
-fn bring_tree_content(asked: &mut RetrackTree<'_>, structure: &TreeStructure) -> Result<(), Next> {
+fn bring_tree_content(
+    asked: &mut RetrackTree<'_>,
+    structure: &TreeStructure,
+    old: &TreeStructure,
+    changed_only: bool,
+) -> Result<(), Next> {
     let keys: Vec<Key> = structure
         .entries()
         .iter()
+        .filter(|entry| !changed_only || old.entry(entry.path()) != Some(entry))
         .filter_map(|entry| entry.storage().copied())
         .collect();
 

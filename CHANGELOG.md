@@ -24,11 +24,12 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Optimized
 
-1. [`modules`] [`chunking`] [`text`] Stop a text cut at the bound when a line runs past it. [See details](dev/CHANGELOG-DETAILS.md#1-modules-chunking-text-stop-a-text-cut-at-the-bound-when-a-line-runs-past-it)
-2. [`modules`] [`inverse-index`] [`table`] Build the inverse index in the buffer it is written from. [See details](dev/CHANGELOG-DETAILS.md#2-modules-inverse-index-table-build-the-inverse-index-in-the-buffer-it-is-written-from)
-3. [`modules`] [`protocol`] [`frame`] Read a carried frame into the buffer it is being put together in. [See details](dev/CHANGELOG-DETAILS.md#3-modules-protocol-frame-read-a-carried-frame-into-the-buffer-it-is-being-put-together-in)
-4. [`modules`] [`storage`] Cut unclaimed binary content on its content, and write chunks in packs. [See details](dev/CHANGELOG-DETAILS.md#4-modules-storage-cut-unclaimed-binary-content-on-its-content-and-write-chunks-in-packs)
-5. [`modules`] [`workspace-analyze`] [`fingerprint`] Stream a binary file through the status reading instead of holding it. [See details](dev/CHANGELOG-DETAILS.md#5-modules-workspace-analyze-fingerprint-stream-a-binary-file-through-the-status-reading-instead-of-holding-it)
+1. [`app`] [`cli`] [`tree`] Retrack a tree by writing only the paths its version changes. [See details](dev/CHANGELOG-DETAILS.md#1-app-cli-tree-retrack-a-tree-by-writing-only-the-paths-its-version-changes)
+2. [`modules`] [`chunking`] [`text`] Stop a text cut at the bound when a line runs past it. [See details](dev/CHANGELOG-DETAILS.md#2-modules-chunking-text-stop-a-text-cut-at-the-bound-when-a-line-runs-past-it)
+3. [`modules`] [`inverse-index`] [`table`] Build the inverse index in the buffer it is written from. [See details](dev/CHANGELOG-DETAILS.md#3-modules-inverse-index-table-build-the-inverse-index-in-the-buffer-it-is-written-from)
+4. [`modules`] [`protocol`] [`frame`] Read a carried frame into the buffer it is being put together in. [See details](dev/CHANGELOG-DETAILS.md#4-modules-protocol-frame-read-a-carried-frame-into-the-buffer-it-is-being-put-together-in)
+5. [`modules`] [`storage`] Cut unclaimed binary content on its content, and write chunks in packs. [See details](dev/CHANGELOG-DETAILS.md#5-modules-storage-cut-unclaimed-binary-content-on-its-content-and-write-chunks-in-packs)
+6. [`modules`] [`workspace-analyze`] [`fingerprint`] Stream a binary file through the status reading instead of holding it. [See details](dev/CHANGELOG-DETAILS.md#6-modules-workspace-analyze-fingerprint-stream-a-binary-file-through-the-status-reading-instead-of-holding-it)
 
 ## Feature
 
