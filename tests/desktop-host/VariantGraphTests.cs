@@ -89,6 +89,7 @@ public sealed class VariantGraphTests
 
         Assert.NotNull(status);
         Assert.False(status.Clean);
+        Assert.True(status.HasWork);
         Assert.Single(status.Staged);
     }
 
@@ -129,6 +130,28 @@ public sealed class VariantGraphTests
         var draft = Assert.Single(drafts, one => one.Path == "tree");
 
         Assert.True(draft.Tree);
+    }
+
+    /// <summary>A tree with nothing to record is not a draft in the graph.</summary>
+    [Fact]
+    public void ACleanTreeDrawsNoDraft()
+    {
+        var workspace = TreeRecorded("tree-clean");
+        var tree = Path.Combine(workspace, "tree");
+
+        var graph = RolaVariantGraph.Locate(workspace);
+        using var status = RolaStatus.Locate(workspace);
+
+        Assert.NotNull(graph);
+        Assert.NotNull(status);
+
+        var drafts = VersionGraphView.DraftsOf(graph, status, workspace);
+        var treeStatus = RolaTreeStatus.Locate(tree);
+
+        Assert.DoesNotContain(drafts, one => one.Path == "tree");
+        Assert.NotNull(treeStatus);
+        Assert.False(treeStatus.HasWork);
+        Assert.True(treeStatus.Clean);
     }
 
     /// <summary>A directory in a tree is what the changes under it add up to.</summary>

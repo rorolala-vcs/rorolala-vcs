@@ -554,7 +554,7 @@ internal sealed class VersionGraphTrackBar : Border
         var status = TreeStatus(tree);
         var described = File.Exists(Path.Combine(tree, ".rola-tree", "description"));
 
-        if ((status is null || status.Clean) && !described)
+        if ((status is null || !status.HasWork) && !described)
         {
             return null;
         }

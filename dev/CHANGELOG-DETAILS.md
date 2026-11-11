@@ -54,13 +54,17 @@ A tree's colour layer was written from the layout update that moved its rows, an
 
 Resizing the folder tree rebuilt the guide layer of every row while the rows' header grids were being arranged, which could end the program with a null reference inside the grid's arrange. The guide layer is now refreshed after the layout pass, and a line covered by a tree's coloured line is hidden rather than removed, so a resize changes only what is shown and never the row's children.
 
-### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
+### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Do not draw a tree with no work as a draft
+
+A tree whose own Layout entry is a wrong change has no work to record when nothing is staged and no file has changed, but the Version Graph read its wrong state as a change and drew a draft saying the tree had unrecorded work. A tree now draws a draft only when its staging area, its files or its description has something to record; being wrong is still what the tree's own badge and status say, and a draft of an actually changed tree still carries the wrong mark.
+
+### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
 
 The Version Graph no longer draws an edited file's local pill on the version its draft is based on
 as well as on the draft. While the file has an unrecorded change, its draft is the one card that
 names it; the baseline version keeps the entries of the other sides.
 
-### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
+### 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
 
 The message field under the Version Graph is the whole room beside the TRACK button, but the pointer read as text only over the line the message is drawn on: the padding around that line and the empty width after it read as ground, although a press there focused the field. The field now names the text cursor itself, so every part of its room inherits it.
 

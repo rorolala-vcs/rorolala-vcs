@@ -986,7 +986,7 @@ internal sealed partial class VersionGraphView : Control
                 var staged = RolaTreeStatus.Locate(absolute);
                 var described = File.Exists(Path.Combine(absolute, ".rola-tree", "description"));
 
-                if ((staged is null || staged.Clean) && !described)
+                if ((staged is null || !staged.HasWork) && !described)
                 {
                     continue;
                 }

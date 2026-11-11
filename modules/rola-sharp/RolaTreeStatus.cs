@@ -48,11 +48,20 @@ public sealed class RolaTreeStatus
 
     /// <summary>Whether the tree has nothing staged, changed or in conflict.</summary>
     public bool Clean =>
-        Staged.Count == 0
-        && Unstaged.Count == 0
-        && Untracked.Count == 0
-        && Conflicts.Count == 0
-        && !Wrong;
+        !HasWork && !Wrong;
+
+    /// <summary>Whether the tree has work a version would record.</summary>
+    /// <remarks>
+    /// A wrong tree may have no work at all: its own Layout entry is a change that must not be recorded,
+    /// which is a fact about the entry rather than work of the tree. What asks whether there is a change
+    /// to draw or a version to make asks this, and what says whether the tree is settled asks
+    /// <see cref="Clean"/>.
+    /// </remarks>
+    public bool HasWork =>
+        Staged.Count > 0
+        || Unstaged.Count > 0
+        || Untracked.Count > 0
+        || Conflicts.Count > 0;
 
     /// <summary>Makes the value from the lists the native side answered.</summary>
     /// <param name="staged">What the staging area changed from the record.</param>

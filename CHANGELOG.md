@@ -18,8 +18,9 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 10. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree row's badges clear of its name. [See details](dev/CHANGELOG-DETAILS.md#10-app-rorolaladesktop-plugins-file-system-tree-keep-a-tree-rows-badges-clear-of-its-name)
 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's colour stripe while the tree is resized. [See details](dev/CHANGELOG-DETAILS.md#11-app-rorolaladesktop-plugins-file-system-tree-keep-a-trees-colour-stripe-while-the-tree-is-resized)
 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Keep a tree's guide layer out of the arrange pass while resizing. [See details](dev/CHANGELOG-DETAILS.md#12-app-rorolaladesktop-plugins-file-system-tree-keep-a-trees-guide-layer-out-of-the-arrange-pass-while-resizing)
-13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited. [See details](dev/CHANGELOG-DETAILS.md#13-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-local-pill-on-the-draft-while-a-file-is-edited)
-14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady. [See details](dev/CHANGELOG-DETAILS.md#14-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-message-fields-pointer-and-row-steady)
+13. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Do not draw a tree with no work as a draft. [See details](dev/CHANGELOG-DETAILS.md#13-app-rorolaladesktop-plugins-rorolala-vcs-do-not-draw-a-tree-with-no-work-as-a-draft)
+14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited. [See details](dev/CHANGELOG-DETAILS.md#14-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-local-pill-on-the-draft-while-a-file-is-edited)
+15. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady. [See details](dev/CHANGELOG-DETAILS.md#15-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-message-fields-pointer-and-row-steady)
 
 ## Optimized
 
