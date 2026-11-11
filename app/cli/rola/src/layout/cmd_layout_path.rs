@@ -8,6 +8,7 @@
 use librorolala::daemon::{
     EntryRemove, PathMove, action_move_remote_path, action_remove_remote_path,
 };
+use librorolala::layout::EntryKind as LayoutEntryKind;
 use librorolala::workspace::Merging;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
@@ -327,7 +328,19 @@ pub fn handle_layout_path_remove(
         Err(next) => return next,
     };
 
-    if let Err(error) = layout.remove_path(&path) {
+    // A tree is one entry rather than a directory of entries, so unbinding its path would leave a
+    // tree the Layout holds and no path can reach, which a listing shows as `.`. What the path is
+    // removed from is the tree's one entry, then.
+    let tree = layout
+        .id_of(&path)
+        .and_then(|id| layout.entry(id).map(|data| (id, data)))
+        .filter(|(_, data)| data.kind() == LayoutEntryKind::Tree);
+
+    if let Some((id, _)) = tree {
+        if let Err(error) = layout.remove_entry(id) {
+            return failed(&error);
+        }
+    } else if let Err(error) = layout.remove_path(&path) {
         return failed(&error);
     }
 

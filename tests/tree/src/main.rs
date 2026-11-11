@@ -53,6 +53,7 @@ fn main() {
     ignore_rules(&rola, &ws, &mut checked);
     root_tree(&rola, &ws, &mut checked);
     tree_move(&rola, &ws, &mut checked);
+    tree_removal(&rola, &ws, &mut checked);
 
     checked.report();
 }
@@ -817,6 +818,40 @@ fn root_tree(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(&root, &["tree", "status", "."]);
     checked.exits("the root tree's own reading is drawn", &ran, 0);
     checked.stdout_has("the root tree is named by the root", &ran, "Tree `.`");
+}
+
+/// Removing a tree takes its one Layout entry with it, not just the path it was at.
+fn tree_removal(rola: &Rola, ws: &Path, checked: &mut Checked) {
+    for name in ["gone", "unbound"] {
+        let dir = ws.join(name);
+        fs::create_dir_all(&dir).expect("a directory to make a tree of");
+        fs::write(dir.join("a.psd"), b"one").expect("a file in the tree");
+
+        let ran = rola.run(ws, &["tree", "init", name]);
+        checked.exits("a tree is made for removal", &ran, 0);
+        let ran = rola.run(ws, &["tree", "add", name]);
+        checked.exits("the tree's work is staged", &ran, 0);
+        let ran = rola.run(ws, &["track", name, "--message", "remove", "--no-editor"]);
+        checked.exits("the tree is recorded", &ran, 0);
+
+        let ran = if name == "gone" {
+            rola.run(ws, &["fs-ops", "rm", name])
+        } else {
+            rola.run(ws, &["layout", "path", "remove", name])
+        };
+        checked.exits("the tree is removed", &ran, 0);
+
+        let ran = rola.run(ws, &["layout", "entries"]);
+        checked.exits("the Layout is read after the removal", &ran, 0);
+        checked.wants(
+            "the removed tree leaves no entry at `.`",
+            !ran
+                .stdout
+                .lines()
+                .any(|line| line.split_whitespace().next() == Some(".")),
+            "the Layout holds a pathless entry",
+        );
+    }
 }
 
 /// A tree moved outside Rorolala is found again by the id it keeps in its mark.
