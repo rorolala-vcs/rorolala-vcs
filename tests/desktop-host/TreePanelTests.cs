@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
@@ -115,6 +116,15 @@ public sealed class TreePanelTests
                 boxes,
                 one => one.Tip == "rorolala_vcs.tree_panel.stage"
             );
+
+            var stageBox = boxes.First(one => one.Tip == "rorolala_vcs.tree_panel.stage").Box;
+            var allBox = boxes.First(one => one.Tip == "rorolala_vcs.tree_panel.stage_all").Box;
+            var stageAt = stageBox.TranslatePoint(new Point(0, 0), window);
+            var allAt = allBox.TranslatePoint(new Point(0, 0), window);
+
+            Assert.NotNull(stageAt);
+            Assert.NotNull(allAt);
+            Assert.Equal(0, allAt.Value.X.CompareTo(stageAt.Value.X));
         }
         finally
         {
@@ -145,6 +155,73 @@ public sealed class TreePanelTests
             Pump();
 
             Assert.True(view.IsWide, "the lists stayed above each other in a wide dock");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>A tree with many paths makes rows for the viewport rather than for every path.</summary>
+    [Fact]
+    public void ManyPathsDoNotMakeEveryRow()
+    {
+        var workspace = TreeRecorded("many");
+        var tree = Path.Combine(workspace, "tree");
+
+        for (var index = 0; index < 300; index++)
+        {
+            File.WriteAllText(Path.Combine(tree, $"{index}.txt"), "one\n");
+        }
+
+        Given(workspace, "tree", "add", "tree");
+        Given(workspace, "track", "tree", "--message", "many", "--no-editor");
+
+        for (var index = 0; index < 300; index++)
+        {
+            File.WriteAllText(Path.Combine(tree, $"{index}.txt"), "changed\n");
+        }
+
+        var services = Host.Services();
+        var view = Panel(services);
+        var window = new Window { Width = 500, Height = 500, Content = view };
+
+        window.Show();
+
+        try
+        {
+            BaseDirectory.Publish(workspace);
+            ChosenDirectory.Publish(new Entry(tree, EntryKind.Directory));
+
+            var boxes = Until(
+                window,
+                () =>
+                {
+                    var found = window
+                        .GetVisualDescendants()
+                        .OfType<CheckBox>()
+                        .Where(box => ToolTip.GetTip(box) as string == "rorolala_vcs.tree_panel.stage")
+                        .ToArray();
+
+                    return found.Length > 0 ? found : null;
+                }
+            );
+
+            Assert.True(
+                boxes.Length < 100,
+                $"the panel made {boxes.Length} row checkboxes for 300 paths"
+            );
+
+            var all = window
+                .GetVisualDescendants()
+                .OfType<CheckBox>()
+                .First(box => ToolTip.GetTip(box) as string == "rorolala_vcs.tree_panel.stage_all");
+            var stageAt = boxes[0].TranslatePoint(new Point(0, 0), window);
+            var allAt = all.TranslatePoint(new Point(0, 0), window);
+
+            Assert.NotNull(stageAt);
+            Assert.NotNull(allAt);
+            Assert.Equal(0, allAt.Value.X.CompareTo(stageAt.Value.X));
         }
         finally
         {

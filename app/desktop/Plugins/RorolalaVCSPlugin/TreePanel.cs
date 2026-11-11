@@ -1,16 +1,20 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+
+using ShapePath = Avalonia.Controls.Shapes.Path;
 
 namespace RorolalaVCSPlugin;
 
@@ -121,11 +125,17 @@ internal sealed class TreePanelView : UserControl
     /// <summary>The changes area's pane, holding its heading and its list.</summary>
     private readonly Border _changesPane;
 
-    /// <summary>The staged paths as a tree, which collapses a directory at a time.</summary>
-    private readonly TreeView _staged;
+    /// <summary>The staged paths as a tree, drawn as the rows that are open.</summary>
+    private readonly ListBox _staged;
 
-    /// <summary>The paths the work holds and the staging area does not, as a tree of their own.</summary>
-    private readonly TreeView _changes;
+    /// <summary>The paths the work holds and the staging area does not, drawn the same way.</summary>
+    private readonly ListBox _changes;
+
+    /// <summary>The roots the staged rows are flattened from, kept so opening a step refills them.</summary>
+    private readonly List<Node> _stagedRoots = [];
+
+    /// <summary>The roots the change rows are flattened from.</summary>
+    private readonly List<Node> _changesRoots = [];
 
     /// <summary>The checkbox that stages or unstages the whole of the staged tree.</summary>
     private readonly CheckBox _stagedBulk;
@@ -242,27 +252,17 @@ internal sealed class TreePanelView : UserControl
             }
         };
 
-        _staged = new TreeView
-        {
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(0),
-            VerticalAlignment = VerticalAlignment.Stretch,
-        };
+        _staged = TreeList();
+        _staged.ItemTemplate = new FuncDataTemplate<Flat>(
+            (row, _) => TreeRow(row),
+            supportsRecycling: true
+        );
 
-        ScrollViewer.SetHorizontalScrollBarVisibility(_staged, ScrollBarVisibility.Disabled);
-        ScrollViewer.SetVerticalScrollBarVisibility(_staged, ScrollBarVisibility.Auto);
-
-        _changes = new TreeView
-        {
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(0),
-            VerticalAlignment = VerticalAlignment.Stretch,
-        };
-
-        ScrollViewer.SetHorizontalScrollBarVisibility(_changes, ScrollBarVisibility.Disabled);
-        ScrollViewer.SetVerticalScrollBarVisibility(_changes, ScrollBarVisibility.Auto);
+        _changes = TreeList();
+        _changes.ItemTemplate = new FuncDataTemplate<Flat>(
+            (row, _) => TreeRow(row),
+            supportsRecycling: true
+        );
 
         _changesPane = Pane(
             "rorolala_vcs.tree_panel.changes",
@@ -280,6 +280,12 @@ internal sealed class TreePanelView : UserControl
 
         _stagedBulk.Click += (_, _) => BulkUnstage();
         _changesBulk.Click += (_, _) => BulkStage();
+
+        // A list with a scrollbar keeps its rows inside it, so the heading's checkbox has to move
+        // in by the bar's width to stand over them. The bar comes and goes with what the list holds,
+        // which is why this is read at every layout rather than set once.
+        _staged.LayoutUpdated += (_, _) => AlignBulk(_staged, _stagedBulk);
+        _changes.LayoutUpdated += (_, _) => AlignBulk(_changes, _changesBulk);
 
         _lists = new Grid { Margin = new Thickness(5) };
 
@@ -337,6 +343,75 @@ internal sealed class TreePanelView : UserControl
         Draw();
     }
 
+    /// <summary>Makes one of the two tree lists: virtualized rows over the paths that are open.</summary>
+    /// <remarks>
+    /// A tree of controls is only worth making for what can be seen. The list holds the rows that are
+    /// open, and the panel materializes a row's controls only while it is in the viewport, so a tree
+    /// with a directory of ten thousand files costs the rows on screen rather than ten thousand.
+    /// </remarks>
+    /// <returns>The list.</returns>
+    private static ListBox TreeList()
+    {
+        var list = new ListBox
+        {
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Stretch,
+            ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel()),
+        };
+
+        list.Styles.Add(
+            new Style(selector => selector.OfType<ListBoxItem>())
+            {
+                Setters =
+                {
+                    new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                    new Setter(Layoutable.MarginProperty, new Thickness(0)),
+                    new Setter(Layoutable.MinHeightProperty, 24.0),
+                    new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0)),
+                    new Setter(
+                        ContentControl.HorizontalContentAlignmentProperty,
+                        HorizontalAlignment.Stretch
+                    ),
+                },
+            }
+        );
+
+        list.Styles.Add(
+            new Style(selector => selector.OfType<ListBoxItem>().Class(":selected"))
+            {
+                Setters =
+                {
+                    new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                },
+            }
+        );
+
+        ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Disabled);
+        ScrollViewer.SetVerticalScrollBarVisibility(list, ScrollBarVisibility.Auto);
+
+        return list;
+    }
+
+    /// <summary>Places a heading's checkbox over the row checkboxes, scrollbar and all.</summary>
+    /// <param name="list">The list the rows are in.</param>
+    /// <param name="bulk">The checkbox at the heading's right.</param>
+    private static void AlignBulk(ListBox list, CheckBox bulk)
+    {
+        var bar = list
+            .GetVisualDescendants()
+            .OfType<ScrollBar>()
+            .FirstOrDefault(bar => bar.Orientation == Orientation.Vertical && bar.IsVisible);
+        var inset = bar?.Bounds.Width ?? 0;
+        var margin = new Thickness(6, 4, 6 + inset, 0);
+
+        if (!bulk.Margin.Equals(margin))
+        {
+            bulk.Margin = margin;
+        }
+    }
+
     /// <summary>Makes one of the two panes: its heading, its bulk checkbox and its content.</summary>
     /// <param name="labelKey">What the pane is called.</param>
     /// <param name="content">What it holds.</param>
@@ -357,7 +432,7 @@ internal sealed class TreePanelView : UserControl
             IsThreeState = false,
             IsEnabled = false,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6, 4, 8, 0),
+            Margin = new Thickness(6, 4, 6, 0),
         };
 
         var head = new Grid
@@ -534,8 +609,10 @@ internal sealed class TreePanelView : UserControl
         _description.IsEnabled = false;
         SetDescription(string.Empty);
 
-        _staged.Items.Clear();
-        _changes.Items.Clear();
+        _staged.ItemsSource = null;
+        _changes.ItemsSource = null;
+        _stagedRoots.Clear();
+        _changesRoots.Clear();
 
         _stagedBulk.IsChecked = false;
         _stagedBulk.IsEnabled = false;
@@ -662,17 +739,21 @@ internal sealed class TreePanelView : UserControl
             ))
             .ToArray();
 
-        Build(_staged, leaves, staged: true);
+        Build(_staged, _stagedRoots, leaves, staged: true);
     }
 
-    /// <summary>Draws a set of paths as a tree, one directory at a time.</summary>
-    /// <param name="view">The tree to fill.</param>
+    /// <summary>Draws a set of paths as a tree, as the rows that are open.</summary>
+    /// <param name="view">The list to fill.</param>
+    /// <param name="roots">Where the roots are kept for opening a step.</param>
     /// <param name="leaves">The paths it holds.</param>
     /// <param name="staged">Whether the tree is the staged one.</param>
-    private void Build(TreeView view, IReadOnlyList<Leaf> leaves, bool staged)
+    private void Build(
+        ListBox view,
+        List<Node> roots,
+        IReadOnlyList<Leaf> leaves,
+        bool staged
+    )
     {
-        view.Items.Clear();
-
         var root = new Node { Directory = true };
 
         foreach (var leaf in leaves)
@@ -695,10 +776,51 @@ internal sealed class TreePanelView : UserControl
             );
         }
 
-        foreach (var child in Sorted(root))
+        roots.Clear();
+        roots.AddRange(Sorted(root));
+
+        var rows = new List<Flat>();
+        Fill(rows, roots, 0, staged);
+        view.ItemsSource = rows;
+    }
+
+    /// <summary>Adds the open rows of a tree, depth first, and no row for a closed step.</summary>
+    /// <param name="rows">The rows being collected.</param>
+    /// <param name="nodes">The nodes at this depth.</param>
+    /// <param name="level">How far in the depth is.</param>
+    /// <param name="staged">Whether the tree is the staged one.</param>
+    private void Fill(List<Flat> rows, IEnumerable<Node> nodes, int level, bool staged)
+    {
+        foreach (var node in nodes)
         {
-            view.Items.Add(Item(child, staged));
+            var expanded = node.Directory && !_collapsed.Contains(node.Path);
+
+            rows.Add(new Flat(node, level, expanded, staged));
+
+            if (expanded)
+            {
+                Fill(rows, Sorted(node), level + 1, staged);
+            }
         }
+    }
+
+    /// <summary>Opens or closes one step and draws the rows that are open now.</summary>
+    /// <param name="item">The step's row.</param>
+    private void Toggle(Flat item)
+    {
+        if (!item.Directory)
+        {
+            return;
+        }
+
+        if (!_collapsed.Remove(item.Path))
+        {
+            _collapsed.Add(item.Path);
+        }
+
+        var rows = new List<Flat>();
+        Fill(rows, item.Staged ? _stagedRoots : _changesRoots, 0, item.Staged);
+        (item.Staged ? _staged : _changes).ItemsSource = rows;
     }
 
     /// <summary>The directory node for `name` under `parent`, made when there is none.</summary>
@@ -732,72 +854,157 @@ internal sealed class TreePanelView : UserControl
             .OrderBy(child => child.Directory ? 0 : 1)
             .ThenBy(child => child.Name, StringComparer.Ordinal);
 
-    /// <summary>One node of a tree as a row, with its children under it.</summary>
-    /// <param name="node">The node.</param>
-    /// <param name="staged">Whether the tree is the staged one.</param>
-    /// <returns>The item.</returns>
-    private TreeViewItem Item(Node node, bool staged)
+    /// <summary>One open row: a step of the tree or one path under it.</summary>
+    /// <param name="item">The row.</param>
+    /// <returns>The row's controls.</returns>
+    private Control TreeRow(Flat item)
     {
-        if (node.Leaf is { } leaf)
+        var row = new Grid
         {
-            return new TreeViewItem
-            {
-                Header = Row(
-                    node.Name,
-                    leaf.Path,
-                    leaf.Detail,
-                    leaf.Change,
-                    leaf.Staged,
-                    leaf.Check,
-                    leaf.Menu
-                ),
-                Tag = node.Path,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-            };
-        }
-
-        var item = new TreeViewItem
-        {
-            Header = DirectoryRow(node, staged),
-            IsExpanded = !_collapsed.Contains(node.Path),
-            Tag = node.Path,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"),
+            Height = 24,
+            Margin = new Thickness(item.Level * 16, 0, 0, 0),
+            Background = Brushes.Transparent,
         };
 
-        item.Expanded += (_, _) => _collapsed.Remove(node.Path);
-        item.Collapsed += (_, _) => _collapsed.Add(node.Path);
-
-        foreach (var child in Sorted(node))
+        if (item.Leaf is not { } leaf)
         {
-            item.Items.Add(Item(child, staged));
+            var chevron = Chevron(item);
+
+            Grid.SetColumn(chevron, 0);
+            row.Children.Add(chevron);
+
+            var step = new TextBlock
+            {
+                Text = item.Name,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+
+            ToolTip.SetTip(step, item.Path);
+
+            Grid.SetColumn(step, 1);
+            Grid.SetColumnSpan(step, 2);
+            row.Children.Add(step);
+
+            var directory = DirectoryBox(item);
+
+            Grid.SetColumn(directory, 3);
+            row.Children.Add(directory);
+
+            return row;
         }
 
-        return item;
-    }
+        var lead = new Border
+        {
+            Width = 16,
+            Height = 24,
+            Background = Brushes.Transparent,
+        };
 
-    /// <summary>One directory: its name and the checkbox that acts on everything under it.</summary>
-    /// <param name="node">The directory.</param>
-    /// <param name="staged">Whether the tree is the staged one.</param>
-    /// <returns>The row.</returns>
-    private Control DirectoryRow(Node node, bool staged)
-    {
+        Grid.SetColumn(lead, 0);
+        row.Children.Add(lead);
+
+        var letter = new TextBlock
+        {
+            Text = StatusLetter(leaf.Change),
+            Width = 16,
+            TextAlignment = TextAlignment.Center,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(StatusColour(leaf.Change)),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        ToolTip.SetTip(letter, ChangeName(leaf.Change));
+
+        Grid.SetColumn(letter, 1);
+        row.Children.Add(letter);
+
         var name = new TextBlock
         {
-            Text = node.Name,
+            Text = item.Name,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
-        ToolTip.SetTip(name, node.Path);
+        if (string.Equals(leaf.Change, "deleted", StringComparison.Ordinal))
+        {
+            name.TextDecorations = TextDecorations.Strikethrough;
+        }
 
-        var leaves = Subtree(node).ToArray();
-        var actionable = staged
+        ToolTip.SetTip(name, leaf.Detail);
+        name.PointerPressed += (_, press) =>
+        {
+            press.Handled = true;
+            Reveal(leaf.Path);
+        };
+
+        Grid.SetColumn(name, 2);
+        row.Children.Add(name);
+
+        var box = FileBox(leaf);
+
+        Grid.SetColumn(box, 3);
+        row.Children.Add(box);
+
+        if (leaf.Menu.Count > 0)
+        {
+            row.ContextMenu = Menu(leaf.Menu);
+        }
+
+        return row;
+    }
+
+    /// <summary>The chevron that opens or closes one step.</summary>
+    /// <param name="item">The step's row.</param>
+    /// <returns>The control.</returns>
+    private Control Chevron(Flat item)
+    {
+        var mark = new ShapePath
+        {
+            Data = Geometry.Parse("M 0 0 L 4 4 L 0 8 Z"),
+            Fill = new SolidColorBrush(RorolalaColours.Disabled),
+            Width = 4,
+            Height = 8,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        if (item.Expanded)
+        {
+            mark.RenderTransform = new RotateTransform(90);
+            mark.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+        }
+
+        var button = new Button
+        {
+            Width = 16,
+            Height = 24,
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Content = mark,
+        };
+
+        button.Click += (_, _) => Toggle(item);
+
+        return button;
+    }
+
+    /// <summary>The checkbox that acts on everything under one step.</summary>
+    /// <param name="item">The step's row.</param>
+    /// <returns>The checkbox.</returns>
+    private CheckBox DirectoryBox(Flat item)
+    {
+        var leaves = Subtree(item.Node).ToArray();
+        var actionable = item.Staged
             ? leaves
             : leaves.Where(leaf => leaf.Change != "conflict").ToArray();
 
         var box = new CheckBox
         {
-            IsChecked = staged,
+            IsChecked = item.Staged,
             IsEnabled = !_busy && actionable.Length > 0,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6, 0, 6, 0),
@@ -806,7 +1013,7 @@ internal sealed class TreePanelView : UserControl
         ToolTip.SetTip(
             box,
             RolaI18N.Get(
-                staged ? "rorolala_vcs.tree_panel.unstage" : "rorolala_vcs.tree_panel.stage"
+                item.Staged ? "rorolala_vcs.tree_panel.unstage" : "rorolala_vcs.tree_panel.stage"
             )
         );
 
@@ -817,7 +1024,7 @@ internal sealed class TreePanelView : UserControl
                 return;
             }
 
-            if (staged)
+            if (item.Staged)
             {
                 Unstage(tree, StagedPaths(leaves));
             }
@@ -827,17 +1034,56 @@ internal sealed class TreePanelView : UserControl
             }
         };
 
-        var row = new Grid
+        return box;
+    }
+
+    /// <summary>The checkbox that stages or unstages one path.</summary>
+    /// <param name="leaf">The path.</param>
+    /// <returns>The checkbox.</returns>
+    private CheckBox FileBox(Leaf leaf)
+    {
+        var box = new CheckBox
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            Height = 24,
+            IsChecked = leaf.Staged,
+            IsEnabled = !_busy,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 6, 0),
         };
 
-        row.Children.Add(name);
-        Grid.SetColumn(box, 1);
-        row.Children.Add(box);
+        ToolTip.SetTip(
+            box,
+            RolaI18N.Get(
+                leaf.Staged ? "rorolala_vcs.tree_panel.unstage" : "rorolala_vcs.tree_panel.stage"
+            )
+        );
 
-        return row;
+        box.Click += (_, _) =>
+        {
+            if (!_busy)
+            {
+                leaf.Check();
+            }
+        };
+
+        return box;
+    }
+
+    /// <summary>The menu one path's row offers.</summary>
+    /// <param name="items">What it offers.</param>
+    /// <returns>The menu.</returns>
+    private static ContextMenu Menu(IReadOnlyList<(string LabelKey, Action Run)> items)
+    {
+        var menu = new ContextMenu();
+
+        foreach (var (labelKey, run) in items)
+        {
+            var entry = new Avalonia.Controls.MenuItem { Header = RolaI18N.Get(labelKey) };
+
+            entry.Click += (_, _) => run();
+            menu.Items.Add(entry);
+        }
+
+        return menu;
     }
 
     /// <summary>Every path under a directory node.</summary>
@@ -899,7 +1145,7 @@ internal sealed class TreePanelView : UserControl
             leaves.Add(UntrackedLeaf(tree, entry));
         }
 
-        Build(_changes, leaves, staged: false);
+        Build(_changes, _changesRoots, leaves, staged: false);
     }
 
     /// <summary>One path the work changed, with what may be done about it.</summary>
@@ -1024,112 +1270,6 @@ internal sealed class TreePanelView : UserControl
             "rorolala_vcs.progress.tree_stage",
             () => TreePanelCommands.StageAll(tree, adds, removals)
         );
-    }
-
-    /// <summary>One path: its letter, its name, and the checkbox that stages or unstages it.</summary>
-    /// <param name="label">What the row says, which is a leaf in a tree and a path in a list.</param>
-    /// <param name="path">The path the row acts on.</param>
-    /// <param name="detail">What the row says on hover, which names both ends of a rename.</param>
-    /// <param name="change">What happened to it.</param>
-    /// <param name="staged">Whether the row's checkbox is checked.</param>
-    /// <param name="check">What checking or unchecking it does.</param>
-    /// <param name="menu">What the row's context menu offers.</param>
-    /// <returns>The row.</returns>
-    private Control Row(
-        string label,
-        string path,
-        string detail,
-        string change,
-        bool staged,
-        Action check,
-        IReadOnlyList<(string LabelKey, Action Run)> menu
-    )
-    {
-        var letter = new TextBlock
-        {
-            Text = StatusLetter(change),
-            Width = 16,
-            TextAlignment = TextAlignment.Center,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(StatusColour(change)),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        ToolTip.SetTip(letter, ChangeName(change));
-
-        var name = new TextBlock
-        {
-            Text = label,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-
-        if (string.Equals(change, "deleted", StringComparison.Ordinal))
-        {
-            name.TextDecorations = TextDecorations.Strikethrough;
-        }
-
-        ToolTip.SetTip(name, detail);
-        name.PointerPressed += (_, press) =>
-        {
-            press.Handled = true;
-            Reveal(path);
-        };
-
-        var box = new CheckBox
-        {
-            IsChecked = staged,
-            IsEnabled = !_busy,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6, 0, 6, 0),
-        };
-
-        ToolTip.SetTip(
-            box,
-            RolaI18N.Get(
-                staged ? "rorolala_vcs.tree_panel.unstage" : "rorolala_vcs.tree_panel.stage"
-            )
-        );
-
-        box.Click += (_, _) =>
-        {
-            if (!_busy)
-            {
-                check();
-            }
-        };
-
-        var row = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
-            ColumnSpacing = 6,
-            Height = 24,
-            Background = Brushes.Transparent,
-        };
-
-        Grid.SetColumn(letter, 0);
-        Grid.SetColumn(name, 1);
-        Grid.SetColumn(box, 2);
-        row.Children.Add(letter);
-        row.Children.Add(name);
-        row.Children.Add(box);
-
-        if (menu.Count > 0)
-        {
-            var context = new ContextMenu();
-
-            foreach (var (labelKey, run) in menu)
-            {
-                var item = new Avalonia.Controls.MenuItem { Header = RolaI18N.Get(labelKey) };
-
-                item.Click += (_, _) => run();
-                context.Items.Add(item);
-            }
-
-            row.ContextMenu = context;
-        }
-
-        return row;
     }
 
     /// <summary>The paths one staged change names, with both ends of a rename.</summary>
@@ -1547,6 +1687,26 @@ internal sealed class TreePanelView : UserControl
         IReadOnlyList<(string LabelKey, Action Run)> Menu,
         string Detail
     );
+
+    /// <summary>One row of a tree that is open: a step, or a path under one.</summary>
+    /// <param name="Node">The node the row stands for.</param>
+    /// <param name="Level">How far in the tree it is.</param>
+    /// <param name="Expanded">Whether the step's children are open.</param>
+    /// <param name="Staged">Whether the row is in the staged tree.</param>
+    private sealed record Flat(Node Node, int Level, bool Expanded, bool Staged)
+    {
+        /// <summary>Whether the row is a step.</summary>
+        public bool Directory => Node.Directory;
+
+        /// <summary>The path, for a leaf.</summary>
+        public Leaf? Leaf => Node.Leaf;
+
+        /// <summary>The row's name.</summary>
+        public string Name => Node.Name;
+
+        /// <summary>The row's path under the tree.</summary>
+        public string Path => Node.Path;
+    }
 
     /// <summary>One node of a tree: a directory or one path.</summary>
     private sealed class Node
