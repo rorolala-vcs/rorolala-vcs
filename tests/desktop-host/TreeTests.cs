@@ -477,6 +477,65 @@ public sealed class TreeTests
     }
 
     /// <summary>
+    /// A press on a step of a multiple choice keeps the choice until the press becomes a click.
+    /// </summary>
+    /// <remarks>
+    /// The toolkit collapses the selection to the row under the pointer as the button goes down, and a drag of a
+    /// chosen group would then carry one row. What is checked is the choice while the button is down, which is
+    /// what a drag reads, and the choice after the release, which is what a click means.
+    /// </remarks>
+    [Fact]
+    public void APressOnAChosenStepKeepsTheChoiceItLandedIn()
+    {
+        var directory = Scratch.New("tree-drag-choice");
+
+        for (var index = 0; index < 3; index++)
+        {
+            File.WriteAllText(Path.Combine(directory, $"file-{index}.txt"), "x");
+        }
+
+        var (window, _) = OpenAt(directory);
+        var root = Until(window, () => Root(window));
+
+        root.IsExpanded = true;
+        PumpFrames(window, 30);
+
+        var rows = Until(
+            window,
+            () =>
+            {
+                var found = root.Items.OfType<TreeViewItem>().ToArray();
+
+                return found.Length >= 3 ? found : null;
+            }
+        );
+
+        var tree = window
+            .GetVisualDescendants()
+            .OfType<global::FileSystemPlugin.TreeBrowser>()
+            .Single();
+
+        rows[0].IsSelected = true;
+        rows[1].IsSelected = true;
+        PumpFrames(window, 5);
+
+        Assert.Equal(2, tree.Chosen().Count);
+
+        var row = Row(rows[1]);
+        var at =
+            row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), window)
+            ?? throw new InvalidOperationException("the row is not drawn in the window");
+
+        window.MouseDown(at, MouseButton.Left);
+
+        Assert.Equal(2, tree.Chosen().Count);
+
+        window.MouseUp(at, MouseButton.Left);
+
+        Assert.Single(tree.Chosen());
+    }
+
+    /// <summary>
     /// The tree as it is drawn now: the step it is rooted at, and the step under that which the fixture holds.
     /// </summary>
     /// <remarks>

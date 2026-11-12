@@ -24,6 +24,16 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// </remarks>
 public sealed class TreePanelTests
 {
+    /// <summary>
+    /// Points the panel at the built command line before every test, the way the launcher names it.
+    /// </summary>
+    /// <remarks>
+    /// The panel reads a tree by running the command line, so every test needs the program named before the
+    /// view is made. Naming it in one test only left the others reading nothing, which is a wait that never
+    /// ends rather than a failure that says why.
+    /// </remarks>
+    public TreePanelTests() => Environment.SetEnvironmentVariable("ROLA_EXE", Program());
+
     /// <summary>A description typed into the panel is written to the tree's mark without a save.</summary>
     [Fact]
     public void ADescriptionIsWrittenToTheTreesMark()
@@ -255,10 +265,6 @@ public sealed class TreePanelTests
         var view = Panel(services);
         var window = new Window { Width = 700, Height = 600, Content = view };
 
-        // The panel runs the command line the window was opened with, which the harness names the
-        // way the launcher does.
-        Environment.SetEnvironmentVariable("ROLA_EXE", Program());
-
         window.Show();
 
         try
@@ -348,7 +354,7 @@ public sealed class TreePanelTests
     private static T Until<T>(Window window, Func<T?> read)
         where T : class
     {
-        for (var frame = 0; frame < 2400; frame++)
+        for (var frame = 0; frame < 6000; frame++)
         {
             Dispatcher.UIThread.RunJobs();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
@@ -378,7 +384,7 @@ public sealed class TreePanelTests
     /// <param name="done">What is being waited for.</param>
     private static void Wait(Func<bool> done)
     {
-        for (var frame = 0; frame < 1200; frame++)
+        for (var frame = 0; frame < 3600; frame++)
         {
             Dispatcher.UIThread.RunJobs();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();

@@ -437,6 +437,20 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Whether this view is putting a choice back, so that the toolkit's event is not a user choosing.</summary>
     private bool _selecting;
 
+    /// <summary>
+    /// Whether the press landed on a step already in a multiple choice, which a drag carries whole.
+    /// </summary>
+    /// <remarks>
+    /// The toolkit collapses the selection to the row under the pointer as the press is made, which reads as a
+    /// new choice and would make a drag of a chosen group a drag of one. The choice is read before that and put
+    /// back while the press is still one that could become a drag; a release that never becomes one chooses the
+    /// row alone, which is what a plain click means.
+    /// </remarks>
+    private bool _pressedInChoice;
+
+    /// <summary>The choice as it stood when that press landed.</summary>
+    private IReadOnlyList<string> _pressedChoice = [];
+
     /// <summary>The press a drag of a step would begin from, while it may still become one.</summary>
     private PointerPressedEventArgs? _pressed;
 
@@ -755,6 +769,8 @@ internal sealed class TreeBrowser : UserControl
         _dragged = false;
         _pressed = null;
         _slipped = null;
+        _pressedInChoice = false;
+        _pressedChoice = [];
 
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
@@ -771,6 +787,8 @@ internal sealed class TreeBrowser : UserControl
         _pressed = e;
         _slip = at;
         _slipped = path;
+        _pressedInChoice = KeepsChoice(_chosen, path, e.KeyModifiers);
+        _pressedChoice = _pressedInChoice ? _chosen : [];
     }
 
     /// <summary>Starts the drag of a step once the press has slipped far enough to mean one.</summary>
@@ -798,10 +816,13 @@ internal sealed class TreeBrowser : UserControl
         _pressed = null;
         _slipped = null;
         _dragged = true;
+        _pressedInChoice = false;
+        _pressedChoice = [];
 
-        var entry = Being(path);
+        var lead = Being(path);
+        var carrying = Carrying([.. _chosen.Select(Being)], lead);
 
-        Drag.Away(_browser, from, [entry], entry, _host.Log.Error);
+        Drag.Away(_browser, from, carrying, lead, _host.Log.Error);
     }
 
     /// <summary>Lets a press that never became a drag go, so that it is read as the step it was.</summary>
@@ -811,6 +832,8 @@ internal sealed class TreeBrowser : UserControl
     {
         _pressed = null;
         _slipped = null;
+        _pressedInChoice = false;
+        _pressedChoice = [];
     }
 
     /// <summary>The step under a point, or nothing where no step is there.</summary>
@@ -1635,10 +1658,47 @@ internal sealed class TreeBrowser : UserControl
             return;
         }
 
+        // The toolkit collapses a multiple choice to the row a press landed on. When that row was already in the
+        // choice, the press may be the beginning of a drag of the whole of it, so the choice is put back here and
+        // stays until the release either begins the drag or chooses the row alone.
+        if (_pressedInChoice && picked.Length == 1 && _pressedChoice.Contains(picked[0], StringComparer.Ordinal))
+        {
+            Restore(_pressedChoice);
+
+            return;
+        }
+
         _chosen = picked;
         _anchor = picked.Length > 0 ? IndexOf(picked[^1]) : -1;
 
         _listing.Chosen([.. picked.Select(Being)]);
+    }
+
+    /// <summary>Puts back a choice the toolkit collapsed, while a press on it may become a drag of the whole.</summary>
+    /// <param name="choice">The choice to put back.</param>
+    private void Restore(IReadOnlyList<string> choice)
+    {
+        _selecting = true;
+
+        try
+        {
+            _tree.SelectedItems?.Clear();
+
+            foreach (var path in choice)
+            {
+                if (Find(_tree.Items, path) is { } item)
+                {
+                    _tree.SelectedItems?.Add(item);
+                }
+            }
+        }
+        finally
+        {
+            _selecting = false;
+        }
+
+        _anchor = choice.Count > 0 ? IndexOf(choice[0]) : -1;
+        _listing.Chosen([.. choice.Select(Being)]);
     }
 
     /// <summary>Chooses every row the tree is showing.</summary>
@@ -2677,6 +2737,46 @@ internal sealed class TreeBrowser : UserControl
     /// <returns>The entry it is.</returns>
     private static Entry Being(string path) =>
         new(path, System.IO.Directory.Exists(path) ? EntryKind.Directory : EntryKind.File);
+
+    /// <summary>
+    /// Whether a press begins a drag of the whole choice rather than a new one.
+    /// </summary>
+    /// <remarks>
+    /// A press on a step already in a multiple choice is how a drag of the whole of it begins. A modified press is
+    /// the toolkit's selection and nothing else, so it is not a drag of what was chosen but the way a choice is
+    /// changed.
+    /// </remarks>
+    /// <param name="chosen">What is chosen when the press lands.</param>
+    /// <param name="path">The step the press landed on.</param>
+    /// <param name="modifiers">What is held while it lands.</param>
+    /// <returns>Whether the choice is kept for the drag.</returns>
+    internal static bool KeepsChoice(
+        IReadOnlyList<string> chosen,
+        string path,
+        KeyModifiers modifiers
+    )
+    {
+        ArgumentNullException.ThrowIfNull(chosen);
+        ArgumentNullException.ThrowIfNull(path);
+
+        return chosen.Count > 1
+            && chosen.Contains(path, StringComparer.Ordinal)
+            && !modifiers.HasFlag(KeyModifiers.Control)
+            && !modifiers.HasFlag(KeyModifiers.Shift);
+    }
+
+    /// <summary>What a drag from a step carries: the whole choice when the step is in it, and the step alone otherwise.</summary>
+    /// <param name="chosen">What is chosen, as entries.</param>
+    /// <param name="lead">The step the drag took hold of.</param>
+    /// <returns>What the drag carries, the lead among it.</returns>
+    internal static IReadOnlyList<Entry> Carrying(IReadOnlyList<Entry> chosen, Entry lead)
+    {
+        ArgumentNullException.ThrowIfNull(chosen);
+
+        return chosen.Any(entry => string.Equals(entry.Path, lead.Path, StringComparison.Ordinal))
+            ? chosen
+            : [lead];
+    }
 
     /// <summary>
     /// Closes every step under a row, and the row itself.

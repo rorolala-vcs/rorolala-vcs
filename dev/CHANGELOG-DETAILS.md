@@ -124,7 +124,7 @@ A directory dock inside the tree's base is named by its part under that base, so
 
 ### 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Choose several entries in the file tree
 
-The file tree now supports the same choice as a directory listing: a plain press chooses one row, Ctrl toggles one, Shift takes a visible range, and Ctrl+A chooses every row on screen. A modified press on a directory changes the choice without navigating, while a plain press still opens it. Copy, cut, delete and the context menu act on the whole choice, and a tree read again keeps its choice by path.
+The file tree now supports the same choice as a directory listing: a plain press chooses one row, Ctrl toggles one, Shift takes a visible range, and Ctrl+A chooses every row on screen. A modified press on a directory changes the choice without navigating, while a plain press still opens it. Copy, cut, delete, drag and the context menu act on the whole choice, and a tree read again keeps its choice by path. A press on a step already in the choice keeps the whole of it while the press may become a drag; a press that becomes a click still chooses that step alone.
 
 ### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a tree's levels as guides and its status on its row
 
