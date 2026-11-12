@@ -19,9 +19,27 @@ internal sealed partial class VersionGraphView
     private MenuRenderer Menus => _menus ??= new MenuRenderer(RolaI18N.Get, MenuIcon, _log.Warn);
 
     /// <summary>What an icon key is drawn as, or nothing when the library does not hold it.</summary>
+    /// <remarks>
+    /// A category is asked for by its shared key first, and the two the graph has a picture of its own for are
+    /// named here: copying is the two sheets the graph's node menu already wears, and a version is the way a
+    /// change comes round again, which is the picture the Version Graph's own dock wears. The rest are the
+    /// File System's shared category pictures, contributed to the library the graph draws from.
+    /// </remarks>
     /// <param name="key">The key naming the picture.</param>
     /// <returns>The picture, or nothing.</returns>
-    private Control? MenuIcon(string key) => _icons.Find(key) is { } picture ? Icons.Inked(picture) : null;
+    private Control? MenuIcon(string key) =>
+        key switch
+        {
+            "menu.entry.copy" => Inked(Icons.ContentCopy),
+            "menu.entry.version" => Inked(Icons.AltRoute),
+            _ => Inked(key),
+        };
+
+    /// <summary>One picture of the library, drawn as a menu entry wears it.</summary>
+    /// <param name="key">The key naming the picture.</param>
+    /// <returns>The picture, or nothing when the library holds none.</returns>
+    private Control? Inked(string key) =>
+        _icons.Find(key) is { } picture ? Icons.Inked(picture) : null;
 
     /// <summary>Offers what a right-click on the thing under the pointer can do.</summary>
     /// <remarks>

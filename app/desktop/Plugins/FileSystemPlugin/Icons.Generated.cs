@@ -68,6 +68,9 @@ internal static partial class Icons
     /// <summary>The key the `create_new_folder` picture is held under.</summary>
     public const string CreateNewFolder = "rorolala_file_system.create_new_folder";
 
+    /// <summary>The key the `add` picture is held under.</summary>
+    public const string Add = "rorolala_file_system.add";
+
     /// <summary>The key the `folder` picture is held under.</summary>
     public const string Folder = "rorolala_file_system.folder";
 
@@ -97,6 +100,7 @@ internal static partial class Icons
         (Delete, "delete"),
         (LocalOffer, "local_offer"),
         (CreateNewFolder, "create_new_folder"),
+        (Add, "add"),
         (Folder, "folder"),
         (AccountTree, "account_tree"),
     ];

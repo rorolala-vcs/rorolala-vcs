@@ -734,7 +734,12 @@ internal sealed class TreePanelView : UserControl
                 Check: () => Unstage(tree, PathsOf(change)),
                 Menu:
                 [
-                    new MenuLeaf(["menu.entry.reveal", "menu.entry.in_list"], 10, () => Reveal(change.Path)),
+                    new MenuLeaf(
+                        ["menu.entry.reveal", "menu.entry.in_list"],
+                        10,
+                        () => Reveal(change.Path),
+                        Icons.Visibility
+                    ),
                 ],
                 Detail: change.OldPath is { Length: > 0 } previous
                     ? $"{previous} -> {change.Path}"
@@ -1101,14 +1106,25 @@ internal sealed class TreePanelView : UserControl
     /// <summary>The menu one path's row offers.</summary>
     /// <param name="items">What it offers.</param>
     /// <returns>The menu.</returns>
-    private static ContextMenu Menu(IReadOnlyList<MenuLeaf> items)
+    private ContextMenu Menu(IReadOnlyList<MenuLeaf> items)
     {
         var menu = new ContextMenu();
 
-        new MenuRenderer(RolaI18N.Get).Fill(menu, items, force: false);
+        new MenuRenderer(RolaI18N.Get, MenuIcon).Fill(menu, items, force: false);
 
         return menu;
     }
+
+    /// <summary>What a menu entry's icon key is drawn as, or nothing when the library holds none.</summary>
+    /// <remarks>
+    /// The categories a tree's menu groups are drawn by the same pictures a file's are: the library is the
+    /// host's, and the File System contributes the shared category keys to it, so a restore and a delete read
+    /// as they do in the listing beside the tree.
+    /// </remarks>
+    /// <param name="key">The key naming the picture.</param>
+    /// <returns>The picture, or nothing.</returns>
+    private Control? MenuIcon(string key) =>
+        _host.Icons.Find(key) is { } picture ? Icons.Inked(picture) : null;
 
     /// <summary>Every path under a directory node.</summary>
     /// <param name="node">The directory.</param>
@@ -1151,9 +1167,15 @@ internal sealed class TreePanelView : UserControl
                         new MenuLeaf(
                             ["menu.entry.restore", "menu.entry.theirs"],
                             10,
-                            () => Reveal(Path.Combine(tree, conflict.Theirs))
+                            () => Reveal(Path.Combine(tree, conflict.Theirs)),
+                            Icons.Refresh
                         ),
-                        new MenuLeaf(["menu.entry.reveal", "menu.entry.in_list"], 10, () => Reveal(conflict.Path)),
+                        new MenuLeaf(
+                            ["menu.entry.reveal", "menu.entry.in_list"],
+                            10,
+                            () => Reveal(conflict.Path),
+                            Icons.Visibility
+                        ),
                     ],
                     Detail: conflict.Path
                 )
@@ -1220,12 +1242,20 @@ internal sealed class TreePanelView : UserControl
                         tree,
                         "rorolala_vcs.progress.tree_restore",
                         () => TreePanelCommands.Restore(tree, restore.Item2)
-                    )
+                    ),
+                    Icons.Refresh
                 )
             );
         }
 
-        menu.Add(new MenuLeaf(["menu.entry.reveal", "menu.entry.in_list"], 10, () => Reveal(change.Path)));
+        menu.Add(
+            new MenuLeaf(
+                ["menu.entry.reveal", "menu.entry.in_list"],
+                10,
+                () => Reveal(change.Path),
+                Icons.Visibility
+            )
+        );
 
         return new Leaf(
             Path: change.Path,
@@ -1257,7 +1287,12 @@ internal sealed class TreePanelView : UserControl
             ),
             Menu:
             [
-                new MenuLeaf(["menu.entry.reveal", "menu.entry.in_list"], 10, () => Reveal(entry.Path)),
+                new MenuLeaf(
+                    ["menu.entry.reveal", "menu.entry.in_list"],
+                    10,
+                    () => Reveal(entry.Path),
+                    Icons.Visibility
+                ),
             ],
             Detail: entry.Path
         );

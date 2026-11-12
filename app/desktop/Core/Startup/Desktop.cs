@@ -456,7 +456,8 @@ internal sealed class Desktop
                 new ContextMenuItem(
                     "menu.dock.own_window",
                     10,
-                    was => OpenInWindow(services, was)
+                    was => OpenInWindow(services, was),
+                    Icons.CropSquare
                 )
             )
         );
@@ -467,7 +468,12 @@ internal sealed class Desktop
             DockMenuTarget.Tab,
             new DockMenuItem(
                 null,
-                new ContextMenuItem("menu.dock.close", 20, was => services.Windows.CloseDock(was.Directory))
+                new ContextMenuItem(
+                    "menu.dock.close",
+                    20,
+                    was => services.Windows.CloseDock(was.Directory),
+                    Icons.Close
+                )
             )
         );
     }

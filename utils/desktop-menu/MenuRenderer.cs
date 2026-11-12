@@ -150,6 +150,12 @@ public sealed class MenuRenderer
         }
 
         var menu = new MenuItem { Header = Text(group.Key!) };
+
+        if (GroupIcon(group) is { } picture)
+        {
+            menu.Icon = picture;
+        }
+
         var children = new List<Control>(group.Slots.Count);
 
         foreach (var slot in Ordered(group, atRoot: false))
@@ -185,7 +191,7 @@ public sealed class MenuRenderer
             IsEnabled = leaf.Enabled?.Invoke() ?? true,
         };
 
-        if (leaf.IconKey is { } key && _icon?.Invoke(key) is { } picture)
+        if (Picture(leaf, prefix) is { } picture)
         {
             menu.Icon = picture;
         }
@@ -199,6 +205,63 @@ public sealed class MenuRenderer
         menu.Click += (_, _) => leaf.Run();
 
         return menu;
+    }
+
+    /// <summary>What an entry wears, or nothing when neither it nor the category it is folded under has one.</summary>
+    /// <remarks>
+    /// A category folded into one line is the one action it holds, so when that action has no picture of its own
+    /// the category's stands for it: `Restore` over one `Baseline` reads as the restore it is, and a line without
+    /// a mark beside its neighbours would read as an entry that has none.
+    /// </remarks>
+    /// <param name="leaf">The entry.</param>
+    /// <param name="prefix">The categories it is folded under, or nothing when it is drawn inside its category.</param>
+    /// <returns>The picture, or nothing.</returns>
+    private Control? Picture(MenuLeaf leaf, IReadOnlyList<string> prefix)
+    {
+        if (leaf.IconKey is { } key && _icon?.Invoke(key) is { } picture)
+        {
+            return picture;
+        }
+
+        return prefix.Count > 0 ? _icon?.Invoke(leaf.Root) : null;
+    }
+
+    /// <summary>What a category is drawn with, or nothing when neither it nor its entries have a picture.</summary>
+    /// <remarks>
+    /// The category's own key is asked for first, which is what lets a plugin draw the plus for new things and
+    /// the three beads for a menu of views rather than reusing the picture of one of the things inside. A key
+    /// nothing answers for falls back to the first entry that has a picture, in the order the entries are drawn.
+    /// </remarks>
+    /// <param name="group">The category.</param>
+    /// <returns>The picture, or nothing.</returns>
+    private Control? GroupIcon(Node group)
+    {
+        if (_icon is null)
+        {
+            return null;
+        }
+
+        if (_icon(group.Key!) is { } picture)
+        {
+            return picture;
+        }
+
+        string[] folded = [group.Key!];
+
+        foreach (var slot in Ordered(group, atRoot: false))
+        {
+            if (slot.Leaf is { } leaf && Picture(leaf, folded) is { } entry)
+            {
+                return entry;
+            }
+
+            if (slot.Group is { } child && GroupIcon(child) is { } nested)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

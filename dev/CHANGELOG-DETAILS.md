@@ -188,6 +188,8 @@ Every menu opened on a file, a folder, a logical place, a dock's tab, a version 
 
 The ownership commands are four words now, `Claim`, `Give up`, `Force claim` and `Force give up`, offered on files and directories alike, with the forced pair still shown while Shift is held. The Version Graph, the Tree Panel and a place's own menu use the same renderer, and the File System's folder tree and directory listing build their menus through it, so the same category reads the same way wherever it appears.
 
+A category wears a picture of its own as well: the action it holds when it holds one, and a plus for new things and three beads for a menu of views. An entry with no picture of its own borrows the category's, so a folded line is never the one markless row in a menu.
+
 A plugin built against the previous contract is not loaded against this one: `ContextMenuItem` carries `Keys` instead of `LabelKey`, the two records gained an `Enabled` question, and a registry refuses an entry whose whole path is already offered in its context. The contract assembly is raised to 0.15.0.
 
 Translation keys under `menu.entry.` are shared: a plugin may state a category another plugin opened, or use a leaf another one stated, and the i18n gate reads the paths written in the C# sources and accepts a key any plugin's file states. A key nothing states reads as its own last part with the underscores turned into spaces.

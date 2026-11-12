@@ -815,5 +815,20 @@ internal sealed class BrowserActions
         ["rorolala_file_system.reveal"] = Icons.Launch,
         ["rorolala_file_system.copy_path"] = Icons.FileCopy,
         ["rorolala_file_system.root"] = Icons.Home,
+
+        // The categories a menu is grouped by wear a picture too, and the one of the action they hold: a
+        // category is the word for what its entries do, so a second picture would be a second answer to one
+        // question. The two that are not an action of their own are the plus a category of new things wears
+        // and the three beads a menu of views wears.
+        ["menu.entry.open"] = Icons.Launch,
+        ["menu.entry.copy"] = Icons.FileCopy,
+        ["menu.entry.cut"] = Icons.ContentCut,
+        ["menu.entry.paste"] = Icons.ContentPaste,
+        ["menu.entry.delete"] = Icons.Delete,
+        ["menu.entry.new"] = Icons.Add,
+        ["menu.entry.rename"] = Icons.LocalOffer,
+        ["menu.entry.reveal"] = Icons.Launch,
+        ["menu.entry.restore"] = Icons.Refresh,
+        ["menu.entry.view"] = Icons.MoreVert,
     };
 }

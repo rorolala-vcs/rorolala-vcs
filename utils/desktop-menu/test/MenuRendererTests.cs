@@ -221,6 +221,75 @@ public sealed class MenuRendererTests
         Assert.Single(menu.Items.OfType<Separator>());
     }
 
+    /// <summary>A category is drawn with its own picture, and a folded entry borrows it when it has none.</summary>
+    /// <remarks>
+    /// The category key is asked for first, which is what lets new things wear a plus and a menu of views wear
+    /// the three beads rather than the picture of one of the entries inside. An entry the category folded into
+    /// one line has no picture of its own, and the category's is what stands beside it.
+    /// </remarks>
+    [Fact]
+    public void ACategoryWearsItsOwnPictureAndAFoldedEntryBorrowsIt()
+    {
+        var words = Words(
+            ("menu.entry.copy", "Copy"),
+            ("menu.entry.cut", "Cut"),
+            ("menu.entry.file", "File"),
+            ("menu.entry.path", "Path")
+        );
+        var pictures = new Dictionary<string, Control>(StringComparer.Ordinal)
+        {
+            ["menu.entry.copy"] = new TextBlock { Text = "copy" },
+            ["menu.entry.cut"] = new TextBlock { Text = "cut" },
+        };
+        var menu = new ContextMenu();
+
+        new MenuRenderer(key => words.GetValueOrDefault(key) ?? key, key => pictures.GetValueOrDefault(key))
+            .Fill(
+                menu,
+                [
+                    new MenuLeaf(["menu.entry.copy", "menu.entry.file"], 10, () => { }),
+                    new MenuLeaf(["menu.entry.copy", "menu.entry.path"], 20, () => { }),
+                    new MenuLeaf(["menu.entry.cut", "menu.entry.file"], 0, () => { }),
+                ],
+                force: false
+            );
+
+        var entries = MenuItems(menu);
+        var copy = Assert.Single(entries, item => Header(item) == "Copy");
+        var cut = Assert.Single(entries, item => Header(item) == "Cut File");
+
+        Assert.NotNull(copy.Icon);
+        Assert.NotNull(cut.Icon);
+    }
+
+    /// <summary>A category nothing draws falls back to the first entry of it that has a picture.</summary>
+    [Fact]
+    public void ACategoryWithoutAPictureBorrowsTheFirstEntrys()
+    {
+        var words = Words(
+            ("menu.entry.version", "Version"),
+            ("menu.entry.fork", "Fork"),
+            ("menu.entry.join", "Join")
+        );
+        var pictures = new Dictionary<string, Control>(StringComparer.Ordinal)
+        {
+            ["vcs.fork"] = new TextBlock { Text = "fork" },
+        };
+        var menu = new ContextMenu();
+
+        new MenuRenderer(key => words.GetValueOrDefault(key) ?? key, key => pictures.GetValueOrDefault(key))
+            .Fill(
+                menu,
+                [
+                    new MenuLeaf(["menu.entry.version", "menu.entry.fork"], 10, () => { }, "vcs.fork"),
+                    new MenuLeaf(["menu.entry.version", "menu.entry.join"], 20, () => { }, "vcs.join"),
+                ],
+                force: false
+            );
+
+        Assert.NotNull(Assert.Single(MenuItems(menu)).Icon);
+    }
+
     /// <summary>A menu made of a list of leaves and a dictionary of words.</summary>
     /// <param name="words">What a key reads as, where a file states it.</param>
     /// <param name="leaves">The leaves.</param>

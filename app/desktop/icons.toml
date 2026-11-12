@@ -42,7 +42,9 @@ key = "rorolala_file_system"
 # draws: shown, gray and hidden. `more_vert` opens that popup, beside the eye in the toolbar's own group.
 # The rest are what an entry's menu is read by: `launch` opens it or shows it where the system keeps it,
 # `file_copy` copies it or its path, `content_cut` cuts it, `content_paste` pastes onto it, `delete` removes
-# it, `local_offer` renames it, and `create_new_folder` makes a directory beside it.
+# it, `local_offer` renames it, and `create_new_folder` makes a directory beside it. `add` is the plus a
+# category of new things wears, which is the same picture the VCS plugin draws for the same word rather than
+# a second one copied here.
 icons = [
     "visibility",
     "visibility_off",
@@ -64,6 +66,7 @@ icons = [
     "delete",
     "local_offer",
     "create_new_folder",
+    "add",
     # The pictures the two docks this plugin registers are drawn as: the directory browser's folder and the
     # tree's nodes. What a registration names is worn by the item that opens the dock in the Window menu and at
     # the left of the dock's tab.
