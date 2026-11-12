@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Menus;
 using MenuItem = Avalonia.Controls.MenuItem;
 
 namespace FileSystemPlugin;
@@ -1065,19 +1066,36 @@ internal abstract class EntryView<TItem> : EntryView
     }
 
     /// <summary>Shows the forced actions while Shift is held, and hides them when it is let go.</summary>
+    /// <remarks>
+    /// Walked through the categories as well as the top level, because a forced entry now sits under the
+    /// category it belongs to: the ownership category holds both the plain and the forced commands, and only
+    /// the submenu is on the top level to hide.
+    /// </remarks>
     /// <param name="menu">The menu being read.</param>
     /// <param name="key">The key, which says what is being held.</param>
     private static void Revealed(ContextMenu menu, KeyEventArgs key)
     {
         var forced = (key.KeyModifiers & KeyModifiers.Shift) != 0;
 
-        foreach (
-            var item in menu
-                .Items.OfType<MenuItem>()
-                .Where(item => item.Classes.Contains(BrowserActions.Force))
-        )
+        Reveal(menu.Items, forced);
+    }
+
+    /// <summary>Shows or hides every forced entry under a set of menu items.</summary>
+    /// <param name="items">What to walk.</param>
+    /// <param name="forced">Whether the forced entries are shown.</param>
+    private static void Reveal(IEnumerable<object?> items, bool forced)
+    {
+        foreach (var item in items.OfType<MenuItem>())
         {
-            item.IsVisible = forced;
+            if (item.Classes.Contains(MenuRenderer.Forced))
+            {
+                item.IsVisible = forced;
+            }
+
+            if (item.Items.Count > 0)
+            {
+                Reveal(item.Items, forced);
+            }
         }
     }
 

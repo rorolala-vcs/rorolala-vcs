@@ -77,7 +77,7 @@ public sealed class RorolalaDockTests
 
         Assert.Contains(
             services.ContextMenus.Items(ContextMenuTarget.Directory),
-            item => item.LabelKey == "rorolala_vcs.menu.upstream"
+            item => item.Keys.SequenceEqual(["menu.entry.open", "menu.entry.upstream"])
         );
     }
 
@@ -96,8 +96,8 @@ public sealed class RorolalaDockTests
         File.WriteAllText(file, "one\n");
 
         var items = services.ContextMenus.Items(ContextMenuTarget.File);
-        var baseline = Assert.Single(items, item => item.LabelKey == "rorolala_vcs.tree_restore.baseline");
-        var staged = Assert.Single(items, item => item.LabelKey == "rorolala_vcs.tree_restore.staged");
+        var baseline = Assert.Single(items, item => item.Key == "menu.entry.baseline");
+        var staged = Assert.Single(items, item => item.Key == "menu.entry.staged");
 
         Assert.True(baseline.Applies!(new ContextTarget(tree, [new Entry(file, EntryKind.File)])));
         Assert.True(staged.Applies!(new ContextTarget(tree, [new Entry(file, EntryKind.File)])));

@@ -43,6 +43,7 @@
          until the user chooses a packaged set to replace it. -->
     <ProjectReference Include="../../Contract/RorolalaDesktop.Contract.csproj" />
     <ProjectReference Include="../../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <ProjectReference Include="../../../../utils/desktop-menu/RorolalaDesktopMenu.csproj" />
     <ProjectReference Include="../../../../utils/desktop-sys-icons/RorolalaDesktopSysIcons.csproj" />
   </ItemGroup>
 

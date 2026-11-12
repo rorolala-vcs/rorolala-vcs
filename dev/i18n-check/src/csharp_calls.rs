@@ -14,6 +14,9 @@ use crate::files;
 /// The call a key is named in.
 const GET: &str = ".Get(";
 
+/// The namespace a menu path's keys live in, which is shared by every plugin rather than owned by one.
+pub const SHARED_MENU: &str = "menu.entry.";
+
 /// Reads every `.cs` file under `dir` and collects the keys its `I18n.Get` calls name.
 ///
 /// A build tree under the sources (`bin`, `obj`) is left alone, since what it holds is a copy of
@@ -34,6 +37,31 @@ pub fn calls(dir: &Path) -> Result<Calls, String> {
 
     Ok(all)
 }
+
+/// Reads every menu path named by a string literal under `dir`.
+///
+/// A menu path is not a `Get` call: it is a list of keys handed to a menu renderer, which is why the
+/// literals are read on their own. Only the shared namespace is read, since that is the one a plugin
+/// may use a key from without stating it itself.
+///
+/// # Errors
+///
+/// Returns a message naming a file that could not be read.
+pub fn menu_keys(dir: &Path) -> Result<Calls, String> {
+    let mut all = Calls::default();
+
+    for file in files::under(dir, &["cs"], &["bin", "obj"])? {
+        let text =
+            fs::read_to_string(&file).map_err(|error| format!("{}: {error}", file.display()))?;
+
+        scan_menu(&text, &file, &mut all);
+    }
+
+    Ok(all)
+}
+
+/// A menu path begins with a quote and this namespace.
+const MENU_QUOTE: &str = "\"menu.entry.";
 
 /// Scans one file's text for `I18n.Get` calls.
 fn scan(text: &str, file: &Path, calls: &mut Calls) {
@@ -60,6 +88,37 @@ fn scan(text: &str, file: &Path, calls: &mut Calls) {
         }
 
         at = dot + GET.len();
+    }
+}
+
+/// Scans one file's text for string literals that begin a menu path.
+///
+/// The path a menu entry sits at is written as a list of string literals rather than passed to
+/// `Get`, so the literals are read where they are written. An interpolated string is skipped by the
+/// characters allowed in a key, which a brace is not.
+fn scan_menu(text: &str, file: &Path, calls: &mut Calls) {
+    let mut at = 0;
+
+    while let Some(found) = text[at..].find(MENU_QUOTE) {
+        let start = at + found + 1;
+        let rest = &text[start..];
+
+        if let Some(end) = rest.find('"') {
+            let key = &rest[..end];
+
+            if key
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_')
+            {
+                calls.calls.push(Call {
+                    file: file.to_path_buf(),
+                    line: line(text, start),
+                    key: key.to_owned(),
+                });
+            }
+        }
+
+        at = start;
     }
 }
 
@@ -132,7 +191,7 @@ fn line(text: &str, at: usize) -> usize {
 mod tests {
     use std::path::Path;
 
-    use super::{Calls, scan};
+    use super::{Calls, scan, scan_menu};
 
     /// The keys `source` names, and how many calls named one this cannot read.
     fn keys(source: &str) -> (Vec<String>, usize) {
@@ -187,6 +246,38 @@ mod tests {
             keys(r#"var one = config.Get("not.a.key"); var two = map.Get("x");"#);
 
         assert!(found.is_empty(), "keys were read: {found:?}");
+        assert_eq!(unchecked, 0);
+    }
+
+    /// The menu paths `source` names.
+    fn menu(source: &str) -> (Vec<String>, usize) {
+        let mut calls = Calls {
+            calls: Vec::new(),
+            unchecked: 0,
+        };
+
+        scan_menu(source, Path::new("test.cs"), &mut calls);
+
+        (
+            calls.calls.into_iter().map(|call| call.key).collect(),
+            calls.unchecked,
+        )
+    }
+
+    #[test]
+    fn a_menu_path_is_read_from_the_literals_it_is_written_in() {
+        let source = r#"
+            new MenuLeaf(["menu.entry.copy", "menu.entry.file"], 10, () => { });
+            var other = "menu.entry.cut";
+            var own = "rorolala_vcs.own.key";
+        "#;
+
+        let (found, unchecked) = menu(source);
+
+        assert_eq!(
+            found,
+            ["menu.entry.copy", "menu.entry.file", "menu.entry.cut"]
+        );
         assert_eq!(unchecked, 0);
     }
 }

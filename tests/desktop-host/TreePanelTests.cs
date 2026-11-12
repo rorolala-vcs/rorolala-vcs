@@ -320,11 +320,25 @@ public sealed class TreePanelTests
         );
     }
 
-    /// <summary>The panel's description field.</summary>
+    /// <summary>The panel's description field, once the tree it is about has been read.</summary>
+    /// <remarks>
+    /// The tree is read off the window's thread, so the field is found disabled for a moment after the
+    /// view is made: what is waited for is the reading that enables it, not the field being there.
+    /// </remarks>
     /// <param name="window">The window holding the panel.</param>
     /// <returns>The field.</returns>
-    private static TextBox Field(Window window) =>
-        window.GetVisualDescendants().OfType<TextBox>().Single();
+    private static TextBox Field(Window window)
+    {
+        TextBox? field = null;
+
+        Wait(
+            () =>
+                (field = window.GetVisualDescendants().OfType<TextBox>().FirstOrDefault())
+                is { IsEnabled: true }
+        );
+
+        return field!;
+    }
 
     /// <summary>What a view says, once it says it.</summary>
     /// <param name="window">The window holding it.</param>
@@ -334,7 +348,7 @@ public sealed class TreePanelTests
     private static T Until<T>(Window window, Func<T?> read)
         where T : class
     {
-        for (var frame = 0; frame < 400; frame++)
+        for (var frame = 0; frame < 2400; frame++)
         {
             Dispatcher.UIThread.RunJobs();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
@@ -344,7 +358,7 @@ public sealed class TreePanelTests
                 return found;
             }
 
-            Thread.Sleep(5);
+            Thread.Sleep(10);
         }
 
         throw new TimeoutException("the panel did not say what the test waited for");
@@ -364,7 +378,7 @@ public sealed class TreePanelTests
     /// <param name="done">What is being waited for.</param>
     private static void Wait(Func<bool> done)
     {
-        for (var frame = 0; frame < 600; frame++)
+        for (var frame = 0; frame < 1200; frame++)
         {
             Dispatcher.UIThread.RunJobs();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();

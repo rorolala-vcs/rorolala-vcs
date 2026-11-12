@@ -182,19 +182,29 @@ The new `rorolala-tree` crate holds what a tree is: a canonically ordered struct
 
 ## Refactor
 
-### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a file tree row as a three-column grid
+### 1. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`menus`] Reorganise every context menu into categories
+
+Every menu opened on a file, a folder, a logical place, a dock's tab, a version graph card or a tree row now says what it offers at a path of keys rather than as one flat list. The first key is the category, the last is the entry, and the renderer the host and the plugins share folds a category of one entry into one line: `Cut File` rather than a submenu holding one item. Entries of one category from different plugins merge by key, so the File System opens `Copy` and the Version Graph adds its hashes under it, while a plugin that states its own root keeps a category of its own.
+
+The ownership commands are four words now, `Claim`, `Give up`, `Force claim` and `Force give up`, offered on files and directories alike, with the forced pair still shown while Shift is held. The Version Graph, the Tree Panel and a place's own menu use the same renderer, and the File System's folder tree and directory listing build their menus through it, so the same category reads the same way wherever it appears.
+
+A plugin built against the previous contract is not loaded against this one: `ContextMenuItem` carries `Keys` instead of `LabelKey`, the two records gained an `Enabled` question, and a registry refuses an entry whose whole path is already offered in its context. The contract assembly is raised to 0.15.0.
+
+Translation keys under `menu.entry.` are shared: a plugin may state a category another plugin opened, or use a leaf another one stated, and the i18n gate reads the paths written in the C# sources and accepts a key any plugin's file states. A key nothing states reads as its own last part with the underscores turned into spaces.
+
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a file tree row as a three-column grid
 
 A file tree row is a three-column grid rather than a dock panel: the name gives way with an ellipsis, the badges keep their width at the row's right, and the row stretches to the tree's width at any panel width. The badges are drawn at twenty pixels, while the entry icon stays at sixteen.
 
-### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Draw the Version Graph in the look's own hues
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Draw the Version Graph in the look's own hues
 
 The graph's grid is laid in the splitter rather than in the accent, a hover and an endpoint take the primary, and each side has a hue of its own while the accent is left to a drag in flight. The type is smaller, a card's radius is 8 rather than 12, and a creator's name is read in the second ink rather than in a tint of its own.
 
-### 3. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack
+### 4. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack
 
 Progress is now the host's rather than the Rorolala plugin's. `IPluginHost.Progress` begins a run that every open window draws in a stack under its title row, and the plugin's commands use it without knowing which window is in front. The Overview no longer draws a panel of its own, and a run begun from any dock appears in the same stack.
 
-### 4. [`app`] [`RorolalaDesktop`] [`theme`] Restate the look and dock chrome
+### 5. [`app`] [`RorolalaDesktop`] [`theme`] Restate the look and dock chrome
 
 The ground, the panel and the middle step are moved apart, and the selection wash is lowered so that it is a statement about an entry rather than a surface of its own. A row is 28 pixels and the chrome 32, a field is filled as a well, the strip of a single dock is read as a title, and the active dock is marked by its selected tab rather than by a ring. A crossing of two seams is a hit area only.
 

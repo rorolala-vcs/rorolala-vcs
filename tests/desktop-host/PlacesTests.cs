@@ -88,8 +88,10 @@ public sealed class PlacesTests
 
         var headers = menu.Items.OfType<MenuItem>().Select(item => item.Header).OfType<string>().ToArray();
 
-        Assert.Contains("rorolala_file_system.rename", headers);
-        Assert.Contains("rorolala_file_system.delete", headers);
+        // The renderer flattens a category of one entry into "category entry", and with nothing
+        // translated here the fallback words are the last key of each path.
+        Assert.Contains("Rename File", headers);
+        Assert.Contains("Delete File", headers);
     }
 
     /// <summary>The listing of a place, and the place answering it, over a scratch directory.</summary>

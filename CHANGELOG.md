@@ -48,10 +48,11 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Refactor
 
-1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a file tree row as a three-column grid. [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-file-system-tree-draw-a-file-tree-row-as-a-three-column-grid)
-2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Draw the Version Graph in the look's own hues. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-draw-the-version-graph-in-the-looks-own-hues)
-3. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-progress-show-progress-in-a-host-level-stack)
-4. [`app`] [`RorolalaDesktop`] [`theme`] Restate the look and dock chrome. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-theme-restate-the-look-and-dock-chrome)
+1. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`menus`] Reorganise every context menu into categories. [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rorolaladesktop-menus-reorganise-every-context-menu-into-categories)
+2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a file tree row as a three-column grid. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-file-system-tree-draw-a-file-tree-row-as-a-three-column-grid)
+3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Draw the Version Graph in the look's own hues. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-draw-the-version-graph-in-the-looks-own-hues)
+4. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-progress-show-progress-in-a-host-level-stack)
+5. [`app`] [`RorolalaDesktop`] [`theme`] Restate the look and dock chrome. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-theme-restate-the-look-and-dock-chrome)
 
 # 0.2.0 (2026-11-04)
 

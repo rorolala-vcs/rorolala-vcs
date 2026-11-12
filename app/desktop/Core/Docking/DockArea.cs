@@ -10,6 +10,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
+using RorolalaDesktop.Menus;
 using MenuItem = Avalonia.Controls.MenuItem;
 
 namespace RorolalaDesktop.Docking;
@@ -1137,16 +1138,22 @@ internal sealed class DockArea : UserControl
         menu.Items.Add(heading);
         menu.Items.Add(new Separator());
 
-        foreach (var item in _windows.DockMenuItems(DockMenuTarget.Tab, instance.DockNameId))
+        var renderer = new MenuRenderer(_i18n.Get, MenuIcon);
+        var leaves = _windows
+            .DockMenuItems(DockMenuTarget.Tab, instance.DockNameId)
+            .Select(item => new MenuLeaf(
+                item.Keys,
+                item.Order,
+                () => item.Command(was),
+                item.IconKey,
+                item.Force,
+                item.Applies is null ? null : () => item.Applies(was),
+                item.Enabled is null ? null : () => item.Enabled(was)
+            ))
+            .ToArray();
+
+        foreach (var entry in renderer.Build(leaves, force: false))
         {
-            var entry = new MenuItem { Header = _i18n.Get(item.LabelKey) };
-
-            if (item.IconKey is { } key && _windows.Pictures.Find(key) is { } picture)
-            {
-                entry.Icon = Marks.Menu(picture);
-            }
-
-            entry.Click += (_, _) => item.Command(was);
             menu.Items.Add(entry);
         }
 
@@ -1180,6 +1187,12 @@ internal sealed class DockArea : UserControl
 
         return (menu, heading);
     }
+
+    /// <summary>What an icon key is drawn as in a dock's own menu, or nothing when the library holds none.</summary>
+    /// <param name="key">The key naming the picture.</param>
+    /// <returns>The picture, or nothing.</returns>
+    private Control? MenuIcon(string key) =>
+        _windows.Pictures.Find(key) is { } picture ? Marks.Menu(picture) : null;
 
     /// <summary>Whether a press landed on the close a header carries.</summary>
     /// <remarks>

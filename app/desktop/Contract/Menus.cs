@@ -31,27 +31,66 @@ public sealed record ContextTarget(string Directory, IReadOnlyList<Entry> Entrie
 }
 
 /// <summary>One context-menu item.</summary>
-/// <param name="LabelKey">An i18n key for the item's label.</param>
-/// <param name="Order">Where the item sits among those of the same context.</param>
-/// <param name="Command">What the item does, given what was right-clicked.</param>
-/// <param name="IconKey">An optional key naming the item's icon.</param>
+/// <param name="Keys">
+/// The path, from the first category to the entry itself, with at least one key. A path of one key is an entry
+/// that stands on its own, which is what a dock's own menu holds.
+/// </param>
+/// <param name="Order">Where the entry sits among those of its category.</param>
+/// <param name="Command">What the entry does, given what was right-clicked.</param>
+/// <param name="IconKey">An optional key naming the entry's icon.</param>
 /// <param name="Force">
-/// Whether the item is one of the forced actions, which are shown while the user holds Shift and are drawn
+/// Whether the entry is one of the forced actions, which are shown while the user holds Shift and are drawn
 /// as what they are: what an action does past the checks it would otherwise make is not what a plain click
 /// should come to.
 /// </param>
 /// <param name="Applies">
-/// What the item is offered for, or nothing for everything in its context: an item about a Workspace has no
+/// What the entry is offered for, or nothing for everything in its context: an entry about a Workspace has no
 /// business in the menu of a file that is in none.
 /// </param>
+/// <param name="Enabled">
+/// Whether the entry may be chosen, or nothing for one that always may.
+/// </param>
 public sealed record ContextMenuItem(
-    string LabelKey,
+    IReadOnlyList<string> Keys,
     int Order,
     Action<ContextTarget> Command,
     string? IconKey = null,
     bool Force = false,
-    Func<ContextTarget, bool>? Applies = null
-);
+    Func<ContextTarget, bool>? Applies = null,
+    Func<ContextTarget, bool>? Enabled = null
+)
+{
+    /// <summary>
+    /// An entry named by one key, which is the shape a menu that has no categories yet is written in.
+    /// </summary>
+    /// <remarks>
+    /// Kept so that a registration that is about no category in particular, and a test that is about the
+    /// registry rather than about the shape of a menu, do not have to spell a path of one key.
+    /// </remarks>
+    /// <param name="LabelKey">The key naming the entry.</param>
+    /// <param name="Order">Where the entry sits among those of its category.</param>
+    /// <param name="Command">What the entry does.</param>
+    /// <param name="IconKey">An optional key naming the entry's icon.</param>
+    /// <param name="Force">Whether the entry is one of the forced actions.</param>
+    /// <param name="Applies">What the entry is offered for, or nothing for everything.</param>
+    /// <param name="Enabled">Whether the entry may be chosen, or nothing for one that always may.</param>
+    public ContextMenuItem(
+        string LabelKey,
+        int Order,
+        Action<ContextTarget> Command,
+        string? IconKey = null,
+        bool Force = false,
+        Func<ContextTarget, bool>? Applies = null,
+        Func<ContextTarget, bool>? Enabled = null
+    )
+        : this([LabelKey], Order, Command, IconKey, Force, Applies, Enabled) { }
+
+    /// <summary>The key naming the entry itself, which is the last of <see cref="Keys"/>.</summary>
+    public string Key => Keys[^1];
+
+    /// <summary>The key naming the category the entry sits under, which is the first of <see cref="Keys"/>.</summary>
+    public string Root => Keys[0];
+}
 
 /// <summary>Where a plugin adds context-menu items.</summary>
 public interface IContextMenuRegistry
@@ -60,8 +99,9 @@ public interface IContextMenuRegistry
     /// Adds an item to one of the three contexts.
     /// </summary>
     /// <remarks>
-    /// Items from different plugins are ordered by plugin load order and then by the item's own
-    /// order value.
+    /// Items from different plugins are ordered by the first key of their path, and then by their own order
+    /// value. An item whose whole path is already offered in the same context is a duplicate, and the one added
+    /// first is the one kept.
     /// </remarks>
     /// <param name="target">The context the item belongs to.</param>
     /// <param name="item">The item to add.</param>

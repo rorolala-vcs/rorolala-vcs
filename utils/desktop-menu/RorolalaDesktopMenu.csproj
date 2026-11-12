@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>RorolalaDesktop.Menus</RootNamespace>
+    <!-- The renderer is shared by the host and its plugins, so its surface is a contract and every
+         part of it is said in a comment. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A menu is made of Avalonia's own controls. The model is here rather than in the Desktop
+         contract because a utility may not depend on the program that uses it, and both the host
+         and every plugin use this one. -->
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tests are a project of their own under this one, and a project of its own is the only
+         one that compiles its sources; the default glob would gather them up as well. -->
+    <Compile Remove="test/**" />
+  </ItemGroup>
+
+</Project>

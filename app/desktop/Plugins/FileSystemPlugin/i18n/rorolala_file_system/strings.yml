@@ -271,3 +271,67 @@ rorolala_file_system:
     cancel:
       en: Cancel
       zh-CN: 取消
+
+# What the entries of every menu are called, by the path that names them rather than by the plugin that
+# offers them: the File System opens the categories a file menu is made of, and a plugin that adds an
+# entry under one of them reuses the word rather than saying it again. The keys are stated once here,
+# and the plugin that depends on this one only states the leaves of its own.
+menu:
+  entry:
+    open:
+      en: Open
+      zh-CN: 打开
+    file:
+      en: File
+      zh-CN: 文件
+    new_window:
+      en: New window
+      zh-CN: 新窗口
+    copy:
+      en: Copy
+      zh-CN: 复制
+    cut:
+      en: Cut
+      zh-CN: 剪切
+    paste:
+      en: Paste
+      zh-CN: 粘贴
+    delete:
+      en: Delete
+      zh-CN: 删除
+    new:
+      en: New
+      zh-CN: 新建
+    folder:
+      en: Folder
+      zh-CN: 文件夹
+    rename:
+      en: Rename
+      zh-CN: 重命名
+    reveal:
+      en: Reveal
+      zh-CN: 显示
+    in_file_manager:
+      en: In file manager
+      zh-CN: 在文件管理器中
+    path:
+      en: Path
+      zh-CN: 路径
+    view:
+      en: View
+      zh-CN: 视图
+    set_base:
+      en: Set as base
+      zh-CN: 设为基准
+    root:
+      en: Root
+      zh-CN: 根
+    refresh:
+      en: Refresh
+      zh-CN: 刷新
+    collapse_all:
+      en: Collapse all
+      zh-CN: 折叠全部
+    in_list:
+      en: In list
+      zh-CN: 在列表中显示

@@ -30,20 +30,20 @@ internal static class TreeRestoreActions
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);
 
-        Add(host, hub, Baseline, 50);
-        Add(host, hub, Staged, 60);
+        Add(host, hub, Baseline, 10);
+        Add(host, hub, Staged, 20);
     }
 
     /// <summary>Registers one of the two.</summary>
     /// <param name="host">The host.</param>
     /// <param name="hub">What the run's card is begun in.</param>
     /// <param name="which">Which restore it is, and the name of its words.</param>
-    /// <param name="order">Where it sits among the file menu's items.</param>
+    /// <param name="order">Where it sits among the other restores.</param>
     private static void Add(IPluginHost host, IProgressHub hub, string which, int order) =>
         host.ContextMenus.Add(
             ContextMenuTarget.File,
             new ContextMenuItem(
-                $"rorolala_vcs.tree_restore.{which}",
+                ["menu.entry.restore", $"menu.entry.{which}"],
                 order,
                 was => Ask(host, hub, was, which == Staged),
                 Icons.Refresh,

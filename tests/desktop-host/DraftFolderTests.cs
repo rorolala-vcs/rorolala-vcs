@@ -226,8 +226,14 @@ public sealed class DraftFolderTests
         );
 
         Assert.NotNull(items);
-        Assert.Contains(items, item => item.LabelKey == "rorolala_vcs.place.take_ownership");
-        Assert.Contains(items, item => item.LabelKey == "rorolala_vcs.place.giveup_ownership");
+        Assert.Contains(
+            items,
+            item => item.Keys.SequenceEqual(["menu.entry.ownership", "menu.entry.claim"])
+        );
+        Assert.Contains(
+            items,
+            item => item.Keys.SequenceEqual(["menu.entry.ownership", "menu.entry.waive"])
+        );
     }
 
     /// <summary>A row held by somebody else wears the lock the work's own row wears.</summary>

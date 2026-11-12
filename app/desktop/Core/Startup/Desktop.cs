@@ -296,7 +296,8 @@ internal sealed class Desktop
 
         var docks = new DockManager(new DockRegistry(), i18n, log, popups);
         var menus = new MenuRegistry();
-        var dockMenus = new DockMenuRegistry();
+        var warned = log.For(Core.Source);
+        var dockMenus = new DockMenuRegistry(warned.Warn);
         var icons = new IconLibrary();
         var refocus = new Refocus();
 
@@ -328,7 +329,7 @@ internal sealed class Desktop
             Settings = new SettingRegistry(_state.Preference),
             Shell = shell,
             Menu = menus,
-            ContextMenus = new ContextMenuRegistry(),
+            ContextMenus = new ContextMenuRegistry(warned.Warn),
             DockMenus = dockMenus,
             Navigation = new NavigationRegistry(),
             Docks = docks,

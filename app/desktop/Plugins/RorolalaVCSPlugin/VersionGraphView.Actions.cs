@@ -5,38 +5,59 @@ using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
-
-using MenuItem = Avalonia.Controls.MenuItem;
-using Separator = Avalonia.Controls.Separator;
+using RorolalaDesktop.Menus;
 
 namespace RorolalaVCSPlugin;
 
 /// <summary>The menu half of the view: what a right-click offers, and the runs it begins.</summary>
 internal sealed partial class VersionGraphView
 {
+    /// <summary>The renderer every menu this view opens is drawn by.</summary>
+    private MenuRenderer? _menus;
+
+    /// <summary>The one renderer, made when the view first opens a menu.</summary>
+    private MenuRenderer Menus => _menus ??= new MenuRenderer(RolaI18N.Get, MenuIcon, _log.Warn);
+
+    /// <summary>What an icon key is drawn as, or nothing when the library does not hold it.</summary>
+    /// <param name="key">The key naming the picture.</param>
+    /// <returns>The picture, or nothing.</returns>
+    private Control? MenuIcon(string key) => _icons.Find(key) is { } picture ? Icons.Inked(picture) : null;
+
     /// <summary>Offers what a right-click on the thing under the pointer can do.</summary>
     /// <remarks>
     /// A card offers what can be done with the file it stands for, copying its hashes, moving the
     /// record, joining an unrecorded variant, ending a merge. A pill, the message and the creator offer
     /// what that one thing says, copied: the whole of it, which is what a pill cannot show.
+    /// <para>
+    /// The entries are grouped by the renderer, so the categories read in the order they first appear in
+    /// the list: copying first, then what moves a record, then what drops a change.
+    /// </para>
     /// </remarks>
     /// <param name="hover">What the pointer is on.</param>
     private void ShowMenu(Hover hover)
     {
-        var menu = new ContextMenu { Placement = PlacementMode.Pointer };
+        var leaves = new List<MenuLeaf>();
 
         switch (hover.Part)
         {
-            case HoverPart.EntryPill when hover.Chip is { Entry: { } entry } chip:
-                Add(menu, "copy_uuid", Icons.ContentCopy, () => Copy(entry.Uuid));
-                Add(menu, "copy_path", Icons.ContentCopy, () => Copy(entry.Path));
+            case HoverPart.EntryPill when hover.Chip is { Entry: { } entry }:
+                leaves.Add(Leaf(["menu.entry.copy", "menu.entry.uuid"], Icons.ContentCopy, () => Copy(entry.Uuid)));
+                leaves.Add(Leaf(["menu.entry.copy", "menu.entry.path"], Icons.ContentCopy, () => Copy(entry.Path)));
 
                 if (entry.Version is { Length: > 0 } version)
                 {
-                    Add(menu, "copy_version_hash", Icons.ContentCopy, () => Copy(version));
+                    leaves.Add(
+                        Leaf(["menu.entry.copy", "menu.entry.version_hash"], Icons.ContentCopy, () => Copy(version))
+                    );
                 }
 
-                Add(menu, "copy_variant_hash", Icons.ContentCopy, () => Copy(hover.Card!.Hash));
+                leaves.Add(
+                    Leaf(
+                        ["menu.entry.copy", "menu.entry.variant_hash"],
+                        Icons.ContentCopy,
+                        () => Copy(hover.Card!.Hash)
+                    )
+                );
 
                 // A local entry is the record a file is kept under, so a fork of it is a new identity
                 // for the same record: the path goes on holding the version it holds, under a Uuid of
@@ -47,12 +68,12 @@ internal sealed partial class VersionGraphView
                     && _root is { Length: > 0 } root
                 )
                 {
-                    menu.Items.Add(new Separator());
-                    Add(
-                        menu,
-                        "fork_uuid",
-                        Icons.CallSplit,
-                        () => BeginForkUuid(root, entry.Path)
+                    leaves.Add(
+                        Leaf(
+                            ["menu.entry.version", "menu.entry.fork"],
+                            Icons.CallSplit,
+                            () => BeginForkUuid(root, entry.Path)
+                        )
                     );
                 }
 
@@ -73,97 +94,110 @@ internal sealed partial class VersionGraphView
                         )
                     )
                     {
-                        menu.Items.Add(new Separator());
-                        Add(
-                            menu,
-                            "switch_uuid",
-                            Icons.ArrowRightAlt,
-                            () => AskSwitch(file, entry.Uuid)
+                        leaves.Add(
+                            Leaf(
+                                ["menu.entry.version", "menu.entry.switch"],
+                                Icons.ArrowRightAlt,
+                                () => AskSwitch(file, entry.Uuid)
+                            )
                         );
-                        Add(
-                            menu,
-                            "switch_uuid_keep",
-                            Icons.ArrowRightAlt,
-                            () => BeginSwitch(file, entry.Uuid, onlyIndex: true, force: false)
+                        leaves.Add(
+                            Leaf(
+                                ["menu.entry.version", "menu.entry.switch_keep"],
+                                Icons.ArrowRightAlt,
+                                () => BeginSwitch(file, entry.Uuid, onlyIndex: true, force: false)
+                            )
                         );
                     }
                 }
 
-                menu.Open(this);
-
-                return;
+                break;
 
             case HoverPart.FilePill when hover.Card?.Draft is { } draft:
-                Add(menu, "copy_path", Icons.ContentCopy, () => Copy(draft.Path));
-                menu.Open(this);
+                leaves.Add(Leaf(["menu.entry.copy", "menu.entry.path"], Icons.ContentCopy, () => Copy(draft.Path)));
 
-                return;
+                break;
 
             case HoverPart.Message when hover.Card is { } said:
-                Add(
-                    menu,
-                    "copy_message",
-                    Icons.ContentCopy,
-                    () => Copy(said.Message),
-                    enabled: said.Message.Length > 0
+                leaves.Add(
+                    Leaf(
+                        ["menu.entry.copy", "menu.entry.message"],
+                        Icons.ContentCopy,
+                        () => Copy(said.Message),
+                        enabled: said.Message.Length > 0
+                    )
                 );
-                menu.Open(this);
 
-                return;
+                break;
 
             case HoverPart.Creator when hover.Card is { } maker:
-                Add(menu, "copy_creator_name", Icons.ContentCopy, () => Copy(maker.Creator));
-                Add(
-                    menu,
-                    "copy_creator_hash",
-                    Icons.ContentCopy,
-                    () => Copy(maker.CreatorHash),
-                    enabled: maker.CreatorHash.Length > 0
+                leaves.Add(
+                    Leaf(["menu.entry.copy", "menu.entry.creator"], Icons.ContentCopy, () => Copy(maker.Creator))
                 );
-                menu.Open(this);
+                leaves.Add(
+                    Leaf(
+                        ["menu.entry.copy", "menu.entry.creator_hash"],
+                        Icons.ContentCopy,
+                        () => Copy(maker.CreatorHash),
+                        enabled: maker.CreatorHash.Length > 0
+                    )
+                );
 
-                return;
+                break;
 
             case HoverPart.HashPill when hover.Card is { } named:
-                VariantMenu(menu, named);
-                menu.Open(this);
+                VariantMenu(leaves, named);
 
-                return;
+                break;
 
             case HoverPart.Number when hover.Card is { } numbered && numbered.HasVersion:
-                Add(menu, "copy_version_hash", Icons.ContentCopy, () => Copy(numbered.VersionHash!));
-                Add(menu, "copy_variant_hash", Icons.ContentCopy, () => Copy(numbered.Hash));
-                menu.Open(this);
+                leaves.Add(
+                    Leaf(
+                        ["menu.entry.copy", "menu.entry.version_hash"],
+                        Icons.ContentCopy,
+                        () => Copy(numbered.VersionHash!)
+                    )
+                );
+                leaves.Add(
+                    Leaf(["menu.entry.copy", "menu.entry.variant_hash"], Icons.ContentCopy, () => Copy(numbered.Hash))
+                );
 
-                return;
+                break;
         }
 
-        if (hover.Card is { } card)
+        if (leaves.Count == 0 && hover.Card is { } card)
         {
-            NodeMenu(menu, card);
-            menu.Open(this);
+            NodeMenu(leaves, card);
         }
+
+        if (leaves.Count == 0)
+        {
+            return;
+        }
+
+        var menu = new ContextMenu { Placement = PlacementMode.Pointer };
+        Menus.Fill(menu, leaves, force: false);
+        menu.Open(this);
     }
 
     /// <summary>Offers what can be done with a card's file.</summary>
-    /// <param name="menu">The menu to add to.</param>
+    /// <param name="leaves">The menu being built.</param>
     /// <param name="card">The card.</param>
-    private void NodeMenu(ContextMenu menu, GraphCard card)
+    private void NodeMenu(List<MenuLeaf> leaves, GraphCard card)
     {
         if (card.Kind == GraphCardKind.Draft && card.Draft is { } draft)
         {
             if (DraftFile(draft) is { } file)
             {
-                menu.Items.Add(DeleteChangesItem(file));
-                menu.Items.Add(new Separator());
+                leaves.Add(DeleteChangesItem(file));
             }
 
-            Add(menu, "copy_path", Icons.ContentCopy, () => Copy(draft.Path));
+            leaves.Add(Leaf(["menu.entry.copy", "menu.entry.path"], Icons.ContentCopy, () => Copy(draft.Path)));
 
             return;
         }
 
-        VariantMenu(menu, card);
+        VariantMenu(leaves, card);
     }
 
     /// <summary>Offers what a right-click on a variant or on the hash that names it can do.</summary>
@@ -172,28 +206,31 @@ internal sealed partial class VersionGraphView
     /// copy what the variant says, the join and its two ends, and the retracks the chosen file may take
     /// to the version it produced.
     /// </remarks>
-    /// <param name="menu">The menu to add to.</param>
+    /// <param name="leaves">The menu being built.</param>
     /// <param name="card">The variant.</param>
-    private void VariantMenu(ContextMenu menu, GraphCard card)
+    private void VariantMenu(List<MenuLeaf> leaves, GraphCard card)
     {
-        Add(
-            menu,
-            "copy_variant_hash",
-            Icons.ContentCopy,
-            () => Copy(card.Hash),
-            enabled: card.Hash.Length > 0
+        leaves.Add(
+            Leaf(
+                ["menu.entry.copy", "menu.entry.variant_hash"],
+                Icons.ContentCopy,
+                () => Copy(card.Hash),
+                enabled: card.Hash.Length > 0
+            )
         );
 
         if (card.HasVersion)
         {
-            Add(menu, "copy_version_hash", Icons.ContentCopy, () => Copy(card.VersionHash!));
+            leaves.Add(
+                Leaf(["menu.entry.copy", "menu.entry.version_hash"], Icons.ContentCopy, () => Copy(card.VersionHash!))
+            );
         }
 
-        Add(menu, "copy_content_hash", Icons.ContentCopy, () => Copy(card.Storage));
+        leaves.Add(Leaf(["menu.entry.copy", "menu.entry.content_hash"], Icons.ContentCopy, () => Copy(card.Storage)));
 
         if (card.Message.Length > 0)
         {
-            Add(menu, "copy_message", Icons.ContentCopy, () => Copy(card.Message));
+            leaves.Add(Leaf(["menu.entry.copy", "menu.entry.message"], Icons.ContentCopy, () => Copy(card.Message)));
         }
 
         // A variant may be joined into the file the user is on. The press is on the variant being
@@ -203,19 +240,16 @@ internal sealed partial class VersionGraphView
         {
             if (PendingMerge(selected.Path) is null)
             {
-                menu.Items.Add(new Separator());
-                Add(
-                    menu,
-                    "join_selected",
-                    Icons.Merge,
-                    () => BeginJoin(selected.Path, card.Hash)
+                leaves.Add(
+                    Leaf(["menu.entry.version", "menu.entry.join"], Icons.Merge, () => BeginJoin(selected.Path, card.Hash))
                 );
             }
         }
         else if (Joinable(card))
         {
-            menu.Items.Add(new Separator());
-            Add(menu, "join_variant", Icons.Merge, () => BeginJoin(TargetFor(card)!, card.Hash));
+            leaves.Add(
+                Leaf(["menu.entry.version", "menu.entry.join"], Icons.Merge, () => BeginJoin(TargetFor(card)!, card.Hash))
+            );
         }
 
         // A merge waiting on a file is ended by taking its variant file away and then its record, which
@@ -227,13 +261,8 @@ internal sealed partial class VersionGraphView
 
             if (actual is not null && recorded is not null)
             {
-                menu.Items.Add(new Separator());
-                menu.Items.Add(
-                    CancelMergeItem(pending.Path, pending.Directory, actual, recorded, keep: false)
-                );
-                menu.Items.Add(
-                    CancelMergeItem(pending.Path, pending.Directory, actual, recorded, keep: true)
-                );
+                leaves.Add(CancelMergeItem(pending.Path, pending.Directory, actual, recorded, keep: false));
+                leaves.Add(CancelMergeItem(pending.Path, pending.Directory, actual, recorded, keep: true));
             }
         }
 
@@ -241,129 +270,58 @@ internal sealed partial class VersionGraphView
         // only the Vault has may be gone to as well, which is a jump.
         if (card.HasVersion && TargetFor(card) is { } target)
         {
-            menu.Items.Add(new Separator());
-            menu.Items.Add(
-                RetrackItem(
-                    target,
-                    card.VersionHash!,
-                    VariantGraphDrawing.VersionLabel(card),
-                    onlyIndex: false
-                )
-            );
-            menu.Items.Add(
-                RetrackItem(
-                    target,
-                    card.VersionHash!,
-                    VariantGraphDrawing.VersionLabel(card),
-                    onlyIndex: true
-                )
-            );
+            leaves.Add(RetrackItem(target, card.VersionHash!, VariantGraphDrawing.VersionLabel(card), onlyIndex: false));
+            leaves.Add(RetrackItem(target, card.VersionHash!, VariantGraphDrawing.VersionLabel(card), onlyIndex: true));
         }
     }
 
-    /// <summary>Adds one item to a menu, drawn with a picture when the library has it.</summary>
-    /// <param name="menu">The menu.</param>
-    /// <param name="key">The i18n key its words come from.</param>
+    /// <summary>One entry of this view's menu, at the end of the path that names it.</summary>
+    /// <param name="keys">The path, from the category to the entry itself.</param>
     /// <param name="icon">The picture's key.</param>
-    /// <param name="action">What pressing it does.</param>
+    /// <param name="run">What pressing it does.</param>
     /// <param name="enabled">Whether it may be pressed.</param>
-    private void Add(ContextMenu menu, string key, string icon, Action action, bool enabled = true)
-    {
-        var item = new MenuItem
-        {
-            Header = RolaI18N.Get($"rorolala_vcs.version_graph.{key}"),
-            IsEnabled = enabled,
-        };
+    /// <returns>The leaf.</returns>
+    private static MenuLeaf Leaf(string[] keys, string? icon, Action run, bool enabled = true) =>
+        new(keys, 0, run, icon, Enabled: enabled ? null : () => false);
 
-        if (_icons.Find(icon) is { } picture)
-        {
-            item.Icon = Icons.Inked(picture);
-        }
-
-        item.Click += (_, _) => action();
-        menu.Items.Add(item);
-    }
-
-    /// <summary>The item that drops the file's unrecorded change.</summary>
+    /// <summary>The entry that drops the file's unrecorded change.</summary>
     /// <param name="file">The file, as the program names it.</param>
-    /// <returns>The item, ready to be added to a menu.</returns>
-    private MenuItem DeleteChangesItem(string file)
-    {
-        var item = new MenuItem
-        {
-            Header = RolaI18N.Get("rorolala_vcs.version_graph.delete_changes"),
-        };
+    /// <returns>The leaf, ready to be added to a menu.</returns>
+    private MenuLeaf DeleteChangesItem(string file) =>
+        Leaf(["menu.entry.delete", "menu.entry.draft"], Icons.Refresh, () => AskDeleteChanges(file));
 
-        if (_icons.Find(Icons.Refresh) is { } picture)
-        {
-            item.Icon = Icons.Inked(picture);
-        }
-
-        item.Click += (_, _) => AskDeleteChanges(file);
-
-        return item;
-    }
-
-    /// <summary>One of the two items that end a merge, which differ in what the file is left holding.</summary>
+    /// <summary>One of the two entries that end a merge, which differ in what the file is left holding.</summary>
     /// <param name="file">The file the merge is waiting on, as the program names it.</param>
     /// <param name="directory">The directory the runs of the item are made in.</param>
     /// <param name="variant">Where the tree holds the variant file.</param>
     /// <param name="recorded">Where the record says the variant file lies.</param>
     /// <param name="keep">Whether the file's content is kept rather than put back.</param>
-    /// <returns>The item, ready to be added to a menu.</returns>
-    private MenuItem CancelMergeItem(
+    /// <returns>The leaf, ready to be added to a menu.</returns>
+    private MenuLeaf CancelMergeItem(
         string file,
         string directory,
         string variant,
         string recorded,
         bool keep
-    )
-    {
-        var item = new MenuItem
-        {
-            Header = RolaI18N.Get(
-                keep
-                    ? "rorolala_vcs.version_graph.cancel_merge_keep"
-                    : "rorolala_vcs.version_graph.cancel_merge"
-            ),
-        };
+    ) =>
+        Leaf(
+            ["menu.entry.version", keep ? "menu.entry.cancel_merge_keep" : "menu.entry.cancel_merge"],
+            keep ? Icons.EditNote : Icons.CallSplit,
+            () => AskCancelMerge(file, directory, variant, recorded, keep)
+        );
 
-        if (_icons.Find(keep ? Icons.EditNote : Icons.CallSplit) is { } picture)
-        {
-            item.Icon = Icons.Inked(picture);
-        }
-
-        item.Click += (_, _) => AskCancelMerge(file, directory, variant, recorded, keep);
-
-        return item;
-    }
-
-    /// <summary>One of the two retrack items, which differ in whether the file on disk follows the record.</summary>
+    /// <summary>One of the two retrack entries, which differ in whether the file on disk follows the record.</summary>
     /// <param name="file">The file the record is of.</param>
     /// <param name="version">The version the record is to be moved to.</param>
     /// <param name="label">What the version is called in the question.</param>
     /// <param name="onlyIndex">Whether the file on disk is left alone.</param>
-    /// <returns>The item, ready to be added to a menu.</returns>
-    private MenuItem RetrackItem(string file, string version, string label, bool onlyIndex)
-    {
-        var item = new MenuItem
-        {
-            Header = RolaI18N.Get(
-                onlyIndex
-                    ? "rorolala_vcs.version_graph.retrack_only_index"
-                    : "rorolala_vcs.version_graph.retrack"
-            ),
-        };
-
-        if (_icons.Find(onlyIndex ? Icons.ArrowRightAlt : Icons.EditNote) is { } picture)
-        {
-            item.Icon = Icons.Inked(picture);
-        }
-
-        item.Click += (_, _) => AskRetrack(file, version, label, onlyIndex);
-
-        return item;
-    }
+    /// <returns>The leaf, ready to be added to a menu.</returns>
+    private MenuLeaf RetrackItem(string file, string version, string label, bool onlyIndex) =>
+        Leaf(
+            ["menu.entry.version", onlyIndex ? "menu.entry.retrack_only_index" : "menu.entry.retrack"],
+            onlyIndex ? Icons.ArrowRightAlt : Icons.EditNote,
+            () => AskRetrack(file, version, label, onlyIndex)
+        );
 
     /// <summary>Whether a card is a variant a join may still be made of.</summary>
     /// <param name="card">The card.</param>

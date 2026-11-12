@@ -212,8 +212,8 @@ public sealed class FileSystemPlugin : IRolaPlugin
         host.ContextMenus.Add(
             ContextMenuTarget.Directory,
             new ContextMenuItem(
-                "rorolala_file_system.new_window",
-                60,
+                ["menu.entry.open", "menu.entry.new_window"],
+                20,
                 was =>
                 {
                     if (was.Entry is { } about)

@@ -1261,12 +1261,12 @@ public sealed class WindowTests
         Assert.Equal(["everywhere-late"], Items(services, "it.dock.tree"));
     }
 
-    /// <summary>What one dock's menu offers, by label key.</summary>
+    /// <summary>What one dock's menu offers, by the last key of its path.</summary>
     /// <param name="services">Everything the host holds.</param>
     /// <param name="dockNameId">The dock the menu belongs to.</param>
-    /// <returns>The label keys, in the order they are shown.</returns>
+    /// <returns>The keys, in the order they are shown.</returns>
     private static string[] Items(HostServices services, string dockNameId) =>
-        [.. services.Windows.DockMenuItems(DockMenuTarget.Tab, dockNameId).Select(item => item.LabelKey)];
+        [.. services.Windows.DockMenuItems(DockMenuTarget.Tab, dockNameId).Select(item => item.Key)];
 
     /// <summary>
     /// A dock moved into a window of its own is drawn in that window and in no other.

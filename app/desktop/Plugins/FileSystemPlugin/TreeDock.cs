@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Menus;
 
 namespace FileSystemPlugin;
 
@@ -2246,21 +2247,31 @@ internal sealed class TreeBrowser : UserControl
                 .Select(Being)
                 .ToArray();
 
+            // Offered by every row with steps under it, which is the same row that is given an expander, since
+            // closing them all is worth offering where there is more than one to close. What is not offered is
+            // the other half, opening them all, since that would read every directory under the row, which is
+            // what a tree read a step at a time is for avoiding. It goes in the same menu as the entry, under
+            // the view category, because it is about how the tree is showing a place rather than about the place.
+            IReadOnlyList<MenuLeaf>? extra =
+                collapse is null
+                    ? null
+                    :
+                    [
+                        new MenuLeaf(
+                            ["menu.entry.view", "menu.entry.collapse_all"],
+                            30,
+                            collapse,
+                            "rorolala_file_system.collapse_all"
+                        ),
+                    ];
+
             _actions.Fill(
                 menu,
                 this,
                 entries,
-                entries.All(one => !HoldsRoot(one.Path))
+                entries.All(one => !HoldsRoot(one.Path)),
+                extra: extra
             );
-
-            // Offered by every row with steps under it, which is the same row that is given an expander, since
-            // closing them all is worth offering where there is more than one to close. What is not offered is
-            // the other half, opening them all, since that would read every directory under the row, which is
-            // what a tree read a step at a time is for avoiding.
-            if (collapse is not null)
-            {
-                menu.Items.Add(BrowserActions.Item("rorolala_file_system.collapse_all", collapse));
-            }
         };
 
         // The menu is opened by the control the row is in rather than by the row, since one of the

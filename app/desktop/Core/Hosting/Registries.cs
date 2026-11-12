@@ -108,13 +108,39 @@ internal sealed class ContextMenuRegistry
     /// <summary>Every item, in registration order.</summary>
     private readonly List<OwnedContextItem> _items = [];
 
+    /// <summary>Where a duplicate is reported, or nothing where nothing listens.</summary>
+    private readonly Action<string>? _warn;
+
+    /// <summary>Makes a registry that reports what it refuses.</summary>
+    /// <param name="warn">Where a duplicate is reported.</param>
+    public ContextMenuRegistry(Action<string>? warn = null) => _warn = warn;
+
     /// <summary>Adds an item to one of the three contexts.</summary>
+    /// <remarks>
+    /// An item whose whole path is already offered in the same context is refused rather than added beside it:
+    /// the path is what says which entry this is, so a second one of the same path is one of the two plugins
+    /// being wrong, and the one that registered first is the one kept.
+    /// </remarks>
     /// <param name="owner">The plugin registering it.</param>
     /// <param name="position">The plugin's place in the load order.</param>
     /// <param name="target">The context the item belongs to.</param>
     /// <param name="item">The item to add.</param>
-    public void Add(PluginId owner, int position, ContextMenuTarget target, ContextMenuItem item) =>
+    public void Add(PluginId owner, int position, ContextMenuTarget target, ContextMenuItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(item.Keys);
+
+        if (_items.Any(entry => entry.Target == target && SamePath(entry.Item.Keys, item.Keys)))
+        {
+            _warn?.Invoke(
+                $"context menu: `{owner.Value}` registered `{Path(item.Keys)}` for {target} twice, the first one is kept"
+            );
+
+            return;
+        }
+
         _items.Add(new OwnedContextItem(owner, position, target, item));
+    }
 
     /// <summary>
     /// The items of one context, in the order they are shown.
@@ -123,6 +149,11 @@ internal sealed class ContextMenuRegistry
     /// Every plugin's, and deliberately not one plugin's: the menu a context is drawn in is another plugin's
     ///, the File System's is what folds these in, so what is asked for is what there is rather than what
     /// one of the plugins that contributed it has to say.
+    /// <para>
+    /// The load order of the plugins is read before the items' own order values, so a category opened by one
+    /// plugin and added to by another keeps the place the first one gave it. The renderer draws the categories
+    /// in the order it meets them, which is this one.
+    /// </para>
     /// </remarks>
     /// <param name="target">The context.</param>
     /// <returns>The items, or nothing when that context has none.</returns>
@@ -131,9 +162,22 @@ internal sealed class ContextMenuRegistry
             .Where(entry => entry.Target == target)
             .OrderBy(entry => entry.Position)
             .ThenBy(entry => entry.Item.Order)
-            .ThenBy(entry => entry.Item.LabelKey, StringComparer.Ordinal)
+            .ThenBy(entry => entry.Item.Keys[0], StringComparer.Ordinal)
             .Select(entry => entry.Item)
             .ToArray();
+
+    /// <summary>Whether two paths name the same entry.</summary>
+    /// <param name="left">One path.</param>
+    /// <param name="right">The other.</param>
+    /// <returns>Whether every key is the same.</returns>
+    private static bool SamePath(IReadOnlyList<string> left, IReadOnlyList<string> right) =>
+        left.Count == right.Count
+        && left.Select((key, at) => string.Equals(key, right[at], StringComparison.Ordinal)).All(same => same);
+
+    /// <summary>A path as one word, for a report.</summary>
+    /// <param name="keys">The path.</param>
+    /// <returns>The keys joined by a slash.</returns>
+    private static string Path(IReadOnlyList<string> keys) => string.Join('/', keys);
 }
 
 /// <summary>One dock-menu item, with who registered it.</summary>
@@ -157,13 +201,44 @@ internal sealed class DockMenuRegistry
     /// <summary>Every item, in registration order.</summary>
     private readonly List<OwnedDockItem> _items = [];
 
+    /// <summary>Where a duplicate is reported, or nothing where nothing listens.</summary>
+    private readonly Action<string>? _warn;
+
+    /// <summary>Makes a registry that reports what it refuses.</summary>
+    /// <param name="warn">Where a duplicate is reported.</param>
+    public DockMenuRegistry(Action<string>? warn = null) => _warn = warn;
+
     /// <summary>Adds an item to one of a dock's own menus.</summary>
+    /// <remarks>
+    /// An item whose whole path is already offered for the same docks in the same place is refused, as it is
+    /// in a file context: the path says which entry it is, and the one registered first is the one kept.
+    /// </remarks>
     /// <param name="owner">The plugin registering it.</param>
     /// <param name="position">The plugin's place in the load order.</param>
     /// <param name="target">The place the item belongs to.</param>
     /// <param name="item">The item to add.</param>
-    public void Add(PluginId owner, int position, DockMenuTarget target, DockMenuItem item) =>
+    public void Add(PluginId owner, int position, DockMenuTarget target, DockMenuItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(item.Item);
+
+        if (
+            _items.Any(entry =>
+                entry.Target == target
+                && string.Equals(entry.Item.DockNameId, item.DockNameId, StringComparison.Ordinal)
+                && SamePath(entry.Item.Item.Keys, item.Item.Keys)
+            )
+        )
+        {
+            _warn?.Invoke(
+                $"dock menu: `{owner.Value}` registered `{Path(item.Item.Keys)}` for {target} twice, the first one is kept"
+            );
+
+            return;
+        }
+
         _items.Add(new OwnedDockItem(owner, position, target, item));
+    }
 
     /// <summary>Every item offered for one place and one dock, in the order they are shown.</summary>
     /// <param name="target">The place.</param>
@@ -178,9 +253,22 @@ internal sealed class DockMenuRegistry
             )
             .OrderBy(entry => entry.Position)
             .ThenBy(entry => entry.Item.Item.Order)
-            .ThenBy(entry => entry.Item.Item.LabelKey, StringComparer.Ordinal)
+            .ThenBy(entry => entry.Item.Item.Keys[0], StringComparer.Ordinal)
             .Select(entry => entry.Item.Item)
             .ToArray();
+
+    /// <summary>Whether two paths name the same entry.</summary>
+    /// <param name="left">One path.</param>
+    /// <param name="right">The other.</param>
+    /// <returns>Whether every key is the same.</returns>
+    private static bool SamePath(IReadOnlyList<string> left, IReadOnlyList<string> right) =>
+        left.Count == right.Count
+        && left.Select((key, at) => string.Equals(key, right[at], StringComparison.Ordinal)).All(same => same);
+
+    /// <summary>A path as one word, for a report.</summary>
+    /// <param name="keys">The path.</param>
+    /// <returns>The keys joined by a slash.</returns>
+    private static string Path(IReadOnlyList<string> keys) => string.Join('/', keys);
 }
 
 /// <summary>The navigation buttons plugins contribute.</summary>

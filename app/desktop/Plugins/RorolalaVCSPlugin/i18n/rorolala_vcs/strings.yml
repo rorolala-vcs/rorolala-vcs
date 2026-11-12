@@ -1238,19 +1238,9 @@ rorolala_vcs:
       en: "%{holder} holds this file, so you cannot edit it"
       zh-CN: 该文件由 %{holder} 持有，无法编辑
 
-  # What an entry's menu offers about who holds it. What is claimed is one file, or everything under a
-  # directory, the command line takes a directory recursively, so the two are said apart. The forced
-  # pair is shown while Shift is held: what it does is past the checks the plain pair makes, which is
-  # worth saying twice, in the words and in the red the look gives it.
-  # What a file inside a tree offers about putting it back. The tree is one entry, so the two versions
-  # named here are the tree's recorded version and its staging area rather than the file's own.
+  # What a file inside a tree offers about putting it back, beyond the shared restore words: the question
+  # asked before the change in the work is lost, which the menu entry itself does not ask.
   tree_restore:
-    baseline:
-      en: Restore to baseline
-      zh-CN: 还原至基准
-    staged:
-      en: Restore to staged
-      zh-CN: 还原至暂存
     baseline_confirm_title:
       en: Restore to the recorded version?
       zh-CN: 要还原至基准吗？
@@ -1267,32 +1257,6 @@ rorolala_vcs:
       en: The file could not be restored
       zh-CN: 无法还原该文件
 
-  ownership_menu:
-    hold_file:
-      en: Take ownership of this file
-      zh-CN: 获得文件的所有权
-    give_file:
-      en: Give up ownership of this file
-      zh-CN: 放弃文件的所有权
-    hold_file_forced:
-      en: Force taking ownership of this file
-      zh-CN: 强制获得文件的所有权
-    give_file_forced:
-      en: Force giving up ownership of this file
-      zh-CN: 强制放弃文件的所有权
-    hold_directory:
-      en: Take ownership of everything in this folder
-      zh-CN: 获得目录下所有条目的所有权
-    give_directory:
-      en: Give up ownership of everything in this folder
-      zh-CN: 放弃目录下所有条目的所有权
-    hold_directory_forced:
-      en: Force taking ownership of everything in this folder
-      zh-CN: 强制获得目录下所有条目的所有权
-    give_directory_forced:
-      en: Force giving up ownership of everything in this folder
-      zh-CN: 强制放弃目录下所有条目的所有权
-
   # What the menu says when the command it ran did not finish, and when there is no command to run.
   # Several entries are one run that is allowed to be partly done, so the words allow for some of it
   # having been changed and some refused; which of them, and why, is the command's own to say. This
@@ -1304,3 +1268,111 @@ rorolala_vcs:
   ownership_unknown:
     en: This window was not opened by `rola`, so it does not know which one to run
     zh-CN: 本窗口不是由 `rola` 打开的，因此不知道要运行哪一个
+
+# What this plugin's entries are called, under the paths that name them. The categories are the File
+# System's and are stated in its own file, since it opens the menu they sit in; a leaf is stated once,
+# here, and any plugin that uses the same leaf reuses the word rather than saying it again.
+menu:
+  entry:
+    ownership:
+      en: Ownership
+      zh-CN: 所有权
+    claim:
+      en: Claim
+      zh-CN: 申请
+    waive:
+      en: Give up
+      zh-CN: 放弃
+    force_claim:
+      en: Force claim
+      zh-CN: 强制申请
+    force_waive:
+      en: Force give up
+      zh-CN: 强制放弃
+    restore:
+      en: Restore
+      zh-CN: 还原
+    baseline:
+      en: Baseline
+      zh-CN: 基线
+    staged:
+      en: Staged
+      zh-CN: 暂存
+    rebuild:
+      en: Rebuild
+      zh-CN: 重建
+    theirs:
+      en: Their version
+      zh-CN: 对方版本
+    version:
+      en: Version
+      zh-CN: 版本
+    fork:
+      en: Fork
+      zh-CN: 分支
+    switch:
+      en: Switch record
+      zh-CN: 切换记录
+    switch_keep:
+      en: Switch record only
+      zh-CN: 仅切换记录
+    join:
+      en: Join variant
+      zh-CN: 加入变体
+    checkin:
+      en: Check in
+      zh-CN: 提交
+    cancel_merge:
+      en: Cancel merge
+      zh-CN: 取消合并
+    cancel_merge_keep:
+      en: Cancel merge and keep
+      zh-CN: 取消合并并保留
+    retrack:
+      en: Move record
+      zh-CN: 移动记录
+    retrack_only_index:
+      en: Move record only
+      zh-CN: 仅移动记录
+    uuid:
+      en: UUID
+      zh-CN: UUID
+    version_hash:
+      en: Version hash
+      zh-CN: 版本哈希
+    variant_hash:
+      en: Variant hash
+      zh-CN: 变体哈希
+    content_hash:
+      en: Content hash
+      zh-CN: 内容哈希
+    message:
+      en: Message
+      zh-CN: 消息
+    creator:
+      en: Creator
+      zh-CN: 创建者
+    creator_hash:
+      en: Creator hash
+      zh-CN: 创建者哈希
+    draft:
+      en: Unrecorded change
+      zh-CN: 未记录改动
+    staging:
+      en: Staging area
+      zh-CN: 暂存区
+    fetch:
+      en: Fetch
+      zh-CN: 获取
+    content:
+      en: Content
+      zh-CN: 内容
+    read_again:
+      en: Read again
+      zh-CN: 重新读取
+    upstream:
+      en: Upstream
+      zh-CN: 上游
+    held:
+      en: Where it is held
+      zh-CN: 所在位置

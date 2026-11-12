@@ -53,9 +53,9 @@ internal static class OwnershipActions
     /// Registers what an entry's menu offers about who holds it.
     /// </summary>
     /// <remarks>
-    /// Two commands, each with a forced twin, for each of the two kinds of entry: a file is one entry, and a
-    /// directory is everything under it, which the command line does by itself, so the words say the
-    /// difference and the command does not.
+    /// Two commands, each with a forced twin, offered on files and on directories under the same four
+    /// words: a file is one entry and a directory is everything under it, which the command line does by
+    /// itself, so nothing about the command differs between the two.
     /// </remarks>
     /// <param name="host">The host, whose context menus they are registered with.</param>
     /// <param name="hub">What every run this plugin makes is gathered in, which a run of these joins.</param>
@@ -70,15 +70,18 @@ internal static class OwnershipActions
         ArgumentNullException.ThrowIfNull(hub);
         ArgumentNullException.ThrowIfNull(readings);
 
-        Add(host, hub, readings, ContextMenuTarget.File, "hold_file", Icons.Lock, "hold", false, 10);
-        Add(host, hub, readings, ContextMenuTarget.File, "give_file", Icons.LockOpen, "giveup", false, 20);
-        Add(host, hub, readings, ContextMenuTarget.File, "hold_file_forced", Icons.Lock, "hold", true, 30);
-        Add(host, hub, readings, ContextMenuTarget.File, "give_file_forced", Icons.LockOpen, "giveup", true, 40);
-
-        Add(host, hub, readings, ContextMenuTarget.Directory, "hold_directory", Icons.Lock, "hold", false, 10);
-        Add(host, hub, readings, ContextMenuTarget.Directory, "give_directory", Icons.LockOpen, "giveup", false, 20);
-        Add(host, hub, readings, ContextMenuTarget.Directory, "hold_directory_forced", Icons.Lock, "hold", true, 30);
-        Add(host, hub, readings, ContextMenuTarget.Directory, "give_directory_forced", Icons.LockOpen, "giveup", true, 40);
+        // Four words for two commands and their forced twins, offered on both kinds of entry: the
+        // command line reads a path as a file or as everything under a directory by itself, so the
+        // difference the old pairs of registrations made was in the words rather than in the work. The
+        // registry names one context at a time, so each of the four is registered for a file and for a
+        // directory, and the path is what makes the two one entry in the menu.
+        foreach (var target in new[] { ContextMenuTarget.File, ContextMenuTarget.Directory })
+        {
+            Add(host, hub, readings, target, "menu.entry.claim", Icons.Lock, "hold", false, 10);
+            Add(host, hub, readings, target, "menu.entry.waive", Icons.LockOpen, "giveup", false, 20);
+            Add(host, hub, readings, target, "menu.entry.force_claim", Icons.Lock, "hold", true, 30);
+            Add(host, hub, readings, target, "menu.entry.force_waive", Icons.LockOpen, "giveup", true, 40);
+        }
     }
 
     /// <summary>Whether this plugin has anything to say about what a menu was opened on.</summary>
@@ -111,12 +114,12 @@ internal static class OwnershipActions
             && readings.Knows(directory);
     }
 
-    /// <summary>Registers one of the eight.</summary>
+    /// <summary>Registers one of the four words, for one kind of entry.</summary>
     /// <param name="host">The host.</param>
     /// <param name="hub">What the run's card is begun in.</param>
     /// <param name="readings">What the Vault's copy says about the entries being listed.</param>
     /// <param name="target">Which kind of entry it is offered for.</param>
-    /// <param name="label">The name of the label key, under the menu's own branch.</param>
+    /// <param name="leaf">The key naming the word, under the ownership category.</param>
     /// <param name="icon">The picture it wears.</param>
     /// <param name="verb">Which command it runs.</param>
     /// <param name="force">Whether it is one of the forced pair.</param>
@@ -126,7 +129,7 @@ internal static class OwnershipActions
         IProgressHub hub,
         OwnershipReadings readings,
         ContextMenuTarget target,
-        string label,
+        string leaf,
         string icon,
         string verb,
         bool force,
@@ -135,7 +138,7 @@ internal static class OwnershipActions
         host.ContextMenus.Add(
             target,
             new ContextMenuItem(
-                $"rorolala_vcs.ownership_menu.{label}",
+                ["menu.entry.ownership", leaf],
                 order,
                 was => Run(verb, was, force, host, hub),
                 icon,

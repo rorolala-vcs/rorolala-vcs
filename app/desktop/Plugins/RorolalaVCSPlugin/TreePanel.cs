@@ -13,6 +13,7 @@ using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Menus;
 
 using ShapePath = Avalonia.Controls.Shapes.Path;
 
@@ -447,21 +448,23 @@ internal sealed class TreePanelView : UserControl
 
         // The whole staging area is reset from the staged heading's own menu rather than from a
         // button: what the panel is for is staging, and a destructive command does not need to be
-        // in the way of the paths it would clear.
-        var reset = new Avalonia.Controls.MenuItem
-        {
-            Header = RolaI18N.Get("rorolala_vcs.tree_panel.reset"),
-        };
-        reset.Click += (_, _) =>
-        {
-            if (_tree is { Length: > 0 } tree)
-            {
-                AskReset(tree);
-            }
-        };
-
-        head.ContextMenu = new ContextMenu();
-        head.ContextMenu.Items.Add(reset);
+        // in the way of the paths it would clear. It is the delete category's, because clearing the
+        // staging area is removing what it holds.
+        head.ContextMenu = Menu(
+            [
+                new MenuLeaf(
+                    ["menu.entry.delete", "menu.entry.staging"],
+                    10,
+                    () =>
+                    {
+                        if (_tree is { Length: > 0 } tree)
+                        {
+                            AskReset(tree);
+                        }
+                    }
+                ),
+            ]
+        );
 
         var pane = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
 
@@ -731,7 +734,7 @@ internal sealed class TreePanelView : UserControl
                 Check: () => Unstage(tree, PathsOf(change)),
                 Menu:
                 [
-                    ("rorolala_vcs.tree_panel.reveal", () => Reveal(change.Path)),
+                    new MenuLeaf(["menu.entry.reveal", "menu.entry.in_list"], 10, () => Reveal(change.Path)),
                 ],
                 Detail: change.OldPath is { Length: > 0 } previous
                     ? $"{previous} -> {change.Path}"
@@ -1098,17 +1101,11 @@ internal sealed class TreePanelView : UserControl
     /// <summary>The menu one path's row offers.</summary>
     /// <param name="items">What it offers.</param>
     /// <returns>The menu.</returns>
-    private static ContextMenu Menu(IReadOnlyList<(string LabelKey, Action Run)> items)
+    private static ContextMenu Menu(IReadOnlyList<MenuLeaf> items)
     {
         var menu = new ContextMenu();
 
-        foreach (var (labelKey, run) in items)
-        {
-            var entry = new Avalonia.Controls.MenuItem { Header = RolaI18N.Get(labelKey) };
-
-            entry.Click += (_, _) => run();
-            menu.Items.Add(entry);
-        }
+        new MenuRenderer(RolaI18N.Get).Fill(menu, items, force: false);
 
         return menu;
     }
@@ -1151,11 +1148,12 @@ internal sealed class TreePanelView : UserControl
                     ),
                     Menu:
                     [
-                        (
-                            "rorolala_vcs.tree_panel.theirs",
+                        new MenuLeaf(
+                            ["menu.entry.restore", "menu.entry.theirs"],
+                            10,
                             () => Reveal(Path.Combine(tree, conflict.Theirs))
                         ),
-                        ("rorolala_vcs.tree_panel.reveal", () => Reveal(conflict.Path)),
+                        new MenuLeaf(["menu.entry.reveal", "menu.entry.in_list"], 10, () => Reveal(conflict.Path)),
                     ],
                     Detail: conflict.Path
                 )
@@ -1200,26 +1198,24 @@ internal sealed class TreePanelView : UserControl
             ),
         };
 
-        var menu = new List<(string LabelKey, Action Run)>();
+        var menu = new List<MenuLeaf>();
 
         if (change.Change is not "added")
         {
             var restore = change switch
             {
-                { Change: "deleted", Path: var path } => (
-                    "rorolala_vcs.tree_panel.rebuild",
-                    path
-                ),
+                { Change: "deleted", Path: var path } => ("menu.entry.rebuild", path),
                 { Change: "renamed", OldPath: { Length: > 0 } was } => (
-                    "rorolala_vcs.tree_panel.restore",
+                    "menu.entry.baseline",
                     was
                 ),
-                { Path: var path } => ("rorolala_vcs.tree_panel.restore", path),
+                { Path: var path } => ("menu.entry.baseline", path),
             };
 
             menu.Add(
-                (
-                    restore.Item1,
+                new MenuLeaf(
+                    ["menu.entry.restore", restore.Item1],
+                    10,
                     () => Begin(
                         tree,
                         "rorolala_vcs.progress.tree_restore",
@@ -1229,7 +1225,7 @@ internal sealed class TreePanelView : UserControl
             );
         }
 
-        menu.Add(("rorolala_vcs.tree_panel.reveal", () => Reveal(change.Path)));
+        menu.Add(new MenuLeaf(["menu.entry.reveal", "menu.entry.in_list"], 10, () => Reveal(change.Path)));
 
         return new Leaf(
             Path: change.Path,
@@ -1261,7 +1257,7 @@ internal sealed class TreePanelView : UserControl
             ),
             Menu:
             [
-                ("rorolala_vcs.tree_panel.reveal", () => Reveal(entry.Path)),
+                new MenuLeaf(["menu.entry.reveal", "menu.entry.in_list"], 10, () => Reveal(entry.Path)),
             ],
             Detail: entry.Path
         );
@@ -1746,7 +1742,7 @@ internal sealed class TreePanelView : UserControl
         string? OldPath,
         bool Staged,
         Action Check,
-        IReadOnlyList<(string LabelKey, Action Run)> Menu,
+        IReadOnlyList<MenuLeaf> Menu,
         string Detail
     );
 

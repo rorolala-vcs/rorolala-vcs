@@ -174,7 +174,7 @@ public sealed class ContextMenuTests
 
     /// <summary>What the items say, in the order they are offered.</summary>
     /// <param name="items">The items offered.</param>
-    /// <returns>Their label keys.</returns>
+    /// <returns>The last key of each path.</returns>
     private static string[] Names(IReadOnlyList<ContextMenuItem> items) =>
-        [.. items.Select(item => item.LabelKey)];
+        [.. items.Select(item => item.Key)];
 }

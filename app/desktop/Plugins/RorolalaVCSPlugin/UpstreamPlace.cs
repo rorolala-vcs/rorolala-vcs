@@ -379,7 +379,7 @@ internal sealed class UpstreamPlace
         host.ContextMenus.Add(
             ContextMenuTarget.Directory,
             new ContextMenuItem(
-                "rorolala_vcs.menu.upstream",
+                ["menu.entry.open", "menu.entry.upstream"],
                 60,
                 _ => place.OpenRoot(),
                 Icons.Download,
@@ -1724,7 +1724,7 @@ internal sealed class UpstreamPlace
 
         items.Add(
             new ContextMenuItem(
-                "rorolala_vcs.place.take_ownership",
+                ["menu.entry.ownership", "menu.entry.claim"],
                 15,
                 _ => BeginOwnership(source, ids, take: true),
                 Icons.Lock
@@ -1732,7 +1732,7 @@ internal sealed class UpstreamPlace
         );
         items.Add(
             new ContextMenuItem(
-                "rorolala_vcs.place.giveup_ownership",
+                ["menu.entry.ownership", "menu.entry.waive"],
                 16,
                 _ => BeginOwnership(source, ids, take: false),
                 Icons.Lock
@@ -1811,7 +1811,7 @@ internal sealed class UpstreamPlace
                     ? new ContextMenuItem[]
                     {
                         new(
-                            "rorolala_vcs.place.new_folder",
+                            ["menu.entry.new", "menu.entry.folder"],
                             5,
                             _ => NewFolder(Of(source.Domain, source.Name, spot.Path)),
                             Icons.Add
@@ -1822,7 +1822,7 @@ internal sealed class UpstreamPlace
                     ? new ContextMenuItem[]
                     {
                         new(
-                            "rorolala_vcs.place.checkin",
+                            ["menu.entry.version", "menu.entry.checkin"],
                             10,
                             _ => _checkin.Start(
                                 source,
@@ -1862,7 +1862,7 @@ internal sealed class UpstreamPlace
                 ? new ContextMenuItem[]
                 {
                     new(
-                        "rorolala_vcs.place.checkin",
+                        ["menu.entry.version", "menu.entry.checkin"],
                         10,
                         _ => _checkin.Start(source, entry, spot.Path),
                         Icons.Download
@@ -1873,7 +1873,7 @@ internal sealed class UpstreamPlace
             // cannot say; what it is not held at is worth copying out instead.
             held
                 ? new ContextMenuItem(
-                    "rorolala_vcs.place.held",
+                    ["menu.entry.reveal", "menu.entry.held"],
                     20,
                     _ => Report(
                         "rorolala_vcs.place.held_title",
@@ -1885,7 +1885,7 @@ internal sealed class UpstreamPlace
                     Icons.Lock
                 )
                 : new ContextMenuItem(
-                    source.Vault.Length > 0 ? "rorolala_vcs.place.copy_path" : "rorolala_vcs.place.copy_path_layout",
+                    ["menu.entry.copy", "menu.entry.path"],
                     20,
                     _ => Report(
                         source.Vault.Length > 0 ? "rorolala_vcs.place.path_title" : "rorolala_vcs.place.path_title_layout",
@@ -1913,7 +1913,7 @@ internal sealed class UpstreamPlace
                 Menu:
                 [
                     new ContextMenuItem(
-                        "rorolala_vcs.place.fetch",
+                        ["menu.entry.fetch", "menu.entry.content"],
                         10,
                         _ => Fetch(),
                         Icons.Download
@@ -1954,7 +1954,7 @@ internal sealed class UpstreamPlace
             Menu:
             [
                 new ContextMenuItem(
-                    "rorolala_vcs.place.read_again",
+                    ["menu.entry.fetch", "menu.entry.read_again"],
                     10,
                     _ => ReadAgain(source, list, why),
                     Icons.Refresh

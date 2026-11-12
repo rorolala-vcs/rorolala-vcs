@@ -30,6 +30,9 @@ use std::process::ExitCode;
 /// Where the scan starts when the caller names nowhere.
 const DEFAULT_ROOT: &str = ".";
 
+/// The namespace a menu path's keys live in, which every plugin may use and any one may state.
+const SHARED_MENU: &str = csharp_calls::SHARED_MENU;
+
 /// The directory names no scan walks into.
 ///
 /// These are build trees and caches: what they hold is made from what is already scanned, or is
@@ -167,6 +170,16 @@ fn scan(root: &Path) -> Result<Report, String> {
 
     let mut report = Report::default();
 
+    // A menu path is shared: a plugin may add an entry under a category another plugin opened, and
+    // name a leaf another one stated. What is collected here is every shared key any plugin states,
+    // which is what any plugin's use of one is checked against.
+    let shared: BTreeSet<String> = catalogs
+        .iter()
+        .filter(|(site, _)| site.kind == Kind::CSharp && site.plugin)
+        .flat_map(|(_, keys)| keys.keys().cloned())
+        .filter(|key| key.starts_with(SHARED_MENU))
+        .collect();
+
     for (site, keys) in catalogs {
         let mut allowed: BTreeSet<&str> = keys.keys().map(String::as_str).collect();
 
@@ -190,6 +203,26 @@ fn scan(root: &Path) -> Result<Report, String> {
                     line: call.line,
                     key: call.key,
                 });
+            }
+        }
+
+        // A menu path is not passed to `Get`, so its keys are read from the literals instead. A
+        // shared key needs no statement of its own: any plugin's catalogue is enough.
+        if site.kind == Kind::CSharp && site.plugin {
+            let menu = csharp_calls::menu_keys(&site.sources)?;
+
+            report.unchecked += menu.unchecked;
+
+            for call in menu.calls {
+                report.checked += 1;
+
+                if !shared.contains(&call.key) {
+                    report.missing.push(Problem {
+                        file: call.file,
+                        line: call.line,
+                        key: call.key,
+                    });
+                }
             }
         }
     }

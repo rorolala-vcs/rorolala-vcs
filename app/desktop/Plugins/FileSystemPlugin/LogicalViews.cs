@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Menus;
 using MenuItem = Avalonia.Controls.MenuItem;
 
 namespace FileSystemPlugin;
@@ -297,27 +298,39 @@ internal sealed class Places : Listing<LogicalEntry>
                 ? place.Menu(_place.Address, chosen) ?? chosen[0].Menu
                 : chosen[0].Menu;
 
+        var was = new ContextTarget(_place.Address.ToString(), []);
+        var leaves = new List<MenuLeaf>();
+
         if (offered is { Count: > 0 } items)
         {
-            foreach (var item in items.OrderBy(item => item.Order))
-            {
-                menu.Items.Add(Item(item));
-            }
+            leaves.AddRange(items.OrderBy(item => item.Order).Select(item => Leaf(item, was)));
         }
 
         if (from is EntryView<LogicalEntry> view && chosen.Count == 1 && Renamable(chosen[0]))
         {
-            menu.Items.Add(
-                BrowserActions.Item("rorolala_file_system.rename", () => view.Rename(chosen[0]))
+            leaves.Add(
+                new MenuLeaf(
+                    ["menu.entry.rename", "menu.entry.file"],
+                    10,
+                    () => view.Rename(chosen[0]),
+                    "rorolala_file_system.rename"
+                )
             );
         }
 
         if (chosen.Any(Removable))
         {
-            menu.Items.Add(
-                BrowserActions.Item("rorolala_file_system.delete", () => Delete(chosen, ask: true))
+            leaves.Add(
+                new MenuLeaf(
+                    ["menu.entry.delete", "menu.entry.file"],
+                    10,
+                    () => Delete(chosen, ask: true),
+                    "rorolala_file_system.delete"
+                )
             );
         }
+
+        BrowserActions.Renderer(Host).Fill(menu, leaves, force);
     }
 
     /// <summary>
@@ -338,6 +351,7 @@ internal sealed class Places : Listing<LogicalEntry>
     public override ContextMenu? Space(Control from)
     {
         var menu = new ContextMenu();
+        var leaves = new List<MenuLeaf>();
 
         // Only a place that makes folders where the menu was opened is offered one, and the view is what is asked
         // for it: a folder made here has a row in that view, and the name is typed in the row.
@@ -347,10 +361,21 @@ internal sealed class Places : Listing<LogicalEntry>
             && editor.MakesFolders(_place.Address)
         )
         {
-            menu.Items.Add(BrowserActions.Item("rorolala_file_system.new_folder", () => view.NewFolder()));
+            leaves.Add(
+                new MenuLeaf(
+                    ["menu.entry.new", "menu.entry.folder"],
+                    10,
+                    () => view.NewFolder(),
+                    "rorolala_file_system.new_folder"
+                )
+            );
         }
 
-        menu.Items.Add(BrowserActions.Item("rorolala_file_system.refresh", _browser.Refresh));
+        leaves.Add(
+            new MenuLeaf(["menu.entry.view", "menu.entry.refresh"], 20, _browser.Refresh, "rorolala_file_system.refresh")
+        );
+
+        BrowserActions.Renderer(Host).Fill(menu, leaves, force: false);
 
         return menu;
     }
@@ -621,23 +646,20 @@ internal sealed class Places : Listing<LogicalEntry>
         return worn.Count == 0 ? icon : Icons.Marked(icon, worn, size);
     }
 
-    /// <summary>One contributed menu item, as the menu draws it.</summary>
+    /// <summary>One contributed menu item, as a leaf of the menu.</summary>
     /// <param name="item">What the provider registered.</param>
-    /// <returns>The item.</returns>
-    private MenuItem Item(ContextMenuItem item)
-    {
-        var menu = new MenuItem { Header = RolaI18N.Get(item.LabelKey) };
-
-        if (item.IconKey is { } key && Host.Icons.Find(key) is { } picture)
-        {
-            menu.Icon = Icons.Inked(picture, Icons.Menu, typeof(MenuItem));
-        }
-
-        var was = new ContextTarget(_place.Address.ToString(), []);
-        menu.Click += (_, _) => item.Command(was);
-
-        return menu;
-    }
+    /// <param name="was">What the menu was opened on.</param>
+    /// <returns>The leaf.</returns>
+    private static MenuLeaf Leaf(ContextMenuItem item, ContextTarget was) =>
+        new(
+            item.Keys,
+            item.Order,
+            () => item.Command(was),
+            item.IconKey,
+            item.Force,
+            item.Applies is null ? null : () => item.Applies(was),
+            item.Enabled is null ? null : () => item.Enabled(was)
+        );
 
     /// <summary>What a drag carried, where it is one this program's own views started.</summary>
     /// <param name="e">The drag.</param>

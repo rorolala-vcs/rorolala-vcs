@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Menus;
 using MenuItem = Avalonia.Controls.MenuItem;
 
 namespace FileSystemPlugin;
@@ -362,38 +363,60 @@ internal sealed class BrowserActions
     /// <param name="entries">What the menu is about.</param>
     /// <param name="deletable">Whether the entries may be removed.</param>
     /// <param name="force">Whether the forced actions are shown to begin with, which Shift is what decides.</param>
+    /// <param name="extra">
+    /// Entries a view adds to the same menu, after what the plugins registered: a tree's own way of closing
+    /// every step it has open is about the tree rather than about the entry, and it still belongs in the menu
+    /// the entry opens.
+    /// </param>
     public void Fill(
         ContextMenu menu,
         Control from,
         IReadOnlyList<Entry> entries,
         bool deletable = true,
-        bool force = false
+        bool force = false,
+        IReadOnlyList<MenuLeaf>? extra = null
     )
     {
         menu.Items.Clear();
+
+        var leaves = new List<MenuLeaf>();
 
         // The way up is not a place: there is nothing under it to reveal, nothing to put on the clipboard
         // and nothing to root a tree at, so what can be done with it is the one thing it is for.
         if (entries.Count == 1 && Browser.IsUp(entries[0].Path))
         {
-            menu.Items.Add(Item("rorolala_file_system.open", () => _browser.Up()));
+            leaves.Add(Leaf(["menu.entry.open", "menu.entry.file"], "rorolala_file_system.open", () => _browser.Up()));
+            Render(menu, leaves, force);
 
             return;
         }
 
-        menu.Items.Add(Item("rorolala_file_system.open", () => Open(entries)));
+        leaves.Add(Leaf(["menu.entry.open", "menu.entry.file"], "rorolala_file_system.open", () => Open(entries)));
 
         var files = Offered(entries);
 
         if (files.Count > 0)
         {
-            menu.Items.Add(Item("rorolala_file_system.copy", () => _clip.Copy(from, files, _host.Log.Error)));
+            leaves.Add(
+                Leaf(
+                    ["menu.entry.copy", "menu.entry.file"],
+                    "rorolala_file_system.copy",
+                    () => _clip.Copy(from, files, _host.Log.Error),
+                    10
+                )
+            );
 
             // Cutting the way up or the computer would be cutting a place rather than an item, which is
             // why the extra is asked for here rather than taken from what is simply offered.
             if (files.Count == entries.Count)
             {
-                menu.Items.Add(Item("rorolala_file_system.cut", () => _clip.Cut(from, files, _host.Log.Error)));
+                leaves.Add(
+                    Leaf(
+                        ["menu.entry.cut", "menu.entry.file"],
+                        "rorolala_file_system.cut",
+                        () => _clip.Cut(from, files, _host.Log.Error)
+                    )
+                );
             }
         }
 
@@ -402,7 +425,7 @@ internal sealed class BrowserActions
         // lands in the directory being looked at.
         if (Into(entries) is { } into)
         {
-            menu.Items.Add(Item("rorolala_file_system.paste", () => Paste(from, into)));
+            leaves.Add(Leaf(["menu.entry.paste", "menu.entry.file"], "rorolala_file_system.paste", () => Paste(from, into)));
         }
 
         // Removing is about the things offered like a copy is, and it asks by default: the menu is opened by
@@ -410,7 +433,23 @@ internal sealed class BrowserActions
         // rather than the shifted one.
         if (deletable && files.Count > 0)
         {
-            menu.Items.Add(Item("rorolala_file_system.delete", () => Remove(entries, ask: true)));
+            leaves.Add(Leaf(["menu.entry.delete", "menu.entry.file"], "rorolala_file_system.delete", () => Remove(entries, ask: true)));
+        }
+
+        // A new folder lands where the menu was opened, which for the tree is the directory the row names
+        // rather than the directory a dock beside it is looking at.
+        if (entries.Count == 1 && from is TreeBrowser grower)
+        {
+            var step = entries[0].Path;
+            leaves.Add(
+                Leaf(["menu.entry.new", "menu.entry.folder"], "rorolala_file_system.new_folder", () => grower.NewFolder(step), 10)
+            );
+            AddVariants(leaves, variant => grower.NewFolder(step, variant));
+        }
+        else if (from is EntryView<Entry> maker)
+        {
+            leaves.Add(Leaf(["menu.entry.new", "menu.entry.folder"], "rorolala_file_system.new_folder", () => maker.NewFolder(), 10));
+            AddVariants(leaves, variant => maker.NewFolder(variant));
         }
 
         // Renaming is one entry at a time, because a name is what one thing has; the way up is not a thing
@@ -423,50 +462,69 @@ internal sealed class BrowserActions
             switch (from)
             {
                 case EntryView<Entry> view:
-                    menu.Items.Add(Item("rorolala_file_system.rename", () => view.Rename(only)));
+                    leaves.Add(
+                        Leaf(["menu.entry.rename", "menu.entry.file"], "rorolala_file_system.rename", () => view.Rename(only))
+                    );
 
                     break;
 
                 case TreeBrowser branch:
-                    menu.Items.Add(Item("rorolala_file_system.rename", () => branch.Rename(only)));
+                    leaves.Add(
+                        Leaf(["menu.entry.rename", "menu.entry.file"], "rorolala_file_system.rename", () => branch.Rename(only))
+                    );
 
                     break;
             }
-        }
-
-        // A new folder lands where the menu was opened, which for the tree is the directory the row names
-        // rather than the directory a dock beside it is looking at.
-        if (entries.Count == 1 && from is TreeBrowser grower)
-        {
-            var step = entries[0].Path;
-            menu.Items.Add(Item("rorolala_file_system.new_folder", () => grower.NewFolder(step)));
-            AddVariants(menu, variant => grower.NewFolder(step, variant));
-        }
-        else if (from is EntryView<Entry> maker)
-        {
-            menu.Items.Add(Item("rorolala_file_system.new_folder", () => maker.NewFolder()));
-            AddVariants(menu, variant => maker.NewFolder(variant));
         }
 
         if (entries.Count == 1)
         {
             var only = entries[0];
-            menu.Items.Add(Item("rorolala_file_system.reveal", () => Openers.Reveal(only, _host.Log.Error)));
-            menu.Items.Add(Item("rorolala_file_system.copy_path", () => Openers.Copy(from, only.Path, _host.Log.Error)));
-
-            // A directory can be made the base of the tree from wherever it is seen, which is what makes
-            // the tree a view of the place being worked in rather than of wherever the browser started.
-            if (only.Kind == EntryKind.Directory)
-            {
-                menu.Items.Add(Item("rorolala_file_system.set_base", () => _browser.SetBase(only.Path)));
-            }
+            leaves.Add(
+                Leaf(
+                    ["menu.entry.reveal", "menu.entry.in_file_manager"],
+                    "rorolala_file_system.reveal",
+                    () => Openers.Reveal(only, _host.Log.Error)
+                )
+            );
+            leaves.Add(
+                Leaf(
+                    ["menu.entry.copy", "menu.entry.path"],
+                    "rorolala_file_system.copy_path",
+                    () => Openers.Copy(from, only.Path, _host.Log.Error),
+                    20
+                )
+            );
         }
         else
         {
-            menu.Items.Add(Item("rorolala_file_system.copy_path", () => Openers.Copy(from, Paths(entries), _host.Log.Error)));
+            leaves.Add(
+                Leaf(
+                    ["menu.entry.copy", "menu.entry.path"],
+                    "rorolala_file_system.copy_path",
+                    () => Openers.Copy(from, Paths(entries), _host.Log.Error),
+                    20
+                )
+            );
         }
 
-        Contributed(menu, entries, force);
+        Contributed(leaves, entries);
+
+        // A directory can be made the base of the tree from wherever it is seen, which is what makes
+        // the tree a view of the place being worked in rather than of wherever the browser started. It is
+        // added after what the plugins registered so that the view category sits at the end of the menu,
+        // which is where it belongs: it is about how the program shows a place rather than about the place.
+        if (entries.Count == 1 && entries[0].Kind == EntryKind.Directory)
+        {
+            var only = entries[0];
+            leaves.Add(
+                Leaf(["menu.entry.view", "menu.entry.set_base"], null, () => _browser.SetBase(only.Path), 10)
+            );
+        }
+
+        leaves.AddRange(extra ?? []);
+
+        Render(menu, leaves, force);
     }
 
     /// <summary>The class a forced action wears, which the look draws as what it is.</summary>
@@ -540,10 +598,9 @@ internal sealed class BrowserActions
     /// The forced actions are added too, hidden, rather than left out: a menu is laid out when it opens, and
     /// what Shift unfolds is a layer of what is already there rather than a menu built a second time.
     /// </remarks>
-    /// <param name="menu">The menu to add to.</param>
+    /// <param name="leaves">The menu being built.</param>
     /// <param name="entries">What the menu is about.</param>
-    /// <param name="force">Whether the forced actions are shown to begin with.</param>
-    private void Contributed(ContextMenu menu, IReadOnlyList<Entry> entries, bool force)
+    private void Contributed(List<MenuLeaf> leaves, IReadOnlyList<Entry> entries)
     {
         if (About(entries, _browser.Current) is not { } about)
         {
@@ -554,7 +611,7 @@ internal sealed class BrowserActions
         {
             foreach (var item in Offer(_host.ContextMenus, about.Target, about.Was, wanted))
             {
-                menu.Items.Add(Contributed(item, about.Was, force));
+                leaves.Add(Leaf(item, about.Was));
             }
         }
     }
@@ -564,52 +621,40 @@ internal sealed class BrowserActions
     /// The picture is the library's, because it belongs to the plugin that drew it: a kind registered here
     /// names a key rather than carrying a picture, so a plugin's own artwork is not copied into this one.
     /// A key the library does not hold leaves the item without a picture rather than without a menu.
+    /// <para>
+    /// The variant's own label key is the last key of the path, so the variant sits under the new category
+    /// beside the plain folder and is named by the plugin that offered it. It needs no part of the shared
+    /// menu namespace: the category is what makes it one menu, and the leaf is only ever read as a word.
+    /// </para>
     /// </remarks>
-    /// <param name="menu">The menu to add to.</param>
+    /// <param name="leaves">The menu being built.</param>
     /// <param name="make">What makes a folder of the kind.</param>
-    private void AddVariants(ContextMenu menu, Action<FolderVariant?> make)
+    private void AddVariants(List<MenuLeaf> leaves, Action<FolderVariant?> make)
     {
+        var order = 20;
+
         foreach (var variant in _host.FolderVariants.All())
         {
-            var item = new MenuItem { Header = RolaI18N.Get(variant.LabelKey) };
-
-            if (_host.Icons.Find(variant.IconKey) is { } picture)
-            {
-                item.Icon = Icons.Inked(picture, Icons.Menu, typeof(MenuItem));
-            }
-
-            item.Click += (_, _) => make(variant);
-            menu.Items.Add(item);
+            leaves.Add(
+                new MenuLeaf(["menu.entry.new", variant.LabelKey], order++, () => make(variant), variant.IconKey)
+            );
         }
     }
 
-    /// <summary>One action a plugin registered, as an item in the menu.</summary>
+    /// <summary>One action a plugin registered, as a leaf of the menu.</summary>
     /// <param name="item">What it registered.</param>
     /// <param name="was">What the menu was opened on.</param>
-    /// <param name="shown">Whether the forced actions are shown to begin with.</param>
-    /// <returns>The item.</returns>
-    private MenuItem Contributed(ContextMenuItem item, ContextTarget was, bool shown)
-    {
-        var menu = new MenuItem { Header = RolaI18N.Get(item.LabelKey) };
-
-        // The picture is the library's, because it was contributed to the library: it belongs to the plugin
-        // that drew it, and this one only hands it on. A key the library does not hold is an item without a
-        // picture rather than a menu that will not open.
-        if (item.IconKey is { } key && _host.Icons.Find(key) is { } picture)
-        {
-            menu.Icon = Icons.Inked(picture, Icons.Menu, typeof(MenuItem));
-        }
-
-        if (item.Force)
-        {
-            menu.Classes.Add(Force);
-            menu.IsVisible = shown;
-        }
-
-        menu.Click += (_, _) => item.Command(was);
-
-        return menu;
-    }
+    /// <returns>The leaf.</returns>
+    private static MenuLeaf Leaf(ContextMenuItem item, ContextTarget was) =>
+        new(
+            item.Keys,
+            item.Order,
+            () => item.Command(was),
+            item.IconKey,
+            item.Force,
+            item.Applies is null ? null : () => item.Applies(was),
+            item.Enabled is null ? null : () => item.Enabled(was)
+        );
 
     /// <summary>The menu opened on the space around the entries.</summary>
     /// <remarks>
@@ -622,12 +667,13 @@ internal sealed class BrowserActions
     {
         var menu = new ContextMenu();
         var here = _browser.Current;
+        var leaves = new List<MenuLeaf>();
 
         // The computer is a place to choose a drive from rather than a directory, so there is nothing
         // there to paste into or to reveal; reading it again is the only thing it can be asked.
         if (!Browser.IsComputer(here))
         {
-            menu.Items.Add(Item("rorolala_file_system.paste", () => Paste(from, here)));
+            leaves.Add(Leaf(["menu.entry.paste", "menu.entry.file"], "rorolala_file_system.paste", () => Paste(from, here)));
 
             // A listing's own space is the one place a folder is made without a row to say where: the tree
             // is rooted at the base and draws no single directory to make one in, so it is left out of this
@@ -635,22 +681,32 @@ internal sealed class BrowserActions
             // step instead (see `Fill`).
             if (from is EntryView)
             {
-                menu.Items.Add(Item("rorolala_file_system.new_folder", () => NewFolder(here)));
-                AddVariants(menu, variant => NewFolder(here, variant));
+                leaves.Add(Leaf(["menu.entry.new", "menu.entry.folder"], "rorolala_file_system.new_folder", () => NewFolder(here), 10));
+                AddVariants(leaves, variant => NewFolder(here, variant));
             }
+
+            leaves.Add(
+                Leaf(
+                    ["menu.entry.reveal", "menu.entry.in_file_manager"],
+                    "rorolala_file_system.reveal",
+                    () => Openers.Reveal(new Entry(here, EntryKind.Directory), _host.Log.Error)
+                )
+            );
 
             // The top of the platform, which is where the tree is rooted by its own button as well: a tree
             // that was rooted deep can be taken back to the drives without going up a step at a time. It is
             // left out where the base is the top already, since choosing it would do nothing at all.
             if (!string.Equals(_browser.BaseDir, Browser.Root(), StringComparison.Ordinal))
             {
-                menu.Items.Add(Item("rorolala_file_system.root", () => _browser.SetBase(Browser.Root())));
+                leaves.Add(
+                    Leaf(["menu.entry.view", "menu.entry.root"], "rorolala_file_system.root", () => _browser.SetBase(Browser.Root()), 10)
+                );
             }
-
-            menu.Items.Add(Item("rorolala_file_system.reveal", () => Openers.Reveal(new Entry(here, EntryKind.Directory), _host.Log.Error)));
         }
 
-        menu.Items.Add(Item("rorolala_file_system.refresh", _browser.Refresh));
+        leaves.Add(Leaf(["menu.entry.view", "menu.entry.refresh"], "rorolala_file_system.refresh", _browser.Refresh, 20));
+
+        Render(menu, leaves, force: false);
 
         return menu;
     }
@@ -686,35 +742,54 @@ internal sealed class BrowserActions
     private static string Paths(IReadOnlyList<Entry> entries) =>
         string.Join(Environment.NewLine, entries.Select(entry => entry.Path));
 
-    /// <summary>
-    /// One menu item, named by a translation key.
-    /// </summary>
+    /// <summary>A renderer over this plugin's words and the pictures it draws.</summary>
     /// <remarks>
-    /// Open to the views as well as to the menus here, so that a view with an item of its own to add,
-    /// the tree closes every step from its root, adds one that is named the way the items around it
-    /// are named rather than spelling a label out.
-    /// <para>
-    /// What the item wears is looked up rather than handed in, because an action is one action wherever it is
-    /// offered: copying a path from one entry and from a set of them are the same words and the same picture,
-    /// and a menu that had to be told every time would be one that could disagree with itself.
-    /// </para>
+    /// One renderer for the File System's own menus and for a place's: what a menu looks like is not the
+    /// listing's answer, and a second renderer would be a second look to keep in step with this one.
     /// </remarks>
-    /// <param name="key">The translation key the item is named by.</param>
-    /// <param name="action">What choosing it does.</param>
-    /// <returns>The item.</returns>
-    public static MenuItem Item(string key, Action action)
+    /// <param name="host">The host, for the icon library and the log.</param>
+    /// <returns>The renderer.</returns>
+    internal static MenuRenderer Renderer(IPluginHost host)
     {
-        var item = new MenuItem { Header = RolaI18N.Get(key) };
+        ArgumentNullException.ThrowIfNull(host);
 
+        return new MenuRenderer(RolaI18N.Get, key => MenuIcon(host, key), host.Log.Warn);
+    }
+
+    /// <summary>
+    /// What an icon key is drawn as, or nothing when neither this plugin nor the library holds it.
+    /// </summary>
+    /// <param name="host">The host, for the icon library.</param>
+    /// <param name="key">The key naming the picture.</param>
+    /// <returns>The picture, or nothing.</returns>
+    internal static Control? MenuIcon(IPluginHost host, string key)
+    {
         if (Pictures.TryGetValue(key, out var picture))
         {
-            item.Icon = Icons.Glyph(Icons.Picture(picture), Icons.PlainInk, Icons.Menu);
+            return Icons.Glyph(Icons.Picture(picture), Icons.PlainInk, Icons.Menu);
         }
 
-        item.Click += (_, _) => action();
-
-        return item;
+        // A contributed picture is the library's, because it belongs to the plugin that drew it: this one
+        // only hands it on. A key the library does not hold is an entry without a picture rather than a menu
+        // that will not open.
+        return host.Icons.Find(key) is { } found ? Icons.Inked(found, Icons.Menu, typeof(MenuItem)) : null;
     }
+
+    /// <summary>One of this plugin's own entries, at the end of the path that names it.</summary>
+    /// <param name="keys">The path, from the category to the entry itself.</param>
+    /// <param name="iconKey">The key naming the entry's picture, or nothing for one without.</param>
+    /// <param name="run">What choosing it does.</param>
+    /// <param name="order">Where it sits among the entries of its category.</param>
+    /// <returns>The leaf.</returns>
+    private static MenuLeaf Leaf(string[] keys, string? iconKey, Action run, int order = 0) =>
+        new(keys, order, run, iconKey);
+
+    /// <summary>Puts the leaves into the menu, as the one renderer every menu in the program is drawn by.</summary>
+    /// <param name="menu">The menu to fill.</param>
+    /// <param name="leaves">What it is to offer.</param>
+    /// <param name="force">Whether the forced entries are shown to begin with.</param>
+    private void Render(ContextMenu menu, IReadOnlyList<MenuLeaf> leaves, bool force) =>
+        Renderer(_host).Fill(menu, leaves, force);
 
     /// <summary>
     /// The picture each menu item wears, by the translation key it is named by.
