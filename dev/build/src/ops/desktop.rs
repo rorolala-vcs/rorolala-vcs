@@ -43,10 +43,46 @@ pub fn lay_out_desktop() -> Result<(), crate::Error> {
     dotnet::publish_host(&workspace, &directory, false)?;
     dotnet::publish_launcher(&workspace, &directory, false)?;
     dotnet::publish_plugins(&workspace, &directory)?;
+    lay_out_presets(&workspace)?;
 
     // The Desktop program searches the book laid beside the programs, so a layout a person runs
     // by hand carries it too; without it the program opens with nothing to search.
     build_book(&workspace)?;
+
+    Ok(())
+}
+
+/// Lays the preset layouts beside the program, where the menu that switches them reads them.
+///
+/// The presets are the tree's own files rather than files written for a layout, because a second copy is a
+/// copy that goes stale. `__raw` is the set the adjusted presets were made from and is not laid down: the
+/// program reads one file a preset, and the files under a directory of their own would be presets named after
+/// a directory.
+///
+/// # Errors
+///
+/// Reports a read or a copy's own failure.
+pub fn lay_out_presets(workspace: &Workspace) -> Result<(), crate::Error> {
+    let source = workspace.root().join("app/desktop/Presets/Layouts");
+    let destination = workspace.desktop_dir()?.join("layout-presets");
+
+    crate::fs::remove(&destination)?;
+
+    for file in crate::fs::read_files(&source)? {
+        if !file
+            .extension()
+            .and_then(std::ffi::OsStr::to_str)
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+        {
+            continue;
+        }
+
+        let Some(name) = file.file_name() else {
+            continue;
+        };
+
+        crate::fs::copy_file(&file, &destination.join(name))?;
+    }
 
     Ok(())
 }

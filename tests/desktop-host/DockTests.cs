@@ -560,6 +560,40 @@ public sealed class DockTests
         Assert.Empty(Names(manager.Snapshot()));
     }
 
+    /// <summary>
+    /// A layout is opened over nothing rather than beside what is open, which is what switching one does.
+    /// </summary>
+    /// <remarks>
+    /// The docks of the arrangement being left are let go of before the new tree is opened: a dock left behind
+    /// would be a second instance of one the preset opens, and the saved layout would name both.
+    /// </remarks>
+    [Fact]
+    public void ALayoutIsOpenedOverNothingRatherThanBesideWhatIsOpen()
+    {
+        var (manager, _, _) = Make();
+        var toggle = Toggle("it.dock.toggle");
+        var created = Created("it.dock.new");
+        manager.Register(toggle);
+        manager.Register(created);
+        manager.Activate(toggle);
+        manager.Activate(created);
+
+        var layout = new DockLayout
+        {
+            ActiveGroup = "g-1",
+            Root = Group("g-1", "it.dock.new"),
+        };
+
+        manager.Unload();
+
+        Assert.Empty(manager.Instances);
+
+        manager.Restore(layout);
+
+        Assert.Single(manager.Instances);
+        Assert.Equal(["it.dock.new"], Names(manager.Snapshot()));
+    }
+
     /// <summary>A saved name that no dock registers is dropped, and the rest is kept.</summary>
     [Fact]
     public void ASavedNameThatNoDockRegistersIsDropped()

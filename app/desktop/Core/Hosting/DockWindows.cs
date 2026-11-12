@@ -850,6 +850,21 @@ internal sealed class DockWindows : IWindows
         }
     }
 
+    /// <summary>Closes every window but the main one, and lets what each held go back or away.</summary>
+    /// <remarks>
+    /// A layout preset describes the main window's arrangement: a window of a dock's own is not part of it, and
+    /// one left up would be a window the chosen layout never asked for. What each window held is let go of by
+    /// closing it, the way the close button does, so a dock that was opened there is discarded and a toggle is
+    /// brought back to the main window.
+    /// </remarks>
+    public void CloseDetached()
+    {
+        foreach (var key in _windows.Keys.ToArray())
+        {
+            Close(key);
+        }
+    }
+
     /// <summary>
     /// Lets go of a window that has closed, and ends the program if it was the last one.
     /// </summary>

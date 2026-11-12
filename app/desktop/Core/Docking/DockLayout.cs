@@ -392,6 +392,63 @@ internal static class LayoutStore
         }
     }
 
+    /// <summary>Reads one layout file, answering nothing when it cannot be read.</summary>
+    /// <remarks>
+    /// A preset is written by hand or saved by an earlier run, so it is read the way a saved layout is: the
+    /// version first, then the tree, then normalized. A file that cannot be read is reported and left where it
+    /// is, because the preset directory is not the program's to replace.
+    /// </remarks>
+    /// <param name="path">The file to read.</param>
+    /// <param name="log">Where a file that would not read is reported.</param>
+    /// <returns>What was read, or nothing.</returns>
+    public static DockLayout? Read(string path, LogService log)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(log);
+
+        try
+        {
+            var text = File.ReadAllText(path);
+            var version = VersionOf(text);
+
+            if (version is not (2 or DockLayout.SchemaVersion))
+            {
+                log.Record(
+                    LogLevel.Warn,
+                    Core.Source,
+                    version is { } stated
+                        ? $"the layout preset `{path}` is version {stated}, which this program does not read"
+                        : $"the layout preset `{path}` states no version"
+                );
+
+                return null;
+            }
+
+            var layout = JsonSerializer.Deserialize<DockLayout>(text, Reading);
+
+            if (layout is null)
+            {
+                return null;
+            }
+
+            layout.Version = DockLayout.SchemaVersion;
+            DockTree.Normalize(layout);
+
+            return layout;
+        }
+        catch (Exception error)
+            when (error is IOException or JsonException or UnauthorizedAccessException)
+        {
+            log.Record(
+                LogLevel.Warn,
+                Core.Source,
+                $"the layout preset `{path}` could not be read: {error.Message}"
+            );
+
+            return null;
+        }
+    }
+
     /// <summary>Writes the layout.</summary>
     /// <param name="log">Where a file that could not be written is reported.</param>
     /// <param name="layout">What to write.</param>

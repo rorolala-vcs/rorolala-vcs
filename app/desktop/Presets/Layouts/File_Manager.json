@@ -1,0 +1,55 @@
+{
+  "_version": 3,
+  "activeGroup": "g-53",
+  "root": {
+    "kind": "split",
+    "axis": "columns",
+    "ratio": 0.25,
+    "first": {
+      "kind": "group",
+      "id": "g-37",
+      "active": 0,
+      "docks": [
+        {
+          "nameId": "rorolala.file_system.tree",
+          "ordinal": 0,
+          "meta": {}
+        }
+      ]
+    },
+    "second": {
+      "kind": "split",
+      "axis": "rows",
+      "ratio": 0.5,
+      "first": {
+        "kind": "group",
+        "id": "g-53",
+        "active": 0,
+        "docks": [
+          {
+            "nameId": "rorolala.file_system.browser",
+            "ordinal": 0,
+            "meta": {
+              "location": ""
+            }
+          }
+        ]
+      },
+      "second": {
+        "kind": "group",
+        "id": "g-58",
+        "active": 0,
+        "docks": [
+          {
+            "nameId": "rorolala.file_system.browser",
+            "ordinal": 1,
+            "meta": {
+              "location": "rola@vaults/origin"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "windows": []
+}

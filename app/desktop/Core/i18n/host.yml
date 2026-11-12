@@ -44,6 +44,9 @@ progress:
     zh-CN: 正在接收
 
 menu:
+  layout:
+    en: Layout
+    zh-CN: 布局  # What the layout presets lay beside the program are switched from; the presets themselves are named by their files.
   window:
     en: Window
     zh-CN: 窗口  # What the Window menu holds besides the docks, which the window is built with rather than registered

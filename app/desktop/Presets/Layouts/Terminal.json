@@ -1,0 +1,34 @@
+{
+  "_version": 3,
+  "activeGroup": "g-61",
+  "root": {
+    "kind": "split",
+    "axis": "columns",
+    "ratio": 0.75,
+    "first": {
+      "kind": "group",
+      "id": "g-61",
+      "active": 0,
+      "docks": [
+        {
+          "nameId": "rorolala.terminal",
+          "ordinal": 0,
+          "meta": {}
+        }
+      ]
+    },
+    "second": {
+      "kind": "group",
+      "id": "g-57",
+      "active": 0,
+      "docks": [
+        {
+          "nameId": "rorolala.vcs.overview",
+          "ordinal": 0,
+          "meta": {}
+        }
+      ]
+    }
+  },
+  "windows": []
+}

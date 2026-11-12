@@ -1,0 +1,75 @@
+{
+  "_version": 3,
+  "activeGroup": "g-65",
+  "root": {
+    "kind": "split",
+    "axis": "columns",
+    "ratio": 0.25,
+    "first": {
+      "kind": "split",
+      "axis": "rows",
+      "ratio": 0.55,
+      "first": {
+        "kind": "group",
+        "id": "g-37",
+        "active": 0,
+        "docks": [
+          {
+            "nameId": "rorolala.file_system.tree",
+            "ordinal": 0,
+            "meta": {}
+          }
+        ]
+      },
+      "second": {
+        "kind": "group",
+        "id": "g-64",
+        "active": 0,
+        "docks": [
+          {
+            "nameId": "rorolala.vcs.overview",
+            "ordinal": 0,
+            "meta": {}
+          }
+        ]
+      }
+    },
+    "second": {
+      "kind": "split",
+      "axis": "rows",
+      "ratio": 0.55,
+      "first": {
+        "kind": "group",
+        "id": "g-65",
+        "active": 1,
+        "docks": [
+          {
+            "nameId": "rorolala.vcs.tree",
+            "ordinal": 0,
+            "meta": {}
+          },
+          {
+            "nameId": "rorolala.file_system.browser",
+            "ordinal": 2,
+            "meta": {
+              "location": ""
+            }
+          }
+        ]
+      },
+      "second": {
+        "kind": "group",
+        "id": "g-63",
+        "active": 0,
+        "docks": [
+          {
+            "nameId": "rorolala.vcs.version_graph",
+            "ordinal": 0,
+            "meta": {}
+          }
+        ]
+      }
+    }
+  },
+  "windows": []
+}

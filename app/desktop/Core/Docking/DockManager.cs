@@ -921,6 +921,29 @@ internal sealed class DockManager
     }
 
     /// <summary>
+    /// Lets go of every dock, so a saved layout can be opened over nothing.
+    /// </summary>
+    /// <remarks>
+    /// Switching layouts is not the restoring of a dock or two: the tree, the instance numbers and the windows
+    /// are all replaced, and a dock left behind would be a second instance of one the new layout opens. A toggle
+    /// kept hidden is let go of as well, since its place is described by the layout being opened rather than by
+    /// the one being left.
+    /// </remarks>
+    public void Unload()
+    {
+        foreach (var instance in _instances.ToArray())
+        {
+            Discard(instance);
+        }
+
+        _ordinals.Clear();
+        Layout.Root = null;
+        Layout.ActiveGroup = null;
+        Layout.GroupIdHighWater = 0;
+        Raise();
+    }
+
+    /// <summary>
     /// Opens the docks a saved layout names, in the groups and tab orders it states.
     /// </summary>
     /// <remarks>

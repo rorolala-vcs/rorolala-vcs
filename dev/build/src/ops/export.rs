@@ -139,6 +139,7 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
     dotnet::publish_host(&workspace, &desktop, self_contained)?;
     dotnet::publish_launcher(&workspace, &desktop, self_contained)?;
     dotnet::publish_plugins(&workspace, &desktop)?;
+    crate::ops::desktop::lay_out_presets(&workspace)?;
 
     // The C# bindings beside the native library they bind, under `lib/` where a consumer of the C
     // ABI looks for both.

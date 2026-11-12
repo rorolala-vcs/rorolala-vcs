@@ -1,0 +1,51 @@
+{
+  "_version": 3,
+  "activeGroup": "g-53",
+  "root": {
+    "kind": "split",
+    "axis": "columns",
+    "ratio": 0.75,
+    "first": {
+      "kind": "group",
+      "id": "g-53",
+      "active": 0,
+      "docks": [
+        {
+          "nameId": "rorolala.core.preference",
+          "ordinal": 0,
+          "meta": {}
+        }
+      ]
+    },
+    "second": {
+      "kind": "split",
+      "axis": "rows",
+      "ratio": 0.5,
+      "first": {
+        "kind": "group",
+        "id": "g-59",
+        "active": 0,
+        "docks": [
+          {
+            "nameId": "rorolala.vcs.accounts",
+            "ordinal": 0,
+            "meta": {}
+          }
+        ]
+      },
+      "second": {
+        "kind": "group",
+        "id": "g-60",
+        "active": 0,
+        "docks": [
+          {
+            "nameId": "rorolala.core.plugin_manager",
+            "ordinal": 0,
+            "meta": {}
+          }
+        ]
+      }
+    }
+  },
+  "windows": []
+}

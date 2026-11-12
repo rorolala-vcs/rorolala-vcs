@@ -44,6 +44,9 @@ internal sealed class Desktop
     /// <summary>The label key of the menu the docks and the way back to the main window appear under.</summary>
     private const string WindowMenu = "menu.window";
 
+    /// <summary>The label key of the menu the preset layouts appear under.</summary>
+    private const string LayoutMenu = "menu.layout";
+
     /// <summary>What the run worked out before Avalonia started.</summary>
     private readonly DesktopState _state;
 
@@ -432,6 +435,25 @@ internal sealed class Desktop
             )
         );
 
+        // The layouts laid beside the program, as one menu: a preset is a file, and its name is the file's, so
+        // nothing here is translated. A run with no preset directory has no menu rather than an empty one.
+        if (LayoutPresets.All() is { Count: > 0 } presets)
+        {
+            services.Menu.AddTopLevel(Kernel, Core.Position, LayoutMenu, 90);
+
+            for (var at = 0; at < presets.Count; at++)
+            {
+                var preset = presets[at];
+
+                services.Menu.AddItem(
+                    Kernel,
+                    Core.Position,
+                    LayoutMenu,
+                    new MenuItem(preset.Name, at * 10, () => Switch(services, preset))
+                );
+            }
+        }
+
         services.Menu.AddTopLevel(Kernel, Core.Position, WindowMenu, 100);
 
         // Where a window that was closed is asked for again. It is an item of the Window menu rather than one
@@ -495,6 +517,30 @@ internal sealed class Desktop
         {
             services.Windows.ToOwnWindow(instance);
         }
+    }
+
+    /// <summary>
+    /// Replaces the arrangement with the one a preset names.
+    /// </summary>
+    /// <remarks>
+    /// The windows of docks' own are closed before the main window's docks are let go, so what each held is
+    /// brought back or discarded by the window's own rule rather than left naming a window that is about to
+    /// go. The arrangement chosen here is written on the next save like any other, since it is where the user
+    /// is working from then on.
+    /// </remarks>
+    /// <param name="services">Everything the host holds.</param>
+    /// <param name="preset">The preset that was chosen.</param>
+    private static void Switch(HostServices services, LayoutPreset preset)
+    {
+        if (LayoutStore.Read(preset.Path, services.Log) is not { } layout)
+        {
+            return;
+        }
+
+        services.Windows.CloseDetached();
+        services.Docks.Unload();
+        services.Docks.Restore(layout);
+        services.Windows.RestoreWindows(layout.Windows);
     }
 
     /// <summary>
