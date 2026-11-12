@@ -176,6 +176,11 @@ A command is a file, a node and a shape. What it carries before it is done:
 
 - The gate is `cargo ci check`, and its exit code is the only thing it signals; read it with
   `cargo ci check > /tmp/log 2>&1; echo $?`. The steps are the commands of `dev/ci` and `dev/build`.
+- The whole gate, `cargo ci check`,
+  runs `fmt`, `fmt-check`, `i18n`, `test`, `clippy`, `doc`, `generated`, `integration-test`, `dotnet-lint`
+  and `dotnet-check` in that order, and usually takes 20 to 30 minutes. It is too slow to run every round.
+  While iterating, run only the steps the change reaches, against the surface it touches;
+  run the whole gate when the user asks for it, or when the work is ready to be committed.
 - Every crate denies `warnings`, `missing_docs`, `rust_2018_idioms`, `clippy::pedantic` and
   `clippy::nursery`. The C# side is held to the same standard: `cargo ci dotnet-lint` runs the
   analyzers at their widest (`AnalysisMode=All`) with every diagnostic an error, and the root
