@@ -179,7 +179,9 @@ key = "rorolala"
 # worn by the item that opens its dock in the Window menu and at the left of the dock's tab.
 #
 # `menu` is the hamburger the title row's button wears: the row no longer draws a menu bar, and the one button
-# that opens it needs a picture that says so without a word.
+# that opens it needs a picture that says so without a word. `back_hand` is the hand beside it that a window of
+# one dock is dragged back to the main window by: the set draws an open hand, which is what taking hold of a
+# thing rather than pressing it looks like.
 icons = [
     "minimize",
     "crop_square",
@@ -189,6 +191,7 @@ icons = [
     "list_alt",
     "settings",
     "menu",
+    "back_hand",
 ]
 
 [[set]]

@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
+using Avalonia.Layout;
 using Avalonia.VisualTree;
 using RorolalaDesktop;
 using RorolalaDesktop.Contract;
@@ -542,6 +543,7 @@ public sealed class WindowTests
     public void AWindowOfOneDockNamesItInARowAsTallAsTheMainWindows()
     {
         var (services, _) = Windows();
+        RorolalaDesktop.Icons.Declare(services.Icons);
         var registration = new DockRegistration(
             Core.Id,
             "it.dock.titled",
@@ -574,6 +576,27 @@ public sealed class WindowTests
         Assert.Equal("it.dock.titled.title", caption.Text);
         Assert.Equal(MainWindow.TitleBarHeight, row.Bounds.Height);
 
+        // The title is centred over the window rather than laid out in the row, which is inset by the frame's
+        // buttons on one side and the menu on the other.
+        var centre = caption.TranslatePoint(new Point(caption.Bounds.Width / 2, 0), own);
+
+        Assert.NotNull(centre);
+        Assert.InRange(centre.Value.X, (own.Bounds.Width / 2) - 2, (own.Bounds.Width / 2) + 2);
+
+        // The hand that drags the dock back stands beside the menu, not on the title.
+        var group = own.FindControl<StackPanel>("MenuGroup");
+        var menu = own.FindControl<Button>("MenuButton");
+        var handle = own.GetVisualDescendants()
+            .OfType<Button>()
+            .First(button => (ToolTip.GetTip(button) as string) == "window.drag");
+
+        Assert.NotNull(group);
+        Assert.NotNull(menu);
+        Assert.Contains(menu, group.Children);
+        Assert.Contains(handle, group.Children);
+        Assert.NotSame(menu, handle);
+        Assert.NotNull(handle.Content);
+
         // Drawn in the row and not spilling under it: what is below the row is the dock itself.
         var at = caption.TranslatePoint(new Point(0, 0), own);
 
@@ -583,6 +606,75 @@ public sealed class WindowTests
             at.Value.Y + caption.Bounds.Height <= MainWindow.TitleBarHeight,
             "the name is drawn in the row and not over the dock"
         );
+    }
+
+    /// <summary>
+    /// Under a macOS frame the menu keeps the right end and the hand stands just inside it.
+    /// </summary>
+    /// <remarks>
+    /// The three lights are at the window's left, so the menu is at its right. The hand is next to the menu on
+    /// the inside, where a control of the row belongs, and the title is centred over the window rather than
+    /// over the room the lights and the menu leave.
+    /// </remarks>
+    [Fact]
+    public void AMacWindowKeepsItsMenuAtTheRightAndItsHandInsideIt()
+    {
+        var original = Program.WindowStyle;
+        var style = typeof(Program).GetProperty(
+            nameof(Program.WindowStyle),
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static
+        )!;
+
+        style.SetValue(null, WindowStyle.Mac);
+
+        try
+        {
+            var (services, _) = Windows();
+            RorolalaDesktop.Icons.Declare(services.Icons);
+            var registration = new DockRegistration(
+                Core.Id,
+                "it.dock.mac",
+                "it.dock.mac.title",
+                DockOpenMode.New,
+                DockSide.Center,
+                () => new FakeDockView { Control = new Border() }
+            );
+
+            services.Docks.Register(registration);
+            services.Docks.Activate(registration);
+            services.Windows.ToOwnWindow(services.Docks.InstanceOf("it.dock.mac")!);
+
+            var own = (MainWindow)services.Shell.Window!;
+            var group = own.FindControl<StackPanel>("MenuGroup")!;
+            var menu = own.FindControl<Button>("MenuButton")!;
+            var handle = own.GetVisualDescendants()
+                .OfType<Button>()
+                .First(button => (ToolTip.GetTip(button) as string) == "window.drag");
+
+            Assert.Equal(1, Grid.GetColumn(group));
+            Assert.Equal(HorizontalAlignment.Right, group.HorizontalAlignment);
+            Assert.Equal([handle, menu], group.Children.OfType<Button>());
+            Assert.NotNull(handle.Content);
+
+            // The hand is a tool's mark, not one of the three lights: it keeps the tool's size under a frame
+            // whose lights are smaller, or a hand drawn at a light's size reads as no mark at all.
+            var hand = Assert.IsAssignableFrom<Control>(handle.Content);
+
+            Assert.Equal(WindowControls.GlyphSize, hand.Width);
+            Assert.Equal(WindowControls.GlyphSize, hand.Height);
+
+            var caption = own.GetVisualDescendants()
+                .OfType<TextBlock>()
+                .First(text => text.Classes.Contains(RorolalaTheme.WindowTitleClass));
+            var centre = caption.TranslatePoint(new Point(caption.Bounds.Width / 2, 0), own);
+
+            Assert.NotNull(centre);
+            Assert.InRange(centre.Value.X, (own.Bounds.Width / 2) - 2, (own.Bounds.Width / 2) + 2);
+        }
+        finally
+        {
+            style.SetValue(null, original);
+        }
     }
 
     /// <summary>

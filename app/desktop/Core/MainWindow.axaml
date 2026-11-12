@@ -53,16 +53,38 @@
                      window knows whether it is one, and it is put over the menu rather than beside it, since a
                      dock's name belongs in the room the row keeps clear of its menus. -->
                 <Grid x:Name="TitleRow" ColumnDefinitions="Auto,*">
-                    <Button
-                        x:Name="MenuButton"
+                    <StackPanel
+                        x:Name="MenuGroup"
                         Grid.Column="0"
-                        Classes="tool"
+                        Orientation="Horizontal"
+                        Spacing="4"
                         VerticalAlignment="Center"
-                    />
+                    >
+                        <Button
+                            x:Name="MenuButton"
+                            Classes="tool"
+                            VerticalAlignment="Center"
+                        />
+                    </StackPanel>
                 </Grid>
             </Border>
             <ContentControl x:Name="DockAreaHost" />
         </DockPanel>
+
+        <!-- The title of a window that is one dock, drawn over the row rather than in it: the row's content is
+             inset by the room the frame's own buttons take on one side and the menu on the other, and a title
+             inset the same way is a title that is off the window's centre. Only the words take a press; the
+             rest of the layer passes one through to the row. -->
+        <Grid x:Name="WindowTitleLayer" VerticalAlignment="Top" IsVisible="False">
+            <TextBlock
+                x:Name="WindowCaption"
+                Classes="window-title"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                TextAlignment="Center"
+                TextTrimming="CharacterEllipsis"
+            />
+        </Grid>
 
         <!-- Notifications stand over the docks rather than in a region, because they belong to the window and
              not to whatever is under them. The layer itself takes no room and no press; only the cards in it do. -->

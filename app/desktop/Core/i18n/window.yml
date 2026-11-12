@@ -28,3 +28,8 @@ window:
   menu:
     en: Menu
     zh-CN: 菜单
+  # What the hand beside the menu says when the pointer rests on it: the one gesture a window of a dock's own
+  # has that the row does not, moving the dock back into the main window.
+  drag:
+    en: Drag this part to attach the dock to the main window
+    zh-CN: 拖拽该部分以吸附至主窗口

@@ -168,7 +168,7 @@ A tagged badge's ground is the look's dark role, read inside the badge's dark sc
 
 ### 20. [`app`] [`RorolalaDesktop`] [`window`] Name the program and workspace in the title row
 
-The main window's title row carries the wordmark `Rorolala`, a 1 px rule and the name of the directory the program was started in, trimmed with an ellipsis at 280 pixels. A window of one dock keeps that dock's name instead, and the row is 32 pixels high.
+The main window's title row carries the wordmark `Rorolala`, a 1 px rule and the name of the directory the program was started in, trimmed with an ellipsis at 280 pixels. A window of one dock shows that dock's title centred over the window rather than in the row: the row is inset by the frame's buttons on one side and the menu on the other, so a title laid out in it would be off the window's centre. The title is the dock's, and it follows the dock when it is renamed. The dock is dragged back to the main window by a hand beside the menu, with a tooltip, rather than by the title, which is now only a title. Under the macOS frame the menu keeps the right end and the hand sits just inside it. The row is 32 pixels high.
 
 ### 21. [`app`] [`RorolalaDesktop`] [`windows`] Own and restore floating dock windows
 

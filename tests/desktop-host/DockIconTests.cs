@@ -191,13 +191,11 @@ public sealed class DockIconTests
 
         Assert.Equal(1, mac.MenuColumn);
         Assert.Equal(HorizontalAlignment.Right, mac.MenuSide);
-        Assert.Equal(0, mac.CaptionColumn);
 
         var windows = MainWindow.TitlePlacement(WindowStyle.Windows);
 
         Assert.Equal(0, windows.MenuColumn);
         Assert.Equal(HorizontalAlignment.Left, windows.MenuSide);
-        Assert.Equal(1, windows.CaptionColumn);
     }
 
     /// <summary>The macOS menu button is drawn inside the row and carries its glyph.</summary>

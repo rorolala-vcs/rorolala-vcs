@@ -25,6 +25,8 @@ using DockRegistration = RorolalaDesktop.Contract.DockRegistration;
 using Notification = RorolalaDesktop.Contract.Notification;
 using NotificationLevel = RorolalaDesktop.Contract.NotificationLevel;
 using PluginId = RorolalaDesktop.Contract.PluginId;
+using Shape = Avalonia.Controls.Shapes.Shape;
+using ShapePath = Avalonia.Controls.Shapes.Path;
 
 namespace RorolalaDesktop;
 
@@ -110,15 +112,6 @@ public partial class MainWindow : Window
     /// this window's own row, which is read long after the window was made.
     /// </remarks>
     private readonly Docking.DockInstance? _dock;
-
-    /// <summary>
-    /// The dock's name in the row, for a window that is one dock, so that a dock that goes somewhere else can say so.
-    /// </summary>
-    /// <remarks>
-    /// Held rather than rebuilt: the name is a word in a row, and making the row again for a word would lose the drag
-    /// the row is also the handle of.
-    /// </remarks>
-    private TextBlock? _caption;
 
     /// <summary>
     /// This window's frame, which is what draws its own buttons.
@@ -214,6 +207,7 @@ public partial class MainWindow : Window
         // own buttons are drawn: a frame that kept room for a shorter row than this window draws would draw its
         // buttons where the row is not.
         TitleBar.Height = TitleBarHeight;
+        WindowTitleLayer.Height = TitleBarHeight;
         ExtendClientAreaTitleBarHeightHint = TitleBarHeight;
         _frame = RorolalaTheme.DecorationsTheme(Program.WindowStyle, TitleBarHeight);
 
@@ -279,10 +273,10 @@ public partial class MainWindow : Window
 
         // The macOS frame puts its three lights at the left, so the menu belongs at the right. Every other
         // frame leaves the left of the row free and keeps its buttons at the right.
-        var (menuColumn, menuSide, _) = TitlePlacement(Program.WindowStyle);
+        var (menuColumn, menuSide) = TitlePlacement(Program.WindowStyle);
 
-        Grid.SetColumn(MenuButton, menuColumn);
-        MenuButton.HorizontalAlignment = menuSide;
+        Grid.SetColumn(MenuGroup, menuColumn);
+        MenuGroup.HorizontalAlignment = menuSide;
 
         // The macOS frame draws its own edge over the last few pixels of the row, so the button is kept clear of
         // it rather than being clipped by the frame it sits in.
@@ -295,13 +289,22 @@ public partial class MainWindow : Window
         AutomationProperties.SetName(MenuButton, _services.I18n.Get("window.menu"));
 
         // The main window is the program, so its row carries the program's name and the workspace it was
-        // started on. A window of one dock is that dock, and its row already carries the dock's name.
+        // started on. A window of one dock is that dock, and its row carries the dock's title instead.
         if (_dock is null)
         {
             var brand = Brand();
 
-            Grid.SetColumn(brand, menuColumn == 0 ? 1 : 0);
-            TitleRow.Children.Add(brand);
+            // The menu is at the left on every frame but the macOS one, where the lights are, so the brand
+            // stands beside it there and at the row's left end under macOS.
+            if (menuColumn == 0)
+            {
+                MenuGroup.Children.Add(brand);
+            }
+            else
+            {
+                Grid.SetColumn(brand, 0);
+                TitleRow.Children.Add(brand);
+            }
         }
 
         BuildMenu();
@@ -410,10 +413,10 @@ public partial class MainWindow : Window
 
         Title = _services.I18n.Get("window.titled", instance.Title);
 
-        if (_caption is { } caption)
+        if (_dock is not null)
         {
-            caption.Text = instance.Title;
-            ToolTip.SetTip(caption, instance.Detail);
+            WindowCaption.Text = instance.Title;
+            ToolTip.SetTip(WindowCaption, instance.Detail);
         }
     }
 
@@ -493,19 +496,19 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Puts the name of the one dock this window holds in the window's own row, and makes it the handle it
-    /// is dragged back to the main window by.
+    /// Puts the title of the one dock this window holds over the row, and the handle it is dragged back to
+    /// the main window by beside the menu.
     /// </summary>
     /// <remarks>
-    /// A window of one dock has no strip of tabs, so the name the dock's tab would have carried has nowhere
-    /// to be but the row the desktop's title bar would have drawn, and the row is the only part of the
-    /// window that is not the dock itself. The drag begins on that name rather than on the row, because the
-    /// row is also what moves the window: what a press landed on is what tells the two gestures apart, and a
-    /// row that did both would do one of them by accident.
+    /// A window of one dock has no strip of tabs, so the dock's name has nowhere to be but the row the
+    /// desktop's title bar would have drawn. The name is a title here rather than a handle: a title says what
+    /// the window is, and a title that was also a drag was a word that looked pressable and moved the dock when
+    /// a reader meant only to read it. The drag is the hand beside the menu, which is where the row's own
+    /// controls are.
     /// <para>
-    /// The press is taken here as well as in <see cref="MoveOrMaximize"/>, which reads the same class off the
-    /// thing that was pressed: a press that tunnels to the row arrives before the one that reaches this name,
-    /// so what tells the window not to move is the name rather than the taking of the press.
+    /// The title is laid over the row rather than in it: the row is inset by the room the frame's buttons take
+    /// on one side and the menu on the other, so a title laid out in it would be off the window's centre. Equal
+    /// margins keep it clear of both ends.
     /// </para>
     /// </remarks>
     private void Caption()
@@ -515,34 +518,134 @@ public partial class MainWindow : Window
             return;
         }
 
-        var caption = RorolalaTheme.Caption(Program.WindowStyle, instance.Title);
-
-        // Kept and tipped, because a window of a dock that names itself by where it is says where that is in full
-        // where the row has room for it, and the row cuts the name off where there is not.
-        _caption = caption;
-        ToolTip.SetTip(caption, instance.Detail);
-
-        caption.PointerPressed += (_, press) =>
+        WindowTitleLayer.IsVisible = true;
+        WindowCaption.Text = instance.Title;
+        ToolTip.SetTip(WindowCaption, instance.Detail);
+        WindowCaption.Margin = Program.WindowStyle switch
         {
-            press.Handled = true;
-            _drag = new DockDrag(_services.Windows, instance, _key);
-            _drag.Take(press, caption);
-
-            // The pointer is kept until it is let go of, so that a hand that leaves the name before it has
-            // moved far enough is still a drag of the dock: what is being followed is the gesture and not
-            // the pixels the name happens to cover.
-            press.Pointer.Capture(caption);
+            Theming.WindowStyle.Mac => new Thickness(80, 0, 80, 0),
+            Theming.WindowStyle.TillingWm => new Thickness(8, 0, 8, 0),
+            _ => new Thickness(150, 0, 150, 0),
         };
 
-        caption.PointerMoved += (_, moved) => _drag?.Follow(moved, caption);
-        caption.PointerCaptureLost += (_, _) => _drag = null;
+        // The title is over the row rather than in it, so a press on its words is the window's to move as
+        // well: the row's own handler never sees a press on a sibling drawn above it.
+        WindowCaption.PointerPressed += (_, press) => MoveOrMaximize(press);
 
-        TitleRow.Children.Add(caption);
+        var handle = DragHandle(instance);
 
-        // The name stands where the frame's buttons are not: on the left under a macOS frame, on the right
-        // under the other two.
-        Grid.SetColumn(caption, TitlePlacement(Program.WindowStyle).CaptionColumn);
+        // The hand stands beside the menu, on the inside of it: the menu keeps the frame's own edge, and the
+        // hand is the next thing inwards under macOS.
+        if (Program.WindowStyle == Theming.WindowStyle.Mac)
+        {
+            MenuGroup.Children.Insert(0, handle);
+        }
+        else
+        {
+            MenuGroup.Children.Add(handle);
+        }
+
+        // The drag is followed over the whole window rather than over the button: a button answers a press
+        // with a click of its own, and what its class handlers do to a move is not this gesture's business.
+        // The window's tunnel handlers see the move first and whether or not the button marks it handled.
+        AddHandler(
+            InputElement.PointerMovedEvent,
+            (_, moved) => _drag?.Follow(moved, this),
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true
+        );
+        AddHandler(
+            InputElement.PointerReleasedEvent,
+            (_, _) => _drag = null,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true
+        );
     }
+
+    /// <summary>The hand a window of one dock is dragged back to the main window by.</summary>
+    /// <remarks>
+    /// A press on it begins the dock's drag rather than the window's move, which is what the row's own press
+    /// does everywhere else: the button takes the press before the row reads it, the same way the menu does. The
+    /// pointer is kept until it is let go of, so a hand that leaves the button before it has moved far enough is
+    /// still a drag of the dock.
+    /// </remarks>
+    /// <param name="instance">The dock this window holds.</param>
+    /// <returns>The handle.</returns>
+    private Button DragHandle(Docking.DockInstance instance)
+    {
+        var handle = new Button
+        {
+            Classes = { "tool" },
+            VerticalAlignment = VerticalAlignment.Center,
+            Content = HandGlyph(),
+        };
+
+        // The picture is a mask over the button's foreground, and the row does not set one for this button
+        // the way it does for the menu's: a foreground left to the window is one the macOS frame may answer
+        // with nothing, which is a hand drawn in nothing.
+        handle[!TemplatedControl.ForegroundProperty] = new DynamicResourceExtension(
+            RorolalaDesktop.Contract.PaletteKeys.Front
+        );
+
+        ToolTip.SetTip(handle, _services.I18n.Get("window.drag"));
+        AutomationProperties.SetName(handle, _services.I18n.Get("window.drag"));
+
+        // Taken on the way down, before the button's own handlers read the press: a button answers a press
+        // with a click, and a click is not a drag. The pointer is captured by the window, so a hand that
+        // leaves the button before it has moved far enough is still followed.
+        handle.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, press) =>
+            {
+                if (!press.GetCurrentPoint(handle).Properties.IsLeftButtonPressed)
+                {
+                    return;
+                }
+
+                press.Handled = true;
+                _drag = new DockDrag(_services.Windows, instance, _key);
+                _drag.Take(press, this);
+                press.Pointer.Capture(handle);
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true
+        );
+
+        handle.PointerCaptureLost += (_, _) => _drag = null;
+
+        return handle;
+    }
+
+    /// <summary>The hand a window of one dock is dragged back to the main window by, in the row's own ink.</summary>
+    /// <remarks>
+    /// Drawn rather than read from the picture library, for the reason the menu's three dots are: the mark is part
+    /// of the row, and a picture put through an opacity mask is a second brush the row's ink has to find its way
+    /// into. The geometry is the `back_hand` outline the icon manifest names, so the two are the same drawing.
+    /// </remarks>
+    /// <returns>The hand.</returns>
+    private static Control HandGlyph()
+    {
+        var hand = new ShapePath
+        {
+            Data = Hand,
+            Stretch = Stretch.Uniform,
+            Width = WindowControls.GlyphSize,
+            Height = WindowControls.GlyphSize,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        hand[!Shape.FillProperty] = new DynamicResourceExtension(
+            RorolalaDesktop.Contract.PaletteKeys.Front
+        );
+
+        return hand;
+    }
+
+    /// <summary>The `back_hand` outline, in the twenty-four unit box the set draws in.</summary>
+    private static readonly Geometry Hand = Geometry.Parse(
+        "M13 24c-3.26 0-6.19-1.99-7.4-5.02l-3.03-7.61a1 1 0 0 1 1.24-1.32l.79.26c.56.18 1.02.61 1.24 1.16L7.25 15H8V3.25a1.25 1.25 0 0 1 2.5 0V12h1V1.25a1.25 1.25 0 0 1 2.5 0V12h1V2.75a1.25 1.25 0 0 1 2.5 0V12h1V5.75a1.25 1.25 0 0 1 2.5 0V16c0 4.42-3.58 8-8 8z"
+    );
 
     /// <summary>
     /// Moves the window for a press on the row, or maximizes it for the second click of a double click.
@@ -562,24 +665,16 @@ public partial class MainWindow : Window
     /// <param name="press">What was pressed.</param>
     private void MoveOrMaximize(PointerPressedEventArgs press)
     {
-        // A press something inside the row has already taken means the menu button or a window button, and the
-        // window must not move out from under the thing that was aimed at. The menu's own items are in a flyout,
-        // outside this row, so a press there never reaches this handler at all. The menu button has not taken the
-        // press yet when this handler runs, because this one is on the way down, so it is recognised by what it is
-        // rather than by the press being handled.
+        // A press that landed on a menu, on one of the window's own buttons, or on the hand a window of one
+        // dock is dragged back by is left alone rather than moved, because each of the three is a part of the
+        // row that answers a press itself: a menu answers the release of one, a button is the toolkit's, and
+        // the hand begins a drag of the dock.
         if (press.Handled || !press.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             return;
         }
 
         if (ButtonUnder(press.Source) is not null)
-        {
-            return;
-        }
-
-        // The name of the dock this window holds begins a drag of that dock, and the window must not be moved by
-        // the same press.
-        if (RorolalaTheme.TitleUnder(press.Source))
         {
             return;
         }
@@ -761,21 +856,20 @@ public partial class MainWindow : Window
     /// <summary>The top-level menus this window shows, in order, for the button and for tests.</summary>
     internal IReadOnlyList<MenuItem> MenuItems => [.. _menus.Items.OfType<MenuItem>()];
 
-    /// <summary>Where the menu button and a one-dock name stand in the title row, by the frame's style.</summary>
+    /// <summary>Where the menu stands in the title row, by the frame's style.</summary>
     /// <remarks>
-    /// A macOS frame draws its three lights at the window's left corner, so the menu moves to the right and the
-    /// dock's name takes the left, after the room the lights need. The other two styles are the other way round.
+    /// A macOS frame draws its three lights at the window's left corner, so the menu moves to the right. The
+    /// other two styles are the other way round. The title is not placed by this: it is centred over the whole
+    /// window rather than laid out in the row the frame insets.
     /// </remarks>
     /// <param name="style">The frame's style.</param>
-    /// <returns>The menu's column and side, and the name's column.</returns>
-    internal static (
-        int MenuColumn,
-        HorizontalAlignment MenuSide,
-        int CaptionColumn
-    ) TitlePlacement(Theming.WindowStyle style) =>
+    /// <returns>The menu's column and side.</returns>
+    internal static (int MenuColumn, HorizontalAlignment MenuSide) TitlePlacement(
+        Theming.WindowStyle style
+    ) =>
         style == Theming.WindowStyle.Mac
-            ? (1, HorizontalAlignment.Right, 0)
-            : (0, HorizontalAlignment.Left, 1);
+            ? (1, HorizontalAlignment.Right)
+            : (0, HorizontalAlignment.Left);
 
     /// <summary>
     /// Ends the covering this window was made with, once the work behind it is done.
