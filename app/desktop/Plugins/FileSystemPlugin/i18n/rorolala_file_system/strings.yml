@@ -110,14 +110,15 @@ rorolala_file_system:
   copy_path:
     en: Copy Path
     zh-CN: 复制路径
+  # What the copy entry for the words under the pointer says past its own word: the words themselves, in the
+  # parentheses the language uses for an aside. The space before the opening parenthesis is the English
+  # spelling's, and the Chinese one has none.
+  selected_text_title:
+    en: " (%{text})"
+    zh-CN: "（%{text}）"
   copy:
     en: Copy
     zh-CN: 复制
-  # The menu entry that copies the words of the cell the pointer is on. The words are written on it, because a
-  # menu opened on a row is opened over one cell of it and a plain "Copy" would not say which cell's text it is.
-  copy_text:
-    en: "Copy \"%{text}\""
-    zh-CN: "复制 “%{text}”"
   cut:
     en: Cut
     zh-CN: 剪切
@@ -312,11 +313,14 @@ menu:
       en: Reveal
       zh-CN: 显示
     in_file_manager:
-      en: In file manager
-      zh-CN: 在文件管理器中
+      en: in file manager
+      zh-CN: 于文件管理器
     path:
       en: Path
       zh-CN: 路径
+    selected_text:
+      en: Selected text
+      zh-CN: 选中的文本
     view:
       en: View
       zh-CN: 视图
@@ -333,5 +337,5 @@ menu:
       en: Collapse all
       zh-CN: 折叠全部
     in_list:
-      en: In list
-      zh-CN: 在列表中显示
+      en: in list
+      zh-CN: 于列表

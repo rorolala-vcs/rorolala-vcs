@@ -215,7 +215,13 @@ public sealed class ListColumnTests
         public override void Open(string item) { }
 
         /// <inheritdoc />
-        public override void Fill(ContextMenu menu, Control from, IReadOnlyList<string> chosen, bool force) { }
+        public override void Fill(
+            ContextMenu menu,
+            Control from,
+            IReadOnlyList<string> chosen,
+            bool force,
+            string? words = null
+        ) { }
     }
 
     /// <summary>A listing whose first row is marked red and whose others are not marked.</summary>
@@ -239,6 +245,12 @@ public sealed class ListColumnTests
         public override void Open(string item) { }
 
         /// <inheritdoc />
-        public override void Fill(ContextMenu menu, Control from, IReadOnlyList<string> chosen, bool force) { }
+        public override void Fill(
+            ContextMenu menu,
+            Control from,
+            IReadOnlyList<string> chosen,
+            bool force,
+            string? words = null
+        ) { }
     }
 }

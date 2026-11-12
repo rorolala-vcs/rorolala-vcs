@@ -42,6 +42,24 @@ internal static partial class Icons
         {
             library.Add(key, Embedded(name));
         }
+
+        // The categories a menu is grouped by are shared keys rather than this plugin's own, so the picture
+        // a category wears is contributed under the key the menu names it by as well as under this plugin's
+        // key. A category the two plugins both open keeps the first picture it was given, which is why this
+        // is an alias rather than a second read of the file.
+        foreach (var (category, key) in new[]
+        {
+            ("menu.entry.ownership", Lock),
+            ("menu.entry.version", AltRoute),
+            ("menu.entry.fetch", Download),
+            ("menu.entry.restore", Refresh),
+        })
+        {
+            if (library.Find(key) is { } picture && library.Find(category) is null)
+            {
+                library.Add(category, picture);
+            }
+        }
     }
 
     /// <summary>A picture of this plugin's own, read from the assembly it travels in.</summary>

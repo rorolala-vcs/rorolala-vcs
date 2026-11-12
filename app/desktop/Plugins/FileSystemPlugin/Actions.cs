@@ -368,13 +368,18 @@ internal sealed class BrowserActions
     /// every step it has open is about the tree rather than about the entry, and it still belongs in the menu
     /// the entry opens.
     /// </param>
+    /// <param name="copyText">
+    /// The words a press landed on, or nothing where the menu was opened from the keyboard: the copy category
+    /// offers them as one of the things it can take, beside the entry and its path.
+    /// </param>
     public void Fill(
         ContextMenu menu,
         Control from,
         IReadOnlyList<Entry> entries,
         bool deletable = true,
         bool force = false,
-        IReadOnlyList<MenuLeaf>? extra = null
+        IReadOnlyList<MenuLeaf>? extra = null,
+        string? copyText = null
     )
     {
         menu.Items.Clear();
@@ -508,6 +513,22 @@ internal sealed class BrowserActions
             );
         }
 
+        // The words the pointer landed on are one more thing the copy category can take. They belong beside the
+        // entry and its path rather than above the whole menu, because copying is what all three are, and a
+        // reader looking for what can be copied opens one category rather than reading the top and the rest.
+        if (copyText is { Length: > 0 } words)
+        {
+            leaves.Add(
+                Leaf(
+                    ["menu.entry.copy", "menu.entry.selected_text"],
+                    "rorolala_file_system.copy",
+                    () => Openers.Copy(from, words, _host.Log.Error),
+                    30,
+                    RolaI18N.Get("rorolala_file_system.selected_text_title", words)
+                )
+            );
+        }
+
         Contributed(leaves, entries);
 
         // A directory can be made the base of the tree from wherever it is seen, which is what makes
@@ -518,7 +539,7 @@ internal sealed class BrowserActions
         {
             var only = entries[0];
             leaves.Add(
-                Leaf(["menu.entry.view", "menu.entry.set_base"], null, () => _browser.SetBase(only.Path), 10)
+                Leaf(["menu.entry.view", "menu.entry.set_base"], "rorolala_file_system.set_base", () => _browser.SetBase(only.Path), 10)
             );
         }
 
@@ -780,9 +801,10 @@ internal sealed class BrowserActions
     /// <param name="iconKey">The key naming the entry's picture, or nothing for one without.</param>
     /// <param name="run">What choosing it does.</param>
     /// <param name="order">Where it sits among the entries of its category.</param>
+    /// <param name="detail">What the entry is named by past its word, or nothing for one that is only its word.</param>
     /// <returns>The leaf.</returns>
-    private static MenuLeaf Leaf(string[] keys, string? iconKey, Action run, int order = 0) =>
-        new(keys, order, run, iconKey);
+    private static MenuLeaf Leaf(string[] keys, string? iconKey, Action run, int order = 0, string? detail = null) =>
+        new(keys, order, run, iconKey, Detail: detail);
 
     /// <summary>Puts the leaves into the menu, as the one renderer every menu in the program is drawn by.</summary>
     /// <param name="menu">The menu to fill.</param>
@@ -815,6 +837,9 @@ internal sealed class BrowserActions
         ["rorolala_file_system.reveal"] = Icons.Launch,
         ["rorolala_file_system.copy_path"] = Icons.FileCopy,
         ["rorolala_file_system.root"] = Icons.Home,
+        ["rorolala_file_system.refresh"] = Icons.Refresh,
+        ["rorolala_file_system.set_base"] = Icons.AccountTree,
+        ["rorolala_file_system.collapse_all"] = Icons.AccountTree,
 
         // The categories a menu is grouped by wear a picture too, and the one of the action they hold: a
         // category is the word for what its entries do, so a second picture would be a second answer to one

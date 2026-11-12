@@ -206,8 +206,13 @@ internal sealed class Files : Listing<Entry>
     public override void Open(Entry item) => _actions.Open(item);
 
     /// <inheritdoc />
-    public override void Fill(ContextMenu menu, Control from, IReadOnlyList<Entry> chosen, bool force) =>
-        _actions.Fill(menu, from, chosen, force);
+    public override void Fill(
+        ContextMenu menu,
+        Control from,
+        IReadOnlyList<Entry> chosen,
+        bool force,
+        string? words = null
+    ) => _actions.Fill(menu, from, chosen, force, copyText: words);
 
     /// <inheritdoc />
     public override ContextMenu? Space(Control from) => _actions.Empty(from);

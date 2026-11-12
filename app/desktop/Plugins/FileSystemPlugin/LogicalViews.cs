@@ -277,11 +277,13 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <param name="from">The control the menu is opened from.</param>
     /// <param name="chosen">What is chosen, the entry the menu was opened on first.</param>
     /// <param name="force">Whether the forced actions are shown to begin with, which a place has none of.</param>
+    /// <param name="words">The words a press landed on, or nothing where the menu was opened from the keyboard.</param>
     public override void Fill(
         ContextMenu menu,
         Control from,
         IReadOnlyList<LogicalEntry> chosen,
-        bool force
+        bool force,
+        string? words = null
     )
     {
         // Emptied first, because a menu is filled every time it is opened rather than made for one entry: a menu that
@@ -326,6 +328,19 @@ internal sealed class Places : Listing<LogicalEntry>
                     10,
                     () => Delete(chosen, ask: true),
                     "rorolala_file_system.delete"
+                )
+            );
+        }
+
+        if (words is { Length: > 0 } text)
+        {
+            leaves.Add(
+                new MenuLeaf(
+                    ["menu.entry.copy", "menu.entry.selected_text"],
+                    30,
+                    () => Openers.Copy(from, text, Host.Log.Error),
+                    "rorolala_file_system.copy",
+                    Detail: RolaI18N.Get("rorolala_file_system.selected_text_title", text)
                 )
             );
         }

@@ -29,6 +29,11 @@ namespace RorolalaDesktop.Menus;
 /// Whether the entry may be chosen, or nothing for one that always may: an entry that is shown but does
 /// nothing says why it is there, while one that is left out says nothing at all.
 /// </param>
+/// <param name="Detail">
+/// What the entry is named by past its own word, already written as it is to read, or nothing: the words a
+/// copy can take are one entry whatever they say, and the words themselves are what tells one of them from
+/// another. It is written by whoever knows the value, since the punctuation around it is the language's.
+/// </param>
 public sealed record MenuLeaf(
     IReadOnlyList<string> Keys,
     int Order,
@@ -36,7 +41,8 @@ public sealed record MenuLeaf(
     string? IconKey = null,
     bool Force = false,
     Func<bool>? Applies = null,
-    Func<bool>? Enabled = null
+    Func<bool>? Enabled = null,
+    string? Detail = null
 )
 {
     /// <summary>The key naming the entry itself, which is the last of <see cref="Keys"/>.</summary>

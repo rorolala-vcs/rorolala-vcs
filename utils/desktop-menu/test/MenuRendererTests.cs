@@ -290,6 +290,23 @@ public sealed class MenuRendererTests
         Assert.NotNull(Assert.Single(MenuItems(menu)).Icon);
     }
 
+    /// <summary>What an entry is named by past its own word is written after it, as it was written.</summary>
+    [Fact]
+    public void AnEntrysDetailIsWrittenAfterItsName()
+    {
+        var menu = Built(
+            Words(("menu.entry.copy", "Copy"), ("menu.entry.selected_text", "Selected text")),
+            new MenuLeaf(
+                ["menu.entry.copy", "menu.entry.selected_text"],
+                0,
+                () => { },
+                Detail: " (the words)"
+            )
+        );
+
+        Assert.Equal(["Copy Selected text (the words)"], Headers(menu));
+    }
+
     /// <summary>A menu made of a list of leaves and a dictionary of words.</summary>
     /// <param name="words">What a key reads as, where a file states it.</param>
     /// <param name="leaves">The leaves.</param>

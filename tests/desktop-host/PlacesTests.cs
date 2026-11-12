@@ -94,6 +94,32 @@ public sealed class PlacesTests
         Assert.Contains("Delete File", headers);
     }
 
+    /// <summary>The words a press landed on are one of the things the copy category can take.</summary>
+    /// <remarks>
+    /// A menu opened on a row is opened over one cell of it, and what the reader pointed at is text before it is
+    /// the entry the row stands for. The copy category is where both are found, so the words are its entry
+    /// rather than a line above the whole menu.
+    /// </remarks>
+    [Fact]
+    public void TheWordsAPressLandedOnAreOfferedUnderCopy()
+    {
+        var (host, browser, provider, address) = Setup();
+
+        _ = provider.Suggest("Photos");
+
+        var listing = new Places(host, browser, Place(provider, address));
+        var view = new ListBrowser<LogicalEntry>(host, listing);
+        var menu = new ContextMenu();
+
+        listing.Fill(menu, view, [Assert.Single(listing.Items)], force: false, words: "Photos");
+
+        var headers = menu.Items.OfType<MenuItem>().Select(item => item.Header).OfType<string>().ToArray();
+
+        // The words are the entry's detail, which the language writes around them; nothing is translated
+        // here, so what is checked is the entry rather than the parentheses.
+        Assert.Contains(headers, header => header.StartsWith("Copy Selected text", StringComparison.Ordinal));
+    }
+
     /// <summary>The listing of a place, and the place answering it, over a scratch directory.</summary>
     /// <returns>The host, the location, the place's answer, and the address it is read at.</returns>
     private static (IPluginHost Host, Browser Browser, VirtualPlace Provider, LogicalAddress Address) Setup()

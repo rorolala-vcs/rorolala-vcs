@@ -190,6 +190,10 @@ The ownership commands are four words now, `Claim`, `Give up`, `Force claim` and
 
 A category wears a picture of its own as well: the action it holds when it holds one, and a plus for new things and three beads for a menu of views. An entry with no picture of its own borrows the category's, so a folded line is never the one markless row in a menu.
 
+The words a press lands on, which a row's menu could copy, are one of the copy category's entries now, `Selected text` with the words themselves after it, beside the entry and its path, rather than a line above the whole menu.
+
+Restoring and revealing are worded as the category's continuation rather than as entries of their own: `to baseline content`, `to staged content`, `in file manager`, `in list`, so a category and its entry read as one phrase when the category has one entry and as a submenu of phrases when it has more.
+
 A plugin built against the previous contract is not loaded against this one: `ContextMenuItem` carries `Keys` instead of `LabelKey`, the two records gained an `Enabled` question, and a registry refuses an entry whose whole path is already offered in its context. The contract assembly is raised to 0.15.0.
 
 Translation keys under `menu.entry.` are shared: a plugin may state a category another plugin opened, or use a leaf another one stated, and the i18n gate reads the paths written in the C# sources and accepts a key any plugin's file states. A key nothing states reads as its own last part with the underscores turned into spaces.

@@ -185,9 +185,11 @@ public sealed class MenuRenderer
     /// <returns>The entry.</returns>
     private MenuItem Leaf(MenuLeaf leaf, IReadOnlyList<string> prefix, bool force)
     {
+        var name = string.Join(' ', prefix.Append(leaf.Key).Select(Text));
+
         var menu = new MenuItem
         {
-            Header = string.Join(' ', prefix.Append(leaf.Key).Select(Text)),
+            Header = leaf.Detail is { Length: > 0 } detail ? name + detail : name,
             IsEnabled = leaf.Enabled?.Invoke() ?? true,
         };
 

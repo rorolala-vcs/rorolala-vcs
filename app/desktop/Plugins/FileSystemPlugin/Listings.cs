@@ -390,7 +390,17 @@ internal abstract class Listing<TItem>
     /// <param name="from">The control the menu is opened from.</param>
     /// <param name="chosen">What is chosen, the item the menu was opened on first.</param>
     /// <param name="force">Whether the forced actions are shown to begin with.</param>
-    public abstract void Fill(ContextMenu menu, Control from, IReadOnlyList<TItem> chosen, bool force);
+    /// <param name="words">
+    /// The words the press landed on, or nothing where the menu was opened from the keyboard: they are the text a
+    /// reader pointed at, which the copy category offers as one of the things it can take.
+    /// </param>
+    public abstract void Fill(
+        ContextMenu menu,
+        Control from,
+        IReadOnlyList<TItem> chosen,
+        bool force,
+        string? words = null
+    );
 
     /// <summary>How the items beyond the name are read, in the order they are shown.</summary>
     public virtual IReadOnlyList<Column<TItem>> Columns => [];
@@ -605,9 +615,6 @@ internal abstract class EntryView<TItem> : EntryView
 
     /// <summary>How tall a row is where nothing on screen says, which is only ever a first guess.</summary>
     private const double RowGuess = 28.0;
-
-    /// <summary>How wide the words in a copy entry are shown before they are cut, since a name may be long.</summary>
-    private const double WidestCopy = 360;
 
     /// <summary>Every row on screen, so that a faded cut and a moved column reach all of them.</summary>
     private readonly List<(TItem Item, Control Row)> _rows = [];
@@ -964,26 +971,15 @@ internal abstract class EntryView<TItem> : EntryView
 
         menu.Opening += (_, _) =>
         {
-            Source.Fill(menu, this, Chosen(item), force: Held);
-
-            // The words the menu was opened on come first, above what the listing offers about the entry: what a
-            // reader pointed at is the thing whose text they meant to take, and the actions about the entry as a
-            // whole read after it. A menu opened from the keyboard was pointed at nothing.
+            // The words the menu was opened on are read before the menu is filled, because a menu is filled
+            // once: what a reader pointed at is one more thing the copy category can take, and a second pass
+            // that put it in afterwards would have to find the category again. A menu opened from the keyboard
+            // was pointed at nothing.
             var words = _pointed;
 
             _pointed = null;
 
-            if (words is not { Length: > 0 })
-            {
-                return;
-            }
-
-            if (menu.Items.Count > 0)
-            {
-                menu.Items.Insert(0, new Separator());
-            }
-
-            menu.Items.Insert(0, Copied(words));
+            Source.Fill(menu, this, Chosen(item), force: Held, words: words);
         };
 
         row.ContextMenu = menu;
@@ -1037,32 +1033,6 @@ internal abstract class EntryView<TItem> : EntryView
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// The menu entry that copies the words a press landed on.
-    /// </summary>
-    /// <remarks>
-    /// What it would copy is written on it, because a menu on a row is opened over one cell of it and a word such
-    /// as "Copy" would not say which cell's text, the size, the owner and the name are all cells of one row.
-    /// </remarks>
-    /// <param name="words">What would be copied.</param>
-    /// <returns>The entry.</returns>
-    private MenuItem Copied(string words)
-    {
-        var entry = new MenuItem
-        {
-            Header = new TextBlock
-            {
-                Text = RolaI18N.Get("rorolala_file_system.copy_text", words),
-                MaxWidth = WidestCopy,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            },
-        };
-
-        entry.Click += (_, _) => Openers.Copy(this, words, Host.Log.Error);
-
-        return entry;
     }
 
     /// <summary>Shows the forced actions while Shift is held, and hides them when it is let go.</summary>

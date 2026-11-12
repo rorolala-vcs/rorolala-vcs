@@ -223,7 +223,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
                         );
                     }
                 },
-                null,
+                Icons.Launch,
                 false,
                 was => was.Entry is { Kind: EntryKind.Directory }
             )

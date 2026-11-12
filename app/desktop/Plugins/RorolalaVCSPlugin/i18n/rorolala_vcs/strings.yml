@@ -548,11 +548,11 @@ rorolala_vcs:
       zh-CN: Rorolala 文件操作
 
   # What the other kind of folder a listing may make is called, and the name a new one is given until it
-  # is named. Both are the plugin's copy rather than the file system's: the plain folder's name is not a
-  # tree's, and a menu that said "New folder" for a tree would be a menu that hid what it makes.
+  # is named. The kind is the noun the new category puts after itself, which is why it is a tree and not a
+  # new tree: a menu that said "New new tree" would be the category said twice.
   new_tree:
-    en: New tree
-    zh-CN: 新建树
+    en: Tree
+    zh-CN: 树
   new_tree_name:
     en: New Tree
     zh-CN: 新树
@@ -1293,11 +1293,11 @@ menu:
       en: Restore
       zh-CN: 还原
     baseline:
-      en: Baseline
-      zh-CN: 基线
+      en: To baseline content
+      zh-CN: 到基线内容
     staged:
-      en: Staged
-      zh-CN: 暂存
+      en: To staged content
+      zh-CN: 到暂存内容
     rebuild:
       en: Rebuild
       zh-CN: 重建
