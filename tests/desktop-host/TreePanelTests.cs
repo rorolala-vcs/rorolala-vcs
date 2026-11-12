@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 
@@ -229,6 +230,70 @@ public sealed class TreePanelTests
         }
     }
 
+    /// <summary>Bulk staging names the tree, not every file, so a long list of paths still runs.</summary>
+    [Fact]
+    public void TheWholeStagingAreaIsStagedWithoutAPathPerFile()
+    {
+        var workspace = TreeRecorded("bulk");
+        var tree = Path.Combine(workspace, "tree");
+        var stem = new string('b', 72);
+
+        for (var index = 0; index < 500; index++)
+        {
+            File.WriteAllText(Path.Combine(tree, $"{stem}{index:D4}.txt"), "one\n");
+        }
+
+        Given(workspace, "tree", "add", "tree");
+        Given(workspace, "track", "tree", "--message", "bulk", "--no-editor");
+
+        for (var index = 0; index < 500; index++)
+        {
+            File.WriteAllText(Path.Combine(tree, $"{stem}{index:D4}.txt"), "changed\n");
+        }
+
+        var services = Host.Services();
+        var view = Panel(services);
+        var window = new Window { Width = 700, Height = 600, Content = view };
+
+        // The panel runs the command line the window was opened with, which the harness names the
+        // way the launcher does.
+        Environment.SetEnvironmentVariable("ROLA_EXE", Program());
+
+        window.Show();
+
+        try
+        {
+            BaseDirectory.Publish(workspace);
+            ChosenDirectory.Publish(new Entry(tree, EntryKind.Directory));
+
+            Wait(() => StageBoxes(window).Length > 0);
+
+            var stageAll = window
+                .GetVisualDescendants()
+                .OfType<CheckBox>()
+                .First(box => ToolTip.GetTip(box) as string == "rorolala_vcs.tree_panel.stage_all");
+
+            stageAll.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Wait(() => StageBoxes(window).Length == 0);
+
+            var unstageAll = window
+                .GetVisualDescendants()
+                .OfType<CheckBox>()
+                .First(
+                    box => ToolTip.GetTip(box) as string == "rorolala_vcs.tree_panel.unstage_all"
+                );
+
+            unstageAll.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Wait(() => StageBoxes(window).Length > 0);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>A tree with a mark but no workspace, which is enough for the description field.</summary>
     /// <param name="label">What the scratch directory is for.</param>
     /// <returns>The tree's root.</returns>
@@ -294,6 +359,36 @@ public sealed class TreePanelTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         }
     }
+
+    /// <summary>Runs the panel until what is being waited for is true.</summary>
+    /// <param name="done">What is being waited for.</param>
+    private static void Wait(Func<bool> done)
+    {
+        for (var frame = 0; frame < 600; frame++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+
+            if (done())
+            {
+                return;
+            }
+
+            Thread.Sleep(50);
+        }
+
+        throw new TimeoutException("the panel did not finish what the test waited for");
+    }
+
+    /// <summary>The row checkboxes that stage one path.</summary>
+    /// <param name="window">The window holding the panel.</param>
+    /// <returns>The checkboxes that are drawn.</returns>
+    private static CheckBox[] StageBoxes(Window window) =>
+        window
+            .GetVisualDescendants()
+            .OfType<CheckBox>()
+            .Where(box => ToolTip.GetTip(box) as string == "rorolala_vcs.tree_panel.stage")
+            .ToArray();
 
     /// <summary>A workspace whose one recorded entry is a tree.</summary>
     /// <param name="label">The scratch directory's label.</param>

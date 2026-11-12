@@ -177,6 +177,17 @@ internal static class TreePanelCommands
     public static IReadOnlyList<string> RestoreArguments(string path) =>
         Arguments("align", "--restore-modify", path);
 
+    /// <summary>How much of a command line paths may take, in characters.</summary>
+    /// <remarks>
+    /// Windows ends a process whose command line passes about thirty-two thousand characters, and a
+    /// tree can hold more paths than that. The budget is half of it, which leaves the program's own
+    /// arguments and quoting room and is still a batch worth running.
+    /// </remarks>
+    private const int ArgumentBudget = 16_000;
+
+    /// <summary>What one command's own words and quoting are given before paths take the rest.</summary>
+    private const int ArgumentReserve = 256;
+
     /// <summary>Stages `path`.</summary>
     /// <param name="tree">The tree's root, where the run is made.</param>
     /// <param name="path">The path inside the tree.</param>
@@ -212,9 +223,9 @@ internal static class TreePanelCommands
         ArgumentNullException.ThrowIfNull(adds);
         ArgumentNullException.ThrowIfNull(removals);
 
-        if (adds.Count > 0)
+        foreach (var batch in Batches(adds))
         {
-            var (staged, said) = Run(tree, StagePathsArguments(adds));
+            var (staged, said) = Run(tree, StagePathsArguments(batch));
 
             if (!staged)
             {
@@ -222,9 +233,17 @@ internal static class TreePanelCommands
             }
         }
 
-        return removals.Count > 0
-            ? Run(tree, StageRemovalsArguments(removals))
-            : (true, string.Empty);
+        foreach (var batch in Batches(removals))
+        {
+            var (removed, said) = Run(tree, StageRemovalsArguments(batch));
+
+            if (!removed)
+            {
+                return (removed, said);
+            }
+        }
+
+        return (true, string.Empty);
     }
 
     /// <summary>Stages the removal of `path`.</summary>
@@ -238,8 +257,30 @@ internal static class TreePanelCommands
     /// <param name="tree">The tree's root, where the run is made.</param>
     /// <param name="paths">The paths to unstage.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
-    public static (bool Done, string Said) Unstage(string tree, IReadOnlyList<string> paths) =>
-        Run(tree, UnstageArguments(paths));
+    public static (bool Done, string Said) Unstage(
+        string tree,
+        IReadOnlyList<string> paths
+    )
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        if (paths.Count == 0)
+        {
+            return (true, string.Empty);
+        }
+
+        foreach (var batch in Batches(paths))
+        {
+            var (unstaged, said) = Run(tree, UnstageArguments(batch));
+
+            if (!unstaged)
+            {
+                return (unstaged, said);
+            }
+        }
+
+        return (true, string.Empty);
+    }
 
     /// <summary>Clears the whole staging area, description and conflicts included.</summary>
     /// <param name="tree">The tree's root, where the run is made.</param>
@@ -266,12 +307,38 @@ internal static class TreePanelCommands
         return staged ? Run(tree, StageRemovalArguments(from)) : (staged, said);
     }
 
+    /// <summary>The paths split into command lines the operating system will start.</summary>
+    /// <param name="paths">The paths to split.</param>
+    /// <returns>The batches, in order.</returns>
+    private static IEnumerable<IReadOnlyList<string>> Batches(IReadOnlyList<string> paths)
+    {
+        var batch = new List<string>();
+        var length = ArgumentReserve;
+
+        foreach (var path in paths)
+        {
+            if (batch.Count > 0 && length + path.Length + 1 > ArgumentBudget)
+            {
+                yield return batch;
+                batch = [];
+                length = ArgumentReserve;
+            }
+
+            batch.Add(path);
+            length += path.Length + 1;
+        }
+
+        if (batch.Count > 0)
+        {
+            yield return batch;
+        }
+    }
+
     /// <summary>Runs one command where the tree is rooted.</summary>
     /// <param name="tree">The tree's root.</param>
     /// <param name="arguments">What the command is told, after the program's name.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
-    private static (bool Done, string Said) Run(string tree, IReadOnlyList<string> arguments)
-    {
+    private static (bool Done, string Said) Run(string tree, IReadOnlyList<string> arguments)    {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(arguments);
 

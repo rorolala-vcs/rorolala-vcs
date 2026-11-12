@@ -1001,6 +1001,12 @@ internal sealed class TreePanelView : UserControl
         var actionable = item.Staged
             ? leaves
             : leaves.Where(leaf => leaf.Change != "conflict").ToArray();
+        var underConflict = _reading?.Conflicts.Any(
+            conflict => Under(item.Path, conflict.Path)
+        ) == true;
+        var crosses = leaves.Any(leaf =>
+            leaf.OldPath is { Length: > 0 } old && !Under(item.Path, old)
+        );
 
         var box = new CheckBox
         {
@@ -1026,7 +1032,28 @@ internal sealed class TreePanelView : UserControl
 
             if (item.Staged)
             {
-                Unstage(tree, StagedPaths(leaves));
+                if (underConflict)
+                {
+                    Unstage(tree, StagedPaths(leaves));
+                }
+                else
+                {
+                    var paths = new List<string> { item.Path };
+
+                    foreach (var leaf in leaves)
+                    {
+                        if (leaf.OldPath is { Length: > 0 } old && !Under(item.Path, old))
+                        {
+                            paths.Add(old);
+                        }
+                    }
+
+                    Unstage(tree, paths);
+                }
+            }
+            else if (actionable.Length == leaves.Length && !crosses)
+            {
+                Stage(tree, item.Path);
             }
             else
             {
@@ -1239,6 +1266,24 @@ internal sealed class TreePanelView : UserControl
             Detail: entry.Path
         );
 
+    /// <summary>Whether a path is a directory or one under it.</summary>
+    /// <param name="directory">The directory's path under the tree.</param>
+    /// <param name="path">The path to test.</param>
+    /// <returns>Whether it is under the directory.</returns>
+    private static bool Under(string directory, string path) =>
+        string.Equals(path, directory, StringComparison.Ordinal)
+        || path.StartsWith(directory + "/", StringComparison.Ordinal);
+
+    /// <summary>Stages one path or one directory.</summary>
+    /// <param name="tree">The tree's root.</param>
+    /// <param name="path">The path or directory inside it.</param>
+    private void Stage(string tree, string path) =>
+        Begin(
+            tree,
+            "rorolala_vcs.progress.tree_stage",
+            () => TreePanelCommands.Stage(tree, path)
+        );
+
     /// <summary>Stages every non-conflict path under one directory.</summary>
     /// <param name="tree">The tree's root.</param>
     /// <param name="leaves">The leaves to stage.</param>
@@ -1406,12 +1451,22 @@ internal sealed class TreePanelView : UserControl
             return;
         }
 
-        var (adds, removals, _) = Work(reading);
+        var (adds, removals, conflicts) = Work(reading);
 
+        if (adds.Length + removals.Length == 0)
+        {
+            return;
+        }
+
+        // Staging the whole tree is one short command. The paths are only named one by one when a
+        // conflict is in the tree, since `tree add .` would settle it, and the panel's bulk
+        // checkbox deliberately leaves conflicts alone.
         Begin(
             tree,
             "rorolala_vcs.progress.tree_stage",
-            () => TreePanelCommands.StageAll(tree, adds, removals)
+            conflicts.Count == 0
+                ? () => TreePanelCommands.StageAll(tree)
+                : () => TreePanelCommands.StageAll(tree, adds, removals)
         );
     }
 
@@ -1423,10 +1478,17 @@ internal sealed class TreePanelView : UserControl
             return;
         }
 
+        // Resetting the whole tree is one short command and keeps the description. A conflict is
+        // not staged work, so a tree holding one is reset path by path instead, which leaves the
+        // conflict where it is.
+        IReadOnlyList<string> paths = reading.Conflicts.Count == 0
+            ? ["."]
+            : StagedPaths(reading.Staged);
+
         Begin(
             tree,
             "rorolala_vcs.progress.tree_unstage",
-            () => TreePanelCommands.Unstage(tree, StagedPaths(reading.Staged))
+            () => TreePanelCommands.Unstage(tree, paths)
         );
     }
 
