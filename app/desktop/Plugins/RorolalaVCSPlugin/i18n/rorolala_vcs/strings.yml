@@ -117,8 +117,8 @@ rorolala_vcs:
     # What a right-click on a variant's hash or on the node naming it offers when a file is chosen:
     # joining that variant into the file the user is on. Both name one variant, so both offer this.
     join_selected:
-      en: Merge variant into the selected entry
-      zh-CN: 合并变体到当前选中条目
+      en: Join the variant into the selected entry
+      zh-CN: 将变体并入当前选中条目
 
     # What a right-click on another side's entry offers: making the file the user is on record that
     # entry. The first item moves the record and lets the content follow it where the two versions say
@@ -262,8 +262,8 @@ rorolala_vcs:
       en: Retrack
       zh-CN: 重新追踪
     retrack_only_index:
-      en: Retrack (version only)
-      zh-CN: 重新追踪（仅版本）
+      en: Retrack (record only)
+      zh-CN: 重新追踪（仅记录）
     retrack_confirm_title:
       en: Retrack this file?
       zh-CN: 要重新追踪该文件吗？
@@ -369,7 +369,7 @@ rorolala_vcs:
     # words to draw.
     upstream_unknown:
       en: This version is recorded by the Vault, but it is not in the local index
-      zh-CN: 该版本由上游记录，但不在本地索引中
+      zh-CN: 该版本由保险库记录，但不在本地索引中
 
   # What each of the three says while the directory the tree is rooted at is not one a Workspace
   # holds: there is nothing under such a place for them to show, and a blank view of the work would
@@ -377,7 +377,7 @@ rorolala_vcs:
   # name a base directory rather than the work.
   not_a_workspace:
     en: The current base directory is not a Rorolala Workspace
-    zh-CN: 当前基础目录并非 Rorolala Workspace
+    zh-CN: 当前基础目录并非 Rorolala 工作区
 
   # What the Overview says while a Workspace holds the base and still answers nothing: a Workspace that
   # works in no Layout and one whose work cannot be read both come to this, and neither is the base
@@ -454,10 +454,10 @@ rorolala_vcs:
     # reason for it, because a reader who has stopped at a pill is asking what it is.
     kind_lost:
       en: The record names it, but it is really not there.
-      zh-CN: 在记录当中，该条目存在，但实际不存在。
+      zh-CN: 记录中有它，实际却不存在。
     kind_untagged:
       en: The record does not name it, but it is really there.
-      zh-CN: 在记录当中，该条目不存在，但实际存在。
+      zh-CN: 记录中没有它，实际却存在。
     kind_rename_weak:
       en: A lost and an untagged one that may be a move, which has to be confirmed.
       zh-CN: 产生了一对丢失和未标记，可能为一组移动，需要确认。
@@ -466,7 +466,7 @@ rorolala_vcs:
       zh-CN: 产生了一对丢失和未标记，它们内容一致，推断为移动。
     kind_merge:
       en: A variant is waiting to be joined in.
-      zh-CN: 有一个变体等待合并。
+      zh-CN: 有一个变体等待并入。
 
     # What a sync would do about a path, which is the last group of the table: a file that is in step with nothing
     # wrong about it is still one a sync would send or fetch, and a reader wants to know which before pressing it.
@@ -538,7 +538,7 @@ rorolala_vcs:
       zh-CN: 该变体文件已不再持有变体的内容
     broken_unknown:
       en: this build does not know why it cannot go on
-      zh-CN: 本版本不知道它为何无法继续
+      zh-CN: 此构建不知道它为何无法继续
 
   # What the preset is called where the File System plugin's settings offer it: Rorolala's own file
   # operations, the commands of `rola fs-ops`.
@@ -862,7 +862,7 @@ rorolala_vcs:
       en: Fetch the Vault's Layout
       zh-CN: 取回保险库的布局
     checkin:
-      en: Bring in
+      en: Check in
       zh-CN: 签入
     checkin_failed:
       en: The checkin from `%{vault}` did not finish
@@ -886,8 +886,8 @@ rorolala_vcs:
       en: Move local files (%{count})
       zh-CN: 移动本地文件（%{count}）
     checkin_partial:
-      en: Bring in the rest (leave %{count} out)
-      zh-CN: 签入其余条目（放弃 %{count} 个）
+      en: Check in the rest (leave %{count} out)
+      zh-CN: 签入其余条目（留下 %{count} 个）
     checkin_abandon:
       en: Abandon this checkin
       zh-CN: 放弃本次签入
@@ -899,10 +899,10 @@ rorolala_vcs:
       zh-CN: "%{count} 个本地文件已移动到保险库指定的路径"
     checkin_abandoned_title:
       en: Part of the checkin was left out
-      zh-CN: 部分签入已放弃
+      zh-CN: 部分签入被略过
     checkin_abandoned:
       en: "%{count} entries were left out of this checkin"
-      zh-CN: "本次签入放弃了 %{count} 个条目"
+      zh-CN: "本次签入未包含 %{count} 个条目"
     new_folder:
       en: New folder
       zh-CN: 新建文件夹
@@ -917,7 +917,7 @@ rorolala_vcs:
       zh-CN: 空文件夹，不会被保留
     draft_folder:
       en: "It has nothing in it: unless something is put in it, it is gone when this Dock or the program is opened again"
-      zh-CN: "它里面没有内容：如果不往里放东西，下次打开这个 Dock 或程序时它就会消失"
+      zh-CN: "它里面没有内容：如果不往里放东西，下次打开这个面板或程序时它就会消失"
     column_uuid:
       en: Uuid
       zh-CN: UUID
@@ -935,7 +935,7 @@ rorolala_vcs:
       zh-CN: 无法放弃所有权
     column_owner:
       en: Owner
-      zh-CN: 持有人
+      zh-CN: 持有者
     copy_path:
       en: Copy the upstream path
       zh-CN: 复制上游路径
@@ -1003,7 +1003,7 @@ rorolala_vcs:
       en: "A list is not a folder: open it and drop into one of the things it lists"
       zh-CN: 列表不是文件夹：请打开它，再放到它列出的某一项上
     refused_a_folder:
-      en: "A folder is not moved: drop it on a directory to bring in what stands under it"
+      en: "A folder is not moved: drop it on a directory to check in what stands under it"
       zh-CN: "文件夹不会被移动：把它放到目录上即可签入其中的条目"
     refused_another_layout:
       en: An entry is moved within one Layout, and this one is of another
@@ -1034,7 +1034,7 @@ rorolala_vcs:
   # name, and one that does not is read by the direction its work moves, or as simply working.
   progress:
     checkin:
-      en: Bringing entries in
+      en: Checking entries in
       zh-CN: 正在签入条目
     path_move:
       en: Moving the entry upstream
@@ -1056,7 +1056,7 @@ rorolala_vcs:
       zh-CN: 取回布局
     hold:
       en: Taking ownership
-      zh-CN: 申请所有权
+      zh-CN: 正在获取所有权
     giveup:
       en: Giving up ownership
       zh-CN: 放弃所有权
@@ -1068,7 +1068,7 @@ rorolala_vcs:
       zh-CN: 追踪新版本
     join:
       en: Joining
-      zh-CN: 合并变体
+      zh-CN: 并入中
     restore:
       en: Restoring
       zh-CN: 还原内容
@@ -1179,7 +1179,7 @@ rorolala_vcs:
       zh-CN: 连接至
     take_ownership:
       en: Hold
-      zh-CN: 获取所有权
+      zh-CN: 持有
     cancel_merge:
       en: Cancel
       zh-CN: 取消该合并
@@ -1243,13 +1243,13 @@ rorolala_vcs:
   tree_restore:
     baseline_confirm_title:
       en: Restore to the recorded version?
-      zh-CN: 要还原至基准吗？
+      zh-CN: 要还原至基线内容吗？
     baseline_confirm_message:
       en: "`%{file}` will be put back to the version the tree records. The change in the work will be lost."
       zh-CN: "`%{file}` 将还原到树记录的版本。工作区中的改动会丢失。"
     staged_confirm_title:
       en: Restore to the staged version?
-      zh-CN: 要还原至暂存吗？
+      zh-CN: 要还原至暂存内容吗？
     staged_confirm_message:
       en: "`%{file}` will be put back to what the tree has staged. The change in the work will be lost."
       zh-CN: "`%{file}` 将还原到树暂存的内容。工作区中的改动会丢失。"
@@ -1278,14 +1278,14 @@ menu:
       en: Ownership
       zh-CN: 所有权
     claim:
-      en: Claim
-      zh-CN: 申请
+      en: Hold
+      zh-CN: 持有
     waive:
       en: Give up
       zh-CN: 放弃
     force_claim:
-      en: Force claim
-      zh-CN: 强制申请
+      en: Force hold
+      zh-CN: 强制持有
     force_waive:
       en: Force give up
       zh-CN: 强制放弃
@@ -1309,7 +1309,7 @@ menu:
       zh-CN: 版本
     fork:
       en: Fork
-      zh-CN: 分支
+      zh-CN: 分叉
     switch:
       en: Switch record
       zh-CN: 切换记录
@@ -1318,7 +1318,7 @@ menu:
       zh-CN: 仅切换记录
     join:
       en: Join variant
-      zh-CN: 加入变体
+      zh-CN: 并入变体
     checkin:
       en: Check in
       zh-CN: 签入
@@ -1329,11 +1329,11 @@ menu:
       en: Cancel merge and keep
       zh-CN: 取消合并并保留
     retrack:
-      en: Move record
-      zh-CN: 移动记录
+      en: Retrack
+      zh-CN: 重新追踪
     retrack_only_index:
-      en: Move record only
-      zh-CN: 仅移动记录
+      en: Retrack (record only)
+      zh-CN: 重新追踪（仅记录）
     uuid:
       en: UUID
       zh-CN: UUID
@@ -1363,7 +1363,7 @@ menu:
       zh-CN: 暂存区
     fetch:
       en: Fetch
-      zh-CN: 获取
+      zh-CN: 取回
     content:
       en: Content
       zh-CN: 内容

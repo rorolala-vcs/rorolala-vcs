@@ -7,14 +7,14 @@ hold:
       zh-CN: 无法全部处理时，先处理可以处理的部分
   help:
     en: |
-      Claim entries for your account
+      Hold entries for your account
 
       **Usage**: rola hold <PATH>...
       **Flags**:
           --allow-partial    Move what can be processed first when not everything can be processed
           --force            Skip the version consistency check
     zh-CN: |
-      为本机账户占有条目
+      为本机账户持有条目
 
       **用法**：rola hold <路径>...
       **标识**：
@@ -22,8 +22,8 @@ hold:
           --force            跳过版本一致性的检查
 
   description:
-    en: Claim entries for your account
-    zh-CN: 为本机账户占有条目
+    en: Hold entries for your account
+    zh-CN: 为本机账户持有条目
 
 giveup:
   help:
@@ -47,13 +47,13 @@ giveup:
     zh-CN: 放弃本机账户持有的条目
 
 ownership:
-  # What a claim or a release says it is doing while it does it: the bar that is drawn while the Vault
+  # What a hold or a release says it is doing while it does it: the bar that is drawn while the Vault
   # is asked about each entry, one at a time over the one connection. The words are this crate's
   # because the action is the daemon's and holds no language of its own, the name crosses with the
   # entries so that the bar is not drawn without one.
   holding:
-    en: Claiming ownership
-    zh-CN: 申请持有权中
+    en: Holding ownership
+    zh-CN: 正在持有所有权
   giving:
     en: Giving up ownership
     zh-CN: 放弃所有权中

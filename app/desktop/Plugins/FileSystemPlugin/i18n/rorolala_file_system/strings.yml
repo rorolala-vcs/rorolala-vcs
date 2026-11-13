@@ -12,7 +12,7 @@ rorolala_file_system:
     zh-CN: 目录
   tree:
     en: Folder Tree
-    zh-CN: 文件导览
+    zh-CN: 文件夹树
 
   # What the plugin's own menu in the menu bar is called. Its items are stated under keys of their own
   # elsewhere in this file, since a key that is a step on the way to an item cannot also be the leaf the menu
@@ -166,7 +166,7 @@ rorolala_file_system:
     zh-CN: 该路径不存在
   not_there:
     en: "`%{path}` is not there, so the dock stayed where it was"
-    zh-CN: "`%{path}` 不存在，Dock 仍停留在原处"
+    zh-CN: "`%{path}` 不存在，面板仍停留在原处"
 
   # What the file operations are carried out with. The commands are the system's tools rather than this
   # program's, which is why they are settings: a system that keeps them elsewhere, or a user who prefers
