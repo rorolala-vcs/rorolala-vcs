@@ -499,14 +499,6 @@ struct Carry<'a> {
     runtime: &'a tokio::runtime::Runtime,
 }
 
-/// Whether the Layout names a tree, which is what a run without a plan cannot carry the inside of.
-fn carries_trees(layout: &Layout) -> bool {
-    layout
-        .entries()
-        .iter()
-        .any(|(_, data)| data.kind() == librorolala::layout::EntryKind::Tree)
-}
-
 /// Writes what a plan names, and moves the content that gives it meaning.
 ///
 /// Content is moved before the Layout is touched either way: a version is only a meaning once what
@@ -540,14 +532,6 @@ fn carry_with(
     // The list is read even when `--no-storage` leaves the store behind, because it is also the list
     // a run with no plan reports having asked for.
     let indexed = plan.is_none().then(|| indexed(carry));
-
-    // With no plan, what moves is the version and what a storage key names. For a tree the version's
-    // storage key is its structure, and what the structure names is not carried: enumerating it needs
-    // the structure read first, which is the two-stage exchange a plan makes. The run says so rather
-    // than leaving the reader to wonder why a pulled tree's files are missing.
-    if plan.is_none() && carries_trees(carry.layout) {
-        eprintln!("{}", t!("sync.no_layout_trees").trim());
-    }
 
     let entries = plan_entries(plan);
 
@@ -785,6 +769,11 @@ fn sync_index(
 /// no list of versions to work from: what the index holds is the list. Every variant's content is
 /// named, so the new variants a run just made have theirs carried the same way the old ones do.
 ///
+/// A tree variant's stored object is its structure, and the structure names the description and every
+/// file's content. Those are read here as well, because a run with no plan is still the run that has
+/// to leave the Vault holding a version a later Workspace can put back: the structures alone are a
+/// record of files whose content never crossed.
+///
 /// The scan is the index's own rather than a listing of every object read whole: only the Variants
 /// are decoded, since only they name content, and the other kinds are skipped by the kind their
 /// bytes lead with.
@@ -794,6 +783,21 @@ fn indexed(carry: &Carry<'_>) -> Vec<Key> {
     };
 
     let mut keys: Vec<Key> = hashes.into_iter().map(Key::new).collect();
+
+    if let Some(store) = carry.store {
+        let mut inside = Vec::new();
+
+        for key in &keys {
+            if let Ok(bytes) = carry.runtime.block_on(store.read_object(key))
+                && let Ok(structure) = librorolala::tree::TreeStructure::decode(&bytes)
+            {
+                inside.extend(structure.content_keys());
+            }
+        }
+
+        keys.extend(inside);
+    }
+
     keys.sort_unstable();
     keys.dedup();
 
@@ -842,6 +846,7 @@ fn content_of(entries: &[&Entry], state: StateSync, carry: &Carry<'_>) -> (Vec<K
             carry.index,
             version.digest(),
             carry.store,
+            !pull,
         )) else {
             continue;
         };

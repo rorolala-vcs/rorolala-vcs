@@ -1369,7 +1369,28 @@ fn bring_in(
     }
 
     if let Some(store) = store {
-        let keys: Vec<Key> = resolved.iter().filter_map(|(_, stored)| *stored).collect();
+        let mut keys: Vec<Key> = Vec::new();
+
+        for (wanted, stored) in &resolved {
+            keys.extend(*stored);
+
+            // A tree's version names a structure, and a structure is one version's inside. An older
+            // version is a structure too, and a later retrack reads it before it asks for what it
+            // names: bringing the chain here is what leaves the pointer able to move back.
+            if wanted.data.kind() == EntryKind::Tree
+                && let Ok(chain) = runtime.block_on(sync::chain_store_keys(
+                    index,
+                    &wanted.data.version(),
+                    Some(store),
+                    false,
+                ))
+            {
+                keys.extend(chain);
+            }
+        }
+
+        keys.sort_unstable();
+        keys.dedup();
 
         sources.bring(store, &keys);
     }

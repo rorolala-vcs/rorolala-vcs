@@ -207,6 +207,13 @@ impl<'a> Sources<'a> {
             return keys.to_vec();
         }
 
+        // `used` says a candidate was asked for the keys of this call, not that it may never be asked
+        // again: a tree asks twice, once for its structure and once for what the structure names. The
+        // second ask has to reach the same Vault the first one did.
+        for asked in self.asked.borrow_mut().iter_mut() {
+            asked.used = false;
+        }
+
         let mut left = self.missing(store, keys);
         if left.is_empty() {
             return Vec::new();

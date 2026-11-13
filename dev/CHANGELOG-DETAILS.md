@@ -6,25 +6,29 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Bugfix
 
-### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Draw badge pictures at whole pixels and without a circular clip
+### 1. [`app`] [`rola`] [`sync`] [`tree`] Carry a tree's whole chain when a sync uploads or a checkin brings it in
+
+A sync uploaded the structure of every version in a tree's chain but expanded only the head structure's files, so a new Workspace could see an older version's name and structure and still not put its content back: retracking that version fetched files the Vault had never been given. The chain now expands the content of every tree version on upload, and a sync with no Layout plan does the same for the variants it carries. A checkin now brings every structure in the tree's chain, not only the head, so the older version a retrack reads is here, and a fetch can ask the same Vault again for what a tree's structure names instead of stopping after its first ask. A Vault that was written before this fix has to be synced again from a Workspace that still holds the older versions.
+
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Draw badge pictures at whole pixels and without a circular clip
 
 A badge's picture was clipped to a circle and scaled to a fractional size, so a small mark lost its corners and read as a blur. The picture now keeps its square mask, is scaled to a whole number of pixels, and the badge is laid out on whole pixels; the badge's own ground remains the circle. The picture is also reduced once to the size it is drawn at and kept, rather than being reduced by the compositor every time it is shown.
 
-### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges
 
 A chosen tree row is one rounded wash over the whole step, rather than a wash on the row and a second one around its name and icon. The badges at the row's right are centred on the step, so the room above and below them is the same.
 
-### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited
 
 The Version Graph no longer draws an edited file's local pill on the version its draft is based on as well as on the draft. While the file has an unrecorded change, its draft is the one card that names it; the baseline version keeps the entries of the other sides.
 
-### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady
 
 The message field under the Version Graph is the whole room beside the TRACK button, but the pointer read as text only over the line the message is drawn on: the padding around that line and the empty width after it read as ground, although a press there focused the field. The field now names the text cursor itself, so every part of its room inherits it.
 
 The hint is a text block and took the body type rather than the field's, so it was taller than the line that replaced it and the strip shrank when typing started. The hint now takes the field's own type, so a row showing the hint and a row showing a message are the same height.
 
-### 5. [`modules`] [`storage`] [`pack`] Forget a pack's listing when its last index goes
+### 6. [`modules`] [`storage`] [`pack`] Forget a pack's listing when its last index goes
 
 A pack left empty by a removal is dropped from the store and from the list of packs at once, rather than waiting for a directory timestamp that a file taken out does not move on every filesystem, so a store that has let go of its last pack does not go on naming it.
 

@@ -570,6 +570,12 @@ pub async fn store_of(index: &VCSIndex, digest: &[u8; 32]) -> Result<Option<Key>
 /// named only the top of a chain left every version below it a name in the Layout with no content
 /// behind it: the version crossed, nothing it stored did, and nothing said so.
 ///
+/// A tree version's storage key is its structure, and the structure names the description and every
+/// file's content. `expand_all` asks for those on every version of the chain, which is what an upload
+/// needs: a version below the head is exactly what a new Workspace reaches for when it moves a pointer
+/// back. A pull expands only the head, because a version below it can ask for its inside when it is
+/// reached, and fetching every tree's history to move one pointer would carry work nobody asked for.
+///
 /// A version the index does not hold ends the walk, a chain the index cannot read is one it cannot
 /// name content for, and guessing past it would name content no version is known to want.
 ///
@@ -580,19 +586,27 @@ pub async fn chain_store_keys(
     index: &VCSIndex,
     head: &[u8; 32],
     store: Option<&librorolala::storage::RorolalaStorage>,
+    expand_all: bool,
 ) -> Result<Vec<Key>, String> {
     let mut keys = Vec::new();
     let mut seen = BTreeSet::new();
     let mut at = *head;
-    let mut top: Option<Key> = None;
 
     while seen.insert(at) {
         if let Some(key) = store_of(index, &at).await? {
-            if at == *head {
-                top = Some(key);
-            }
-
             keys.push(key);
+
+            if (expand_all || at == *head)
+                && let Some(store) = store
+                && let Ok(bytes) = store.read_object(&key).await
+                && let Ok(structure) = librorolala::tree::TreeStructure::decode(&bytes)
+            {
+                for inside in structure.content_keys() {
+                    if seen.insert(*inside.digest()) {
+                        keys.push(inside);
+                    }
+                }
+            }
         }
 
         let Some(base) = base_of(index, &at).await? else {
@@ -603,21 +617,6 @@ pub async fn chain_store_keys(
         }
 
         at = base;
-    }
-
-    // What the head version holds when it is a tree: its structure names the description and every
-    // file's content, and those are what a reader of the version reaches for. Only the head is
-    // expanded: a version below it is reached for through its structure, and the content below can
-    // be asked for when it is reached for.
-    if let (Some(store), Some(top)) = (store, top)
-        && let Ok(bytes) = store.read_object(&top).await
-        && let Ok(structure) = librorolala::tree::TreeStructure::decode(&bytes)
-    {
-        for key in structure.content_keys() {
-            if seen.insert(*key.digest()) {
-                keys.push(key);
-            }
-        }
     }
 
     Ok(keys)
@@ -685,7 +684,8 @@ mod tests {
     use std::str::FromStr as _;
 
     use librorolala::layout::LayoutPath;
-    use librorolala::storage::Key;
+    use librorolala::storage::{Codec, Key, RorolalaStorage};
+    use librorolala::tree::{FileMode, TreeEntry, TreeStructure};
     use librorolala::vcs::{VCSIndex, Variant, Version};
 
     use super::{
@@ -744,7 +744,7 @@ mod tests {
 
         let keys = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(chain_store_keys(&index, &digest(&three), None))
+            .block_on(chain_store_keys(&index, &digest(&three), None, false))
             .expect("the index reads");
 
         assert_eq!(
@@ -764,10 +764,74 @@ mod tests {
 
         let keys = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(chain_store_keys(&index, &digest(&one), None))
+            .block_on(chain_store_keys(&index, &digest(&one), None, false))
             .expect("the index reads");
 
         assert_eq!(keys, vec![Key::new(only)]);
+    }
+
+    /// A tree version names its files through its structure. An upload carries every version of the
+    /// chain, so every structure's files are carried too; a Workspace that moves a pointer back to an
+    /// older version must find what that version held and not only its structure.
+    #[test]
+    fn a_chain_expands_the_inside_of_every_tree_version_it_stands_on() {
+        let store_dir =
+            std::env::temp_dir().join(format!("rola-sync-tree-chain-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&store_dir);
+
+        let store = RorolalaStorage::create(&store_dir);
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let index = index("tree-chain");
+
+        let first = tree_version(&runtime, &store, [1_u8; 32]);
+        let second = tree_version(&runtime, &store, [2_u8; 32]);
+        let third = tree_version(&runtime, &store, [3_u8; 32]);
+
+        let (_, one) = record(
+            &index,
+            &Version::root().new_variant(first, [0; 32], [0; 32]),
+        );
+        let (_, two) = record(&index, &one.new_variant(second, [0; 32], [0; 32]));
+        let (three, _) = record(&index, &two.new_variant(third, [0; 32], [0; 32]));
+
+        let keys = runtime
+            .block_on(chain_store_keys(
+                &index,
+                &digest(&three),
+                Some(&store),
+                true,
+            ))
+            .expect("the index reads");
+
+        for seed in [1_u8, 2, 3] {
+            assert!(
+                keys.contains(&Key::new([seed; 32])),
+                "the content of a tree version below the head is carried"
+            );
+        }
+    }
+
+    /// A tree structure naming one file, written into the store, and the key it is stored under.
+    fn tree_version(
+        runtime: &tokio::runtime::Runtime,
+        store: &RorolalaStorage,
+        content: [u8; 32],
+    ) -> [u8; 32] {
+        let structure = TreeStructure::build(
+            None,
+            [TreeEntry::file(
+                "a.psd",
+                FileMode::Regular,
+                Key::new(content),
+            )],
+        )
+        .expect("a tree structure");
+
+        let key = runtime
+            .block_on(store.write_object(&structure.encode(), Codec::Raw))
+            .expect("the structure is written");
+
+        *key.digest()
     }
 
     #[test]

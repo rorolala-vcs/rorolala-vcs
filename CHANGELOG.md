@@ -6,11 +6,12 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Bugfix
 
-1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Draw badge pictures at whole pixels and without a circular clip. [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-file-system-icons-draw-badge-pictures-at-whole-pixels-and-without-a-circular-clip)
-2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-file-system-tree-draw-a-chosen-tree-row-once-and-centre-its-badges)
-3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-local-pill-on-the-draft-while-a-file-is-edited)
-4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-message-fields-pointer-and-row-steady)
-5. [`modules`] [`storage`] [`pack`] Forget a pack's listing when its last index goes. [See details](dev/CHANGELOG-DETAILS.md#5-modules-storage-pack-forget-a-packs-listing-when-its-last-index-goes)
+1. [`app`] [`rola`] [`sync`] [`tree`] Carry a tree's whole chain when a sync uploads or a checkin brings it in. [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-sync-tree-carry-a-trees-whole-chain-when-a-sync-uploads-or-a-checkin-brings-it-in)
+2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Draw badge pictures at whole pixels and without a circular clip. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-file-system-icons-draw-badge-pictures-at-whole-pixels-and-without-a-circular-clip)
+3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a chosen tree row once and centre its badges. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-file-system-tree-draw-a-chosen-tree-row-once-and-centre-its-badges)
+4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the local pill on the draft while a file is edited. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-local-pill-on-the-draft-while-a-file-is-edited)
+5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Keep the message field's pointer and row steady. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-rorolala-vcs-keep-the-message-fields-pointer-and-row-steady)
+6. [`modules`] [`storage`] [`pack`] Forget a pack's listing when its last index goes. [See details](dev/CHANGELOG-DETAILS.md#6-modules-storage-pack-forget-a-packs-listing-when-its-last-index-goes)
 
 ## Optimized
 

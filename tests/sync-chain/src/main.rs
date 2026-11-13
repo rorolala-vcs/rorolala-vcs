@@ -1,4 +1,4 @@
-//! `sync-chain`: a version chain crosses whole.
+//! `sync-chain`: a version chain crosses whole, for a file and for a tree.
 //!
 //! What a run tells the Vault it holds is a whole chain of versions, and a version is only a meaning
 //! once what it stored is in the store that names it. So a push has to carry the content of *every*
@@ -6,10 +6,10 @@
 //! content below it does not, and a later run that moves a pointer back finds a name nothing can
 //! produce.
 //!
-//! The shape is the one a person meets: one workspace makes two versions of a file and syncs them;
-//! a second workspace, which holds none of it, checks the file in and moves its pointer back one
-//! version. That last step needs the content of the version below the top, and it can only work if
-//! the push carried it.
+//! The shape is the one a person meets, for a file and again for a tree: one workspace makes two
+//! versions and syncs them; a second workspace, which holds none of it, checks it in and moves its
+//! pointer back one version. That last step needs the content and the structure of the version below
+//! the top, and it can only work if the push and the checkin carried them.
 //!
 //! A program rather than a `#[test]` for the same reason the other suites are: it runs the built
 //! programs the way a caller meets them, over a real socket, with a real daemon serving a real Vault.
@@ -179,6 +179,11 @@ fn main() {
         "the file the pointer was moved to is not what the version below the top stored",
     );
 
+    // A tree is one entry whose version names a structure, and the structure names its files. The
+    // same chain question applies to it: every version of the tree uploaded, every version's inside
+    // has to cross, or a new Workspace can see an older version and not put its content back.
+    tree_chain(&first, &second, &data, &mut checked);
+
     // A run that cannot be carried out must say so, which is what the confirmation at the end of a
     // direction is for. It cannot be made to fail from outside: the Vault makes its own directories
     // as it opens, so taking one away is not taking away its ability to write. What the detector
@@ -187,6 +192,83 @@ fn main() {
 
     serving.stop();
     checked.report();
+}
+
+/// Two versions of a tree are recorded, uploaded, checked into a new Workspace, and one is put back.
+fn tree_chain(first: &Path, second: &Path, data: &Path, checked: &mut Checked) {
+    let tree = first.join("main");
+
+    fs::create_dir_all(&tree).expect("a directory to make a tree of");
+    fs::write(tree.join("a.psd"), b"tree one").expect("the first tree file");
+
+    run(&mut client(first, data, &["tree", "init", "main"])).expect_success();
+    run(&mut client(first, data, &["tree", "add", "main"])).expect_success();
+
+    let said = run(&mut client(
+        first,
+        data,
+        &["track", "main", "--message", "tree one"],
+    ));
+    checked.wants(
+        "the first tree version is recorded",
+        said.success(),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    fs::write(tree.join("a.psd"), b"tree two").expect("the second tree file");
+
+    run(&mut client(first, data, &["tree", "add", "main"])).expect_success();
+
+    let said = run(&mut client(
+        first,
+        data,
+        &["track", "main", "--message", "tree two"],
+    ));
+    checked.wants(
+        "the second tree version is recorded",
+        said.success(),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let said = run(&mut client(first, data, &["sync"]));
+    checked.wants(
+        "the tree's chain is uploaded",
+        said.success(),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    run(&mut client(second, data, &["fetch"])).expect_success();
+
+    let said = run(&mut client(second, data, &["checkin", "main", "."]));
+    checked.wants(
+        "the tree is checked into the second Workspace",
+        said.success(),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let file = second.join("main").join("a.psd");
+    checked.wants(
+        "the tree's head content was brought whole",
+        fs::read(&file).is_ok_and(|bytes| bytes == b"tree two"),
+        "the tree at the Vault's path is not what the Vault holds",
+    );
+
+    let said = run(&mut client(second, data, &["retrack", "main", "~1"]));
+    checked.wants(
+        "the tree's pointer moves back to the version below the top",
+        said.success(),
+        &format!(
+            "it ended with {:?}: {} / {}",
+            said.code,
+            said.stdout.trim(),
+            said.stderr.trim()
+        ),
+    );
+    checked.wants(
+        "the tree version moved back to is the content that version stored",
+        fs::read(&file).is_ok_and(|bytes| bytes == b"tree one"),
+        "the tree file the pointer was moved to is not what the version below the top stored",
+    );
 }
 
 /// A Photoshop document, cut into chunks by the store's own policy for the format.
