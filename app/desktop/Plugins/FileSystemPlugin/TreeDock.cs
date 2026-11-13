@@ -192,20 +192,29 @@ internal sealed class TreeControl : UserControl
     /// Reads the keys a dock answers for the whole of itself.
     /// </summary>
     /// <remarks>
-    /// Read again on <c>F5</c>, and the three the clipboard answers, over the step that is chosen: a tree is a
-    /// view of directories, and a directory is what a copy, a cut and a paste are about as much as an entry of a
-    /// listing is.
+    /// Read again on <c>F5</c>, and the clipboard's three, <c>Delete</c>, <c>F2</c> and <c>Ctrl+Shift+N</c>, over
+    /// the step that is chosen: a tree is a view of directories, and a directory is what a copy, a cut and a paste
+    /// are about as much as an entry of a listing is.
     /// </remarks>
     /// <param name="sender">The dock.</param>
     /// <param name="e">The key.</param>
     private void Keyed(object? sender, KeyEventArgs e)
     {
+        // A name being typed is the box's, not the tree's: Ctrl, Alt and the tree's own keys belong to the
+        // field while it is there, and Escape is the field's way out (see `Edited`).
+        var tree = _content.Content as TreeBrowser;
+
+        if (tree?.Editing == true)
+        {
+            return;
+        }
+
         if (Keys.Again(e, _browser, _host.Log))
         {
             return;
         }
 
-        if (_content.Content is TreeBrowser tree)
+        if (tree is not null)
         {
             if (
                 e.Key == Key.A
@@ -224,7 +233,16 @@ internal sealed class TreeControl : UserControl
                 return;
             }
 
-            _ = Keys.Clipboard(e, new Clipboard(tree.Copy, tree.Cut, tree.Paste), _host.Log);
+            if (Keys.Rename(e, tree.Rename, _host.Log))
+            {
+                return;
+            }
+
+            _ = Keys.Clipboard(
+                e,
+                new Clipboard(tree.Copy, tree.Cut, tree.Paste, tree.NewFolder),
+                _host.Log
+            );
         }
     }
 
@@ -505,6 +523,9 @@ internal sealed class TreeBrowser : UserControl
     /// has to be replaced when the editing ends.
     /// </remarks>
     private TextBox? _editor;
+
+    /// <summary>Whether a step's name is being typed, which is when the tree's keys are the box's.</summary>
+    public bool Editing => _editor is not null;
 
     /// <summary>The name the box was put in place of, so that cancelling puts it back.</summary>
     private TextBlock? _label;
@@ -1733,6 +1754,11 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="e">The key.</param>
     private void ChosenAll(object? sender, KeyEventArgs e)
     {
+        if (_editor is not null)
+        {
+            return;
+        }
+
         if (
             e.Key == Key.A
             && e.KeyModifiers.HasFlag(KeyModifiers.Control)
@@ -1862,6 +1888,21 @@ internal sealed class TreeBrowser : UserControl
     public void NewFolder(string into, FolderVariant? variant = null) =>
         _actions.NewFolder(into, variant);
 
+    /// <summary>Makes a directory in the chosen directory, or in the base when none is chosen.</summary>
+    /// <remarks>
+    /// The tree's own answer to <c>Ctrl+Shift+N</c>, which a listing answers in the directory it is showing. The
+    /// tree shows directories under a base, so the one a new folder goes in is the chosen one, and the base is
+    /// what a tree with nothing chosen is standing on.
+    /// </remarks>
+    public void NewFolder()
+    {
+        var into =
+            ChosenEntries().FirstOrDefault(entry => entry.Kind == EntryKind.Directory)?.Path
+            ?? _root;
+
+        NewFolder(into);
+    }
+
     /// <summary>
     /// Puts the name of a step into a box, where the tree draws it.
     /// </summary>
@@ -1872,6 +1913,30 @@ internal sealed class TreeBrowser : UserControl
     /// </remarks>
     /// <param name="entry">The directory whose name is being edited.</param>
     public void Rename(Entry entry) => Named(entry);
+
+    /// <summary>Renames the one chosen step, which is the tree's answer to <c>F2</c>.</summary>
+    /// <remarks>
+    /// One step, because a box replaces one row's name: a choice of several has no one name to put in it, and
+    /// the root is left out for the reason it is left out of a delete, the tree stands on it rather than holding
+    /// it as a step.
+    /// </remarks>
+    public void Rename()
+    {
+        var chosen = ChosenEntries().Where(entry => !HoldsRoot(entry.Path)).ToArray();
+
+        if (chosen is [var entry])
+        {
+            Rename(entry);
+
+            return;
+        }
+
+        _host.Log.Info(
+            chosen.Length == 0
+                ? "rename: nothing is chosen in the tree"
+                : "rename: choose one entry to rename"
+        );
+    }
 
     /// <summary>Puts the name of a step into a box, where its row and its label are already drawn.</summary>
     /// <param name="entry">The directory whose name is being edited.</param>

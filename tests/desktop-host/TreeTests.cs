@@ -235,6 +235,147 @@ public sealed class TreeTests
         window.Close();
     }
 
+    /// <summary>F2 puts the chosen step's name in a box, and Escape leaves the step as it was.</summary>
+    /// <remarks>
+    /// The tree answers the same keys a listing does. What is checked is the box the tree draws in the row, which
+    /// is the one thing a tree has to do differently: a listing's row can be replaced, while a tree's row is the
+    /// step it stands for.
+    /// </remarks>
+    [Fact]
+    public void F2PutsTheChosenStepsNameIntoABoxAndEscapeLeavesIt()
+    {
+        var directory = Scratch.New("tree-keys");
+        Directory.CreateDirectory(Path.Combine(directory, "alpha"));
+
+        var (window, _) = OpenAt(directory);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            Press(window, Chevron(root));
+
+            var alpha = Until(window, () => Step(root, "alpha"));
+
+            Press(window, Row(alpha));
+            PumpFrames(window, 20);
+
+            window.KeyPress(Key.F2, RawInputModifiers.None, PhysicalKey.F2, null);
+
+            var box = Until(
+                window,
+                () => window.GetVisualDescendants().OfType<TextBox>().FirstOrDefault()
+            );
+
+            Assert.Equal("alpha", box.Text);
+
+            // Ctrl+A in the box is the box's, not the tree's: the tree must not choose every row under the
+            // box that is covering one of them.
+            window.KeyPress(Key.A, RawInputModifiers.Control, PhysicalKey.A, "a");
+            PumpFrames(window, 5);
+
+            Assert.Equal(
+                [Path.Combine(directory, "alpha")],
+                ChosenEntries().Select(entry => entry.Path)
+            );
+
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+            PumpFrames(window, 20);
+
+            Assert.DoesNotContain(
+                window.GetVisualDescendants().OfType<TextBox>(),
+                text => text.Text == "alpha"
+            );
+            Assert.True(Directory.Exists(Path.Combine(directory, "alpha")));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>Ctrl+Shift+N makes a folder in the step that is chosen.</summary>
+    [Fact]
+    public void CtrlShiftNMakesAFolderInTheChosenStep()
+    {
+        var directory = Scratch.New("tree-new");
+        var alpha = Path.Combine(directory, "alpha");
+
+        Directory.CreateDirectory(alpha);
+
+        var (window, _) = OpenAt(directory);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            Press(window, Chevron(root));
+
+            var step = Until(window, () => Step(root, "alpha"));
+
+            Press(window, Row(step));
+            PumpFrames(window, 20);
+
+            var before = Directory.GetDirectories(alpha).Length;
+
+            window.KeyPress(
+                Key.N,
+                RawInputModifiers.Control | RawInputModifiers.Shift,
+                PhysicalKey.N,
+                null
+            );
+
+            Pump(window, () => Directory.GetDirectories(alpha).Length > before);
+
+            Assert.True(Directory.GetDirectories(alpha).Length > before);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>Shift+Delete removes the step that is chosen.</summary>
+    [Fact]
+    public void ShiftDeleteRemovesTheChosenStep()
+    {
+        var directory = Scratch.New("tree-delete");
+        var alpha = Path.Combine(directory, "alpha");
+
+        Directory.CreateDirectory(alpha);
+
+        var (window, _) = OpenAt(directory);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            Press(window, Chevron(root));
+
+            var step = Until(window, () => Step(root, "alpha"));
+
+            Press(window, Row(step));
+            PumpFrames(window, 20);
+
+            Assert.Equal([alpha], ChosenEntries().Select(entry => entry.Path));
+
+            window.KeyPress(
+                Key.Delete,
+                RawInputModifiers.Shift,
+                PhysicalKey.Delete,
+                null
+            );
+
+            Pump(window, () => !Directory.Exists(alpha));
+
+            Assert.False(Directory.Exists(alpha), "the chosen step was not removed");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>
     /// A tree told that the files changed keeps the scroll it was read at, and the step it had chosen.
     /// </summary>
@@ -431,6 +572,15 @@ public sealed class TreeTests
         return (window, Until(window, () => Root(window)));
     }
 
+    /// <summary>The program file operations are run with, which the suites are told the directory of.</summary>
+    /// <returns>The path of `rola`.</returns>
+    private static string Program() =>
+        Path.Combine(
+            Environment.GetEnvironmentVariable("ROLA_BIN_DIR")
+                ?? throw new InvalidOperationException("the suites are run with ROLA_BIN_DIR"),
+            OperatingSystem.IsWindows() ? "rola.exe" : "rola"
+        );
+
     /// <summary>A tree dock over a directory, shown in a window, and the location it reads.</summary>
     /// <remarks>
     /// The providers the plugin brings itself are the state a run starts in; what any other test registered was
@@ -440,6 +590,8 @@ public sealed class TreeTests
     /// <returns>The window the tree is shown in, and the location it reads.</returns>
     private static (Window Window, global::FileSystemPlugin.Browser Browser) OpenAt(string directory)
     {
+        Environment.SetEnvironmentVariable("ROLA_EXE", Program());
+
         var services = Host.Services();
         var host = services.For(new PluginId(FileSystem.Identity), 1);
 
