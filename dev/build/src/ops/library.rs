@@ -37,6 +37,8 @@ pub struct StateLibrary;
 pub fn build_library() -> Result<(), crate::Error> {
     let workspace = Workspace::discover()?;
 
+    ensure_header(&workspace);
+
     // A musl build has no shared library, and the reason is in rustc rather than here: a `cdylib` is
     // refused for a target whose C runtime is static, and the dynamic alternative needs a musl
     // `libgcc_s`, the unwinder is the one piece of the C toolchain `musl-tools` does not carry, so a
@@ -55,6 +57,32 @@ pub fn build_library() -> Result<(), crate::Error> {
     }
 
     Tool::cargo().run(["build", "--release", "--all-features", "-p", "rorolala-ffi"])
+}
+
+/// Makes the root build script run when a cached build left its header behind.
+///
+/// The header is a side effect of the build script, not an artifact cargo knows: a warm target
+/// directory can keep the script fresh while `ffi_bindings/` is gone, which is a package that copies
+/// a file nobody wrote. Touching the script is what makes cargo run it again, and the header is
+/// written before anything is packaged or handed to .NET.
+fn ensure_header(workspace: &Workspace) {
+    let Ok(header) = workspace
+        .release_dir()
+        .map(|directory| directory.join("ffi_bindings").join("rorolala_ffi.h"))
+    else {
+        return;
+    };
+
+    if header.is_file() {
+        return;
+    }
+
+    if let Ok(script) = std::fs::OpenOptions::new()
+        .write(true)
+        .open(workspace.root().join("build.rs"))
+    {
+        let _ = script.set_modified(std::time::SystemTime::now());
+    }
 }
 
 /// Builds the shared library the .NET suites load, and lays it beside the programs they are told are

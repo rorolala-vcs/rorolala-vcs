@@ -69,7 +69,7 @@ pub fn mark_hidden(directory: &Path) -> bool {
 /// Marks `directory` hidden where the platform has an attribute for it, answering whether it did.
 #[must_use]
 #[cfg(not(windows))]
-pub fn mark_hidden(_directory: &Path) -> bool {
+pub const fn mark_hidden(_directory: &Path) -> bool {
     false
 }
 

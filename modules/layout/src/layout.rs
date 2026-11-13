@@ -213,11 +213,11 @@ impl Layout {
     pub fn as_files(&self) -> Result<Vec<(String, Vec<u8>)>, LayoutError> {
         let mut files = Vec::with_capacity(SHARD_COUNT * 2);
 
-        for shard in 0..SHARD_COUNT {
+        for (shard, shard_lock) in self.shards.iter().enumerate() {
             // The shard is held only while it is written down: what comes after is a list being built,
             // and a lock held over it is a writer kept waiting for nothing.
             let encoded = {
-                let slots = lock_read(&self.shards[shard]);
+                let slots = lock_read(shard_lock);
 
                 crate::snapshot::encode(&slots.slots)
             };
