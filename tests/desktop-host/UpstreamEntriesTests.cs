@@ -477,8 +477,8 @@ public sealed class UpstreamEntriesTests
 
         // A row with no name is not a Vault, and one that states no default is not the default.
         Assert.Equal(2, vaults.Count);
-        Assert.Equal(("origin", false), (vaults[0].Name, vaults[0].Default));
-        Assert.Equal(("home", true), (vaults[1].Name, vaults[1].Default));
+        Assert.Equal(("origin", false, "https://one"), (vaults[0].Name, vaults[0].Default, vaults[0].Address));
+        Assert.Equal(("home", true, "https://two"), (vaults[1].Name, vaults[1].Default, vaults[1].Address));
     }
 
     /// <summary>An entry of a Layout, for these checks to build trees from.</summary>

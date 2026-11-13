@@ -100,6 +100,7 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // sync carries it, so two docks each holding their own would be two runs of the same thing. The graph
         // asks for a fetch when its own Refresh is pressed, and a carried sync is followed by one.
         var fetch = new VaultFetch(host, hub);
+        fetch.Start();
         var watch = new SyncWatcher(host, host.Log, hub, fetch);
 
         // And what the work is looked at through: the docks, which are this plugin's own windows

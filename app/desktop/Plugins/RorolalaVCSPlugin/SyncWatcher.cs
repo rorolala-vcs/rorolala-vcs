@@ -348,10 +348,7 @@ internal sealed class SyncWatcher
                 }
 
                 // What the run carried is what the tree now holds, and what is left to carry is the Vault's
-                // answer again: both are read rather than guessed at. A run that ended well is followed by
-                // one explicit fetch, so what the readings are made from is the Layout as the Vault holds it
-                // after the run, rather than the copy the run had when it planned. A run that failed fetched
-                // nothing new, and is answered by the plan it would have made anyway.
+                // answer again: both are read rather than guessed at.
                 _host.Files.Touch();
 
                 // The newest ask is the one about where the work is now: a base moved while the run was
@@ -359,14 +356,15 @@ internal sealed class SyncWatcher
                 // nothing has been asked yet.
                 var next = _asked ? _planFor : directory;
 
+                // The run's end leaves the copy it carried marked behind rather than fetching beside it: the
+                // loop brings the Layout over, and then asks the plan again. The plan is asked at once as well,
+                // so the buttons are not waiting for the loop to say what the run just did.
                 if (done)
                 {
-                    _fetch.Fetch(directory, () => Plan(next));
+                    _fetch.MarkDirty(directory, () => Plan(next));
                 }
-                else
-                {
-                    Plan(next);
-                }
+
+                Plan(next);
             });
         });
     }

@@ -15,7 +15,8 @@ internal sealed record LayoutListing(string Name, bool Current, string Tracking)
 /// Whether it is the Workspace's default Vault, which is the one the work's own upstream is opened at when the Layout
 /// being worked in tracks none.
 /// </param>
-internal sealed record VaultListing(string Name, bool Default);
+/// <param name="Address">The address it answers at, as the Workspace bound it.</param>
+internal sealed record VaultListing(string Name, bool Default, string Address = "");
 
 /// <summary>One entry, as <c>rola layout entries --json</c> lists it on either side of the work.</summary>
 /// <remarks>
@@ -286,7 +287,8 @@ internal static class LayoutEntriesCommand
                 new VaultListing(
                     name,
                     item.TryGetProperty("is_default", out var isDefault)
-                        && isDefault.ValueKind is JsonValueKind.True
+                        && isDefault.ValueKind is JsonValueKind.True,
+                    Text(item, "address") ?? string.Empty
                 )
             );
         }

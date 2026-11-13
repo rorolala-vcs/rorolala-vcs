@@ -544,12 +544,10 @@ internal sealed partial class VersionGraphView
 
                 Refresh();
 
-                // The entry read for the switch may have come from the Vault's Layout, and a fetch is
-                // what keeps the copy read from here in step with it.
-                if (!_sync.Running)
-                {
-                    _fetch.Fetch(directory, Refresh);
-                }
+                // The entry read for the switch may have come from the Vault's Layout, so the copy read from here
+                // is marked behind rather than fetched beside the action: the loop's next fetch brings it over and
+                // reads the graph again.
+                _fetch.MarkDirty(directory, Refresh);
             });
         });
     }
@@ -903,12 +901,9 @@ internal sealed partial class VersionGraphView
 
                 Refresh();
 
-                // A sync writes the copy a fetch brings and is followed by one of its own, so a fetch
-                // made beside it would be two exchanges for one file.
-                if (!_sync.Running)
-                {
-                    _fetch.Fetch(directory, Refresh);
-                }
+                // A sync writes the copy a fetch brings, so the copy read here is marked behind rather than
+                // fetched beside the run: the loop's next fetch brings it over and reads the graph again.
+                _fetch.MarkDirty(directory, Refresh);
             });
         });
     }

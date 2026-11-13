@@ -1,3 +1,10 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.VisualTree;
+using RorolalaDesktop;
+using RorolalaDesktop.Contract;
+using RorolalaDesktop.Hosting;
 using RorolalaVCSPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
@@ -26,5 +33,46 @@ public sealed class FetchTests
         Assert.Contains("fetch", arguments);
         Assert.DoesNotContain("layout", arguments);
         Assert.Single(arguments, argument => argument.StartsWith("--theme-choice=", StringComparison.Ordinal));
+    }
+
+    /// <summary>A foreground change marks the copy behind, and does not start a fetch of its own.</summary>
+    [Fact]
+    public void AForegroundChangeMarksTheCopyBehind()
+    {
+        var services = Host.Services();
+        var fetch = new VaultFetch(
+            services.For(new PluginId("it.fetch"), 1),
+            services.Progress
+        );
+
+        Assert.Equal(FetchState.Never, fetch.State);
+        Assert.False(fetch.Dirty);
+
+        var read = false;
+
+        fetch.MarkDirty("/work", () => read = true);
+
+        Assert.True(fetch.Dirty);
+        Assert.Equal(FetchState.Never, fetch.State);
+        Assert.False(read);
+    }
+
+    /// <summary>The status bar names the Vault in capitals, in bold, and shows the address beside it.</summary>
+    [Fact]
+    public void TheStatusBarNamesTheVaultAndItsAddress()
+    {
+        var bar = new FetchStatusBar();
+
+        bar.Show(FetchState.Ready, "origin", "rola://127.0.0.1/rainbow");
+
+        Assert.Equal(35, bar.Height);
+        Assert.Equal(new Thickness(0, 1, 0, 0), bar.BorderThickness);
+
+        var texts = bar.GetVisualDescendants().OfType<TextBlock>().ToList();
+        var name = Assert.Single(texts, text => text.Text == "ORIGIN");
+
+        Assert.Equal(FontWeight.Bold, name.FontWeight);
+        Assert.Single(texts, text => text.Text == "|");
+        Assert.Single(texts, text => text.Text == "rola://127.0.0.1/rainbow");
     }
 }

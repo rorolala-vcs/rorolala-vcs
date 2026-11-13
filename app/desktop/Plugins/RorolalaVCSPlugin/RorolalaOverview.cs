@@ -428,6 +428,18 @@ internal sealed class OverviewView : UserControl
     /// <summary>The one fetch of the Vault's Layout, shared with the Version Graph.</summary>
     private readonly VaultFetch _fetch;
 
+    /// <summary>The line under the reading that says which Vault is fetched and how the last fetch went.</summary>
+    private readonly FetchStatusBar _status;
+
+    /// <summary>The Vault the work tracks, or the Workspace's default one, as the status bar names it.</summary>
+    private string _vaultName = string.Empty;
+
+    /// <summary>The address the Vault answers at, as the status bar shows it.</summary>
+    private string _vaultAddress = string.Empty;
+
+    /// <summary>Which reading of the Vault's name and address is the newest, so an old one does not land.</summary>
+    private int _vaultReading;
+
     /// <summary>Whether the hub had something going when it last said it had changed.</summary>
     /// <remarks>
     /// What tells a run ending from a run saying what it is doing: the hub says both the same way, and the reading
@@ -518,6 +530,7 @@ internal sealed class OverviewView : UserControl
         };
 
         _tableCell = new Grid();
+        _status = new FetchStatusBar();
 
         // The sync's own state, which the strip in the dock's header draws from; what the runs of every command
         // say is gathered in the hub, which the floating capsules draw from and which every place a command
@@ -531,7 +544,7 @@ internal sealed class OverviewView : UserControl
             ToggleIgnored
         );
 
-        var root = new Grid();
+        var root = new Grid { RowDefinitions = new RowDefinitions("*,35") };
 
         // One column: what a command is doing floats over the bottom right of the reading rather than taking a
         // column of it, so the table keeps its width whether a run is going or not.
@@ -542,6 +555,8 @@ internal sealed class OverviewView : UserControl
         var reading = new Grid { Children = { _tableCell, _notice } };
 
         root.Children.Add(reading);
+        Grid.SetRow(_status, 1);
+        root.Children.Add(_status);
 
         Content = root;
 
@@ -562,6 +577,12 @@ internal sealed class OverviewView : UserControl
         {
             Listen(true);
 
+            // The status bar is what says which Vault is fetched: read its name and address when the dock
+            // appears and when the base moves, and follow what the fetch itself says about its state.
+            _fetch.Changed += Fetched;
+            BaseDirectory.Changed += ReadVault;
+            ReadVault();
+
             // What there is to carry is asked when the dock appears rather than on the timer the reading is made
             // on: a plan costs a fetch of the Vault's Layout, and a listing left open would ask every five
             // seconds for as long as it was looked at.
@@ -575,6 +596,8 @@ internal sealed class OverviewView : UserControl
         DetachedFromVisualTree += (_, _) =>
         {
             Listen(false);
+            _fetch.Changed -= Fetched;
+            BaseDirectory.Changed -= ReadVault;
             _hub.Changed -= Sizing;
         };
 
@@ -1416,6 +1439,76 @@ internal sealed class OverviewView : UserControl
     /// <returns>The states, which are none for a path no row is about.</returns>
     private static IReadOnlyList<State> StatesAt(string path, IReadOnlyList<TableRow> rows) =>
         rows.FirstOrDefault(row => Path(row) == path) is { } row ? Choices(row) : [];
+
+    /// <summary>Draws what the fetch says about itself in the status bar.</summary>
+    private void Fetched() => _status.Show(_fetch.State, _vaultName, _vaultAddress);
+
+    /// <summary>Reads the Vault the work tracks, or the Workspace's default, for the status bar.</summary>
+    /// <remarks>
+    /// The name and the address are the command line's answer rather than a file this plugin reads: the Workspace
+    /// keeps them in its own configuration, and what a Vault is called is what the command that reaches it calls it.
+    /// The read is made off the window's thread, since it is a run of `rola` beside the one the fetch loop makes.
+    /// </remarks>
+    private void ReadVault()
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(ReadVault);
+
+            return;
+        }
+
+        if (BaseDirectory.Current is not { Length: > 0 } at)
+        {
+            _vaultName = string.Empty;
+            _vaultAddress = string.Empty;
+            Fetched();
+
+            return;
+        }
+
+        var version = ++_vaultReading;
+
+        _ = Task.Run(() =>
+        {
+            var name = string.Empty;
+            var address = string.Empty;
+
+            try
+            {
+                var layouts = LayoutEntriesCommand.Layouts(at);
+                var vaults = LayoutEntriesCommand.Vaults(at);
+                var tracked = layouts.Layouts.FirstOrDefault(layout => layout.Current)?.Tracking;
+                var vault =
+                    tracked is { Length: > 0 }
+                        ? vaults.Vaults.FirstOrDefault(one =>
+                            string.Equals(one.Name, tracked, StringComparison.Ordinal)
+                        )
+                        : null;
+
+                vault ??= vaults.Vaults.FirstOrDefault(one => one.Default);
+
+                name = vault?.Name ?? tracked ?? string.Empty;
+                address = vault?.Address ?? string.Empty;
+            }
+            catch (Exception error) when (error is not OutOfMemoryException)
+            {
+                _log.Info($"the Vault the status bar names could not be read: {error.Message}");
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (version != _vaultReading)
+                {
+                    return;
+                }
+
+                _vaultName = name;
+                _vaultAddress = address;
+                Fetched();
+            });
+        });
+    }
 
     /// <summary>Starts or stops listening for what a reading goes stale from.</summary>
     /// <param name="on">Whether to listen.</param>
