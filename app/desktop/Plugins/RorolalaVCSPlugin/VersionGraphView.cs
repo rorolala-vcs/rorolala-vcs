@@ -1292,7 +1292,18 @@ internal sealed partial class VersionGraphView : Control
     {
         if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.None)
         {
-            Fit();
+            // A graph standing on one file is a graph of that file's local chain: F is the node, as a press
+            // on it would be. With nothing chosen there is no one node to stand on, and the whole drawing is
+            // what the key brings into view.
+            if (LocalCard() is { } local)
+            {
+                FocusCard(local);
+            }
+            else
+            {
+                Fit();
+            }
+
             InvalidateVisual();
             e.Handled = true;
 
@@ -1397,6 +1408,70 @@ internal sealed partial class VersionGraphView : Control
             (Bounds.Width / 2) - (card.X * zoom),
             (Bounds.Height / 2) - (card.Y * zoom)
         );
+    }
+
+    /// <summary>
+    /// The node the chosen file stands on, or nothing when the drawing is not standing on one file.
+    /// </summary>
+    /// <remarks>
+    /// The file's own local entry is the node F goes to: a changed file is drawn as its draft, and a clean one
+    /// as the variant card its local entry hangs under. What the reading is centred on is asked of
+    /// <see cref="FocusOf"/> rather than worked out again, so the node F finds is the node the reading was
+    /// made for.
+    /// </remarks>
+    /// <returns>The card, or nothing when the drawing is about the whole work.</returns>
+    private GraphCard? LocalCard()
+    {
+        if (
+            !_showFocus
+            || _drawing is not { } drawing
+            || _root is not { Length: > 0 } root
+            || _target is not { Length: > 0 } target
+            || FocusOf([target], root) is not [var focus]
+        )
+        {
+            return null;
+        }
+
+        var wanted = VariantGraphDrawing.Normalize(focus.Path);
+
+        // A changed file is drawn twice: once as the variant its local entry hangs under and once as the
+        // draft standing beside it. The draft is the node the change is on, so it is looked for over the whole
+        // drawing before the entry card is, whatever order the cards were laid out in.
+        foreach (var card in drawing.Cards)
+        {
+            if (
+                card.Draft is { } draft
+                && string.Equals(
+                    VariantGraphDrawing.Normalize(draft.Path),
+                    wanted,
+                    StringComparison.Ordinal
+                )
+            )
+            {
+                return card;
+            }
+        }
+
+        foreach (var card in drawing.Cards)
+        {
+            if (
+                card.Entries.Any(entry =>
+                    entry.Side == "local"
+                    && entry.Path.Length > 0
+                    && string.Equals(
+                        VariantGraphDrawing.Normalize(entry.Path),
+                        wanted,
+                        StringComparison.Ordinal
+                    )
+                )
+            )
+            {
+                return card;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Takes the choice away, which is a click on the ground with no file chosen any more.</summary>

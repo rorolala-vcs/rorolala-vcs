@@ -38,14 +38,15 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Manage a tree's staging area and description in a Tree dock. [See details](dev/CHANGELOG-DETAILS.md#14-app-rorolaladesktop-plugins-rorolala-vcs-manage-a-trees-staging-area-and-description-in-a-tree-dock)
 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Show owners and move ownership in the upstream view. [See details](dev/CHANGELOG-DETAILS.md#15-app-rorolaladesktop-plugins-rorolala-vcs-show-owners-and-move-ownership-in-the-upstream-view)
 16. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`columns`] Show a tree's status and staging in a directory listing. [See details](dev/CHANGELOG-DETAILS.md#16-app-rorolaladesktop-plugins-rorolala-vcs-columns-show-a-trees-status-and-staging-in-a-directory-listing)
-17. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph. [See details](dev/CHANGELOG-DETAILS.md#17-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-follow-a-rola-trees-history-in-the-version-graph)
-18. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background. [See details](dev/CHANGELOG-DETAILS.md#18-app-rorolaladesktop-preview-generate-file-previews-in-the-background)
-19. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette. [See details](dev/CHANGELOG-DETAILS.md#19-app-rorolaladesktop-theme-state-the-programs-colours-in-one-semantic-palette)
-20. [`app`] [`RorolalaDesktop`] [`window`] Name the program and workspace in the title row. [See details](dev/CHANGELOG-DETAILS.md#20-app-rorolaladesktop-window-name-the-program-and-workspace-in-the-title-row)
-21. [`app`] [`RorolalaDesktop`] [`windows`] Own and restore floating dock windows. [See details](dev/CHANGELOG-DETAILS.md#21-app-rorolaladesktop-windows-own-and-restore-floating-dock-windows)
-22. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash. [See details](dev/CHANGELOG-DETAILS.md#22-app-rorolaladesktophost-report-a-desktop-run-that-ends-with-a-crash)
-23. [`librorolala`] [`tree`] Read a tree's entries and status as JSON across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#23-librorolala-tree-read-a-trees-entries-and-status-as-json-across-the-c-abi)
-24. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge. [See details](dev/CHANGELOG-DETAILS.md#24-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
+17. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Focus the chosen file's node with F in the Version Graph. [See details](dev/CHANGELOG-DETAILS.md#17-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-focus-the-chosen-files-node-with-f-in-the-version-graph)
+18. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Follow a rola-tree's history in the Version Graph. [See details](dev/CHANGELOG-DETAILS.md#18-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-follow-a-rola-trees-history-in-the-version-graph)
+19. [`app`] [`RorolalaDesktop`] [`preview`] Generate file previews in the background. [See details](dev/CHANGELOG-DETAILS.md#19-app-rorolaladesktop-preview-generate-file-previews-in-the-background)
+20. [`app`] [`RorolalaDesktop`] [`theme`] State the program's colours in one semantic palette. [See details](dev/CHANGELOG-DETAILS.md#20-app-rorolaladesktop-theme-state-the-programs-colours-in-one-semantic-palette)
+21. [`app`] [`RorolalaDesktop`] [`window`] Name the program and workspace in the title row. [See details](dev/CHANGELOG-DETAILS.md#21-app-rorolaladesktop-window-name-the-program-and-workspace-in-the-title-row)
+22. [`app`] [`RorolalaDesktop`] [`windows`] Own and restore floating dock windows. [See details](dev/CHANGELOG-DETAILS.md#22-app-rorolaladesktop-windows-own-and-restore-floating-dock-windows)
+23. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash. [See details](dev/CHANGELOG-DETAILS.md#23-app-rorolaladesktophost-report-a-desktop-run-that-ends-with-a-crash)
+24. [`librorolala`] [`tree`] Read a tree's entries and status as JSON across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#24-librorolala-tree-read-a-trees-entries-and-status-as-json-across-the-c-abi)
+25. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge. [See details](dev/CHANGELOG-DETAILS.md#25-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
 
 ## Refactor
 
