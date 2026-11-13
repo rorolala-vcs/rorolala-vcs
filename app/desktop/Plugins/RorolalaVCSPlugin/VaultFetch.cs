@@ -63,7 +63,7 @@ internal sealed class VaultFetch
     /// <summary>Whether a foreground change is waiting for the loop's next fetch.</summary>
     private bool _dirty;
 
-    /// <summary>The loop, made when the plugin starts rather than when a view asks for a fetch.</summary>
+    /// <summary>The loop, made when the plugin starts and run for as long as it does.</summary>
     private DispatcherTimer? _loop;
 
     /// <summary>What the last fetch came to.</summary>
@@ -99,12 +99,20 @@ internal sealed class VaultFetch
     /// Starts the loop that keeps the Vault's copy current.
     /// </summary>
     /// <remarks>
-    /// Started once by the plugin rather than by a view: a window may open and close, while the work the loop reads
-    /// is the one the plugin was started for. The first fetch is a minute away, which is the interval the status bar
-    /// says is not fetching yet.
+    /// Started once by the plugin: a window may open and close, while the work the loop reads is the one the
+    /// plugin was started for. The first fetch is a minute away, which is the interval the status bar says is not
+    /// fetching yet.
     /// </remarks>
     public void Start()
     {
+        // A host under test has no Vault to keep current, and a loop that reached for one would be a
+        // network exchange between tests. The suite states this rather than the plugin guessing from
+        // the platform.
+        if (Environment.GetEnvironmentVariable("ROLA_DESKTOP_TEST") is { Length: > 0 })
+        {
+            return;
+        }
+
         if (!Dispatcher.UIThread.CheckAccess())
         {
             Dispatcher.UIThread.Post(Start);
@@ -117,9 +125,18 @@ internal sealed class VaultFetch
             return;
         }
 
-        _loop = new DispatcherTimer { Interval = Interval };
-        _loop.Tick += (_, _) => Tick();
+        _loop = MakeLoop();
         _loop.Start();
+    }
+
+    /// <summary>Makes the timer that asks the Vault once a minute.</summary>
+    /// <returns>The timer, not started.</returns>
+    private DispatcherTimer MakeLoop()
+    {
+        var loop = new DispatcherTimer { Interval = Interval };
+        loop.Tick += (_, _) => Tick();
+
+        return loop;
     }
 
     /// <summary>

@@ -29,6 +29,10 @@ internal static class DataHome
         Name("ROLA_DATA_HOME", Root);
         Name("XDG_DATA_HOME", Root);
 
+        // The VCS plugin's fetch loop reaches a Vault; a test host has none, and a background
+        // exchange between tests is a test waiting on a network it did not ask for.
+        Name("ROLA_DESKTOP_TEST", "1");
+
         AppDomain.CurrentDomain.ProcessExit += (_, _) => Remove();
     }
 
