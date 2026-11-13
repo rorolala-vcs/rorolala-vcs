@@ -1321,7 +1321,7 @@ menu:
       zh-CN: 加入变体
     checkin:
       en: Check in
-      zh-CN: 提交
+      zh-CN: 签入
     cancel_merge:
       en: Cancel merge
       zh-CN: 取消合并
