@@ -123,8 +123,7 @@ pub fn handle_layout_ls(
 /// The Vault a Layout tracks, as read from the file beside it, or nothing when it tracks none.
 fn track_of(layout: &librorolala::layout::Layout) -> String {
     std::fs::read_to_string(layout.dir().join(LAYOUT_TRACK_FILE))
-        .map(|track| track.trim().to_owned())
-        .unwrap_or_default()
+        .map_or_default(|track| track.trim().to_owned())
 }
 
 /// What a Layout that could not be read is answered with.

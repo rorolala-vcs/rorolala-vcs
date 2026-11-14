@@ -250,8 +250,7 @@ pub fn rows(structure: &TreeStructure) -> Vec<String> {
                 };
                 let storage = entry
                     .storage()
-                    .map(librorolala::storage::Key::hex)
-                    .unwrap_or_default();
+                    .map_or_default(librorolala::storage::Key::hex);
 
                 format!("{mode} blob {storage}\t{}", entry.path())
             }

@@ -272,7 +272,7 @@ pub fn handle_checkin(
     // own operands and asks for the Vault only when what it wants is not here: a merge of something
     // already synced is local work, and a Workspace that tracks no Vault can still do it.
     if let Some(target) = join {
-        let variant = refs.first().map(String::as_str).unwrap_or_default();
+        let variant = refs.first().map_or_default(String::as_str);
 
         return checkin_variant(
             &target,

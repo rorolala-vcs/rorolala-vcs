@@ -199,8 +199,7 @@ pub fn vault_names(remote: &ResCurrentRemoteVault) -> Vec<String> {
 pub fn workspace_layout_names(workspace: &ResWorkspace) -> Vec<String> {
     workspace
         .as_ref()
-        .map(|_| vec![DEFAULT_LAYOUT_NAME.to_owned()])
-        .unwrap_or_default()
+        .map_or_default(|_| vec![DEFAULT_LAYOUT_NAME.to_owned()])
 }
 
 /// The Layouts a run can name, in name order.
@@ -317,7 +316,7 @@ pub fn entry_words(workspace: &ResWorkspace, vault: &ResVault) -> Vec<String> {
     };
 
     let layout = chosen_layout(workspace, vault, None);
-    let mut words = layout.as_ref().map(layout_orphan_uuids).unwrap_or_default();
+    let mut words = layout.as_ref().map_or_default(layout_orphan_uuids);
 
     if let Some(vault) = tracked_vault(held)
         && let Some(dir) = readonly_layout_copy(held, &vault, VAULT_LAYOUT_NAME)
