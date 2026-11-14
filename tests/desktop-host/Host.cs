@@ -54,6 +54,7 @@ internal static class Host
         var making = ThemeService.Make(null, new ThemeConfiguration());
 
         var progress = new ProgressHub();
+        var openHooks = new OpenHookRegistry();
 
         return new HostServices
         {
@@ -75,7 +76,8 @@ internal static class Host
             DockMenus = dockMenus,
             Navigation = new NavigationRegistry(),
             Docks = docks,
-            OpenHooks = new OpenHookRegistry(),
+            OpenHooks = openHooks,
+            OpenPipeline = new OpenPipeline(openHooks, log.For("tests")),
             IconBadges = new IconBadgeRegistry(),
             // Nothing contributes a picture here, and nothing draws one: the library is what the
             // contract says a plugin may add to, and a headless test adds nothing.

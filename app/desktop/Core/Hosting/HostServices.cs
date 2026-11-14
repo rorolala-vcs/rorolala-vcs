@@ -111,6 +111,9 @@ internal sealed class HostServices
     /// <summary>The open hooks.</summary>
     public required OpenHookRegistry OpenHooks { get; init; }
 
+    /// <summary>The pipeline an open passes through, which is what a plugin that opens a file asks.</summary>
+    public required IOpenPipeline OpenPipeline { get; init; }
+
     /// <summary>The icon badge providers.</summary>
     public required IconBadgeRegistry IconBadges { get; init; }
 
@@ -232,6 +235,9 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     public IOpenHookRegistry OpenHooks => this;
+
+    /// <inheritdoc />
+    public IOpenPipeline OpenPipeline => _services.OpenPipeline;
 
     /// <inheritdoc />
     public IIconBadgeRegistry IconBadges => this;

@@ -1238,6 +1238,42 @@ rorolala_vcs:
       en: "%{holder} holds this file, so you cannot edit it"
       zh-CN: 该文件由 %{holder} 持有，无法编辑
 
+  # What a single file asks before the Desktop opens it. A tracked file whose owner is another account is
+  # opened with the warning that a change would be recorded as an error; one nobody holds is offered the
+  # hold that makes it editable, or opened as it is; one whose hold failed can be tried again. The answers
+  # are the buttons, and the last one is always the way out.
+  open:
+    held_title:
+      en: Held by another account
+      zh-CN: 文件被他人持有
+    held_message:
+      en: "The file is held by %{holder}, so changes to it will be recorded as an error"
+      zh-CN: "文件被 %{holder} 持有，对该文件的修改会被记录为错误"
+    free_title:
+      en: Nobody holds this file
+      zh-CN: 文件无人持有
+    free_message:
+      en: Nobody holds this file, so it cannot be edited until you hold it
+      zh-CN: 文件无人持有，目前无法修改，但可以持有以获得编辑权
+    failed_title:
+      en: Ownership not taken
+      zh-CN: 无法获取所有权
+    failed_message:
+      en: Ownership could not be taken
+      zh-CN: 获取所有权失败
+    open_file:
+      en: Open file
+      zh-CN: 打开文件
+    hold_and_open:
+      en: Hold and open
+      zh-CN: 持有并打开文件
+    open_without_holding:
+      en: Open without holding
+      zh-CN: 直接打开文件
+    retry:
+      en: Retry
+      zh-CN: 重试
+
   # What a file inside a tree offers about putting it back, beyond the shared restore words: the question
   # asked before the change in the work is lost, which the menu entry itself does not ask.
   tree_restore:

@@ -114,6 +114,19 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // which reports itself to the hub while it goes.
         OwnershipActions.Declare(host, hub, ownership);
 
+        // And what a single file asks before the Desktop opens it: whether another account holds it, or
+        // whether nobody does, and the hold that would make it the reader's to edit. The question is put
+        // through the host's dialogs and the hold through the command line, so this registers the one
+        // check that knows when to ask, not a second answer to what holding means.
+        host.OpenHooks.Add(
+            new OwnershipOpenHook(
+                new RolaOwnershipLookup(host.Log),
+                new CommandOwnershipHold(host, hub),
+                host.Dialogs,
+                host.Log
+            )
+        );
+
         // What a file inside a tree offers: the tree's recorded version and its staging area, which are
         // the two structures a tree's file can be put back to.
         TreeRestoreActions.Declare(host, hub);

@@ -87,3 +87,63 @@ internal sealed class RecordingDockView : IDockView, IDockOpened
     /// <inheritdoc />
     public void Opened(DockRequest request) => Requests.Add(request);
 }
+
+/// <summary>
+/// A log that keeps what it was told, for a test that reads why something failed.
+/// </summary>
+internal sealed class RecordingLog : ILog
+{
+    /// <summary>What was written at the warning level, in order.</summary>
+    public List<string> Warnings { get; } = [];
+
+    /// <inheritdoc />
+    public void Trace(string message) { }
+
+    /// <inheritdoc />
+    public void Debug(string message) { }
+
+    /// <inheritdoc />
+    public void Info(string message) { }
+
+    /// <inheritdoc />
+    public void Warn(string message) => Warnings.Add(message);
+
+    /// <inheritdoc />
+    public void Error(string message) { }
+}
+
+/// <summary>
+/// A dialog service that answers each question from a script, so a test can choose a button.
+/// </summary>
+/// <remarks>
+/// The question is kept as it was put, which is how a test reads which dialog was shown and which
+/// answers it offered. A question the script has no answer for is closed without an answer.
+/// </remarks>
+internal sealed class ScriptedDialogs : IDialogs
+{
+    /// <summary>The answers to give, one per question, in the order the questions come.</summary>
+    public Queue<Func<Choice, DialogChoice?>> Answers { get; } = [];
+
+    /// <summary>The questions that were put, in order.</summary>
+    public List<Choice> Questions { get; } = [];
+
+    /// <inheritdoc />
+    public void Show(Dialog dialog) { }
+
+    /// <inheritdoc />
+    public void Choose(Choice choice) { }
+
+    /// <inheritdoc />
+    public void Report(Report report) { }
+
+    /// <inheritdoc />
+    public void Notify(Notification notification) { }
+
+    /// <inheritdoc />
+    public Task<DialogChoice?> Ask(Choice choice)
+    {
+        Questions.Add(choice);
+
+        return Task.FromResult(Answers.Count > 0 ? Answers.Dequeue()(choice) : null);
+    }
+}

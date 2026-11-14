@@ -201,38 +201,152 @@ internal static class OwnershipActions
             arguments.Add(Path.GetRelativePath(target.Directory, entry.Path));
         }
 
-        // The run's card down the Overview is opened before the work is handed off, so that it is there to be
-        // drawn from the moment the command begins, see the hub for why the runs are gathered rather than kept
-        // where they were begun.
+        // The run's card is opened before the work is handed off. The method starts on this thread and
+        // reaches the hub before its first await, so the card is there from the moment the command
+        // begins; see the hub for why the runs are gathered rather than kept where they were begun.
+        _ = ReportAsync(host, hub, program, arguments, target.Directory, verb);
+    }
+
+    /// <summary>Runs one ownership command and shows what it came to when it did not end cleanly.</summary>
+    /// <param name="host">The host, for the report and for saying the files may have changed.</param>
+    /// <param name="hub">What the run's card is begun in.</param>
+    /// <param name="program">The program the window was opened by.</param>
+    /// <param name="arguments">What to run it with.</param>
+    /// <param name="directory">Where to run it.</param>
+    /// <param name="verb">Which command it is.</param>
+    private static async Task ReportAsync(
+        IPluginHost host,
+        IProgressHub hub,
+        string program,
+        IReadOnlyList<string> arguments,
+        string directory,
+        string verb
+    )
+    {
+        var outcome = await RunAsync(host, hub, verb, program, arguments, directory);
+
+        // A run given --json has its result serialized rather than drawn, so the renderer that would set a
+        // non-zero code for a refused entry never runs. What was refused is therefore read from the result's
+        // `failed` list: --allow-partial makes a batch with refusals a successful run, and the exit code alone
+        // would call that success.
+        IReadOnlyList<string> failed = outcome.Done ? Failures(outcome.Output) : [];
+
+        if (!outcome.Done || failed.Count > 0)
+        {
+            FailureNotice.Show(
+                host.Dialogs,
+                host.Icons,
+                RolaI18N.Get("rorolala_vcs.ownership_failed"),
+                outcome.Done ? string.Join('\n', failed) : outcome.Said
+            );
+        }
+    }
+
+    /// <summary>
+    /// Runs one ownership command, drawing its progress and saying the files may have changed.
+    /// </summary>
+    /// <remarks>
+    /// One run for the whole choice rather than one per entry: the command line takes several paths at once, and
+    /// a claim that is one claim is one exchange with the Vault rather than three.
+    /// <para>
+    /// The card is begun where the caller is, which is the window's thread for a menu and a worker for the open
+    /// check. The hub is written safely from either, and it is the hub that moves the drawing to the window's
+    /// thread. The command itself is run on a thread of its own: it talks to a Vault, which takes as long as a
+    /// network takes, and a window that stopped drawing until it answered would be a window that stopped.
+    /// </para>
+    /// </remarks>
+    /// <param name="host">The host, for saying the files may have changed.</param>
+    /// <param name="hub">What the run's card is begun in.</param>
+    /// <param name="verb">Which command it is.</param>
+    /// <param name="program">The program the window was opened by.</param>
+    /// <param name="arguments">What to run it with.</param>
+    /// <param name="directory">Where to run it, which is where the names it was given are read from.</param>
+    /// <returns>Whether it ended well, what to say when it did not, and what it wrote.</returns>
+    internal static async Task<Outcome> RunAsync(
+        IPluginHost host,
+        IProgressHub hub,
+        string verb,
+        string program,
+        IReadOnlyList<string> arguments,
+        string directory
+    )
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(hub);
+        ArgumentException.ThrowIfNullOrEmpty(program);
+        ArgumentNullException.ThrowIfNull(arguments);
+        ArgumentException.ThrowIfNullOrEmpty(directory);
+
         var run = hub.Begin(TitleKey(verb));
 
-        _ = Task.Run(() =>
+        var (done, said, output) = await Task.Run(
+            () => Ask(program, arguments, directory, run.Records, hub.Touch)
+        );
+
+        // The card is let go of here rather than when the command is over, because the panel keeps it for a
+        // few seconds after: what ended is drawn as ended before it is taken away.
+        hub.End(run);
+
+        // Either way the files may have moved, which is what the listing reads again for.
+        host.Files.Touch();
+
+        return new Outcome(done, said, output);
+    }
+
+    /// <summary>
+    /// Takes ownership of one file, with the command line's own run and progress.
+    /// </summary>
+    /// <remarks>
+    /// This is the same command the menu runs, with the same flags, and the same reading of a result:
+    /// a run asked for `--json` serializes a refusal into its `failed` list rather than failing, so the
+    /// list is what says whether the file was taken. The file is named by its whole path and the run is
+    /// made beside it, so a name that starts with a dash is still a path rather than a flag.
+    /// </remarks>
+    /// <param name="host">The host, for saying the files may have changed.</param>
+    /// <param name="hub">What the run's card is begun in.</param>
+    /// <param name="file">The file to take.</param>
+    /// <returns>Whether it was taken, and what to say when it was not.</returns>
+    internal static async Task<(bool Done, string Said)> HoldAsync(
+        IPluginHost host,
+        IProgressHub hub,
+        string file
+    )
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(hub);
+        ArgumentNullException.ThrowIfNull(file);
+
+        var program = Environment.GetEnvironmentVariable(Program);
+
+        if (string.IsNullOrEmpty(program))
         {
-            var (done, said, output) = Ask(program, arguments, target.Directory, run.Records, hub.Touch);
+            return (false, RolaI18N.Get("rorolala_vcs.ownership_unknown"));
+        }
 
-            // The card is let go of here rather than when the command is over, because the panel keeps it for a
-            // few seconds after: what ended is drawn as ended before it is taken away.
-            hub.End(run);
+        if (Path.GetDirectoryName(file) is not { Length: > 0 } directory)
+        {
+            return (false, RolaI18N.Get("rorolala_vcs.open.failed_message"));
+        }
 
-            // Either way the files may have moved, which is what the listing reads again for.
-            host.Files.Touch();
+        var arguments = new List<string>
+        {
+            "--theme-choice=" + Theme,
+            Json,
+            "hold",
+            "--allow-partial",
+            file,
+        };
 
-            // A run given --json has its result serialized rather than drawn, so the renderer that would set a
-            // non-zero code for a refused entry never runs. What was refused is therefore read from the result's
-            // `failed` list: --allow-partial makes a batch with refusals a successful run, and the exit code alone
-            // would call that success.
-            IReadOnlyList<string> failed = done ? Failures(output) : [];
+        var outcome = await RunAsync(host, hub, "hold", program, arguments, directory);
 
-            if (!done || failed.Count > 0)
-            {
-                FailureNotice.Show(
-                    host.Dialogs,
-                    host.Icons,
-                    RolaI18N.Get("rorolala_vcs.ownership_failed"),
-                    done ? string.Join('\n', failed) : said
-                );
-            }
-        });
+        IReadOnlyList<string> failed = outcome.Done ? Failures(outcome.Output) : [];
+
+        if (!outcome.Done || failed.Count > 0)
+        {
+            return (false, outcome.Done ? string.Join('\n', failed) : outcome.Said);
+        }
+
+        return (true, string.Empty);
     }
 
     /// <summary>Reads the entries a successful result says were not moved.</summary>
@@ -376,4 +490,10 @@ internal static class OwnershipActions
             return (false, error.Message, string.Empty);
         }
     }
+
+    /// <summary>What a command run left for its caller to read.</summary>
+    /// <param name="Done">Whether it ended well.</param>
+    /// <param name="Said">What it said when it did not.</param>
+    /// <param name="Output">What it wrote on its output stream.</param>
+    internal sealed record Outcome(bool Done, string Said, string Output);
 }

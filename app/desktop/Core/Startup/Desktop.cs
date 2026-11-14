@@ -303,6 +303,7 @@ internal sealed class Desktop
         var dockMenus = new DockMenuRegistry(warned.Warn);
         var icons = new IconLibrary();
         var refocus = new Refocus();
+        var openHooks = new OpenHookRegistry();
 
         var progress = new ProgressHub();
         var previews = new PreviewService(log.For("rorolala.previews"), progress);
@@ -336,7 +337,8 @@ internal sealed class Desktop
             DockMenus = dockMenus,
             Navigation = new NavigationRegistry(),
             Docks = docks,
-            OpenHooks = new OpenHookRegistry(),
+            OpenHooks = openHooks,
+            OpenPipeline = new OpenPipeline(openHooks, warned),
             Refocus = refocus,
             FileChanges = new FileChanges(),
             Dialogs = dialogs,

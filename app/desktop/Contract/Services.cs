@@ -385,6 +385,19 @@ public interface IDialogs
     void Choose(Choice choice);
 
     /// <summary>
+    /// Shows a question with several answers and answers which one was chosen.
+    /// </summary>
+    /// <remarks>
+    /// The action an answer carries is not run: this is the form for a caller whose next step depends on the
+    /// answer, so the caller runs what the answer means once it has read it. A window closed without a button
+    /// answers nothing. <see cref="Choose"/> is the same question for a caller that only wants the answer's
+    /// action run.
+    /// </remarks>
+    /// <param name="choice">The question and its answers.</param>
+    /// <returns>The answer that was chosen, or nothing when the window was closed.</returns>
+    Task<DialogChoice?> Ask(Choice choice);
+
+    /// <summary>
     /// Shows something that has happened, which the user reads and closes.
     /// </summary>
     /// <param name="report">What to say.</param>

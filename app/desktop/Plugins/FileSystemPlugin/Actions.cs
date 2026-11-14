@@ -46,6 +46,13 @@ internal sealed class BrowserActions
     /// <remarks>
     /// The way up is turned into a step here rather than resolved like a path, because it carries no path:
     /// what it leads to is the listing's parent, which only the browser knows.
+    /// <para>
+    /// A single file asks the host's open pipeline first, because a plugin may have something to say
+    /// about opening one file. A batch does not: the gesture that opens several entries is a menu or
+    /// <c>Enter</c> over a selection, and a question asked once per file would turn one choice into
+    /// several. What a batch opens is therefore opened directly, which is the behaviour it had before
+    /// there was a pipeline.
+    /// </para>
     /// </remarks>
     /// <param name="entries">What to open, in the order the listing shows.</param>
     public void Open(IReadOnlyList<Entry> entries)
@@ -59,7 +66,68 @@ internal sealed class BrowserActions
                 continue;
             }
 
-            Openers.Open(entry, _browser, _host.Log.Error);
+            if (entry.Kind == EntryKind.Directory)
+            {
+                _browser.Go(entry.Path);
+
+                continue;
+            }
+
+            if (entries.Count == 1)
+            {
+                _ = OpenFile(entry);
+
+                continue;
+            }
+
+            _ = Openers.Open(entry, _browser, _host.Log.Error);
+        }
+    }
+
+    /// <summary>
+    /// Asks the host's pipeline about one file and opens it when the answer allows that.
+    /// </summary>
+    /// <remarks>
+    /// Run off the caller's step rather than waited for: a hook may ask the user a question, and a
+    /// double-click that blocked until it was answered would be a window that stopped drawing. A
+    /// failure in the pipeline itself is opened past rather than turned into a refusal, which is what
+    /// the contract says a broken hook must not become.
+    /// </remarks>
+    /// <param name="entry">The file to open.</param>
+    private async Task OpenFile(Entry entry)
+    {
+        OpenRequest? request;
+
+        try
+        {
+            request = await _host.OpenPipeline.ReviewAsync(new OpenRequest { Target = entry });
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _host.Log.Error($"open: the review of `{entry.Path}` failed: {error.Message}");
+
+            request = new OpenRequest { Target = entry };
+        }
+
+        if (request is null)
+        {
+            _host.Log.Info($"open: `{entry.Path}` was refused");
+
+            return;
+        }
+
+        if (!Openers.Open(request.Target, _browser, _host.Log.Error))
+        {
+            return;
+        }
+
+        try
+        {
+            await _host.OpenPipeline.OpenedAsync(request);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _host.Log.Error($"open: the notification of `{entry.Path}` failed: {error.Message}");
         }
     }
 

@@ -9,10 +9,9 @@ namespace FileSystemPlugin;
 /// What the browser does to an entry: opens it, reveals where it is, or names it.
 /// </summary>
 /// <remarks>
-/// Opening here is the operating system's, not the host's pipeline. The open is put on the
-/// host, but the contract gives a plugin no way to ask for one, <c>IPluginHost</c> has a registry
-/// for hooks and nothing to raise a request through. Until that is settled in the contract, the
-/// browser opens directly, which is visible behaviour and not a thing to leave unsaid.
+/// Opening here is the operating system's. A file is opened only after the host's open pipeline has
+/// allowed it, which is the browser's step rather than this one: what this class does is the launch
+/// itself, and the answer says whether the system took it.
 /// </remarks>
 internal static class Openers
 {
@@ -22,16 +21,17 @@ internal static class Openers
     /// <param name="entry">The entry to open.</param>
     /// <param name="browser">The browser showing it, for a directory.</param>
     /// <param name="failed">Where a failure is reported.</param>
-    public static void Open(Entry entry, Browser browser, Action<string> failed)
+    /// <returns>Whether the system took the entry, which a directory always does.</returns>
+    public static bool Open(Entry entry, Browser browser, Action<string> failed)
     {
         if (entry.Kind == EntryKind.Directory)
         {
             browser.Go(entry.Path);
 
-            return;
+            return true;
         }
 
-        Launch(entry.Path, failed);
+        return Launch(entry.Path, failed);
     }
 
     /// <summary>Reveals an entry in the system's own file manager.</summary>
@@ -44,7 +44,7 @@ internal static class Openers
                 ? entry.Path
                 : Path.GetDirectoryName(entry.Path) ?? entry.Path;
 
-        Launch(directory, failed);
+        _ = Launch(directory, failed);
     }
 
     /// <summary>Puts an entry's path on the clipboard.</summary>
@@ -73,15 +73,20 @@ internal static class Openers
     /// </summary>
     /// <param name="path">What to hand over.</param>
     /// <param name="failed">Where a failure is reported.</param>
-    private static void Launch(string path, Action<string> failed)
+    /// <returns>Whether the system took it.</returns>
+    private static bool Launch(string path, Action<string> failed)
     {
         try
         {
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            _ = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+
+            return true;
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
             failed(error.Message);
+
+            return false;
         }
     }
 }

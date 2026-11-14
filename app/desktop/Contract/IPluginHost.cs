@@ -67,6 +67,17 @@ public interface IPluginHost
     /// <summary>Where the plugin adds open hooks.</summary>
     IOpenHookRegistry OpenHooks { get; }
 
+    /// <summary>
+    /// The pipeline an open passes through, which a plugin that opens an entry asks before it does.
+    /// </summary>
+    /// <remarks>
+    /// A plugin that opens a file asks here rather than launching it directly, so that every hook has
+    /// its chance and a rejected open never reaches the system. The hooks are the plugin's and the
+    /// pipeline's shape is the host's, which is the same division as everywhere else: a plugin says
+    /// what it contributes, and the host says when.
+    /// </remarks>
+    IOpenPipeline OpenPipeline { get; }
+
     /// <summary>Where the plugin adds icon badges.</summary>
     IIconBadgeRegistry IconBadges { get; }
 

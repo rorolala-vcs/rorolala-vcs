@@ -70,12 +70,45 @@ internal sealed class Dialogs : IDialogs
 
         if (Dispatcher.UIThread.CheckAccess())
         {
-            Put(choice);
+            _ = ShowAndRun(choice);
 
             return;
         }
 
-        Dispatcher.UIThread.Post(() => Put(choice));
+        Dispatcher.UIThread.Post(() => _ = ShowAndRun(choice));
+    }
+
+    /// <inheritdoc />
+    public Task<DialogChoice?> Ask(Choice choice)
+    {
+        ArgumentNullException.ThrowIfNull(choice);
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            return Show(choice);
+        }
+
+        // The answer is taken on the loop's own thread, and the asking thread waits for it: the
+        // controls belong to that thread, and a caller that asked from a worker has nothing to draw
+        // them with. The source is completed rather than the task being handed over, because the
+        // answer is not known until the window is closed.
+        var answer = new TaskCompletionSource<DialogChoice?>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+
+        Dispatcher.UIThread.Post(async () =>
+        {
+            try
+            {
+                answer.TrySetResult(await Show(choice));
+            }
+            catch (Exception error) when (error is not OutOfMemoryException)
+            {
+                answer.TrySetException(error);
+            }
+        });
+
+        return answer.Task;
     }
 
     /// <inheritdoc />
@@ -193,19 +226,34 @@ internal sealed class Dialogs : IDialogs
         }
     }
 
-    /// <summary>Puts one question with several answers to the user.</summary>
+    /// <summary>Shows a question with several answers, and runs the one that is chosen.</summary>
     /// <remarks>
-    /// One button per answer, in the order they were given, and closing the window is the last of them: a question
-    /// whose answers are all things to do has nothing to do by default, and the last answer is the one the asker
-    /// placed there for that. Nothing is run for a window closed by anything but a button, which is the rule
-    /// <see cref="Put(Dialog)"/> follows as well.
+    /// The action is run on the loop's own thread and after the window is gone, which is the same order
+    /// <see cref="Show(Dialog)"/> runs its own consequence in: what an answer does may rebuild the view
+    /// the question was asked over, and rebuilding it while the dialog still owns the loop would be
+    /// doing it under the window that is closing.
     /// </remarks>
     /// <param name="choice">The question and its answers.</param>
-    private async void Put(Choice choice)
+    private async Task ShowAndRun(Choice choice)
+    {
+        var picked = await Show(choice);
+
+        picked?.Chosen();
+    }
+
+    /// <summary>Shows a question with several answers, and answers which one was chosen.</summary>
+    /// <remarks>
+    /// One button per answer, in the order they were given, and closing the window answers nothing: a
+    /// question whose answers are all things to do has nothing to do by default, and the last answer is
+    /// the one the asker placed there for that. Nothing is run here, not even the answer's action.
+    /// </remarks>
+    /// <param name="choice">The question and its answers.</param>
+    /// <returns>The answer that was chosen, or nothing when the window was closed.</returns>
+    private async Task<DialogChoice?> Show(Choice choice)
     {
         if (_shell.Window is not { IsVisible: true } owner || choice.Choices.Count == 0)
         {
-            return;
+            return null;
         }
 
         var message = new TextBlock
@@ -241,17 +289,12 @@ internal sealed class Dialogs : IDialogs
 
         window[!Window.BackgroundProperty] = new DynamicResourceExtension("rorolala.bg.elevated");
 
-        var last = choice.Choices.Count - 1;
+        var last = choice.Choices.Count;
+        DialogChoice? picked = null;
 
-        // What was answered is kept in a source rather than a local, because a local is only ever written from a click
-        // handler: nothing on this side of the dialog ever assigns it, and a reader of the code, the analyzer included,
-        // would be right to wonder whether anything ever does.
-        var picked = new TaskCompletionSource<Action?>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        for (var at = 0; at <= last; at++)
+        for (var at = 0; at < last; at++)
         {
             var answer = choice.Choices[at];
-            var run = answer.Chosen;
 
             var button = new Button
             {
@@ -259,12 +302,12 @@ internal sealed class Dialogs : IDialogs
                 MinWidth = 96,
                 MaxWidth = 240,
                 IsDefault = at == 0,
-                IsCancel = at == last,
+                IsCancel = at + 1 == last,
             };
 
             button.Click += (_, _) =>
             {
-                picked.TrySetResult(run);
+                picked = answer;
                 window.Close();
             };
 
@@ -273,10 +316,6 @@ internal sealed class Dialogs : IDialogs
 
         await window.ShowDialog(owner);
 
-        // Off the screen first, for the reason the two-answer question above gives.
-        if (picked.Task.IsCompletedSuccessfully)
-        {
-            picked.Task.Result?.Invoke();
-        }
+        return picked;
     }
 }
