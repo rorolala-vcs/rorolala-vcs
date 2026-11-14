@@ -66,6 +66,7 @@
         />
     <Exec
             Command="cargo run --quiet --manifest-path &quot;$(RsharpRoot)Cargo.toml&quot; -p rorolala-dev-rsharp-bindgen -- &quot;$(RsharpHeader)&quot; &quot;$(RsharpBinding)&quot;"
+            IgnoreStandardErrorWarningFormat="true"
         />
   </Target>
 
