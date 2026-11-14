@@ -7,27 +7,29 @@ vcs_index:
 
         **Usage**: rola vcs-index <COMMAND>
         **Commands**:
-            create-rootver                   Write the root version
-            print-rootver                    Print the root version's hash
-            my-creator-hash                  Print the Creator hash of the current account
-            ls-str                           List the text objects in the index
-            ls-variants                      List the variants in the index
-            ls-versions                      List the versions in the index
-            ls-remote-str [VAULT]            List the text objects in the other end's index
-            ls-remote-variants [VAULT]       List the variants in the other end's index
-            ls-remote-versions [VAULT]       List the versions in the other end's index
-            read <HASH>                      Read one index object
-            read-remote <HASH> [VAULT]       Read one index object from the other end's index
-            lookback <HASH>                  Draw the version chain with an object on top
-            write-creator <NAME>             Write a Creator
-            write-msg <MESSAGE>              Write a Message
-            write-variant <BASE_VERSION>     Write a Variant
+            create-rootver                     Write the root version
+            print-rootver                      Print the root version's hash
+            my-creator-hash                    Print the Creator hash of the current account
+            ls-str                             List the text objects in the index
+            ls-variants                        List the variants in the index
+            ls-versions                        List the versions in the index
+            ls-remote-str [VAULT]              List the text objects in the other end's index
+            ls-remote-variants [VAULT]         List the variants in the other end's index
+            ls-remote-versions [VAULT]         List the versions in the other end's index
+            read <HASH>                        Read one index object
+            read-remote <HASH> [VAULT]         Read one index object from the other end's index
+            lookback <HASH>                    Draw the version chain with an object on top
+            write-creator <NAME>               Write a Creator
+            write-msg <MESSAGE>                Write a Message
+            write-variant <BASE_VERSION>       Write a Variant
                           <STORAGE>
                           <CREATOR_HASH>
                           <MESSAGE_HASH>
                           [--join <JOIN>]
-            write-version <VARIANT>          Write a Version
-            sync-all [VAULT]                 Make the indexes at both ends hold the same objects
+            write-version <VARIANT>            Write a Version
+            sync-all [VAULT]                   Make the indexes at both ends hold the same objects
+            can-retrack-offline <TARGET>...    Check whether a target's content is here
+            search-source <TARGET>...          Ask which Vaults hold what a target names
 
         **NOTE**:
             The index holds variants, versions, Creators and Messages,
@@ -58,6 +60,8 @@ vcs_index:
                           [--join <变体>]
             write-version <变体>             写入版本
             sync-all [保险库]                让两端索引持有相同的对象
+            can-retrack-offline <目标>...    检查目标指向的内容是否在本地
+            search-source <目标>...          询问哪些保险库持有目标指向的内容
 
         **注意**：
             索引保存变体、版本、Creator 与 Message，各命令之间以哈希交接数据
@@ -105,6 +109,26 @@ vcs_index:
         Please create what is missing first, then try again
     zh-CN: |
         请先创建缺少的对象，然后重试
+
+  err_target:
+    en: "`%{target}` names no object and no Layout entry"
+    zh-CN: "`%{target}` 既不是索引对象，也不是布局条目"
+
+  err_target_help:
+    en: |
+        Please give a hash, or a path the Layout being worked in records
+    zh-CN: |
+        请给出哈希，或当前布局记录的路径
+
+  err_no_vault:
+    en: The Workspace has bound no Vault to ask
+    zh-CN: 工作区没有绑定任何可询问的保险库
+
+  err_no_vault_help:
+    en: |
+        Please bind a Vault with `rola vault bind`, then try again
+    zh-CN: |
+        请先用 `rola vault bind` 绑定保险库，然后重试
 
 vcs_index_ls_variants:
   help:
@@ -340,3 +364,82 @@ vcs_index_print_rootver:
   description:
     en: Print the root version's hash
     zh-CN: 输出根版本的哈希
+
+vcs_index_can_retrack_offline:
+  help:
+    en: |
+        Check whether a target's content is stored here, so it can be retracked offline
+
+        **Usage**: rola vcs-index can-retrack-offline <TARGET>...
+        **Flags**:
+            --json    Output as JSON
+
+        **TARGET**:
+            A variant hash, a version hash, or a path of the working Layout.
+            An answer is yes when every object from the target to its content is here.
+            A tree is checked down to the files its structure lists.
+
+        **NOTE**:
+            Nothing is changed and no Vault is reached
+    zh-CN: |
+        检查目标指向的内容是否已在本地，从而可以离线回退
+
+        **用法**：rola vcs-index can-retrack-offline <目标>...
+        **标识**：
+            --json    以 JSON 输出
+
+        **目标**：
+            变体哈希、版本哈希，或当前布局记录的路径。
+            从目标到内容的每个对象都在本地时答案为是。
+            树内容还会检查其结构列出的每个文件。
+
+        **注意**：
+            此命令不改变任何东西，也不联网
+  description:
+    en: Check whether a target's content is stored here
+    zh-CN: 检查目标指向的内容是否在本地
+  yes:
+    en: "yes"
+    zh-CN: "是"
+  no:
+    en: "no"
+    zh-CN: "否"
+
+vcs_index_search_source:
+  help:
+    en: |
+        Ask which Vaults hold the content a target names
+
+        **Usage**: rola vcs-index search-source <TARGET>...
+        **Flags**:
+            --json    Output as JSON
+
+        **TARGET**:
+            A variant hash, a version hash, or a path of the working Layout.
+            Every Vault the Workspace has bound is asked; a Vault that cannot be
+            reached is reported and the others still answer.
+
+        **NOTE**:
+            The search reaches the network, so `--offline` refuses it
+    zh-CN: |
+        询问哪些保险库持有目标指向的内容
+
+        **用法**：rola vcs-index search-source <目标>...
+        **标识**：
+            --json    以 JSON 输出
+
+        **目标**：
+            变体哈希、版本哈希，或当前布局记录的路径。
+            工作区绑定的每个保险库都会被询问；无法连接的保险库会被报告，其余照常回答。
+
+        **注意**：
+            此命令会联网，因此 `--offline` 会拒绝它
+  description:
+    en: Ask which bound Vaults hold what a target names
+    zh-CN: 询问哪些已绑定的保险库持有目标指向的内容
+  no_source:
+    en: "none"
+    zh-CN: "无"
+  warn_unreachable:
+    en: "Could not ask: %{vaults}"
+    zh-CN: "无法询问：%{vaults}"

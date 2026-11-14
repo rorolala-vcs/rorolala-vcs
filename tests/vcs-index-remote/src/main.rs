@@ -14,7 +14,7 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
-use librorolala::storage::{Key, StorageBackend as _};
+use librorolala::storage::{Codec, Key, RorolalaStorage, StorageBackend as _};
 use librorolala::vault::{KEYS_DIR, Vault};
 use librorolala::vcs::{Creator, Message, ROOT_VERSION, VCSIndex, VCSWrite as _, Version};
 use librorolala::workspace::Workspace;
@@ -61,12 +61,20 @@ async fn main() {
     // The Vault's index holds a whole little chain: a creator, a message, the root version, a variant
     // based on the root, and the version made of that variant. The number of the version is 0, and the
     // root's is the root number, both are the Vault's to work out, and neither is written down.
+    //
+    // The content the variant names is in the Vault's store, so a search can find the Vault by it.
+    let store = RorolalaStorage::create(root.join("storage"));
+    let content = store
+        .write_object(b"the content the variant names", Codec::Raw)
+        .await
+        .expect("content in the Vault's store");
+
     let vault_index = VCSIndex::create(root.join("index"));
     let creator = Creator::try_from(NAME).expect("a name");
     let message = Message::try_from("first").expect("a message");
     let root_version = Version::root();
     let variant = root_version.new_variant(
-        [0x42; 32],
+        *content.digest(),
         *creator.hash().digest(),
         *message.hash().digest(),
     );
@@ -273,6 +281,26 @@ async fn main() {
         "a word that is not a hash is refused",
         said.code == Some(123),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // A search names the Vault whose store holds what a version names. This side never fetched the
+    // version, so the Vault's own index names the variant and the content, and its store holds it.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["vcs-index", "search-source", &version_key.hex()],
+    ));
+
+    checked.wants(
+        "a search names the Vault that holds the content",
+        said.success()
+            && said.stdout.contains(&version_key.hex())
+            && said.stdout.contains(VAULT_NAME),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
     );
 
     // Nothing any of it did changed either index: the Workspace's index never held the Vault's

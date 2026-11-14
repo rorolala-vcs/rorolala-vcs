@@ -50,6 +50,7 @@ internal static class GraphTint
 /// <param name="Studio">A second Vault's side, whose name the drawing keeps for itself.</param>
 /// <param name="Pending">A merge in progress.</param>
 /// <param name="Danger">A change that must not be recorded.</param>
+/// <param name="Success">What is settled, which is the mark a node that needs no Vault wears.</param>
 /// <param name="Same">Two variants made of the same content.</param>
 /// <param name="Primary">The look's primary.</param>
 /// <param name="ChipFill">A chip's fill.</param>
@@ -79,6 +80,7 @@ internal sealed record GraphInk(
     Color Studio,
     Color Pending,
     Color Danger,
+    Color Success,
     Color Same,
     Color Primary,
     Color ChipFill,
@@ -126,6 +128,7 @@ internal sealed record GraphInk(
             Studio: Color.FromRgb(0xA7, 0x8B, 0xFA),
             Pending: Color.FromRgb(0xF5, 0x9E, 0x0B),
             Danger: Color.FromRgb(0xF8, 0x71, 0x71),
+            Success: palette.Semantic.Success,
             Same: Color.FromRgb(0x22, 0xD3, 0xEE),
             Primary: palette.Primary,
             ChipFill: GraphTint.Mix(card, front, light ? 0.05 : 0.09),
@@ -796,6 +799,62 @@ internal sealed class VariantGraphRenderer
         {
             DrawPills(context, ink, frame, card, left, top);
         }
+
+        if (card.Offline && card.Kind == GraphCardKind.Variant && card.HasVersion && zoom >= DetailZoom)
+        {
+            DrawOfflineMark(context, ink, zoom, right, top);
+        }
+    }
+
+    /// <summary>Draws the mark a node whose content is entirely here wears.</summary>
+    /// <remarks>
+    /// A green disc with a check in it, in the card's top right corner: a node whose content the store
+    /// holds needs no Vault to be retracked to, and a reader scanning the graph for one can see it
+    /// without opening anything. The check is drawn in the ground's colour rather than in one of its
+    /// own: the ground is what the green was chosen to be told apart from, so the two are readable on
+    /// either look, and on a card that is the ground's step above it.
+    /// </remarks>
+    /// <param name="context">Where to draw.</param>
+    /// <param name="ink">The colours in force.</param>
+    /// <param name="zoom">How large the drawing is drawn.</param>
+    /// <param name="right">The card's right edge, in screen units.</param>
+    /// <param name="top">The card's top edge, in screen units.</param>
+    private static void DrawOfflineMark(
+        DrawingContext context,
+        GraphInk ink,
+        double zoom,
+        double right,
+        double top
+    )
+    {
+        var centre = new Point(right - (9 * zoom), top + (9 * zoom));
+        var radius = 6 * zoom;
+
+        context.DrawEllipse(
+            new SolidColorBrush(ink.Success),
+            null,
+            centre,
+            radius,
+            radius
+        );
+
+        var check = new StreamGeometry();
+
+        using (var shape = check.Open())
+        {
+            shape.BeginFigure(new Point(centre.X - (3.2 * zoom), centre.Y + (0.1 * zoom)), false);
+            shape.LineTo(new Point(centre.X - (0.8 * zoom), centre.Y + (2.4 * zoom)));
+            shape.LineTo(new Point(centre.X + (3.4 * zoom), centre.Y - (2.2 * zoom)));
+            shape.EndFigure(false);
+        }
+
+        var pen = new Pen(new SolidColorBrush(ink.Ground), Math.Max(1, 1.7 * zoom))
+        {
+            LineCap = PenLineCap.Round,
+            LineJoin = PenLineJoin.Round,
+        };
+
+        context.DrawGeometry(null, pen, check);
     }
 
     /// <summary>What a card's shape is: its fill, its border, whether the border is broken and how thick.</summary>

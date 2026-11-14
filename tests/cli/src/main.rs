@@ -74,6 +74,7 @@ fn main() {
     layouts(&rola, &ws, &vault, &mut checked);
     storage(&rola, &ws, &files, &mut checked);
     index(&rola, &ws, &mut checked);
+    existence(&rola, &ws, &files, &mut checked);
     movement(&rola, &plain, &files, &mut checked);
     accounts(&rola, &plain, &ws, &mut checked);
     lookback(&rola, &ws, &mut checked);
@@ -991,6 +992,100 @@ fn index(rola: &Rola, ws: &Path, checked: &mut Checked) {
     checked.exits("a kind nothing is is refused", &ran, 134);
 }
 
+/// Whether a version's content is stored here, and which Vaults could provide it.
+fn existence(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
+    let source = files.join("offline.txt");
+    fs::write(&source, "the content a version names\n").expect("a file to store");
+
+    let ran = rola.run(ws, &["storage", "write-file", &text(&source)]);
+    checked.exits("content is stored for a variant", &ran, 0);
+    let storage = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(ws, &["vcs-index", "print-rootver"]);
+    checked.exits("the root version is known", &ran, 0);
+    let root = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(ws, &["vcs-index", "write-creator", "artist"]);
+    checked.exits("a Creator is written for the variant", &ran, 0);
+    let creator = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(ws, &["vcs-index", "write-msg", "offline"]);
+    checked.exits("a Message is written for the variant", &ran, 0);
+    let message = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(
+        ws,
+        &[
+            "vcs-index",
+            "write-variant",
+            &root,
+            &storage,
+            &creator,
+            &message,
+        ],
+    );
+    checked.exits("a variant is written over stored content", &ran, 0);
+    let variant = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(ws, &["vcs-index", "write-version", &variant]);
+    checked.exits("a version is written over the variant", &ran, 0);
+    let version = ran.stdout.trim().to_owned();
+
+    // The answers keep the order the targets were written in, and a root names no content.
+    let ran = rola.run(ws, &["vcs-index", "can-retrack-offline", &version, &root]);
+    checked.exits("a check answers every target", &ran, 0);
+    checked.wants(
+        "the answers keep the order asked",
+        ran.stdout.lines().collect::<Vec<_>>()
+            == [format!("{version} yes"), format!("{root} no")],
+        &said(&ran),
+    );
+
+    // A whole hash the index does not hold is answered, not refused: the content is not here.
+    let absent = "0".repeat(64);
+    let ran = rola.run(ws, &["vcs-index", "can-retrack-offline", &absent]);
+    checked.exits("a hash nothing holds is answered", &ran, 0);
+    checked.stdout_has("the answer says it is not here", &ran, &format!("{absent} no"));
+
+    let ran = rola.run(
+        ws,
+        &["vcs-index", "can-retrack-offline", "not-a-path.psd"],
+    );
+    checked.exits("a word that names nothing is refused", &ran, 123);
+
+    let ran = rola.run(
+        ws,
+        &["vcs-index", "can-retrack-offline", &version, "--json"],
+    );
+    checked.exits("the check answers as data when asked", &ran, 0);
+    checked.wants(
+        "each answer is keyed by the target it is about",
+        json(&ran).is_some_and(|value| {
+            value
+                .get("targets")
+                .and_then(JsonValue::as_array)
+                .is_some_and(|targets| {
+                    targets.len() == 1
+                        && targets[0].get("target").and_then(JsonValue::as_str)
+                            == Some(version.as_str())
+                        && targets[0].get("offline") == Some(&JsonValue::Bool(true))
+                })
+        }),
+        &said(&ran),
+    );
+
+    // A search is the one thing here that reaches the network, and the two things it cannot do
+    // are refused before it reaches anything.
+    let ran = rola.run(
+        ws,
+        &["vcs-index", "search-source", &version, "--offline"],
+    );
+    checked.exits("an offline run may not search", &ran, 252);
+
+    let ran = rola.run(ws, &["vcs-index", "search-source", &version]);
+    checked.exits("a search acts as an account", &ran, 62);
+}
+
 /// Moving, copying and removing a path by hand.
 fn movement(rola: &Rola, plain: &Path, files: &Path, checked: &mut Checked) {
     let one = files.join("one.txt");
@@ -1082,6 +1177,19 @@ fn accounts(rola: &Rola, plain: &Path, ws: &Path, checked: &mut Checked) {
             .as_deref()
             == Some("bob"),
         &said(&ran),
+    );
+
+    // A search asks the Vaults the Workspace has bound, and a Workspace that has bound none has
+    // nowhere to ask.
+    let ran = rola.run(ws, &["vcs-index", "print-rootver"]);
+    let root = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(ws, &["vcs-index", "search-source", &root]);
+    checked.exits("a search with no Vault bound is refused", &ran, 32);
+    checked.stderr_has(
+        "the refusal says there is no Vault to ask",
+        &ran,
+        "bound no Vault",
     );
 }
 
@@ -1586,6 +1694,20 @@ fn vaults(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["vault"]);
     checked.stdout_has("the bound Vault is listed", &ran, "origin");
     checked.stdout_has("its address is listed", &ran, "127.0.0.1:7999");
+
+    // A search asks the bound Vault and answers even when it cannot be reached: one Vault being
+    // down says nothing about the rest.
+    let ran = rola.run(ws, &["vcs-index", "print-rootver"]);
+    let root = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(ws, &["vcs-index", "search-source", &root]);
+    checked.exits("a search answers with an unreachable Vault", &ran, 0);
+    checked.stdout_has("the answer names the target", &ran, &root);
+    checked.stderr_has(
+        "the Vault that could not be asked is reported",
+        &ran,
+        "Could not ask",
+    );
 
     let ran = rola.run(ws, &["vault", "bind"]);
     checked.exits("binding without a name is refused", &ran, 70);

@@ -8,6 +8,7 @@ rorolala-ignore.workspace = true
 rorolala-inverse-index.workspace = true
 rorolala-layout.workspace = true
 rorolala-storage.workspace = true
+rorolala-tree.workspace = true
 rorolala-workspace-analyze.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true

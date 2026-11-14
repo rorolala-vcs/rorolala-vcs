@@ -10,6 +10,7 @@
 //! the failures any of them can reach for, the hash of what a write stored, and the little that
 //! reading a hash and driving the index takes.
 
+pub mod cmd_vcs_index_can_retrack_offline;
 pub mod cmd_vcs_index_create_rootver;
 pub mod cmd_vcs_index_lookback;
 pub mod cmd_vcs_index_ls_remote_str;
@@ -22,17 +23,22 @@ pub mod cmd_vcs_index_my_creator_hash;
 pub mod cmd_vcs_index_print_rootver;
 pub mod cmd_vcs_index_read;
 pub mod cmd_vcs_index_read_remote;
+pub mod cmd_vcs_index_search_source;
 pub mod cmd_vcs_index_sync_all;
 pub mod cmd_vcs_index_write_creator;
 pub mod cmd_vcs_index_write_msg;
 pub mod cmd_vcs_index_write_variant;
 pub mod cmd_vcs_index_write_version;
 
+use std::str::FromStr as _;
+
 use librorolala::auth::Account;
 use librorolala::daemon::{action_list_remote_index_async, action_read_remote_index_async};
+use librorolala::layout::{Layout, LayoutPath};
 use librorolala::protocol::ActionError;
-use librorolala::storage::Key;
-use librorolala::vcs::{VCSIndex, VCSIndexObject};
+use librorolala::status::Target;
+use librorolala::storage::{Key, ShortHash};
+use librorolala::vcs::{VCSIndex, VCSIndexKind, VCSIndexObject};
 use librorolala::workspace::Workspace;
 use mingling::{
     Grouped, StructuralData,
@@ -47,8 +53,9 @@ use rust_i18n::t;
 use serde::Serialize;
 
 use crate::Next;
+use crate::complete::{IndexObject, index_keys};
 use crate::exit_codes::{
-    EC_ERR_FORMAT, EC_ERR_VCS_INDEX_ARGUMENT, EC_ERR_VCS_INDEX_NO_INDEX,
+    EC_ERR_FORMAT, EC_ERR_NO_REMOTE_VAULT, EC_ERR_VCS_INDEX_ARGUMENT, EC_ERR_VCS_INDEX_NO_INDEX,
     EC_ERR_VCS_INDEX_NOT_FOUND, EC_ERR_VCS_INDEX_READ, EC_ERR_VCS_INDEX_WRITE, EC_HELP,
 };
 use crate::failure::failure;
@@ -142,6 +149,90 @@ pub fn hash_of(
     resolve(text, candidates).map_err(|miss| ErrorVcsIndexHash {
         hash: text.to_owned(),
         miss,
+    })
+}
+
+/// What `word` names: an object of the index, or an entry of the Layout being worked in.
+///
+/// A word written as hex is a key, a whole one or the head of one, and anything else is a path. The
+/// two cannot be told apart by looking at them alone: a path written entirely in hex digits is read
+/// as a key, which is the price of one argument list carrying both.
+///
+/// # Errors
+///
+/// Renders [`ErrorVcsIndexHash`] when a word written as a hash names no one object,
+/// [`ErrorVcsIndexTarget`] when a word names no Layout entry or a key that is neither a variant nor
+/// a version, and [`ErrorVcsIndexRead`] when the index cannot say what a key holds.
+pub fn target_of(
+    word: &str,
+    layout: &Layout,
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<Target, Next> {
+    if let Ok(key) = Key::from_str(word) {
+        return classified(key, index, runtime);
+    }
+
+    // A head of a hash is resolved among what the index holds. A word too short to be one, or one
+    // with a character that is not a hex digit, is a path.
+    if ShortHash::new(word).is_ok() {
+        let key = match resolve(word, || index_keys(Some(index), IndexObject::Any)) {
+            Ok(key) => key,
+            Err(miss) => {
+                return Err(ErrorVcsIndexHash {
+                    hash: word.to_owned(),
+                    miss,
+                }
+                .into());
+            }
+        };
+
+        return classified(key, index, runtime);
+    }
+
+    let path = LayoutPath::new(word).map_err(|_| {
+        let next: Next = ErrorVcsIndexTarget {
+            target: word.to_owned(),
+        }
+        .into();
+
+        next
+    })?;
+
+    if layout.id_of(&path).is_none() {
+        return Err(ErrorVcsIndexTarget {
+            target: word.to_owned(),
+        }
+        .into());
+    }
+
+    Ok(Target::Entry(path))
+}
+
+/// The target a key names, from what the index holds under it.
+fn classified(
+    key: Key,
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<Target, Next> {
+    let kind = runtime.block_on(index.kind_of(&key)).map_err(|error| {
+        let next: Next = ErrorVcsIndexRead {
+            cause: error.to_string(),
+        }
+        .into();
+
+        next
+    })?;
+
+    Ok(match kind {
+        Some(VCSIndexKind::Variant) => Target::Variant(key),
+        Some(VCSIndexKind::Version) => Target::Version(key),
+        // A whole key the index does not hold is still a target: whether its content is here is
+        // what the reading answers, and that reading is what the run asked for.
+        None => Target::Unknown(key),
+        Some(_) => {
+            return Err(ErrorVcsIndexTarget { target: key.hex() }.into());
+        }
     })
 }
 
@@ -382,6 +473,64 @@ pub fn render_error_vcs_index_not_found(error: ErrorVcsIndexNotFound, ec: &mut R
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("vcs_index.err_not_found_help").trim()));
     ec.exit_code = EC_ERR_VCS_INDEX_NOT_FOUND;
+}
+
+/// Error: a word names no object this run can check.
+///
+/// It is told apart from [`ErrorVcsIndexNotFound`], which is an object the index was asked about
+/// and does not hold: this is a word that names neither a key nor a path of the Layout being worked
+/// in, so nothing was asked.
+#[derive(Grouped)]
+pub struct ErrorVcsIndexTarget {
+    /// The word, as it was written.
+    target: String,
+}
+
+impl Failure for ErrorVcsIndexTarget {
+    fn name(&self) -> &'static str {
+        "error_vcs_index_target"
+    }
+
+    fn reason(&self) -> String {
+        t!("vcs_index.err_target", target = self.target)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorVcsIndexTarget);
+
+#[renderer(buffer)]
+pub fn render_error_vcs_index_target(error: ErrorVcsIndexTarget, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("vcs_index.err_target_help").trim()));
+    ec.exit_code = EC_ERR_VCS_INDEX_ARGUMENT;
+}
+
+/// Error: the Workspace has bound no Vault a search could ask.
+///
+/// A search asks every Vault the Workspace knows, and a Workspace that knows none has nowhere to
+/// ask: the answer would be "no Vault holds it" about a set of no Vaults, which is not an answer.
+#[derive(Grouped)]
+pub struct ErrorVcsIndexNoVault;
+
+impl Failure for ErrorVcsIndexNoVault {
+    fn name(&self) -> &'static str {
+        "error_vcs_index_no_vault"
+    }
+
+    fn reason(&self) -> String {
+        t!("vcs_index.err_no_vault").trim().to_string()
+    }
+}
+
+failure!(ErrorVcsIndexNoVault);
+
+#[renderer(buffer)]
+pub fn render_error_vcs_index_no_vault(_error: ErrorVcsIndexNoVault, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(t!("vcs_index.err_no_vault").trim()));
+    r_eprintln!("{}", help_line!(t!("vcs_index.err_no_vault_help").trim()));
+    ec.exit_code = EC_ERR_NO_REMOTE_VAULT;
 }
 
 /// Result: the hash of what was written.

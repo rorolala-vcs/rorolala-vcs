@@ -260,12 +260,15 @@ rorolala-status.workspace = true
 rorolala-storage.workspace = true
 rorolala-tree.workspace = true
 rorolala-utils-constants.workspace = true
+rorolala-utils-configure.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
+rorolala-utils-progress.workspace = true
 rorolala-vault.workspace = true
 rorolala-vcs.workspace = true
 rorolala-workspace.workspace = true
 rola-desktop-pty.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 

@@ -118,11 +118,20 @@ fn generate_c_header() {
 
 /// Resolves `{target_dir}/{profile}/ffi_bindings` from `OUT_DIR`.
 ///
-/// `OUT_DIR` is `{target_dir}/{profile}/build/{package}-{hash}/out`, so three
-/// levels up is `{target_dir}/{profile}`.
+/// `OUT_DIR` sits under the target directory's `build` directory, and the profile is what that
+/// `build` sits in. The levels between the two are not counted: one cargo writes
+/// `build/{crate}-{hash}/out` there and another `build/{crate}/{hash}/out`, and a header written a
+/// level off is a header no caller reads while the stale one beside it is read instead. The
+/// directory named `build` is what both layouts share, so the profile is its parent.
 fn bindings_dir() -> Option<PathBuf> {
     let out_dir = PathBuf::from(env::var("OUT_DIR").ok()?);
-    let profile_dir = out_dir.ancestors().nth(3)?;
+    let build = out_dir.ancestors().find(|ancestor| {
+        ancestor
+            .file_name()
+            .is_some_and(|name| name == std::ffi::OsStr::new("build"))
+    })?;
+    let profile_dir = build.parent()?;
+
     Some(profile_dir.join(BINDINGS_DIR))
 }
 

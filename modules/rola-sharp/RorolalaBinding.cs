@@ -692,6 +692,95 @@ internal struct RolaActionError
     public RolaActionErrorPayload payload;
 }
 
+internal enum RolaExistenceErrorTag : int
+{
+    /// <summary>
+    /// No Workspace holds the directory the reading was asked of.
+    /// </summary>
+    RolaExistenceError_NoWorkspace = 0,
+    /// <summary>
+    /// The Workspace works in no Layout.
+    /// </summary>
+    RolaExistenceError_NoLayout = 1,
+    /// <summary>
+    /// The Workspace holds no version control index.
+    /// </summary>
+    RolaExistenceError_NoIndex = 2,
+    /// <summary>
+    /// The request does not read as one this build knows.
+    /// </summary>
+    RolaExistenceError_BadRequest = 3,
+    /// <summary>
+    /// The reading, or the answer it was written as, could not be made.
+    /// </summary>
+    RolaExistenceError_Read = 4,
+    /// <summary>
+    /// The account a search was to act as is not here.
+    /// </summary>
+    RolaExistenceError_NoAccount = 5,
+    /// <summary>
+    /// No account was named, and the user's current account names none either.
+    /// </summary>
+    RolaExistenceError_NoCurrentAccount = 6,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaExistenceErrorBadRequest
+{
+    /// <summary>
+    /// Why it does not.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaExistenceErrorRead
+{
+    /// <summary>
+    /// Why it could not.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaExistenceErrorNoAccount
+{
+    /// <summary>
+    /// The account that was named.
+    /// </summary>
+    public nint name;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaExistenceErrorPayload
+{
+    /// <summary>
+    /// The request does not read as one this build knows.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaExistenceErrorBadRequest BadRequest;
+    /// <summary>
+    /// The reading, or the answer it was written as, could not be made.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaExistenceErrorRead Read;
+    /// <summary>
+    /// The account a search was to act as is not here.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaExistenceErrorNoAccount NoAccount;
+}
+
+/// <summary>
+/// What reading whether a target is held failed with.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaExistenceError
+{
+    public RolaExistenceErrorTag tag;
+    public RolaExistenceErrorPayload payload;
+}
+
 /// <summary>
 /// Why a merge in progress cannot go on, as C reads it.
 ///
@@ -1634,6 +1723,9 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_action_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_existence_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_status_broken(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -1713,6 +1805,28 @@ internal static partial class RorolalaBinding
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_configure_error(nint value);
+
+    /// <summary>
+    /// Which Vaults can provide what a variant, a version or a Layout entry names.
+    ///
+    /// `directory` is the directory the Workspace is searched upwards from, and `request` is a UTF-8
+    /// JSON document of this shape:
+    ///
+    /// ```json
+    /// {"targets": [{"kind": "version", "hash": "blake3:..."}], "account": "alice"}
+    /// ```
+    ///
+    /// `account` is optional. The answer is an owned JSON string the caller releases with
+    /// `free_string`, `{"targets": [...]}` in the order asked, each with `kind`, the `hash` or `path`,
+    /// `version`, `variant`, `storage`, `offline`, `tree`, `expanded`, `sources` and `unreachable`. A
+    /// failure is a `RolaExistenceError *` the caller releases with `free_rola_existence_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaExistenceError *`, owned; release it with `free_rola_existence_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_search_source_json(nint directory, nint request);
 
     /// <summary>
     /// Every member whose public key `rule` finds, highest priority first.
@@ -2014,6 +2128,32 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint locate_rola_inverse_index(nint dir);
+
+    /// <summary>
+    /// Whether the objects a variant, a version or a Layout entry names are stored here.
+    ///
+    /// `directory` is the directory the Workspace is searched upwards from, and `request` is a UTF-8
+    /// JSON document of this shape:
+    ///
+    /// ```json
+    /// {"targets": [
+    /// {"kind": "variant", "hash": "blake3:..."},
+    /// {"kind": "version", "hash": "..."},
+    /// {"kind": "entry", "path": "art.psd"}
+    /// ]}
+    /// ```
+    ///
+    /// The answer is an owned JSON string the caller releases with `free_string`. It is
+    /// `{"targets": [...]}`, one answer per target in the order asked, each with `kind`, the `hash` or
+    /// `path` it was asked about, `version`, `variant`, `storage`, `offline`, `tree` and `missing`. A
+    /// failure is a `RolaExistenceError *` the caller releases with `free_rola_existence_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaExistenceError *`, owned; release it with `free_rola_existence_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_can_retrack_offline_json(nint directory, nint request);
 
     /// <summary>
     /// Reads the chain of the file `target` as the Version Graph shows it.

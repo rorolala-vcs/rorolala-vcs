@@ -215,6 +215,7 @@ internal sealed record DraftInfo(
 /// <param name="Creator">Who made it, as a name; <c>?</c> when no name is held.</param>
 /// <param name="Message">What it says was done, in full; the card draws one truncated line of it.</param>
 /// <param name="Storage">The content it was made of, as the store's key in hex.</param>
+/// <param name="Offline">Whether every object the content needs is held here.</param>
 /// <param name="BaseVariant">The variant it is based on, when the index holds it.</param>
 /// <param name="Join">The variant it merges in, when it is a merge.</param>
 /// <param name="MissingBase">Whether its base version is named but not held.</param>
@@ -246,6 +247,7 @@ internal sealed record GraphCard(
     string Creator,
     string Message,
     string Storage,
+    bool Offline,
     string? BaseVariant,
     string? Join,
     bool MissingBase,
@@ -621,6 +623,7 @@ internal sealed class VariantGraphDrawing
                     Creator = creator,
                     Message = message,
                     Storage = node.Storage,
+                    Offline = node.Offline,
                     BaseVariant = node.BaseVariant,
                     BaseVersion = node.BaseVersion,
                     Join = node.Join,
@@ -1582,6 +1585,9 @@ internal sealed class VariantGraphDrawing
         /// <summary>The content it was made of.</summary>
         public string Storage { get; init; } = string.Empty;
 
+        /// <summary>Whether every object the content needs is held here.</summary>
+        public bool Offline { get; init; }
+
         /// <summary>The variant it is based on, when the index holds it.</summary>
         public string? BaseVariant { get; init; }
 
@@ -1664,6 +1670,7 @@ internal sealed class VariantGraphDrawing
                 Creator,
                 Message,
                 Storage,
+                Offline,
                 BaseVariant,
                 Join,
                 MissingBase,

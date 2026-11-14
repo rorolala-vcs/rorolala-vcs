@@ -73,6 +73,10 @@ public sealed record VariantGraphFrontier(bool Parents, bool Children, bool Join
 /// </param>
 /// <param name="Join">The variant it merges in, as hex, or nothing when it is no merge.</param>
 /// <param name="Storage">The content it was made of, as the store's key in hex.</param>
+/// <param name="Offline">
+/// Whether every object the content needs is held here, so the variant can be used without a Vault:
+/// its content, every chunk of it, and every file a tree names.
+/// </param>
 /// <param name="Creator">Who made it, as the hash of the Creator index object.</param>
 /// <param name="Message">What it says was done, as the hash of the Message index object.</param>
 /// <param name="Frontier">Where the window stops short of what this node names.</param>
@@ -82,6 +86,7 @@ public sealed record VariantGraphNode(
     string? BaseVariant,
     string? Join,
     string Storage,
+    bool Offline,
     string Creator,
     string Message,
     VariantGraphFrontier Frontier

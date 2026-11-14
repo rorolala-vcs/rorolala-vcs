@@ -30,6 +30,8 @@ use rorolala_workspace::{Merging, Workspace};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::existence::{Existence, Target, local};
+
 /// The side the Layout being worked in is named on.
 const LOCAL: &str = "local";
 
@@ -94,6 +96,17 @@ pub fn locate_variant_graph_json(directory: &Path, request: &str) -> Result<Stri
     let merging = merging_of(&workspace, &sides.local);
     let focus = focus_of(&view, focused);
 
+    // A node's content is the content the variant's `storage` field names, so what the graph has
+    // already read is what the local check asks the store about: one lookup for the whole window,
+    // not one per node.
+    let targets: Vec<Target> = view
+        .nodes
+        .iter()
+        .map(|node| Target::Storage(node.storage))
+        .collect();
+    let store = workspace.get_current_rola_storage();
+    let held = runtime.block_on(local(&sides.local, &index, store.as_ref(), &targets));
+
     // Only the entries the window can name are carried: a workspace may hold thousands, and the ones
     // the window does not draw are the listing's business rather than the graph's.
     let named: BTreeSet<Hash> = view.versions.iter().map(|version| version.hash).collect();
@@ -108,7 +121,12 @@ pub fn locate_variant_graph_json(directory: &Path, request: &str) -> Result<Stri
 
     let graph = GraphJson {
         focus,
-        nodes: view.nodes.iter().map(node_json).collect(),
+        nodes: view
+            .nodes
+            .iter()
+            .zip(&held)
+            .map(|(node, existence)| node_json(node, existence))
+            .collect(),
         versions: view
             .versions
             .iter()
@@ -404,7 +422,7 @@ fn focus_of(view: &GraphView, focused: Vec<Focused>) -> Vec<FocusJson> {
 }
 
 /// One variant, as JSON.
-fn node_json(node: &GraphNode) -> NodeJson {
+fn node_json(node: &GraphNode, existence: &Existence) -> NodeJson {
     NodeJson {
         hash: node.hash.hex(),
         base_version: node.base_version.hex(),
@@ -413,6 +431,7 @@ fn node_json(node: &GraphNode) -> NodeJson {
         storage: node.storage.hex(),
         creator: node.creator.hex(),
         message: node.message.hex(),
+        offline: existence.held,
         frontier: FrontierJson {
             parents: node.frontier.parents,
             children: node.frontier.children,
@@ -547,6 +566,8 @@ struct NodeJson {
     join: Option<String>,
     /// The content it was made of.
     storage: String,
+    /// Whether every object the content needs is held here, so the variant can be used offline.
+    offline: bool,
     /// Who made it.
     creator: String,
     /// What it says was done.
@@ -683,7 +704,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use rorolala_layout::{Layout, LayoutPath, MutableData};
-    use rorolala_storage::Key;
+    use rorolala_storage::{Codec, Key};
     use rorolala_utils_location::Locate as _;
     use rorolala_vcs::{
         ComputeBlake3, Creator, Message, VCSIndex, VCSWrite as _, Variant, Version,
@@ -804,6 +825,8 @@ mod tests {
 
         // The chain behind it: two variants, and the three versions that fix them and the root.
         assert_eq!(json["nodes"].as_array().unwrap().len(), 2);
+        // Nothing was stored, so no node's content is here, and each says so.
+        assert_eq!(json["nodes"][0]["offline"], Value::Bool(false));
         assert_eq!(json["versions"].as_array().unwrap().len(), 3);
         assert_eq!(json["edges"].as_array().unwrap().len(), 1);
         assert_eq!(
@@ -956,6 +979,49 @@ mod tests {
             }),
             "the variant file is not named beside its target: {named:?}"
         );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A node whose content is stored is marked as usable offline, which is what the Desktop's
+    /// check is drawn from.
+    #[test]
+    fn a_node_whose_content_is_here_is_marked_offline() {
+        let (dir, workspace, index, runtime) = held("offline");
+        let layout = workspace.layout().unwrap();
+        let store = workspace.get_or_create_rola_storage();
+        let content = runtime
+            .block_on(store.write_object(b"the art", Codec::Raw))
+            .unwrap();
+
+        let creator = Creator::try_from("me").unwrap();
+        let message = Message::try_from("did").unwrap();
+        runtime.block_on(index.write(creator.clone())).unwrap();
+        runtime.block_on(index.write(message.clone())).unwrap();
+
+        let variant = Version::root().new_variant(
+            *content.digest(),
+            creator.compute_blake3(),
+            message.compute_blake3(),
+        );
+        let version = variant.new_version();
+        runtime.block_on(index.write(variant)).unwrap();
+        runtime.block_on(index.write(version.clone())).unwrap();
+
+        layout
+            .create_entry(
+                Uuid::from_u128(1),
+                MutableData::new(None, *version.hash().digest(), "art"),
+            )
+            .unwrap();
+        layout
+            .create_path(&LayoutPath::new("art.psd").unwrap(), Uuid::from_u128(1))
+            .unwrap();
+
+        let answer = locate_variant_graph_json(&dir, "{}").expect("the graph is read");
+        let json: Value = serde_json::from_str(&answer).expect("the answer is JSON");
+
+        assert_eq!(json["nodes"][0]["offline"], Value::Bool(true));
 
         let _ = fs::remove_dir_all(&dir);
     }

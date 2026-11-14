@@ -113,11 +113,46 @@ struct Asked {
     brought: usize,
 }
 
+/// The Vaults a run may bring content from: `primary` first, then every other one the Workspace has
+/// bound.
+///
+/// The other Vaults are taken in name order, since the Workspace keeps them in no order at all and
+/// two runs asking the same question should reach them in the same sequence. A name the Workspace
+/// has bound to nothing that reads as an address is passed over rather than ending the run: it is
+/// one Vault that cannot be asked, not every one after it.
+#[must_use]
+pub fn candidates(
+    remote: &ResCurrentRemoteVault,
+    primary: Option<(String, VaultAddress)>,
+) -> Vec<(String, VaultAddress)> {
+    let mut candidates: Vec<(String, VaultAddress)> = Vec::new();
+    if let Some(primary) = primary {
+        candidates.push(primary);
+    }
+
+    let first = candidates.first().map(|(name, _)| name.clone());
+    let mut names: Vec<String> = remote
+        .names()
+        .unwrap_or_default()
+        .into_iter()
+        .map(str::to_owned)
+        .filter(|name| Some(name) != first.as_ref())
+        .collect();
+    names.sort();
+
+    for name in names {
+        let Ok(address) = remote.vault_or_default(name.clone()) else {
+            continue;
+        };
+
+        candidates.push((name, address));
+    }
+
+    candidates
+}
+
 impl<'a> Sources<'a> {
     /// The Vaults a run may ask: `primary` first, then every other one the Workspace has bound.
-    ///
-    /// The other Vaults are taken in name order, since the Workspace keeps them in no order at all
-    /// and two runs asking the same question should reach them in the same sequence.
     ///
     /// # Errors
     ///
@@ -130,30 +165,10 @@ impl<'a> Sources<'a> {
         offline: bool,
     ) -> Result<Self, String> {
         let runtime = tokio::runtime::Runtime::new().map_err(|error| error.to_string())?;
-
-        let mut candidates = Vec::new();
-        if let Some((name, address)) = primary {
-            candidates.push(Candidate { name, address });
-        }
-
-        let first = candidates.first().map(|candidate| candidate.name.clone());
-        let mut names: Vec<String> = remote
-            .names()
-            .unwrap_or_default()
+        let candidates: Vec<Candidate> = candidates(remote, primary)
             .into_iter()
-            .map(str::to_owned)
-            .filter(|name| Some(name) != first.as_ref())
+            .map(|(name, address)| Candidate { name, address })
             .collect();
-        names.sort();
-
-        for name in names {
-            let Ok(address) = remote.vault_or_default(name.clone()) else {
-                continue;
-            };
-
-            candidates.push(Candidate { name, address });
-        }
-
         let asked = vec![Asked::default(); candidates.len()];
 
         Ok(Self {

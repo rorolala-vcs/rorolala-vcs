@@ -390,6 +390,17 @@ impl TreeStructure {
         Key::new(*blake3::hash(&self.encode()).as_bytes())
     }
 
+    /// Whether `bytes` begin a structure this build writes.
+    ///
+    /// A caller that holds only the opening of a content, the first chunk of one kept cut, uses this
+    /// to tell a tree's structure from a file's content before it reads the whole of it. What is
+    /// read is the magic and the format version, not the entries: a content that begins one is meant
+    /// as a structure, and [`decode`](Self::decode) is what says whether it holds together.
+    #[must_use]
+    pub fn begins(bytes: &[u8]) -> bool {
+        bytes.starts_with(MAGIC) && bytes.get(MAGIC.len()) == Some(&VERSION)
+    }
+
     /// The structure `bytes` hold, which [`encode`](Self::encode) is what made.
     ///
     /// # Errors
