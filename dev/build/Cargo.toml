@@ -18,6 +18,10 @@ publish = false
 # tool has a command to dispatch and nothing beside it.
 mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267fe16686e1ac22d68da14a26005b8c9", default-features = false }
 
+# The C header is a side effect of the root build script, which a warm Cargo target can keep fresh
+# while the header itself is gone. The build tool writes it itself before handing the ABI over.
+rorolala-dev-bindgen = { path = "../bindgen" }
+
 # The workspace's own manifest is read for what no program knows, the version everything is at, and
 # the publisher a package is named for, and it is read as TOML rather than as lines, so a value
 # that moves within the section is still found.
