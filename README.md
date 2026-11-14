@@ -2,6 +2,8 @@
   <img src="./res/icons/readme-banner-small.png" alt="Rorolala" width="100%">
 </p>
 
+Other langs: [English](./README.md) | [中文](./README_zh_CN.md)
+
 <h2 style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;">RorolalaVCS<img src="https://img.shields.io/github/stars/rorolala-vcs/rorolala-vcs?style=plastic" alt="GitHub stars"><img src="https://img.shields.io/github/forks/rorolala-vcs/rorolala-vcs?style=plastic" alt="GitHub forks"/><img src="https://img.shields.io/github/v/release/rorolala-vcs/rorolala-vcs?style=plastic" alt="GitHub release"/><img src="https://img.shields.io/github/actions/workflow/status/rorolala-vcs/rorolala-vcs/ci.yml?style=plastic" alt="CI status"/></h1>
 
 `ROLA` is a version control system designed for **artistic creation and multi-person collaboration**. Its purpose is to let **game and film/TV projects** produce and manage binary asset data more flexibly:
