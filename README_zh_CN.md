@@ -1,49 +1,43 @@
 <p align="center">
-  <!--<img src="res/icons/yizi.png" alt="Rorolala" width="240">-->
-  <img src="./res/icons/rorolala-title.png" alt="Rorolala" width="240">
+  <img src="./res/icons/readme-banner-small.png" alt="Rorolala" width="100%">
 </p>
 
-<p align="center">
-    <b>ROLA</b> <b>O</b>ffer <b>L</b>ittle <b>A</b>bility
-</p>
+本文章提供了多种语言：[English](./README.md) | [中文](./README_zh_CN.md)
 
-<p align="center">
-  <a href="https://github.com/rorolala-vcs/rorolala-vcs/stargazers"><img src="https://img.shields.io/github/stars/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub stars"></a>
-  <a href="https://github.com/rorolala-vcs/rorolala-vcs/network/members"><img src="https://img.shields.io/github/forks/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub forks"></a>
-  <a href="https://github.com/rorolala-vcs/rorolala-vcs/releases/latest"><img src="https://img.shields.io/github/v/release/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub release"></a>
-  <a href="https://github.com/rorolala-vcs/rorolala-vcs/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/rorolala-vcs/rorolala-vcs/ci.yml?style=for-the-badge" alt="CI status"></a>
-</p>
+<h2 style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;">RorolalaVCS<img src="https://img.shields.io/github/stars/rorolala-vcs/rorolala-vcs?style=plastic" alt="GitHub stars"><img src="https://img.shields.io/github/forks/rorolala-vcs/rorolala-vcs?style=plastic" alt="GitHub forks"/><img src="https://img.shields.io/github/v/release/rorolala-vcs/rorolala-vcs?style=plastic" alt="GitHub release"/><img src="https://img.shields.io/github/actions/workflow/status/rorolala-vcs/rorolala-vcs/ci.yml?style=plastic" alt="CI status"/></h1>
 
-本文章提供了多种语言：[English](./README.md)|[中文](./README_zh_CN.md)
+`ROLA` 是一款为 **艺术创作和多人协作** 设计的版本控制系统，它设计出来的目的是为了 **让游戏、影视项目** 可以更灵活地生产和管理二进制资产数据：
 
-## ⭐ 简介 ⭐
+- 在 `ROLA` 中，你的工作目录被称作 **"工作区 (Workspace)"**，工作区可以任意地签入 (Check-in) 上游中的 **单体素材文件** 或 **被作为整体管理的树文件**，他们由自身的 **独立版本链** 所管理。
 
-`Rorolala VCS` 是一款为艺术创作和多人协作设计的版本控制系统，包含如下设计：
+- 你可以自由地在本地修改文件内容，但只有该文件的 **所有者** 才能真正移动版本：**“放心，GUI 会告诉你是否可以修改该文件的。”**
 
-### 版本控制 & 协作模式
+### 1. 本地存储
 
-- 本地文件结构私有化：本地文件结构是 **用户对自身工作状态的描述** 而非 **仓库状态的描述**。
+- 你的本地工作区内，会增量存储上游的 **所有索引**：它们很小，所以可以快速辅助你找到所需的索引。
 
-- 版本粒度细化到逐个文件：每个文件都有自己的版本链，这意味着你可以局部操作而不影响全局。
+- 当你真正要建立该文件时，才会因为块缺失向上游请求下载缺失的部分，这保证了 **你不会下载到你不需要的内容**。
 
-### 存储模型
+### 2. 管理粒度
 
-- **索引**、**版本** 还有 **数据** 会被 **内容寻址存储**
-- **所有权**、**公共路径** 会被 **集中式存储**
-- 完整存储索引，按需拉取内容：本地可以快速获取版本、所有权，而只有 **真正需要内容时才请求拉取**。
+`ROLA` 采用了混合的版本控制粒度：你可以将单个文件作为版本链，也可以将整个目录作为版本链，这使得依赖相对路径的资产可以被局部可复现，而那些无路径依赖的资产可以细粒度管理。
 
-## 🚀 下载 & 安装 🚀
+### 3. 远程协议
 
-`ROLA` 在 [GitHub](https://github.com/rorolala-vcs/rorolala-vcs) 提供了完整的预构建版本，你可以直接 [下载最新](https://github.com/rorolala-vcs/rorolala-vcs/releases/latest)
+`ROLA` 提供了两种传输协议：`ssh` 协议和 `rola://` 协议，其中 `rola` 协议是专门为 `rola-daemon` 服务端程序设计的，它可以很方便地管理服务器上的资产保险库 (Vault)
 
-或者，你也可以查看 [所有版本](https://github.com/rorolala-vcs/rorolala-vcs/releases)。
+## 下载和安装
+
+`ROLA` 在 [GitHub](https://github.com/rorolala-vcs/rorolala-vcs) 提供了完整的预构建版本，你可以直接 [下载最新构建版本](https://github.com/rorolala-vcs/rorolala-vcs/releases/latest)
+
+或者，你也可以查看并 [下载历史版本](https://github.com/rorolala-vcs/rorolala-vcs/releases)。
 
 ### 桌面端
 
-安装完成后，你可以找到 `ROLALauncher` 启动入口，在这里你可以创建或打开工作区；进入工作区后，你可以签入素材、修改它们，并创建版本以同步给其他人：
+安装完成后，你可以在系统中找到 `ROLALauncher` 启动入口，在这里你可以连接 **保险库并创建工作区**；进入工作区后，你可以签入素材、修改它们，并创建版本以同步给其他人：
 
 <p align="center">
-  <img src="./res/screenshots/rola-desktop-launcher-preview.png" style="width: 90%;" alt="ROLALauncher">
+  <img src="./res/screenshots/rola-desktop-preview.png" style="width: 100%;" alt="ROLADesktop">
 </p>
 
 ### 命令行使用
@@ -110,12 +104,10 @@ rola://my-rola-vault.com/default
 rola://my-rola-vault.com:7717/default
 ```
 
-## ❤ 贡献者 ❤
+## 许可证
 
-<img src="https://contrib.rocks/image?repo=rorolala-vcs/rorolala-vcs" />
+本项目基于 **MIT 许可证** 发布。
 
-## 📖 许可证 📖
+任何人都可以自由使用、复制、修改、合并、发布、分发、再许可，乃至销售本软件的副本，唯一的要求是在本软件的所有副本或重要部分中保留原始的版权声明与许可声明。
 
-本项目基于 **MIT 许可证** 发布。任何人都可以自由使用、复制、修改、合并、发布、分发、再许可，乃至销售本软件的副本，唯一的要求是在本软件的所有副本或重要部分中保留原始的版权声明与许可声明。
-
-完整条款请参见 [LICENSE](./LICENSE)。
+完整条款请参见 [LICENSE](./LICENSE)

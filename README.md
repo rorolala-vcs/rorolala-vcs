@@ -1,84 +1,76 @@
 <p align="center">
-  <!--<img src="res/icons/yizi.png" alt="Rorolala" width="240">-->
-  <img src="./res/icons/rorolala-title.png" alt="Rorolala" width="240">
+  <img src="./res/icons/readme-banner-small.png" alt="Rorolala" width="100%">
 </p>
 
-<p align="center">
-    <b>ROLA</b> <b>O</b>ffer <b>L</b>ittle <b>A</b>bility
-</p>
+<h2 style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;">RorolalaVCS<img src="https://img.shields.io/github/stars/rorolala-vcs/rorolala-vcs?style=plastic" alt="GitHub stars"><img src="https://img.shields.io/github/forks/rorolala-vcs/rorolala-vcs?style=plastic" alt="GitHub forks"/><img src="https://img.shields.io/github/v/release/rorolala-vcs/rorolala-vcs?style=plastic" alt="GitHub release"/><img src="https://img.shields.io/github/actions/workflow/status/rorolala-vcs/rorolala-vcs/ci.yml?style=plastic" alt="CI status"/></h1>
 
-<p align="center">
-  <a href="https://github.com/rorolala-vcs/rorolala-vcs/stargazers"><img src="https://img.shields.io/github/stars/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub stars"></a>
-  <a href="https://github.com/rorolala-vcs/rorolala-vcs/network/members"><img src="https://img.shields.io/github/forks/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub forks"></a>
-  <a href="https://github.com/rorolala-vcs/rorolala-vcs/releases/latest"><img src="https://img.shields.io/github/v/release/rorolala-vcs/rorolala-vcs?style=for-the-badge" alt="GitHub release"></a>
-  <a href="https://github.com/rorolala-vcs/rorolala-vcs/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/rorolala-vcs/rorolala-vcs/ci.yml?style=for-the-badge" alt="CI status"></a>
-</p>
+`ROLA` is a version control system designed for **artistic creation and multi-person collaboration**. Its purpose is to let **game and film/TV projects** produce and manage binary asset data more flexibly:
 
-This article is available in multiple languages: [English](./README.md)|[中文](./README_zh_CN.md)
+- In `ROLA`, your working directory is called a **"Workspace"**. A workspace can freely check in **individual asset files** or **tree files managed as a whole** from upstream, each tracked by its own **independent version chain**.
 
-## ⭐ Introduction ⭐
+- You are free to modify file contents locally, but only the file's **owner** can actually advance its version: **"Don't worry — the GUI will tell you whether you're allowed to modify the file."**
 
-`Rorolala VCS` is a version control system designed for artistic creation and multi-person collaboration, built around the following design principles:
+### 1. Local storage
 
-### Version Control & Collaboration Model
+- Inside your local workspace, **all upstream indices** are stored incrementally: they are small, so they can quickly help you find the indices you need.
 
-- Private local file structure: the local file structure is **a description of the user's own working state**, not **a description of the repository state**.
+- Only when you actually materialize the file will the missing chunks be requested and downloaded from upstream, ensuring that **you never download content you don't need**.
 
-- Version granularity down to individual files: every file has its own version chain, which means you can operate locally without affecting the whole.
+### 2. Granularity
 
-### Storage Model
+`ROLA` uses a hybrid versioning granularity: you can treat a single file as a version chain, or an entire directory as one. This allows assets that depend on relative paths to be locally reproducible, while assets without path dependencies can be managed at a fine-grained level.
 
-- **Indices**, **versions**, and **data** are stored via **content-addressed storage**.
-- **Ownership** and **public paths** are stored via **centralized storage**.
-- Indices are stored in full, while content is pulled on demand: versions and ownership can be obtained quickly locally, while **content is only requested and pulled when actually needed**.
+### 3. Remote protocols
 
-## 🚀 Download & Install 🚀
+`ROLA` provides two transport protocols: `ssh` and `rola://`. The `rola` protocol is designed specifically for the `rola-daemon` server program, making it easy to manage asset vaults on a server.
 
-`ROLA` provides complete prebuilt versions on [GitHub](https://github.com/rorolala-vcs/rorolala-vcs), you can directly [download the latest](https://github.com/rorolala-vcs/rorolala-vcs/releases/latest).
+## Download and installation
 
-Alternatively, you can view [all versions](https://github.com/rorolala-vcs/rorolala-vcs/releases).
+`ROLA` provides complete pre-built binaries on [GitHub](https://github.com/rorolala-vcs/rorolala-vcs). You can directly [download the latest build](https://github.com/rorolala-vcs/rorolala-vcs/releases/latest)
+
+Alternatively, you can browse and [download previous versions](https://github.com/rorolala-vcs/rorolala-vcs/releases).
 
 ### Desktop
 
-After installation, you can find the `ROLALauncher` launch entry, where you can create or open a workspace; once inside a workspace, you can check-in assets, modify them, and create versions to sync to others:
+After installation, you can find the `ROLALauncher` entry in your system, where you can **connect to a vault and create a workspace**; once inside a workspace, you can check in assets, modify them, and create versions to sync with others:
 
 <p align="center">
-  <img src="./res/screenshots/rola-desktop-launcher-preview.png" style="width: 90%;" alt="ROLALauncher">
+  <img src="./res/screenshots/rola-desktop-preview.png" style="width: 100%;" alt="ROLADesktop">
 </p>
 
-### Command Line Usage
+### Command line usage
 
 ```bash
-# View help
+# Show help
 ~> rola --help
 
 # Create a workspace
 ~> mkdir my-workspace && cd my-workspace
 ~/my-workspace> rola init
 
-# Connect to a vault within the workspace
+# Bind the workspace to a repository
 ~/my-workspace> rola bind rola://your-vault.com/default
 ```
 
-## Server Deployment
+## Server deployment
 
-To use `ROLA`, you need a server or another device that can be accessed, with `rola-daemon` installed.
+To use `ROLA`, you need a server or another accessible device with `rola-daemon` installed.
 
-### 1. Create a Remote Vault
+### 1. Create a remote repository
 
-`ROLA` requires an empty directory to create a `Vault` for storing data:
+`ROLA` needs an empty directory to create a `Vault` for data storage:
 
 ```bash
 # Create the my-vault/ directory and initialize a Rola Vault inside it
 rola create --vault my-vault
 
-# Register this Vault as `default` (required for the rola protocol)
+# Register the vault under the name `default` (required for the rola protocol)
 cd my-vault && rola-daemon register default
 ```
 
-### 2. Start the Server
+### 2. Start the server
 
-To support the `rola` protocol, `rola-daemon` must stay running. You can manage it with `systemd`, or run the `rola-daemon` process on your own:
+To support the `rola` protocol, `rola-daemon` must be kept running. You can manage it with `systemd`, or run the `rola-daemon` process yourself:
 
 ```bash
 # 1. Run rola-daemon directly
@@ -88,19 +80,19 @@ rola-daemon
 systemctl --user enable --now rolad.service
 ```
 
-If you are using `Windows Server` or another `Windows` system, you can also directly run `rola-daemon-gui.exe` to quickly manage and start the client:
+If you are using `Windows Server` or another `Windows` system, you can simply run `rola-daemon-gui.exe` to quickly manage and start the client:
 
 <p align="center">
   <img src="./res/screenshots/windows-daemon-gui.png" style="width: 80%;" alt="Windows daemon GUI">
 </p>
 
-On the Linux desktop, you can also launch the `GTK4`-drawn `rola-daemon-gui`:
+On Linux desktops, you can also launch `rola-daemon-gui`, drawn with `GTK4`:
 
 <p align="center">
   <img src="./res/screenshots/gtk-daemon-gui.png" style="width: 80%;" alt="GTK daemon GUI">
 </p>
 
-**After that**, other users can directly connect to the `rola://` protocol vault using links in the following format:
+**After that**, other users can connect to a repository using the `rola://` protocol with the following format:
 
 ```text
 rola://your.domain:port/namespace
@@ -110,12 +102,10 @@ rola://my-rola-vault.com/default
 rola://my-rola-vault.com:7717/default
 ```
 
-## ❤ Contributors ❤
+## License
 
-<img src="https://contrib.rocks/image?repo=rorolala-vcs/rorolala-vcs" />
+This project is released under the **MIT License**.
 
-## 📖 License 📖
+Anyone is free to use, copy, modify, merge, publish, distribute, sublicense, and even sell copies of this software. The only requirement is that the original copyright notice and license notice be retained in all copies or substantial portions of the software.
 
-This project is released under the **MIT License**. Anyone is free to use, copy, modify, merge, publish, distribute, sublicense, and even sell copies of this software; the only requirement is to retain the original copyright notice and license notice in all copies or substantial portions of the software.
-
-For the full terms, see [LICENSE](./LICENSE).
+See [LICENSE](./LICENSE) for the full terms.
