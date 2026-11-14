@@ -171,8 +171,7 @@ pub(crate) async fn ownership_batch(
     let me = ctx
         .get_member()
         .into_inner()
-        .map(|member| member.name())
-        .unwrap_or_default();
+        .map_or_default(|member| member.name());
 
     if ctx.is_vault() && me.is_empty() {
         return Err(ActionError::MissingValue);

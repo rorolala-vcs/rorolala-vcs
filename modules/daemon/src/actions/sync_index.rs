@@ -351,8 +351,7 @@ async fn take_keys(
         let named = packet
             .carried
             .first()
-            .map(|entry| entry.key.hex())
-            .unwrap_or_default();
+            .map_or_default(|entry| entry.key.hex());
         let working = task.doing(named);
 
         for entry in &packet.carried {

@@ -59,8 +59,7 @@ impl Action for ActionSyncHashes {
         let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;
         let text = arrived
             .or(to_vault)
-            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-            .unwrap_or_default();
+            .map_or_default(|bytes| String::from_utf8_lossy(&bytes).into_owned());
 
         // How much the caller wants read at once, and how much the Vault will serve: the ask crosses,
         // the answer comes back, and the answer is what the caller is told. Both ends read the same

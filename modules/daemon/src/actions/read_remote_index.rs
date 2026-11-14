@@ -57,8 +57,7 @@ impl Action for ActionReadRemoteIndex {
         let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;
         let named = arrived
             .or(to_vault)
-            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-            .unwrap_or_default();
+            .map_or_default(|bytes| String::from_utf8_lossy(&bytes).into_owned());
         let key = Key::from_str(named.trim()).map_err(|_| {
             ActionError::Codec(BincodeError::new("the hash does not read".to_owned()))
         })?;

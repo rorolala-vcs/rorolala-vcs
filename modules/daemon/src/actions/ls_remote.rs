@@ -54,8 +54,7 @@ impl Action for ActionListRemote {
         let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;
         let which = arrived
             .or(to_vault)
-            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-            .unwrap_or_default();
+            .map_or_default(|bytes| String::from_utf8_lossy(&bytes).into_owned());
 
         // What the Vault holds crosses back, and the Workspace is where it is read: the same call
         // reads both ways, so the side that sent it keeps its own.
