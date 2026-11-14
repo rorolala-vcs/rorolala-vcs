@@ -3,13 +3,11 @@ _version: 2
 vault_unbind:
   help:
     en: |
-        Let a name go
-
-        **Usage**: rola vault unbind <NAME>
+        # Let a name go
+        **Usage**: rola vault [[GREEN]]__unbind__[[/]] <NAME>
     zh-CN: |
-        解除名字的绑定
-
-        **用法**：rola vault unbind <名字>
+        # 解除名字的绑定
+        **用法**：rola vault [[GREEN]]__unbind__[[/]] <名字>
 
   cmd_vault_unbind_description:
     en: Let a name go

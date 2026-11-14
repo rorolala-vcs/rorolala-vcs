@@ -7,19 +7,17 @@ hold:
       zh-CN: 无法全部处理时，先处理可以处理的部分
   help:
     en: |
-      Hold entries for your account
-
-      **Usage**: rola hold <PATH>...
+      # Hold entries for your account
+      **Usage**: rola [[GREEN]]__hold__[[/]] <PATH>...
       **Flags**:
-          --allow-partial    Move what can be processed first when not everything can be processed
-          --force            Skip the version consistency check
+           __--allow-partial__    Move what can be processed first when not everything can be processed
+           __--force__            Skip the version consistency check
     zh-CN: |
-      为本机账户持有条目
-
-      **用法**：rola hold <路径>...
+      # 为本机账户持有条目
+      **用法**：rola [[GREEN]]__hold__[[/]] <路径>...
       **标识**：
-          --allow-partial    无法全部处理时，先处理可以处理的部分
-          --force            跳过版本一致性的检查
+           __--allow-partial__    无法全部处理时，先处理可以处理的部分
+           __--force__            跳过版本一致性的检查
 
   description:
     en: Hold entries for your account
@@ -28,19 +26,17 @@ hold:
 giveup:
   help:
     en: |
-      Let go of entries your account holds
-
-      **Usage**: rola giveup <PATH>...
+      # Let go of entries your account holds
+      **Usage**: rola [[GREEN]]__giveup__[[/]] <PATH>...
       **Flags**:
-          --allow-partial    Move what can be processed first when not everything can be processed
-          --force            Skip the version consistency and unrecorded change checks
+           __--allow-partial__    Move what can be processed first when not everything can be processed
+           __--force__            Skip the version consistency and unrecorded change checks
     zh-CN: |
-      放弃本机账户持有的条目
-
-      **用法**：rola giveup <路径>...
+      # 放弃本机账户持有的条目
+      **用法**：rola [[GREEN]]__giveup__[[/]] <路径>...
       **标识**：
-          --allow-partial    无法全部处理时，先处理可以处理的部分
-          --force            跳过版本一致性与未记录改动的检查
+           __--allow-partial__    无法全部处理时，先处理可以处理的部分
+           __--force__            跳过版本一致性与未记录改动的检查
 
   description:
     en: Let go of entries your account holds
@@ -73,22 +69,16 @@ ownership:
     zh-CN: "`%{name}` 不是工作区内的文件或目录，或无法读取工作树"
 
   err_name_help:
-    en: |
-      The path is read relative to the directory the run was made in, and `.` is that directory itself
-      At the Workspace root it is the whole of the workspace
-    zh-CN: |
-      路径相对于运行所在目录解读，`.` 就是这个目录本身
-      在工作区根目录即为整个工作区
+    en: Name the path relative to the directory the run is made in, where `.` is the whole Workspace
+    zh-CN: 请给出相对于运行所在目录的路径，`.` 即整个工作区
 
   err_no_track:
     en: The current Layout tracks no Vault
     zh-CN: 当前布局没有追踪任何保险库
 
   err_no_track_help:
-    en: |
-      Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then run the command again
-    zh-CN: |
-      请用 `rola layout set-track <布局> <保险库>` 指定后再次运行该命令
+    en: Name the Vault it tracks with `rola layout set-track <VAULT>`, then run the command again
+    zh-CN: 请用 `rola layout set-track <保险库>` 指定它所追踪的保险库，然后再次运行该命令
 
   err_path:
     en: "The current Layout names no entry at `%{path}`"
@@ -135,10 +125,8 @@ ownership:
     zh-CN: "`%{path}` 已被 `%{owner}` 持有"
 
   err_held_help:
-    en: |
-      The entry is already held by another, and only the holder can let it go with `rola layout giveup-ownership`
-    zh-CN: |
-      条目已由他人持有，只有持有者本人能用 `rola layout giveup-ownership` 放弃
+    en: Only the holder can let it go, with `rola giveup <PATH>`
+    zh-CN: 只有持有者本人能用 `rola giveup <路径>` 放弃
 
   err_not_yours:
     en: "`%{path}` is held by `%{owner}`, not yours, so it cannot be let go of"

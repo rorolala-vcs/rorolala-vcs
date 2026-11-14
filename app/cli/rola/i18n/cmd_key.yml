@@ -3,21 +3,19 @@ _version: 2
 key:
   help:
     en: |
-        List the keys available on this machine
-
-        **Usage**: rola key <COMMAND>
+        # List the keys available on this machine
+        **Usage**: rola [[GREEN]]__key__[[/]] <COMMAND>
         **Flags**:
-            --pem              List private keys instead of public ones
-            --vault, -v        Also list the keys of the Vault currently in
+             __--pem__         List private keys instead of public ones
+             __--vault__ __-v__    Also list the keys of the Vault currently in
         **Commands**:
             generate <NAME>    Generate an Ed25519 key pair under a name
     zh-CN: |
-        列出本机可用的密钥
-
-        **用法**：rola key <子命令>
+        # 列出本机可用的密钥
+        **用法**：rola [[GREEN]]__key__[[/]] <子命令>
         **标识**：
-            --pem              列出私钥而不是公钥
-            --vault, -v        同时列出当前所在保险库的密钥
+             __--pem__         列出私钥而不是公钥
+             __--vault__ __-v__    同时列出当前所在保险库的密钥
         **命令**：
             generate <名字>    按名字生成一对 Ed25519 密钥
 

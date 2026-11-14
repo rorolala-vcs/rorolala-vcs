@@ -3,17 +3,15 @@ _version: 2
 vcs_index_sync_all:
   help:
     en: |
-        Make the indexes at both ends hold the same objects
-
-        **Usage**: rola vcs-index sync-all [VAULT]
+        # Make the indexes at both ends hold the same objects
+        **Usage**: rola vcs-index [[GREEN]]__sync-all__[[/]] [VAULT]
         **Flags**:
-            --confirm    Run without asking for confirmation beforehand
+             __--confirm__    Run without asking for confirmation beforehand
     zh-CN: |
-        让两端索引持有相同的对象
-
-        **用法**：rola vcs-index sync-all [保险库]
+        # 让两端索引持有相同的对象
+        **用法**：rola vcs-index [[GREEN]]__sync-all__[[/]] [保险库]
         **标识**：
-            --confirm    运行前不征求确认，直接执行
+             __--confirm__    运行前不征求确认，直接执行
 
   cmd_vcs_index_sync_all_description:
     en: Make the indexes at both ends hold the same objects

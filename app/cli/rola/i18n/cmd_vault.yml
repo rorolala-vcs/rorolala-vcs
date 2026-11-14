@@ -3,9 +3,8 @@ _version: 2
 vault:
   help:
     en: |
-        List the Vaults the current Workspace knows
-
-        **Usage**: rola vault <COMMAND>
+        # List the Vaults the current Workspace knows
+        **Usage**: rola [[GREEN]]__vault__[[/]] <COMMAND>
         **Commands**:
             bind <NAME> <ADDR>    Bind a name to a Vault address, or change what it means
             unbind <NAME>         Let a name go
@@ -14,9 +13,8 @@ vault:
             ls                    List the Vaults the current Workspace knows
             default               Print the Vault the Workspace reaches for
     zh-CN: |
-        列出当前工作区已知的保险库
-
-        **用法**：rola vault <子命令>
+        # 列出当前工作区已知的保险库
+        **用法**：rola [[GREEN]]__vault__[[/]] <子命令>
         **命令**：
             bind <名字> <地址>    将名字绑定到保险库地址，或修改其含义
             unbind <名字>         解除名字的绑定
@@ -40,13 +38,11 @@ vault:
 vault_ls:
   help:
     en: |
-        List the Vaults the current Workspace knows
-
-        **Usage**: rola vault ls
+        # List the Vaults the current Workspace knows
+        **Usage**: rola vault [[GREEN]]__ls__[[/]]
     zh-CN: |
-        列出当前工作区已知的保险库
-
-        **用法**：rola vault ls
+        # 列出当前工作区已知的保险库
+        **用法**：rola vault [[GREEN]]__ls__[[/]]
   description:
     en: List the Vaults the current Workspace knows
     zh-CN: 列出当前工作区已知的保险库
@@ -54,13 +50,11 @@ vault_ls:
 vault_default:
   help:
     en: |
-        Print the Vault the Workspace reaches for
-
-        **Usage**: rola vault default
+        # Print the Vault the Workspace reaches for
+        **Usage**: rola vault [[GREEN]]__default__[[/]]
     zh-CN: |
-        输出工作区默认使用的保险库
-
-        **用法**：rola vault default
+        # 输出工作区默认使用的保险库
+        **用法**：rola vault [[GREEN]]__default__[[/]]
   description:
     en: Print the Vault the Workspace reaches for
     zh-CN: 输出工作区默认使用的保险库

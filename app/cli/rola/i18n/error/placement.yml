@@ -7,24 +7,16 @@ error:
       zh-CN: 该命令需要在工作区中运行，而当前不在任何工作区内
 
     err_should_in_workspace_help:
-      en: |
-        Please run it inside one. `rola create <PATH>` can create a Workspace
-        `--workspace-dir <PATH>` can name a Workspace that already exists
-      zh-CN: |
-        请在工作区内运行。`rola create <PATH>` 可以创建工作区
-        `--workspace-dir <PATH>` 可以指定已有的工作区
+      en: Run it inside a Workspace, which `rola create <PATH>` makes or `--workspace-dir <PATH>` names
+      zh-CN: 请在工作区内运行，可用 `rola create <路径>` 创建，或用 `--workspace-dir <路径>` 指定已有的
 
     err_should_in_vault:
       en: This command works on a Vault, and this run is not inside one
       zh-CN: 该命令需要在保险库中运行，而当前不在任何保险库内
 
     err_should_in_vault_help:
-      en: |
-        Please run it inside one. `rola create --vault <PATH>` can create a Vault
-        `--vault-dir <PATH>` can name a Vault that already exists
-      zh-CN: |
-        请在保险库内运行。`rola create --vault <PATH>` 可以创建保险库
-        `--vault-dir <PATH>` 可以指定已有的保险库
+      en: Run it inside a Vault, which `rola create --vault <PATH>` makes or `--vault-dir <PATH>` names
+      zh-CN: 请在保险库内运行，可用 `rola create --vault <路径>` 创建，或用 `--vault-dir <路径>` 指定已有的
 
     err_config_unreadable:
       en: "Could not read the Workspace configuration: %{path}"
@@ -39,12 +31,8 @@ error:
       zh-CN: 未给出要连接的保险库，工作区也没有默认选择
 
     err_not_chosen_help:
-      en: |
-        Please give a name or an address, as in `rola vault handshake origin` or `rola vault handshake 127.0.0.1:7717`
-        Or run `rola vault set-default <NAME>` to choose a default Vault for the Workspace, so it need not be named every time
-      zh-CN: |
-        请给出名字或地址，例如 `rola vault handshake origin` 或 `rola vault handshake 127.0.0.1:7717`
-        也可以运行 `rola vault set-default <NAME>` 为工作区选定默认保险库，以后就不必每次指定
+      en: Name the Vault, as in `rola vault handshake origin`, or choose a default with `rola vault set-default <NAME>`
+      zh-CN: 请给出保险库名或地址，例如 `rola vault handshake origin`，或用 `rola vault set-default <名字>` 选定默认保险库
 
     err_not_address:
       en: "`%{name}` is not a Vault this Workspace knows, nor an address"

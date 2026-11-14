@@ -3,17 +3,15 @@ _version: 2
 cmd_fetch:
   help:
     en: |
-        Bring back a read-only copy of the Vault's Layout
-
-        **Usage**: rola fetch <VAULT>
+        # Bring back a read-only copy of the Vault's Layout
+        **Usage**: rola [[GREEN]]__fetch__[[/]] <VAULT>
         **Flags**:
-            --no-ignore-rules    Fetch only the Layout, leaving the Vault's ignore rules unfetched
+             __--no-ignore-rules__    Fetch only the Layout, leaving the Vault's ignore rules unfetched
     zh-CN: |
-        取回保险库的布局只读副本
-
-        **用法**：rola fetch <保险库>
+        # 取回保险库的布局只读副本
+        **用法**：rola [[GREEN]]__fetch__[[/]] <保险库>
         **标识**：
-            --no-ignore-rules    只取回布局，不取保险库的忽略规则
+             __--no-ignore-rules__    只取回布局，不取保险库的忽略规则
 
   description:
     en: Bring back a read-only copy of the Vault's Layout

@@ -7,18 +7,16 @@ cmd_layout_fetch:
       zh-CN: 只取回布局，不取保险库的忽略规则
   help:
     en: |
-        Bring a Vault's Layout here as a read-only copy
-
-        **Usage**: rola layout fetch [VAULT]
+        # Bring a Vault's Layout here as a read-only copy
+        **Usage**: rola layout [[GREEN]]__fetch__[[/]] [VAULT]
         **Flags**:
-            --no-ignore-rules    Fetch the Layout without the Vault's ignore rules
+             __--no-ignore-rules__    Fetch the Layout without the Vault's ignore rules
 
     zh-CN: |
-        取回保险库的布局只读副本
-
-        **用法**：rola layout fetch <保险库>
+        # 取回保险库的布局只读副本
+        **用法**：rola layout [[GREEN]]__fetch__[[/]] <保险库>
         **标识**：
-            --no-ignore-rules    只取回布局，不取保险库的忽略规则
+             __--no-ignore-rules__    只取回布局，不取保险库的忽略规则
   description:
     en: Bring a Vault's Layout here as a read-only copy
     zh-CN: 取回保险库的布局只读副本

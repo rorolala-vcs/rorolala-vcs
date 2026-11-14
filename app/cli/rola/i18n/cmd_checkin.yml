@@ -3,29 +3,27 @@ _version: 2
 checkin:
   help:
     en: |
-        Add the entries of an upstream Layout into the local Layout
-
+        # Add the entries of an upstream Layout into the local Layout
         **Usage**:
-            rola checkin <REF> [TO]
-            rola checkin <VARIANT_HASH> --join <FILE>
+            rola [[GREEN]]__checkin__[[/]] <REF> [TO]
+            rola [[GREEN]]__checkin__[[/]] <VARIANT_HASH> --join <FILE>
         **Flags**:
-            --join <FILE>        Name the file a checked-in variant is to be merged into
-            --by-name            Land each reference under the destination by its own name
-            --offline            Build the file only from content already stored locally
-            --force              Skip the shared-history check for a variant checkin
-            --concurrency <N>    Carry the content N units at a time (default 4)
+             __--join__ <FILE>        Name the file a checked-in variant is to be merged into
+             __--by-name__            Land each reference under the destination by its own name
+             __--offline__            Build the file only from content already stored locally
+             __--force__              Skip the shared-history check for a variant checkin
+             __--concurrency__ <N>    Carry the content N units at a time (default 4)
     zh-CN: |
-        将上游布局的条目加入到本地布局中
-
+        # 将上游布局的条目加入到本地布局中
         **用法**：
-            rola checkin <上游条目> [本地路径]
-            rola checkin <变体HASH> --join <本地文件>
+            rola [[GREEN]]__checkin__[[/]] <上游条目> [本地路径]
+            rola [[GREEN]]__checkin__[[/]] <变体HASH> --join <本地文件>
         **标识**：
-            --join <本地文件>    为签入的变体指定待合入的文件
-            --by-name            每条参考按自己的名字落在目标目录下
-            --offline            仅使用本地已存储的内容来构建文件
-            --force              跳过变体签入的共享版本检查
-            --concurrency <N>    每次同时搬运 N 份内容（默认 4）
+             __--join__ <本地文件>    为签入的变体指定待合入的文件
+             __--by-name__            每条参考按自己的名字落在目标目录下
+             __--offline__            仅使用本地已存储的内容来构建文件
+             __--force__              跳过变体签入的共享版本检查
+             __--concurrency__ <N>    每次同时搬运 N 份内容（默认 4）
 
   description:
     en: Add the entries of an upstream Layout into the local Layout
@@ -48,12 +46,8 @@ checkin:
     zh-CN: "无法将变体并入 `%{target}`：%{cause}"
 
   err_join_help:
-    en: |
-        Give a variant the index holds, and the corresponding file in the current Layout
-        The variant comes from wherever the index holds it, and is really merged in only when the file is recorded with `rola track`
-    zh-CN: |
-        给出索引持有的变体，以及当前布局中的对应文件
-        变体来自其索引持有它的地方，并在用 `rola track` 记录该文件时才真正并入
+    en: Name the variant's Hash with `--join`, then record the file with `rola track` to merge it in
+    zh-CN: 请用 `--join` 给出变体的 Hash，再用 `rola track` 记录该文件以完成合入
 
   err_join_hash:
     en: what was named is no variant hash
@@ -120,22 +114,16 @@ checkin:
     zh-CN: 当前布局没有追踪任何保险库
 
   err_no_track_help:
-    en: |
-        Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then try again
-    zh-CN: |
-        请用 `rola layout set-track <布局> <保险库>` 指定后再次运行该命令
+    en: Name the Vault it tracks with `rola layout set-track <VAULT>`, then try again
+    zh-CN: 请用 `rola layout set-track <保险库>` 指定它所追踪的保险库，然后重试
 
   err_argument:
     en: "`rola checkin` was given operands it cannot use"
     zh-CN: "`rola checkin` 收到的参数无法使用"
 
   err_argument_help:
-    en: |
-        Please name the upstream path to check in, and optionally the local path to check it in to
-        If merging is needed, give the variant's Hash and use `--join` to name the one file to merge into
-    zh-CN: |
-        请指定需要签入的上游路径，并可选地给出要签入到的本地路径
-        若需要合并，请给出变体的 Hash，并使用 `--join` 指定唯一的待合入文件
+    en: Name the upstream path, and the local path to land it at, with `--join` naming the one file a variant merges into
+    zh-CN: 请给出要签入的上游路径与要落到的本地路径，合并变体时用 `--join` 指定唯一的待合入文件
 
   err_unknown:
     en: "The Vault's Layout names nothing by `%{reference}`"

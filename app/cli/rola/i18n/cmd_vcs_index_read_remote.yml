@@ -3,17 +3,15 @@ _version: 2
 vcs_index_read_remote:
   help:
     en: |
-        Read one index object from the other end
-
-        **Usage**: rola vcs-index read-remote <HASH> [VAULT]
+        # Read one index object from the other end
+        **Usage**: rola vcs-index [[GREEN]]__read-remote__[[/]] <HASH> [VAULT]
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
     zh-CN: |
-        从对端读取一个索引对象
-
-        **用法**：rola vcs-index read-remote <哈希> [保险库]
+        # 从对端读取一个索引对象
+        **用法**：rola vcs-index [[GREEN]]__read-remote__[[/]] <哈希> [保险库]
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
   description:
     en: Read one index object from the index at the other end

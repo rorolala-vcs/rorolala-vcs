@@ -3,13 +3,11 @@ _version: 2
 cmd_layout_req_ownership:
   help:
     en: |
-        Ask the Vault to record the named entries' holder as the account this run uses
-
-        **Usage**: rola layout req-ownership [VAULT] <UUID>...
+        # Ask the Vault to record the named entries' holder as the account this run uses
+        **Usage**: rola layout [[GREEN]]__req-ownership__[[/]] [VAULT] <UUID>...
     zh-CN: |
-        请求保险库把指定条目的持有者记为本次运行所用的账户
-
-        **用法**：rola layout req-ownership [保险库名] <UUID>...
+        # 请求保险库把指定条目的持有者记为本次运行所用的账户
+        **用法**：rola layout [[GREEN]]__req-ownership__[[/]] [保险库名] <UUID>...
 
   description:
     en: Ask the Vault to record the named entries' holder as this account

@@ -3,9 +3,8 @@ _version: 2
 vcs_index:
   help:
     en: |
-        Build and read/write the version control index by hand
-
-        **Usage**: rola vcs-index <COMMAND>
+        # Build and read/write the version control index by hand
+        **Usage**: rola [[GREEN]]__vcs-index__[[/]] <COMMAND>
         **Commands**:
             create-rootver                     Write the root version
             print-rootver                      Print the root version's hash
@@ -30,14 +29,12 @@ vcs_index:
             sync-all [VAULT]                   Make the indexes at both ends hold the same objects
             can-retrack-offline <TARGET>...    Check whether a target's content is here
             search-source <TARGET>...          Ask which Vaults hold what a target names
-
-        **NOTE**:
-            The index holds variants, versions, Creators and Messages,
-            and the commands hand data over by hash
+        > [!Note]
+        > The index holds variants, versions, Creators and Messages,
+        > and the commands hand data over by hash
     zh-CN: |
-        手工建立并读写版本控制索引
-
-        **用法**：rola vcs-index <子命令>
+        # 手工建立并读写版本控制索引
+        **用法**：rola [[GREEN]]__vcs-index__[[/]] <子命令>
         **命令**：
             create-rootver                   写入根版本
             print-rootver                    输出根版本的哈希
@@ -62,9 +59,8 @@ vcs_index:
             sync-all [保险库]                让两端索引持有相同的对象
             can-retrack-offline <目标>...    检查目标指向的内容是否在本地
             search-source <目标>...          询问哪些保险库持有目标指向的内容
-
-        **注意**：
-            索引保存变体、版本、Creator 与 Message，各命令之间以哈希交接数据
+        > [!Note]
+        > 索引保存变体、版本、Creator 与 Message，各命令之间以哈希交接数据
 
   cmd_vcs_index_description:
     en: Build and read/write the version control index by hand
@@ -133,17 +129,15 @@ vcs_index:
 vcs_index_ls_variants:
   help:
     en: |
-        List the variants in the index
-
-        **Usage**: rola vcs-index ls-variants
+        # List the variants in the index
+        **Usage**: rola vcs-index [[GREEN]]__ls-variants__[[/]]
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
     zh-CN: |
-        列出索引中的变体
-
-        **用法**：rola vcs-index ls-variants
+        # 列出索引中的变体
+        **用法**：rola vcs-index [[GREEN]]__ls-variants__[[/]]
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
   description:
     en: List the variants the index holds
@@ -152,17 +146,15 @@ vcs_index_ls_variants:
 vcs_index_ls_versions:
   help:
     en: |
-        List the versions in the index
-
-        **Usage**: rola vcs-index ls-versions
+        # List the versions in the index
+        **Usage**: rola vcs-index [[GREEN]]__ls-versions__[[/]]
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
     zh-CN: |
-        列出索引中的版本
-
-        **用法**：rola vcs-index ls-versions
+        # 列出索引中的版本
+        **用法**：rola vcs-index [[GREEN]]__ls-versions__[[/]]
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
   description:
     en: List the versions the index holds
@@ -171,17 +163,15 @@ vcs_index_ls_versions:
 vcs_index_read:
   help:
     en: |
-        Read one index object by its hash
-
-        **Usage**: rola vcs-index read <HASH>
+        # Read one index object by its hash
+        **Usage**: rola vcs-index [[GREEN]]__read__[[/]] <HASH>
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
     zh-CN: |
-        按哈希读取一个索引对象
-
-        **用法**：rola vcs-index read <哈希>
+        # 按哈希读取一个索引对象
+        **用法**：rola vcs-index [[GREEN]]__read__[[/]] <哈希>
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
   description:
     en: Read one index object by its hash
@@ -190,13 +180,11 @@ vcs_index_read:
 vcs_index_write_creator:
   help:
     en: |
-        Write a Creator into the index, and print its hash
-
-        **Usage**: rola vcs-index write-creator <NAME>
+        # Write a Creator into the index, and print its hash
+        **Usage**: rola vcs-index [[GREEN]]__write-creator__[[/]] <NAME>
     zh-CN: |
-        将 Creator 写入索引，并输出其哈希
-
-        **用法**：rola vcs-index write-creator <名称>
+        # 将 Creator 写入索引，并输出其哈希
+        **用法**：rola vcs-index [[GREEN]]__write-creator__[[/]] <名称>
 
   description:
     en: Write a Creator into the index
@@ -205,13 +193,11 @@ vcs_index_write_creator:
 vcs_index_write_msg:
   help:
     en: |
-        Write a Message into the index, and print its hash
-
-        **Usage**: rola vcs-index write-msg <MESSAGE>
+        # Write a Message into the index, and print its hash
+        **Usage**: rola vcs-index [[GREEN]]__write-msg__[[/]] <MESSAGE>
     zh-CN: |
-        将 Message 写入索引，并输出其哈希
-
-        **用法**：rola vcs-index write-msg <消息>
+        # 将 Message 写入索引，并输出其哈希
+        **用法**：rola vcs-index [[GREEN]]__write-msg__[[/]] <消息>
 
   description:
     en: Write a Message into the index
@@ -224,17 +210,15 @@ vcs_index_write_variant:
       zh-CN: 指定本变体并入的变体
   help:
     en: |
-        Write a Variant into the index, and print its hash
-
-        **Usage**: rola vcs-index write-variant <BASE_VERSION> <STORAGE> <CREATOR_HASH> <MESSAGE_HASH>
+        # Write a Variant into the index, and print its hash
+        **Usage**: rola vcs-index [[GREEN]]__write-variant__[[/]] <BASE_VERSION> <STORAGE> <CREATOR_HASH> <MESSAGE_HASH>
         **Flags**:
-            --join <JOIN>    Name the variant this one merges in
+             __--join__ <JOIN>    Name the variant this one merges in
     zh-CN: |
-        将变体写入索引，并输出其哈希
-
-        **用法**：rola vcs-index write-variant <基础版本> <存储条目> <Creator 哈希> <Message 哈希>
+        # 将变体写入索引，并输出其哈希
+        **用法**：rola vcs-index [[GREEN]]__write-variant__[[/]] <基础版本> <存储条目> <Creator 哈希> <Message 哈希>
         **标识**：
-            --join <变体>    指定本变体并入的变体
+             __--join__ <变体>    指定本变体并入的变体
 
   description:
     en: Write a Variant into the index
@@ -243,13 +227,11 @@ vcs_index_write_variant:
 vcs_index_write_version:
   help:
     en: |
-        Write a Version into the index, and print its hash
-
-        **Usage**: rola vcs-index write-version <VARIANT>
+        # Write a Version into the index, and print its hash
+        **Usage**: rola vcs-index [[GREEN]]__write-version__[[/]] <VARIANT>
     zh-CN: |
-        将版本写入索引，并输出其哈希
-
-        **用法**：rola vcs-index write-version <变体>
+        # 将版本写入索引，并输出其哈希
+        **用法**：rola vcs-index [[GREEN]]__write-version__[[/]] <变体>
 
   description:
     en: Write a Version into the index
@@ -258,17 +240,15 @@ vcs_index_write_version:
 vcs_index_my_creator_hash:
   help:
     en: |
-        Print the Creator hash of the current account
-
-        **Usage**: rola vcs-index my-creator-hash
+        # Print the Creator hash of the current account
+        **Usage**: rola vcs-index [[GREEN]]__my-creator-hash__[[/]]
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
     zh-CN: |
-        输出当前账户对应的 Creator 哈希
-
-        **用法**：rola vcs-index my-creator-hash
+        # 输出当前账户对应的 Creator 哈希
+        **用法**：rola vcs-index [[GREEN]]__my-creator-hash__[[/]]
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
   description:
     en: Print the Creator hash of the current account
@@ -290,26 +270,24 @@ vcs_index_lookback:
       zh-CN: 说明截断前显示多少字符
   help:
     en: |
-        Draw the version chain with an index object on top
-
-        **Usage**: rola vcs-index lookback <HASH>
+        # Draw the version chain with an index object on top
+        **Usage**: rola vcs-index [[GREEN]]__lookback__[[/]] <HASH>
         **Flags**:
-            --compact                   Draw the versions alone, without the variants between them
-            --no-creator                Do not show the creator of each version
-            --no-message                Do not show what each version says
-            --max-message-length <N>    How many characters of a message are
-                                        shown before it is cut short, 64 by default
-            --json                      Output as JSON
+             __--compact__                   Draw the versions alone, without the variants between them
+             __--no-creator__                Do not show the creator of each version
+             __--no-message__                Do not show what each version says
+             __--max-message-length__ <N>    How many characters of a message are
+                                     shown before it is cut short, 64 by default
+             __--json__                      Output as JSON
     zh-CN: |
-        画出以索引对象为顶的版本链
-
-        **用法**：rola vcs-index lookback <哈希>
+        # 画出以索引对象为顶的版本链
+        **用法**：rola vcs-index [[GREEN]]__lookback__[[/]] <哈希>
         **标识**：
-            --compact                   只画版本，不画中间的变体
-            --no-creator                不显示每个版本的创建者
-            --no-message                不显示每个版本的说明
-            --max-message-length <N>    说明截断前显示多少字符，默认为 64
-            --json                      以 JSON 输出
+             __--compact__                   只画版本，不画中间的变体
+             __--no-creator__                不显示每个版本的创建者
+             __--no-message__                不显示每个版本的说明
+             __--max-message-length__ <N>    说明截断前显示多少字符，默认为 64
+             __--json__                      以 JSON 输出
 
   being_edited:
     en: being edited
@@ -330,17 +308,15 @@ vcs_index_lookback:
 vcs_index_create_rootver:
   help:
     en: |
-        Write the root version into the index, and print its hash
-
-        **Usage**: rola vcs-index create-rootver
+        # Write the root version into the index, and print its hash
+        **Usage**: rola vcs-index [[GREEN]]__create-rootver__[[/]]
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
     zh-CN: |
-        将根版本写入索引，并输出其哈希
-
-        **用法**：rola vcs-index create-rootver
+        # 将根版本写入索引，并输出其哈希
+        **用法**：rola vcs-index [[GREEN]]__create-rootver__[[/]]
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
   description:
     en: Put the root version into the index
@@ -349,17 +325,15 @@ vcs_index_create_rootver:
 vcs_index_print_rootver:
   help:
     en: |
-        Print the root version's hash
-
-        **Usage**: rola vcs-index print-rootver
+        # Print the root version's hash
+        **Usage**: rola vcs-index [[GREEN]]__print-rootver__[[/]]
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
     zh-CN: |
-        输出根版本的哈希
-
-        **用法**：rola vcs-index print-rootver
+        # 输出根版本的哈希
+        **用法**：rola vcs-index [[GREEN]]__print-rootver__[[/]]
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
   description:
     en: Print the root version's hash
@@ -368,33 +342,29 @@ vcs_index_print_rootver:
 vcs_index_can_retrack_offline:
   help:
     en: |
-        Check whether a target's content is stored here, so it can be retracked offline
-
-        **Usage**: rola vcs-index can-retrack-offline <TARGET>...
+        # Check whether a target's content is stored here, so it can be retracked offline
+        **Usage**: rola vcs-index [[GREEN]]__can-retrack-offline__[[/]] <TARGET>...
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
 
         **TARGET**:
             A variant hash, a version hash, or a path of the working Layout.
             An answer is yes when every object from the target to its content is here.
             A tree is checked down to the files its structure lists.
-
-        **NOTE**:
-            Nothing is changed and no Vault is reached
+        > [!Note]
+        > Nothing is changed and no Vault is reached
     zh-CN: |
-        检查目标指向的内容是否已在本地，从而可以离线回退
-
-        **用法**：rola vcs-index can-retrack-offline <目标>...
+        # 检查目标指向的内容是否已在本地，从而可以离线回退
+        **用法**：rola vcs-index [[GREEN]]__can-retrack-offline__[[/]] <目标>...
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
         **目标**：
             变体哈希、版本哈希，或当前布局记录的路径。
             从目标到内容的每个对象都在本地时答案为是。
             树内容还会检查其结构列出的每个文件。
-
-        **注意**：
-            此命令不改变任何东西，也不联网
+        > [!Note]
+        > 此命令不改变任何东西，也不联网
   description:
     en: Check whether a target's content is stored here
     zh-CN: 检查目标指向的内容是否在本地
@@ -408,32 +378,28 @@ vcs_index_can_retrack_offline:
 vcs_index_search_source:
   help:
     en: |
-        Ask which Vaults hold the content a target names
-
-        **Usage**: rola vcs-index search-source <TARGET>...
+        # Ask which Vaults hold the content a target names
+        **Usage**: rola vcs-index [[GREEN]]__search-source__[[/]] <TARGET>...
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
 
         **TARGET**:
             A variant hash, a version hash, or a path of the working Layout.
             Every Vault the Workspace has bound is asked; a Vault that cannot be
             reached is reported and the others still answer.
-
-        **NOTE**:
-            The search reaches the network, so `--offline` refuses it
+        > [!Note]
+        > The search reaches the network, so `--offline` refuses it
     zh-CN: |
-        询问哪些保险库持有目标指向的内容
-
-        **用法**：rola vcs-index search-source <目标>...
+        # 询问哪些保险库持有目标指向的内容
+        **用法**：rola vcs-index [[GREEN]]__search-source__[[/]] <目标>...
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
         **目标**：
             变体哈希、版本哈希，或当前布局记录的路径。
             工作区绑定的每个保险库都会被询问；无法连接的保险库会被报告，其余照常回答。
-
-        **注意**：
-            此命令会联网，因此 `--offline` 会拒绝它
+        > [!Note]
+        > 此命令会联网，因此 `--offline` 会拒绝它
   description:
     en: Ask which bound Vaults hold what a target names
     zh-CN: 询问哪些已绑定的保险库持有目标指向的内容

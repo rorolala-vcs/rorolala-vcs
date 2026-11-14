@@ -3,21 +3,19 @@ _version: 2
 desktop:
   help:
     en: |
-        Open the Desktop program that sits beside rola
-
-        **Usage**: rola desktop
+        # Open the Desktop program that sits beside rola
+        **Usage**: rola [[GREEN]]__desktop__[[/]]
         **Flags**:
-            --window-style <STYLE>    Choose the window frame style, one of windows, mac or tillingwm
-            --query-window-style      Print how this machine draws a window frame, and open nothing
-            --ready                   Ask the window to say on standard output when it is up
+             __--window-style__ <STYLE>    Choose the window frame style, one of windows, mac or tillingwm
+             __--query-window-style__      Print how this machine draws a window frame, and open nothing
+             __--ready__                   Ask the window to say on standard output when it is up
     zh-CN: |
-        打开与 rola 并排的桌面程序
-
-        **用法**：rola desktop
+        # 打开与 rola 并排的桌面程序
+        **用法**：rola [[GREEN]]__desktop__[[/]]
         **标识**：
-            --window-style <样式>    选择窗口边框的样式，可选 windows、mac 或 tillingwm
-            --query-window-style     打印本机绘制窗口边框的样式，不打开任何窗口
-            --ready                  要求窗口在出现时于标准输出报到
+             __--window-style__ <样式>    选择窗口边框的样式，可选 windows、mac 或 tillingwm
+             __--query-window-style__     打印本机绘制窗口边框的样式，不打开任何窗口
+             __--ready__                  要求窗口在出现时于标准输出报到
 
   cmd_desktop_description:
     en: Open the companion Desktop program

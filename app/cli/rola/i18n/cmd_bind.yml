@@ -3,17 +3,16 @@ _version: 2
 bind:
   help:
     en: |
-        Bind a Vault link quickly
+      # Bind a Vault link quickly
 
-        **Usage**: rola bind <LINK> [NAME]
-        **Flags**:
-            --no-set-default-vault    Do not set the default Vault
+      **Usage**: rola [[GREEN]]__bind__[[/]] <LINK> [NAME]
+      **Flags**:
+           __--no-set-default-vault__    Do not set the default Vault
     zh-CN: |
-        快捷绑定保险库链接
-
-        **用法**：rola bind <链接> [名字]
-        **标识**：
-            --no-set-default-vault    不设置默认保险库
+      # 快捷绑定保险库链接
+      **用法**：rola [[GREEN]]__bind__[[/]] <链接> [名字]
+      **标识**：
+           __--no-set-default-vault__    不设置默认保险库
 
   description:
     en: Bind a Vault link quickly
@@ -29,14 +28,8 @@ bind:
     zh-CN: "`%{name}` 不是保险库可以使用的绑定名"
 
   err_name_invalid_help:
-    en: |
-        Please make sure the given name is words of letters and digits joined by `-`, and is not empty
-
-        **Example**: `rola bind rola://127.0.0.1:7000/ upstream`
-    zh-CN: |
-        请确保给出的名字由字母数字组成的词以 `-` 相连，且不为空
-
-        **例如**：`rola bind rola://127.0.0.1:7000/ upstream`
+    en: Give a name of letters and digits joined by `-`, as in `rola bind rola://127.0.0.1:7000/ upstream`
+    zh-CN: 请给出由字母数字组成的词以 `-` 相连的名字，例如 `rola bind rola://127.0.0.1:7000/ upstream`
 
   result_bound:
     en: "`%{name}` is bound to %{address}"

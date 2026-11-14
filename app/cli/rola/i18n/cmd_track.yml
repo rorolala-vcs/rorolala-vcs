@@ -19,31 +19,29 @@ track:
       zh-CN: 用指定的分块策略切分这些文件，并在此后沿用
   help:
     en: |
-      Record files into the current Layout
-
-      **Usage**: rola track <FILE>...
+      # Record files into the current Layout
+      **Usage**: rola [[GREEN]]__track__[[/]] <FILE>...
       **Flags**:
-          --message <MESSAGE>         Give the whole group one commit message
-          --file-message <MESSAGE>    Give each file or tree its own message, one per subject, in order
+           __--message__ <MESSAGE>         Give the whole group one commit message
+           __--file-message__ <MESSAGE>    Give each file or tree its own message, one per subject, in order
 
-          --policy <NAME>             Cut these files with the named chunking policy, and prefer it from now on
-          --no-editor                 Record only what is already known, without opening an editor
-          --replace                   Redo the version the file is at, like `git commit --amend`
-          --force                     Record files that belong to another account
-          --include-ignored           Record files the ignore rules govern as well
+           __--policy__ <NAME>             Cut these files with the named chunking policy, and prefer it from now on
+           __--no-editor__                 Record only what is already known, without opening an editor
+           __--replace__                   Redo the version the file is at, like `git commit --amend`
+           __--force__                     Record files that belong to another account
+           __--include-ignored__           Record files the ignore rules govern as well
     zh-CN: |
-      将文件记录到当前布局
-
-      **用法**：rola track <路径>...
+      # 将文件记录到当前布局
+      **用法**：rola [[GREEN]]__track__[[/]] <路径>...
       **标识**：
-          --message <信息>         为整组文件指定提交信息
-          --file-message <信息>    为每个文件或树指定自己的信息，按顺序每个对象一条
+           __--message__ <信息>         为整组文件指定提交信息
+           __--file-message__ <信息>    为每个文件或树指定自己的信息，按顺序每个对象一条
 
-          --policy <名称>          用指定的分块策略切分这些文件，并在此后沿用
-          --no-editor              只记录已知信息，不打开编辑器
-          --replace                重做文件当前所在的版本，如同 `git commit --amend`
-          --force                  记录属于其他账户的文件
-          --include-ignored        连被忽略规则管辖的文件一并记录
+           __--policy__ <名称>          用指定的分块策略切分这些文件，并在此后沿用
+           __--no-editor__              只记录已知信息，不打开编辑器
+           __--replace__                重做文件当前所在的版本，如同 `git commit --amend`
+           __--force__                  记录属于其他账户的文件
+           __--include-ignored__        连被忽略规则管辖的文件一并记录
 
   # What a recording says it is doing while it does it, one line each: the three parts of the run in the
   # order it goes through them. They are said both to a person watching, on a bar, and to a program
@@ -139,20 +137,16 @@ track:
     zh-CN: "有 %{count} 个布局命名、工作树缺失的路径：%{paths}"
 
   err_lost_help:
-    en: |
-      Settle it first with `rola align <PATH> --delete`, `rola layout tree-diff` shows what is lost
-    zh-CN: |
-      请先用 `rola align <路径> --delete` 处理，`rola layout tree-diff` 可查看丢失项
+    en: Settle it first with `rola align <PATH> --delete`
+    zh-CN: 请先用 `rola align <路径> --delete` 处理
 
   err_unowned:
     en: "%{count} files named are not yours to record: %{paths}"
     zh-CN: "指定的 %{count} 个文件不属于你，无法记录：%{paths}"
 
   err_unowned_help:
-    en: |
-      Record them anyway with `rola track --force`, or ask the holder to give ownership up with `rola layout giveup-ownership`
-    zh-CN: |
-      请用 `rola track --force` 强制记录，或请持有者用 `rola layout giveup-ownership` 让出所有权
+    en: Record them anyway with `rola track --force`, or ask the holder to give it up with `rola giveup <PATH>`
+    zh-CN: 请用 `rola track --force` 强制记录，或请持有者用 `rola giveup <路径>` 让出所有权
 
   err_ignored:
     en: "%{count} files named are governed by the ignore rules: %{paths}"

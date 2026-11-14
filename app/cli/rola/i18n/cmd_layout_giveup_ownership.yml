@@ -3,13 +3,11 @@ _version: 2
 cmd_layout_giveup_ownership:
   help:
     en: |
-        Ask the Vault to clear the holders of the named entries
-
-        **Usage**: rola layout giveup-ownership [VAULT] <UUID>...
+        # Ask the Vault to clear the holders of the named entries
+        **Usage**: rola layout [[GREEN]]__giveup-ownership__[[/]] [VAULT] <UUID>...
     zh-CN: |
-        请求保险库把指定条目的持有者清空
-
-        **用法**：rola layout giveup-ownership [保险库名] <UUID>...
+        # 请求保险库把指定条目的持有者清空
+        **用法**：rola layout [[GREEN]]__giveup-ownership__[[/]] [保险库名] <UUID>...
   description:
     en: Ask the Vault to clear the holders of the named entries
     zh-CN: 请求保险库将指定条目的持有者清空

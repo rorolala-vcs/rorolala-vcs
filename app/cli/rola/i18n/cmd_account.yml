@@ -3,23 +3,23 @@ _version: 2
 account:
   help:
     en: |
-        Query or switch the available accounts on this machine
-
-        **Usage**: rola account <SUBCOMMAND|ACCOUNT>
-        **Flags**:
-            --vault, -v    Also show the accounts in the current Vault
+        # Query or Set the account used by the current user
+        **Query account**:rola [[GREEN]]__account__[[/]] [COMMAND]
+        **  Set account**:rola [[GREEN]]__account__[[/]] <NAME>
         **Commands**:
-            ls             List the available accounts on this machine
-            current        Print the account currently in use
+            ls             List available accounts
+            current        Print current account
+        **Flags**:
+             __--vault__ __-v__    Also show the account of the current vault
     zh-CN: |
-        查询或切换本机的可用账户
-
-        **用法**：rola account <子命令|账户名>
-        **标识**：
-            --vault, -v    同时显示当前所在保险库的账户
+        # 查询 或 设置 当前用户所使用的账户
+        **查询账户**：rola [[GREEN]]__account__[[/]] [命令]
+        **设置账户**：rola [[GREEN]]__account__[[/]] <账户名>
         **命令**：
-            ls             列出本机可用账户
-            current        直接输出当前使用的账户
+            ls             列出可用账户
+            current        输出当前账户
+        **标识**：
+             __--vault__ __-v__    同时显示当前所在保险库的账户
 
   cmd_account_description:
     en: Query or switch the available accounts on this machine
@@ -54,31 +54,25 @@ account:
   err_no_user_dir_help:
     en: |
         Recording an account needs the local data directory, but this machine does not name it
-        Please set `XDG_DATA_HOME`
     zh-CN: |
         记录账户需要本地数据目录，但本机未指明该目录
-        请设置 `XDG_DATA_HOME`
 
 account_ls:
   help:
     en: |
-        List the available accounts on this machine
-
-        **Usage**: rola account ls
+        # List available accounts on this machine
+        **Usage**: rola account current [[GREEN]]__ls__[[/]]
         **Flags**:
-            --vault, -v    Also show the accounts in the current Vault
-
-        **NOTE**:
-            This command has the same effect as `rola account`
+             __--vault__ __-v__    Also show the account of the current vault
+        > [!Note]
+        > This command behaves the same as `rola account`
     zh-CN: |
-        列出本机可用账户
-
-        **用法**：rola account ls
+        # 列出本机可用账户
+        **用法**：rola account current [[GREEN]]__ls__[[/]]
         **标识**：
-            --vault, -v    同时显示当前所在保险库的账户
-
-        **注意**：
-            该命令效果和 `rola account` 一致
+             __--vault__ __-v__    同时显示当前所在保险库的账户
+        > [!Note]
+        > 该命令效果和 `rola account` 一致
 
   description:
     en: List the available accounts on this machine
@@ -87,20 +81,15 @@ account_ls:
 account_current:
   help:
     en: |
-        Print the account currently in use
-
-        **Usage**: rola account current
-
-        **NOTE**:
-            Print only the content to Stdout,
-            and stay completely silent when no account is set
+        # Output the account currently in use
+        **Usage**: rola account [[GREEN]]__current__[[/]]
+        > [!Note]
+        > Writes only to stdout; completely silent if no account is set
     zh-CN: |
-        直接输出当前使用的账户
-
-        **用法**：rola account current
-
-        **注意**：
-            仅输出内容到 Stdout，若未设置账户则完全静默
+        # 直接输出当前使用的账户
+        **用法**：rola account [[GREEN]]__current__[[/]]
+        > [!Note]
+        > 仅输出内容到 Stdout，若未设置账户则完全静默
   description:
     en: Print the account currently in use
     zh-CN: 直接输出当前使用的账户

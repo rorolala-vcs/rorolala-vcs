@@ -3,13 +3,11 @@ _version: 2
 cmd_layout_read_ownership:
   help:
     en: |
-        Read an entry's holder from the fetched copy
-
-        **Usage**: rola layout read-ownership [VAULT] <UUID>
+        # Read an entry's holder from the fetched copy
+        **Usage**: rola layout [[GREEN]]__read-ownership__[[/]] [VAULT] <UUID>
     zh-CN: |
-        从取回的副本中读取条目的持有者
-
-        **用法**：rola layout read-ownership [保险库名] <UUID>
+        # 从取回的副本中读取条目的持有者
+        **用法**：rola layout [[GREEN]]__read-ownership__[[/]] [保险库名] <UUID>
 
   description:
     en: Read an entry's holder from the fetched copy

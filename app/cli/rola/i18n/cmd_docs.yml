@@ -3,24 +3,24 @@ _version: 2
 docs:
   help:
     en: |
-      **Usage**: rola docs [--search] [--limit <N>] <text>
+      **Usage**: rola [[GREEN]]__docs__[[/]] [--search] [--limit <N>] <text>
 
       **Flags**:
-          --search       Search the articles; support multi keywords
-          --limit <N>    Show at most N results
-          --no-pager     Do not use a pager; write the results out directly
-          --raw          Output the raw article content
+           __--search__       Search the articles; support multi keywords
+           __--limit__ <N>    Show at most N results
+           __--no-pager__     Do not use a pager; write the results out directly
+           __--raw__          Output the raw article content
 
       **When searching, if only one entry matches, its content is printed directly**
 
     zh-CN: |
-      **用法**：rola docs [--search] [--limit <N>] <文本>
+      **用法**：rola [[GREEN]]__docs__[[/]] [--search] [--limit <N>] <文本>
 
       **标识**：
-          --search       搜索文章，支持多个关键词缩小范围
-          --limit <N>    显示最多 N 条结果
-          --no-pager     不使用分页器，直接写出结果
-          --raw          输出原始文章内容
+           __--search__       搜索文章，支持多个关键词缩小范围
+           __--limit__ <N>    显示最多 N 条结果
+           __--no-pager__     不使用分页器，直接写出结果
+           __--raw__          输出原始文章内容
 
       **搜索时，若只命中一个条目，将直接打印文章内容**
 
@@ -49,12 +49,8 @@ docs:
     zh-CN: 找不到文章
 
   err_no_book_help:
-    en: |-
-      The articles are kept in `docs/builtin.book`, beside the programs an export or an install lays down;
-      in a checkout it is made by `cargo dev book`
-    zh-CN: |-
-      文章保存在 `docs/builtin.book`，与导出或安装的程序放在一起；
-      在源码树中可用 `cargo dev book` 生成
+    en: Make the book in a checkout with `cargo dev book`
+    zh-CN: 在源码树中运行 `cargo dev book` 生成它
 
   err_unknown_article:
     en: "There is no article named `%{name}`"

@@ -3,19 +3,17 @@ _version: 2
 create:
   help:
     en: |
-        Create a Workspace or a Vault
-
-        **Usage**: rola create <PATH>
+        # Create a Workspace or a Vault
+        **Usage**: rola [[GREEN]]__create__[[/]] <PATH>
         **Flags**:
-            --vault, -v    Create a Vault instead of a Workspace
+             __--vault__ __-v__    Create a Vault instead of a Workspace
 
         Create a Workspace at the given path, or use `--vault` to create a Vault
     zh-CN: |
-        创建工作区或保险库
-
-        **用法**：rola create <路径>
+        # 创建工作区或保险库
+        **用法**：rola [[GREEN]]__create__[[/]] <路径>
         **标识**：
-            --vault, -v    创建保险库而不是工作区
+             __--vault__ __-v__    创建保险库而不是工作区
 
         在给定路径创建工作区，或使用 `--vault` 指定创建保险库
 
@@ -32,12 +30,12 @@ create:
         Please provide a path to complete the creation
 
         **Example**: `rola create my-workspace`
-                  `rola create our-vault --vault`
+                 `rola create our-vault --vault`
     zh-CN: |
         请提供一个路径以完成创建
 
         **例如**：`rola create my-workspace`
-                `rola create our-vault --vault`
+              `rola create our-vault --vault`
 
   result_workspace_created:
     en: Workspace created at %{path}

@@ -7,17 +7,15 @@ entries:
       zh-CN: 读取保险库自己的布局，而非当前工作的布局
   help:
     en: |
-        List the paths a Layout names, one per line
-
-        **Usage**: rola entries
+        # List the paths a Layout names, one per line
+        **Usage**: rola [[GREEN]]__entries__[[/]]
         **Flags**:
-            --remote    Read the Vault's own Layout instead of the one being worked in
+             __--remote__    Read the Vault's own Layout instead of the one being worked in
     zh-CN: |
-        列出布局命名的路径，一行一个
-
-        **用法**：rola entries
+        # 列出布局命名的路径，一行一个
+        **用法**：rola [[GREEN]]__entries__[[/]]
         **标识**：
-            --remote    读取保险库自己的布局，而非当前工作的布局
+             __--remote__    读取保险库自己的布局，而非当前工作的布局
 
   description:
     en: List the paths a Layout names
@@ -28,7 +26,5 @@ entries:
     zh-CN: 当前使用的布局没有追踪任何保险库
 
   err_no_track_help:
-    en: |
-        Please name one with `rola layout set-track <LAYOUT> <VAULT>`, then try again
-    zh-CN: |
-        请用 `rola layout set-track <布局> <保险库>` 指定一个保险库，然后重试
+    en: Name the Vault it tracks with `rola layout set-track <VAULT>`, then try again
+    zh-CN: 请用 `rola layout set-track <保险库>` 指定它所追踪的保险库，然后重试

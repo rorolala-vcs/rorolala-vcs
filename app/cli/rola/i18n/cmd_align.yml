@@ -34,47 +34,51 @@ align:
       zh-CN: 完全还原所指内容
   help:
     en: |
-        Bring the file structure under the Workspace into agreement with what is recorded
+      # Bring the file structure under the Workspace into agreement with what is recorded
+      **Usage**: rola [[GREEN]]__align__[[/]] <PATH> [OPERATIONS]
+      **Flags**:
+           __--delete__             Confirm the **lost entry** is gone
+           __--rename__             Confirm the **move**,
+                                and update the record to the new position
+           __--break__              For a **non-deterministic move**,
+                                break it into a **lost entry** and an **untracked entry**
+           __--move__ <TO>          Assert that PATH moved to TO,
+                                forming a **non-deterministic move**
 
-        **Usage**: rola align <PATH>
-        **Flags**:
-            --delete             Confirm the **lost entry** is gone
-            --rename             Confirm the **move**, and update the record to the new position
-            --break              For a **non-deterministic move**, break it into a **lost entry** and an **untracked entry**
-            --move <TO>          Assert that PATH moved to TO, forming a **non-deterministic move**
+           __--restore-move__       Confirm the **move**,
+                                and restore it to its original position
+           __--restore-modify__     Restore the file's content change
+           __--restore-staged__     Restore a file inside a tree to what the tree staged
+           __--restore-delete__     Rebuild a **lost entry**'s file
+           __--restore__            Do one of the three above, as PATH needs
+           __--completely__         Restore the content as well as the position,
+                                meaningful only for restoring a move
 
-            --restore-move       Confirm the **move**, and restore it to its original position
-            --restore-modify     Restore the file's content change
-            --restore-staged     Restore a file inside a tree to what the tree staged
-            --restore-delete     Rebuild a **lost entry**'s file
-            --restore            Do one of the three above, as PATH needs
-            --completely         Restore the content as well as the position, meaningful only for restoring a move
-
-            --vault              Include this Vault as a Layout source during alignment
-            --offline            Look for the content needed to restore only locally without asking the Vault
-            --concurrency <N>    Carry the content N units at a time (default 4)
-            --include-ignored    Align an entry the ignore rules govern as well
+           __--vault__              Include this Vault as a Layout source during alignment
+           __--offline__            Look for the content needed to restore only locally
+                                without asking the Vault
+           __--concurrency__ <N>    Carry the content N units at a time (default 4)
+           __--include-ignored__    Align an entry the ignore rules govern as well
     zh-CN: |
-        让工作区下的文件结构与记录的保持一致
+      # 让工作区下的 文件结构 与 记录 的保持一致
+      **用法**：rola [[GREEN]]__align__[[/]] <路径> [操作]
+      **标识**：
+           __--delete__             确认该 **丢失项** 已丢失
+           __--rename__             确认该 **移动项**，并更新记录至到新位置
+           __--break__              对于 **非确定性移动**，可以断开为 **丢失项** 和 **未标记项**
+           __--move__ <TO>          断言 PATH 移动到了 TO，形成一个 **非确定性移动**
 
-        **用法**：rola align <路径>
-        **标识**：
-            --delete             确认该 **丢失项** 已丢失
-            --rename             确认该 **移动项**，并更新记录至到新位置
-            --break              对于 **非确定性移动**，可以断开为 **丢失项** 和 **未标记项**
-            --move <TO>          断言 PATH 移动到了 TO，形成一个 **非确定性移动**
+           __--restore-move__       确认该 **移动项**，并还原至原来的位置
+           __--restore-modify__     还原该文件的内容变更
+           __--restore-staged__     把树内文件还原到树的暂存内容
+           __--restore-delete__     重建某条 **丢失项** 的文件
+           __--restore__            按 PATH 需要，执行上面三者中的一个
+           __--completely__         在还原位置的同时还原内容，只对还原移动有意义
 
-            --restore-move       确认该 **移动项**，并还原至原来的位置
-            --restore-modify     还原该文件的内容变更
-            --restore-staged     把树内文件还原到树的暂存内容
-            --restore-delete     重建某条 **丢失项** 的文件
-            --restore            按 PATH 需要，执行上面三者中的一个
-            --completely         在还原位置的同时还原内容，只对还原移动有意义
-
-            --vault              在校准时把该保险库作为布局来源一起纳入
-            --offline            还原需要的内容只从本地查找，不向保险库请求
-            --concurrency <N>    每次同时搬运 N 份内容（默认 4）
-            --include-ignored    连被忽略规则管辖的条目一并校准
+           __--vault__              在校准时把该保险库作为布局来源一起纳入
+           __--offline__            还原需要的内容只从本地查找，不向保险库请求
+           __--concurrency__ <N>    每次同时搬运 N 份内容（默认 4）
+           __--include-ignored__    连被忽略规则管辖的条目一并校准
 
   description:
     en: Bring the file structure under the Workspace into agreement with what is recorded
@@ -126,11 +130,10 @@ align:
 
   err_argument_help:
     en: |
-        A path is needed and exactly one mode for it, and the mode must suit what the path is:
-        run `rola align --help` for the modes, and `rola status` to see what the path is
+      Run `rola align --help` to view the various modes, and run `rola status` to view the status of that path.
     zh-CN: |
-        需要给出一个路径和恰好一个模式，且模式要与该路径的实际情况相称：
-        运行 `rola align --help` 查看各个模式，运行 `rola status` 查看该路径的情况
+
+      运行 `rola align --help` 查看各个模式，运行 `rola status` 查看该路径的情况
 
   err_completely:
     en: "`--completely` only means something for a move being put back"
@@ -138,9 +141,9 @@ align:
 
   err_completely_help:
     en: |
-        Use it with `--restore` or `--restore-move`
+      Use it with `--restore` or `--restore-move`
     zh-CN: |
-        请与 `--restore` 或 `--restore-move` 一起使用
+      请与 `--restore` 或 `--restore-move` 一起使用
 
   err_not_lost:
     en: "`%{path}` is not a path the Layout names and the tree lacks"
@@ -148,9 +151,9 @@ align:
 
   err_not_lost_help:
     en: |
-        Run `rola layout tree-diff` to see what is lost
+      Run `rola status` to see which paths are missing
     zh-CN: |
-        运行 `rola layout tree-diff` 查看哪些路径已丢失
+      运行 `rola status` 查看哪些路径已丢失
 
   err_no_rename:
     en: "`%{path}` is not a side of any move the reading found"
@@ -158,9 +161,9 @@ align:
 
   err_no_rename_help:
     en: |
-        Run `rola layout tree-diff` to see the moves, or assert one with `--move`
+      Run `rola status` to view the move, or use `rola align --move` to assert a move
     zh-CN: |
-        运行 `rola layout tree-diff` 查看移动，或用 `--move` 断言一次移动
+      运行 `rola status` 查看移动，或用 `rola align --move` 断言一次移动
 
   err_ignored:
     en: "`%{path}` is governed by the ignore rules"
@@ -168,9 +171,9 @@ align:
 
   err_ignored_help:
     en: |
-        Leave it alone, or align it anyway with `rola align --include-ignored`
+      Leave it alone, or align it anyway with `rola align --include-ignored`
     zh-CN: |
-        请略过该路径，或用 `rola align --include-ignored` 对其进行校准
+      请略过该路径，或用 `rola align --include-ignored` 对其进行校准
 
   err_real_move:
     en: "`%{from}` and `%{to}` have exactly the same content, this is a real move and it cannot be taken back"
@@ -178,9 +181,9 @@ align:
 
   err_real_move_help:
     en: |
-        Confirm it with `--rename`, or remove the path with `--delete`
+      Confirm it with `--rename`, or remove the path with `--delete`
     zh-CN: |
-        用 `--rename` 确认它，或用 `--delete` 移除该路径
+      用 `--rename` 确认它，或用 `--delete` 移除该路径
 
   err_move_missing:
     en: "`%{path}` is not a file inside this Workspace"
@@ -196,9 +199,9 @@ align:
 
   err_move_help:
     en: |
-        `--move` names the file or tree a lost path moved to, which must be one the Layout does not know
+      `--move` names the file or tree a lost path moved to, which must be one the Layout does not know
     zh-CN: |
-        `--move` 指定丢失路径移动到的文件或树，该内容必须是布局尚不认识的
+      `--move` 指定丢失路径移动到的文件或树，该内容必须是布局尚不认识的
 
   err_not_modified:
     en: "`%{path}` is not a change against a version the Layout names"
@@ -206,11 +209,9 @@ align:
 
   err_not_modified_help:
     en: |
-        A move's destination has no version of its own
-        Put the move back first with `--restore-move`
+      The destination of the move has no version of its own, use `--restore-move` first to restore the move
     zh-CN: |
-        移动的目的地没有自己的版本
-        请先用 `--restore-move` 把移动放回
+      移动的目的地没有自己的版本, 请先用 `--restore-move` 把移动放回
 
   err_not_staged:
     en: "`%{path}` is not a file the tree has staged"
@@ -218,11 +219,9 @@ align:
 
   err_not_staged_help:
     en: |
-        Stage the tree's work first with `rola tree add`
-        A file the tree has not staged has nothing to be put back to
+      Stage the tree's work first with `rola tree add`
     zh-CN: |
-        请先用 `rola tree add` 暂存树的工作
-        树没有暂存的文件没有可还原的内容
+      请先用 `rola tree add` 暂存树的工作
 
   err_restore_exists:
     en: "Putting the file back would land on `%{path}`, which is already there"
@@ -230,9 +229,9 @@ align:
 
   err_restore_exists_help:
     en: |
-        Move or remove what is there first, then put the file back
+      Move or remove what is there first, then put the file back
     zh-CN: |
-        请先移走或删除那里的文件，然后再放回
+      请先移走或删除那里的文件，然后再放回
 
   err_not_restorable:
     en: "`%{path}` is not a move, a change, or a deletion the Layout names, so there is nothing to put back"
@@ -240,9 +239,9 @@ align:
 
   err_not_restorable_help:
     en: |
-        Run `rola status` to see what can be put back
+      Run `rola status` to see what can be put back
     zh-CN: |
-        运行 `rola status` 查看哪些可以还原
+      运行 `rola status` 查看哪些可以还原
 
   err_no_store:
     en: This run works on no store to take the recorded version from
@@ -258,9 +257,9 @@ align:
 
   err_failed_help:
     en: |
-        Check the Workspace, the Layout and the analysis cache, then try again
+      Check the Workspace, the Layout and the analysis cache, then try again
     zh-CN: |
-        请检查工作区、布局与分析缓存，然后重试
+      请检查工作区、布局与分析缓存，然后重试
 
   result_tree:
     en: "Tree `%{path}` is back to what it records"

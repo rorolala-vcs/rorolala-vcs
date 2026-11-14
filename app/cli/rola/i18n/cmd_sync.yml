@@ -25,35 +25,33 @@ sync:
       zh-CN: 不动保险库的布局，只双向交换索引并上传存储
   help:
     en: |
-        Bring the local Layout and the Vault it tracks into agreement
-
-        **Usage**: rola sync
+        # Bring the local Layout and the Vault it tracks into agreement
+        **Usage**: rola [[GREEN]]__sync__[[/]]
         **Flags**:
-            --up-only            Only what the local Layout holds goes up; cannot be used with --no-layout
-            --down-only          Only what the Vault holds comes down; cannot be used with --no-layout
-            --both               Sync in both directions, the default when no direction is given
+             __--up-only__            Only what the local Layout holds goes up; cannot be used with --no-layout
+             __--down-only__          Only what the Vault holds comes down; cannot be used with --no-layout
+             __--both__               Sync in both directions, the default when no direction is given
 
-            --dry-run            Show the plan and change nothing
-            --no-index           Leave the index alone; only the Layout and the store move
-            --no-storage         Leave the store alone; only the Layout and the index move
-            --no-layout          Do not read or write the Vault's Layout; exchange the index both ways and upload storage
-            --force              Go on uploading when the version chain has moved apart
-            --concurrency <N>    Carry the content N units at a time (default 4)
+             __--dry-run__            Show the plan and change nothing
+             __--no-index__           Leave the index alone; only the Layout and the store move
+             __--no-storage__         Leave the store alone; only the Layout and the index move
+             __--no-layout__          Do not read or write the Vault's Layout; exchange the index both ways and upload storage
+             __--force__              Go on uploading when the version chain has moved apart
+             __--concurrency__ <N>    Carry the content N units at a time (default 4)
     zh-CN: |
-        让本地布局与它所追踪的保险库保持一致
-
-        **用法**：rola sync
+        # 让本地布局与它所追踪的保险库保持一致
+        **用法**：rola [[GREEN]]__sync__[[/]]
         **标识**：
-            --up-only            只上传本地布局持有的内容；与 --no-layout 互斥
-            --down-only          只下拉保险库持有的内容；与 --no-layout 互斥
-            --both               双向同步，未指定方向时即此
+             __--up-only__            只上传本地布局持有的内容；与 --no-layout 互斥
+             __--down-only__          只下拉保险库持有的内容；与 --no-layout 互斥
+             __--both__               双向同步，未指定方向时即此
 
-            --dry-run            只显示计划，不做任何改动
-            --no-index           不动索引，只移动布局和仓库
-            --no-storage         不动仓库，只移动布局和索引
-            --no-layout          不读写保险库布局；索引双向交换，存储只上传
-            --force              版本链已分叉时仍然上传
-            --concurrency <N>    每次同时搬运 N 份内容（默认 4）
+             __--dry-run__            只显示计划，不做任何改动
+             __--no-index__           不动索引，只移动布局和仓库
+             __--no-storage__         不动仓库，只移动布局和索引
+             __--no-layout__          不读写保险库布局；索引双向交换，存储只上传
+             __--force__              版本链已分叉时仍然上传
+             __--concurrency__ <N>    每次同时搬运 N 份内容（默认 4）
 
   description:
     en: Bring the local Layout and the Vault it tracks into agreement
@@ -64,22 +62,16 @@ sync:
     zh-CN: 当前布局没有追踪任何保险库
 
   err_no_track_help:
-    en: |
-        Please name one with `rola layout set-track <LAYOUT> [VAULT]`, then try again
-    zh-CN: |
-        请用 `rola layout set-track <布局> <保险库>` 指定后再次运行该命令
+    en: Name the Vault it tracks with `rola layout set-track <VAULT>`, then try again
+    zh-CN: 请用 `rola layout set-track <保险库>` 指定它所追踪的保险库，然后重试
 
   err_blocked:
     en: A file changed here is behind the Vault, so bringing the Vault's version down would overwrite it
     zh-CN: 有文件在本地被改动且落后于保险库，下拉保险库的版本会覆盖它
 
   err_blocked_help:
-    en: |
-        Please record the change with `rola track`, or set it aside, then try again
-        Merging semantics are not implemented yet
-    zh-CN: |
-        请用 `rola track` 记录该改动，或将其放到一边，然后重试
-        合并语义尚未实现
+    en: Record the change with `rola track`, or set it aside, then try again
+    zh-CN: 请用 `rola track` 记录该改动，或将其放到一边，然后重试
 
   err_failed:
     en: "The sync could not go on: %{cause}"
@@ -106,12 +98,8 @@ sync:
     zh-CN: "`--no-layout` 不能与 `--up-only` 或 `--down-only` 同时使用"
 
   err_no_layout_direction_help:
-    en: |
-        A run that reads no Layout has no plan for a direction to narrow: it exchanges the index both ways and uploads the stored content
-        Leave out the direction, or carry the Layout by dropping `--no-layout`
-    zh-CN: |
-        不读布局的运行没有可缩小的方向计划：它双向交换索引，并上传存储内容
-        请去掉方向标识，或去掉 `--no-layout` 以同步布局
+    en: Leave out the direction, or drop `--no-layout` so the Layout is carried
+    zh-CN: 请去掉方向标识，或去掉 `--no-layout` 以同步布局
 
   write_written:
     en: written

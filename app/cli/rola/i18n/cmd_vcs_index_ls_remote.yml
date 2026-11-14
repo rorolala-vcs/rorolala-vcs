@@ -3,17 +3,15 @@ _version: 2
 vcs_index_ls_remote:
   variants_help:
     en: |
-        List the variants the index at the other end holds
-
-        **Usage**: rola vcs-index ls-remote-variants [VAULT]
+        # List the variants the index at the other end holds
+        **Usage**: rola vcs-index [[GREEN]]__ls-remote-variants__[[/]] [VAULT]
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
     zh-CN: |
-        列出对端索引持有的变体
-
-        **用法**：rola vcs-index ls-remote-variants [保险库]
+        # 列出对端索引持有的变体
+        **用法**：rola vcs-index [[GREEN]]__ls-remote-variants__[[/]] [保险库]
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
   variants_description:
     en: List the variants the index at the other end holds
@@ -21,17 +19,15 @@ vcs_index_ls_remote:
 
   versions_help:
     en: |
-        List the versions the index at the other end holds
-
-        **Usage**: rola vcs-index ls-remote-versions [VAULT]
+        # List the versions the index at the other end holds
+        **Usage**: rola vcs-index [[GREEN]]__ls-remote-versions__[[/]] [VAULT]
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
     zh-CN: |
-        列出对端索引持有的版本
-
-        **用法**：rola vcs-index ls-remote-versions [保险库]
+        # 列出对端索引持有的版本
+        **用法**：rola vcs-index [[GREEN]]__ls-remote-versions__[[/]] [保险库]
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
   versions_description:
     en: List the versions the index at the other end holds
@@ -39,17 +35,15 @@ vcs_index_ls_remote:
 
   str_help:
     en: |
-        List the hashes of the text objects in the index at the other end
-
-        **Usage**: rola vcs-index ls-remote-str [VAULT]
+        # List the hashes of the text objects in the index at the other end
+        **Usage**: rola vcs-index [[GREEN]]__ls-remote-str__[[/]] [VAULT]
         **Flags**:
-            --json    Output as JSON
+             __--json__    Output as JSON
     zh-CN: |
-        列出对端索引中文本对象的哈希
-
-        **用法**：rola vcs-index ls-remote-str [保险库]
+        # 列出对端索引中文本对象的哈希
+        **用法**：rola vcs-index [[GREEN]]__ls-remote-str__[[/]] [保险库]
         **标识**：
-            --json    以 JSON 输出
+             __--json__    以 JSON 输出
 
   str_description:
     en: List the hashes of the text objects the index at the other end holds

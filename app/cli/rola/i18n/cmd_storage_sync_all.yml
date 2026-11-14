@@ -3,19 +3,17 @@ _version: 2
 storage_sync_all:
   help:
     en: |
-        Make the stores at both ends hold the same keys
-
-        **Usage**: rola storage sync-all [VAULT]
+        # Make the stores at both ends hold the same keys
+        **Usage**: rola storage [[GREEN]]__sync-all__[[/]] [VAULT]
         **Flags**:
-            --confirm    Confirm in advance that both stores will be changed
-            --offline    This command needs to reach the Vault, and does not run when offline
+             __--confirm__    Confirm in advance that both stores will be changed
+             __--offline__    This command needs to reach the Vault, and does not run when offline
     zh-CN: |
-        让两端的仓库持有相同的密钥
-
-        **用法**：rola storage sync-all [保险库]
+        # 让两端的仓库持有相同的密钥
+        **用法**：rola storage [[GREEN]]__sync-all__[[/]] [保险库]
         **标识**：
-            --confirm    预先确认两个仓库都会被改动
-            --offline    本命令需要访问保险库，离线时不执行
+             __--confirm__    预先确认两个仓库都会被改动
+             __--offline__    本命令需要访问保险库，离线时不执行
 
   cmd_storage_sync_all_description:
     en: Make the stores at both ends hold the same keys

@@ -3,13 +3,11 @@ _version: 2
 storage_write_file:
   help:
     en: |
-        Store a file's content into the store, and print the hash it is kept under
-
-        **Usage**: rola storage write-file <FILE>
+        # Store a file's content into the store, and print the hash it is kept under
+        **Usage**: rola storage [[GREEN]]__write-file__[[/]] <FILE>
     zh-CN: |
-        将文件内容存入仓库，并打印它所用的哈希
-
-        **用法**：rola storage write-file <文件>
+        # 将文件内容存入仓库，并打印它所用的哈希
+        **用法**：rola storage [[GREEN]]__write-file__[[/]] <文件>
 
   cmd_storage_write_file_description:
     en: Store a file's content and print its hash

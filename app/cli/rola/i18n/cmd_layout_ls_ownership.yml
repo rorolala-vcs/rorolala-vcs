@@ -3,13 +3,11 @@ _version: 2
 cmd_layout_ls_ownership:
   help:
     en: |
-        List the holder of each entry from the fetched copy
-
-        **Usage**: rola layout ls-ownership [VAULT]
+        # List the holder of each entry from the fetched copy
+        **Usage**: rola layout [[GREEN]]__ls-ownership__[[/]] [VAULT]
     zh-CN: |
-        从取回的副本中列出每个条目的持有者
-
-        **用法**：rola layout ls-ownership [保险库名]
+        # 从取回的副本中列出每个条目的持有者
+        **用法**：rola layout [[GREEN]]__ls-ownership__[[/]] [保险库名]
 
   description:
     en: List the holder of each entry from the fetched copy

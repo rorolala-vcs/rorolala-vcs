@@ -3,11 +3,10 @@ _version: 2
 cmd_layout:
   help:
     en: |
-        Work with the Layout a run keeps
-
-        **Usage**: rola layout <COMMAND>
+        # Work with the Layout a run keeps
+        **Usage**: rola [[GREEN]]__layout__[[/]] <COMMAND>
         **Flags**:
-            --vault, -v     Work on the Vault's Layout, rather than the Workspace's
+             __--vault__ __-v__    Work on the Vault's Layout, rather than the Workspace's
         **Commands**:
             ls              List the Layout a run works in
             set-track       Name the Vault upstream the Layout tracks
@@ -17,11 +16,10 @@ cmd_layout:
             path            Work with the paths in a Layout
             entries         List what a Layout's entries hold
     zh-CN: |
-        操作本运行所持有的布局
-
-        **用法**：rola layout <子命令>
+        # 操作本运行所持有的布局
+        **用法**：rola [[GREEN]]__layout__[[/]] <子命令>
         **标识**：
-            --vault, -v     在保险库的布局上操作，而非工作区的布局
+             __--vault__ __-v__    在保险库的布局上操作，而非工作区的布局
         **命令**：
             ls              列出本运行所使用的布局
             set-track       指定布局追踪的上游保险库
@@ -120,22 +118,16 @@ cmd_layout:
     zh-CN: "尚未在此取回 `%{vault}` 的布局 `%{layout}`"
 
   err_not_cached_help:
-    en: |
-        Run `rola layout fetch %{vault}` to bring it down, then try again
-    zh-CN: |
-        请运行 `rola layout fetch %{vault}` 将其取回，然后重试
+    en: Run `rola fetch %{vault}` to bring it down, then try again
+    zh-CN: 请运行 `rola fetch %{vault}` 将其取回，然后重试
 
   err_read_only:
     en: "The Layout `%{layout}` is a fetched copy of a Vault's Layout, and cannot be changed"
     zh-CN: "布局 `%{layout}` 是保险库布局的取回副本，无法修改"
 
   err_read_only_help:
-    en: |
-        A name written `NAME@VAULT` reads the copy `rola layout fetch` brought back
-        Please work on the Workspace's own Layout instead
-    zh-CN: |
-        写成 `NAME@VAULT` 的名字读取的是 `rola layout fetch` 取回的副本
-        请改为操作工作区自身的布局
+    en: Work on the Workspace's own Layout, since a `NAME@VAULT` name reads the fetched copy alone
+    zh-CN: 请改为操作工作区自身的布局，`NAME@VAULT` 读到的是取回的只读副本
 
   err_path_taken:
     en: That path already names an entry of the Vault's Layout
@@ -152,10 +144,8 @@ cmd_layout:
     zh-CN: "取回的布局中没有名为 `%{uuid}` 的条目"
 
   err_ownership_unknown_help:
-    en: |
-        The copy may be out of date: run `rola layout fetch` to get the new state
-    zh-CN: |
-        副本可能已过期：请运行 `rola layout fetch` 获取新状态
+    en: "The copy may be out of date: run `rola fetch` to get the new state"
+    zh-CN: 副本可能已过期：请运行 `rola fetch` 获取新状态
 
   err_ownership_missing:
     en: "The Vault holds no entry `%{uuid}`"
@@ -172,51 +162,37 @@ cmd_layout:
     zh-CN: "条目 `%{uuid}` 由 `%{owner}` 持有"
 
   err_ownership_held_help:
-    en: |
-        The holder has to give it up first before it can be taken
-        `rola layout read-ownership` can read the holder from the fetched copy
-    zh-CN: |
-        需要持有者先放弃，才能取得它
-        `rola layout read-ownership` 可以从取回的副本中读取持有者
+    en: Ask the holder to give it up with `rola giveup <PATH>`
+    zh-CN: 请让持有者用 `rola giveup <路径>` 让出它
 
   err_layout_held:
     en: "The entry `%{path}` is held by `%{owner}`, so this account may not remove it"
     zh-CN: "`%{path}` 的条目由 `%{owner}` 持有，本账户不能删除它"
 
   err_layout_held_help:
-    en: |
-        Only the account that holds an entry, or one that administrates the Vault, may remove it
-        Ask the holder to let go of it, or have an administrator of the Vault remove it
-    zh-CN: |
-        只有持有条目的账户、或保险库管理员才能删除它
-        请持有者先放弃，或由保险库管理员删除
+    en: Ask the holder to let go with `rola giveup <PATH>`, or have an administrator of the Vault remove it
+    zh-CN: 请让持有者用 `rola giveup <路径>` 放手，或由保险库管理员删除
 
   err_layout_unheld:
     en: "The entry `%{path}` is held by nobody, so only an administrator of the Vault may remove it"
     zh-CN: "`%{path}` 的条目无人持有，只有保险库管理员才能删除它"
 
   err_layout_unheld_help:
-    en: |
-        An entry nobody holds is still the Vault's, and an administrator is the one that acts for it
-        Have an administrator of the Vault remove it
-    zh-CN: |
-        无人持有的条目仍属于保险库，由管理员代表它行事
-        请保险库管理员删除它
+    en: Have an administrator of the Vault remove it
+    zh-CN: 请由保险库管理员删除它
 
 cmd_layout_ls:
   help:
     en: |
-        List the Layout a run works in
-
-        **Usage**: rola layout ls
+        # List the Layout a run works in
+        **Usage**: rola layout [[GREEN]]__ls__[[/]]
         **Flags**:
-            --vault, -v    List the Vault's Layout, rather than the Workspace's
+             __--vault__ __-v__    List the Vault's Layout, rather than the Workspace's
     zh-CN: |
-        列出本运行所使用的布局
-
-        **用法**：rola layout ls
+        # 列出本运行所使用的布局
+        **用法**：rola layout [[GREEN]]__ls__[[/]]
         **标识**：
-            --vault, -v    列出保险库的布局，而非工作区的布局
+             __--vault__ __-v__    列出保险库的布局，而非工作区的布局
 
   description:
     en: List the Layout a run works in
@@ -225,15 +201,13 @@ cmd_layout_ls:
 cmd_layout_set_track:
   help:
     en: |
-        Name the Vault upstream the Layout tracks
-
-        **Usage**: rola layout set-track <VAULT>
+        # Name the Vault upstream the Layout tracks
+        **Usage**: rola layout [[GREEN]]__set-track__[[/]] <VAULT>
 
         `VAULT` must be the name of a Vault the Workspace has bound
     zh-CN: |
-        指定布局所追踪的上游保险库
-
-        **用法**：rola layout set-track <保险库>
+        # 指定布局所追踪的上游保险库
+        **用法**：rola layout [[GREEN]]__set-track__[[/]] <保险库>
 
         `保险库` 须是工作区已绑定的保险库名字
 
@@ -248,13 +222,11 @@ cmd_layout_set_track:
 cmd_layout_un_track:
   help:
     en: |
-        Make the Layout track no Vault
-
-        **Usage**: rola layout un-track
+        # Make the Layout track no Vault
+        **Usage**: rola layout [[GREEN]]__un-track__[[/]]
     zh-CN: |
-        让布局不再追踪任何保险库
-
-        **用法**：rola layout un-track
+        # 让布局不再追踪任何保险库
+        **用法**：rola layout [[GREEN]]__un-track__[[/]]
 
   description:
     en: Make the Layout track no Vault
@@ -271,19 +243,17 @@ cmd_layout_tree_diff:
       zh-CN: 两个文本文件要多相似才算作同一次移动，取值 0 到 1
   help:
     en: |
-        Show what the working tree holds beside a Layout
-
-        **Usage**: rola layout tree-diff [LAYOUT]
+        # Show what the working tree holds beside a Layout
+        **Usage**: rola layout [[GREEN]]__tree-diff__[[/]] [LAYOUT]
         **Flags**:
-            --alike <0.0-1.0>    The similarity threshold for two text files to count as moved, `0.6` by default
-            --include-ignored    Show what the ignore rules govern as well
+             __--alike__ <0.0-1.0>    The similarity threshold for two text files to count as moved, `0.6` by default
+             __--include-ignored__    Show what the ignore rules govern as well
     zh-CN: |
-        展示工作树相对于布局的内容
-
-        **用法**：rola layout tree-diff [布局]
+        # 展示工作树相对于布局的内容
+        **用法**：rola layout [[GREEN]]__tree-diff__[[/]] [布局]
         **标识**：
-            --alike <0.0-1.0>    两个文本文件算作移动的相似度门槛，默认为 0.6
-            --include-ignored    连被忽略规则管辖的条目一并显示
+             __--alike__ <0.0-1.0>    两个文本文件算作移动的相似度门槛，默认为 0.6
+             __--include-ignored__    连被忽略规则管辖的条目一并显示
 
   description:
     en: Show what the working tree holds beside a Layout
@@ -302,21 +272,19 @@ cmd_layout_entry:
       zh-CN: 要操作的布局，未指定时用当前使用的布局
   create_help:
     en: |
-        Make an entry hold data
-
-        **Usage**: rola layout entry create <UUID> <VERSION>
+        # Make an entry hold data
+        **Usage**: rola layout entry [[GREEN]]__create__[[/]] <UUID> <VERSION>
         **Flags**:
-            --vault, -v             Edit the Vault's Layout, rather than the Workspace's
-            --owner <ACCOUNT>       Name the account that holds the entry
-            --description <TEXT>    Write a description for the entry
+             __--vault__ __-v__              Edit the Vault's Layout, rather than the Workspace's
+             __--owner__ <ACCOUNT>       Name the account that holds the entry
+             __--description__ <TEXT>    Write a description for the entry
     zh-CN: |
-        让条目持有数据
-
-        **用法**：rola layout entry create <UUID> <版本>
+        # 让条目持有数据
+        **用法**：rola layout entry [[GREEN]]__create__[[/]] <UUID> <版本>
         **标识**：
-            --vault, -v             编辑保险库的布局，而非工作区的布局
-            --owner <账户>          指定持有该条目的账户
-            --description <文本>    给该条目写一段说明
+             __--vault__ __-v__              编辑保险库的布局，而非工作区的布局
+             __--owner__ <账户>          指定持有该条目的账户
+             __--description__ <文本>    给该条目写一段说明
 
   create_description:
     en: Make an entry hold data
@@ -324,21 +292,19 @@ cmd_layout_entry:
 
   update_help:
     en: |
-        Change what an entry holds
-
-        **Usage**: rola layout entry update <UUID> <VERSION>
+        # Change what an entry holds
+        **Usage**: rola layout entry [[GREEN]]__update__[[/]] <UUID> <VERSION>
         **Flags**:
-            --vault, -v             Edit the Vault's Layout, rather than the Workspace's
-            --owner <ACCOUNT>       Name the account that holds the entry
-            --description <TEXT>    Write a description for the entry
+             __--vault__ __-v__              Edit the Vault's Layout, rather than the Workspace's
+             __--owner__ <ACCOUNT>       Name the account that holds the entry
+             __--description__ <TEXT>    Write a description for the entry
     zh-CN: |
-        修改条目所持有的数据
-
-        **用法**：rola layout entry update <UUID> <版本>
+        # 修改条目所持有的数据
+        **用法**：rola layout entry [[GREEN]]__update__[[/]] <UUID> <版本>
         **标识**：
-            --vault, -v             编辑保险库的布局，而非工作区的布局
-            --owner <账户>          指定持有该条目的账户
-            --description <文本>    给该条目写一段说明
+             __--vault__ __-v__              编辑保险库的布局，而非工作区的布局
+             __--owner__ <账户>          指定持有该条目的账户
+             __--description__ <文本>    给该条目写一段说明
 
   update_description:
     en: Change what an entry holds
@@ -346,17 +312,15 @@ cmd_layout_entry:
 
   remove_help:
     en: |
-        Drop an entry, and the path that named it
-
-        **Usage**: rola layout entry remove <UUID>
+        # Drop an entry, and the path that named it
+        **Usage**: rola layout entry [[GREEN]]__remove__[[/]] <UUID>
         **Flags**:
-            --vault, -v    Edit the Vault's Layout, rather than the Workspace's
+             __--vault__ __-v__    Edit the Vault's Layout, rather than the Workspace's
     zh-CN: |
-        删除条目，以及命名它的路径
-
-        **用法**：rola layout entry remove <UUID>
+        # 删除条目，以及命名它的路径
+        **用法**：rola layout entry [[GREEN]]__remove__[[/]] <UUID>
         **标识**：
-            --vault, -v    编辑保险库的布局，而非工作区的布局
+             __--vault__ __-v__    编辑保险库的布局，而非工作区的布局
 
   remove_description:
     en: Drop an entry, and the path that named it
@@ -381,25 +345,21 @@ cmd_layout_path:
       zh-CN: 要操作的布局，未指定时用当前使用的布局
   create_help:
     en: |
-        Make a path name an entry
-
-        **Usage**: rola layout path create <PATH> <UUID>
+        # Make a path name an entry
+        **Usage**: rola layout path [[GREEN]]__create__[[/]] <PATH> <UUID>
         **Flags**:
-            --vault, -v    Edit the Vault's Layout, rather than the Workspace's
-
-        **NOTE**:
-            An entry is at only one path, and naming it elsewhere is moving it
-            The entry may not yet hold data
+             __--vault__ __-v__    Edit the Vault's Layout, rather than the Workspace's
+        > [!Note]
+        > An entry is at only one path, and naming it elsewhere is moving it
+        > The entry may not yet hold data
     zh-CN: |
-        让路径指向条目
-
-        **用法**：rola layout path create <路径> <UUID>
+        # 让路径指向条目
+        **用法**：rola layout path [[GREEN]]__create__[[/]] <路径> <UUID>
         **标识**：
-            --vault, -v    编辑保险库的布局，而非工作区的布局
-
-        **注意**：
-            一个条目只位于一个路径，在别处命名它等于移动它
-            该条目可以尚未持有数据
+             __--vault__ __-v__    编辑保险库的布局，而非工作区的布局
+        > [!Note]
+        > 一个条目只位于一个路径，在别处命名它等于移动它
+        > 该条目可以尚未持有数据
 
   create_description:
     en: Make a path name an entry
@@ -407,24 +367,22 @@ cmd_layout_path:
 
   remove_help:
     en: |
-        Make a path name nothing, or take an entry out of the Vault's Layout
-
-        **Usage**: rola layout path remove <PATH>
+        # Make a path name nothing, or take an entry out of the Vault's Layout
+        **Usage**: rola layout path [[GREEN]]__remove__[[/]] <PATH>
         **Flags**:
-            --layout <NAME[@VAULT]>    Remove the path in that Layout
-                                       Write `truth@VAULT` to point at the Vault's Layout
-            --vault, -v                Switch to editing the Vault's Layout
-            --offline                  Do not reach the Vault, using only what was fetched locally
+             __--layout__ <NAME[@VAULT]>    Remove the path in that Layout
+                                    Write `truth@VAULT` to point at the Vault's Layout
+             __--vault__ __-v__                 Switch to editing the Vault's Layout
+             __--offline__                  Do not reach the Vault, using only what was fetched locally
 
     zh-CN: |
-        让路径不再指向任何条目，或从保险库的布局中删除条目
-
-        **用法**：rola layout path remove <路径>
+        # 让路径不再指向任何条目，或从保险库的布局中删除条目
+        **用法**：rola layout path [[GREEN]]__remove__[[/]] <路径>
         **标识**：
-            --layout <名称[@保险库]>    在指定布局中删除路径
-                                        以 `truth@VAULT` 指向保险库布局
-            --vault, -v                 切换为编辑保险库的布局
-            --offline                   不访问保险库，仅使用本地已取回的内容
+             __--layout__ <名称[@保险库]>    在指定布局中删除路径
+                                     以 `truth@VAULT` 指向保险库布局
+             __--vault__ __-v__                  切换为编辑保险库的布局
+             __--offline__                   不访问保险库，仅使用本地已取回的内容
 
   remove_description:
     en: Make a path name nothing, or take an entry out of the Vault's Layout
@@ -432,23 +390,21 @@ cmd_layout_path:
 
   move_help:
     en: |
-        Move the entry at one path to another
-
-        **Usage**: rola layout path move <FROM> <TO>
+        # Move the entry at one path to another
+        **Usage**: rola layout path [[GREEN]]__move__[[/]] <FROM> <TO>
         **Flags**:
-            --layout <NAME[@VAULT]>    Move the path in that Layout
-                                       Write `truth@VAULT` to point at the Vault's Layout
-            --vault, -v                Switch to editing the Vault's Layout
-            --offline                  Do not reach the Vault when moving, using only what was fetched locally
+             __--layout__ <NAME[@VAULT]>    Move the path in that Layout
+                                    Write `truth@VAULT` to point at the Vault's Layout
+             __--vault__ __-v__                 Switch to editing the Vault's Layout
+             __--offline__                  Do not reach the Vault when moving, using only what was fetched locally
     zh-CN: |
-        把条目从旧路径移到新路径
-
-        **用法**：rola layout path move <源路径> <目标路径>
+        # 把条目从旧路径移到新路径
+        **用法**：rola layout path [[GREEN]]__move__[[/]] <源路径> <目标路径>
         **标识**：
-            --layout <名称[@保险库]>    在指定布局中移动路径
-                                        以 `truth@VAULT` 指向保险库布局
-            --vault, -v                 切换为编辑保险库的布局
-            --offline                   移动时不连接保险库，仅使用本地已取回的内容
+             __--layout__ <名称[@保险库]>    在指定布局中移动路径
+                                     以 `truth@VAULT` 指向保险库布局
+             __--vault__ __-v__                  切换为编辑保险库的布局
+             __--offline__                   移动时不连接保险库，仅使用本地已取回的内容
 
 
   move_description:
@@ -457,32 +413,28 @@ cmd_layout_path:
 
   change_uuid_help:
     en: |
-        Make a path name another entry
-
-        **Usage**: rola layout path change-uuid <PATH> <UUID>
+        # Make a path name another entry
+        **Usage**: rola layout path [[GREEN]]__change-uuid__[[/]] <PATH> <UUID>
         **Flags**:
-            --layout <NAME[@VAULT]>    Change the path in that Layout
-                                       Write `truth@VAULT` to point at the Vault's Layout
-            --vault, -v                Switch to editing the Vault's Layout
-            --offline                  Do not reach the Vault, using only what was fetched locally
+             __--layout__ <NAME[@VAULT]>    Change the path in that Layout
+                                    Write `truth@VAULT` to point at the Vault's Layout
+             __--vault__ __-v__                 Switch to editing the Vault's Layout
+             __--offline__                  Do not reach the Vault, using only what was fetched locally
 
-
-        **NOTE**:
-            The entry the path named is dropped, and the entry given takes its place
-            `UUID` must be one the Layout holds at no path
+        > [!Note]
+        > The entry the path named is dropped, and the entry given takes its place
+        > `UUID` must be one the Layout holds at no path
     zh-CN: |
-        让路径改指另一个条目
-
-        **用法**：rola layout path change-uuid <路径> <UUID>
+        # 让路径改指另一个条目
+        **用法**：rola layout path [[GREEN]]__change-uuid__[[/]] <路径> <UUID>
         **标识**：
-            --layout <名称[@保险库]>    在指定布局中修改路径
-                                        以 `truth@VAULT` 指向保险库布局
-            --vault, -v                 切换为编辑保险库的布局
-            --offline                   不访问保险库，仅使用本地已取回的内容
-
-        **注意**：
-            路径原本指向的条目会被删除，改由给出的条目占据该路径
-            `UUID` 须是布局持有、但没有任何路径指向的条目
+             __--layout__ <名称[@保险库]>    在指定布局中修改路径
+                                     以 `truth@VAULT` 指向保险库布局
+             __--vault__ __-v__                  切换为编辑保险库的布局
+             __--offline__                   不访问保险库，仅使用本地已取回的内容
+        > [!Note]
+        > 路径原本指向的条目会被删除，改由给出的条目占据该路径
+        > `UUID` 须是布局持有、但没有任何路径指向的条目
 
   change_uuid_description:
     en: Make a path name another entry
@@ -490,29 +442,25 @@ cmd_layout_path:
 
   new_uuid_help:
     en: |
-        Give a path's entry a new Uuid
-
-        **Usage**: rola layout path new-uuid <PATH>
+        # Give a path's entry a new Uuid
+        **Usage**: rola layout path [[GREEN]]__new-uuid__[[/]] <PATH>
         **Flags**:
-            --layout <NAME[@VAULT]>    Change the path in that Layout
-                                       Write `truth@VAULT` to point at the Vault's Layout
-            --vault, -v                Switch to editing the Vault's Layout
-            --offline                  Do not reach the Vault, using only what was fetched locally
-
-        **NOTE**:
-            The entry the path named is dropped and made again under a new Uuid, holding what it held
+             __--layout__ <NAME[@VAULT]>    Change the path in that Layout
+                                    Write `truth@VAULT` to point at the Vault's Layout
+             __--vault__ __-v__                 Switch to editing the Vault's Layout
+             __--offline__                  Do not reach the Vault, using only what was fetched locally
+        > [!Note]
+        > The entry the path named is dropped and made again under a new Uuid, holding what it held
     zh-CN: |
-        给路径上的条目换一个新的 Uuid
-
-        **用法**：rola layout path new-uuid <路径>
+        # 给路径上的条目换一个新的 Uuid
+        **用法**：rola layout path [[GREEN]]__new-uuid__[[/]] <路径>
         **标识**：
-            --layout <名称[@保险库]>    在指定布局中修改路径
-                                        以 `truth@VAULT` 指向保险库布局
-            --vault, -v                 切换为编辑保险库的布局
-            --offline                   不访问保险库，仅使用本地已取回的内容
-
-        **注意**：
-            路径原本指向的条目会被删除，并以新的 Uuid 重新创建，所持有的内容不变
+             __--layout__ <名称[@保险库]>    在指定布局中修改路径
+                                     以 `truth@VAULT` 指向保险库布局
+             __--vault__ __-v__                  切换为编辑保险库的布局
+             __--offline__                   不访问保险库，仅使用本地已取回的内容
+        > [!Note]
+        > 路径原本指向的条目会被删除，并以新的 Uuid 重新创建，所持有的内容不变
 
 
   new_uuid_description:
@@ -524,24 +472,16 @@ cmd_layout_path:
     zh-CN: "该路径已经指向条目 `%{uuid}`"
 
   err_same_uuid_help:
-    en: |
-        A change of Uuid is only a change when it is another Uuid
-        Please give the Uuid of an entry that has no path
-    zh-CN: |
-        只有换成另一个 Uuid 才算修改
-        请给出一个没有路径的条目的 Uuid
+    en: Give the Uuid of an entry no path names
+    zh-CN: 请给出一个没有被任何路径指向的条目的 Uuid
 
   err_uuid_named:
     en: "The entry `%{uuid}` is already named by `%{path}`"
     zh-CN: "条目 `%{uuid}` 已由 `%{path}` 命名"
 
   err_uuid_named_help:
-    en: |
-        An entry is at one path, so the path that names it has to let go first
-        Run `rola layout path remove` on that path, then try again
-    zh-CN: |
-        一个条目只位于一个路径，须先让指向它的路径放手
-        请先对该路径运行 `rola layout path remove`，然后重试
+    en: Let the other path go first with `rola layout path remove`, then try again
+    zh-CN: 请先用 `rola layout path remove` 让另一条路径放手，然后重试
 
   err_uuid_missing:
     en: "The Layout holds no entry `%{uuid}`"
@@ -583,23 +523,21 @@ cmd_layout_entries:
       zh-CN: 只列出该条目，未指定时列出全部条目
   help:
     en: |
-        List what a Layout's entries hold
-
-        **Usage**: rola layout entries
+        # List what a Layout's entries hold
+        **Usage**: rola layout [[GREEN]]__entries__[[/]]
         **Flags**:
-            --vault, -v                List the Vault's Layout, rather than the Workspace's
-            --layout <NAME[@VAULT]>    List that Layout
-                                       Write `truth@VAULT` to point at the Vault's Layout
-            --uuid <UUID>              List only the entry with this UUID
+             __--vault__ __-v__                 List the Vault's Layout, rather than the Workspace's
+             __--layout__ <NAME[@VAULT]>    List that Layout
+                                    Write `truth@VAULT` to point at the Vault's Layout
+             __--uuid__ <UUID>              List only the entry with this UUID
     zh-CN: |
-        列出布局中各条目所持有的内容
-
-        **用法**：rola layout entries
+        # 列出布局中各条目所持有的内容
+        **用法**：rola layout [[GREEN]]__entries__[[/]]
         **标识**：
-            --vault, -v                 列出保险库的布局，而非工作区的布局
-            --layout <名称[@保险库]>    列出指定布局
-                                        以 `truth@VAULT` 指向保险库布局
-            --uuid <UUID>               只列出该 UUID 的条目
+             __--vault__ __-v__                  列出保险库的布局，而非工作区的布局
+             __--layout__ <名称[@保险库]>    列出指定布局
+                                     以 `truth@VAULT` 指向保险库布局
+             __--uuid__ <UUID>               只列出该 UUID 的条目
 
 
   description:

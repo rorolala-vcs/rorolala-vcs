@@ -3,13 +3,11 @@ _version: 2
 vault_set_default:
   help:
     en: |
-        Choose the Vault the Workspace reaches for by default
-
-        **Usage**: rola vault set-default <NAME>
+        # Choose the Vault the Workspace reaches for by default
+        **Usage**: rola vault [[GREEN]]__set-default__[[/]] <NAME>
     zh-CN: |
-        选择工作区默认使用的保险库
-
-        **用法**：rola vault set-default <名字>
+        # 选择工作区默认使用的保险库
+        **用法**：rola vault [[GREEN]]__set-default__[[/]] <名字>
 
   cmd_vault_set_default_description:
     en: Choose the Vault the Workspace reaches for

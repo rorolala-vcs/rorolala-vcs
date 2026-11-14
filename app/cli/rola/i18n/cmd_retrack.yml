@@ -13,27 +13,25 @@ retrack:
       zh-CN: 给路径的条目换一个新的 Uuid，保持一致所记录的内容
   help:
     en: |
-        Record a version, or another entry, for a path, file or tree
-
-        **Usage**: rola retrack <PATH> [TARGET]
+        # Record a version, or another entry, for a path, file or tree
+        **Usage**: rola [[GREEN]]__retrack__[[/]] <PATH> [TARGET]
         **Flags**:
-            --only-index         Move the record and leave the file on disk as it is
-            --deny-jump          Refuse a version or an entry that is not on the way to what the path records
-            --fork               Give the path's entry a fresh Uuid, holding what it records now
-            --force              Discard unrecorded changes or end a merge, and forcibly switch the content
-            --offline            Do not reach for a Vault: use only what is already here
-            --concurrency <N>    Carry the content N units at a time (default 4)
+             __--only-index__         Move the record and leave the file on disk as it is
+             __--deny-jump__          Refuse a version or an entry that is not on the way to what the path records
+             __--fork__               Give the path's entry a fresh Uuid, holding what it records now
+             __--force__              Discard unrecorded changes or end a merge, and forcibly switch the content
+             __--offline__            Do not reach for a Vault: use only what is already here
+             __--concurrency__ <N>    Carry the content N units at a time (default 4)
     zh-CN: |
-        为文件的路径记录一个版本，或另一个条目
-
-        **用法**：rola retrack <路径> [目标]
+        # 为文件的路径记录一个版本，或另一个条目
+        **用法**：rola [[GREEN]]__retrack__[[/]] <路径> [目标]
         **标识**：
-            --only-index         只移动记录，磁盘上的文件保持原样
-            --deny-jump          拒绝不在通往当前记录路径上的版本或条目
-            --fork               给路径的条目换一个新的 Uuid，保持一致所记录的内容
-            --force              丢弃未记录的改动或结束合并，强制切换内容
-            --offline            不连接保险库，只使用本地已有的内容与版本
-            --concurrency <N>    每次同时搬运 N 份内容（默认 4）
+             __--only-index__         只移动记录，磁盘上的文件保持原样
+             __--deny-jump__          拒绝不在通往当前记录路径上的版本或条目
+             __--fork__               给路径的条目换一个新的 Uuid，保持一致所记录的内容
+             __--force__              丢弃未记录的改动或结束合并，强制切换内容
+             __--offline__            不连接保险库，只使用本地已有的内容与版本
+             __--concurrency__ <N>    每次同时搬运 N 份内容（默认 4）
 
   description:
     en: Record a version, or another entry, for a path, file or tree
@@ -102,12 +100,8 @@ retrack:
     zh-CN: "`--fork` 给条目换新的 Uuid，而目标指定它要记录的条目：两者只能给出其一"
 
   err_fork_target_help:
-    en: |
-        Use `--fork` to give the entry a fresh Uuid with what it records now,
-        or name the version or entry the path is to record
-    zh-CN: |
-        用 `--fork` 让条目在当前记录的基础上换一个新的 Uuid，
-        或给出该路径要记录的版本或条目
+    en: Add `--fork` to give the entry a fresh Uuid, or name the version or entry the path is to record
+    zh-CN: 请加 `--fork` 给条目换一个新的 Uuid，或给出该路径要记录的版本或条目
 
   err_modified:
     en: "`%{path}` has changes never recorded"
@@ -124,12 +118,8 @@ retrack:
     zh-CN: "`%{path}` 有变体 `%{variant}` 等待合并进来"
 
   err_merging_help:
-    en: |
-        Please record this merge with `rola track`, or add `--force` to end the merge, remove the variant file and switch the content
-        `--only-index` cannot end a merge
-    zh-CN: |
-        请用 `rola track` 记录这次合并，或加 `--force` 结束合并、删除变体文件并切换内容
-        `--only-index` 无法结束合并
+    en: Record the merge with `rola track`, or add `--force` to end it, which `--only-index` cannot do
+    zh-CN: 请用 `rola track` 记录这次合并，或加 `--force` 结束它，`--only-index` 无法结束合并
 
   err_not_local:
     en: "`%{path}` is not a local path; `rola retrack` only takes a file in this Workspace"
@@ -160,12 +150,8 @@ retrack:
     zh-CN: "布局没有在 `%{path}` 记录任何条目"
 
   err_not_recorded_help:
-    en: |
-        Only a path the Layout records has a record to set
-        `rola entries` can list them
-    zh-CN: |
-        只有布局记录过的路径才有记录可设置
-        `rola entries` 可列出它们
+    en: Record the file first with `rola track`, then set its record
+    zh-CN: 请先用 `rola track` 记录该文件，再设置它的记录
 
   err_nothing:
     en: "`%{path}` was never recorded, and there is no version to go back to"
@@ -212,12 +198,8 @@ retrack:
     zh-CN: "`%{target}` 不是本索引中的版本"
 
   err_not_a_version_help:
-    en: |
-        Please give the hash of a **Version**
-        `rola status <PATH>` prints the versions a file has been at
-    zh-CN: |
-        请给出 **版本** 的哈希
-        `rola status <路径>` 会打印该文件经历过的版本
+    en: Give the hash of a **Version**, which `rola status <PATH>` prints
+    zh-CN: 请给出 **版本** 的哈希，`rola status <路径>` 会打印它
 
   err_not_ancestor:
     en: "`%{target}` is not on the way back from the version `%{path}` is at, and this run was asked not to jump"
@@ -254,60 +236,40 @@ retrack:
     zh-CN: "本地与上游的布局都没有条目 `%{uuid}`"
 
   err_entry_unknown_uuid_help:
-    en: |
-        Please fetch the Vault's Layout with `rola layout fetch` so its entries are here to read,
-        or give the file a new Uuid with `--fork`
-    zh-CN: |
-        请用 `rola layout fetch` 取回保险库的布局，使其中条目可供读取，
-        或用 `--fork` 给文件换一个新的 Uuid
+    en: Fetch the Vault's Layout with `rola fetch`, or give the file a new Uuid with `--fork`
+    zh-CN: 请用 `rola fetch` 取回保险库的布局，或用 `--fork` 给文件换一个新的 Uuid
 
   err_entry_same_uuid:
     en: "The path already records the entry `%{uuid}`"
     zh-CN: "该路径已经记录了条目 `%{uuid}`"
 
   err_entry_same_uuid_help:
-    en: |
-        Recording the entry the path records already is no change
-        Please name the entry the file is to be recorded as
-    zh-CN: |
-        记录该路径本来就记录的条目并非改变
-        请给出文件改而记录的条目
+    en: Name the entry the file is to be recorded as
+    zh-CN: 请给出该文件要改而记录的条目
 
   err_entry_named:
     en: "The entry `%{uuid}` is recorded under `%{path}` already"
     zh-CN: "条目 `%{uuid}` 已记录在 `%{path}` 之下"
 
   err_entry_named_help:
-    en: |
-        An entry is at one path, so the path that records it has to let go first
-        Run `rola layout path remove` on that path, then try again
-    zh-CN: |
-        一个条目只位于一个路径，须先让记录它的路径放手
-        请先对该路径运行 `rola layout path remove`，然后重试
+    en: Let the other path go first with `rola layout path remove`, then try again
+    zh-CN: 请先用 `rola layout path remove` 让另一条路径放手，然后重试
 
   err_entry_no_version:
     en: "The entry `%{uuid}` records no version, so there is nothing to switch to"
     zh-CN: "条目 `%{uuid}` 没有记录任何版本，没有可切换的对象"
 
   err_entry_no_version_help:
-    en: |
-        An entry no version was recorded for is one whose content was never submitted
-        Please record the file the entry belongs to with `rola track`, or give the file a new Uuid with `--fork`
-    zh-CN: |
-        未记录版本的条目就是内容从未提交过的条目
-        请用 `rola track` 记录该条目所属的文件，或用 `--fork` 给文件换一个新的 Uuid
+    en: Record the file with `rola track`, or give it a new Uuid with `--fork`
+    zh-CN: 请用 `rola track` 记录该文件，或用 `--fork` 给它换一个新的 Uuid
 
   err_switch_not_on_chain:
     en: "The version `%{path}` records is not on the way to the one its new entry records, and this run was asked not to jump"
     zh-CN: "`%{path}` 记录的版本不在通往其新条目版本的路径上，而本运行被要求不要跳转"
 
   err_switch_not_on_chain_help:
-    en: |
-        The two versions are on different chains, so the file holds work the new entry does not
-        Remove `--deny-jump` to switch the content anyway, add `--force` to discard unrecorded changes as well, or use `--only-index` to record the entry and leave the file as it is
-    zh-CN: |
-        两个版本位于不同的链上，文件所持有的内容并不属于新条目
-        去掉 `--deny-jump` 即可切换内容，再加 `--force` 一并丢弃未记录的改动，或用 `--only-index` 只记录条目、保持文件原样
+    en: Drop `--deny-jump` to switch anyway, add `--force` to discard unrecorded changes, or use `--only-index` to leave the file as it is
+    zh-CN: 请去掉 `--deny-jump` 直接切换，或加 `--force` 一并丢弃未记录的改动，或用 `--only-index` 只改记录
 
   err_no_store:
     en: This run has no store to take the content from

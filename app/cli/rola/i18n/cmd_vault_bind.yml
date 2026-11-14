@@ -7,17 +7,15 @@ vault_bind:
       zh-CN: 同时设为工作区默认使用的保险库
   help:
     en: |
-        Bind a name to a Vault address
-
-        **Usage**: rola vault bind <NAME> <ADDR>
+        # Bind a name to a Vault address
+        **Usage**: rola vault [[GREEN]]__bind__[[/]] <NAME> <ADDR>
         **Flags**:
-            --set-default    Also set the name as the Vault the Workspace reaches for by default
+             __--set-default__    Also set the name as the Vault the Workspace reaches for by default
     zh-CN: |
-        将名字绑定到保险库地址
-
-        **用法**：rola vault bind <名字> <地址>
+        # 将名字绑定到保险库地址
+        **用法**：rola vault [[GREEN]]__bind__[[/]] <名字> <地址>
         **标识**：
-            --set-default    同时把该名字设为工作区默认使用的保险库
+             __--set-default__    同时把该名字设为工作区默认使用的保险库
 
   cmd_vault_bind_description:
     en: Bind a name to a Vault address

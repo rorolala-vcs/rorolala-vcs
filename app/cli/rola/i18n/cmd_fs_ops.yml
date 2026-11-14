@@ -8,17 +8,15 @@ _version: 2
 fs_ops:
   help:
     en: |
-        Move, copy or remove a path
-
-        **Usage**: rola fs-ops <SUBCOMMAND>
+        # Move, copy or remove a path
+        **Usage**: rola [[GREEN]]__fs-ops__[[/]] <SUBCOMMAND>
         **Commands**:
             mv <FROM> <TO>    Move or rename
             cp <FROM> <TO>    Copy
             rm <PATH>         Remove
     zh-CN: |
-        移动、复制或删除路径
-
-        **用法**：rola fs-ops <子命令>
+        # 移动、复制或删除路径
+        **用法**：rola [[GREEN]]__fs-ops__[[/]] <子命令>
         **命令**：
             mv <源路径> <目标路径>    移动或重命名
             cp <源路径> <目标路径>    复制
@@ -30,13 +28,11 @@ fs_ops:
 
   mv_help:
     en: |
-        Put a path at another position
-
-        **Usage**: rola fs-ops mv <FROM> <TO>
+        # Put a path at another position
+        **Usage**: rola fs-ops [[GREEN]]__mv__[[/]] <FROM> <TO>
     zh-CN: |
-        把路径放到另一个位置
-
-        **用法**：rola fs-ops mv <源路径> <目标路径>
+        # 把路径放到另一个位置
+        **用法**：rola fs-ops [[GREEN]]__mv__[[/]] <源路径> <目标路径>
 
   mv_description:
     en: Put a path at another position
@@ -44,13 +40,11 @@ fs_ops:
 
   cp_help:
     en: |
-        Put a copy of a path at another position
-
-        **Usage**: rola fs-ops cp <FROM> <TO>
+        # Put a copy of a path at another position
+        **Usage**: rola fs-ops [[GREEN]]__cp__[[/]] <FROM> <TO>
     zh-CN: |
-        把路径的副本放到另一个位置
-
-        **用法**：rola fs-ops cp <源路径> <目标路径>
+        # 把路径的副本放到另一个位置
+        **用法**：rola fs-ops [[GREEN]]__cp__[[/]] <源路径> <目标路径>
 
   cp_description:
     en: Put a copy of a path at another position
@@ -58,13 +52,11 @@ fs_ops:
 
   rm_help:
     en: |
-        Take a path away
-
-        **Usage**: rola fs-ops rm <PATH>
+        # Take a path away
+        **Usage**: rola fs-ops [[GREEN]]__rm__[[/]] <PATH>
     zh-CN: |
-        把路径移除
-
-        **用法**：rola fs-ops rm <路径>
+        # 把路径移除
+        **用法**：rola fs-ops [[GREEN]]__rm__[[/]] <路径>
 
   rm_description:
     en: Take a path away
@@ -79,14 +71,8 @@ fs_ops:
     zh-CN: "`%{path}` 是变体文件，而工作区之外的位置无法承载合并"
 
   err_blocked_help:
-    en: |
-        Please keep the change within what the Layout allows
-        The file operations keep the Layout consistent
-        A change the Layout refuses is stopped rather than half made
-    zh-CN: |
-        请让改动落在布局允许的范围内
-        文件操作会保持布局一致
-        布局拒绝的改动会被拦下，而不是只做一半
+    en: Keep the change within what the Layout allows, and it is applied whole rather than half made
+    zh-CN: 请让改动落在布局允许的范围内，改动会被整体执行，而不会只做一半
 
   result_two:
     en: "%{verb}: %{from} -> %{to}"
@@ -105,12 +91,8 @@ fs_ops:
     zh-CN: "`%{verb}` 需要它所作用的路径：`%{verb} <路径>`"
 
   err_argument_help:
-    en: |
-        Please name the path to move, copy or remove, and where to put it when it is being moved or
-        copied
-    zh-CN: |
-        请给出要移动、复制或删除的路径
-        若是移动或复制，再给出要放到哪里
+    en: Name the path, and for `mv` and `cp` where it goes
+    zh-CN: 请给出路径，`mv` 与 `cp` 还需给出目标位置
 
   err_failed:
     en: "`%{verb}` could not be done: %{reason}"

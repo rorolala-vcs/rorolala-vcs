@@ -10,9 +10,5 @@ common:
     zh-CN: "`%{hash}` 对应多个哈希：%{candidates}"
 
   err_hash_help:
-    en: |
-        When only one hash here starts with a prefix, you may write only that prefix, at least four hex digits
-        Please add more digits, or write the hash in full
-    zh-CN: |
-        若此处的哈希中只有一个哈希以某前缀开头，可以只写该前缀，至少四位十六进制
-        请补足位数，或写出完整哈希
+    en: Add more digits to the prefix, or write the hash in full
+    zh-CN: 请补足前缀位数，或写出完整哈希

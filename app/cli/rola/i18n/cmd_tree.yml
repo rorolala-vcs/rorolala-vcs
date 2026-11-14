@@ -3,9 +3,8 @@ _version: 2
 tree:
   help:
     en: |
-        Version a directory as one file
-
-        **Usage**: rola tree <COMMAND>
+        # Version a directory as one file
+        **Usage**: rola [[GREEN]]__tree__[[/]] <COMMAND>
         **Commands**:
             init [DIR]                 Make a directory a tree
             add <PATH>...              Stage paths of the tree
@@ -19,9 +18,8 @@ tree:
             ls-staging-tree [TREE]     List the entries a commit would record
             cat-desc [TARGET]          Print the description of a tree version
     zh-CN: |
-        把一个目录当作一个文件来版本控制
-
-        **用法**：rola tree <子命令>
+        # 把一个目录当作一个文件来版本控制
+        **用法**：rola [[GREEN]]__tree__[[/]] <子命令>
         **命令**：
             init [目录]                把一个目录变成树
             add <路径>...              暂存树中的路径
@@ -72,13 +70,11 @@ tree:
   status:
     help:
       en: |
-          Show how a tree's work stands
-
-          **Usage**: rola tree status [TREE] [--json] [--include-ignored]
+          # Show how a tree's work stands
+          **Usage**: rola tree [[GREEN]]__status__[[/]] [TREE] [--json] [--include-ignored]
       zh-CN: |
-          查看一棵树的工作状态
-
-          **用法**：rola tree status [树] [--json] [--include-ignored]
+          # 查看一棵树的工作状态
+          **用法**：rola tree [[GREEN]]__status__[[/]] [树] [--json] [--include-ignored]
     description:
       en: Show how a tree's work stands
       zh-CN: 查看一棵树的工作状态
@@ -132,13 +128,11 @@ tree:
   ls_tree:
     help:
       en: |
-          List the entries one tree version holds
-
-          **Usage**: rola tree ls-tree [TARGET] [--json]
+          # List the entries one tree version holds
+          **Usage**: rola tree [[GREEN]]__ls-tree__[[/]] [TARGET] [--json]
       zh-CN: |
-          列出一个树版本持有的条目
-
-          **用法**：rola tree ls-tree [目标] [--json]
+          # 列出一个树版本持有的条目
+          **用法**：rola tree [[GREEN]]__ls-tree__[[/]] [目标] [--json]
     description:
       en: List the entries of a tree version
       zh-CN: 列出一个树版本的条目
@@ -156,13 +150,11 @@ tree:
   ls_staging_tree:
     help:
       en: |
-          List the entries a commit of the tree would record
-
-          **Usage**: rola tree ls-staging-tree [TREE] [--json]
+          # List the entries a commit of the tree would record
+          **Usage**: rola tree [[GREEN]]__ls-staging-tree__[[/]] [TREE] [--json]
       zh-CN: |
-          列出提交这棵树时会记录的条目
-
-          **用法**：rola tree ls-staging-tree [树] [--json]
+          # 列出提交这棵树时会记录的条目
+          **用法**：rola tree [[GREEN]]__ls-staging-tree__[[/]] [树] [--json]
     description:
       en: List the entries a commit would record
       zh-CN: 列出一次提交会记录的条目
@@ -177,13 +169,11 @@ tree:
   cat_desc:
     help:
       en: |
-          Print the description of one tree version
-
-          **Usage**: rola tree cat-desc [TARGET]
+          # Print the description of one tree version
+          **Usage**: rola tree [[GREEN]]__cat-desc__[[/]] [TARGET]
       zh-CN: |
-          打印一个树版本的描述
-
-          **用法**：rola tree cat-desc [目标]
+          # 打印一个树版本的描述
+          **用法**：rola tree [[GREEN]]__cat-desc__[[/]] [目标]
     description:
       en: Print the description of a tree version
       zh-CN: 打印一个树版本的描述
@@ -197,13 +187,11 @@ tree:
   init:
     help:
       en: |
-          Make a directory a tree
-
-          **Usage**: rola tree init [DIR] [--force]
+          # Make a directory a tree
+          **Usage**: rola tree [[GREEN]]__init__[[/]] [DIR] [--force]
       zh-CN: |
-          把一个目录变成树
-
-          **用法**：rola tree init [目录] [--force]
+          # 把一个目录变成树
+          **用法**：rola tree [[GREEN]]__init__[[/]] [目录] [--force]
     description:
       en: Make a directory a tree
       zh-CN: 把一个目录变成树
@@ -248,13 +236,11 @@ tree:
   add:
     help:
       en: |
-          Stage work of a tree
-
-          **Usage**: rola tree add <PATH>... [--include-ignored]
+          # Stage work of a tree
+          **Usage**: rola tree [[GREEN]]__add__[[/]] <PATH>... [--include-ignored]
       zh-CN: |
-          暂存一棵树中的工作
-
-          **用法**：rola tree add <路径>... [--include-ignored]
+          # 暂存一棵树中的工作
+          **用法**：rola tree [[GREEN]]__add__[[/]] <路径>... [--include-ignored]
     description:
       en: Stage work of a tree
       zh-CN: 暂存一棵树中的工作
@@ -283,13 +269,11 @@ tree:
   rm:
     help:
       en: |
-          Stage the removal of work from a tree
-
-          **Usage**: rola tree rm <PATH>... [--cached] [--recursive]
+          # Stage the removal of work from a tree
+          **Usage**: rola tree [[GREEN]]__rm__[[/]] <PATH>... [--cached] [--recursive]
       zh-CN: |
-          暂存树中工作的删除
-
-          **用法**：rola tree rm <路径>... [--cached] [--recursive]
+          # 暂存树中工作的删除
+          **用法**：rola tree [[GREEN]]__rm__[[/]] <路径>... [--cached] [--recursive]
     description:
       en: Stage the removal of work from a tree
       zh-CN: 暂存树中工作的删除
@@ -328,13 +312,11 @@ tree:
   reset:
     help:
       en: |
-          Reset the staging area of a tree
-
-          **Usage**: rola tree reset [<PATH>...]
+          # Reset the staging area of a tree
+          **Usage**: rola tree [[GREEN]]__reset__[[/]] [<PATH>...]
       zh-CN: |
-          重置一棵树的暂存区
-
-          **用法**：rola tree reset [<路径>...]
+          # 重置一棵树的暂存区
+          **用法**：rola tree [[GREEN]]__reset__[[/]] [<路径>...]
     description:
       en: Reset the staging area of a tree
       zh-CN: 重置一棵树的暂存区
@@ -360,13 +342,11 @@ tree:
   desc:
     help:
       en: |
-          Write the description of the next version of a tree
-
-          **Usage**: rola tree desc [TREE]
+          # Write the description of the next version of a tree
+          **Usage**: rola tree [[GREEN]]__desc__[[/]] [TREE]
       zh-CN: |
-          写一棵树下一个版本的描述
-
-          **用法**：rola tree desc [树]
+          # 写一棵树下一个版本的描述
+          **用法**：rola tree [[GREEN]]__desc__[[/]] [树]
     description:
       en: Write the description of the next version of a tree
       zh-CN: 写一棵树下一个版本的描述
@@ -383,13 +363,11 @@ tree:
   write_desc:
     help:
       en: |
-          Write the description of the next version of a tree without an editor
-
-          **Usage**: rola tree write-desc [TEXT]
+          # Write the description of the next version of a tree without an editor
+          **Usage**: rola tree [[GREEN]]__write-desc__[[/]] [TEXT]
       zh-CN: |
-          不用编辑器直接写一棵树下一个版本的描述
-
-          **用法**：rola tree write-desc [文本]
+          # 不用编辑器直接写一棵树下一个版本的描述
+          **用法**：rola tree [[GREEN]]__write-desc__[[/]] [文本]
     description:
       en: Write the description of the next version without an editor
       zh-CN: 不用编辑器直接写下一个版本的描述
@@ -415,13 +393,11 @@ tree:
   diff_stat:
     help:
       en: |
-          Compare tree structures and say what holds apart
-
-          **Usage**: rola tree diff-stat [A [B]] [--staged] [--json]
+          # Compare tree structures and say what holds apart
+          **Usage**: rola tree [[GREEN]]__diff-stat__[[/]] [A [B]] [--staged] [--json]
       zh-CN: |
-          比较两个树结构并说出差异
-
-          **用法**：rola tree diff-stat [甲 [乙]] [--staged] [--json]
+          # 比较两个树结构并说出差异
+          **用法**：rola tree [[GREEN]]__diff-stat__[[/]] [甲 [乙]] [--staged] [--json]
     description:
       en: Compare tree structures
       zh-CN: 比较树结构

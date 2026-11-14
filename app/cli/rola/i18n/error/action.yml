@@ -7,24 +7,16 @@ error:
       zh-CN: 该动作没有可用于交换的通道
 
     err_no_channel_help:
-      en: |
-        This is a fault in the program rather than in what was asked for
-        Please report this
-      zh-CN: |
-        这是程序自身的问题，而不是所请求的内容有问题
-        请反馈这个情况
+      en: Report this, since it is a fault in the program rather than in what was asked for
+      zh-CN: 请反馈这个情况，这是程序自身的问题，而不是所请求的内容有问题
 
     err_missing_value:
       en: The side holding the value had no value to send
       zh-CN: 持有值的一侧没有可发送的值
 
     err_missing_value_help:
-      en: |
-        This is a fault in the program rather than in what was asked for
-        Please report this
-      zh-CN: |
-        这是程序自身的问题，而不是所请求的内容有问题
-        请反馈这个情况
+      en: Report this, since it is a fault in the program rather than in what was asked for
+      zh-CN: 请反馈这个情况，这是程序自身的问题，而不是所请求的内容有问题
 
     err_missing_object:
       en: Neither side holds an object the exchange needs
@@ -41,12 +33,8 @@ error:
       zh-CN: 接收方无法再次产出刚收到的内容
 
     err_not_confirmed_help:
-      en: |
-        What crossed was written, but reading it back did not work
-        Please check the Vault's store and the disk it sits on
-      zh-CN: |
-        内容已经写出，但读回来时失败了
-        请检查保险库的存储与其所在的磁盘
+      en: Check the Vault's store and the disk it sits on
+      zh-CN: 请检查保险库的存储与其所在的磁盘
 
     err_store:
       en: "The store failed: \"%{reason}\""
@@ -93,12 +81,8 @@ error:
       zh-CN: "有值无法通过通道：“%{reason}”"
 
     err_codec_help:
-      en: |
-        The two sides disagree about what is on the wire
-        Please check that both are the same build
-      zh-CN: |
-        两侧对线上内容的约定不一致
-        请确认双方是同一个构建
+      en: Check that both sides are the same build
+      zh-CN: 请确认双方是同一个构建
 
     err_unknown_action:
       en: No action responds to id %{id}
@@ -115,12 +99,8 @@ error:
       zh-CN: "动作的输出无法编码：“%{reason}”"
 
     err_json_help:
-      en: |
-        This is a fault in the program rather than in what was asked for
-        Please report this
-      zh-CN: |
-        这是程序自身的问题，而不是所请求的内容有问题
-        请反馈这个情况
+      en: Report this, since it is a fault in the program rather than in what was asked for
+      zh-CN: 请反馈这个情况，这是程序自身的问题，而不是所请求的内容有问题
 
     err_addr:
       en: "`%{target}` is not an IP"
@@ -147,9 +127,5 @@ error:
       zh-CN: 无法抵达该保险库：%{reason}
 
     err_transport_help:
-      en: |
-        For a Vault reached over SSH: check that `ssh` is installed here, that the host is one
-        `ssh` itself can reach, and that `rola-daemon` is installed there
-      zh-CN: |
-        若该保险库经 SSH 抵达：请确认本机已安装 `ssh`、该主机是 `ssh` 自身能连上的，
-        且对端已安装 `rola-daemon`
+      en: Check that `ssh` is installed here and reaches the host, and that `rola-daemon` is installed there
+      zh-CN: 请确认本机已安装 `ssh` 且能连上该主机，且对端已安装 `rola-daemon`

@@ -3,13 +3,11 @@ _version: 2
 storage_ls_manifests:
   help:
     en: |
-        List every content the store keeps in chunks
-
-        **Usage**: rola storage ls-manifests
+        # List every content the store keeps in chunks
+        **Usage**: rola storage [[GREEN]]__ls-manifests__[[/]]
     zh-CN: |
-        列出仓库中分块保存的全部内容
-
-        **用法**：rola storage ls-manifests
+        # 列出仓库中分块保存的全部内容
+        **用法**：rola storage [[GREEN]]__ls-manifests__[[/]]
 
   cmd_storage_ls_manifests_description:
     en: List every content the store keeps in chunks

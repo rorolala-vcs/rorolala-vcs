@@ -3,13 +3,11 @@ _version: 2
 storage_ls_storaged:
   help:
     en: |
-        List every object the store holds
-
-        **Usage**: rola storage ls-storaged
+        # List every object the store holds
+        **Usage**: rola storage [[GREEN]]__ls-storaged__[[/]]
     zh-CN: |
-        列出仓库持有的全部对象
-
-        **用法**：rola storage ls-storaged
+        # 列出仓库持有的全部对象
+        **用法**：rola storage [[GREEN]]__ls-storaged__[[/]]
 
   cmd_storage_ls_storaged_description:
     en: List every object the store holds

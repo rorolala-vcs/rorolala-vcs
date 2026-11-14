@@ -10,19 +10,17 @@ pack:
       zh-CN: 不整理仓库
   help:
     en: |
-        Tidy the objects of the store and the index into packs
-
-        **Usage**: rola pack
+        # Tidy the objects of the store and the index into packs
+        **Usage**: rola [[GREEN]]__pack__[[/]]
         **Flags**:
-            --no-index      Do not tidy the index, leave it as it is
-            --no-storage    Do not tidy the store, leave it as it is
+             __--no-index__      Do not tidy the index, leave it as it is
+             __--no-storage__    Do not tidy the store, leave it as it is
     zh-CN: |
-        把仓库与索引中的对象整理进 pack
-
-        **用法**：rola pack
+        # 把仓库与索引中的对象整理进 pack
+        **用法**：rola [[GREEN]]__pack__[[/]]
         **标识**：
-            --no-index      不整理索引，保持原样
-            --no-storage    不整理仓库，保持原样
+             __--no-index__      不整理索引，保持原样
+             __--no-storage__    不整理仓库，保持原样
 
   cmd_pack_description:
     en: Tidy the objects of the store and the index

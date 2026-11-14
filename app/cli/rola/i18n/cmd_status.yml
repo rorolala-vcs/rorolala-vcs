@@ -22,31 +22,29 @@ status:
       zh-CN: 不显示来源与状态两行
   help:
     en: |
-      Show the state of the working tree relative to the Layout, or look back from one item in it
-
-      **Usage**: rola status [TARGET]
+      # Show the state of the working tree relative to the Layout, or look back from one item in it
+      **Usage**: rola [[GREEN]]__status__[[/]] [TARGET]
       **Flags**:
-        --compact                   Draw compactly, keeping only the version chain
-        --no-creator                Hide the creator signature
-        --no-message                Hide the version message
-        --max-message-length <N>    Set the maximum message character length
-        --no-graph                  Suppress drawing the graph
-        --no-hint                   Suppress the creator and message information
-        --show-unjoined-variants    Show variants that have not been joined
-        --include-ignored           Include ignored files in the global status drawing
+           __--compact__                   Draw compactly, keeping only the version chain
+           __--no-creator__                Hide the creator signature
+           __--no-message__                Hide the version message
+           __--max-message-length__ <N>    Set the maximum message character length
+           __--no-graph__                  Suppress drawing the graph
+           __--no-hint__                   Suppress the creator and message information
+           __--show-unjoined-variants__    Show variants that have not been joined
+           __--include-ignored__           Include ignored files in the global status drawing
     zh-CN: |
-      查看工作区相对布局的状态，或从其中某一项往回查看
-
-      **用法**：rola status [目标]
+      # 查看工作区相对布局的状态，或从其中某一项往回查看
+      **用法**：rola [[GREEN]]__status__[[/]] [目标]
       **标识**：
-          --compact                   紧凑绘制，仅保留版本链
-          --no-creator                隐藏创建者签名
-          --no-message                隐藏版本说明
-          --max-message-length <N>    设置最大消息字符长度
-          --no-graph                  抑制图表绘制
-          --no-hint                   抑制创建者和消息信息
-          --show-unjoined-variants    显示未合并的变体
-          --include-ignored           在全局状态绘制中包含被忽略的文件
+           __--compact__                   紧凑绘制，仅保留版本链
+           __--no-creator__                隐藏创建者签名
+           __--no-message__                隐藏版本说明
+           __--max-message-length__ <N>    设置最大消息字符长度
+           __--no-graph__                  抑制图表绘制
+           __--no-hint__                   抑制创建者和消息信息
+           __--show-unjoined-variants__    显示未合并的变体
+           __--include-ignored__           在全局状态绘制中包含被忽略的文件
 
   description:
     en: Show the state of the working tree relative to the Layout
