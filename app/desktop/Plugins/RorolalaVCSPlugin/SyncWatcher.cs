@@ -148,6 +148,13 @@ internal sealed class SyncWatcher
     /// <param name="directory">Where the work is rooted, or nothing where the tree is not rooted anywhere.</param>
     public void Plan(string? directory)
     {
+        // A host under test has no Vault to ask, and a plan is a fetch of its Layout: asking one
+        // would leave a test waiting on a network it did not name.
+        if (Environment.GetEnvironmentVariable("ROLA_DESKTOP_TEST") is { Length: > 0 })
+        {
+            return;
+        }
+
         // A plugin may say that the files changed from the thread the command ran on, and this is
         // reached from that saying: what is kept here is what the window's thread draws from, so it
         // is touched there alone.
