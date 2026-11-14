@@ -16,4 +16,5 @@ BUILD:
    clean         Remove everything the build produced
 
 UTILS:
-   show-shape    Print what the build works out about the tree before it does anything
+   cli-help-editor    Open a local editor for the CLI's help and message copy
+   show-shape         Print what the build works out about the tree before it does anything

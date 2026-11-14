@@ -30,6 +30,15 @@ impl Tool {
         Self::from_env("DOTNET", "dotnet")
     }
 
+    /// The toolchain a step runs `node` with: `NODE`, or the machine's own when it is unset.
+    ///
+    /// The CLI help editor is a Node.js program under `dev/cli-help-editor`; this is how a
+    /// `cargo dev` step reaches it without a second copy of its path on every machine.
+    #[must_use]
+    pub fn node() -> Self {
+        Self::from_env("NODE", "node")
+    }
+
     /// The renderer the icon set is drawn with: `RSVG`, or the machine's own when it is unset.
     #[must_use]
     pub fn rsvg() -> Self {

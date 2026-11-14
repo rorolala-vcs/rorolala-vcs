@@ -8,6 +8,7 @@ pub mod build;
 pub mod cargo_clean;
 pub mod chunker;
 pub mod clean;
+pub mod cli_help_editor;
 pub mod desktop;
 pub mod export;
 pub mod icons;
@@ -20,6 +21,6 @@ pub mod publish;
 // harness's, so it is reached by name rather than by this.
 #[allow(clippy::wildcard_imports, clippy::redundant_pub_crate)]
 pub(crate) use {
-    book::*, build::*, cargo_clean::*, clean::*, desktop::*, export::*, icons::*, library::*,
-    programs::*, publish::*,
+    book::*, build::*, cargo_clean::*, clean::*, cli_help_editor::*, desktop::*, export::*,
+    icons::*, library::*, programs::*, publish::*,
 };

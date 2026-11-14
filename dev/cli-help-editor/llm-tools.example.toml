@@ -1,0 +1,23 @@
+# Copy this file to one of these paths:
+#   Linux:   `~/.local/share/rola/dev/llm-tools.toml`
+#   Windows: `%LOCALAPPDATA%\rola\dev\llm-tools.toml`
+#   macOS:   `~/Library/Application Support/rola/dev/llm-tools.toml`
+#
+# ROLA_DATA_HOME replaces the directory above rola when it is set.
+#
+# The endpoint is OpenAI compatible.
+
+[translation]
+base_url = "https://api.openai.com/v1"
+api_key = "sk-your-key"
+model = "gpt-4o-mini"
+
+# Optional, from 0 to 2. The editor asks for 0.2 when this is absent.
+temperature = 0.2
+
+# Optional, in seconds. The editor asks for 120 when this is absent.
+timeout = 120
+
+# Optional extra headers, for a provider that needs one.
+# [translation.headers]
+# X-Example = "value"

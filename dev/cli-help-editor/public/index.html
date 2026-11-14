@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>CLI help editor</title>
+        <link rel="stylesheet" href="/app.css" />
+    </head>
+    <body>
+        <header class="topbar">
+            <div class="brand">
+                <span class="brand-mark" aria-hidden="true"></span>
+                <span>CLI help editor</span>
+            </div>
+            <div class="search">
+                <input
+                    id="search"
+                    type="search"
+                    placeholder="Search"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="Search keys"
+                />
+                <kbd>/</kbd>
+            </div>
+            <div class="top-actions">
+                <button
+                    id="settings"
+                    class="button ghost icon"
+                    type="button"
+                    title="LLM settings"
+                    aria-label="LLM settings"
+                >
+                    <svg
+                        viewBox="0 0 16 16"
+                        width="15"
+                        height="15"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
+                        <circle
+                            cx="8"
+                            cy="8"
+                            r="2.5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.4"
+                        />
+                        <path
+                            d="M8 1.5v1.8M8 12.7v1.8M14.5 8h-1.8M3.3 8H1.5M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3M12.6 12.6l-1.3-1.3M4.7 4.7L3.4 3.4"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.3"
+                            stroke-linecap="round"
+                        />
+                    </svg>
+                </button>
+                <button
+                    id="reload"
+                    class="button ghost"
+                    type="button"
+                    title="Reload from disk"
+                >
+                    Reload
+                </button>
+                <button
+                    id="save"
+                    class="button primary"
+                    type="button"
+                    title="Save all (Ctrl+S)"
+                >
+                    Save
+                </button>
+            </div>
+        </header>
+
+        <div id="banner" class="banner" hidden>
+            <span id="banner-text"></span>
+            <button id="banner-action" class="button" type="button">
+                Reload
+            </button>
+            <button id="banner-close" class="button ghost" type="button">
+                Dismiss
+            </button>
+        </div>
+
+        <div class="layout">
+            <aside class="sidebar">
+                <div
+                    id="filters"
+                    class="filters"
+                    role="toolbar"
+                    aria-label="Filter by kind"
+                ></div>
+                <div id="list" class="list"></div>
+            </aside>
+
+            <main class="main">
+                <div id="key-header" class="key-header"></div>
+                <div class="workspace">
+                    <section class="editor-pane">
+                        <div
+                            id="lang-tabs"
+                            class="tabs"
+                            role="tablist"
+                            aria-label="Language"
+                        ></div>
+                        <div
+                            id="toolbar"
+                            class="toolbar"
+                            role="toolbar"
+                            aria-label="Formatting"
+                        ></div>
+                        <div class="editor">
+                            <div
+                                id="gutter"
+                                class="gutter"
+                                aria-hidden="true"
+                            ></div>
+                            <div class="editor-stack">
+                                <div
+                                    id="highlight"
+                                    class="highlight"
+                                    aria-hidden="true"
+                                ></div>
+                                <textarea
+                                    id="editor"
+                                    spellcheck="false"
+                                    autocapitalize="off"
+                                    autocomplete="off"
+                                    wrap="off"
+                                    aria-label="Copy source"
+                                ></textarea>
+                            </div>
+                            <div id="editor-empty" class="editor-empty" hidden>
+                                Missing
+                            </div>
+                        </div>
+                    </section>
+
+                    <div id="split" class="split" title="Resize"></div>
+
+                    <section class="preview-pane">
+                        <div id="preview-toolbar" class="preview-toolbar"></div>
+                        <div class="preview-wrap">
+                            <div id="preview" class="preview"></div>
+                        </div>
+                        <div id="preview-status" class="preview-status"></div>
+                    </section>
+                </div>
+
+                <div id="checks" class="checks"></div>
+            </main>
+        </div>
+
+        <div id="color-popover" class="popover" hidden>
+            <div class="popover-title">Text</div>
+            <div id="foreground-swatches" class="swatches"></div>
+            <div class="popover-title">Background</div>
+            <div id="background-swatches" class="swatches"></div>
+        </div>
+
+        <div id="link-popover" class="popover link-popover" hidden>
+            <input
+                id="link-address"
+                type="url"
+                placeholder="Address"
+                spellcheck="false"
+            />
+            <button id="link-apply" class="button primary" type="button">
+                Link
+            </button>
+        </div>
+
+        <div id="settings-dialog" class="modal" hidden>
+            <div
+                class="modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="settings-title"
+            >
+                <header class="modal-head">
+                    <span id="settings-title" class="title">LLM</span>
+                    <code id="settings-path" class="path"></code>
+                </header>
+                <div class="settings-grid">
+                    <label for="settings-base-url">base_url</label>
+                    <input
+                        id="settings-base-url"
+                        type="url"
+                        spellcheck="false"
+                        autocomplete="off"
+                        placeholder="https://api.openai.com/v1"
+                    />
+                    <label for="settings-model">model</label>
+                    <input
+                        id="settings-model"
+                        type="text"
+                        spellcheck="false"
+                        autocomplete="off"
+                        placeholder="gpt-4o-mini"
+                    />
+                    <label for="settings-api-key">api_key</label>
+                    <div class="settings-row">
+                        <input
+                            id="settings-api-key"
+                            type="password"
+                            spellcheck="false"
+                            autocomplete="off"
+                        />
+                        <button
+                            id="settings-reveal"
+                            class="button ghost"
+                            type="button"
+                            aria-pressed="false"
+                        >
+                            Show
+                        </button>
+                    </div>
+                    <label for="settings-temperature">temperature</label>
+                    <input
+                        id="settings-temperature"
+                        type="number"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                    />
+                    <label for="settings-timeout">timeout</label>
+                    <input
+                        id="settings-timeout"
+                        type="number"
+                        min="1"
+                        max="600"
+                        step="1"
+                    />
+                    <label for="settings-headers">headers</label>
+                    <textarea
+                        id="settings-headers"
+                        rows="3"
+                        spellcheck="false"
+                        placeholder="X-Header: value"
+                    ></textarea>
+                </div>
+                <footer class="modal-foot">
+                    <span id="settings-hint" class="hint"></span>
+                    <button
+                        id="settings-cancel"
+                        class="button ghost"
+                        type="button"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        id="settings-save"
+                        class="button primary"
+                        type="button"
+                    >
+                        Save
+                    </button>
+                </footer>
+            </div>
+        </div>
+
+        <div id="toast" class="toast" hidden></div>
+
+        <script type="module" src="/app.js"></script>
+    </body>
+</html>
