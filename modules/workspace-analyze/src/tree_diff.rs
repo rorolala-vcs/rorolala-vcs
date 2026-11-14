@@ -177,7 +177,7 @@ pub fn tree_diff(
     for file in found {
         match file.kind {
             EntryKind::Tree => {
-                disk_trees.insert(file.path.clone());
+                disk_trees.insert(file.path);
             }
             EntryKind::File => {
                 disk_files.insert(file.path.clone(), file);
@@ -323,7 +323,7 @@ pub fn tree_diff(
             strong: false,
         });
         moved_from.insert(from);
-        moved_to.insert(to.clone());
+        moved_to.insert(to);
     }
 
     // Third pass: a lost tree and a marked directory elsewhere keeping the same Layout entry id are
