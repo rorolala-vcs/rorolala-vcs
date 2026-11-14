@@ -218,9 +218,7 @@ fn write_score(
         .map(|(_, measured)| measured.numbers.versions)
         .max()
         .unwrap_or(0);
-    let claims = rorolala_storage::policy(&policy.name)
-        .map(|own| own.extensions)
-        .unwrap_or_default();
+    let claims = rorolala_storage::policy(&policy.name).map_or_default(|own| own.extensions);
 
     let mut text = String::new();
     let _ = writeln!(text, "# `{}`: what it scores", policy.name);
