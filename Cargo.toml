@@ -76,24 +76,16 @@ jj-cli = { version = "0.46.0", default-features = false }
 jj-lib = { version = "0.46.0", default-features = false }
 
 # Members
-git-rola = { path = "app/cli/git-rola" }
 librorolala = { path = "." }
-rola = { path = "app/cli/rola" }
-rola-daemon = { path = "app/cli/rola-daemon" }
 rola-define-format = { path = "modules/define-format" }
 rola-desktop-pty = { path = "modules/desktop-pty" }
-rola-edit = { path = "app/cli/rola-edit" }
-rola-jj = { path = "app/cli/rola-jj" }
 rorolala-auth = { path = "modules/auth" }
 rorolala-book-search = { path = "modules/book-search" }
 rorolala-chunking = { path = "modules/chunking" }
 rorolala-cli-setups = { path = "app/cli/setups" }
 rorolala-daemon = { path = "modules/daemon" }
 rorolala-dev-bindgen = { path = "dev/bindgen" }
-rorolala-dev-i18n-check = { path = "dev/i18n-check" }
-rorolala-dev-rsharp-bindgen = { path = "dev/rsharp-bindgen" }
 rorolala-errors = { path = "modules/errors" }
-rorolala-ffi = { path = "app/ffi" }
 rola-git-support = { path = "modules/git-support" }
 rorolala-ignore = { path = "modules/ignore" }
 rorolala-inverse-index = { path = "modules/inverse-index" }
@@ -114,7 +106,6 @@ rorolala-utils-lazyffi-core = { path = "utils/lazyffi-core" }
 rorolala-utils-lazyffi-macros = { path = "utils/lazyffi-macros" }
 rorolala-utils-location = { path = "utils/location" }
 rorolala-utils-progress = { path = "utils/progress" }
-rorolala-utils-sandbox = { path = "utils/sandbox" }
 rorolala-vault = { path = "modules/vault" }
 rorolala-vcs = { path = "modules/vcs" }
 rorolala-workspace = { path = "modules/workspace" }
