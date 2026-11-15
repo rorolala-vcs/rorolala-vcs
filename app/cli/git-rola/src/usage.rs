@@ -1,4 +1,4 @@
-//! What the program says it can do, and how each command is written down.
+﻿//! What the program says it can do, and how each command is written down.
 //!
 //! The text is the translation files': the root usage is one block holding the commands and the
 //! descriptions they are listed by, and each command's own usage line is a key of its own. The
@@ -11,8 +11,8 @@
 use rust_i18n::t;
 
 /// The commands the program has, in the order the root usage lists them.
-pub const COMMANDS: [&str; 8] = [
-    "init", "hook", "check", "bring", "restore", "update", "help", "version",
+pub const COMMANDS: [&str; 9] = [
+    "init", "hook", "check", "bring", "restore", "refresh", "update", "help", "version",
 ];
 
 /// The name of a command, when `word` is one.
@@ -41,6 +41,7 @@ pub fn command(name: &str) -> String {
         "check" => t!("check.usage"),
         "bring" => t!("bring.usage"),
         "restore" => t!("restore.usage"),
+        "refresh" => t!("refresh.usage"),
         "update" => t!("update.usage"),
         "help" => t!("help.usage"),
         "version" => t!("version.usage"),

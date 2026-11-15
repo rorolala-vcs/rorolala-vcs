@@ -41,6 +41,8 @@ mod options;
 mod output;
 mod pathspec;
 mod quote;
+mod refresh;
+mod settle;
 mod source;
 mod update;
 mod upstream;

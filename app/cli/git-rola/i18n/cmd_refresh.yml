@@ -1,0 +1,6 @@
+_version: 2
+
+refresh:
+  usage:
+    en: git rola refresh
+    zh-CN: git rola refresh

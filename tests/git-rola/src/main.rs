@@ -63,6 +63,7 @@ fn main() {
     checking(&run, &repo, &mut checked);
     restoring(&run, &repo, &mut checked);
     bringing(&run, &repo, &elsewhere, &mut checked);
+    refreshing(&run, &repo, &mut checked);
     reaching(&run, &repo, &mut checked);
     quoting(&run, sandbox.dir(), &mut checked);
     trees(&run, sandbox.dir(), &mut checked);
@@ -140,7 +141,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
             "See 'git rola <command>'",
         );
 
-        for command in ["init", "hook", "check", "bring", "restore", "update", "help", "version"] {
+        for command in ["init", "hook", "check", "bring", "restore", "refresh", "update", "help", "version"] {
             checked.stdout_has(&format!("the usage lists `{command}`"), &help, command);
         }
 
@@ -166,7 +167,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     );
 
     // Each command writes down its own use, and `--help` as its first word asks for it with success.
-    for command in ["init", "hook", "check", "bring", "restore", "update", "help", "version"] {
+    for command in ["init", "hook", "check", "bring", "restore", "refresh", "update", "help", "version"] {
         let help = run.rola(elsewhere, &[command, "--help"]);
         checked.exits(&format!("`{command} --help` ends successfully"), &help, 0);
         checked.stdout_has(
@@ -182,7 +183,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     }
 
     // `-h` is git's usage request inside a command: the same text, on stdout, with 129.
-    for command in ["init", "hook", "check", "bring", "restore", "update", "help", "version"] {
+    for command in ["init", "hook", "check", "bring", "restore", "refresh", "update", "help", "version"] {
         let usage = run.rola(elsewhere, &[command, "-h"]);
         checked.exits(&format!("`{command} -h` is a usage request"), &usage, 129);
         checked.stdout_has(
@@ -240,6 +241,15 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
         &value,
         "usage: git rola bring",
     );
+
+    let extra = run.rola(elsewhere, &["refresh", "x"]);
+    checked.exits("an operand refresh does not take is refused", &extra, 129);
+    checked.stderr_has(
+        "the refusal is refresh's usage",
+        &extra,
+        "usage: git rola refresh",
+    );
+    checked.stdout_empty("the refusal is not a result", &extra);
 
     // The root has no flag of its own, and git says so without an `error:` prefix.
     let root = run.rola(elsewhere, &["--bogus"]);
@@ -378,6 +388,14 @@ fn refusals(run: &Run, repo: &Path, plain: &Path, elsewhere: &Path, checked: &mu
     let restore = run.rola(elsewhere, &["restore", MATERIAL]);
     checked.exits("a restore outside a project is refused", &restore, 128);
 
+    let refresh = run.rola(elsewhere, &["refresh"]);
+    checked.exits("a refresh outside a project is refused", &refresh, 128);
+    checked.stderr_has(
+        "the refusal says there is no project",
+        &refresh,
+        "fatal: not inside a rola project",
+    );
+
     // A hook that finds no project is not a failure: it was installed in a repository whose project
     // may have been removed since, and a checkout there is still a run that worked.
     let hook = run.rola(elsewhere, &["hook", "post-checkout"]);
@@ -464,6 +482,18 @@ fn refusals(run: &Run, repo: &Path, plain: &Path, elsewhere: &Path, checked: &mu
         "does not turn git support on",
     );
 
+    let disabled = run.rola(&off, &["refresh"]);
+    checked.exits(
+        "a refresh in a project that turns git support off is refused",
+        &disabled,
+        128,
+    );
+    checked.stderr_has(
+        "the refusal says the feature is off",
+        &disabled,
+        "does not turn git support on",
+    );
+
     // A project with no lock has nothing to check the work tree against.
     let unlocked = sibling(repo, "unlocked");
     fs::create_dir_all(&unlocked).expect("a directory for the project with no lock");
@@ -476,6 +506,14 @@ fn refusals(run: &Run, repo: &Path, plain: &Path, elsewhere: &Path, checked: &mu
 
     let no_lock = run.rola(&unlocked, &["check"]);
     checked.exits("a project with no lock is refused", &no_lock, 128);
+    checked.stderr_has(
+        "the refusal names what could not be read",
+        &no_lock,
+        "cannot read rola.lock",
+    );
+
+    let no_lock = run.rola(&unlocked, &["refresh"]);
+    checked.exits("a refresh with no lock is refused", &no_lock, 128);
     checked.stderr_has(
         "the refusal names what could not be read",
         &no_lock,
@@ -978,6 +1016,132 @@ fn bringing(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     );
 }
 
+/// Applying the lock to the work tree: no Vault, no `rola.toml`, and no lock written.
+fn refreshing(run: &Run, repo: &Path, checked: &mut Checked) {
+    let before_exclude = exclude_text(repo);
+    let before_state = state_text(repo);
+
+    let clean = run.rola(repo, &["refresh"]);
+    checked.exits("a refresh on a clean tree ends successfully", &clean, 0);
+    checked.stdout_empty("a clean refresh says nothing", &clean);
+    checked.wants(
+        "a clean refresh says nothing on stderr",
+        clean.stderr.trim().is_empty(),
+        &said(&clean),
+    );
+    checked.wants(
+        "a clean refresh leaves the exclude block as it was",
+        exclude_text(repo) == before_exclude,
+        "the exclude file changed",
+    );
+    checked.wants(
+        "a clean refresh leaves the state as it was",
+        state_text(repo) == before_state,
+        "the state changed",
+    );
+
+    // A material taken out of the work tree is put back from the store.
+    fs::remove_file(repo.join(MATERIAL)).expect("the material taken away");
+    let restored = run.rola(repo, &["refresh"]);
+    checked.exits("a missing material is put back", &restored, 0);
+    checked.stdout_empty("putting it back says nothing", &restored);
+    checked.wants(
+        "the material is back",
+        holds(repo, FIRST_CUT),
+        &said(&restored),
+    );
+
+    // A material changed after it was placed is not thrown away.
+    let edit = b"an edit a refresh must not lose\n";
+    fs::write(repo.join(MATERIAL), edit).expect("an edit");
+    let changed = run.rola(repo, &["refresh"]);
+    checked.exits("a changed material stops the refresh", &changed, 128);
+    checked.stderr_has("the refusal is fatal", &changed, "fatal: ");
+    checked.stderr_has("the refusal names the material", &changed, MATERIAL);
+    checked.wants(
+        "the edit is still there",
+        holds(repo, edit),
+        &said(&changed),
+    );
+
+    // `restore` is how a change is thrown away on purpose, and the refresh after it is clean.
+    let restored = run.rola(repo, &["restore", MATERIAL]);
+    checked.exits("the edit is thrown away with restore", &restored, 0);
+    let clean = run.rola(repo, &["refresh"]);
+    checked.exits("a refresh after a restore ends successfully", &clean, 0);
+
+    // A change to `rola.toml` is not applied: the lock and the work tree stay as they are.
+    let config = fs::read_to_string(repo.join("rola.toml")).expect("the project file");
+    let lock_before = fs::read(repo.join("rola.lock")).expect("the lock");
+    fs::write(
+        repo.join("rola.toml"),
+        format!("{config}\n# a line that changes nothing\n"),
+    )
+    .expect("a changed project file");
+
+    let configured = run.rola(repo, &["refresh"]);
+    checked.exits(
+        "a refresh with a changed project file ends successfully",
+        &configured,
+        0,
+    );
+    checked.wants(
+        "the lock is not rewritten",
+        fs::read(repo.join("rola.lock")).ok() == Some(lock_before),
+        &said(&configured),
+    );
+
+    fs::write(repo.join("rola.toml"), config).expect("the project file put back");
+
+    // Content that is in neither the store nor the staging area is reported, and the run is partial.
+    let store = repo.join(".rola/storage");
+    let kept = sibling(repo, "refresh-store");
+    fs::rename(&store, &kept).expect("the store taken away");
+    fs::remove_file(repo.join(MATERIAL)).expect("the material taken away");
+
+    let missing = run.rola(repo, &["refresh"]);
+    checked.exits(
+        "a material no local source holds is a partial failure",
+        &missing,
+        1,
+    );
+    checked.stderr_has(
+        "the failure names the material",
+        &missing,
+        "error: Assets/hero.psd:",
+    );
+    checked.stderr_has(
+        "the failure says no source holds it",
+        &missing,
+        "no source holds the content",
+    );
+
+    fs::rename(&kept, &store).expect("the store put back");
+    let restored = run.rola(repo, &["refresh"]);
+    checked.exits("the material is back once the store holds it", &restored, 0);
+    checked.wants(
+        "the content is the lock's again",
+        holds(repo, FIRST_CUT),
+        &said(&restored),
+    );
+
+    // Running it again changes nothing.
+    let before_exclude = exclude_text(repo);
+    let before_state = state_text(repo);
+    let again = run.rola(repo, &["refresh"]);
+    checked.exits("a second refresh ends successfully", &again, 0);
+    checked.wants(
+        "a second refresh leaves the exclude block as it was",
+        exclude_text(repo) == before_exclude,
+        "the exclude file changed",
+    );
+    checked.wants(
+        "a second refresh leaves the state as it was",
+        state_text(repo) == before_state,
+        "the state changed",
+    );
+}
+
 /// What `git rola` is, as opposed to the program run by hand: the same program, reached by git.
 fn reaching(run: &Run, repo: &Path, checked: &mut Checked) {
     // git prepends its own directories to the `PATH` and runs `git-rola` with the words it was
@@ -1440,6 +1604,14 @@ fn worktrees(run: &Run, repo: &Path, checked: &mut Checked) {
 
     let restore = run.rola(&linked, &["restore", MATERIAL]);
     checked.exits("a restore in a linked work tree is refused", &restore, 128);
+
+    let refreshed = run.rola(&linked, &["refresh"]);
+    checked.exits("a refresh in a linked work tree is refused", &refreshed, 128);
+    checked.stderr_has(
+        "the refusal says the work tree is a linked one",
+        &refreshed,
+        "linked work tree",
+    );
 
     let hook = run.rola(&linked, &["hook", "post-checkout"]);
     checked.exits("a hook in a linked work tree is not a failure", &hook, 0);

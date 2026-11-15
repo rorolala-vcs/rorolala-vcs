@@ -1,4 +1,4 @@
-﻿//! The commands that keep a project's git support: its files, its materials, and the hooks.
+//! The commands that keep a project's git support: its files, its materials, and the hooks.
 
 // mingling's `#[command]` expands the entry type and the dispatch function beside the command, and
 // the expansion is not documented; the items this module writes carry their own docs.
@@ -202,7 +202,10 @@ pub struct StateHook {
 pub fn handle_hook(state: StateHook) -> Next {
     let event = state.event;
     let Ok(cwd) = std::env::current_dir() else {
-        return ResultHook { placed: true }.into();
+        return crate::settle::ResultSettled {
+            failures: Vec::new(),
+        }
+        .into();
     };
 
     let session = match Session::open(&cwd) {
@@ -213,67 +216,30 @@ pub fn handle_hook(state: StateHook) -> Next {
         Err(error @ GitError::LinkedWorkTree) => {
             eprintln!("{}{error}", t!("message.warning"));
 
-            return ResultHook { placed: true }.into();
+            return crate::settle::ResultSettled {
+                failures: Vec::new(),
+            }
+            .into();
         }
         // A project there is nothing to do for is not a failure of the hook: the hook was installed
         // here, but the project may have been removed since, and a project no command could read is
         // the commands' to report.
-        Ok(None) | Err(_) => return ResultHook { placed: true }.into(),
-    };
-
-    let stored = match session.lock() {
-        Ok(lock) => lock,
-        Err(error) => {
-            return crate::Fatal::new(
-                t!("git_rola.err_lock", error = error.to_string()).to_string(),
-            )
+        Ok(None) | Err(_) => {
+            return crate::settle::ResultSettled {
+                failures: Vec::new(),
+            }
             .into();
         }
     };
 
-    let source = crate::source::of(session.project());
-
-    match session.settle(&stored, &source) {
-        Ok(failures) if failures.is_empty() => ResultHook { placed: true }.into(),
-        Ok(failures) => {
-            for (path, error) in &failures {
-                eprintln!(
-                    "{}{}",
-                    t!("message.error"),
-                    t!(
-                        "message.failed_path",
-                        path = path.as_str(),
-                        error = error.to_string()
-                    )
-                );
-            }
-
-            ResultHook { placed: false }.into()
-        }
-        Err(error) => crate::Fatal::new(
-            t!(
-                "hook.err_settle",
-                event = event.as_str(),
-                error = error.to_string()
-            )
-            .to_string(),
+    // What a hook does after git changed the tree and what `refresh` does when a person asks for it
+    // are the same run, so both go through the one that applies the lock.
+    match crate::settle::apply(&session) {
+        Ok(result) => result.into(),
+        Err(message) => crate::Fatal::new(
+            t!("hook.err_settle", event = event.as_str(), error = message).to_string(),
         )
         .into(),
-    }
-}
-
-/// Result: what a hook run managed.
-#[derive(Grouped)]
-pub struct ResultHook {
-    /// Whether every material the lock names was placed.
-    pub placed: bool,
-}
-
-/// Renders nothing on success, and ends a run that could not place everything with git's 1.
-#[renderer(buffer)]
-pub fn render_hook(result: ResultHook, ec: &mut ResExitCode) {
-    if !result.placed {
-        ec.exit_code = EC_FAILED;
     }
 }
 
