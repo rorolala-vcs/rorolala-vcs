@@ -1,31 +1,57 @@
 _version: 2
 
 git_rola:
-  help:
+  usage:
     en: |
-      usage: git rola <command> [<args>]
+      %{usage}git rola <command> [<args>]
 
       The rola commands are:
-        init       Initialize a rola workspace inside the work tree
-        check      Check the difference between the work tree and currently brought-in assets
-        restore    Restore brought-in assets that have been modified
-        update     Re-parse rola.toml and update files
-        hook       Hook behavior provided; runs among the registered hooks
+        init       Set up git support in this project
+        hook       Keep the materials in step after a git operation
+        check      Report the materials that differ from rola.lock
+        restore    Put named materials back from rola.lock
+        update     Resolve rola.toml through the Vaults and rewrite rola.lock
+        help       Print this list, or the usage of one command
+        version    Print the version of this program
+
+      See 'git rola <command>' to read about a specific command.
     zh-CN: |
-      用法：git rola <命令> [<参数>]
+      %{usage}git rola <命令> [<参数>]
 
       rola 命令：
-         init       在工作树内初始化 rola 工作区
-         check      检查工作树和当前带入素材内容的差异
-         restore    将已经带入但修改的素材换原
-         update     重新解析 `rola.toml` 并更新文件
-         hook       提供的钩子行为，它会在注册的钩子中执行
+        init       在工作树内建立 rola 项目的 git 支持
+        hook       在 git 操作后让素材保持同步
+        check      报告与 `rola.lock` 不同的素材
+        restore    从 `rola.lock` 把指名的素材放回去
+        update     通过保险库解析 `rola.toml` 并重写 `rola.lock`
+        help       打印这份列表，或某个命令的用法
+        version    打印这个程序的版本
+
+      见 'git rola <命令>' 读某个命令的说明。
   version:
-    en: git-rola version %{version}
-    zh-CN: git-rola 版本 %{version}
-  err_usage:
-    en: unknown command line; see `git rola --help`
-    zh-CN: 无法识别的命令行；见 `git rola --help`
+    en: git rola version %{version}
+    zh-CN: git rola 版本 %{version}
+  err_unknown_command:
+    en: "git rola: '%{typed}' is not a rola command. See 'git rola --help'."
+    zh-CN: "git rola：'%{typed}' 不是 rola 命令。见 'git rola --help'。"
+  similar_command:
+    en: The most similar command is
+    zh-CN: 最相似的命令是
+  similar_commands:
+    en: The most similar commands are
+    zh-CN: 最相似的命令是
+  err_unknown_option:
+    en: "unknown option: %{word}"
+    zh-CN: "未知选项：%{word}"
+  err_no_such_option:
+    en: "unknown option `%{word}'"
+    zh-CN: "未知选项 `%{word}'"
+  err_no_such_switch:
+    en: "unknown switch `%{word}'"
+    zh-CN: "未知开关 `%{word}'"
+  err_write_stdout:
+    en: write failure on standard output
+    zh-CN: 写标准输出失败
   err_cwd:
     en: "cannot read the current directory: %{error}"
     zh-CN: "无法读取当前目录：%{error}"

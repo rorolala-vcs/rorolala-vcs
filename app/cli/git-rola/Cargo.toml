@@ -9,8 +9,9 @@ edition.workspace = true
 mingling.workspace = true
 # A content hash is named in the sources a command places materials from.
 rola-define-format.workspace = true
-# A result a program renders into structures is written down for the structural renderer, so the
-# types that carry one are `serde`'s.
+# The framework is built with its structural renderer, and the empty result it generates for an
+# answer that has none is `serde`'s, so the derive resolves only while this crate can see `serde`.
+# The program does not mount the structural renderer: `--json` and `--renderer` are not its flags.
 serde.workspace = true
 # The local half of git support: the project files, the work tree, the exclude block and the
 # staging area.
@@ -28,3 +29,11 @@ rorolala-utils-constants.workspace = true
 # A store reads and writes asynchronously, and a command is not: the two meet on a runtime the
 # program brings for its own reads.
 tokio.workspace = true
+# git's wildcards in a pathspec, which a restore has to read the way git reads them.
+globset.workspace = true
+
+# A pager and a wrapped git die by signal on Unix, and this program has to arrange for both: the
+# `SIGPIPE` disposition is restored at start, and a signal that killed a wrapped command is raised
+# again so the shell sees what git would have left it.
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true

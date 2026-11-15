@@ -58,14 +58,15 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Refactor
 
-1. **\[BREAKING!\]** [`app`] [`rola`] [`bring`] Rename the checkin command to bring. [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rola-bring-rename-the-checkin-command-to-bring)
-2. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`menus`] Reorganise every context menu into categories. [See details](dev/CHANGELOG-DETAILS.md#2-breaking-app-rorolaladesktop-menus-reorganise-every-context-menu-into-categories)
-3. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Rename the desktop plugin's check-in flow to bring. [See details](dev/CHANGELOG-DETAILS.md#3-breaking-app-rorolaladesktop-plugins-rorolala-vcs-rename-the-desktop-plugins-check-in-flow-to-bring)
-4. **\[BREAKING!\]** [`modules`] [`define-format`] Record a material's kind in rola.lock. [See details](dev/CHANGELOG-DETAILS.md#4-breaking-modules-define-format-record-a-materials-kind-in-rolalock)
-5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a file tree row as a three-column grid. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-file-system-tree-draw-a-file-tree-row-as-a-three-column-grid)
-6. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Draw the Version Graph in the look's own hues. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-draw-the-version-graph-in-the-looks-own-hues)
-7. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack. [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolaladesktop-progress-show-progress-in-a-host-level-stack)
-8. [`app`] [`RorolalaDesktop`] [`theme`] Restate the look and dock chrome. [See details](dev/CHANGELOG-DETAILS.md#8-app-rorolaladesktop-theme-restate-the-look-and-dock-chrome)
+1. **\[BREAKING!\]** [`app`] [`git-rola`] Speak git's language instead of the program's own. [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-git-rola-speak-gits-language-instead-of-the-programs-own)
+2. **\[BREAKING!\]** [`app`] [`rola`] [`bring`] Rename the checkin command to bring. [See details](dev/CHANGELOG-DETAILS.md#2-breaking-app-rola-bring-rename-the-checkin-command-to-bring)
+3. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`menus`] Reorganise every context menu into categories. [See details](dev/CHANGELOG-DETAILS.md#3-breaking-app-rorolaladesktop-menus-reorganise-every-context-menu-into-categories)
+4. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Rename the desktop plugin's check-in flow to bring. [See details](dev/CHANGELOG-DETAILS.md#4-breaking-app-rorolaladesktop-plugins-rorolala-vcs-rename-the-desktop-plugins-check-in-flow-to-bring)
+5. **\[BREAKING!\]** [`modules`] [`define-format`] Record a material's kind in rola.lock. [See details](dev/CHANGELOG-DETAILS.md#5-breaking-modules-define-format-record-a-materials-kind-in-rolalock)
+6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a file tree row as a three-column grid. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-file-system-tree-draw-a-file-tree-row-as-a-three-column-grid)
+7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Draw the Version Graph in the look's own hues. [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-draw-the-version-graph-in-the-looks-own-hues)
+8. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack. [See details](dev/CHANGELOG-DETAILS.md#8-app-rorolaladesktop-progress-show-progress-in-a-host-level-stack)
+9. [`app`] [`RorolalaDesktop`] [`theme`] Restate the look and dock chrome. [See details](dev/CHANGELOG-DETAILS.md#9-app-rorolaladesktop-theme-restate-the-look-and-dock-chrome)
 
 # 0.2.0 (2026-11-04)
 

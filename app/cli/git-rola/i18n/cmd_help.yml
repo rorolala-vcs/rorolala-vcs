@@ -1,0 +1,6 @@
+_version: 2
+
+help:
+  usage:
+    en: git rola help [<command>]
+    zh-CN: git rola help [<命令>]

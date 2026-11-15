@@ -3,9 +3,13 @@
 // mingling's `#[command]` expands the entry type and the dispatch function beside the command, and
 // the expansion is not documented; the items this module writes carry their own docs.
 #![allow(missing_docs)]
+// A command's words arrive as the value the framework's entry converts to, so the parameter is the
+// framework's shape rather than this module's choice: taking them by reference is not an option the
+// generated wrapper offers.
+#![allow(clippy::needless_pass_by_value)]
 
 use mingling::{
-    Grouped, StructuralData,
+    Grouped,
     macros::{buffer, chain, command, r_println, renderer},
     res::ResExitCode,
 };
@@ -14,19 +18,26 @@ use rola_git_support::{
     DifferenceKind, Session, differences, digest_of, structure as read_structure,
 };
 use rust_i18n::t;
-use serde::Serialize;
 
 use crate::Next;
+use crate::Refused;
 use crate::exit_codes::{EC_DIFFERENCES, EC_OK};
+use crate::options::operands;
 
 /// Prints what differs from `rola.lock`
 ///
 /// Each material is read and its content named; a material whose content is not the one the lock
 /// names is one line of git's short status, and one that is not there at all is another. Nothing is
 /// printed when the working tree is the lock's.
+///
+/// The paths are quoted the way git quotes a path, so a reader of both programs sees one spelling.
 #[command(node = "check", entry = EntryCheck)]
-pub fn check() -> StateCheck {
-    StateCheck
+pub fn check(words: Vec<String>) -> Next {
+    if !operands(&words).is_empty() {
+        return Refused { command: "check" }.into();
+    }
+
+    StateCheck.into()
 }
 
 /// The state a check starts in: the command names nothing.
@@ -43,10 +54,7 @@ pub fn handle_check(_state: StateCheck) -> Next {
 }
 
 /// Result: what a check found.
-///
-/// It is `StructuralData` as well as `Serialize`, so a run that asked for `--json` is answered with
-/// this and not with the nothing a renderer that only writes text returns.
-#[derive(Grouped, Serialize, StructuralData)]
+#[derive(Grouped)]
 pub struct ResultCheck {
     /// The lines of git's short status, one per material that differs.
     pub lines: Vec<String>,
@@ -93,7 +101,7 @@ fn inspect() -> Result<ResultCheck, String> {
         match material.kind() {
             MaterialKind::File => {
                 if !target.is_file() {
-                    lines.push(format!(" D {named}"));
+                    lines.push(format!(" D {}", crate::quote::path(&named)));
 
                     continue;
                 }
@@ -108,7 +116,7 @@ fn inspect() -> Result<ResultCheck, String> {
                 })?;
 
                 if found != material.content() {
-                    lines.push(format!(" M {named}"));
+                    lines.push(format!(" M {}", crate::quote::path(&named)));
                 }
             }
             MaterialKind::Tree => {
@@ -140,7 +148,7 @@ fn inspect() -> Result<ResultCheck, String> {
                         DifferenceKind::Modified => "M",
                     };
 
-                    lines.push(format!(" {mark} {at}"));
+                    lines.push(format!(" {mark} {}", crate::quote::path(&at)));
                 }
             }
         }

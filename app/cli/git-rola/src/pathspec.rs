@@ -6,12 +6,19 @@
 //! [`check`](crate::check) prints it, from the work tree's root, is read that way when nothing
 //! else matches it, since that is the spelling a person copies out of a `check`.
 //!
+//! A name may hold git's wildcards, `*`, `?` and `[]`, read under the four `GIT_*_PATHSPECS`
+//! variables, see [`wildmatch`](crate::wildmatch). The `:(magic)` prefixes git also reads are not
+//! implemented: a component holding a `:` is refused rather than guessed at, since a name with one
+//! in it means a place outside the project or a rule this program does not apply.
+//!
 //! Reading the names is a pure business: what a name means is decided from the paths alone, so the
 //! reading is tested here rather than through the program.
 
 use std::path::Path;
 
 use rola_define_format::{Lock, LockPath, MaterialKind};
+
+use crate::wildmatch::{Options, Pattern};
 
 /// Why a name selected nothing.
 #[derive(Debug)]
@@ -43,15 +50,33 @@ pub struct Choice {
 /// Returns a [`Refusal`] for a name no material is under, one that leaves the project, and one that
 /// is not a path a lock could name.
 pub fn select(lock: &Lock, base: &Path, prefix: &str, specs: &[String]) -> Result<Choice, Refusal> {
+    select_with(lock, base, prefix, specs, Options::from_env())
+}
+
+/// The materials of `lock` that `specs` select, read under `options`.
+///
+/// # Errors
+///
+/// Returns the same refusals as [`select`].
+pub fn select_with(
+    lock: &Lock,
+    base: &Path,
+    prefix: &str,
+    specs: &[String],
+    options: Options,
+) -> Result<Choice, Refusal> {
     // Each name is settled by the first reading of it that the lock has something under: a name is
     // meant as it reads from the run's directory, and the other readings are only there for a name
     // that would otherwise match nothing.
     let mut settled = Vec::with_capacity(specs.len());
 
     for spec in specs {
-        let candidates = wanted(spec, base, prefix)?;
+        let mut candidates: Vec<Pattern> = wanted(spec, base, prefix)?
+            .into_iter()
+            .map(|text| Pattern::new(text, options))
+            .collect();
 
-        let Some(reached) = candidates.iter().find(|candidate| {
+        let Some(found) = candidates.iter().position(|candidate| {
             lock.materials()
                 .iter()
                 .any(|material| covers(candidate, material.path().as_str(), material.kind()))
@@ -59,7 +84,7 @@ pub fn select(lock: &Lock, base: &Path, prefix: &str, specs: &[String]) -> Resul
             return Err(Refusal::NoMatch(spec.clone()));
         };
 
-        settled.push(reached.clone());
+        settled.push(candidates.remove(found));
     }
 
     let materials = lock
@@ -170,23 +195,48 @@ fn read(base: &Path, spec: &str) -> Result<String, Refusal> {
 /// which is how a directory name restores everything beneath it. A tree is one material, so a name
 /// inside it selects the whole tree: a file of a tree has no content of its own to put back, only
 /// the structure the tree records.
-fn covers(candidate: &str, material: &str, kind: MaterialKind) -> bool {
-    candidate.is_empty()
-        || candidate == material
-        || material
-            .strip_prefix(candidate)
-            .is_some_and(|rest| rest.starts_with('/'))
-        || (kind == MaterialKind::Tree
-            && candidate
-                .strip_prefix(material)
-                .is_some_and(|rest| rest.starts_with('/')))
+fn covers(candidate: &Pattern, material: &str, kind: MaterialKind) -> bool {
+    let text = candidate.text();
+
+    if text.is_empty() || text == material || candidate.at_or_above(material) {
+        return true;
+    }
+
+    // A tree is one material, so a name at it, in it, or inside it selects the whole tree.
+    kind == MaterialKind::Tree
+        && (candidate.matches(material)
+            || candidate.below(material)
+            || names_inside(candidate, material))
+}
+
+/// Whether `candidate` names something inside `material`, a tree.
+///
+/// The two are walked a component at a time: once the tree's own components are all consumed and
+/// the candidate still has one, the candidate names a place under the tree rather than the tree
+/// itself. `*` may cross `/` in the default reading, so the whole-name match above settles the
+/// cases where it does; this is what settles a candidate whose own components go further.
+fn names_inside(candidate: &Pattern, material: &str) -> bool {
+    let mut parts = candidate.text().split('/');
+
+    for component in material.split('/') {
+        let Some(part) = parts.next() else {
+            return false;
+        };
+
+        if !candidate.matches_component(part, component) {
+            return false;
+        }
+    }
+
+    parts.next().is_some()
 }
 
 #[cfg(test)]
 mod tests {
     use rola_define_format::{ContentHash, Lock, LockPath, Material, MaterialKind};
 
-    use super::{Refusal, select};
+    use super::{Refusal, select, select_with};
+    use crate::wildmatch::Options;
 
     /// A lock naming `paths` at one content each.
     fn lock(paths: &[&str]) -> Lock {
@@ -229,9 +279,20 @@ mod tests {
 
     /// The paths `specs` select, as the lock lists them.
     fn chosen(lock: &Lock, base: &str, prefix: &str, specs: &[&str]) -> Vec<String> {
+        chosen_with(lock, base, prefix, specs, Options::default())
+    }
+
+    /// The paths `specs` select under `options`.
+    fn chosen_with(
+        lock: &Lock,
+        base: &str,
+        prefix: &str,
+        specs: &[&str],
+        options: Options,
+    ) -> Vec<String> {
         let specs: Vec<String> = specs.iter().map(|spec| (*spec).to_owned()).collect();
 
-        select(lock, std::path::Path::new(base), prefix, &specs)
+        select_with(lock, std::path::Path::new(base), prefix, &specs, options)
             .unwrap()
             .materials
             .iter()
@@ -385,5 +446,75 @@ mod tests {
         );
 
         assert!(matches!(refused, Err(Refusal::NoMatch(_))));
+    }
+
+    #[test]
+    fn a_star_selects_everything_under_what_it_starts_with() {
+        let lock = lock(&["Assets/a/b.psd", "Assets/hero.psd", "Source/c.fbx"]);
+
+        assert_eq!(
+            chosen(&lock, "", ".", &["Assets/*"]),
+            ["Assets/a/b.psd", "Assets/hero.psd"]
+        );
+        // `*` crosses `/` by default, so this is every `.psd` under `Assets`, at any depth.
+        assert_eq!(
+            chosen(&lock, "", ".", &["Assets/*.psd"]),
+            ["Assets/a/b.psd", "Assets/hero.psd"]
+        );
+        assert_eq!(chosen(&lock, "", ".", &["Sou?ce"]), ["Source/c.fbx"]);
+        assert_eq!(
+            chosen(&lock, "", ".", &["[SA]*"]),
+            ["Assets/a/b.psd", "Assets/hero.psd", "Source/c.fbx"]
+        );
+    }
+
+    #[test]
+    fn a_wildcard_name_inside_a_tree_selects_the_tree() {
+        let lock = mixed(&["Assets/Textures"], &["Assets/hero.psd"]);
+
+        assert_eq!(
+            chosen(&lock, "", ".", &["Assets/Textures/*"]),
+            ["Assets/Textures"]
+        );
+        assert_eq!(
+            chosen(&lock, "", ".", &["Assets/Tex*/sub/x.psd"]),
+            ["Assets/Textures"]
+        );
+    }
+
+    #[test]
+    fn a_wildcard_that_matches_nothing_is_refused() {
+        let lock = lock(&["Assets/hero.psd"]);
+
+        let refused = select(
+            &lock,
+            std::path::Path::new(""),
+            ".",
+            &["Source/*".to_owned()],
+        );
+
+        assert!(matches!(refused, Err(Refusal::NoMatch(name)) if name == "Source/*"));
+    }
+
+    #[test]
+    fn the_literal_environment_makes_a_star_a_character() {
+        let lock = lock(&["Assets/*", "Assets/hero.psd"]);
+        let options = Options::from_lookup(|name| name == "GIT_LITERAL_PATHSPECS");
+
+        assert_eq!(
+            chosen_with(&lock, "", ".", &["Assets/*"], options),
+            ["Assets/*"]
+        );
+    }
+
+    #[test]
+    fn the_icase_environment_folds_the_case() {
+        let lock = lock(&["Assets/hero.psd"]);
+        let options = Options::from_lookup(|name| name == "GIT_ICASE_PATHSPECS");
+
+        assert_eq!(
+            chosen_with(&lock, "", ".", &["assets/HERO.psd"], options),
+            ["Assets/hero.psd"]
+        );
     }
 }

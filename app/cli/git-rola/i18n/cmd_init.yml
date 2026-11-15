@@ -1,6 +1,9 @@
 _version: 2
 
 init:
+  usage:
+    en: git rola init
+    zh-CN: git rola init
   initialized:
     en: Initialized rola project in %{path}
     zh-CN: 已在 %{path} 初始化 rola 项目

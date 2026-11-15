@@ -1,0 +1,6 @@
+_version: 2
+
+version:
+  usage:
+    en: git rola version
+    zh-CN: git rola version

@@ -1,12 +1,18 @@
 _version: 2
 
 restore:
+  usage:
+    en: git rola restore <path>...
+    zh-CN: git rola restore <路径>
+  err_no_path:
+    en: you must specify path(s) to restore
+    zh-CN: 必须指定要放回的路径
   err_path:
-    en: "'%{name}' is not a path rola.lock could name"
-    zh-CN: "'%{name}' 不是 `rola.lock` 能命名的路径"
-  err_not_in_lock:
-    en: "no material matches `%{name}`"
-    zh-CN: "没有素材匹配 `%{name}`"
+    en: "pathspec '%{name}' is not a path rola.lock could name"
+    zh-CN: "pathspec '%{name}' 不是 `rola.lock` 能命名的路径"
+  err_pathspec:
+    en: "pathspec '%{name}' did not match any material in rola.lock"
+    zh-CN: "pathspec '%{name}' 没有匹配 `rola.lock` 里的任何素材"
   err_outside:
-    en: "`%{name}` is not under the project"
-    zh-CN: "`%{name}` 不在项目内"
+    en: "pathspec '%{name}' is outside the project"
+    zh-CN: "pathspec '%{name}' 在项目之外"

@@ -1,23 +1,28 @@
-//! The `init` and `hook` commands: a project's git support set up, and kept in step afterwards.
+//! The commands that keep a project's git support: its files, its materials, and the hooks.
 
 // mingling's `#[command]` expands the entry type and the dispatch function beside the command, and
 // the expansion is not documented; the items this module writes carry their own docs.
 #![allow(missing_docs)]
+// A command's words arrive as the value the framework's entry converts to, so the parameter is the
+// framework's shape rather than this module's choice: taking them by reference is not an option the
+// generated wrapper offers.
+#![allow(clippy::needless_pass_by_value)]
 
 use std::fs;
+use std::path::{Path, PathBuf};
 
 use mingling::{
     Grouped,
-    consts::UNMATCHED,
-    macros::{arg, buffer, chain, command, r_eprintln, r_println, renderer},
-    picker::EntryPicker,
+    macros::{buffer, chain, command, r_eprintln, r_println, renderer},
     res::ResExitCode,
 };
 use rola_git_support::{Error as GitError, Project, Repository, Session};
 use rust_i18n::t;
 
 use crate::Next;
-use crate::exit_codes::EC_ERR;
+use crate::Refused;
+use crate::exit_codes::EC_FAILED;
+use crate::options::operands;
 
 /// The events a project's materials are kept in step after.
 const EVENTS: [&str; 3] = ["post-checkout", "post-merge", "post-rewrite"];
@@ -50,8 +55,12 @@ origin = "rola://127.0.0.1/default"
 /// The project file is written when there is none, the hooks that keep the materials in step are
 /// installed, and a project that already has a lock has its materials put in place.
 #[command(node = "init", entry = EntryInit)]
-pub fn init() -> StateInit {
-    StateInit
+pub fn init(words: Vec<String>) -> Next {
+    if !operands(&words).is_empty() {
+        return Refused { command: "init" }.into();
+    }
+
+    StateInit.into()
 }
 
 /// The state init starts in: the command names nothing.
@@ -67,17 +76,23 @@ pub fn handle_init(_state: StateInit) -> Next {
     }
 }
 
-/// Result: a project was set up.
+/// Result: a project was set up, and what could not be done on the way.
 #[derive(Grouped)]
 pub struct ResultInit {
     /// The line git-rola says about the project it set up.
     pub message: String,
+    /// Whether something the set-up was to write could not be written.
+    pub failed: bool,
 }
 
-/// Renders the line about the project that was set up.
+/// Renders the line about the project that was set up, and ends a partial set-up with git's 1.
 #[renderer(buffer)]
-pub fn render_init(result: ResultInit) {
+pub fn render_init(result: ResultInit, ec: &mut ResExitCode) {
     r_println!("{}", result.message);
+
+    if result.failed {
+        ec.exit_code = EC_FAILED;
+    }
 }
 
 /// Writes the project file and the hooks, and puts a lock's materials in place.
@@ -114,7 +129,7 @@ fn initialise() -> Result<ResultInit, String> {
         .map_err(|error| error.to_string())?
         .ok_or_else(|| t!("init.err_open").to_string())?;
 
-    install_hooks(session.repository().git_dir())?;
+    let mut failed = !install_hooks(session.repository().git_dir())?;
 
     if session.project().lock_path().is_file() {
         let lock = session.lock().map_err(|error| error.to_string())?;
@@ -125,7 +140,8 @@ fn initialise() -> Result<ResultInit, String> {
         session.exclude(&lock).map_err(|error| error.to_string())?;
 
         for (path, error) in &failures {
-            eprintln!("git-rola: {path}: {error}");
+            eprintln!("{}{path}: {error}", t!("message.error"));
+            failed = true;
         }
     }
 
@@ -138,33 +154,32 @@ fn initialise() -> Result<ResultInit, String> {
 
     Ok(ResultInit {
         message: message.to_string(),
+        failed,
     })
 }
 
 /// Keeps a project's materials in step after a git operation changed the work tree
 ///
-/// This is what the installed hooks run. A repository that holds no project is not a failure: the
-/// hook was installed here, but the project may have been removed since.
+/// This is what the installed hooks run. The first word is the event, and the words after it are
+/// git's own arguments to that hook, which a hook does not read and so are passed over. A
+/// repository that holds no project is not a failure: the hook was installed here, but the project
+/// may have been removed since.
 #[command(node = "hook", entry = EntryHook)]
-pub fn hook(args: EntryHook) -> Next {
-    let picked = args.pick(arg![Vec<String>]).pick(&UNMATCHED).to_result();
+pub fn hook(words: Vec<String>) -> Next {
+    let named = operands(&words);
 
-    let (words, unmatched) = match picked {
-        Ok(picked) => picked,
-        Err(next) => return next,
+    let Some(event) = named.first() else {
+        return Refused { command: "hook" }.into();
     };
 
-    if crate::refused(&unmatched) {
-        return crate::usage();
+    if !EVENTS.contains(&event.as_str()) {
+        return Refused { command: "hook" }.into();
     }
 
-    match words.first().map(String::as_str) {
-        Some(event) if EVENTS.contains(&event) => StateHook {
-            event: event.to_owned(),
-        }
-        .into(),
-        _ => crate::usage(),
+    StateHook {
+        event: event.clone(),
     }
+    .into()
 }
 
 /// The state a hook run starts in: the event it is run for.
@@ -188,7 +203,7 @@ pub fn handle_hook(state: StateHook) -> Next {
         // command's failure for some of git's commands (`git worktree add`), so a work tree this
         // build does not act in is said and left where it is.
         Err(error @ GitError::LinkedWorkTree) => {
-            eprintln!("git-rola: {error}");
+            eprintln!("{}{error}", t!("message.warning"));
 
             return ResultHook { placed: true }.into();
         }
@@ -214,7 +229,7 @@ pub fn handle_hook(state: StateHook) -> Next {
         Ok(failures) if failures.is_empty() => ResultHook { placed: true }.into(),
         Ok(failures) => {
             for (path, error) in &failures {
-                eprintln!("git-rola: {path}: {error}");
+                eprintln!("{}{path}: {error}", t!("message.error"));
             }
 
             ResultHook { placed: false }.into()
@@ -238,33 +253,31 @@ pub struct ResultHook {
     pub placed: bool,
 }
 
-/// Renders nothing on success, and ends a run that could not place everything with an error.
+/// Renders nothing on success, and ends a run that could not place everything with git's 1.
 #[renderer(buffer)]
 pub fn render_hook(result: ResultHook, ec: &mut ResExitCode) {
     if !result.placed {
-        ec.exit_code = EC_ERR;
+        ec.exit_code = EC_FAILED;
     }
 }
 
 /// Puts materials back as the lock names them
 ///
 /// A name is read the way git reads a pathspec: a path relative to the run's directory, a directory
-/// for everything under it, and `.` for everything under the current directory. A name that selects
-/// nothing is refused before anything is written, so a run that mistypes one restores nothing.
+/// for everything under it, `.` for everything under the current directory, and git's wildcards
+/// under the variables that shape them. A name that selects nothing is refused before anything is
+/// written, so a run that mistypes one restores nothing.
 ///
 /// A tree is one material, so a name inside it selects the whole tree, which is written back as the
 /// structure the lock names. A file the structure does not name is left where it is.
 #[command(node = "restore", entry = EntryRestore)]
-pub fn restore(args: EntryRestore) -> Next {
-    let picked = args.pick(arg![Vec<String>]).pick(&UNMATCHED).to_result();
+pub fn restore(words: Vec<String>) -> Next {
+    let names = operands(&words);
 
-    let (names, unmatched) = match picked {
-        Ok(picked) => picked,
-        Err(next) => return next,
-    };
-
-    if crate::refused(&unmatched) || names.is_empty() {
-        return crate::usage();
+    // git reads a restore with no name as a command that cannot be made, not as a line it could not
+    // read: `fatal: you must specify path(s) to restore`, 128.
+    if names.is_empty() {
+        return crate::Fatal::new(t!("restore.err_no_path").to_string()).into();
     }
 
     StateRestore { names }.into()
@@ -284,8 +297,17 @@ pub fn handle_restore(state: StateRestore) -> Next {
 
     match restore_materials(&names) {
         Ok(result) => result.into(),
-        Err(message) => crate::Fatal::new(message).into(),
+        Err(RestoreFailure::Pathspec(refusal)) => crate::PathspecRefused { refusal }.into(),
+        Err(RestoreFailure::Fatal(message)) => crate::Fatal::new(message).into(),
     }
+}
+
+/// Why a restore could not put anything back.
+enum RestoreFailure {
+    /// A name that selected nothing, which git answers as a pathspec with status 1.
+    Pathspec(crate::pathspec::Refusal),
+    /// The project or its lock could not be read, which git answers as `fatal:`.
+    Fatal(String),
 }
 
 /// Result: what a restore could not put back.
@@ -295,55 +317,66 @@ pub struct ResultRestore {
     pub failures: Vec<(String, String)>,
 }
 
-/// Renders what a restore could not put back, and ends the run with an error when anything is left.
+/// Renders what a restore could not put back, and ends the run on the first of them with git's 1.
 #[renderer(buffer)]
 pub fn render_restore(result: ResultRestore, ec: &mut ResExitCode) {
     for (path, error) in &result.failures {
-        r_eprintln!("git-rola: {path}: {error}");
+        r_eprintln!("{}{path}: {error}", t!("message.error"));
     }
 
     if !result.failures.is_empty() {
-        ec.exit_code = EC_ERR;
+        ec.exit_code = EC_FAILED;
     }
 }
 
 /// Reads the project and puts the materials the names select back from the lock.
-fn restore_materials(names: &[String]) -> Result<ResultRestore, String> {
-    let cwd = std::env::current_dir()
-        .map_err(|error| t!("git_rola.err_cwd", error = error.to_string()).to_string())?;
+fn restore_materials(names: &[String]) -> Result<ResultRestore, RestoreFailure> {
+    let cwd = std::env::current_dir().map_err(|error| {
+        RestoreFailure::Fatal(t!("git_rola.err_cwd", error = error.to_string()).to_string())
+    })?;
 
-    let Some(session) = Session::open(&cwd).map_err(|error| error.to_string())? else {
-        return Err(t!("git_rola.err_no_project").to_string());
+    let Some(session) =
+        Session::open(&cwd).map_err(|error| RestoreFailure::Fatal(error.to_string()))?
+    else {
+        return Err(RestoreFailure::Fatal(
+            t!("git_rola.err_no_project").to_string(),
+        ));
     };
 
-    let lock = session
-        .lock()
-        .map_err(|error| t!("git_rola.err_lock", error = error.to_string()).to_string())?;
+    let lock = session.lock().map_err(|error| {
+        RestoreFailure::Fatal(t!("git_rola.err_lock", error = error.to_string()).to_string())
+    })?;
 
     // What a name means is read from where the run is: the directory it is made in, relative to the
     // project, is what a name is joined to.
-    let prefix = session.name().map_err(|error| error.to_string())?;
+    let prefix = session
+        .name()
+        .map_err(|error| RestoreFailure::Fatal(error.to_string()))?;
     let here = session
         .repository()
         .relative(&cwd)
-        .map_err(|error| error.to_string())?;
-    let base: std::path::PathBuf = if prefix == "." {
+        .map_err(|error| RestoreFailure::Fatal(error.to_string()))?;
+    let base: PathBuf = if prefix == "." {
         here
     } else {
-        let project: std::path::PathBuf = prefix.split('/').collect();
+        let project: PathBuf = prefix.split('/').collect();
 
         here.strip_prefix(&project)
-            .map_err(|_| t!("restore.err_outside", name = cwd.display().to_string()).to_string())?
+            .map_err(|_| {
+                RestoreFailure::Fatal(
+                    t!("restore.err_outside", name = cwd.display().to_string()).to_string(),
+                )
+            })?
             .to_path_buf()
     };
 
-    let only = crate::pathspec::select(&lock, &base, &prefix, names)
-        .map_err(|refusal| refusal_message(&refusal))?;
+    let only =
+        crate::pathspec::select(&lock, &base, &prefix, names).map_err(RestoreFailure::Pathspec)?;
 
     let source = crate::source::of(session.project());
     let failures = session
         .restore(&lock, &only.materials, &source)
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| RestoreFailure::Fatal(error.to_string()))?;
 
     Ok(ResultRestore {
         failures: failures
@@ -353,26 +386,18 @@ fn restore_materials(names: &[String]) -> Result<ResultRestore, String> {
     })
 }
 
-/// A name that selected nothing, said the way the program says it.
-fn refusal_message(refusal: &crate::pathspec::Refusal) -> String {
-    use crate::pathspec::Refusal;
-
-    match refusal {
-        Refusal::NoMatch(name) => t!("restore.err_not_in_lock", name = name.as_str()),
-        Refusal::Outside(name) => t!("restore.err_outside", name = name.as_str()),
-        Refusal::Invalid(name) => t!("restore.err_path", name = name.as_str()),
-    }
-    .to_string()
-}
-
 /// Updates `rola.lock` and puts the project's materials in step with it
 ///
 /// Each mapping is resolved through the Vaults the project declares: the version its pin names, and
 /// the content that version points at, brought into the project's store. Nothing is written unless
 /// every mapping resolves, and what was placed before is taken out before the new lock is applied.
 #[command(node = "update", entry = EntryUpdate)]
-pub fn update() -> StateUpdate {
-    StateUpdate
+pub fn update(words: Vec<String>) -> Next {
+    if !operands(&words).is_empty() {
+        return Refused { command: "update" }.into();
+    }
+
+    StateUpdate.into()
 }
 
 /// The state update starts in: the command names nothing.
@@ -405,18 +430,74 @@ pub struct ResultUpdated {
 #[renderer(buffer)]
 pub fn render_updated(result: ResultUpdated, ec: &mut ResExitCode) {
     for (path, error) in &result.failures {
-        r_eprintln!("git-rola: {path}: {error}");
+        r_eprintln!("{}{path}: {error}", t!("message.error"));
     }
 
     if result.failures.is_empty() {
         r_println!("{}", t!("update.updated", materials = result.materials));
     } else {
-        ec.exit_code = EC_ERR;
+        ec.exit_code = EC_FAILED;
     }
 }
 
+/// Prints the program's usage, or one command's
+///
+/// This is git's `git help` with the documentation viewer left out: the same text a `-h` gives is
+/// written here, so a run that wants to read about a command gets it without a man page or a
+/// browser. A word after the command name is ignored, the way `git help status extra` ignores it.
+#[command(node = "help", entry = EntryHelp)]
+pub fn help(words: Vec<String>) -> ResultHelp {
+    let command = operands(&words)
+        .first()
+        .and_then(|word| crate::usage::named(word));
+
+    ResultHelp { command }
+}
+
+/// Result: which usage was asked for.
+#[derive(Grouped)]
+pub struct ResultHelp {
+    /// The command whose usage was asked for, or nothing for the program's own.
+    pub command: Option<&'static str>,
+}
+
+/// Renders the usage that was asked for, on stdout and with git's status.
+#[renderer(buffer)]
+pub fn render_help(result: ResultHelp) {
+    match result.command {
+        Some(command) => r_println!("{}", crate::usage::command(command)),
+        None => r_println!("{}", crate::usage::program()),
+    }
+}
+
+/// Prints the version of this program
+///
+/// git answers `git version` as `git version X` whatever follows it, so this is the same line under
+/// this program's name, and a word after it is ignored.
+#[command(node = "version", entry = EntryVersion)]
+pub fn version() -> ResultVersion {
+    ResultVersion
+}
+
+/// Result: the version line is all there is to say.
+#[derive(Grouped)]
+pub struct ResultVersion;
+
+/// Renders the version line, the way `git version` writes one.
+#[renderer(buffer)]
+pub fn render_version(_: ResultVersion) {
+    r_println!(
+        "{}",
+        t!("git_rola.version", version = env!("CARGO_PKG_VERSION"))
+    );
+}
+
 /// Installs the hooks a project needs, leaving any hook a person put there alone.
-fn install_hooks(git_dir: &std::path::Path) -> Result<(), String> {
+///
+/// Answers whether every hook this program was to write is now written. A hook that belongs to
+/// someone else is left where it is and is not counted against the run; one that could not be
+/// written is, since the set-up is then only part done.
+fn install_hooks(git_dir: &Path) -> Result<bool, String> {
     let hooks = git_dir.join("hooks");
 
     fs::create_dir_all(&hooks).map_err(|error| {
@@ -428,6 +509,8 @@ fn install_hooks(git_dir: &std::path::Path) -> Result<(), String> {
         .to_string()
     })?;
 
+    let mut every_written = true;
+
     for event in EVENTS {
         let path = hooks.join(event);
 
@@ -436,7 +519,7 @@ fn install_hooks(git_dir: &std::path::Path) -> Result<(), String> {
 
             if !ours {
                 let said = t!("init.err_hook_exists", event = event).to_string();
-                eprintln!("git-rola: {said}");
+                eprintln!("{}{said}", t!("message.warning"));
 
                 continue;
             }
@@ -453,7 +536,9 @@ fn install_hooks(git_dir: &std::path::Path) -> Result<(), String> {
                 error = error.to_string()
             )
             .to_string();
-            eprintln!("git-rola: {said}");
+            eprintln!("{}{said}", t!("message.error"));
+
+            every_written = false;
         } else {
             #[cfg(unix)]
             {
@@ -466,5 +551,5 @@ fn install_hooks(git_dir: &std::path::Path) -> Result<(), String> {
         }
     }
 
-    Ok(())
+    Ok(every_written)
 }

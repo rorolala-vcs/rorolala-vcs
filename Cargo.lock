@@ -1529,6 +1529,8 @@ dependencies = [
 name = "git-rola"
 version = "0.3.0"
 dependencies = [
+ "globset",
+ "libc",
  "librorolala",
  "mingling",
  "rola-define-format",

@@ -1,0 +1,15 @@
+_version: 2
+
+message:
+  fatal:
+    en: "fatal: "
+    zh-CN: "致命错误："
+  error:
+    en: "error: "
+    zh-CN: "错误："
+  warning:
+    en: "warning: "
+    zh-CN: "警告："
+  usage:
+    en: "usage: "
+    zh-CN: "用法："

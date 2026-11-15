@@ -1,16 +1,18 @@
 //! `git-rola`: what the program does in a work tree that holds a project.
 //!
 //! A program rather than a set of tests cargo runs, because what it checks is programs a caller
-//! meets: the built `git-rola`, started the way a person starts it, and the `git` it reaches for
-//! the operations that change the working tree. What is checked is what a run exits with, what it
-//! says, and what the work tree and the repository's exclude file hold afterwards.
+//! meets: the built `git-rola`, started the way a person starts it, the `git rola` git reaches it
+//! as, and the `git` it reaches for the operations that change the working tree. What is checked is
+//! what a run exits with, what it says, and what the work tree and the repository's exclude file
+//! hold afterwards.
 //!
 //! Everything happens inside one sandbox, and the machine's own git configuration is pointed into
 //! it as well (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `HOME`) so a run here reads and writes
 //! nothing of the person's, and a machine whose git is configured differently answers the same. The
 //! programs of this build are put on the `PATH` the child git is given, because a hook installed in
-//! the repository is reached by git as `git rola` and has to find it. The language is pinned to
-//! English, since what is read back is text; the check that is about the language says so itself.
+//! the repository is reached by git as `git rola` and has to find it. The language is pinned to the
+//! `C` locale, which git's own tests use and which is the untranslated one; the checks that are
+//! about the language name their own.
 //!
 //! The suite is about the one thing git and rola have to agree on: a material is content, not a
 //! file git keeps. git is given every material the lock names through the repository's exclude
@@ -24,9 +26,6 @@ use std::process::Command;
 use librorolala::storage::Key;
 use librorolala::tree::{FileMode, TreeEntry, TreeStructure};
 use rorolala_utils_sandbox::{Guard, Ran, bin_dir, run};
-
-/// The language every run is made in, so what is read back is a known text.
-const EN: &str = "en";
 
 /// The material every project here places.
 const MATERIAL: &str = "Assets/hero.psd";
@@ -63,6 +62,8 @@ fn main() {
     initialise(&run, &repo, &mut checked);
     checking(&run, &repo, &mut checked);
     restoring(&run, &repo, &mut checked);
+    reaching(&run, &repo, &mut checked);
+    quoting(&run, sandbox.dir(), &mut checked);
     trees(&run, sandbox.dir(), &mut checked);
     branches(&run, &repo, &mut checked);
     hooks(&run, &repo, &mut checked);
@@ -74,14 +75,14 @@ fn main() {
     checked.report();
 }
 
-/// What the program says about itself: the version, the help, and the language both are said in.
+/// What the program says about itself: the version, the usage, and the language both are said in.
 fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     let version = run.rola(elsewhere, &["--version"]);
     checked.exits("`--version` ends successfully", &version, 0);
     checked.stdout_has(
         "`--version` names the program",
         &version,
-        "git-rola version",
+        "git rola version",
     );
     checked.wants(
         "`--version` names a version",
@@ -102,100 +103,248 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
         &said(&version),
     );
 
-    // The help is git's: one usage line and what the program can do. There is one help, at the
-    // program's root, and a command's name does not change what `--help` says.
-    let help = run.rola(elsewhere, &["--help"]);
-    checked.exits("`--help` ends successfully", &help, 0);
+    // The version is a command of its own as well, and it ignores what follows it, the way
+    // `git version extra` does.
+    for words in [&["version"][..], &["version", "extra"][..]] {
+        let version = run.rola(elsewhere, words);
+        let question = words.join(" ");
+
+        checked.exits(&format!("`{question}` ends successfully"), &version, 0);
+        checked.wants(
+            &format!("`{question}` names a version"),
+            names_a_version(&version),
+            &said(&version),
+        );
+    }
+
+    // The root usage is git's bare-`git` shape: a usage line, the commands, and where to read more.
+    for words in [&["-h"][..], &["--help"][..]] {
+        let help = run.rola(elsewhere, words);
+        let question = words.join(" ");
+
+        checked.exits(&format!("`{question}` ends successfully"), &help, 0);
+        checked.stdout_has(
+            "the usage has git's line",
+            &help,
+            "usage: git rola <command>",
+        );
+        checked.stdout_has(
+            "the usage names the commands it lists",
+            &help,
+            "The rola commands are",
+        );
+        checked.stdout_has(
+            "the usage says where to read about one",
+            &help,
+            "See 'git rola <command>'",
+        );
+
+        for command in ["init", "hook", "check", "restore", "update", "help", "version"] {
+            checked.stdout_has(&format!("the usage lists `{command}`"), &help, command);
+        }
+
+        checked.wants(
+            "the usage is a result, not a failure",
+            help.stderr.trim().is_empty(),
+            &said(&help),
+        );
+    }
+
+    // A bare run is git's bare `git`: the same usage, on stdout, with status 1.
+    let bare = run.rola(elsewhere, &[]);
+    checked.exits("a bare run asks for the usage", &bare, 1);
     checked.stdout_has(
-        "the help has git's usage line",
+        "the usage is what a bare run says",
+        &bare,
+        "usage: git rola <command>",
+    );
+    checked.wants(
+        "a bare run is not a failure",
+        bare.stderr.trim().is_empty(),
+        &said(&bare),
+    );
+
+    // Each command writes down its own use, and `--help` as its first word asks for it with success.
+    for command in ["init", "hook", "check", "restore", "update", "help", "version"] {
+        let help = run.rola(elsewhere, &[command, "--help"]);
+        checked.exits(&format!("`{command} --help` ends successfully"), &help, 0);
+        checked.stdout_has(
+            &format!("`{command} --help` is its own usage"),
+            &help,
+            &format!("usage: git rola {command}"),
+        );
+        checked.wants(
+            &format!("`{command} --help` is a result, not a failure"),
+            help.stderr.trim().is_empty(),
+            &said(&help),
+        );
+    }
+
+    // `-h` is git's usage request inside a command: the same text, on stdout, with 129.
+    for command in ["init", "hook", "check", "restore", "update", "help", "version"] {
+        let usage = run.rola(elsewhere, &[command, "-h"]);
+        checked.exits(&format!("`{command} -h` is a usage request"), &usage, 129);
+        checked.stdout_has(
+            &format!("`{command} -h` is its own usage"),
+            &usage,
+            &format!("usage: git rola {command}"),
+        );
+    }
+
+    // The command, not the program, answers a line it cannot read.
+    let extra = run.rola(elsewhere, &["check", "x"]);
+    checked.exits("an operand a command does not take is refused", &extra, 129);
+    checked.stderr_has(
+        "the refusal is the command's usage",
+        &extra,
+        "usage: git rola check",
+    );
+    checked.stdout_empty("the refusal is not a result", &extra);
+
+    let late = run.rola(elsewhere, &["check", "x", "--help"]);
+    checked.exits("`--help` after an operand is a usage request", &late, 129);
+    checked.stdout_has(
+        "the usage request names the command",
+        &late,
+        "usage: git rola check",
+    );
+
+    let flag = run.rola(elsewhere, &["check", "--bogus"]);
+    checked.exits("a flag a command does not have is refused", &flag, 129);
+    checked.stderr_has(
+        "the refusal names the flag",
+        &flag,
+        "error: unknown option `bogus'",
+    );
+    checked.stderr_has(
+        "the refusal names the command's use",
+        &flag,
+        "usage: git rola check",
+    );
+    checked.stdout_empty("the refusal is not a result", &flag);
+
+    let short = run.rola(elsewhere, &["check", "-C"]);
+    checked.exits("a short flag a command does not have is refused", &short, 129);
+    checked.stderr_has("the short flag is a switch", &short, "error: unknown switch `C'");
+
+    // The root has no flag of its own, and git says so without an `error:` prefix.
+    let root = run.rola(elsewhere, &["--bogus"]);
+    checked.exits("a root flag is refused", &root, 129);
+    checked.stderr_has(
+        "the refusal names the option as git does",
+        &root,
+        "unknown option: --bogus",
+    );
+    checked.stderr_has(
+        "the refusal is followed by the program's usage",
+        &root,
+        "usage: git rola <command>",
+    );
+    checked.stdout_empty("the refusal is not a result", &root);
+
+    // A word no command answers to is git's unknown command: status 1, and the nearest command
+    // when there is one to offer.
+    for (typed, offered) in [("nosuch", None), ("chek", Some("check"))] {
+        let unknown = run.rola(elsewhere, &[typed]);
+        checked.exits("a word that names no command is refused", &unknown, 1);
+        checked.stderr_has("the refusal has git's sentence", &unknown, "is not a rola command");
+        checked.stderr_has("the refusal points at the usage", &unknown, "git rola --help");
+        checked.stdout_empty("the refusal is not a result", &unknown);
+
+        if let Some(offered) = offered {
+            checked.stderr_has(
+                "the nearest command is offered",
+                &unknown,
+                "The most similar command is",
+            );
+            checked.stderr_has("the offered command is named", &unknown, offered);
+        }
+    }
+
+    // `help` names a command's usage and ignores what follows it, the way `git help status extra`
+    // does; a word that names no command is the unknown command of the line above.
+    let help = run.rola(elsewhere, &["help"]);
+    checked.exits("`help` ends successfully", &help, 0);
+    checked.stdout_has(
+        "`help` writes the program's usage",
         &help,
         "usage: git rola <command>",
     );
-    checked.stdout_has(
-        "the help names the commands it lists",
-        &help,
-        "The rola commands are",
-    );
 
-    for command in ["check", "hook", "init", "restore", "update"] {
-        checked.stdout_has(&format!("the help lists `{command}`"), &help, command);
-    }
+    for words in [
+        &["help", "check"][..],
+        &["help", "check", "extra"][..],
+    ] {
+        let help = run.rola(elsewhere, words);
+        let question = words.join(" ");
 
-    checked.wants(
-        "the help is a result, not a failure",
-        help.stderr.trim().is_empty(),
-        &said(&help),
-    );
-
-    for command in ["check", "hook", "init", "restore", "update"] {
-        let help = run.rola(elsewhere, &[command, "--help"]);
-        checked.exits(&format!("`{command} --help` ends successfully"), &help, 0);
-        checked.wants(
-            &format!("`{command} --help` is answered with the program's one help"),
-            help.stdout.contains("usage: git rola <command>"),
-            &said(&help),
-        );
-        checked.wants(
-            &format!("`{command} --help` gives no help of its own"),
-            !help.stdout.contains(&format!("usage: git rola {command}")),
-            &said(&help),
+        checked.exits(&format!("`{question}` ends successfully"), &help, 0);
+        checked.stdout_has(
+            &format!("`{question}` writes check's usage"),
+            &help,
+            "usage: git rola check",
         );
     }
 
-    // The language is the one the run speaks: `--lang` names it, the environment names it when the
-    // flag does not, and what is said follows, not only the help, but the refusals too.
-    let chinese = run.rola(elsewhere, &["--lang", "zh-CN", "--help"]);
-    checked.exits("`--lang zh-CN --help` ends successfully", &chinese, 0);
-    checked.stdout_has("the help is said in the named language", &chinese, "用法：");
+    let help = run.rola(elsewhere, &["help", "nosuch"]);
+    checked.exits("`help nosuch` is an unknown command", &help, 1);
+
+    // The language is gettext's: `LC_ALL` above `LC_MESSAGES` above `LANG`, `C` untranslated, and
+    // `LANGUAGE` read only when the locale is a language.
+    let chinese = run.rola_with(elsewhere, &[("LC_ALL", "zh_CN.UTF-8")], &["--help"]);
+    checked.exits("a Chinese locale ends successfully", &chinese, 0);
+    checked.stdout_has("the usage is said in the locale's language", &chinese, "用法：");
     checked.wants(
-        "the help is not also said in English",
+        "the usage is not also said in English",
         !chinese.stdout.contains("usage:"),
         &said(&chinese),
     );
 
-    let english = run.rola(elsewhere, &["--lang", "en", "--help"]);
-    checked.exits("`--lang en --help` ends successfully", &english, 0);
-    checked.stdout_has(
-        "the chosen language is English",
-        &english,
-        "usage: git rola",
+    let english = run.rola_with(
+        elsewhere,
+        &[("LC_ALL", "C"), ("LANGUAGE", "zh_CN")],
+        &["--help"],
+    );
+    checked.exits("the C locale ends successfully", &english, 0);
+    checked.stdout_has("the C locale is not translated", &english, "usage: git rola");
+    checked.wants(
+        "the C locale does not read LANGUAGE",
+        !english.stdout.contains("用法："),
+        &said(&english),
     );
 
-    let from_environment = run.rola_in(elsewhere, "zh-CN", &["--help"]);
-    checked.exits(
-        "the environment names the language too",
-        &from_environment,
-        0,
+    let preferred = run.rola_with(
+        elsewhere,
+        &[("LC_ALL", "zh_CN.UTF-8"), ("LANGUAGE", "zh_CN")],
+        &["--help"],
     );
-    checked.stdout_has(
-        "the environment's language is spoken",
-        &from_environment,
-        "用法：",
-    );
+    checked.exits("a named preference ends successfully", &preferred, 0);
+    checked.stdout_has("the preferred language is spoken", &preferred, "用法：");
 
-    let refused = run.rola(elsewhere, &["--lang", "zh-CN", "no-such-command"]);
-    checked.exits("a refusal is the same refusal in Chinese", &refused, 129);
+    let refused = run.rola_with(elsewhere, &[("LC_ALL", "zh_CN.UTF-8")], &["nosuch"]);
+    checked.exits("a refusal is the same refusal in Chinese", &refused, 1);
     checked.stderr_has(
         "the refusal follows the run's language",
         &refused,
-        "无法识别",
+        "不是 rola 命令",
     );
 
-    // A run that asked about a wrapped command asked a question, not for git: the words are not
-    // handed to git, and nothing about the work tree moves.
+    // A wrapped command is git's to answer, flags and all: `-h` is git's own usage request, and
+    // nothing about the work tree moves.
     let before = run.git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]);
-    let help = run.rola(repo, &["switch", "--help"]);
-    checked.exits("`switch --help` ends successfully", &help, 0);
-    checked.stdout_has(
-        "`switch --help` is answered with the program's help",
-        &help,
-        "usage: git rola",
+    let usage = run.rola(repo, &["switch", "-h"]);
+    checked.exits("a wrapped command's `-h` is git's to answer", &usage, 129);
+    checked.stdout_has("the answer is git's usage of the command", &usage, "usage: git switch");
+    checked.wants(
+        "the program's own usage is not written over it",
+        !usage.stdout.contains("usage: git rola"),
+        &said(&usage),
     );
     let after = run.git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]);
     checked.wants(
-        "`switch --help` runs no git",
+        "a wrapped command's usage runs no checkout",
         before.stdout.trim() == after.stdout.trim(),
-        &said(&help),
+        &said(&usage),
     );
 }
 
@@ -221,10 +370,10 @@ fn refusals(run: &Run, repo: &Path, plain: &Path, elsewhere: &Path, checked: &mu
     checked.exits("a hook that finds no project ends successfully", &hook, 0);
     checked.stdout_empty("a hook that finds no project says nothing", &hook);
 
-    // A word no command answers to is a command line to refuse: a script reading the status must
-    // not take silence for a run that did something.
+    // A word no command answers to is a command line git would have refused, and a script reading
+    // the status must not take silence for a run that did something.
     let unknown = run.rola(elsewhere, &["no-such-command"]);
-    checked.exits("a word that names no command is refused", &unknown, 129);
+    checked.exits("a word that names no command is refused", &unknown, 1);
     checked.stderr_has(
         "the refusal points at the help",
         &unknown,
@@ -232,13 +381,44 @@ fn refusals(run: &Run, repo: &Path, plain: &Path, elsewhere: &Path, checked: &mu
     );
     checked.stdout_empty("the refusal is not a result", &unknown);
 
+    // A bare run is git's bare `git`: the usage, on stdout, with 1.
     let bare = run.rola(elsewhere, &[]);
-    checked.exits("a run that names nothing is refused", &bare, 129);
+    checked.exits("a run that names nothing asks for the usage", &bare, 1);
+    checked.stdout_has("the usage is what it says", &bare, "usage: git rola <command>");
+    checked.wants(
+        "the usage is not a failure",
+        bare.stderr.trim().is_empty(),
+        &said(&bare),
+    );
+
+    // A command line the program cannot read is 129, and the prefix is git's rather than the
+    // program's name.
+    let unreadable = run.rola(elsewhere, &["--bogus"]);
+    checked.exits("a line the program cannot read is 129", &unreadable, 129);
+    checked.stderr_has(
+        "the refusal is git's unknown option",
+        &unreadable,
+        "unknown option: --bogus",
+    );
+
+    // The command that could not be made is `fatal:`, which is 128 and not 1.
+    let fatal = run.rola(elsewhere, &["restore"]);
+    checked.exits("a command that cannot be made is fatal", &fatal, 128);
+    checked.stderr_has(
+        "the failure has git's prefix",
+        &fatal,
+        "fatal: you must specify path(s) to restore",
+    );
 
     // Setting up a directory that is no work tree writes the project file and then has nowhere to
     // put the hooks, so it says that rather than pretending to have set anything up.
     let init = run.rola(plain, &["init"]);
     checked.exits("setting up inside no work tree is refused", &init, 128);
+    checked.stderr_has(
+        "the refusal says there is no work tree",
+        &init,
+        "fatal: ",
+    );
     checked.stderr_has(
         "the refusal says there is no work tree",
         &init,
@@ -546,12 +726,14 @@ fn checking(run: &Run, repo: &Path, checked: &mut Checked) {
         &said(&status),
     );
 
-    let as_data = run.rola(repo, &["check", "--json"]);
-    checked.exits("a difference is still a difference as data", &as_data, 1);
-    checked.wants(
-        "the data says what differs",
-        as_data.stdout.contains("\"differing\":true"),
-        &said(&as_data),
+    // A flag the command does not have is a line it cannot read, not a different way of writing
+    // the answer: `--json` and `--renderer` were the program's own, not git's.
+    let unreadable = run.rola(repo, &["check", "--json"]);
+    checked.exits("a flag the command does not have is refused", &unreadable, 129);
+    checked.stderr_has(
+        "the refusal names the flag",
+        &unreadable,
+        "error: unknown option `json'",
     );
 
     // A material that is not there at all is another of git's short statuses.
@@ -596,11 +778,11 @@ fn restoring(run: &Run, repo: &Path, checked: &mut Checked) {
     // restores nothing.
     let before = fs::read(repo.join(MATERIAL)).expect("the material");
     let unknown = run.rola(repo, &["restore", "Assets/not-here.psd"]);
-    checked.exits("a name no material is under is refused", &unknown, 128);
+    checked.exits("a name no material is under is refused", &unknown, 1);
     checked.stderr_has(
-        "the refusal says nothing matched the name",
+        "the refusal is git's pathspec",
         &unknown,
-        "no material matches",
+        "error: pathspec 'Assets/not-here.psd' did not match any material in rola.lock",
     );
     checked.wants(
         "a refused restore writes nothing",
@@ -608,9 +790,14 @@ fn restoring(run: &Run, repo: &Path, checked: &mut Checked) {
         &said(&unknown),
     );
 
-    // A restore names what to put back; with nothing named there is nothing to do.
+    // A restore names what to put back; with nothing named git cannot make the command at all.
     let bare = run.rola(repo, &["restore"]);
-    checked.exits("a restore that names nothing is refused", &bare, 129);
+    checked.exits("a restore that names nothing is fatal", &bare, 128);
+    checked.stderr_has(
+        "the failure is git's sentence",
+        &bare,
+        "fatal: you must specify path(s) to restore",
+    );
 
     // The store is where the content comes from: a project that has lost it cannot put the material
     // back, and the run says which material it could not place.
@@ -621,14 +808,14 @@ fn restoring(run: &Run, repo: &Path, checked: &mut Checked) {
 
     let missing = run.rola(repo, &["restore", MATERIAL]);
     checked.exits(
-        "a material no local source holds is a failure",
+        "a material no local source holds is a partial failure",
         &missing,
-        128,
+        1,
     );
     checked.stderr_has(
         "the failure names the material",
         &missing,
-        "git-rola: Assets/hero.psd:",
+        "error: Assets/hero.psd:",
     );
     checked.stderr_has(
         "the failure says no source holds it",
@@ -671,6 +858,17 @@ fn restoring(run: &Run, repo: &Path, checked: &mut Checked) {
         &said(&directory),
     );
 
+    // A name may hold a wildcard, read the way git reads one.
+    fs::write(repo.join(MATERIAL), b"a seventh edit\n").expect("an edit");
+
+    let wildcard = run.rola(repo, &["restore", "Assets/*"]);
+    checked.exits("a wildcard restores what it selects", &wildcard, 0);
+    checked.wants(
+        "the wildcard puts the material back",
+        holds(repo, FIRST_CUT),
+        &said(&wildcard),
+    );
+
     // Run from inside the material's own directory, the same names mean the subtree it is in.
     let assets = repo.join("Assets");
     fs::write(repo.join(MATERIAL), b"a sixth edit\n").expect("an edit");
@@ -685,12 +883,114 @@ fn restoring(run: &Run, repo: &Path, checked: &mut Checked) {
 
     // A name that climbs out of the project names nothing: there are no materials outside it.
     let outside = run.rola(repo, &["restore", ".."]);
-    checked.exits("a name that leaves the project is refused", &outside, 128);
+    checked.exits("a name that leaves the project is refused", &outside, 1);
     checked.stderr_has(
-        "the refusal says the name is outside",
+        "the refusal is git's pathspec",
         &outside,
-        "is not under the project",
+        "error: pathspec '..' is outside the project",
     );
+}
+
+/// What `git rola` is, as opposed to the program run by hand: the same program, reached by git.
+fn reaching(run: &Run, repo: &Path, checked: &mut Checked) {
+    // git prepends its own directories to the `PATH` and runs `git-rola` with the words it was
+    // given, so what a person types is what this checks.
+    let reached = run.git(repo, &["rola", "check"]);
+    checked.exits("git reaches the program", &reached, 0);
+    checked.wants(
+        "git hands the program a clean work tree",
+        reached.stderr.trim().is_empty(),
+        &said(&reached),
+    );
+
+    // `--no-pager` is git's to set, and it leaves `GIT_PAGER=cat` for the program to read: what the
+    // program said before is what it says now.
+    let unpaged = run.git(repo, &["--no-pager", "rola", "check"]);
+    checked.exits("a run through `--no-pager` ends the same", &unpaged, 0);
+    checked.wants(
+        "`--no-pager` changes no answer",
+        unpaged.stdout == reached.stdout && unpaged.stderr == reached.stderr,
+        &said(&unpaged),
+    );
+
+    // `-h` after the command is the program's own, since git rewrites only `--help`.
+    let usage = run.git(repo, &["rola", "-h"]);
+    checked.exits("`git rola -h` ends successfully", &usage, 0);
+    checked.stdout_has(
+        "`git rola -h` is the program's usage",
+        &usage,
+        "usage: git rola <command>",
+    );
+
+    let unknown = run.git(repo, &["rola", "nosuch"]);
+    checked.exits("`git rola nosuch` is refused", &unknown, 1);
+    checked.stderr_has(
+        "the refusal is the program's",
+        &unknown,
+        "is not a rola command",
+    );
+
+    // `--help` right after the command never reaches the program: git turns it into its own
+    // documentation lookup, and there is no page for `rola` to find. That is git's search, not this
+    // program's failure, and it is left as git answers it.
+    let documented = run.git(repo, &["rola", "--help"]);
+    checked.exits(
+        "`git rola --help` is git's documentation lookup",
+        &documented,
+        128,
+    );
+    checked.stderr_has(
+        "the lookup names the documentation it could not find",
+        &documented,
+        "documentation file not found",
+    );
+}
+
+/// How a path is written out: git's quoting, under `core.quotePath` as git reads it.
+fn quoting(run: &Run, sandbox: &Path, checked: &mut Checked) {
+    let project = sandbox.join("quoting");
+    fs::create_dir_all(&project).expect("a directory for the quoting project");
+    run.git(&project, &["init", "-b", "main"]);
+
+    fs::write(
+        project.join("rola.toml"),
+        "[features]\ngit_support = true\n",
+    )
+    .expect("the project file");
+
+    // A name outside ASCII is what git quotes by default.
+    let material = "素材.psd";
+    fs::write(
+        project.join("rola.lock"),
+        format!("? FORMAT 2\n/{material} {} file\n", digest(FIRST_CUT)),
+    )
+    .expect("the lock");
+    fs::write(project.join(material), b"an edit\n").expect("an edit to the material");
+
+    let quoted = run.rola(&project, &["check"]);
+    checked.exits("a path outside ASCII is a difference", &quoted, 1);
+    checked.stdout_has(
+        "the path is quoted the way git quotes it",
+        &quoted,
+        " M \"\\347\\264\\240\\346\\235\\220.psd\"",
+    );
+
+    // `core.quotePath=false` leaves the bytes as they are.
+    let configured = run.git(&project, &["config", "--global", "core.quotePath", "false"]);
+    checked.exits("git is told not to quote paths", &configured, 0);
+
+    let plain = run.rola(&project, &["check"]);
+    checked.exits("the same path is still a difference", &plain, 1);
+    checked.stdout_has("the path is written as it is", &plain, " M 素材.psd");
+    checked.wants(
+        "the path is not quoted then",
+        !plain.stdout.contains("\\347"),
+        &said(&plain),
+    );
+
+    // The setting is the sandbox's, so it is put back for the checks that follow.
+    let unset = run.git(&project, &["config", "--global", "--unset", "core.quotePath"]);
+    checked.exits("the setting is put back", &unset, 0);
 }
 
 /// A material the lock names as a tree: the directory its structure names is placed, checked, put
@@ -1258,12 +1558,10 @@ impl Run {
             .env("GIT_AUTHOR_EMAIL", "test@example.invalid")
             .env("GIT_COMMITTER_NAME", "Rola Test")
             .env("GIT_COMMITTER_EMAIL", "test@example.invalid")
-            // The language is pinned, so that what a check reads back does not depend on the machine
-            // it runs on. A check about the language names its own.
-            .env("ROLA_LANG", EN)
-            .env("APP_LANG", EN)
-            .env("LANG", EN)
-            .env("LC_ALL", EN)
+            // The language is pinned to the untranslated locale, so that what a check reads back
+            // does not depend on the machine it runs on. A check about the language names its own.
+            .env("LC_ALL", "C")
+            .env("LANG", "C")
             .env("PATH", path);
 
         command
@@ -1293,10 +1591,13 @@ impl Run {
         run(&mut command)
     }
 
-    /// Runs the built `git-rola` in `dir` with the environment naming `language`.
-    fn rola_in(&self, dir: &Path, language: &str, args: &[&str]) -> Ran {
+    /// Runs the built `git-rola` in `dir` with `environment` set over the suite's own.
+    ///
+    /// A language check names its locale here, since what it is about is the environment the run
+    /// reads rather than the one the suite settled on.
+    fn rola_with(&self, dir: &Path, environment: &[(&str, &str)], args: &[&str]) -> Ran {
         let mut command = self.command(dir, &self.programs.join("git-rola"));
-        command.env("ROLA_LANG", language).args(args);
+        command.envs(environment.iter().copied()).args(args);
 
         run(&mut command)
     }
@@ -1460,7 +1761,7 @@ fn said(ran: &Ran) -> String {
 /// that the program names a version, not one particular number.
 fn names_a_version(ran: &Ran) -> bool {
     let line = ran.stdout.trim();
-    let Some(version) = line.strip_prefix("git-rola version ") else {
+    let Some(version) = line.strip_prefix("git rola version ") else {
         return false;
     };
 

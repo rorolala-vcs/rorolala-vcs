@@ -1,6 +1,9 @@
 _version: 2
 
 update:
+  usage:
+    en: git rola update
+    zh-CN: git rola update
   updated:
     en: "Updated rola.lock: %{materials} materials"
     zh-CN: "已更新 `rola.lock`：%{materials} 个素材"

@@ -1,12 +1,14 @@
 //! Git support for rola, as a program Git reaches for as `git rola`.
 //!
 //! A command is a node of this program's dispatch tree, a chain that does the work, and a renderer
-//! that writes the answer through mingling's buffer. The output is git's, not rola's: quiet on
-//! success, one line per thing that changed where a command lists things, and every failure on
-//! stderr as `git-rola: ...`.
+//! that writes the answer through mingling's buffer. What it says is git's: `fatal:` and `error:`
+//! on stderr, the command's own usage when a line is not one it reads, and the version and the
+//! usage list on stdout. The command line is read before the dispatch tree sees it, because git's
+//! rules are about the command boundary and the framework's global flags are not; see [`options`].
 //!
-//! What it says is translated the way the rest of rola says it: every word comes from `i18n/` in
-//! the language the run speaks, and the language is chosen by `--lang` or the environment.
+//! The words come from `i18n/` in the language git would speak, chosen from `LANGUAGE`, `LC_ALL`,
+//! `LC_MESSAGES` and `LANG`; see [`locale`]. A pager is chosen the way git chooses one, and both
+//! streams are written through it; see [`output`].
 
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
@@ -23,27 +25,31 @@ rust_i18n::i18n!("i18n", fallback = "en");
 
 use mingling::{
     Grouped,
-    hook::ProgramHook,
-    macros::{buffer, gen_program, help, r_eprintln, r_println, renderer},
-    picker::UnmatchedArgs,
+    macros::{buffer, gen_program, r_eprintln, renderer},
     res::ResExitCode,
-    setup::DefaultSetup,
+    setup::ExitCodeSetup,
 };
 use rust_i18n::t;
 
 mod check;
 mod commands;
 mod exit_codes;
-mod lang;
+mod git_config;
+mod locale;
+mod options;
+mod output;
 mod pathspec;
+mod quote;
 mod source;
 mod update;
+mod usage;
+mod wildmatch;
 mod wrap;
 
-use crate::exit_codes::{EC_ERR, EC_OK, EC_USAGE};
-use crate::lang::LanguageSetup;
+use crate::exit_codes::{EC_ERR, EC_FAILED, EC_USAGE};
+use crate::output::OutputSetup;
 
-/// A command that could not be made, said the way the program says it.
+/// A command that could not be made, said the way git says it.
 #[derive(Grouped)]
 pub struct Fatal {
     /// What could not be done, as the run says it.
@@ -53,7 +59,7 @@ pub struct Fatal {
 }
 
 impl Fatal {
-    /// A failure that ends the run with [`EC_ERR`].
+    /// A failure that ends the run with [`EC_ERR`], which is git's `fatal:`.
     pub(crate) fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -62,84 +68,89 @@ impl Fatal {
     }
 }
 
-/// Renders a command that could not be made the way the program says it.
+/// Renders a command that could not be made the way git says it.
 #[renderer(buffer)]
 pub fn render_fatal(error: Fatal, ec: &mut ResExitCode) {
-    r_eprintln!("git-rola: {}", error.message);
+    r_eprintln!("{}{}", t!("message.fatal"), error.message);
     ec.exit_code = error.code;
 }
 
-/// Answers a run that named something this program does not read.
-pub(crate) fn usage() -> Next {
-    Fatal {
-        message: t!("git_rola.err_usage").to_string(),
-        code: EC_USAGE,
-    }
-    .into()
+/// A command line whose operands its command does not take, answered with that command's usage.
+#[derive(Grouped)]
+pub struct Refused {
+    /// The command the operands were written for.
+    pub command: &'static str,
 }
 
-/// Answers the run the dispatch tree reached for anything it was given no command for.
+/// Renders a command line the command does not read: its usage, on stderr, with git's status.
 ///
-/// A bare `git rola` and a mistyped word both end here; there is no default action to take on a
-/// work tree, so both are refused rather than made to look like success.
+/// git writes the usage alone here rather than an `error:` line, which is what `git var GIT_PAGER
+/// extra` does: the line was readable, it just named something the command has no use for.
 #[renderer(buffer)]
-pub fn render_fallback(_args: EntryFallback, ec: &mut ResExitCode) {
-    r_eprintln!("git-rola: {}", t!("git_rola.err_usage"));
+pub fn render_refused(refused: Refused, ec: &mut ResExitCode) {
+    r_eprintln!("{}", usage::command(refused.command));
     ec.exit_code = EC_USAGE;
 }
 
-/// Prints the help a run asks for.
-///
-/// git's own help is a usage line and a list of what the program can do, so that is what is said
-/// here, the list is the program's, not a page of prose. It goes to stdout and ends the run with
-/// success, the way `git help` does.
-#[help(buffer)]
-pub fn help_fallback(_: EntryFallback, ec: &mut ResExitCode) {
-    r_println!("{}", t!("git_rola.help").trim_end());
-    ec.exit_code = EC_OK;
+/// A name `restore` was given that selects no material, said the way git says a pathspec that
+/// matched nothing.
+#[derive(Grouped)]
+pub struct PathspecRefused {
+    /// Why the name selected nothing.
+    pub refusal: crate::pathspec::Refusal,
 }
 
-/// Whether a run left words the command did not read.
-pub(crate) fn refused(unmatched: &UnmatchedArgs) -> bool {
-    !unmatched.is_empty()
+/// Renders a pathspec that selected nothing.
+#[renderer(buffer)]
+pub fn render_pathspec_refused(refused: PathspecRefused, ec: &mut ResExitCode) {
+    let said = match &refused.refusal {
+        pathspec::Refusal::NoMatch(name) => t!("restore.err_pathspec", name = name.as_str()),
+        pathspec::Refusal::Outside(name) => t!("restore.err_outside", name = name.as_str()),
+        pathspec::Refusal::Invalid(name) => t!("restore.err_path", name = name.as_str()),
+    };
+
+    r_eprintln!("{}{said}", t!("message.error"));
+    ec.exit_code = EC_FAILED;
 }
 
-/// Whether the run asked for help or the version.
+/// Asks the kernel to kill the process on `SIGPIPE`, the way a Unix filter is expected to die.
 ///
-/// The flags are taken out of the arguments before a hook runs, so the question is read from the
-/// command line the process was started with. A run that asked one is not a run of a git command,
-/// and the words that follow must not be handed to git as if it were.
-fn asks_a_question() -> bool {
-    std::env::args().any(|word| matches!(word.as_str(), "-h" | "--help" | "-v" | "--version"))
+/// Rust starts every process with `SIGPIPE` ignored, so a write to a pipe whose reader has gone,
+/// `git rola check | head`, or a pager that has been quit, returns `EPIPE` instead. Dying on the
+/// signal is what every other Unix tool does, it is what git does, and it leaves the status a pipe
+/// expects instead of a panic over the output the reader was consuming.
+#[cfg(unix)]
+fn restore_default_sigpipe() {
+    // SAFETY: single-threaded at this point, and the call only resets `SIGPIPE` to the disposition
+    // a fresh process already carries; it installs no handler of our own.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
 }
+
+/// Leaves the process as it is: Windows has no `SIGPIPE`, and a broken pipe is reported to the
+/// write itself rather than delivered as a signal.
+#[cfg(not(unix))]
+fn restore_default_sigpipe() {}
 
 fn main() {
+    restore_default_sigpipe();
+    locale::select();
+
+    // The words are read here rather than by the framework, because git's reading of them is about
+    // where a command's own words begin: see `options` for what decides an answer and what is left
+    // to the dispatch tree.
+    let words: Vec<String> = std::env::args().skip(1).collect();
+
+    match options::decide(&words) {
+        options::Decision::Draw(answer) => options::draw(answer),
+        options::Decision::Wrap { verb, rest } => std::process::exit(wrap::run(&verb, &rest)),
+        options::Decision::Dispatch => {}
+    }
+
     let mut program = ThisProgram::new();
-    program.with_setup(DefaultSetup);
-    program.with_setup(LanguageSetup);
-    program.with_hook(
-        ProgramHook::empty()
-            // `--version` is a question answered before any command: git says which program it is
-            // in one line, so that is what is written.
-            .on_version(|info| {
-                let version = env!("CARGO_PKG_VERSION");
-                info.result
-                    .println(t!("git_rola.version", version = version));
-            })
-            .on_pre_dispatch(|info| {
-                if asks_a_question() {
-                    // There is one help, at the program's root, and every `--help` asks for it: a
-                    // command's own words are a question about the program rather than a run of
-                    // that command, so the dispatch tree is left with the fallback entry.
-                    info.arguments.clear();
-                } else {
-                    // git has no hook before a checkout, a merge or a pull, so the words that name
-                    // one of those are answered here, before the dispatch tree sees them: the
-                    // materials are taken out, git is run, and they are put back.
-                    wrap::intercept(info.arguments);
-                }
-            }),
-    );
+    program.with_setup(ExitCodeSetup);
+    program.with_setup(OutputSetup);
     program.exec_and_exit();
 }
 

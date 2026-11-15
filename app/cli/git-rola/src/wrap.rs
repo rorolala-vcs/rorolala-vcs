@@ -2,7 +2,12 @@
 //!
 //! git has no hook of its own before a checkout or a merge, so the "first take the materials out,
 //! then run git, then put them back" order lives here: a word this program wraps is answered by
-//! this, and git is run with everything that followed it.
+//! this module, and git is run with everything that followed it.
+//!
+//! What git says is git's, unchanged: its streams are inherited, and its status is what this run
+//! ends with, a signal included. What this program says about its own half is git's too: `fatal:`
+//! when it cannot act at all, `error:` when a material could not be put back, `warning:` when it
+//! goes on regardless.
 
 use rola_git_support::{Error as GitError, Session};
 use rust_i18n::t;
@@ -10,29 +15,14 @@ use rust_i18n::t;
 use crate::exit_codes::EC_ERR;
 
 /// The git commands that change the working tree, and so the materials with it.
-const WRAPPED: [&str; 4] = ["checkout", "switch", "merge", "pull"];
+pub const WRAPPED: [&str; 4] = ["checkout", "switch", "merge", "pull"];
 
 /// The variable that says a run is already wrapping, so a git that reaches this program through a
 /// hook does not wrap itself again.
 const GUARD: &str = "ROLA_GIT_WRAPPING";
 
-/// Runs `verb` wrapped when the run names a wrapped command, and nothing otherwise.
-pub fn intercept(arguments: &mut Vec<String>) {
-    let Some(verb) = arguments.first().cloned() else {
-        return;
-    };
-
-    if !WRAPPED.contains(&verb.as_str()) {
-        return;
-    }
-
-    let rest: Vec<String> = arguments.drain(1..).collect();
-
-    std::process::exit(run(&verb, &rest));
-}
-
 /// Takes the materials out, runs `verb`, and puts them back.
-fn run(verb: &str, arguments: &[String]) -> i32 {
+pub fn run(verb: &str, arguments: &[String]) -> i32 {
     if std::env::var_os(GUARD).is_some() {
         return git(verb, arguments);
     }
@@ -46,7 +36,7 @@ fn run(verb: &str, arguments: &[String]) -> i32 {
         // A work tree this build does not act in is refused before git is reached, since running
         // git there would leave the materials to be answered for by another work tree's lock.
         Err(error @ GitError::LinkedWorkTree) => {
-            eprintln!("git-rola: {error}");
+            eprintln!("{}{error}", t!("message.fatal"));
 
             return EC_ERR;
         }
@@ -57,8 +47,10 @@ fn run(verb: &str, arguments: &[String]) -> i32 {
 
     let old = match session.lock() {
         Ok(lock) => lock,
+        // The run goes on without the materials taken out: git's own answer is worth more than
+        // this program giving up over a lock it could not read.
         Err(error) => {
-            eprintln!("git-rola: {error}");
+            eprintln!("{}{error}", t!("message.warning"));
 
             return git(verb, arguments);
         }
@@ -69,7 +61,7 @@ fn run(verb: &str, arguments: &[String]) -> i32 {
     let source = crate::source::of(session.project());
 
     if let Err(error) = session.detach(&source) {
-        eprintln!("git-rola: {error}");
+        eprintln!("{}{error}", t!("message.fatal"));
 
         return EC_ERR;
     }
@@ -82,17 +74,19 @@ fn run(verb: &str, arguments: &[String]) -> i32 {
         old
     };
 
+    // A material that could not be put back is an `error:` and nothing more: what the run ends with
+    // is git's answer, and a wrapper that replaced it would be reporting its own failure as git's.
     match session.attach(&lock, &source) {
         Ok(failures) => {
             for (path, error) in &failures {
-                eprintln!("git-rola: {path}: {error}");
+                eprintln!("{}{path}: {error}", t!("message.error"));
             }
         }
-        Err(error) => eprintln!("git-rola: {error}"),
+        Err(error) => eprintln!("{}{error}", t!("message.error")),
     }
 
     if let Err(error) = session.exclude(&lock) {
-        eprintln!("git-rola: {error}");
+        eprintln!("{}{error}", t!("message.warning"));
     }
 
     code
@@ -106,12 +100,42 @@ fn git(verb: &str, arguments: &[String]) -> i32 {
         .env(GUARD, "1")
         .status()
     {
-        Ok(status) => status.code().unwrap_or(EC_ERR),
+        Ok(status) => ended(status),
         Err(error) => {
-            let said = t!("git_rola.err_git", error = error.to_string()).to_string();
-            eprintln!("git-rola: {said}");
+            eprintln!(
+                "{}{}",
+                t!("message.fatal"),
+                t!("git_rola.err_git", error = error.to_string())
+            );
 
             EC_ERR
         }
     }
+}
+
+/// The status a git that has ended leaves this run with.
+///
+/// A child killed by a signal has no exit code. git's own callers read the number as 128 plus the
+/// signal, which is what a shell computes when git dies on one, so the disposition is restored and
+/// the signal raised in this process: what the shell sees is what it would have seen from git.
+fn ended(status: std::process::ExitStatus) -> i32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt as _;
+
+        if let Some(signal) = status.signal() {
+            // SAFETY: the disposition of a signal this program never installed a handler for is
+            // reset to the default, and the signal is raised in the thread reading the status. A
+            // signal that is blocked or ignored leaves the fallback below to answer with git's
+            // own arithmetic.
+            unsafe {
+                libc::signal(signal, libc::SIG_DFL);
+                libc::raise(signal);
+            }
+
+            return EC_ERR + signal;
+        }
+    }
+
+    status.code().unwrap_or(EC_ERR)
 }
