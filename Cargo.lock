@@ -1536,9 +1536,11 @@ dependencies = [
  "rola-define-format",
  "rola-git-support",
  "rorolala-utils-constants",
+ "rorolala-utils-location",
  "rust-i18n",
  "serde",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

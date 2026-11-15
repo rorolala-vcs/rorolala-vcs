@@ -31,6 +31,12 @@ rorolala-utils-constants.workspace = true
 tokio.workspace = true
 # git's wildcards in a pathspec, which a restore has to read the way git reads them.
 globset.workspace = true
+# A material is named by its `Uuid` upstream, and `bring` writes one into `rola.toml` and reads
+# one out of a reference.
+uuid.workspace = true
+# The run's directory, its destination and the project's root are joined into one normalized path
+# before a landing is decided.
+rorolala-utils-location.workspace = true
 
 # A pager and a wrapped git die by signal on Unix, and this program has to arrange for both: the
 # `SIGPIPE` disposition is restored at start, and a signal that killed a wrapped command is raised

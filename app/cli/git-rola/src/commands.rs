@@ -1,4 +1,4 @@
-//! The commands that keep a project's git support: its files, its materials, and the hooks.
+﻿//! The commands that keep a project's git support: its files, its materials, and the hooks.
 
 // mingling's `#[command]` expands the entry type and the dispatch function beside the command, and
 // the expansion is not documented; the items this module writes carry their own docs.
@@ -140,7 +140,15 @@ fn initialise() -> Result<ResultInit, String> {
         session.exclude(&lock).map_err(|error| error.to_string())?;
 
         for (path, error) in &failures {
-            eprintln!("{}{path}: {error}", t!("message.error"));
+            eprintln!(
+                "{}{}",
+                t!("message.error"),
+                t!(
+                    "message.failed_path",
+                    path = path.as_str(),
+                    error = error.to_string()
+                )
+            );
             failed = true;
         }
     }
@@ -229,7 +237,15 @@ pub fn handle_hook(state: StateHook) -> Next {
         Ok(failures) if failures.is_empty() => ResultHook { placed: true }.into(),
         Ok(failures) => {
             for (path, error) in &failures {
-                eprintln!("{}{path}: {error}", t!("message.error"));
+                eprintln!(
+                    "{}{}",
+                    t!("message.error"),
+                    t!(
+                        "message.failed_path",
+                        path = path.as_str(),
+                        error = error.to_string()
+                    )
+                );
             }
 
             ResultHook { placed: false }.into()
@@ -321,7 +337,15 @@ pub struct ResultRestore {
 #[renderer(buffer)]
 pub fn render_restore(result: ResultRestore, ec: &mut ResExitCode) {
     for (path, error) in &result.failures {
-        r_eprintln!("{}{path}: {error}", t!("message.error"));
+        r_eprintln!(
+            "{}{}",
+            t!("message.error"),
+            t!(
+                "message.failed_path",
+                path = path.as_str(),
+                error = error.as_str()
+            )
+        );
     }
 
     if !result.failures.is_empty() {
@@ -430,7 +454,15 @@ pub struct ResultUpdated {
 #[renderer(buffer)]
 pub fn render_updated(result: ResultUpdated, ec: &mut ResExitCode) {
     for (path, error) in &result.failures {
-        r_eprintln!("{}{path}: {error}", t!("message.error"));
+        r_eprintln!(
+            "{}{}",
+            t!("message.error"),
+            t!(
+                "message.failed_path",
+                path = path.as_str(),
+                error = error.as_str()
+            )
+        );
     }
 
     if result.failures.is_empty() {

@@ -79,7 +79,15 @@ pub fn run(verb: &str, arguments: &[String]) -> i32 {
     match session.attach(&lock, &source) {
         Ok(failures) => {
             for (path, error) in &failures {
-                eprintln!("{}{path}: {error}", t!("message.error"));
+                eprintln!(
+                    "{}{}",
+                    t!("message.error"),
+                    t!(
+                        "message.failed_path",
+                        path = path.as_str(),
+                        error = error.to_string()
+                    )
+                );
             }
         }
         Err(error) => eprintln!("{}{error}", t!("message.error")),

@@ -31,6 +31,7 @@ use mingling::{
 };
 use rust_i18n::t;
 
+mod bring;
 mod check;
 mod commands;
 mod exit_codes;
@@ -42,6 +43,7 @@ mod pathspec;
 mod quote;
 mod source;
 mod update;
+mod upstream;
 mod usage;
 mod wildmatch;
 mod wrap;
@@ -107,6 +109,38 @@ pub fn render_pathspec_refused(refused: PathspecRefused, ec: &mut ResExitCode) {
         pathspec::Refusal::NoMatch(name) => t!("restore.err_pathspec", name = name.as_str()),
         pathspec::Refusal::Outside(name) => t!("restore.err_outside", name = name.as_str()),
         pathspec::Refusal::Invalid(name) => t!("restore.err_path", name = name.as_str()),
+    };
+
+    r_eprintln!("{}{said}", t!("message.error"));
+    ec.exit_code = EC_FAILED;
+}
+
+/// A `bring` run that named something it cannot sign in, said as the run that asked for it.
+#[derive(Grouped)]
+pub struct BringRefused {
+    /// Why the reference, the destination or the landing cannot be used.
+    pub refusal: crate::bring::Refusal,
+}
+
+/// Renders a bring that was refused before anything was written.
+#[renderer(buffer)]
+pub fn render_bring_refused(refused: BringRefused, ec: &mut ResExitCode) {
+    let said = match &refused.refusal {
+        bring::Refusal::Unknown { reference, vault } => t!(
+            "bring.err_unknown",
+            reference = reference.as_str(),
+            vault = vault.as_str()
+        ),
+        bring::Refusal::Unnamed { id, vault } => t!(
+            "bring.err_unnamed",
+            uuid = id.to_string(),
+            vault = vault.as_str()
+        ),
+        bring::Refusal::Destination => t!("bring.err_destination"),
+        bring::Refusal::Outside(path) => t!("bring.err_outside", path = path.as_str()),
+        bring::Refusal::Taken(path) => t!("bring.err_taken", path = path.as_str()),
+        bring::Refusal::Known(uuid) => t!("bring.err_known", uuid = uuid.to_string()),
+        bring::Refusal::PathKnown(path) => t!("bring.err_path_known", path = path.as_str()),
     };
 
     r_eprintln!("{}{said}", t!("message.error"));

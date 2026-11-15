@@ -1,0 +1,30 @@
+_version: 2
+
+bring:
+  usage:
+    en: git rola bring [--vault <vault>] [--by-name] <ref>... [<to>]
+    zh-CN: git rola bring [--vault <保险库>] [--by-name] <上游条目> [<本地路径>]
+  err_config:
+    en: "cannot read `%{path}`: %{error}"
+    zh-CN: "无法读取 `%{path}`：%{error}"
+  err_unknown:
+    en: "'%{reference}' names nothing in the Layout of %{vault}"
+    zh-CN: "'%{reference}' 在 %{vault} 的布局里没有命名任何东西"
+  err_unnamed:
+    en: "%{uuid} is at no path in the Layout of %{vault}"
+    zh-CN: "%{uuid} 在 %{vault} 的布局里没有路径"
+  err_destination:
+    en: a destination that is not a directory takes one reference
+    zh-CN: 不是目录的目的地只能接一个条目
+  err_outside:
+    en: "'%{path}' is outside the project"
+    zh-CN: "'%{path}' 在项目之外"
+  err_taken:
+    en: "'%{path}' is already there"
+    zh-CN: "'%{path}' 已经有东西了"
+  err_known:
+    en: "%{uuid} is already mapped in rola.toml"
+    zh-CN: "%{uuid} 已经在 `rola.toml` 里映射"
+  err_path_known:
+    en: "'%{path}' is already the place of a mapping"
+    zh-CN: "'%{path}' 已经是某个映射的落点"

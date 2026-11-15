@@ -46,6 +46,7 @@ pub enum Decision {
 }
 
 /// One answer written before any command runs.
+#[derive(Debug)]
 pub enum Answer {
     /// The program's usage, with the status git ends such a run with.
     ProgramUsage {
@@ -81,6 +82,7 @@ pub enum Answer {
 }
 
 /// Why a command's line is refused.
+#[derive(Debug)]
 pub enum Refusal {
     /// A long flag the command does not have.
     UnknownOption {
@@ -92,6 +94,59 @@ pub enum Refusal {
         /// The letter, as git reports it.
         word: String,
     },
+    /// A flag that takes a value was given none.
+    MissingValue {
+        /// The name without its dashes.
+        option: String,
+    },
+    /// A flag that takes no value was given one.
+    UnwantedValue {
+        /// The name without its dashes.
+        option: String,
+    },
+}
+
+/// One flag a command reads.
+pub struct Flag {
+    /// The word without its dashes.
+    pub name: &'static str,
+    /// Whether a value follows it, after a space or after an `=`.
+    pub value: bool,
+}
+
+/// The flags `bring` reads.
+const BRING_FLAGS: [Flag; 2] = [
+    Flag {
+        name: "vault",
+        value: true,
+    },
+    Flag {
+        name: "by-name",
+        value: false,
+    },
+];
+
+/// The flags `command` reads.
+///
+/// Only `bring` has any today: every other command is written down with no flag but the universal
+/// `-h` and `--help`, so a dash word after it is a flag it does not have. A command that grows a
+/// flag grows a row here, and `Given` grows the field that carries its value.
+fn flags(command: &str) -> &'static [Flag] {
+    match command {
+        "bring" => &BRING_FLAGS,
+        _ => &[],
+    }
+}
+
+/// The words of a command after its flags are taken out.
+#[derive(Default)]
+pub struct Given {
+    /// The command's own operands, the words after `--` included.
+    pub operands: Vec<String>,
+    /// The value of `--vault`, when the command has that flag.
+    pub vault: Option<String>,
+    /// Whether `--by-name` was given.
+    pub by_name: bool,
 }
 
 /// What `words` ask for.
@@ -184,50 +239,117 @@ fn at_the_root(rest: &[String]) -> Answer {
 /// extra` ignores it. A word that names no command is refused here rather than dispatched, since
 /// the node only ever sees a name it has.
 fn decide_help(rest: &[String]) -> Decision {
-    let mut spoken: Vec<&String> = Vec::new();
-
-    for (index, word) in rest.iter().enumerate() {
-        if word == "--" {
-            break;
-        }
-
-        if let Some(answer) = asked(word, index == 0, "help") {
-            return Decision::Draw(answer);
-        }
-
-        spoken.push(word);
-    }
-
-    match spoken.first() {
-        None => Decision::Dispatch,
-        Some(word) if usage::named(word).is_some() => Decision::Dispatch,
-        Some(word) => Decision::Draw(Answer::UnknownCommand {
-            typed: (*word).clone(),
-        }),
+    match given("help", rest) {
+        Err(answer) => Decision::Draw(answer),
+        Ok(given) => match given.operands.first() {
+            None => Decision::Dispatch,
+            Some(word) if usage::named(word).is_some() => Decision::Dispatch,
+            Some(word) => Decision::Draw(Answer::UnknownCommand {
+                typed: word.clone(),
+            }),
+        },
     }
 }
 
 /// The answer a command's words ask for before the command runs, if they ask one.
 fn decide_command(command: &'static str, rest: &[String]) -> Decision {
-    for (index, word) in rest.iter().enumerate() {
-        // Everything after the marker is an operand, `-h` included: that is what the marker is for.
+    match given(command, rest) {
+        Ok(_) => Decision::Dispatch,
+        Err(answer) => Decision::Draw(answer),
+    }
+}
+
+/// Reads a command's words: its flags, its operands, and the answers that end the run.
+///
+/// The scan is one left-to-right pass, because a flag's value is the word after it and that is the
+/// one place deciding whether a word is a value or a flag. `--` ends the flags; what follows is
+/// operands even when it looks like a flag, `-h` included.
+pub fn given(command: &'static str, words: &[String]) -> Result<Given, Answer> {
+    let mut given = Given::default();
+    let mut index = 0;
+    let mut first = true;
+
+    while index < words.len() {
+        let word = &words[index];
+
         if word == "--" {
+            index += 1;
+
             break;
         }
 
-        if let Some(answer) = asked(word, index == 0, command) {
-            return Decision::Draw(answer);
+        if let Some(answer) = help_asked(word, first, command) {
+            return Err(answer);
         }
+
+        if let Some((flag, inline)) = split_flag(command, word) {
+            if flag.value {
+                let value = match inline {
+                    Some(value) => value.to_owned(),
+                    None => match words.get(index + 1).filter(|next| is_value(next.as_str())) {
+                        Some(next) => {
+                            index += 1;
+
+                            (*next).clone()
+                        }
+                        None => {
+                            return Err(Answer::CommandRefusal {
+                                command,
+                                reason: Refusal::MissingValue {
+                                    option: flag.name.to_owned(),
+                                },
+                            });
+                        }
+                    },
+                };
+
+                if flag.name == "vault" {
+                    given.vault = Some(value);
+                }
+            } else {
+                if inline.is_some() {
+                    return Err(Answer::CommandRefusal {
+                        command,
+                        reason: Refusal::UnwantedValue {
+                            option: flag.name.to_owned(),
+                        },
+                    });
+                }
+
+                if flag.name == "by-name" {
+                    given.by_name = true;
+                }
+            }
+
+            first = false;
+            index += 1;
+
+            continue;
+        }
+
+        if flag_shaped(word) {
+            return Err(Answer::CommandRefusal {
+                command,
+                reason: named_flag(word),
+            });
+        }
+
+        given.operands.push(word.clone());
+        first = false;
+        index += 1;
     }
 
-    Decision::Dispatch
+    // What follows the marker is operands; the marker itself is syntax rather than a word.
+    given.operands.extend(words[index..].iter().cloned());
+
+    Ok(given)
 }
 
-/// The answer `word` asks for when a command reads it, if it asks one.
+/// The answer `word` asks for before a command runs, when it asks one.
 ///
 /// `first` is whether the word is the command's own first word, which is the only place git reads
 /// `--help` as a request for the documentation rather than as a mistake.
-fn asked(word: &str, first: bool, command: &'static str) -> Option<Answer> {
+fn help_asked(word: &str, first: bool, command: &'static str) -> Option<Answer> {
     match word {
         "-h" => Some(Answer::CommandUsage {
             command,
@@ -237,28 +359,54 @@ fn asked(word: &str, first: bool, command: &'static str) -> Option<Answer> {
             command,
             code: if first { EC_OK } else { EC_USAGE },
         }),
-        _ => named_flag(word).map(|reason| Answer::CommandRefusal { command, reason }),
+        _ => None,
     }
 }
 
-/// Why `word` is a flag no command has, when it is flag-shaped at all.
+/// The flag `word` names, with the value it carries inline, when it names one.
+fn split_flag<'a>(command: &str, word: &'a str) -> Option<(&'static Flag, Option<&'a str>)> {
+    let body = word.strip_prefix("--")?;
+    let (name, inline) = match body.split_once('=') {
+        Some((name, value)) => (name, Some(value)),
+        None => (body, None),
+    };
+
+    flags(command)
+        .iter()
+        .find(|flag| flag.name == name)
+        .map(|flag| (flag, inline))
+}
+
+/// Whether `word` can be a flag's value.
+///
+/// A word that is the end-of-options marker, or that is flag-shaped itself, is not one: taking it
+/// would swallow the word after it, and a run that wants a value beginning with a dash writes it
+/// as `--vault=-x`.
+fn is_value(word: &str) -> bool {
+    !flag_shaped(word) && word != "--"
+}
+
+/// Whether `word` looks like a flag rather than a path.
+///
+/// A lone `-` is a path, which is what `git restore -` reads it as.
+fn flag_shaped(word: &str) -> bool {
+    word.len() > 1 && word.starts_with('-')
+}
+
+/// Why `word` is a flag no command has.
 ///
 /// git names a long flag without its dashes and up to its `=`, and a short one by its first letter,
-/// since a cluster of them is read one letter at a time. A lone `-` is a path, not a flag.
-fn named_flag(word: &str) -> Option<Refusal> {
+/// since a cluster of them is read one letter at a time. Only called for a flag-shaped word.
+fn named_flag(word: &str) -> Refusal {
     if let Some(long) = word.strip_prefix("--") {
-        return Some(Refusal::UnknownOption {
+        return Refusal::UnknownOption {
             word: long.split('=').next().unwrap_or(long).to_owned(),
-        });
+        };
     }
 
-    if word.len() > 1 && word.starts_with('-') {
-        return Some(Refusal::UnknownSwitch {
-            word: word.chars().nth(1).map_or_else(String::new, String::from),
-        });
+    Refusal::UnknownSwitch {
+        word: word.chars().nth(1).map_or_else(String::new, String::from),
     }
-
-    None
 }
 
 /// Writes the answer and ends the run with the status it carries.
@@ -306,6 +454,12 @@ pub fn draw(answer: Answer) -> ! {
                 }
                 Refusal::UnknownSwitch { word } => {
                     t!("git_rola.err_no_such_switch", word = word.as_str())
+                }
+                Refusal::MissingValue { option } => {
+                    t!("git_rola.err_option_value", option = option.as_str())
+                }
+                Refusal::UnwantedValue { option } => {
+                    t!("git_rola.err_option_no_value", option = option.as_str())
                 }
             };
 
@@ -418,7 +572,7 @@ fn edit_distance(left: &str, right: &str) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{Answer, Decision, Refusal, decide, edit_distance, operands, similar};
+    use super::{Answer, Decision, Refusal, decide, edit_distance, given, operands, similar};
 
     /// What `words` come to, said as one line.
     fn answer(words: &[&str]) -> String {
@@ -427,21 +581,49 @@ mod tests {
         match decide(&words) {
             Decision::Dispatch => "dispatch".to_owned(),
             Decision::Wrap { verb, .. } => format!("wrap {verb}"),
-            Decision::Draw(Answer::ProgramUsage { code }) => format!("program usage {code}"),
-            Decision::Draw(Answer::CommandUsage { command, code }) => {
-                format!("{command} usage {code}")
-            }
-            Decision::Draw(Answer::Version) => "version".to_owned(),
-            Decision::Draw(Answer::UnknownCommand { typed }) => format!("unknown command {typed}"),
-            Decision::Draw(Answer::UnknownOption { word }) => format!("unknown option {word}"),
-            Decision::Draw(Answer::CommandRefusal { command, reason }) => {
-                let reason = match reason {
-                    Refusal::UnknownOption { word } => format!("option {word}"),
-                    Refusal::UnknownSwitch { word } => format!("switch {word}"),
-                };
+            Decision::Draw(answer) => described(answer),
+        }
+    }
 
-                format!("refused {command} {reason}")
+    /// What one answer says, as one line.
+    fn described(answer: Answer) -> String {
+        match answer {
+            Answer::ProgramUsage { code } => format!("program usage {code}"),
+            Answer::CommandUsage { command, code } => format!("{command} usage {code}"),
+            Answer::Version => "version".to_owned(),
+            Answer::UnknownCommand { typed } => format!("unknown command {typed}"),
+            Answer::UnknownOption { word } => format!("unknown option {word}"),
+            Answer::CommandRefusal { command, reason } => {
+                format!("refused {command} {}", refusal(reason))
             }
+        }
+    }
+
+    /// What one refusal says, as one line.
+    fn refusal(reason: Refusal) -> String {
+        match reason {
+            Refusal::UnknownOption { word } => format!("option {word}"),
+            Refusal::UnknownSwitch { word } => format!("switch {word}"),
+            Refusal::MissingValue { option } => format!("no value for {option}"),
+            Refusal::UnwantedValue { option } => format!("unwanted value for {option}"),
+        }
+    }
+
+    /// What `given` reads from `words`, as the three things it carries.
+    fn parsed(words: &[&str]) -> (Vec<String>, Option<String>, bool) {
+        let words: Vec<String> = words.iter().map(|word| (*word).to_owned()).collect();
+        let given = given("bring", &words).expect("a line `bring` reads");
+
+        (given.operands, given.vault, given.by_name)
+    }
+
+    /// What `given` answers `words` with, as one line.
+    fn read(words: &[&str]) -> String {
+        let words: Vec<String> = words.iter().map(|word| (*word).to_owned()).collect();
+
+        match given("bring", &words) {
+            Ok(_) => "read".to_owned(),
+            Err(answer) => described(answer),
         }
     }
 
@@ -489,7 +671,7 @@ mod tests {
     }
 
     #[test]
-    fn a_command_reads_its_own_flags() {
+    fn a_command_reads_the_flags_it_declares() {
         assert_eq!(answer(&["check", "-h"]), "check usage 129");
         assert_eq!(answer(&["check", "--help"]), "check usage 0");
         assert_eq!(answer(&["check", "x", "--help"]), "check usage 129");
@@ -603,5 +785,86 @@ mod tests {
         assert_eq!(similar("chek"), ["check"]);
         assert_eq!(similar("restroe"), ["restore"]);
         assert_eq!(similar("nosuch"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_flag_is_read_with_its_value() {
+        assert_eq!(
+            parsed(&["--vault", "origin", "Assets/*"]),
+            (
+                vec!["Assets/*".to_owned()],
+                Some("origin".to_owned()),
+                false
+            )
+        );
+        assert_eq!(
+            parsed(&["--vault=origin"]),
+            (Vec::new(), Some("origin".to_owned()), false)
+        );
+        assert_eq!(
+            parsed(&["a", "--by-name", "b"]),
+            (vec!["a".to_owned(), "b".to_owned()], None, true)
+        );
+        assert_eq!(
+            parsed(&["--by-name", "--vault=-x", "a"]),
+            (vec!["a".to_owned()], Some("-x".to_owned()), true)
+        );
+
+        // Every word after the marker is an operand, a flag's name included.
+        assert_eq!(
+            parsed(&["a", "--", "--vault"]),
+            (vec!["a".to_owned(), "--vault".to_owned()], None, false)
+        );
+    }
+
+    #[test]
+    fn a_flag_without_its_value_is_refused() {
+        assert_eq!(read(&["--vault"]), "refused bring no value for vault");
+        assert_eq!(
+            read(&["--vault", "--by-name"]),
+            "refused bring no value for vault",
+            "a flag is not a value"
+        );
+        assert_eq!(
+            read(&["--by-name=1"]),
+            "refused bring unwanted value for by-name"
+        );
+    }
+
+    #[test]
+    fn a_flag_a_command_does_not_have_is_refused() {
+        assert_eq!(
+            read(&["--vault", "origin", "--bogus"]),
+            "refused bring option bogus"
+        );
+        assert_eq!(
+            answer(&["check", "--vault", "x"]),
+            "refused check option vault"
+        );
+    }
+
+    #[test]
+    fn the_usage_answers_still_come_before_the_flags() {
+        assert_eq!(read(&["-h"]), "bring usage 129");
+        assert_eq!(read(&["--help"]), "bring usage 0");
+        assert_eq!(read(&["x", "--help"]), "bring usage 129");
+        assert_eq!(
+            read(&["--by-name", "--help"]),
+            "bring usage 129",
+            "only the first word is the command's own"
+        );
+    }
+
+    #[test]
+    fn a_line_with_a_flag_is_still_dispatched() {
+        assert_eq!(
+            answer(&["bring", "--vault", "origin", "Assets/*"]),
+            "dispatch"
+        );
+        assert_eq!(answer(&["bring", "--by-name", "a", "b"]), "dispatch");
+        assert_eq!(
+            answer(&["bring", "--vault"]),
+            "refused bring no value for vault"
+        );
     }
 }

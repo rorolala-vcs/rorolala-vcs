@@ -9,6 +9,7 @@ git_rola:
         init       Set up git support in this project
         hook       Keep the materials in step after a git operation
         check      Report the materials that differ from rola.lock
+        bring      Sign a Vault's entries in to this project
         restore    Put named materials back from rola.lock
         update     Resolve rola.toml through the Vaults and rewrite rola.lock
         help       Print this list, or the usage of one command
@@ -22,6 +23,7 @@ git_rola:
         init       在工作树内建立 rola 项目的 git 支持
         hook       在 git 操作后让素材保持同步
         check      报告与 `rola.lock` 不同的素材
+        bring      把保险库布局里的条目签入本项目
         restore    从 `rola.lock` 把指名的素材放回去
         update     通过保险库解析 `rola.toml` 并重写 `rola.lock`
         help       打印这份列表，或某个命令的用法
@@ -49,6 +51,12 @@ git_rola:
   err_no_such_switch:
     en: "unknown switch `%{word}'"
     zh-CN: "未知开关 `%{word}'"
+  err_option_value:
+    en: "option '--%{option}' requires a value"
+    zh-CN: "选项 '--%{option}' 需要一个值"
+  err_option_no_value:
+    en: "option '--%{option}' takes no value"
+    zh-CN: "选项 '--%{option}' 不接值"
   err_write_stdout:
     en: write failure on standard output
     zh-CN: 写标准输出失败

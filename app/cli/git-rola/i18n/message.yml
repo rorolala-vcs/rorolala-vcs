@@ -13,3 +13,6 @@ message:
   usage:
     en: "usage: "
     zh-CN: "用法："
+  failed_path:
+    en: "%{path}: %{error}"
+    zh-CN: "%{path}：%{error}"

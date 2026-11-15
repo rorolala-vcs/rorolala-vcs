@@ -62,6 +62,7 @@ fn main() {
     initialise(&run, &repo, &mut checked);
     checking(&run, &repo, &mut checked);
     restoring(&run, &repo, &mut checked);
+    bringing(&run, &repo, &elsewhere, &mut checked);
     reaching(&run, &repo, &mut checked);
     quoting(&run, sandbox.dir(), &mut checked);
     trees(&run, sandbox.dir(), &mut checked);
@@ -139,7 +140,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
             "See 'git rola <command>'",
         );
 
-        for command in ["init", "hook", "check", "restore", "update", "help", "version"] {
+        for command in ["init", "hook", "check", "bring", "restore", "update", "help", "version"] {
             checked.stdout_has(&format!("the usage lists `{command}`"), &help, command);
         }
 
@@ -165,7 +166,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     );
 
     // Each command writes down its own use, and `--help` as its first word asks for it with success.
-    for command in ["init", "hook", "check", "restore", "update", "help", "version"] {
+    for command in ["init", "hook", "check", "bring", "restore", "update", "help", "version"] {
         let help = run.rola(elsewhere, &[command, "--help"]);
         checked.exits(&format!("`{command} --help` ends successfully"), &help, 0);
         checked.stdout_has(
@@ -181,7 +182,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     }
 
     // `-h` is git's usage request inside a command: the same text, on stdout, with 129.
-    for command in ["init", "hook", "check", "restore", "update", "help", "version"] {
+    for command in ["init", "hook", "check", "bring", "restore", "update", "help", "version"] {
         let usage = run.rola(elsewhere, &[command, "-h"]);
         checked.exits(&format!("`{command} -h` is a usage request"), &usage, 129);
         checked.stdout_has(
@@ -226,6 +227,19 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     let short = run.rola(elsewhere, &["check", "-C"]);
     checked.exits("a short flag a command does not have is refused", &short, 129);
     checked.stderr_has("the short flag is a switch", &short, "error: unknown switch `C'");
+
+    let value = run.rola(elsewhere, &["bring", "--vault"]);
+    checked.exits("a flag with no value is refused", &value, 129);
+    checked.stderr_has(
+        "the refusal says the flag needs a value",
+        &value,
+        "error: option '--vault' requires a value",
+    );
+    checked.stderr_has(
+        "the refusal names the command's use",
+        &value,
+        "usage: git rola bring",
+    );
 
     // The root has no flag of its own, and git says so without an `error:` prefix.
     let root = run.rola(elsewhere, &["--bogus"]);
@@ -888,6 +902,79 @@ fn restoring(run: &Run, repo: &Path, checked: &mut Checked) {
         "the refusal is git's pathspec",
         &outside,
         "error: pathspec '..' is outside the project",
+    );
+}
+
+/// What `bring` refuses before it reaches a Vault, and that a refusal writes nothing.
+fn bringing(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
+    // A run outside a project has nothing to configure and nothing to write.
+    let outside = run.rola(elsewhere, &["bring", "Assets/*"]);
+    checked.exits("a bring outside a project is refused", &outside, 128);
+    checked.stderr_has(
+        "the refusal says there is no project",
+        &outside,
+        "fatal: not inside a rola project",
+    );
+
+    // Nothing to bring in is a line the command cannot read.
+    let bare = run.rola(elsewhere, &["bring"]);
+    checked.exits("a bring that names nothing is refused", &bare, 129);
+    checked.stderr_has("the refusal is the command's use", &bare, "usage: git rola bring");
+    checked.stdout_empty("the refusal is not a result", &bare);
+
+    // A Vault the project does not declare is refused before an account is looked for.
+    let undeclared = run.rola(repo, &["bring", "--vault", "nosuch", "Assets/*"]);
+    checked.exits("a Vault the project does not declare is refused", &undeclared, 128);
+    checked.stderr_has(
+        "the refusal names the Vault",
+        &undeclared,
+        "is not named in [vaults]",
+    );
+
+    // The suite's sandbox holds no account, so a run that would reach for one is refused before
+    // anything is written.
+    let before_config = fs::read(repo.join("rola.toml")).expect("the project file");
+    let before_lock = fs::read(repo.join("rola.lock")).expect("the lock");
+
+    let refused = run.rola(repo, &["bring", "Assets/*"]);
+    checked.exits("a bring with no account is refused", &refused, 128);
+    checked.stderr_has(
+        "the refusal names the account it needs",
+        &refused,
+        "no account is named",
+    );
+    checked.wants(
+        "a refused bring leaves the project file as it was",
+        fs::read(repo.join("rola.toml")).ok() == Some(before_config),
+        &said(&refused),
+    );
+    checked.wants(
+        "a refused bring leaves the lock as it was",
+        fs::read(repo.join("rola.lock")).ok() == Some(before_lock),
+        &said(&refused),
+    );
+
+    // A project with no lock is told so before a Vault is reached for.
+    let unlocked = sibling(repo, "bring-unlocked");
+    fs::create_dir_all(&unlocked).expect("a directory for the project with no lock");
+    run.git(&unlocked, &["init", "-b", "main"]);
+    fs::write(
+        unlocked.join("rola.toml"),
+        "[features]\ngit_support = true\n",
+    )
+    .expect("the project file");
+
+    let no_lock = run.rola(&unlocked, &["bring", "Assets/*"]);
+    checked.exits("a bring with no lock is refused", &no_lock, 128);
+    checked.stderr_has(
+        "the refusal names what could not be read",
+        &no_lock,
+        "cannot read rola.lock",
+    );
+    checked.wants(
+        "a refused bring asks no Vault",
+        !unlocked.join(".rola").exists(),
+        &said(&no_lock),
     );
 }
 

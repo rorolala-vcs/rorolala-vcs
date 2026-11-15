@@ -9,32 +9,25 @@
 //! Layout is fetched and read for the version each mapping is at, the index is asked for that version
 //! and the variant it points at, and the content the variant stored is brought into the project's
 //! store. Everything is resolved before the lock is written, and a resolution that fails writes
-//! nothing: the lock is only ever the result of a whole pass.
+//! nothing: the lock is only ever the result of a whole pass. The reaching itself is
+//! [`upstream`](crate::upstream)'s, shared with `bring`.
 //!
 //! The content is brought into the project's own store, `.rola/storage/`, which is the same store the
 //! rest of the commands read their materials out of. That is deliberate: the store is
 //! content-addressed, so sharing it with the `rola` program is sharing a cache rather than sharing
 //! state.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::collections::BTreeMap;
 
-use librorolala::auth::{
-    Account, KeyLocateRule, current_account, env_keys_dir, find_account, global_keys_dir,
-    user_keys_dir,
-};
-use librorolala::daemon::{action_fetch_layout, action_read_remote_index, action_sync_hashes};
-use librorolala::layout::{EntryKind, Layout};
-use librorolala::protocol::VaultAddress;
-use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
-use librorolala::tree::{TreeError, TreeStructure};
-use librorolala::vcs::{UNKNOWN_VERSION, VCSIndexObject, Variant, Version};
-use librorolala::workspace::{Workspace, locate_workspace};
+use librorolala::auth::Account;
+use librorolala::layout::EntryKind;
+use librorolala::vcs::{UNKNOWN_VERSION, Version};
+use librorolala::workspace::Workspace;
 use rola_define_format::{ContentHash, Lock, LockPath, Material, MaterialKind, Vault, VaultName};
 use rola_git_support::{Mapping, Pin, Project, ProjectConfig, Session};
-use rorolala_utils_constants::{VAULT_LAYOUT_NAME, WORKSPACE_KEYS_DIR};
 use rust_i18n::t;
+
+use crate::upstream;
 
 /// The marker a version chain ends at: the variant a first version is based on is the empty hash.
 const ROOT_VARIANT: [u8; 32] = [0_u8; 32];
@@ -44,17 +37,6 @@ const ROOT_VARIANT: [u8; 32] = [0_u8; 32];
 /// A chain that long is a broken index rather than a long history, and following it forever would
 /// be a run with nothing to report.
 const CHAIN_LIMIT: u64 = 100_000;
-
-/// Which of a key's directories an account is looked for in.
-///
-/// Every directory is named by value where the search is made, so each is searched once: the scopes
-/// that would name one of them again are turned off.
-const SEARCH: KeyLocateRule = KeyLocateRule {
-    find_global: false,
-    find_local: true,
-    find_user: false,
-    find_env: false,
-};
 
 /// What an update came to.
 pub struct Outcome {
@@ -89,7 +71,7 @@ pub fn run() -> Result<Outcome, String> {
 
     session.detach(&source).map_err(|error| error.to_string())?;
 
-    write_lock(&project.lock_path(), &lock)?;
+    upstream::write_atomically(&project.lock_path(), &lock.encode())?;
 
     let failures = session
         .attach(&lock, &source)
@@ -118,10 +100,10 @@ fn resolve(project: &Project, config: &ProjectConfig) -> Result<Lock, String> {
         return Ok(Lock::empty());
     }
 
-    let account = account(project)?;
-    let vaults = VaultSource::used(config)?;
-    let fetch = Fetch::new(project)?;
-    let workspace = Workarea::new(project)?;
+    let account = upstream::account(project)?;
+    let vaults = upstream::VaultSource::used(config)?;
+    let fetch = upstream::Fetch::new(project)?;
+    let workspace = upstream::Workarea::new(project)?;
 
     // What the run wrote down: every Vault's Layout, fetched once, and the content each mapping
     // resolved to.
@@ -131,7 +113,7 @@ fn resolve(project: &Project, config: &ProjectConfig) -> Result<Lock, String> {
     for source in &vaults {
         layouts.insert(
             source.name.clone(),
-            fetch_layout(&fetch.workspace, &account, source)?,
+            upstream::fetch_layout(&fetch.workspace, &account, source)?,
         );
     }
 
@@ -162,12 +144,12 @@ fn resolve(project: &Project, config: &ProjectConfig) -> Result<Lock, String> {
 
         let version = match mapping.pin {
             Pin::Latest | Pin::Vault(_) => {
-                version_object(&workspace.value, &account, source, &tip)?
+                upstream::version_object(&workspace.value, &account, source, &tip)?
             }
             Pin::Version(number) => version_at(&workspace.value, &account, source, &tip, number)?,
         };
 
-        let content = content_of(&workspace.value, &account, source, &version)?;
+        let content = upstream::content_of(&workspace.value, &account, source, &version)?;
         resolved.push(Resolved {
             id: mapping.from.to_string(),
             path: mapping.path().map_err(|error| error.to_string())?,
@@ -180,9 +162,9 @@ fn resolve(project: &Project, config: &ProjectConfig) -> Result<Lock, String> {
     // here is one every command after it can act on. A tree's structure is the content its version
     // names, and what the structure names is a second ask: the structure is what says which keys
     // the inside is made of, so it crosses before they can be named.
-    let store = project_store(project);
+    let store = upstream::project_store(project);
     let contents: Vec<ContentHash> = resolved.iter().map(|entry| entry.content).collect();
-    bring(&store, &workspace.value, &account, &vaults, &contents)?;
+    upstream::bring_contents(&store, &workspace.value, &account, &vaults, &contents)?;
 
     let trees: Vec<(String, ContentHash)> = resolved
         .iter()
@@ -191,8 +173,8 @@ fn resolve(project: &Project, config: &ProjectConfig) -> Result<Lock, String> {
         .collect();
 
     if !trees.is_empty() {
-        let inside = tree_contents(&store, &trees)?;
-        bring(&store, &workspace.value, &account, &vaults, &inside)?;
+        let inside = upstream::tree_contents(&store, &trees)?;
+        upstream::bring_contents(&store, &workspace.value, &account, &vaults, &inside)?;
     }
 
     let vaults = vaults
@@ -227,59 +209,6 @@ struct Resolved {
     content: ContentHash,
 }
 
-/// The content a tree names inside itself, for every tree among `trees`.
-///
-/// The structure is read from the store the run has just filled, which is what the first [`bring`]
-/// leaves there. Both a structure that cannot be read and one that does not decode are the same
-/// failure: the mapping resolved to a version whose content is not a tree this build reads.
-///
-/// # Errors
-///
-/// Returns a message naming the material whose structure cannot be read, and what reading it failed
-/// with.
-fn tree_contents(
-    store: &RorolalaStorage,
-    trees: &[(String, ContentHash)],
-) -> Result<Vec<ContentHash>, String> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .build()
-        .map_err(|error| error.to_string())?;
-
-    let mut contents = Vec::new();
-
-    for (id, content) in trees {
-        let failed = |error: String| {
-            t!(
-                "update.err_structure",
-                material = id.as_str(),
-                error = error
-            )
-            .to_string()
-        };
-
-        let bytes = runtime
-            .block_on(store.read_object(&Key::new(*content.digest())))
-            .map_err(|error| failed(error.to_string()))?;
-        let keys = tree_content_keys(&bytes).map_err(|error| failed(error.to_string()))?;
-
-        contents.extend(
-            keys.into_iter()
-                .map(|key| ContentHash::from_digest(*key.digest())),
-        );
-    }
-
-    Ok(contents)
-}
-
-/// The content keys a tree's stored bytes name inside it.
-///
-/// # Errors
-///
-/// Returns [`TreeError::Malformed`] when the bytes are not a structure this build wrote.
-fn tree_content_keys(bytes: &[u8]) -> Result<Vec<Key>, TreeError> {
-    TreeStructure::decode(bytes).map(|structure| structure.content_keys())
-}
-
 /// The Vault a mapping is resolved against.
 ///
 /// A version number is a place in the material's chain, which is the index's rather than a Vault's,
@@ -298,276 +227,6 @@ fn vault_for(config: &ProjectConfig, mapping: &Mapping) -> Result<String, String
     }
 }
 
-/// The Vaults a project's mappings are resolved against, by name and address.
-struct VaultSource {
-    /// The name the project knows the Vault by.
-    name: String,
-    /// The address it answers at, as the project wrote it.
-    address: String,
-    /// Where the daemon is asked, as the actions name it.
-    target: String,
-}
-
-impl VaultSource {
-    /// The Vault a project's mappings are to be resolved against, sorted by name.
-    ///
-    /// Only the Vaults some mapping resolves through are read: a project that declares a Vault no
-    /// mapping uses does not reach it.
-    ///
-    /// # Errors
-    ///
-    /// Returns a message when a mapping names a Vault the project does not declare, or when a
-    /// declared address does not read as one.
-    fn used(config: &ProjectConfig) -> Result<Vec<Self>, String> {
-        let mut names = BTreeSet::new();
-
-        for mapping in &config.mapping {
-            names.insert(match &mapping.pin {
-                Pin::Vault(name) => name.clone(),
-                Pin::Latest | Pin::Version(_) => config
-                    .default_vault()
-                    .map(str::to_owned)
-                    .ok_or_else(|| t!("update.err_no_vault").to_string())?,
-            });
-        }
-
-        let mut sources = Vec::with_capacity(names.len());
-
-        for name in names {
-            let Some(address) = config.vault(&name) else {
-                return Err(t!("update.err_undeclared", vault = name.as_str()).to_string());
-            };
-
-            let target = VaultAddress::parse(address)
-                .map_err(|error| {
-                    t!(
-                        "update.err_address",
-                        vault = name.as_str(),
-                        error = error.to_string()
-                    )
-                    .to_string()
-                })?
-                .to_string();
-
-            sources.push(Self {
-                name,
-                address: address.to_owned(),
-                target,
-            });
-        }
-
-        Ok(sources)
-    }
-}
-
-/// The account a run acts as, found the way the rest of rola finds it.
-///
-/// The name is the one the user's own file carries, and the key is looked for where rola looks: the
-/// project's own keys first, then the user's key directories.
-///
-/// # Errors
-///
-/// Returns a message when no account is named, or when no scope holds a key by that name.
-fn account(project: &Project) -> Result<Account, String> {
-    let name = current_account().ok_or_else(|| t!("update.err_no_account").to_string())?;
-
-    let mut roots = vec![
-        project
-            .root()
-            .join(WORKSPACE_KEYS_DIR)
-            .components()
-            .collect::<PathBuf>(),
-    ];
-    roots.extend(user_keys_dir());
-    roots.extend(global_keys_dir());
-    roots.extend(env_keys_dir());
-
-    find_account(&name, &roots, &SEARCH)
-        .ok_or_else(|| t!("update.err_no_key", name = name.as_str()).to_string())
-}
-
-/// A place to fetch a Vault's Layout into, taken away when the update is done with it.
-///
-/// The fetched copy is a Vault's Layout as it stands, and `fetch-layout` writes it under a
-/// workspace's cache. The whole of `.rola/` belongs to this project's own commands, so the copy is
-/// fetched under the git half's private area, `.rola/git/vault/`, rather than into the cache the
-/// `rola` program keeps for the same purpose: two programs answering for one project should not be
-/// sharing the shape of a directory neither of them owns.
-struct Fetch {
-    /// The directory the copy lives under, which is removed when the update is done.
-    root: PathBuf,
-    /// The workspace the copy is written into.
-    workspace: Workspace,
-}
-
-impl Fetch {
-    /// A workspace under the project's private area, made for this update.
-    ///
-    /// # Errors
-    ///
-    /// Returns a message when the directory cannot be made or found again.
-    fn new(project: &Project) -> Result<Self, String> {
-        let root = project.root().join(".rola").join("git").join("vault");
-        let error = || t!("update.err_workarea", path = root.display().to_string()).to_string();
-
-        fs::create_dir_all(root.join(".rola")).map_err(|_| error())?;
-
-        let workspace = locate_workspace(&root).ok_or_else(error)?;
-
-        Ok(Self { root, workspace })
-    }
-}
-
-impl Drop for Fetch {
-    fn drop(&mut self) {
-        // The copy is this run's own and is fetched again next time; one that cannot be taken away
-        // costs space rather than correctness.
-        let _ = fs::remove_dir_all(&self.root);
-    }
-}
-
-/// The project as the daemon actions see it: the store they write content into.
-struct Workarea {
-    /// The project's own workspace, which is where the store is.
-    value: Workspace,
-}
-
-impl Workarea {
-    /// The workspace rooted at the project.
-    ///
-    /// # Errors
-    ///
-    /// Returns a message when the project's data directory cannot be made or found.
-    fn new(project: &Project) -> Result<Self, String> {
-        let error = || {
-            t!(
-                "update.err_workarea",
-                path = project.root().display().to_string()
-            )
-            .to_string()
-        };
-
-        fs::create_dir_all(project.root().join(".rola")).map_err(|_| error())?;
-
-        locate_workspace(project.root())
-            .map(|value| Self { value })
-            .ok_or_else(error)
-    }
-}
-
-/// The Vault's Layout, fetched into the workspace this update keeps for it.
-///
-/// # Errors
-///
-/// Returns a message naming the Vault when it cannot be reached, or when what it answered is not a
-/// Layout this build reads.
-fn fetch_layout(
-    workspace: &Workspace,
-    account: &Account,
-    source: &VaultSource,
-) -> Result<Layout, String> {
-    action_fetch_layout(
-        workspace,
-        account,
-        source.target.clone(),
-        source.name.clone(),
-    )
-    .map_err(|error| {
-        t!(
-            "update.err_fetch",
-            vault = source.name.as_str(),
-            error = error.to_string()
-        )
-        .to_string()
-    })?;
-
-    let dir = workspace
-        .readonly_layout_copy(&source.name, VAULT_LAYOUT_NAME)
-        .ok_or_else(|| t!("update.err_no_layout", vault = source.name.as_str()).to_string())?;
-
-    Layout::open_existing(dir).map_err(|error| {
-        t!(
-            "update.err_layout",
-            vault = source.name.as_str(),
-            error = error.to_string()
-        )
-        .to_string()
-    })
-}
-
-/// One object the Vault's index holds.
-///
-/// # Errors
-///
-/// Returns a message naming the Vault when it cannot be read.
-fn object(
-    workspace: &Workspace,
-    account: &Account,
-    source: &VaultSource,
-    hash: &[u8; 32],
-) -> Result<VCSIndexObject, String> {
-    action_read_remote_index(workspace, account, source.target.clone(), hex(hash)).map_err(
-        |error| {
-            t!(
-                "update.err_index",
-                vault = source.name.as_str(),
-                error = error.to_string()
-            )
-            .to_string()
-        },
-    )
-}
-
-/// The version the index holds under `hash`.
-///
-/// # Errors
-///
-/// Returns a message when what is held there is not a version.
-fn version_object(
-    workspace: &Workspace,
-    account: &Account,
-    source: &VaultSource,
-    hash: &[u8; 32],
-) -> Result<Version, String> {
-    match object(workspace, account, source, hash)? {
-        VCSIndexObject::Version(version) => Ok(version),
-        other => Err(t!("update.err_not_a_version", object = format!("{other:?}")).to_string()),
-    }
-}
-
-/// The variant the index holds under `hash`.
-///
-/// # Errors
-///
-/// Returns a message when what is held there is not a variant.
-fn variant_object(
-    workspace: &Workspace,
-    account: &Account,
-    source: &VaultSource,
-    hash: &[u8; 32],
-) -> Result<Variant, String> {
-    match object(workspace, account, source, hash)? {
-        VCSIndexObject::Variant(variant) => Ok(variant),
-        other => Err(t!("update.err_not_a_version", object = format!("{other:?}")).to_string()),
-    }
-}
-
-/// The content a version names: the storage key of the variant it points at.
-///
-/// # Errors
-///
-/// Returns a message when either object cannot be read.
-fn content_of(
-    workspace: &Workspace,
-    account: &Account,
-    source: &VaultSource,
-    version: &Version,
-) -> Result<ContentHash, String> {
-    let variant = variant_object(workspace, account, source, version.variant())?;
-
-    Ok(ContentHash::from_digest(*variant.storage_hash()))
-}
-
 /// The version at `number` in the chain that ends at `tip`.
 ///
 /// A version number is not written into a version: it is traced by following the variant each
@@ -580,18 +239,23 @@ fn content_of(
 fn version_at(
     workspace: &Workspace,
     account: &Account,
-    source: &VaultSource,
+    source: &upstream::VaultSource,
     tip: &[u8; 32],
     number: u64,
 ) -> Result<Version, String> {
-    let mut version = version_object(workspace, account, source, tip)?;
+    let mut version = upstream::version_object(workspace, account, source, tip)?;
     let mut followed = 0_u64;
 
     loop {
         let at = version.version_num();
 
         if at == UNKNOWN_VERSION {
-            return Err(t!("update.err_chain", material = hex(tip), number = number).to_string());
+            return Err(t!(
+                "update.err_chain",
+                material = upstream::hex(tip),
+                number = number
+            )
+            .to_string());
         }
 
         if at == number {
@@ -601,188 +265,36 @@ fn version_at(
         // Numbers are one per link, so a chain that is already below the number will not reach it
         // by going further back.
         if at < number {
-            return Err(t!("update.err_version", number = number, material = hex(tip)).to_string());
+            return Err(t!(
+                "update.err_version",
+                number = number,
+                material = upstream::hex(tip)
+            )
+            .to_string());
         }
 
-        let variant = variant_object(workspace, account, source, version.variant())?;
+        let variant = upstream::variant_object(workspace, account, source, version.variant())?;
         let base = *variant.base_version();
 
         if base == ROOT_VARIANT {
-            return Err(t!("update.err_version", number = number, material = hex(tip)).to_string());
+            return Err(t!(
+                "update.err_version",
+                number = number,
+                material = upstream::hex(tip)
+            )
+            .to_string());
         }
 
-        version = version_object(workspace, account, source, &base)?;
+        version = upstream::version_object(workspace, account, source, &base)?;
 
         followed += 1;
         if followed > CHAIN_LIMIT {
-            return Err(t!("update.err_chain", material = hex(tip), number = number).to_string());
-        }
-    }
-}
-
-/// The project's store, made where it is not there yet.
-///
-/// A project that has never had content brought into it keeps none, and a run that resolves
-/// mappings makes one: the content the lock names has to sit somewhere before the lock says so.
-fn project_store(project: &Project) -> RorolalaStorage {
-    let root = project.root().join(".rola").join("storage");
-
-    RorolalaStorage::at(root.clone()).unwrap_or_else(|| RorolalaStorage::create(root))
-}
-
-/// Brings the content the resolved materials name into the project's store.
-///
-/// A key is the hash of its content, so any Vault that holds it hands back the same object: the
-/// content is asked of every Vault the mappings resolve through, and what none of them holds is a
-/// resolution that cannot be applied, which is refused here, before the lock says it is placed.
-///
-/// # Errors
-///
-/// Returns a message naming the Vault when one cannot be reached, and the content when it cannot be
-/// had at all.
-fn bring(
-    store: &RorolalaStorage,
-    workspace: &Workspace,
-    account: &Account,
-    sources: &[VaultSource],
-    contents: &[ContentHash],
-) -> Result<(), String> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .build()
-        .map_err(|error| error.to_string())?;
-
-    let mut keys: Vec<Key> = contents
-        .iter()
-        .map(|content| Key::new(*content.digest()))
-        .collect();
-    keys.sort_unstable_by_key(Key::hex);
-    keys.dedup_by(|one, other| one.hex() == other.hex());
-
-    let mut missing = absent(&runtime, store, &keys)?;
-
-    if missing.is_empty() {
-        return Ok(());
-    }
-
-    for source in sources {
-        let units = missing.iter().map(Key::hex).collect::<Vec<_>>().join(" ");
-
-        action_sync_hashes(workspace, account, source.target.clone(), units).map_err(|error| {
-            t!(
-                "update.err_content",
-                vault = source.name.as_str(),
-                error = error.to_string()
+            return Err(t!(
+                "update.err_chain",
+                material = upstream::hex(tip),
+                number = number
             )
-            .to_string()
-        })?;
-
-        missing = absent(&runtime, store, &missing)?;
-
-        if missing.is_empty() {
-            return Ok(());
+            .to_string());
         }
-    }
-
-    let wanted = missing.iter().map(Key::hex).collect::<Vec<_>>().join(", ");
-
-    Err(t!("update.err_missing", content = wanted).to_string())
-}
-
-/// Which of `keys` the store does not hold.
-/// # Errors
-///
-/// Returns a message when the store cannot be asked.
-fn absent(
-    runtime: &tokio::runtime::Runtime,
-    store: &RorolalaStorage,
-    keys: &[Key],
-) -> Result<Vec<Key>, String> {
-    let presence = runtime
-        .block_on(store.contains_keys(keys))
-        .map_err(|error| error.to_string())?;
-
-    Ok(keys
-        .iter()
-        .zip(presence.iter())
-        .filter_map(|(key, held)| (!held).then_some(*key))
-        .collect())
-}
-
-/// Writes the lock where the project keeps it, whole rather than half way.
-///
-/// # Errors
-///
-/// Returns a message when what is written cannot be, naming the path.
-fn write_lock(path: &Path, lock: &Lock) -> Result<(), String> {
-    let temporary = path.with_file_name(format!(".rola.lock.{}", std::process::id()));
-
-    fs::write(&temporary, lock.encode()).map_err(|error| {
-        t!(
-            "update.err_write",
-            path = path.display().to_string(),
-            error = error.to_string()
-        )
-        .to_string()
-    })?;
-
-    match fs::rename(&temporary, path) {
-        Ok(()) => Ok(()),
-        // WORKAROUND: Windows refuses to rename over a file that is there, so the old lock is
-        // removed first. The lock is this project's own file and no other run writes it while a
-        // command is holding it.
-        Err(error) if path.exists() => {
-            fs::remove_file(path).map_err(|error| error.to_string())?;
-            fs::rename(&temporary, path).map_err(|_| error.to_string())
-        }
-        Err(error) => Err(error.to_string()),
-    }
-}
-
-/// A hash as the index names it.
-fn hex(hash: &[u8; 32]) -> String {
-    use std::fmt::Write as _;
-
-    let mut text = String::with_capacity(64);
-
-    for byte in hash {
-        // UNWRAP: writing into a String cannot fail, so the `Result` this answers is never one.
-        let _ = write!(text, "{byte:02x}");
-    }
-
-    text
-}
-
-#[cfg(test)]
-mod tests {
-    use librorolala::storage::Key;
-    use librorolala::tree::{FileMode, TreeEntry, TreeStructure};
-
-    use super::tree_content_keys;
-
-    /// The keys a structure names are the description's and its files', description first.
-    #[test]
-    fn the_keys_a_structure_names_are_the_description_and_its_files() {
-        let description = Key::new([9; 32]);
-        let first = Key::new([1; 32]);
-        let second = Key::new([2; 32]);
-        let structure = TreeStructure::build(
-            Some(description),
-            [
-                TreeEntry::file("a.png", FileMode::Regular, first),
-                TreeEntry::directory("sub"),
-                TreeEntry::file("sub/b.psd", FileMode::Regular, second),
-            ],
-        )
-        .unwrap();
-
-        let keys = tree_content_keys(&structure.encode()).unwrap();
-
-        assert_eq!(keys, [description, first, second]);
-    }
-
-    /// Bytes that are not a structure are refused rather than read as one.
-    #[test]
-    fn bytes_that_are_not_a_structure_are_refused() {
-        assert!(tree_content_keys(b"not a structure").is_err());
     }
 }
