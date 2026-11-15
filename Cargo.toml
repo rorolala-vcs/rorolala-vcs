@@ -274,7 +274,19 @@ tokio.workspace = true
 
 [build-dependencies]
 rorolala-dev-bindgen.workspace = true
+# The tree's icons, drawn again whenever this crate is built: `utils/icons`'s build script reads
+# every `res/icons/*.toml` description and writes the `.ico` beside its picture, and a tree that
+# was just checked out has none of them. No line here names the crate, and the dependency is for
+# its side effect alone: `rola` and `rola-daemon` carry their own under `cfg(windows)`, and the
+# C# projects read `res/icons/yizi.ico` at build time, so on Linux and in a job whose only build
+# is the C ABI header, this crate's build is what draws the icons before anything reads one.
+rorolala-utils-icons.workspace = true
 serde_json.workspace = true
+
+# Cargo reads this crate's sources for a name and cannot see an edge that only runs a build script,
+# so the report it makes of the dependency above is told to stay quiet.
+[lints.cargo]
+unused_dependencies = "allow"
 
 [dev-dependencies]
 # The tests of the C ABI's own glue make a Workspace and name paths in a Layout, which is done by
