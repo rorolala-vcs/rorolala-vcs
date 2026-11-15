@@ -6,7 +6,7 @@ use std::str::SplitWhitespace;
 use crate::FORMAT_VERSION;
 use crate::error::{FormatError, FormatErrorKind};
 use crate::hash::ContentHash;
-use crate::lock::{Lock, Material, Vault};
+use crate::lock::{Lock, Material, MaterialKind, Vault};
 use crate::name::VaultName;
 use crate::path::LockPath;
 
@@ -101,6 +101,8 @@ impl Lock {
             text.push_str(material.path().as_str());
             text.push(' ');
             text.push_str(&material.content().to_token());
+            text.push(' ');
+            text.push_str(material.kind().token());
             text.push('\n');
         }
 
@@ -225,11 +227,27 @@ fn read_material(reading: &mut Reading, line_number: usize, line: &str) -> Resul
         ));
     }
 
-    // The hash is the last word of the line, so the path may hold spaces: it is everything before
-    // that word, with the one run of spaces between them cut.
+    // The kind and the hash are the last two words of the line, so the path may hold spaces: it
+    // is everything before them, with the one run of spaces between each pair cut.
     let trimmed = line.trim_end();
-    let Some((path, token)) = trimmed.rsplit_once(|character: char| character.is_whitespace())
+    let Some((rest, kind)) = trimmed.rsplit_once(|character: char| character.is_whitespace())
     else {
+        return Err(FormatError::at(
+            line_number,
+            FormatErrorKind::MalformedMaterial,
+        ));
+    };
+
+    let Some(kind) = MaterialKind::from_token(kind) else {
+        return Err(FormatError::at(
+            line_number,
+            FormatErrorKind::UnknownMaterialKind {
+                text: kind.to_owned(),
+            },
+        ));
+    };
+
+    let Some((path, token)) = rest.rsplit_once(|character: char| character.is_whitespace()) else {
         return Err(FormatError::at(
             line_number,
             FormatErrorKind::MalformedMaterial,
@@ -249,7 +267,7 @@ fn read_material(reading: &mut Reading, line_number: usize, line: &str) -> Resul
         ));
     }
 
-    reading.materials.push(Material::new(path, content));
+    reading.materials.push(Material::new(path, content, kind));
 
     Ok(())
 }
@@ -269,7 +287,7 @@ mod tests {
     use super::Lock;
     use crate::error::FormatErrorKind;
     use crate::hash::ContentHash;
-    use crate::lock::{Material, Vault};
+    use crate::lock::{Material, MaterialKind, Vault};
     use crate::name::VaultName;
     use crate::path::LockPath;
 
@@ -283,9 +301,22 @@ mod tests {
         Vault::new(VaultName::new(name).unwrap(), address).unwrap()
     }
 
-    /// A material at `path_text`, holding content `byte`.
+    /// A file material at `path_text`, holding content `byte`.
     fn material(path_text: &str, byte: u8) -> Material {
-        Material::new(path(path_text), ContentHash::from_digest([byte; 32]))
+        Material::new(
+            path(path_text),
+            ContentHash::from_digest([byte; 32]),
+            MaterialKind::File,
+        )
+    }
+
+    /// A tree material at `path_text`, holding content `byte`.
+    fn tree(path_text: &str, byte: u8) -> Material {
+        Material::new(
+            path(path_text),
+            ContentHash::from_digest([byte; 32]),
+            MaterialKind::Tree,
+        )
     }
 
     /// The lock most tests read and write.
@@ -294,6 +325,7 @@ mod tests {
             vec![vault("origin", "rola://127.0.0.1:7717/default")],
             vec![
                 material("/Source/character.fbx", 2),
+                tree("/Textures", 3),
                 material("/Assets/hero.psd", 1),
             ],
         )
@@ -313,9 +345,10 @@ mod tests {
         assert_eq!(
             text,
             format!(
-                "? FORMAT 1\n? VAULT origin rola://127.0.0.1:7717/default\n/Assets/hero.psd {}\n/Source/character.fbx {}\n",
+                "? FORMAT 2\n? VAULT origin rola://127.0.0.1:7717/default\n/Assets/hero.psd {} file\n/Source/character.fbx {} file\n/Textures {} tree\n",
                 token(1),
-                token(2)
+                token(2),
+                token(3)
             )
         );
         assert_eq!(Lock::decode(&text).unwrap(), lock);
@@ -344,7 +377,7 @@ mod tests {
     #[test]
     fn comments_and_blank_lines_are_skipped() {
         let text = format!(
-            "# a lock written by hand\n\n? FORMAT 1\n\n# the source\n? VAULT origin rola://a/default\n\n/Assets/hero.psd {}\n",
+            "# a lock written by hand\n\n? FORMAT 2\n\n# the source\n? VAULT origin rola://a/default\n\n/Assets/hero.psd {} file\n",
             token(1)
         );
 
@@ -370,8 +403,8 @@ mod tests {
     #[test]
     fn a_value_before_the_format_is_refused() {
         for text in [
-            "? VAULT origin rola://a/default\n? FORMAT 1\n".to_owned(),
-            format!("/Assets/hero.psd {}\n? FORMAT 1\n", token(1)),
+            "? VAULT origin rola://a/default\n? FORMAT 2\n".to_owned(),
+            format!("/Assets/hero.psd {}\n? FORMAT 2\n", token(1)),
         ] {
             let error = Lock::decode(&text).unwrap_err();
 
@@ -385,7 +418,7 @@ mod tests {
 
     #[test]
     fn a_format_named_twice_is_refused() {
-        let error = Lock::decode("? FORMAT 1\n? FORMAT 1\n").unwrap_err();
+        let error = Lock::decode("? FORMAT 2\n? FORMAT 2\n").unwrap_err();
 
         assert!(matches!(error.kind(), FormatErrorKind::RepeatedFormat));
         assert_eq!(error.line(), Some(2));
@@ -393,11 +426,11 @@ mod tests {
 
     #[test]
     fn a_format_this_build_does_not_read_is_refused() {
-        let error = Lock::decode("? FORMAT 2\n").unwrap_err();
+        let error = Lock::decode("? FORMAT 3\n").unwrap_err();
 
         assert!(matches!(
             error.kind(),
-            FormatErrorKind::UnsupportedFormat { version: 2 }
+            FormatErrorKind::UnsupportedFormat { version: 3 }
         ));
         assert_eq!(error.line(), Some(1));
     }
@@ -415,7 +448,7 @@ mod tests {
 
     #[test]
     fn a_fact_this_build_does_not_read_is_refused() {
-        let error = Lock::decode("? FORMAT 1\n? THING x\n").unwrap_err();
+        let error = Lock::decode("? FORMAT 2\n? THING x\n").unwrap_err();
 
         assert!(matches!(
             error.kind(),
@@ -427,10 +460,10 @@ mod tests {
     #[test]
     fn a_fact_without_the_words_it_needs_is_refused() {
         for text in [
-            "? FORMAT 1\n? VAULT\n",
-            "? FORMAT 1\n? VAULT origin\n",
-            "? FORMAT 1\n? VAULT origin rola://a/default extra\n",
-            "? FORMAT 1\n?\n",
+            "? FORMAT 2\n? VAULT\n",
+            "? FORMAT 2\n? VAULT origin\n",
+            "? FORMAT 2\n? VAULT origin rola://a/default extra\n",
+            "? FORMAT 2\n?\n",
         ] {
             let error = Lock::decode(text).unwrap_err();
 
@@ -444,7 +477,7 @@ mod tests {
 
     #[test]
     fn a_line_of_a_kind_the_grammar_does_not_name_is_refused() {
-        let error = Lock::decode("? FORMAT 1\nunsaid\n").unwrap_err();
+        let error = Lock::decode("? FORMAT 2\nunsaid\n").unwrap_err();
 
         assert!(matches!(
             error.kind(),
@@ -455,15 +488,20 @@ mod tests {
 
     #[test]
     fn a_material_line_without_a_hash_is_refused() {
-        let error = Lock::decode("? FORMAT 1\n/Assets/hero.psd\n").unwrap_err();
+        for text in [
+            "? FORMAT 2\n/Assets/hero.psd\n",
+            "? FORMAT 2\n/Assets/hero.psd file\n",
+        ] {
+            let error = Lock::decode(text).unwrap_err();
 
-        assert!(matches!(error.kind(), FormatErrorKind::MalformedMaterial));
-        assert_eq!(error.line(), Some(2));
+            assert!(matches!(error.kind(), FormatErrorKind::MalformedMaterial));
+            assert_eq!(error.line(), Some(2));
+        }
     }
 
     #[test]
     fn a_material_line_whose_hash_is_not_a_content_hash_is_refused() {
-        let error = Lock::decode("? FORMAT 1\n/Assets/hero.psd nope\n").unwrap_err();
+        let error = Lock::decode("? FORMAT 2\n/Assets/hero.psd nope file\n").unwrap_err();
 
         assert!(matches!(
             error.kind(),
@@ -473,8 +511,32 @@ mod tests {
     }
 
     #[test]
+    fn a_material_line_of_a_kind_this_build_does_not_read_is_refused() {
+        let line = format!("/Assets/hero.psd {} folder", token(1));
+        let error = Lock::decode(&format!("? FORMAT 2\n{line}\n")).unwrap_err();
+
+        assert!(matches!(
+            error.kind(),
+            FormatErrorKind::UnknownMaterialKind { text } if text == "folder"
+        ));
+        assert_eq!(error.line(), Some(2));
+    }
+
+    #[test]
+    fn a_material_line_without_a_kind_is_refused() {
+        let line = format!("/Assets/hero.psd {}", token(1));
+        let error = Lock::decode(&format!("? FORMAT 2\n{line}\n")).unwrap_err();
+
+        assert!(matches!(
+            error.kind(),
+            FormatErrorKind::UnknownMaterialKind { text } if text == &token(1)
+        ));
+        assert_eq!(error.line(), Some(2));
+    }
+
+    #[test]
     fn a_material_path_that_cannot_be_one_place_is_refused() {
-        let error = Lock::decode(&format!("? FORMAT 1\n/../x {}\n", token(1))).unwrap_err();
+        let error = Lock::decode(&format!("? FORMAT 2\n/../x {} file\n", token(1))).unwrap_err();
 
         assert!(matches!(error.kind(), FormatErrorKind::InvalidPath { .. }));
         assert_eq!(error.line(), Some(2));
@@ -483,7 +545,7 @@ mod tests {
     #[test]
     fn two_vaults_with_one_name_are_refused_with_the_line_they_meet_on() {
         let error = Lock::decode(
-            "? FORMAT 1\n? VAULT origin rola://a/default\n? VAULT origin rola://b/default\n",
+            "? FORMAT 2\n? VAULT origin rola://a/default\n? VAULT origin rola://b/default\n",
         )
         .unwrap_err();
 
@@ -497,7 +559,7 @@ mod tests {
     #[test]
     fn two_materials_at_one_path_are_refused_with_the_line_they_meet_on() {
         let error = Lock::decode(&format!(
-            "? FORMAT 1\n/Assets/hero.psd {}\n/Assets/hero.psd {}\n",
+            "? FORMAT 2\n/Assets/hero.psd {} file\n/Assets/hero.psd {} tree\n",
             token(1),
             token(2)
         ))
@@ -513,7 +575,7 @@ mod tests {
     #[test]
     fn a_material_path_may_hold_spaces() {
         let read = Lock::decode(&format!(
-            "? FORMAT 1\n/Program Files/Some Game/Data.pak {}\n",
+            "? FORMAT 2\n/Program Files/Some Game/Data.pak {} file\n",
             token(3)
         ))
         .unwrap();
@@ -522,19 +584,31 @@ mod tests {
             read.materials()[0].path().as_str(),
             "Program Files/Some Game/Data.pak"
         );
+        assert_eq!(read.materials()[0].kind(), MaterialKind::File);
+    }
+
+    #[test]
+    fn a_tree_material_reads_back_as_a_tree() {
+        let line = format!("/Assets/Textures {}", token(4));
+        let text = format!("? FORMAT 2\n{line} tree\n");
+
+        let read = Lock::decode(&text).unwrap();
+
+        assert_eq!(read.materials()[0].kind(), MaterialKind::Tree);
+        assert_eq!(read.encode(), text);
     }
 
     #[test]
     fn an_empty_lock_round_trips() {
         let empty = Lock::empty();
 
-        assert_eq!(empty.encode(), "? FORMAT 1\n");
+        assert_eq!(empty.encode(), "? FORMAT 2\n");
         assert_eq!(Lock::decode(&empty.encode()).unwrap(), empty);
     }
 
     #[test]
     fn a_lock_with_nothing_but_a_format_round_trips() {
-        let read = Lock::decode("? FORMAT 1\n").unwrap();
+        let read = Lock::decode("? FORMAT 2\n").unwrap();
 
         assert_eq!(read, Lock::empty());
     }

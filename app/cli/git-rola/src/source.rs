@@ -42,6 +42,37 @@ impl ContentSource for Source {
             }),
         }
     }
+
+    fn read(&self, content: ContentHash) -> Result<Vec<u8>, Error> {
+        match self {
+            Self::Store(store) => read_from_store(store, content),
+            Self::Nothing => Err(Error::Unavailable {
+                content: content.to_token(),
+            }),
+        }
+    }
+}
+
+/// The bytes the `store` holds under `content`.
+///
+/// A tree material's content is its structure, which has to be read whole to say what the material
+/// holds. It meets the store's runtime the same way a placement does, see [`write_from_store`].
+fn read_from_store(store: &RorolalaStorage, content: ContentHash) -> Result<Vec<u8>, Error> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .map_err(|error| Error::Io(io::Error::other(error.to_string())))?;
+
+    let key = Key::new(*content.digest());
+
+    match runtime.block_on(store.read_object(&key)) {
+        Ok(bytes) => Ok(bytes),
+        // A content the store does not hold is "no source here has it", which is what a caller
+        // reports as an unplaced material rather than as a failed read.
+        Err(librorolala::storage::Error::NotFound(_)) => Err(Error::Unavailable {
+            content: content.to_token(),
+        }),
+        Err(error) => Err(Error::Io(io::Error::other(error.to_string()))),
+    }
 }
 
 /// Writes the content `store` holds under `content` to `path`.

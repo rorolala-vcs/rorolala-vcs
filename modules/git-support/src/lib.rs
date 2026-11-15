@@ -21,6 +21,7 @@ mod git;
 mod project;
 mod session;
 mod staging;
+mod tree;
 
 pub use config::*;
 pub use content::*;
@@ -30,3 +31,4 @@ pub use git::*;
 pub use project::*;
 pub use session::*;
 pub use staging::*;
+pub use tree::*;

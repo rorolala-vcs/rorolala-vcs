@@ -25,12 +25,13 @@ use librorolala::auth::{
     user_keys_dir,
 };
 use librorolala::daemon::{action_fetch_layout, action_read_remote_index, action_sync_hashes};
-use librorolala::layout::Layout;
+use librorolala::layout::{EntryKind, Layout};
 use librorolala::protocol::VaultAddress;
 use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
+use librorolala::tree::{TreeError, TreeStructure};
 use librorolala::vcs::{UNKNOWN_VERSION, VCSIndexObject, Variant, Version};
 use librorolala::workspace::{Workspace, locate_workspace};
-use rola_define_format::{ContentHash, Lock, Material, Vault, VaultName};
+use rola_define_format::{ContentHash, Lock, LockPath, Material, MaterialKind, Vault, VaultName};
 use rola_git_support::{Mapping, Pin, Project, ProjectConfig, Session};
 use rorolala_utils_constants::{VAULT_LAYOUT_NAME, WORKSPACE_KEYS_DIR};
 use rust_i18n::t;
@@ -82,12 +83,14 @@ pub fn run() -> Result<Outcome, String> {
     let lock = resolve(project, &config)?;
 
     // What was placed before is taken out first, so a failure here leaves the lock, and so the
-    // command, as it was rather than half applied.
-    session.detach().map_err(|error| error.to_string())?;
+    // command, as it was rather than half applied. A tree is checked against the structure it was
+    // placed from, which is the store's, so the source is made before the taking out.
+    let source = crate::source::of(project);
+
+    session.detach(&source).map_err(|error| error.to_string())?;
 
     write_lock(&project.lock_path(), &lock)?;
 
-    let source = crate::source::of(project);
     let failures = session
         .attach(&lock, &source)
         .map_err(|error| error.to_string())?;
@@ -123,8 +126,7 @@ fn resolve(project: &Project, config: &ProjectConfig) -> Result<Lock, String> {
     // What the run wrote down: every Vault's Layout, fetched once, and the content each mapping
     // resolved to.
     let mut layouts = BTreeMap::new();
-    let mut materials = Vec::with_capacity(config.mapping.len());
-    let mut contents: Vec<ContentHash> = Vec::with_capacity(config.mapping.len());
+    let mut resolved: Vec<Resolved> = Vec::with_capacity(config.mapping.len());
 
     for source in &vaults {
         layouts.insert(
@@ -153,6 +155,10 @@ fn resolve(project: &Project, config: &ProjectConfig) -> Result<Lock, String> {
             .to_string()
         })?;
         let tip = held.version();
+        let kind = match held.kind() {
+            EntryKind::File => MaterialKind::File,
+            EntryKind::Tree => MaterialKind::Tree,
+        };
 
         let version = match mapping.pin {
             Pin::Latest | Pin::Vault(_) => {
@@ -162,16 +168,32 @@ fn resolve(project: &Project, config: &ProjectConfig) -> Result<Lock, String> {
         };
 
         let content = content_of(&workspace.value, &account, source, &version)?;
-        contents.push(content);
-        materials.push(Material::new(
-            mapping.path().map_err(|error| error.to_string())?,
+        resolved.push(Resolved {
+            id: mapping.from.to_string(),
+            path: mapping.path().map_err(|error| error.to_string())?,
+            kind,
             content,
-        ));
+        });
     }
 
     // The content comes to the project's store before the lock says it is placed, so a lock written
-    // here is one every command after it can act on.
-    bring(&workspace.value, project, &account, &vaults, &contents)?;
+    // here is one every command after it can act on. A tree's structure is the content its version
+    // names, and what the structure names is a second ask: the structure is what says which keys
+    // the inside is made of, so it crosses before they can be named.
+    let store = project_store(project);
+    let contents: Vec<ContentHash> = resolved.iter().map(|entry| entry.content).collect();
+    bring(&store, &workspace.value, &account, &vaults, &contents)?;
+
+    let trees: Vec<(String, ContentHash)> = resolved
+        .iter()
+        .filter(|entry| entry.kind == MaterialKind::Tree)
+        .map(|entry| (entry.id.clone(), entry.content))
+        .collect();
+
+    if !trees.is_empty() {
+        let inside = tree_contents(&store, &trees)?;
+        bring(&store, &workspace.value, &account, &vaults, &inside)?;
+    }
 
     let vaults = vaults
         .into_iter()
@@ -184,7 +206,78 @@ fn resolve(project: &Project, config: &ProjectConfig) -> Result<Lock, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+    let materials = resolved
+        .into_iter()
+        .map(|entry| Material::new(entry.path, entry.content, entry.kind))
+        .collect();
+
     Lock::new(vaults, materials).map_err(|error| error.to_string())
+}
+
+/// One mapping, resolved to what the lock places: the `Uuid` it names, where it lands, what lands
+/// there, and the content it holds.
+struct Resolved {
+    /// The `Uuid` the mapping names, as the run says it.
+    id: String,
+    /// Where the content is placed in the project.
+    path: LockPath,
+    /// What the content is placed as.
+    kind: MaterialKind,
+    /// The content the version names.
+    content: ContentHash,
+}
+
+/// The content a tree names inside itself, for every tree among `trees`.
+///
+/// The structure is read from the store the run has just filled, which is what the first [`bring`]
+/// leaves there. Both a structure that cannot be read and one that does not decode are the same
+/// failure: the mapping resolved to a version whose content is not a tree this build reads.
+///
+/// # Errors
+///
+/// Returns a message naming the material whose structure cannot be read, and what reading it failed
+/// with.
+fn tree_contents(
+    store: &RorolalaStorage,
+    trees: &[(String, ContentHash)],
+) -> Result<Vec<ContentHash>, String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .map_err(|error| error.to_string())?;
+
+    let mut contents = Vec::new();
+
+    for (id, content) in trees {
+        let failed = |error: String| {
+            t!(
+                "update.err_structure",
+                material = id.as_str(),
+                error = error
+            )
+            .to_string()
+        };
+
+        let bytes = runtime
+            .block_on(store.read_object(&Key::new(*content.digest())))
+            .map_err(|error| failed(error.to_string()))?;
+        let keys = tree_content_keys(&bytes).map_err(|error| failed(error.to_string()))?;
+
+        contents.extend(
+            keys.into_iter()
+                .map(|key| ContentHash::from_digest(*key.digest())),
+        );
+    }
+
+    Ok(contents)
+}
+
+/// The content keys a tree's stored bytes name inside it.
+///
+/// # Errors
+///
+/// Returns [`TreeError::Malformed`] when the bytes are not a structure this build wrote.
+fn tree_content_keys(bytes: &[u8]) -> Result<Vec<Key>, TreeError> {
+    TreeStructure::decode(bytes).map(|structure| structure.content_keys())
 }
 
 /// The Vault a mapping is resolved against.
@@ -527,6 +620,16 @@ fn version_at(
     }
 }
 
+/// The project's store, made where it is not there yet.
+///
+/// A project that has never had content brought into it keeps none, and a run that resolves
+/// mappings makes one: the content the lock names has to sit somewhere before the lock says so.
+fn project_store(project: &Project) -> RorolalaStorage {
+    let root = project.root().join(".rola").join("storage");
+
+    RorolalaStorage::at(root.clone()).unwrap_or_else(|| RorolalaStorage::create(root))
+}
+
 /// Brings the content the resolved materials name into the project's store.
 ///
 /// A key is the hash of its content, so any Vault that holds it hands back the same object: the
@@ -538,15 +641,12 @@ fn version_at(
 /// Returns a message naming the Vault when one cannot be reached, and the content when it cannot be
 /// had at all.
 fn bring(
+    store: &RorolalaStorage,
     workspace: &Workspace,
-    project: &Project,
     account: &Account,
     sources: &[VaultSource],
     contents: &[ContentHash],
 ) -> Result<(), String> {
-    let root = project.root().join(".rola").join("storage");
-    let store = RorolalaStorage::at(root.clone()).unwrap_or_else(|| RorolalaStorage::create(root));
-
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()
         .map_err(|error| error.to_string())?;
@@ -558,7 +658,7 @@ fn bring(
     keys.sort_unstable_by_key(Key::hex);
     keys.dedup_by(|one, other| one.hex() == other.hex());
 
-    let mut missing = absent(&runtime, &store, &keys)?;
+    let mut missing = absent(&runtime, store, &keys)?;
 
     if missing.is_empty() {
         return Ok(());
@@ -576,7 +676,7 @@ fn bring(
             .to_string()
         })?;
 
-        missing = absent(&runtime, &store, &missing)?;
+        missing = absent(&runtime, store, &missing)?;
 
         if missing.is_empty() {
             return Ok(());
@@ -650,4 +750,39 @@ fn hex(hash: &[u8; 32]) -> String {
     }
 
     text
+}
+
+#[cfg(test)]
+mod tests {
+    use librorolala::storage::Key;
+    use librorolala::tree::{FileMode, TreeEntry, TreeStructure};
+
+    use super::tree_content_keys;
+
+    /// The keys a structure names are the description's and its files', description first.
+    #[test]
+    fn the_keys_a_structure_names_are_the_description_and_its_files() {
+        let description = Key::new([9; 32]);
+        let first = Key::new([1; 32]);
+        let second = Key::new([2; 32]);
+        let structure = TreeStructure::build(
+            Some(description),
+            [
+                TreeEntry::file("a.png", FileMode::Regular, first),
+                TreeEntry::directory("sub"),
+                TreeEntry::file("sub/b.psd", FileMode::Regular, second),
+            ],
+        )
+        .unwrap();
+
+        let keys = tree_content_keys(&structure.encode()).unwrap();
+
+        assert_eq!(keys, [description, first, second]);
+    }
+
+    /// Bytes that are not a structure are refused rather than read as one.
+    #[test]
+    fn bytes_that_are_not_a_structure_are_refused() {
+        assert!(tree_content_keys(b"not a structure").is_err());
+    }
 }

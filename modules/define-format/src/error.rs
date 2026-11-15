@@ -96,8 +96,13 @@ pub enum FormatErrorKind {
         /// The name the fact is given.
         name: String,
     },
-    /// A material line is not a path, a space and a content hash.
+    /// A material line is not a path, a content hash and a kind.
     MalformedMaterial,
+    /// A material line names a kind this build does not read.
+    UnknownMaterialKind {
+        /// What the line said instead of a kind.
+        text: String,
+    },
     /// A content hash is not `blake3:` and 64 lowercase hexadecimal digits.
     MalformedHash {
         /// What the line said instead of a content hash.
@@ -157,7 +162,13 @@ impl fmt::Display for FormatErrorKind {
                 write!(formatter, "`? {name}` does not carry the words it needs")
             }
             Self::MalformedMaterial => {
-                formatter.write_str("a material line is a path, a space and a content hash")
+                formatter.write_str("a material line is a path, a space, a content hash and a kind")
+            }
+            Self::UnknownMaterialKind { text } => {
+                write!(
+                    formatter,
+                    "`{text}` is not a material kind this build reads"
+                )
             }
             Self::MalformedHash { text } => write!(
                 formatter,

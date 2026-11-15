@@ -115,14 +115,17 @@ impl Session {
 
     /// Takes every material last attached out of the working tree.
     ///
+    /// A tree material is checked against the structure it was placed from, which is the content
+    /// the state records, so the source is what says whether the directories are still that tree.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error::Content`] when a material was changed after it was attached, and what
-    /// moving or recording fails with.
-    pub fn detach(&self) -> Result<(), Error> {
+    /// Returns [`Error::Content`] or [`Error::TreeContent`] when a material was changed after it
+    /// was attached, and what moving or recording fails with.
+    pub fn detach(&self, source: &dyn ContentSource) -> Result<(), Error> {
         let mut state = self.state()?;
 
-        staging::detach(&self.private, self.project.root(), &mut state)
+        staging::detach(&self.private, self.project.root(), &mut state, source)
     }
 
     /// Puts `lock`'s materials into the working tree, recording only what was placed.
@@ -179,7 +182,7 @@ impl Session {
         lock: &Lock,
         source: &dyn ContentSource,
     ) -> Result<Vec<(String, Error)>, Error> {
-        self.detach()?;
+        self.detach(source)?;
         let failures = self.attach(lock, source)?;
         self.exclude(lock)?;
 

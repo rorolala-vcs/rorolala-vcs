@@ -188,7 +188,7 @@ fn temporary_path(path: &Path) -> std::path::PathBuf {
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use rola_define_format::{ContentHash, Lock, LockPath, Material};
+    use rola_define_format::{ContentHash, Lock, LockPath, Material, MaterialKind};
 
     use super::{name, rewrite};
     use crate::error::Error;
@@ -216,6 +216,7 @@ mod tests {
                 Material::new(
                     LockPath::new(path).unwrap(),
                     ContentHash::from_digest([7; 32]),
+                    MaterialKind::File,
                 )
             })
             .collect();

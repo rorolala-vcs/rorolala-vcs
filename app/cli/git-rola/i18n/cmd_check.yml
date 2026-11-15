@@ -4,3 +4,6 @@ check:
   err_digest:
     en: "%{path}: %{error}"
     zh-CN: "%{path}：%{error}"
+  err_structure:
+    en: "%{path}: %{error}"
+    zh-CN: "%{path}：%{error}"

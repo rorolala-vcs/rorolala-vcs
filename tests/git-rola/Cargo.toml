@@ -10,3 +10,6 @@ rorolala-utils-sandbox = { path = "../../utils/sandbox" }
 # The content a lock names is the content of the material, so the fixture's locks are written from
 # the same hash the store lays its objects down by.
 blake3 = "1.8.3"
+# A tree material's content is a structure, and the structure's canonical encoding is the tree
+# module's: a fixture that wrote those bytes by hand would be a second answer to the format.
+librorolala = { path = "../.." }

@@ -1,6 +1,7 @@
 //! Where a material's content comes from when the private area does not hold it.
 
 use std::fs;
+use std::io;
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
@@ -18,6 +19,18 @@ pub trait ContentSource {
     /// Returns [`Error::Unavailable`] when the source does not hold the content, and
     /// [`Error::Io`] when it cannot be written.
     fn write(&self, content: ContentHash, path: &Path) -> Result<(), Error>;
+
+    /// The bytes of the content `content` names, when the source holds them.
+    ///
+    /// A tree material's content is the structure naming its files, so a reader that places one
+    /// asks for it whole here. A file's content is placed through [`write`](Self::write) instead,
+    /// since reading a gigabyte to learn what it is is not a thing a placement does.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Unavailable`] when the source does not hold the content, and
+    /// [`Error::Io`] when it cannot be read.
+    fn read(&self, content: ContentHash) -> Result<Vec<u8>, Error>;
 }
 
 /// Loose content on this machine, laid down the way a rola store lays its objects down.
@@ -70,6 +83,16 @@ impl ContentSource for LocalStore {
         fs::copy(&object, path).map_err(Error::Io)?;
 
         Ok(())
+    }
+
+    fn read(&self, content: ContentHash) -> Result<Vec<u8>, Error> {
+        match fs::read(self.object_path(content)) {
+            Ok(bytes) => Ok(bytes),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Err(Error::Unavailable {
+                content: content.to_token(),
+            }),
+            Err(error) => Err(Error::Io(error)),
+        }
     }
 }
 

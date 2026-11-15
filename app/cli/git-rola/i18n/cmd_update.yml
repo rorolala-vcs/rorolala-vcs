@@ -49,6 +49,9 @@ update:
   err_missing:
     en: "no Vault holds the content %{content}"
     zh-CN: "没有保险库持有内容 %{content}"
+  err_structure:
+    en: "cannot read the tree structure of `%{material}`: %{error}"
+    zh-CN: "无法读取 `%{material}` 的树结构：%{error}"
   err_write:
     en: "cannot write `%{path}`: %{error}"
     zh-CN: "无法写入 `%{path}`：%{error}"

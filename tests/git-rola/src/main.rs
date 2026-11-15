@@ -21,6 +21,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use librorolala::storage::Key;
+use librorolala::tree::{FileMode, TreeEntry, TreeStructure};
 use rorolala_utils_sandbox::{Guard, Ran, bin_dir, run};
 
 /// The language every run is made in, so what is read back is a known text.
@@ -61,6 +63,7 @@ fn main() {
     initialise(&run, &repo, &mut checked);
     checking(&run, &repo, &mut checked);
     restoring(&run, &repo, &mut checked);
+    trees(&run, sandbox.dir(), &mut checked);
     branches(&run, &repo, &mut checked);
     hooks(&run, &repo, &mut checked);
     worktrees(&run, &repo, &mut checked);
@@ -312,7 +315,7 @@ fn updating(run: &Run, sandbox: &Path, checked: &mut Checked) {
     );
     checked.wants(
         "the lock is the empty one",
-        fs::read_to_string(project.join("rola.lock")).is_ok_and(|text| text == "? FORMAT 1\n"),
+        fs::read_to_string(project.join("rola.lock")).is_ok_and(|text| text == "? FORMAT 2\n"),
         &said(&update),
     );
 
@@ -687,6 +690,163 @@ fn restoring(run: &Run, repo: &Path, checked: &mut Checked) {
         "the refusal says the name is outside",
         &outside,
         "is not under the project",
+    );
+}
+
+/// A material the lock names as a tree: the directory its structure names is placed, checked, put
+/// back, and moved out and back as git's own changes go around it.
+fn trees(run: &Run, sandbox: &Path, checked: &mut Checked) {
+    let project = sandbox.join("trees");
+    fs::create_dir_all(&project).expect("a directory for the tree project");
+    run.git(&project, &["init", "-b", "main"]);
+
+    let first = b"the first texture\n";
+    let second = b"the second texture\n";
+    store_content(run, &project, first);
+    store_content(run, &project, second);
+
+    let first_tree = TreeStructure::build(
+        None,
+        [
+            TreeEntry::file("a.png", FileMode::Regular, key_of(first)),
+            TreeEntry::directory("sub"),
+            TreeEntry::file("sub/b.psd", FileMode::Regular, key_of(second)),
+        ],
+    )
+    .expect("the first tree");
+    let first_content = store_bytes(run, &project, &first_tree.encode());
+    fs::write(project.join("rola.lock"), tree_lock_text(&first_content)).expect("the lock");
+
+    let init = run.rola(&project, &["init"]);
+    checked.exits("a project with a tree is set up", &init, 0);
+    checked.wants(
+        "the tree's file is placed",
+        holds_at(&project, "Assets/Textures/a.png", first),
+        &said(&init),
+    );
+    checked.wants(
+        "the file under the tree's directory is placed",
+        holds_at(&project, "Assets/Textures/sub/b.psd", second),
+        &said(&init),
+    );
+
+    let check = run.rola(&project, &["check"]);
+    checked.exits("a tree that is the lock's is clean", &check, 0);
+    checked.stdout_empty("a clean tree says nothing", &check);
+
+    // A file changed inside the tree is one difference, named by the path inside it.
+    fs::write(project.join("Assets/Textures/sub/b.psd"), b"an edit\n").expect("an edit");
+    let check = run.rola(&project, &["check"]);
+    checked.exits("a changed file inside a tree is a difference", &check, 1);
+    checked.stdout_has(
+        "the changed file is named",
+        &check,
+        " M Assets/Textures/sub/b.psd",
+    );
+
+    // A path inside the tree selects the whole tree, which is written back as the lock names it.
+    let restored = run.rola(&project, &["restore", "Assets/Textures/sub/b.psd"]);
+    checked.exits("a path inside a tree restores it", &restored, 0);
+    checked.wants(
+        "the tree's file is back",
+        holds_at(&project, "Assets/Textures/sub/b.psd", second),
+        &said(&restored),
+    );
+
+    // A file taken out of the tree is a difference of its own, and the tree is put back whole.
+    fs::remove_file(project.join("Assets/Textures/a.png")).expect("a file taken out");
+    let check = run.rola(&project, &["check"]);
+    checked.exits("a file taken out of a tree is a difference", &check, 1);
+    checked.stdout_has(
+        "the missing file is named",
+        &check,
+        " D Assets/Textures/a.png",
+    );
+    let restored = run.rola(&project, &["restore", "Assets/Textures"]);
+    checked.wants(
+        "the tree is put back whole",
+        holds_at(&project, "Assets/Textures/a.png", first),
+        &said(&restored),
+    );
+
+    // Setting the project up again places nothing a second time: the tree already there is the
+    // one the lock names.
+    let again = run.rola(&project, &["init"]);
+    checked.exits("a project with a tree is set up again", &again, 0);
+    checked.wants(
+        "the tree is still there",
+        holds_at(&project, "Assets/Textures/sub/b.psd", second),
+        &said(&again),
+    );
+
+    // git is kept away from the tree as one material.
+    let ignored = run.git(&project, &["check-ignore", "Assets/Textures/a.png"]);
+    checked.exits("git agrees the tree's file is ignored", &ignored, 0);
+
+    let status = run.git(&project, &["status", "--porcelain"]);
+    checked.wants(
+        "git does not see the tree",
+        !status.stdout.contains("Assets/Textures"),
+        &said(&status),
+    );
+
+    // The tree follows the lock a branch leaves: the structure is taken out whole and another one
+    // placed, which is the same run a tree of one cut takes to reach another.
+    let add = run.git(&project, &["add", "rola.toml", "rola.lock"]);
+    checked.exits("the tree's lock is added", &add, 0);
+    let commit = run.git(&project, &["commit", "-m", "the first tree"]);
+    checked.exits("the first tree is committed", &commit, 0);
+
+    let switch = run.rola(&project, &["switch", "-c", "other"]);
+    checked.exits("a branch is made with a tree placed", &switch, 0);
+
+    let third = b"another first texture\n";
+    store_content(run, &project, third);
+    let second_tree = TreeStructure::build(
+        None,
+        [
+            TreeEntry::file("a.png", FileMode::Regular, key_of(third)),
+            TreeEntry::directory("sub"),
+            TreeEntry::file("sub/b.psd", FileMode::Regular, key_of(second)),
+        ],
+    )
+    .expect("the second tree");
+    let second_content = store_bytes(run, &project, &second_tree.encode());
+    fs::write(project.join("rola.lock"), tree_lock_text(&second_content)).expect("the lock");
+    let add = run.git(&project, &["add", "rola.lock"]);
+    checked.exits("the second tree's lock is added", &add, 0);
+    let commit = run.git(&project, &["commit", "-m", "the second tree"]);
+    checked.exits("the second tree is committed", &commit, 0);
+
+    let switch = run.rola(&project, &["switch", "main"]);
+    checked.exits("the work moves back to the first tree", &switch, 0);
+    checked.wants(
+        "the first tree's content is placed",
+        holds_at(&project, "Assets/Textures/a.png", first),
+        &said(&switch),
+    );
+
+    let switch = run.rola(&project, &["switch", "other"]);
+    checked.exits("the work moves to the second tree", &switch, 0);
+    checked.wants(
+        "the second tree's content is placed",
+        holds_at(&project, "Assets/Textures/a.png", third),
+        &said(&switch),
+    );
+
+    // A tree changed inside stops the checkout before git runs, and the change is left where it is.
+    fs::write(project.join("Assets/Textures/a.png"), b"an edit\n").expect("an edit");
+    let blocked = run.rola(&project, &["switch", "main"]);
+    checked.exits("a changed tree stops the checkout", &blocked, 128);
+    checked.stderr_has(
+        "the refusal names the tree that differs",
+        &blocked,
+        "differs from the tree that was placed at `a.png`",
+    );
+    checked.wants(
+        "the edit is still there",
+        holds_at(&project, "Assets/Textures/a.png", b"an edit\n"),
+        &said(&blocked),
     );
 }
 
@@ -1156,12 +1316,18 @@ fn lay_project(run: &Run, root: &Path, content: &[u8]) {
 }
 
 /// Puts `content` into the project's store, written by the store's own program.
+fn store_content(run: &Run, project: &Path, content: &[u8]) {
+    store_bytes(run, project, content);
+}
+
+/// Puts `bytes` into the project's store and answers with the content hash they are stored under.
 ///
 /// The store is made in a workspace of the suite's own and copied across, so the project is only
 /// ever what `git-rola` itself would leave there. The key the program answers with is checked
 /// against the content hash a lock names: the two are the same number, and that is what makes a
-/// lock's token the store's key.
-fn store_content(run: &Run, project: &Path, content: &[u8]) {
+/// lock's token the store's key. A tree's structure is written the same way a file's content is,
+/// since a structure is content like any other.
+fn store_bytes(run: &Run, project: &Path, bytes: &[u8]) -> String {
     let scratch = run.store();
 
     if !scratch.join(".rola/workspace.toml").is_file() {
@@ -1174,7 +1340,7 @@ fn store_content(run: &Run, project: &Path, content: &[u8]) {
     }
 
     let file = run.sandbox().join("storing.bin");
-    fs::write(&file, content).expect("the content to store");
+    fs::write(&file, bytes).expect("the content to store");
 
     let stored = run.rola_cli(&scratch, &["storage", "write-file", &text(&file)]);
     assert!(
@@ -1182,9 +1348,11 @@ fn store_content(run: &Run, project: &Path, content: &[u8]) {
         "the content is stored by the store's own program: {}",
         said(&stored),
     );
+
+    let content = stored.stdout.trim().to_owned();
     assert_eq!(
-        stored.stdout.trim(),
-        digest(content),
+        content,
+        digest(bytes),
         "the store names the content the way a lock does"
     );
 
@@ -1192,6 +1360,8 @@ fn store_content(run: &Run, project: &Path, content: &[u8]) {
         &scratch.join(".rola/storage"),
         &project.join(".rola/storage"),
     );
+
+    content
 }
 
 /// Copies the files of `from` into `to`, making what `to` needs.
@@ -1217,7 +1387,22 @@ fn write_lock(root: &Path, content: &[u8]) {
 
 /// The text of a lock naming `content` at the material's path.
 fn lock_text(content: &[u8]) -> String {
-    format!("? FORMAT 1\n/{MATERIAL} {}\n", digest(content))
+    format!("? FORMAT 2\n/{MATERIAL} {} file\n", digest(content))
+}
+
+/// The text of a lock naming `content` as the tree at `/Assets/Textures`.
+fn tree_lock_text(content: &str) -> String {
+    format!("? FORMAT 2\n/Assets/Textures {content} tree\n")
+}
+
+/// The key the store holds `bytes` under.
+fn key_of(bytes: &[u8]) -> Key {
+    Key::new(*blake3::hash(bytes).as_bytes())
+}
+
+/// Whether `path` under `root` holds `content`.
+fn holds_at(root: &Path, path: &str, content: &[u8]) -> bool {
+    fs::read(root.join(path)).is_ok_and(|found| found == content)
 }
 
 /// The content hash of `content`, as a lock writes it.

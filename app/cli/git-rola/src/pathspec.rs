@@ -11,7 +11,7 @@
 
 use std::path::Path;
 
-use rola_define_format::{Lock, LockPath};
+use rola_define_format::{Lock, LockPath, MaterialKind};
 
 /// Why a name selected nothing.
 #[derive(Debug)]
@@ -54,7 +54,7 @@ pub fn select(lock: &Lock, base: &Path, prefix: &str, specs: &[String]) -> Resul
         let Some(reached) = candidates.iter().find(|candidate| {
             lock.materials()
                 .iter()
-                .any(|material| covers(candidate, material.path().as_str()))
+                .any(|material| covers(candidate, material.path().as_str(), material.kind()))
         }) else {
             return Err(Refusal::NoMatch(spec.clone()));
         };
@@ -68,7 +68,7 @@ pub fn select(lock: &Lock, base: &Path, prefix: &str, specs: &[String]) -> Resul
         .filter(|material| {
             settled
                 .iter()
-                .any(|candidate| covers(candidate, material.path().as_str()))
+                .any(|candidate| covers(candidate, material.path().as_str(), material.kind()))
         })
         .map(|material| material.path().clone())
         .collect();
@@ -167,18 +167,24 @@ fn read(base: &Path, spec: &str) -> Result<String, Refusal> {
 /// Whether `candidate` names `material` or something above it.
 ///
 /// A candidate is a directory as well as a path: one the material sits under selects the material,
-/// which is how a directory name restores everything beneath it.
-fn covers(candidate: &str, material: &str) -> bool {
+/// which is how a directory name restores everything beneath it. A tree is one material, so a name
+/// inside it selects the whole tree: a file of a tree has no content of its own to put back, only
+/// the structure the tree records.
+fn covers(candidate: &str, material: &str, kind: MaterialKind) -> bool {
     candidate.is_empty()
         || candidate == material
         || material
             .strip_prefix(candidate)
             .is_some_and(|rest| rest.starts_with('/'))
+        || (kind == MaterialKind::Tree
+            && candidate
+                .strip_prefix(material)
+                .is_some_and(|rest| rest.starts_with('/')))
 }
 
 #[cfg(test)]
 mod tests {
-    use rola_define_format::{ContentHash, Lock, LockPath, Material};
+    use rola_define_format::{ContentHash, Lock, LockPath, Material, MaterialKind};
 
     use super::{Refusal, select};
 
@@ -190,8 +196,32 @@ mod tests {
                 Material::new(
                     LockPath::new(path).unwrap(),
                     ContentHash::from_digest([1; 32]),
+                    MaterialKind::File,
                 )
             })
+            .collect();
+
+        Lock::new(vec![], materials).unwrap()
+    }
+
+    /// A lock naming `trees` as trees and `files` as files.
+    fn mixed(trees: &[&str], files: &[&str]) -> Lock {
+        let materials = trees
+            .iter()
+            .map(|path| {
+                Material::new(
+                    LockPath::new(path).unwrap(),
+                    ContentHash::from_digest([2; 32]),
+                    MaterialKind::Tree,
+                )
+            })
+            .chain(files.iter().map(|path| {
+                Material::new(
+                    LockPath::new(path).unwrap(),
+                    ContentHash::from_digest([3; 32]),
+                    MaterialKind::File,
+                )
+            }))
             .collect();
 
         Lock::new(vec![], materials).unwrap()
@@ -317,5 +347,43 @@ mod tests {
         let refused = select(&lock, std::path::Path::new(""), ".", &["..".to_owned()]);
 
         assert!(matches!(refused, Err(Refusal::Outside(name)) if name == ".."));
+    }
+
+    #[test]
+    fn a_path_inside_a_tree_selects_the_tree() {
+        let lock = mixed(&["Assets/Textures"], &["Assets/hero.psd"]);
+
+        assert_eq!(
+            chosen(&lock, "", ".", &["Assets/Textures/sub/b.psd"]),
+            ["Assets/Textures"]
+        );
+        assert_eq!(
+            chosen(&lock, "", ".", &["Assets/Textures"]),
+            ["Assets/Textures"]
+        );
+    }
+
+    #[test]
+    fn a_directory_above_a_tree_selects_the_tree_and_its_siblings() {
+        let lock = mixed(&["Assets/Textures"], &["Assets/hero.psd"]);
+
+        assert_eq!(
+            chosen(&lock, "", ".", &["Assets"]),
+            ["Assets/Textures", "Assets/hero.psd"]
+        );
+    }
+
+    #[test]
+    fn a_path_inside_a_file_material_selects_nothing() {
+        let lock = mixed(&[], &["Assets/hero.psd"]);
+
+        let refused = select(
+            &lock,
+            std::path::Path::new(""),
+            ".",
+            &["Assets/hero.psd/inside".to_owned()],
+        );
+
+        assert!(matches!(refused, Err(Refusal::NoMatch(_))));
     }
 }

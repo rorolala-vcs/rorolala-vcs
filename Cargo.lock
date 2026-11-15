@@ -3647,6 +3647,8 @@ version = "0.3.0"
 dependencies = [
  "blake3",
  "rola-define-format",
+ "rorolala-storage",
+ "rorolala-tree",
  "serde",
  "toml 0.8.23",
  "uuid",

@@ -30,4 +30,4 @@ pub use path::*;
 /// It is the number a lock's first line carries. A lock naming another version is refused whole
 /// rather than read approximately: the format is a generated file, so the answer to one this build
 /// does not know is to regenerate it with a build that does.
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;

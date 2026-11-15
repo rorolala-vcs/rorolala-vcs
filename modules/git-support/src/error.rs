@@ -53,6 +53,18 @@ pub enum Error {
         /// The content no source holds.
         content: String,
     },
+    /// A content the lock names is not a tree structure this build reads.
+    Structure {
+        /// The content that is not a structure.
+        content: String,
+    },
+    /// A tree material on disk is not the tree that was placed.
+    TreeContent {
+        /// Where the tree is, as the lock names it.
+        path: String,
+        /// The place inside it that differs, `.` for the tree's own path.
+        at: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -85,6 +97,17 @@ impl fmt::Display for Error {
             Self::Unavailable { content } => {
                 write!(formatter, "no source holds the content {content}")
             }
+            Self::Structure { content } => write!(
+                formatter,
+                "the content {content} is not a tree structure this build reads"
+            ),
+            Self::TreeContent { path, at } if at == "." => {
+                write!(formatter, "`{path}` is not the tree that was placed")
+            }
+            Self::TreeContent { path, at } => write!(
+                formatter,
+                "`{path}` differs from the tree that was placed at `{at}`"
+            ),
         }
     }
 }

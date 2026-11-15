@@ -9,7 +9,10 @@ use mingling::{
     macros::{buffer, chain, command, r_println, renderer},
     res::ResExitCode,
 };
-use rola_git_support::{Session, digest_of};
+use rola_define_format::MaterialKind;
+use rola_git_support::{
+    DifferenceKind, Session, differences, digest_of, structure as read_structure,
+};
 use rust_i18n::t;
 use serde::Serialize;
 
@@ -78,31 +81,68 @@ fn inspect() -> Result<ResultCheck, String> {
         .lock()
         .map_err(|error| t!("git_rola.err_lock", error = error.to_string()).to_string())?;
     let prefix = session.name().map_err(|error| error.to_string())?;
+    let source = crate::source::of(session.project());
 
     let mut lines = Vec::new();
 
     for material in lock.materials() {
-        let shown = shown(&prefix, material.path().as_str());
+        let named = shown(&prefix, material.path().as_str());
         let relative: std::path::PathBuf = material.path().as_str().split('/').collect();
         let target = session.project().root().join(relative);
 
-        if !target.is_file() {
-            lines.push(format!(" D {shown}"));
+        match material.kind() {
+            MaterialKind::File => {
+                if !target.is_file() {
+                    lines.push(format!(" D {named}"));
 
-            continue;
-        }
+                    continue;
+                }
 
-        let found = digest_of(&target).map_err(|error| {
-            t!(
-                "check.err_digest",
-                path = shown.as_str(),
-                error = error.to_string()
-            )
-            .to_string()
-        })?;
+                let found = digest_of(&target).map_err(|error| {
+                    t!(
+                        "check.err_digest",
+                        path = named.as_str(),
+                        error = error.to_string()
+                    )
+                    .to_string()
+                })?;
 
-        if found != material.content() {
-            lines.push(format!(" M {shown}"));
+                if found != material.content() {
+                    lines.push(format!(" M {named}"));
+                }
+            }
+            MaterialKind::Tree => {
+                let structure = read_structure(&source, material.content()).map_err(|error| {
+                    t!(
+                        "check.err_structure",
+                        path = named.as_str(),
+                        error = error.to_string()
+                    )
+                    .to_string()
+                })?;
+
+                let found = differences(&target, &structure).map_err(|error| {
+                    t!(
+                        "check.err_structure",
+                        path = named.as_str(),
+                        error = error.to_string()
+                    )
+                    .to_string()
+                })?;
+
+                for difference in found {
+                    let at = shown(
+                        &prefix,
+                        &format!("{}/{}", material.path().as_str(), difference.at),
+                    );
+                    let mark = match difference.kind {
+                        DifferenceKind::Missing => "D",
+                        DifferenceKind::Modified => "M",
+                    };
+
+                    lines.push(format!(" {mark} {at}"));
+                }
+            }
         }
     }
 

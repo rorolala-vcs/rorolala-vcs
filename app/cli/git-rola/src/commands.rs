@@ -251,6 +251,9 @@ pub fn render_hook(result: ResultHook, ec: &mut ResExitCode) {
 /// A name is read the way git reads a pathspec: a path relative to the run's directory, a directory
 /// for everything under it, and `.` for everything under the current directory. A name that selects
 /// nothing is refused before anything is written, so a run that mistypes one restores nothing.
+///
+/// A tree is one material, so a name inside it selects the whole tree, which is written back as the
+/// structure the lock names. A file the structure does not name is left where it is.
 #[command(node = "restore", entry = EntryRestore)]
 pub fn restore(args: EntryRestore) -> Next {
     let picked = args.pick(arg![Vec<String>]).pick(&UNMATCHED).to_result();

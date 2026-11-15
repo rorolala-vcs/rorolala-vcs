@@ -64,7 +64,11 @@ fn run(verb: &str, arguments: &[String]) -> i32 {
         }
     };
 
-    if let Err(error) = session.detach() {
+    // A tree is taken out only once the structure it was placed from is read, so the source is
+    // made before the taking out rather than after git has run.
+    let source = crate::source::of(session.project());
+
+    if let Err(error) = session.detach(&source) {
         eprintln!("git-rola: {error}");
 
         return EC_ERR;
@@ -72,7 +76,6 @@ fn run(verb: &str, arguments: &[String]) -> i32 {
 
     let code = git(verb, arguments);
 
-    let source = crate::source::of(session.project());
     let lock = if code == 0 {
         session.lock().unwrap_or(old)
     } else {

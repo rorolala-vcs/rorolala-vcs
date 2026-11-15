@@ -7,7 +7,15 @@ edition.workspace = true
 # The lock's text has one reader and one writer, and they are this crate's dependency rather than
 # its code: a second reading of the format here would be a second answer to what a lock is.
 rola-define-format.workspace = true
+# A tree material is placed from the structure its content is, and the structure's shape is the
+# tree module's: this crate only moves files to and from the paths it names.
+rorolala-tree.workspace = true
 blake3.workspace = true
 serde.workspace = true
 toml.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+# A tree entry names its content by the store's key type, so a test that builds a structure names
+# the same key the tree module does.
+rorolala-storage.workspace = true

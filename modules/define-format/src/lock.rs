@@ -57,6 +57,40 @@ impl Vault {
     }
 }
 
+/// What a material is placed as.
+///
+/// The kind is what tells a reader whether the content is the bytes placed at the path or a
+/// structure naming the files under it, without reading the store. It mirrors the Layout's own
+/// `EntryKind`, restated here because a lock is read where no Layout is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MaterialKind {
+    /// A file, whose content is the bytes placed at the path.
+    File,
+    /// A tree, whose content is a structure naming the files under the path.
+    Tree,
+}
+
+impl MaterialKind {
+    /// The word a lock's material line carries.
+    #[must_use]
+    pub const fn token(self) -> &'static str {
+        match self {
+            Self::File => "file",
+            Self::Tree => "tree",
+        }
+    }
+
+    /// The kind `text` names, or nothing when this build does not know it.
+    #[must_use]
+    pub fn from_token(text: &str) -> Option<Self> {
+        match text {
+            "file" => Some(Self::File),
+            "tree" => Some(Self::Tree),
+            _ => None,
+        }
+    }
+}
+
 /// One material: where it is placed and what content is placed there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Material {
@@ -64,13 +98,19 @@ pub struct Material {
     path: LockPath,
     /// The content placed there.
     content: ContentHash,
+    /// What the content is placed as.
+    kind: MaterialKind,
 }
 
 impl Material {
-    /// A material placed at `path`, holding `content`.
+    /// A material of `kind` placed at `path`, holding `content`.
     #[must_use]
-    pub const fn new(path: LockPath, content: ContentHash) -> Self {
-        Self { path, content }
+    pub const fn new(path: LockPath, content: ContentHash, kind: MaterialKind) -> Self {
+        Self {
+            path,
+            content,
+            kind,
+        }
     }
 
     /// Where it is placed.
@@ -83,6 +123,12 @@ impl Material {
     #[must_use]
     pub const fn content(&self) -> ContentHash {
         self.content
+    }
+
+    /// What the content is placed as.
+    #[must_use]
+    pub const fn kind(&self) -> MaterialKind {
+        self.kind
     }
 }
 
@@ -167,7 +213,7 @@ impl Lock {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lock, Material, Vault};
+    use super::{Lock, Material, MaterialKind, Vault};
     use crate::error::FormatErrorKind;
     use crate::hash::ContentHash;
     use crate::name::VaultName;
@@ -185,7 +231,11 @@ mod tests {
 
     /// A material at `path_text`, holding content `byte`.
     fn material(path_text: &str, byte: u8) -> Material {
-        Material::new(path(path_text), ContentHash::from_digest([byte; 32]))
+        Material::new(
+            path(path_text),
+            ContentHash::from_digest([byte; 32]),
+            MaterialKind::File,
+        )
     }
 
     #[test]
@@ -224,6 +274,28 @@ mod tests {
 
         assert_eq!(lock, Lock::new(Vec::new(), Vec::new()).unwrap());
         assert_eq!(lock.format(), crate::FORMAT_VERSION);
+    }
+
+    #[test]
+    fn a_material_keeps_the_kind_it_was_built_with() {
+        let file = Material::new(
+            path("/a.psd"),
+            ContentHash::from_digest([1; 32]),
+            MaterialKind::File,
+        );
+        let tree = Material::new(
+            path("/Textures"),
+            ContentHash::from_digest([2; 32]),
+            MaterialKind::Tree,
+        );
+
+        assert_eq!(file.kind(), MaterialKind::File);
+        assert_eq!(tree.kind(), MaterialKind::Tree);
+        assert_eq!(MaterialKind::Tree.token(), "tree");
+        assert_eq!(MaterialKind::File.token(), "file");
+        assert_eq!(MaterialKind::from_token("tree"), Some(MaterialKind::Tree));
+        assert_eq!(MaterialKind::from_token("file"), Some(MaterialKind::File));
+        assert_eq!(MaterialKind::from_token("directory"), None);
     }
 
     #[test]
