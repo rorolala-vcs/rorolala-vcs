@@ -11,8 +11,8 @@
 use rust_i18n::t;
 
 /// The commands the program has, in the order the root usage lists them.
-pub const COMMANDS: [&str; 9] = [
-    "init", "hook", "check", "bring", "restore", "refresh", "update", "help", "version",
+pub const COMMANDS: [&str; 10] = [
+    "init", "hook", "check", "entries", "bring", "restore", "refresh", "update", "help", "version",
 ];
 
 /// The name of a command, when `word` is one.
@@ -39,6 +39,7 @@ pub fn command(name: &str) -> String {
         "init" => t!("init.usage"),
         "hook" => t!("hook.usage"),
         "check" => t!("check.usage"),
+        "entries" => t!("entries.usage"),
         "bring" => t!("bring.usage"),
         "restore" => t!("restore.usage"),
         "refresh" => t!("refresh.usage"),

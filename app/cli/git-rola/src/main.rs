@@ -1,4 +1,4 @@
-//! Git support for rola, as a program Git reaches for as `git rola`.
+﻿//! Git support for rola, as a program Git reaches for as `git rola`.
 //!
 //! A command is a node of this program's dispatch tree, a chain that does the work, and a renderer
 //! that writes the answer through mingling's buffer. What it says is git's: `fatal:` and `error:`
@@ -34,6 +34,7 @@ use rust_i18n::t;
 mod bring;
 mod check;
 mod commands;
+mod entries;
 mod exit_codes;
 mod git_config;
 mod locale;

@@ -64,6 +64,7 @@ fn main() {
     restoring(&run, &repo, &mut checked);
     bringing(&run, &repo, &elsewhere, &mut checked);
     refreshing(&run, &repo, &mut checked);
+    listing(&run, sandbox.dir(), &repo, &elsewhere, &mut checked);
     reaching(&run, &repo, &mut checked);
     quoting(&run, sandbox.dir(), &mut checked);
     trees(&run, sandbox.dir(), &mut checked);
@@ -141,7 +142,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
             "See 'git rola <command>'",
         );
 
-        for command in ["init", "hook", "check", "bring", "restore", "refresh", "update", "help", "version"] {
+        for command in ["init", "hook", "check", "entries", "bring", "restore", "refresh", "update", "help", "version"] {
             checked.stdout_has(&format!("the usage lists `{command}`"), &help, command);
         }
 
@@ -167,7 +168,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     );
 
     // Each command writes down its own use, and `--help` as its first word asks for it with success.
-    for command in ["init", "hook", "check", "bring", "restore", "refresh", "update", "help", "version"] {
+    for command in ["init", "hook", "check", "entries", "bring", "restore", "refresh", "update", "help", "version"] {
         let help = run.rola(elsewhere, &[command, "--help"]);
         checked.exits(&format!("`{command} --help` ends successfully"), &help, 0);
         checked.stdout_has(
@@ -183,7 +184,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     }
 
     // `-h` is git's usage request inside a command: the same text, on stdout, with 129.
-    for command in ["init", "hook", "check", "bring", "restore", "refresh", "update", "help", "version"] {
+    for command in ["init", "hook", "check", "entries", "bring", "restore", "refresh", "update", "help", "version"] {
         let usage = run.rola(elsewhere, &[command, "-h"]);
         checked.exits(&format!("`{command} -h` is a usage request"), &usage, 129);
         checked.stdout_has(
@@ -248,6 +249,15 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
         "the refusal is refresh's usage",
         &extra,
         "usage: git rola refresh",
+    );
+    checked.stdout_empty("the refusal is not a result", &extra);
+
+    let extra = run.rola(elsewhere, &["entries", "x"]);
+    checked.exits("an operand entries does not take is refused", &extra, 129);
+    checked.stderr_has(
+        "the refusal is the entries usage",
+        &extra,
+        "usage: git rola entries",
     );
     checked.stdout_empty("the refusal is not a result", &extra);
 
@@ -1140,6 +1150,77 @@ fn refreshing(run: &Run, repo: &Path, checked: &mut Checked) {
         state_text(repo) == before_state,
         "the state changed",
     );
+}
+
+/// The paths the lock names: the one read that needs neither a Vault nor a work tree change.
+fn listing(run: &Run, sandbox: &Path, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
+    let listed = run.rola(repo, &["entries"]);
+    checked.exits("a lock's entries are listed", &listed, 0);
+    checked.wants(
+        "the path is the lock's own",
+        listed.stdout.trim() == MATERIAL,
+        &said(&listed),
+    );
+    checked.wants(
+        "listing writes nothing on stderr",
+        listed.stderr.trim().is_empty(),
+        &said(&listed),
+    );
+
+    // A lock naming a file and a tree names both, in path order, each at its own path.
+    let project = sandbox.join("listing");
+    fs::create_dir_all(&project).expect("a directory for the listing project");
+    run.git(&project, &["init", "-b", "main"]);
+    fs::write(
+        project.join("rola.toml"),
+        "[features]\ngit_support = true\n",
+    )
+    .expect("the project file");
+    fs::write(
+        project.join("rola.lock"),
+        format!(
+            "? FORMAT 2\n/Source/c.fbx {} file\n/Assets/Textures {} tree\n",
+            digest(FIRST_CUT),
+            digest(SECOND_CUT)
+        ),
+    )
+    .expect("the lock");
+
+    let listed = run.rola(&project, &["entries"]);
+    checked.exits("a lock of several materials is listed", &listed, 0);
+    checked.wants(
+        "the paths are the lock's, in path order",
+        listed.stdout == "Assets/Textures\nSource/c.fbx\n",
+        &said(&listed),
+    );
+
+    // Outside a project there is no lock to read.
+    let outside = run.rola(elsewhere, &["entries"]);
+    checked.exits("an entries outside a project is refused", &outside, 128);
+    checked.stderr_has(
+        "the refusal says there is no project",
+        &outside,
+        "fatal: not inside a rola project",
+    );
+
+    // A project with no lock names nothing rather than answering an empty list as success.
+    let unlocked = sibling(repo, "entries-unlocked");
+    fs::create_dir_all(&unlocked).expect("a directory for the project with no lock");
+    run.git(&unlocked, &["init", "-b", "main"]);
+    fs::write(
+        unlocked.join("rola.toml"),
+        "[features]\ngit_support = true\n",
+    )
+    .expect("the project file");
+
+    let no_lock = run.rola(&unlocked, &["entries"]);
+    checked.exits("an entries with no lock is refused", &no_lock, 128);
+    checked.stderr_has(
+        "the refusal names what could not be read",
+        &no_lock,
+        "cannot read rola.lock",
+    );
+    checked.stdout_empty("the refusal is not a result", &no_lock);
 }
 
 /// What `git rola` is, as opposed to the program run by hand: the same program, reached by git.

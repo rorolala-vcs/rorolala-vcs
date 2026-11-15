@@ -9,6 +9,7 @@ git_rola:
         init       Set up git support in this project
         hook       Keep the materials in step after a git operation
         check      Report the materials that differ from rola.lock
+        entries    List the paths rola.lock names, one a line
         bring      Sign a Vault's entries in to this project
         restore    Put named materials back from rola.lock
         refresh    Put the working tree back in step with rola.lock
@@ -24,6 +25,7 @@ git_rola:
         init       在工作树内建立 rola 项目的 git 支持
         hook       在 git 操作后让素材保持同步
         check      报告与 `rola.lock` 不同的素材
+        entries    列出 `rola.lock` 命名的路径，一行一个
         bring      把保险库布局里的条目签入本项目
         restore    从 `rola.lock` 把指名的素材放回去
         refresh    按 `rola.lock` 让工作区回到正轨
