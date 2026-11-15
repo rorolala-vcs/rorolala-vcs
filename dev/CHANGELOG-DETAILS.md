@@ -228,7 +228,11 @@ The new `rorolala-tree` crate holds what a tree is: a canonically ordered struct
 
 ## Refactor
 
-### 1. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`menus`] Reorganise every context menu into categories
+### 1. **\[BREAKING!\]** [`app`] [`rola`] [`bring`] Rename the checkin command to bring
+
+`checkin` reads as a commit: an author signs their own work in. `bring` reads as carrying material into the workspace being worked in, which is what the command does: it takes the content the Vault holds and puts it in the Layout being worked in. The command is now `rola bring`, and every name built on it follows: the variant mode, the help, completion and descriptions, the failures `error_bring_*`, the result summary, the exit codes 240 and 241 (`EC_ERR_BRING` and `EC_ERR_BRING_ARGUMENT`), and the `exit_codes.bring` keys. The numbers 240 and 241 do not move. No `checkin` name, alias or key remains in the program, so a script or a caller that still runs `rola checkin` has to run `rola bring`. The Chinese for the command and the operation is `带入`.
+
+### 2. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`menus`] Reorganise every context menu into categories
 
 Every menu opened on a file, a folder, a logical place, a dock's tab, a version graph card or a tree row now says what it offers at a path of keys rather than as one flat list. The first key is the category, the last is the entry, and the renderer the host and the plugins share folds a category of one entry into one line: `Cut File` rather than a submenu holding one item. Entries of one category from different plugins merge by key, so the File System opens `Copy` and the Version Graph adds its hashes under it, while a plugin that states its own root keeps a category of its own.
 
@@ -244,19 +248,23 @@ A plugin built against the previous contract is not loaded against this one: `Co
 
 Translation keys under `menu.entry.` are shared: a plugin may state a category another plugin opened, or use a leaf another one stated, and the i18n gate reads the paths written in the C# sources and accepts a key any plugin's file states. A key nothing states reads as its own last part with the underscores turned into spaces.
 
-### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a file tree row as a three-column grid
+### 3. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Rename the desktop plugin's check-in flow to bring
+
+The Desktop plugin's plan-and-run flow, its command wrapper, the Version menu item and the progress card now say bring. The place's strings read `Bring in` and `带入`, the menu key is `menu.entry.bring`, the progress channel is `rorolala_vcs.progress.bring` and wears the download mark, and the flow's types are `BringFlow`, `BringPlan`, `BringStep` and `BringBlocker`. The plugin runs `rola bring`, so a program that does not state that command cannot serve it.
+
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw a file tree row as a three-column grid
 
 A file tree row is a three-column grid rather than a dock panel: the name gives way with an ellipsis, the badges keep their width at the row's right, and the row stretches to the tree's width at any panel width. The badges are drawn at twenty pixels, while the entry icon stays at sixteen.
 
-### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Draw the Version Graph in the look's own hues
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Draw the Version Graph in the look's own hues
 
 The graph's grid is laid in the splitter rather than in the accent, a hover and an endpoint take the primary, and each side has a hue of its own while the accent is left to a drag in flight. The type is smaller, a card's radius is 8 rather than 12, and a creator's name is read in the second ink rather than in a tint of its own.
 
-### 4. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack
+### 6. [`app`] [`RorolalaDesktop`] [`progress`] Show progress in a host-level stack
 
 Progress is now the host's rather than the Rorolala plugin's. `IPluginHost.Progress` begins a run that every open window draws in a stack under its title row, and the plugin's commands use it without knowing which window is in front. The Overview no longer draws a panel of its own, and a run begun from any dock appears in the same stack.
 
-### 5. [`app`] [`RorolalaDesktop`] [`theme`] Restate the look and dock chrome
+### 7. [`app`] [`RorolalaDesktop`] [`theme`] Restate the look and dock chrome
 
 The ground, the panel and the middle step are moved apart, and the selection wash is lowered so that it is a statement about an entry rather than a surface of its own. A row is 28 pixels and the chrome 32, a field is filled as a well, the strip of a single dock is read as a title, and the active dock is marked by its selected tab rather than by a ring. A crossing of two seams is a hit area only.
 

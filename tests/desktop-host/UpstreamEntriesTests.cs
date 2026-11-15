@@ -180,13 +180,13 @@ public sealed class UpstreamEntriesTests
         Assert.NotNull(EntryIcons.Folder(16));
     }
 
-    /// <summary>A checkin names each entry by its path, and by its uuid where the path reads as a pattern.</summary>
+    /// <summary>A bring names each entry by its path, and by its uuid where the path reads as a pattern.</summary>
     [Fact]
-    public void ACheckinNamesWhatWasChosenAndNothingElse()
+    public void ABringNamesWhatWasChosenAndNothingElse()
     {
-        var plain = CheckinCommand.Arguments(["Assets/hero.psd"]);
+        var plain = BringCommand.Arguments(["Assets/hero.psd"]);
 
-        Assert.Contains("checkin", plain);
+        Assert.Contains("bring", plain);
         Assert.Contains("--json", plain);
         Assert.Contains("Assets/hero.psd", plain);
 
@@ -196,10 +196,10 @@ public sealed class UpstreamEntriesTests
         Assert.DoesNotContain("--force", plain);
 
         // A path a glob would read is handed over as the uuid it stands for, which no pattern can be read from.
-        Assert.Equal("a", CheckinCommand.Reference(Entry("Assets/hero[1].psd", "a")));
-        Assert.Equal("b", CheckinCommand.Reference(Entry("Assets/{draft}.psd", "b")));
-        Assert.Equal("c", CheckinCommand.Reference(Entry("Assets/why?.psd", "c")));
-        Assert.Equal("Assets/hero.psd", CheckinCommand.Reference(Entry("Assets/hero.psd", "d")));
+        Assert.Equal("a", BringCommand.Reference(Entry("Assets/hero[1].psd", "a")));
+        Assert.Equal("b", BringCommand.Reference(Entry("Assets/{draft}.psd", "b")));
+        Assert.Equal("c", BringCommand.Reference(Entry("Assets/why?.psd", "c")));
+        Assert.Equal("Assets/hero.psd", BringCommand.Reference(Entry("Assets/hero.psd", "d")));
     }
 
     /// <summary>
@@ -245,25 +245,25 @@ public sealed class UpstreamEntriesTests
         Assert.Empty(UpstreamBringing.Entries(tree, [new UpstreamCarry(Origin, "Gone/hero.psd")]));
     }
 
-    /// <summary>A checkin landed under a directory names it last, because that is how the operands are read.</summary>
+    /// <summary>A bring landed under a directory names it last, because that is how the operands are read.</summary>
     /// <remarks>
     /// The run carries the flag that rebases every reference on its own name before the references
     /// themselves: what is dropped keeps the name it was dropped under rather than the Vault's whole
     /// path, which is what a destination is for.
     /// </remarks>
     [Fact]
-    public void ACheckinLandedUnderADirectoryNamesItLast()
+    public void ABringLandedUnderADirectoryNamesItLast()
     {
-        var landed = CheckinCommand.Arguments(["Assets/hero.psd", "Assets/bg.psd"], @"C:\work\art");
+        var landed = BringCommand.Arguments(["Assets/hero.psd", "Assets/bg.psd"], @"C:\work\art");
 
-        Assert.Equal("checkin", landed[^5]);
+        Assert.Equal("bring", landed[^5]);
         Assert.Equal("--by-name", landed[^4]);
         Assert.Equal("Assets/hero.psd", landed[^3]);
         Assert.Equal("Assets/bg.psd", landed[^2]);
         Assert.Equal(@"C:\work\art", landed[^1]);
 
         // No destination is no operand: a run that lands where upstream names it has nothing asserted after the references.
-        Assert.Equal("Assets/hero.psd", CheckinCommand.Arguments(["Assets/hero.psd"])[^1]);
+        Assert.Equal("Assets/hero.psd", BringCommand.Arguments(["Assets/hero.psd"])[^1]);
     }
 
     /// <summary>A move names the Layout the place is a view of, and nothing else is touched.</summary>
@@ -341,7 +341,7 @@ public sealed class UpstreamEntriesTests
     [Fact]
     public void AResultSaysWhatCameInAndWhatDidNot()
     {
-        var answer = CheckinCommand.Parse(
+        var answer = BringCommand.Parse(
             """
             {
               "layout": "work",

@@ -3,13 +3,13 @@ using System.Text.Json;
 
 namespace RorolalaVCSPlugin;
 
-/// <summary>One entry a checkin brought in.</summary>
+/// <summary>One entry a bring carried in.</summary>
 /// <param name="Uuid">The uuid it is known by.</param>
 /// <param name="RemotePath">The path the Vault's Layout names it by, when it names one.</param>
 /// <param name="LocalPath">The path this Layout now names it by.</param>
-internal sealed record CheckinLanded(string Uuid, string? RemotePath, string LocalPath);
+internal sealed record BringLanded(string Uuid, string? RemotePath, string LocalPath);
 
-/// <summary>What a checkin came to.</summary>
+/// <summary>What a bring came to.</summary>
 /// <remarks>
 /// The entries and the failures are both read from the result rather than from the status: a run given a
 /// structural renderer has its result serialized, so the renderer that would have set a non-zero status for what
@@ -19,15 +19,15 @@ internal sealed record CheckinLanded(string Uuid, string? RemotePath, string Loc
 /// <param name="Said">What it said when it did not end well.</param>
 /// <param name="Landed">What it brought in.</param>
 /// <param name="Failed">What it could not bring in, one line each.</param>
-internal sealed record CheckinAnswer(
+internal sealed record BringAnswer(
     bool Done,
     string Said,
-    IReadOnlyList<CheckinLanded> Landed,
+    IReadOnlyList<BringLanded> Landed,
     IReadOnlyList<string> Failed
 );
 
 /// <summary>
-/// Running <c>rola checkin</c>: bringing what the Vault holds into the Layout being worked in.
+/// Running <c>rola bring</c>: bringing what the Vault holds into the Layout being worked in.
 /// </summary>
 /// <remarks>
 /// The references are paths of the Vault's Layout, so what a run brings in is what the tree showed at the path
@@ -40,7 +40,7 @@ internal sealed record CheckinAnswer(
 /// became of the run: the copy the tree was drawn from may have been replaced under it.
 /// </para>
 /// </remarks>
-internal static class CheckinCommand
+internal static class BringCommand
 {
     /// <summary>The characters a reference is read as a pattern for.</summary>
     /// <remarks>
@@ -50,7 +50,7 @@ internal static class CheckinCommand
     /// </remarks>
     private const string PatternCharacters = "*?[{";
 
-    /// <summary>The arguments a checkin of these references is run with, after the program's name.</summary>
+    /// <summary>The arguments a bring of these references is run with, after the program's name.</summary>
     /// <param name="references">What is to be brought in.</param>
     /// <param name="to">The directory to land them under, or nothing to land them at their upstream paths.</param>
     /// <returns>The arguments.</returns>
@@ -58,7 +58,7 @@ internal static class CheckinCommand
     {
         ArgumentNullException.ThrowIfNull(references);
 
-        List<string> arguments = ["--theme-choice=" + Sync.Theme, "--json", "checkin"];
+        List<string> arguments = ["--theme-choice=" + Sync.Theme, "--json", "bring"];
 
         // What a drop or a paste carried lands where it was put, so a destination from one makes the run rebase every
         // reference on its own parent: a file keeps its name, a folder the tree it is. Without one the entries land at
@@ -109,7 +109,7 @@ internal static class CheckinCommand
             : carry.Entry.Uuid;
     }
 
-    /// <summary>Runs the checkin and reads what it answered.</summary>
+    /// <summary>Runs the bring and reads what it answered.</summary>
     /// <param name="program">The program the window was opened by.</param>
     /// <param name="directory">Where the work is rooted, and where the run is made.</param>
     /// <param name="references">What is to be brought in.</param>
@@ -117,7 +117,7 @@ internal static class CheckinCommand
     /// <param name="progress">What is told that a record was said, which redraws on the window's thread.</param>
     /// <param name="to">The directory to land them under, or nothing to land them at their upstream paths.</param>
     /// <returns>What the run came to.</returns>
-    public static CheckinAnswer Run(
+    public static BringAnswer Run(
         string program,
         string directory,
         IReadOnlyList<string> references,
@@ -142,7 +142,7 @@ internal static class CheckinCommand
 
         if (!done)
         {
-            return new CheckinAnswer(false, said, [], []);
+            return new BringAnswer(false, said, [], []);
         }
 
         try
@@ -151,21 +151,21 @@ internal static class CheckinCommand
         }
         catch (JsonException error)
         {
-            return new CheckinAnswer(false, error.Message, [], []);
+            return new BringAnswer(false, error.Message, [], []);
         }
     }
 
-    /// <summary>Reads the result a checkin answered with.</summary>
+    /// <summary>Reads the result a bring answered with.</summary>
     /// <param name="output">What it wrote, which is one JSON object when it was asked for one.</param>
     /// <returns>What it brought in, and what it could not.</returns>
     /// <exception cref="JsonException">The output is not JSON.</exception>
-    internal static CheckinAnswer Parse(string output)
+    internal static BringAnswer Parse(string output)
     {
         ArgumentNullException.ThrowIfNull(output);
 
         using var document = JsonDocument.Parse(output);
 
-        var landed = new List<CheckinLanded>();
+        var landed = new List<BringLanded>();
 
         if (
             document.RootElement.ValueKind is JsonValueKind.Object
@@ -184,11 +184,11 @@ internal static class CheckinCommand
                     continue;
                 }
 
-                landed.Add(new CheckinLanded(uuid, Text(item, "remote_path"), local));
+                landed.Add(new BringLanded(uuid, Text(item, "remote_path"), local));
             }
         }
 
-        return new CheckinAnswer(true, string.Empty, landed, Failed(document.RootElement));
+        return new BringAnswer(true, string.Empty, landed, Failed(document.RootElement));
     }
 
     /// <summary>Reads what a successful result says could not be brought in.</summary>

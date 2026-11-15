@@ -656,7 +656,7 @@ fn record(
                 let disk = root.join(path.to_path_buf());
 
                 // A variant file that is already gone is one the merge can still be recorded from:
-                // the content that was checked in is what the version names, and the file was only
+                // the content that was brought in is what the version names, and the file was only
                 // how it was shown.
                 if disk.is_file()
                     && let Err(error) = fs::remove_file(&disk)
@@ -1633,7 +1633,7 @@ fn commit(
                     verify_variant_file(layout, merging, root, pending, &joined)?;
 
                     // Content that is exactly the variant's own is no merge but a replacement: the
-                    // file now holds what was checked in, and what is recorded is that, on the chain
+                    // file now holds what was brought in, and what is recorded is that, on the chain
                     // the file was already on. Only content of its own is joined.
                     if *joined.storage_hash() == *file.storage.digest() {
                         base
@@ -1713,7 +1713,7 @@ fn verify_variant_file(
     let disk = root.join(path.to_path_buf());
 
     // A variant file that is already gone is one the merge can still be recorded from: what was
-    // checked in is what the version names, and the file was only how it was shown.
+    // brought in is what the version names, and the file was only how it was shown.
     if !disk.is_file() {
         return Ok(());
     }

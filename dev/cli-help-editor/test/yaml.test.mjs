@@ -33,7 +33,7 @@ function roundTrip(source, file = "sample.yml") {
 const SAMPLE = `_version: 2
 
 # A comment that has to stay.
-checkin:
+bring:
   help:
     en: |
         Line one
@@ -55,26 +55,26 @@ checkin:
 test("the three scalar styles are read and written back as they are", () => {
   const parsed = parseFile(SAMPLE, "sample.yml");
   const help = parsed.nodes.find(
-    (node) => node.id === "checkin.help" && node.lang === "en",
+    (node) => node.id === "bring.help" && node.lang === "en",
   );
   assert.equal(help.value, "Line one\nLine two\n\nAfter a gap");
   assert.equal(help.style, "block");
   assert.equal(help.contentIndent, 8);
 
   const quoted = parsed.nodes.find(
-    (node) => node.id === "checkin.err_x" && node.lang === "en",
+    (node) => node.id === "bring.err_x" && node.lang === "en",
   );
   assert.equal(quoted.value, 'a "quoted" value');
   assert.equal(quoted.style, "quoted");
 
   const plain = parsed.nodes.find(
-    (node) => node.id === "checkin.err_x" && node.lang === "zh-CN",
+    (node) => node.id === "bring.err_x" && node.lang === "zh-CN",
   );
   assert.equal(plain.value, "纯文本");
   assert.equal(plain.style, "plain");
 
   const nested = parsed.nodes.find(
-    (node) => node.id === "checkin.complete.by_name" && node.lang === "en",
+    (node) => node.id === "bring.complete.by_name" && node.lang === "en",
   );
   assert.equal(nested.value, "A name of its own");
   assert.equal(nested.contentIndent, 10);
@@ -85,7 +85,7 @@ test("the three scalar styles are read and written back as they are", () => {
 test("a changed block keeps its indentation and leaves the rest of the file alone", () => {
   const parsed = parseFile(SAMPLE, "sample.yml");
   const node = parsed.nodes.find(
-    (candidate) => candidate.id === "checkin.help" && candidate.lang === "en",
+    (candidate) => candidate.id === "bring.help" && candidate.lang === "en",
   );
   applyEdit(parsed.lines, node, "New one\n\nNew three");
   const written = joinSource(parsed);

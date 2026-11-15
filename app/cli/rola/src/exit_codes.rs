@@ -362,13 +362,13 @@ pub const EC_ERR_SYNC: i32 = 230;
 /// `exit_codes.sync_argument`
 pub const EC_ERR_SYNC_ARGUMENT: i32 = 231;
 
-// Checking in, bringing what the Vault holds into the Layout being worked in
+// Bringing what the Vault holds into the Layout being worked in
 
-/// `exit_codes.checkin`
-pub const EC_ERR_CHECKIN: i32 = 240;
+/// `exit_codes.bring`
+pub const EC_ERR_BRING: i32 = 240;
 
-/// `exit_codes.checkin_argument`
-pub const EC_ERR_CHECKIN_ARGUMENT: i32 = 241;
+/// `exit_codes.bring_argument`
+pub const EC_ERR_BRING_ARGUMENT: i32 = 241;
 
 // Retracking, moving a file's version pointer back
 

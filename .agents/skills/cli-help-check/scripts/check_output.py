@@ -128,7 +128,7 @@ def run(binary: Path, parts: list[str], lang: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("commands", nargs="*", help="command paths, e.g. checkin or 'storage ls-remote-manifests'")
+    parser.add_argument("commands", nargs="*", help="command paths, e.g. bring or 'storage ls-remote-manifests'")
     parser.add_argument("--command", action="append", default=[], help="a command path containing spaces")
     parser.add_argument("--file", action="append", default=[], help="a captured --help output (repeatable)")
     parser.add_argument("--bin", help="the rola binary; defaults to build/bin/rola[.exe]")

@@ -90,7 +90,7 @@ pub struct Rename {
 pub struct Merge {
     /// The file it is to be joined into.
     pub target: String,
-    /// The variant that was checked in, as the hex it is named by.
+    /// The variant that was brought in, as the hex it is named by.
     pub variant: String,
     /// The path its file lies at, or lay at before a move.
     pub path: String,

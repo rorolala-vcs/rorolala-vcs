@@ -6,8 +6,8 @@ using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;
 
-/// <summary>What is in the way of one entry of a checkin.</summary>
-internal enum CheckinBlocker
+/// <summary>What is in the way of one entry of a bring.</summary>
+internal enum BringBlocker
 {
     /// <summary>Nothing: the entry lands where the Vault names it, or under the directory it was dropped on.</summary>
     None,
@@ -19,9 +19,9 @@ internal enum CheckinBlocker
     /// The Layout being worked in holds it at another path, which can be moved to the landing one.
     /// </summary>
     /// <remarks>
-    /// It is the one case a checkin has a third way out of: what the Vault now names `A/b.fbx` is what this side checked
+    /// It is the one case a bring has a third way out of: what the Vault now names `A/b.fbx` is what this side brought
     /// in as `imported.fbx`, an earlier name of the same entry, so moving the local file and its record over is what
-    /// letting the checkin go ahead would have done, without fetching the content again.
+    /// letting the bring go ahead would have done, without fetching the content again.
     /// </remarks>
     Elsewhere,
 
@@ -29,22 +29,22 @@ internal enum CheckinBlocker
     Taken,
 }
 
-/// <summary>One entry of a checkin: where it lands, and what is in the way there.</summary>
+/// <summary>One entry of a bring: where it lands, and what is in the way there.</summary>
 /// <param name="Entry">What the Vault's copy holds.</param>
 /// <param name="Landing">The path it would be named at here, relative to the Workspace's root.</param>
 /// <param name="Local">The path this side names it at, when it holds it; empty for one it holds at no path.</param>
 /// <param name="Blocker">What is in the way.</param>
 /// <param name="Carried">The path the drag carried that brought this entry, which is what a drop brings in whole.</param>
-internal sealed record CheckinStep(
+internal sealed record BringStep(
     LayoutEntry Entry,
     string Landing,
     string? Local,
-    CheckinBlocker Blocker,
+    BringBlocker Blocker,
     string Carried
 );
 
 /// <summary>
-/// A checkin worked out before anything is done: every entry it would bring, and what is in the way of each.
+/// A bring worked out before anything is done: every entry it would bring, and what is in the way of each.
 /// </summary>
 /// <remarks>
 /// The command line refuses a run whole for the first reference it will not take, so a batch that half fits has to be
@@ -54,30 +54,30 @@ internal sealed record CheckinStep(
 /// <param name="Vault">The Vault the entries are of, by the name the Workspace bound it under.</param>
 /// <param name="Root">The Workspace's root, which Layout paths are relative to.</param>
 /// <param name="Destination">The directory they are to land under, or nothing for the paths the Vault names.</param>
-/// <param name="Steps">What the checkin comes to, in the order the entries were carried.</param>
+/// <param name="Steps">What the bring comes to, in the order the entries were carried.</param>
 /// <param name="Carried">What the drag carried, in the order it carried it.</param>
-internal sealed record CheckinPlan(
+internal sealed record BringPlan(
     string Vault,
     string Root,
     string? Destination,
-    IReadOnlyList<CheckinStep> Steps,
+    IReadOnlyList<BringStep> Steps,
     IReadOnlyList<UpstreamCarry> Carried
 )
 {
     /// <summary>The entries that can be brought in as they stand.</summary>
-    public IReadOnlyList<CheckinStep> Clean =>
-        [.. Steps.Where(step => step.Blocker is CheckinBlocker.None)];
+    public IReadOnlyList<BringStep> Clean =>
+        [.. Steps.Where(step => step.Blocker is BringBlocker.None)];
 
     /// <summary>The entries this side holds at another path, which can be moved to where they would land.</summary>
-    public IReadOnlyList<CheckinStep> Elsewhere =>
-        [.. Steps.Where(step => step.Blocker is CheckinBlocker.Elsewhere)];
+    public IReadOnlyList<BringStep> Elsewhere =>
+        [.. Steps.Where(step => step.Blocker is BringBlocker.Elsewhere)];
 
     /// <summary>The entries that cannot land where they would, whatever is done about it.</summary>
-    public IReadOnlyList<CheckinStep> Taken =>
-        [.. Steps.Where(step => step.Blocker is CheckinBlocker.Taken)];
+    public IReadOnlyList<BringStep> Taken =>
+        [.. Steps.Where(step => step.Blocker is BringBlocker.Taken)];
 
     /// <summary>How many entries this side already holds where they would land.</summary>
-    public int Here => Steps.Count(step => step.Blocker is CheckinBlocker.Here);
+    public int Here => Steps.Count(step => step.Blocker is BringBlocker.Here);
 
     /// <summary>How many entries a run would leave out: everything that is not clean.</summary>
     public int Left => Steps.Count - Clean.Count;
@@ -91,12 +91,12 @@ internal sealed record CheckinPlan(
     /// folder is one reference, and the run keeps the tree it is, the command line rebases each on its own name. The
     /// button names the entries themselves, since each is to land at the path the Vault gives it.
     /// </remarks>
-    /// <returns>What a checkin is to name, in the order the entries were carried.</returns>
+    /// <returns>What a bring is to name, in the order the entries were carried.</returns>
     public IReadOnlyList<string> References()
     {
         if (Destination is not { Length: > 0 })
         {
-            return [.. Clean.Select(step => CheckinCommand.Reference(step.Entry))];
+            return [.. Clean.Select(step => BringCommand.Reference(step.Entry))];
         }
 
         // What is carried comes in whole or not at all: one entry that cannot land refuses the run that names what it
@@ -107,10 +107,10 @@ internal sealed record CheckinPlan(
         {
             if (Steps.All(step =>
                 !string.Equals(step.Carried, carry.Path, StringComparison.Ordinal)
-                || step.Blocker is CheckinBlocker.None
+                || step.Blocker is BringBlocker.None
             ))
             {
-                references.Add(CheckinCommand.Reference(carry));
+                references.Add(BringCommand.Reference(carry));
             }
         }
 
@@ -118,13 +118,13 @@ internal sealed record CheckinPlan(
     }
 }
 
-/// <summary>Working out what a checkin of a drag would come to, without running anything.</summary>
-internal static class CheckinPlanning
+/// <summary>Working out what a bring of a drag would come to, without running anything.</summary>
+internal static class BringPlanning
 {
     /// <summary>The mark the Vault puts in front of a path it holds no place for yet.</summary>
     internal const string UnplacedMark = "@/";
 
-    /// <summary>Works out a checkin of what a drag carried, landing it under a directory or at the Vault's paths.</summary>
+    /// <summary>Works out a bring of what a drag carried, landing it under a directory or at the Vault's paths.</summary>
     /// <remarks>
     /// What this side holds is read from the entries as a run lists them rather than from the reading the place drew from:
     /// the two are the same Layout, and only one of them is certain to be the Layout as it is now.
@@ -136,7 +136,7 @@ internal static class CheckinPlanning
     /// <param name="vault">The Vault the entries are of.</param>
     /// <param name="carrying">What the drag carried.</param>
     /// <returns>The plan.</returns>
-    public static CheckinPlan Of(
+    public static BringPlan Of(
         UpstreamEntriesTree tree,
         IReadOnlyList<LayoutEntry> local,
         string root,
@@ -166,7 +166,7 @@ internal static class CheckinPlanning
 
         var under = destination is { Length: > 0 } ? Relative(root, destination) : null;
 
-        List<CheckinStep> steps = [];
+        List<BringStep> steps = [];
 
         foreach (var carry in carrying)
         {
@@ -193,7 +193,7 @@ internal static class CheckinPlanning
                 var here = held.TryGetValue(entry.Uuid, out var at) ? at : null;
 
                 steps.Add(
-                    new CheckinStep(
+                    new BringStep(
                         entry,
                         landing,
                         here,
@@ -212,12 +212,12 @@ internal static class CheckinPlanning
         [
             .. steps.Select(step =>
                 Collides(step.Landing, landings)
-                    ? step with { Blocker = CheckinBlocker.Taken }
+                    ? step with { Blocker = BringBlocker.Taken }
                     : step
             ),
         ];
 
-        return new CheckinPlan(vault, root, destination, steps, carrying);
+        return new BringPlan(vault, root, destination, steps, carrying);
     }
 
     /// <summary>Where an entry a drag carried lands under a destination.</summary>
@@ -288,7 +288,7 @@ internal static class CheckinPlanning
     /// <param name="held">The path this side names it at, or nothing when it does not hold it.</param>
     /// <param name="named">Every path the Layout being worked in names.</param>
     /// <returns>What is in the way.</returns>
-    private static CheckinBlocker Blocker(
+    private static BringBlocker Blocker(
         string root,
         string landing,
         string? held,
@@ -298,20 +298,20 @@ internal static class CheckinPlanning
         if (held is { Length: > 0 })
         {
             return string.Equals(held, landing, StringComparison.Ordinal)
-                ? CheckinBlocker.Here
+                ? BringBlocker.Here
                 : Occupied(root, landing, named)
-                    ? CheckinBlocker.Taken
-                    : CheckinBlocker.Elsewhere;
+                    ? BringBlocker.Taken
+                    : BringBlocker.Elsewhere;
         }
 
         // An entry this side holds at no path at all is one nothing can be moved from, so it is no different from a
         // landing path that is taken.
         if (held is not null)
         {
-            return CheckinBlocker.Taken;
+            return BringBlocker.Taken;
         }
 
-        return Occupied(root, landing, named) ? CheckinBlocker.Taken : CheckinBlocker.None;
+        return Occupied(root, landing, named) ? BringBlocker.Taken : BringBlocker.None;
     }
 
     /// <summary>Whether a path already names something here, on disk or in the Layout being worked in.</summary>
@@ -328,19 +328,19 @@ internal static class CheckinPlanning
 }
 
 /// <summary>
-/// One checkin, from what a drag carried to what the user was told about it.
+/// One bring, from what a drag carried to what the user was told about it.
 /// </summary>
 /// <remarks>
-/// The command line checks in what it is given, or nothing: the first reference it refuses is the run refused, so
-/// "bring in what fits and leave the rest" is a plan made here and then run, see <see cref="CheckinPlanning"/>. What
+/// The command line brings in what it is given, or nothing: the first reference it refuses is the run refused, so
+/// "bring in what fits and leave the rest" is a plan made here and then run, see <see cref="BringPlanning"/>. What
 /// the user is asked when the plan does not fit is the one question this class puts: move the files that are already
-/// here under another name, leave them out, or let the checkin go.
+/// here under another name, leave them out, or let the bring go.
 /// <para>
 /// Nothing here is done on the window's thread: the plan is two reads of the work, the runs are programs, and the
 /// question is the only thing the window answers.
 /// </para>
 /// </remarks>
-internal sealed class CheckinFlow
+internal sealed class BringFlow
 {
     /// <summary>The host, for the question and for what a failure is shown through.</summary>
     private readonly IPluginHost _host;
@@ -351,7 +351,7 @@ internal sealed class CheckinFlow
     /// <summary>What every command this plugin runs reports itself to.</summary>
     private readonly IProgressHub _hub;
 
-    /// <summary>What the place read of a Layout, which a checkin's entries are read from.</summary>
+    /// <summary>What the place read of a Layout, which a bring's entries are read from.</summary>
     private readonly Func<UpstreamSource, UpstreamEntriesTree?> _tree;
 
     /// <summary>Makes the flow over the readings it plans from.</summary>
@@ -359,7 +359,7 @@ internal sealed class CheckinFlow
     /// <param name="log">Where a base that is not a Workspace is judged.</param>
     /// <param name="hub">What every command this plugin runs reports itself to.</param>
     /// <param name="tree">What the place read of a Layout.</param>
-    public CheckinFlow(
+    public BringFlow(
         IPluginHost host,
         ILog log,
         IProgressHub hub,
@@ -378,11 +378,11 @@ internal sealed class CheckinFlow
     }
 
     /// <summary>
-    /// Works out a checkin of what a drag carried and asks about it where it does not fit, then does what was chosen.
+    /// Works out a bring of what a drag carried and asks about it where it does not fit, then does what was chosen.
     /// </summary>
     /// <remarks>
     /// A drag of a folder carries everything under it, and a drag of several rows carries the lot: what is planned is every
-    /// entry they come to, which is what makes a folder a thing that can be checked in at all.
+    /// entry they come to, which is what makes a folder a thing that can be brought in at all.
     /// </remarks>
     /// <param name="source">The Layout the entries are of.</param>
     /// <param name="carrying">What the drag carried, in the order it carried it.</param>
@@ -441,7 +441,7 @@ internal sealed class CheckinFlow
         if (_tree(source) is not { } tree)
         {
             Post(() => Refuse(
-                "rorolala_vcs.place.checkin_failed",
+                "rorolala_vcs.place.bring_failed",
                 RolaI18N.Get("rorolala_vcs.place.refused_reading")
             ));
 
@@ -452,7 +452,7 @@ internal sealed class CheckinFlow
 
         if (!local.Done)
         {
-            Post(() => Refuse("rorolala_vcs.place.checkin_failed", local.Said));
+            Post(() => Refuse("rorolala_vcs.place.bring_failed", local.Said));
 
             return;
         }
@@ -460,14 +460,14 @@ internal sealed class CheckinFlow
         if (Root(directory) is not { } root)
         {
             Post(() => Refuse(
-                "rorolala_vcs.place.checkin_failed",
+                "rorolala_vcs.place.bring_failed",
                 RolaI18N.Get("rorolala_vcs.place.not_workspace")
             ));
 
             return;
         }
 
-        var plan = CheckinPlanning.Of(
+        var plan = BringPlanning.Of(
             tree,
             local.Entries,
             root,
@@ -487,10 +487,10 @@ internal sealed class CheckinFlow
     /// landing path something else already occupies is not something moving a local file can fix, so a plan that has one
     /// is asked as "leave them out or let it go" rather than with an answer that would fail.
     /// </remarks>
-    /// <param name="plan">What the checkin comes to.</param>
+    /// <param name="plan">What the bring comes to.</param>
     /// <param name="program">The program the window was opened by.</param>
     /// <param name="directory">Where the work is rooted, and where the runs are made.</param>
-    private void Confirm(CheckinPlan plan, string program, string directory)
+    private void Confirm(BringPlan plan, string program, string directory)
     {
         if (plan.Steps.Count == 0)
         {
@@ -516,7 +516,7 @@ internal sealed class CheckinFlow
         {
             choices.Add(
                 new DialogChoice(
-                    RolaI18N.Get("rorolala_vcs.place.checkin_move", plan.Elsewhere.Count),
+                    RolaI18N.Get("rorolala_vcs.place.bring_move", plan.Elsewhere.Count),
                     () => Move(plan, program, directory)
                 )
             );
@@ -524,57 +524,57 @@ internal sealed class CheckinFlow
 
         choices.Add(
             new DialogChoice(
-                RolaI18N.Get("rorolala_vcs.place.checkin_partial", plan.Left),
+                RolaI18N.Get("rorolala_vcs.place.bring_partial", plan.Left),
                 () =>
                 {
                     Bring(plan, program, directory);
                     Notify(
                         NotificationLevel.Warning,
-                        "rorolala_vcs.place.checkin_abandoned_title",
-                        RolaI18N.Get("rorolala_vcs.place.checkin_abandoned", plan.Left)
+                        "rorolala_vcs.place.bring_abandoned_title",
+                        RolaI18N.Get("rorolala_vcs.place.bring_abandoned", plan.Left)
                     );
                 }
             )
         );
 
-        // The answer that does nothing is last, and is what closing the window comes to: a checkin left alone is not a
+        // The answer that does nothing is last, and is what closing the window comes to: a bring left alone is not a
         // failure and is not worth a word.
         choices.Add(
             new DialogChoice(
-                RolaI18N.Get("rorolala_vcs.place.checkin_abandon"),
+                RolaI18N.Get("rorolala_vcs.place.bring_abandon"),
                 () => { }
             )
         );
 
         _host.Dialogs.Choose(new Choice(
-            RolaI18N.Get("rorolala_vcs.place.checkin_question"),
+            RolaI18N.Get("rorolala_vcs.place.bring_question"),
             Question(plan),
             choices
         ));
     }
 
     /// <summary>What the question says about what does not fit.</summary>
-    /// <param name="plan">What the checkin comes to.</param>
+    /// <param name="plan">What the bring comes to.</param>
     /// <returns>The lines, one per kind of thing in the way.</returns>
-    private static string Question(CheckinPlan plan)
+    private static string Question(BringPlan plan)
     {
         List<string> lines = [];
 
         if (plan.Elsewhere.Count > 0)
         {
             lines.Add(
-                RolaI18N.Get("rorolala_vcs.place.checkin_elsewhere", plan.Elsewhere.Count)
+                RolaI18N.Get("rorolala_vcs.place.bring_elsewhere", plan.Elsewhere.Count)
             );
         }
 
         if (plan.Taken.Count > 0)
         {
-            lines.Add(RolaI18N.Get("rorolala_vcs.place.checkin_taken", plan.Taken.Count));
+            lines.Add(RolaI18N.Get("rorolala_vcs.place.bring_taken", plan.Taken.Count));
         }
 
         if (plan.Here > 0)
         {
-            lines.Add(RolaI18N.Get("rorolala_vcs.place.checkin_here", plan.Here));
+            lines.Add(RolaI18N.Get("rorolala_vcs.place.bring_here", plan.Here));
         }
 
         return string.Join((char)10, lines);
@@ -588,10 +588,10 @@ internal sealed class CheckinFlow
     /// that moved to a file that is not there is worse than a file beside the name it already had. What actually moved is
     /// said, a run that moved files and said nothing is a run the user cannot tell from one that did not.
     /// </remarks>
-    /// <param name="plan">What the checkin comes to.</param>
+    /// <param name="plan">What the bring comes to.</param>
     /// <param name="program">The program the window was opened by.</param>
     /// <param name="directory">Where the work is rooted, and where the runs are made.</param>
-    private void Move(CheckinPlan plan, string program, string directory)
+    private void Move(BringPlan plan, string program, string directory)
     {
         var run = _hub.Begin("rorolala_vcs.progress.path_move");
 
@@ -667,8 +667,8 @@ internal sealed class CheckinFlow
                 {
                     Notify(
                         NotificationLevel.Message,
-                        "rorolala_vcs.place.checkin_moved_title",
-                        RolaI18N.Get("rorolala_vcs.place.checkin_moved", moved)
+                        "rorolala_vcs.place.bring_moved_title",
+                        RolaI18N.Get("rorolala_vcs.place.bring_moved", moved)
                     );
                 }
 
@@ -677,7 +677,7 @@ internal sealed class CheckinFlow
                     FailureNotice.Show(
                         _host.Dialogs,
                         _host.Icons,
-                        RolaI18N.Get("rorolala_vcs.place.checkin_failed", plan.Vault),
+                        RolaI18N.Get("rorolala_vcs.place.bring_failed", plan.Vault),
                         path.Length > 0 ? path + (char)10 + said : said
                     );
                 }
@@ -690,11 +690,11 @@ internal sealed class CheckinFlow
         });
     }
 
-    /// <summary>Runs the checkin of everything the plan can bring in.</summary>
-    /// <param name="plan">What the checkin comes to.</param>
+    /// <summary>Runs the bring of everything the plan can bring in.</summary>
+    /// <param name="plan">What the bring comes to.</param>
     /// <param name="program">The program the window was opened by.</param>
     /// <param name="directory">Where the work is rooted, and where the runs are made.</param>
-    private void Bring(CheckinPlan plan, string program, string directory)
+    private void Bring(BringPlan plan, string program, string directory)
     {
         var references = plan.References();
 
@@ -707,11 +707,11 @@ internal sealed class CheckinFlow
             return;
         }
 
-        var run = _hub.Begin("rorolala_vcs.progress.checkin");
+        var run = _hub.Begin("rorolala_vcs.progress.bring");
 
         _ = Task.Run(() =>
         {
-            var answer = CheckinCommand.Run(
+            var answer = BringCommand.Run(
                 program,
                 directory,
                 references,
@@ -729,7 +729,7 @@ internal sealed class CheckinFlow
                     FailureNotice.Show(
                         _host.Dialogs,
                         _host.Icons,
-                        RolaI18N.Get("rorolala_vcs.place.checkin_failed", plan.Vault),
+                        RolaI18N.Get("rorolala_vcs.place.bring_failed", plan.Vault),
                         answer.Done ? string.Join((char)10, answer.Failed) : answer.Said
                     );
                 }
@@ -760,7 +760,7 @@ internal sealed class CheckinFlow
             )
         );
 
-    /// <summary>Shows a failure that stopped the checkin before anything was asked.</summary>
+    /// <summary>Shows a failure that stopped the bring before anything was asked.</summary>
     /// <param name="title">The key of what it is called.</param>
     /// <param name="said">What it says.</param>
     private void Refuse(string title, string said) =>

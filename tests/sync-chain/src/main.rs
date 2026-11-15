@@ -7,9 +7,9 @@
 //! produce.
 //!
 //! The shape is the one a person meets, for a file and again for a tree: one workspace makes two
-//! versions and syncs them; a second workspace, which holds none of it, checks it in and moves its
+//! versions and syncs them; a second workspace, which holds none of it, brings it in and moves its
 //! pointer back one version. That last step needs the content and the structure of the version below
-//! the top, and it can only work if the push and the checkin carried them.
+//! the top, and it can only work if the push and the bring carried them.
 //!
 //! A program rather than a `#[test]` for the same reason the other suites are: it runs the built
 //! programs the way a caller meets them, over a real socket, with a real daemon serving a real Vault.
@@ -39,10 +39,10 @@ const VAULT_NAME: &str = "origin";
 /// How long the Vault is waited for before it is given up on.
 const STARTUP: Duration = Duration::from_secs(10);
 
-/// Where the file sits in a Layout: what a checkin names it by.
+/// Where the file sits in a Layout: what a bring names it by.
 const REMOTE_PATH: &str = "hero.psd";
 
-/// Where a checkin puts it on disk, below the Workspace it is checked into.
+/// Where a bring puts it on disk, below the Workspace it is brought into.
 const LOCAL_PATH: &str = "hero.psd";
 
 fn main() {
@@ -146,17 +146,17 @@ fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    let said = run(&mut client(&second, &data, &["checkin", REMOTE_PATH, "."]));
+    let said = run(&mut client(&second, &data, &["bring", REMOTE_PATH, "."]));
     checked.wants(
-        "the file is checked in as the Vault holds it",
+        "the file is brought in as the Vault holds it",
         said.success(),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
-    let checked_in = second.join(LOCAL_PATH);
+    let brought_in = second.join(LOCAL_PATH);
     checked.wants(
-        "the content the checkin needed was brought whole",
-        fs::read(&checked_in).is_ok_and(|bytes| bytes == newer),
+        "the content the bring needed was brought whole",
+        fs::read(&brought_in).is_ok_and(|bytes| bytes == newer),
         "the file at the Vault's path is not what the Vault holds",
     );
 
@@ -175,7 +175,7 @@ fn main() {
     );
     checked.wants(
         "the version moved back to is the content that version stored",
-        fs::read(&checked_in).is_ok_and(|bytes| bytes == older),
+        fs::read(&brought_in).is_ok_and(|bytes| bytes == older),
         "the file the pointer was moved to is not what the version below the top stored",
     );
 
@@ -187,14 +187,14 @@ fn main() {
     // A run that cannot be carried out must say so, which is what the confirmation at the end of a
     // direction is for. It cannot be made to fail from outside: the Vault makes its own directories
     // as it opens, so taking one away is not taking away its ability to write. What the detector
-    // itself does with content that is gone is checked in the store's own tests, where a chunk can
+    // itself does with content that is gone is covered by the store's own tests, where a chunk can
     // be taken away directly.
 
     serving.stop();
     checked.report();
 }
 
-/// Two versions of a tree are recorded, uploaded, checked into a new Workspace, and one is put back.
+/// Two versions of a tree are recorded, uploaded, brought into a new Workspace, and one is put back.
 fn tree_chain(first: &Path, second: &Path, data: &Path, checked: &mut Checked) {
     let tree = first.join("main");
 
@@ -239,9 +239,9 @@ fn tree_chain(first: &Path, second: &Path, data: &Path, checked: &mut Checked) {
 
     run(&mut client(second, data, &["fetch"])).expect_success();
 
-    let said = run(&mut client(second, data, &["checkin", "main", "."]));
+    let said = run(&mut client(second, data, &["bring", "main", "."]));
     checked.wants(
-        "the tree is checked into the second Workspace",
+        "the tree is brought into the second Workspace",
         said.success(),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
@@ -411,7 +411,7 @@ fn client(workspace: &Path, data: &Path, args: &[&str]) -> Command {
 /// The link the Vault serving on [`PORT`] is bound by.
 ///
 /// Binding is also what gives a Workspace a Layout: the name it takes is the name the Layout is
-/// under, and a run that has no Layout has nothing to check in or sync.
+/// under, and a run that has no Layout has nothing to bring in or sync.
 fn link() -> String {
     format!("rola://127.0.0.1:{PORT}/{NAMESPACE}")
 }

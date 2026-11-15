@@ -126,7 +126,7 @@ With no paths, both scan the user-facing i18n files under `app/cli/` and `app/de
 
 ```sh
 python .agents/skills/write-documents/scripts/check_symbols.py
-python .agents/skills/write-documents/scripts/check_symbols.py app/cli/rola/i18n/cmd_checkin.yml
+python .agents/skills/write-documents/scripts/check_symbols.py app/cli/rola/i18n/cmd_bring.yml
 python .agents/skills/write-documents/scripts/check_phrases.py --strict
 ```
 

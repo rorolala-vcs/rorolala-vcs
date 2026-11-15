@@ -799,9 +799,9 @@ async fn main() {
     // The name a destination that is a directory takes the entry by: the leaf of the Vault's path.
     let leaf = "hero.psd";
 
-    let said = run(&mut client(&workspace, &data, &["checkin", remote_path]));
+    let said = run(&mut client(&workspace, &data, &["bring", remote_path]));
     checked.wants(
-        "checking in what this Layout already holds is refused",
+        "bringing in what this Layout already holds is refused",
         said.code == Some(240),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
@@ -809,7 +809,7 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["checkin", remote_path, "a.psd", "only/one.psd"],
+        &["bring", remote_path, "a.psd", "only/one.psd"],
     ));
     checked.wants(
         "several references with a destination that is not a directory are refused",
@@ -851,10 +851,10 @@ async fn main() {
     let said = run(&mut client(
         &other,
         &data,
-        &["checkin", "models/*", "./", "--json"],
+        &["bring", "models/*", "./", "--json"],
     ));
     checked.wants(
-        "a checkin brings what only the Vault holds into a fresh Workspace",
+        "a bring carries what only the Vault holds into a fresh Workspace",
         said.success()
             && fs::read(other.join(leaf)).unwrap() == b"second"
             && said.stdout.contains(&id.to_string()),
@@ -866,7 +866,7 @@ async fn main() {
         ),
     );
     checked.wants(
-        "the Layout names what was checked in",
+        "the Layout names what was brought in",
         Layout::open(other.join(".rola/layout"))
             .expect("the second Layout")
             .id_of(&LayoutPath::new(leaf).unwrap())
@@ -1660,7 +1660,7 @@ async fn main() {
     run(&mut client(
         &workspace,
         &data,
-        &["checkin", &variant, "--join", "models/hero.psd"],
+        &["bring", &variant, "--join", "models/hero.psd"],
     ))
     .expect_success();
 

@@ -183,7 +183,7 @@ test("the settings route writes what the translation reads", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         program: "rola",
-        key: "checkin.help",
+        key: "bring.help",
         source: "en",
         target: "zh-CN",
         text: "Hello",
@@ -229,7 +229,7 @@ test("the translation route streams an OpenAI compatible answer", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         program: "rola",
-        key: "checkin.help",
+        key: "bring.help",
         source: "en",
         target: "zh-CN",
         text: "Hello",
@@ -260,7 +260,7 @@ test("the translation route streams an OpenAI compatible answer", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         program: "rola",
-        key: "checkin.help",
+        key: "bring.help",
         source: "en",
         target: "zh-CN",
         text: "Hello",

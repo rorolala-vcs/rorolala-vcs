@@ -1246,7 +1246,7 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     checked.exits("a file to merge into is recorded", &ran, 0);
 
     // A variant made by hand, as one handed over from elsewhere would be, so that nothing of the
-    // Vault has to be reached to check it in.
+    // Vault has to be reached to bring it in.
     let incoming = files.join("incoming.bin");
     fs::write(&incoming, "from elsewhere\n").expect("the incoming content");
 
@@ -1292,12 +1292,12 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     checked.exits("a variant on another history is written", &ran, 0);
     let off_chain = ran.stdout.trim().to_owned();
 
-    let ran = rola.run(ws, &["checkin", &off_chain, "--join", "merge/file.txt"]);
+    let ran = rola.run(ws, &["bring", &off_chain, "--join", "merge/file.txt"]);
     checked.exits("a variant off the file's chain is refused", &ran, 240);
     checked.stderr_has("the refusal names the way past it", &ran, "--force");
 
-    let ran = rola.run(ws, &["checkin", &variant, "--join", "merge/file.txt"]);
-    checked.exits("a variant is checked in for a file", &ran, 0);
+    let ran = rola.run(ws, &["bring", &variant, "--join", "merge/file.txt"]);
+    checked.exits("a variant is brought in for a file", &ran, 0);
 
     let variant_file = fs::read_dir(&work)
         .expect("the files beside the target")
@@ -1504,7 +1504,7 @@ fn shared_history(rola: &Rola, dir: &Path, files: &Path, checked: &mut Checked) 
 
     // The variant's own base is the other fork's first version, which is not on the file's chain.
     // The two chains meet at the shared version, so the join is not forced.
-    let ran = rola.run(dir, &["checkin", &second, "--join", "branch/file.txt"]);
+    let ran = rola.run(dir, &["bring", &second, "--join", "branch/file.txt"]);
     checked.exits(
         "a variant sharing a version with the file's chain is joined without forcing",
         &ran,

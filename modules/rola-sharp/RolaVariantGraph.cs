@@ -129,7 +129,7 @@ public sealed record VariantGraphEntry(
 );
 
 /// <summary>One merge in progress.</summary>
-/// <param name="Variant">The variant that was checked in, as the hex it is named by.</param>
+/// <param name="Variant">The variant that was brought in, as the hex it is named by.</param>
 /// <param name="Target">The <c>Uuid</c> of the file it is to be joined into.</param>
 /// <param name="Path">The path that file is at, when the Layout still names it.</param>
 /// <param name="File">Where the variant file lies.</param>

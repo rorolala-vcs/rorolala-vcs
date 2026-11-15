@@ -1,4 +1,4 @@
-//! The merge in progress: the variant files checked in to be joined into the files they sit beside.
+//! The merge in progress: the variant files brought in to be joined into the files they sit beside.
 //!
 //! A file the Layout names may have changes made elsewhere that are to be joined into it without
 //! either side giving up: content a Vault holds, brought into the tree as a **variant file** and
@@ -46,7 +46,7 @@ const MERGING_FILE: &str = "MERGING";
 pub struct Pending {
     /// The `Uuid` of the file the variant is to be joined into.
     target: Uuid,
-    /// The hash of the variant that was checked in.
+    /// The hash of the variant that was brought in.
     variant: Blake3Hash,
     /// Where the variant file lies, relative to the target's directory, when the run said.
     at: Option<PathBuf>,
@@ -70,7 +70,7 @@ impl Pending {
         self.target
     }
 
-    /// The hash of the variant that was checked in.
+    /// The hash of the variant that was brought in.
     #[must_use]
     pub const fn variant(&self) -> &Blake3Hash {
         &self.variant
@@ -192,7 +192,7 @@ impl Merging {
         self.pending.iter().find(|pending| pending.target == target)
     }
 
-    /// Whether the variant `variant` was already checked in.
+    /// Whether the variant `variant` was already brought in.
     #[must_use]
     pub fn holds_variant(&self, variant: &Blake3Hash) -> bool {
         self.pending

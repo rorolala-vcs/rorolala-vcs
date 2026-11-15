@@ -1,33 +1,33 @@
 _version: 2
 
-checkin:
+bring:
   help:
     en: |
-        # Add the entries of an upstream Layout into the local Layout
+        # Bring the entries of an upstream Layout into the local Layout
         **Usage**:
-            rola [[GREEN]]__checkin__[[/]] <REF> [TO]
-            rola [[GREEN]]__checkin__[[/]] <VARIANT_HASH> --join <FILE>
+            rola [[GREEN]]__bring__[[/]] <REF> [TO]
+            rola [[GREEN]]__bring__[[/]] <VARIANT_HASH> --join <FILE>
         **Flags**:
-             __--join__ <FILE>        Name the file a checked-in variant is to be merged into
+             __--join__ <FILE>        Name the file a brought-in variant is to be merged into
              __--by-name__            Land each reference under the destination by its own name
              __--offline__            Build the file only from content already stored locally
-             __--force__              Skip the shared-history check for a variant checkin
+             __--force__              Skip the shared-history check for a variant bring
              __--concurrency__ <N>    Carry the content N units at a time (default 4)
     zh-CN: |
-        # 将上游布局的条目加入到本地布局中
+        # 将上游布局的条目带入本地布局中
         **用法**：
-            rola [[GREEN]]__checkin__[[/]] <上游条目> [本地路径]
-            rola [[GREEN]]__checkin__[[/]] <变体HASH> --join <本地文件>
+            rola [[GREEN]]__bring__[[/]] <上游条目> [本地路径]
+            rola [[GREEN]]__bring__[[/]] <变体HASH> --join <本地文件>
         **标识**：
-             __--join__ <本地文件>    为签入的变体指定待合入的文件
+             __--join__ <本地文件>    为带入的变体指定待合入的文件
              __--by-name__            每条参考按自己的名字落在目标目录下
              __--offline__            仅使用本地已存储的内容来构建文件
-             __--force__              跳过变体签入的共享版本检查
+             __--force__              跳过变体带入的共享版本检查
              __--concurrency__ <N>    每次同时搬运 N 份内容（默认 4）
 
   description:
-    en: Add the entries of an upstream Layout into the local Layout
-    zh-CN: 将上游布局的条目加入到本地布局中
+    en: Bring the entries of an upstream Layout into the local Layout
+    zh-CN: 将上游布局的条目带入本地布局中
 
   complete:
     by_name:
@@ -35,8 +35,8 @@ checkin:
       zh-CN: 让参考按自己的名字落在目标目录下
 
     join:
-      en: Name the file a checked-in variant is to be merged into
-      zh-CN: 为签入的变体指定待合入的文件
+      en: Name the file a brought-in variant is to be merged into
+      zh-CN: 为带入的变体指定待合入的文件
 
     tree_merge:
       en: Merge a tree variant into its tree instead of putting it beside the work
@@ -61,9 +61,9 @@ checkin:
     en: a variant is already waiting to be joined into it
     zh-CN: 已经有一个变体正在等待并入它
 
-  err_join_checked_in:
-    en: that variant was already checked in
-    zh-CN: 该变体已经签入过
+  err_join_brought_in:
+    en: that variant was already brought in
+    zh-CN: 该变体已经带入过
 
   err_join_off_chain:
     en: "it shares no version with this file's own chain: pass `--force` to join it anyway"
@@ -106,8 +106,8 @@ checkin:
     zh-CN: "`%{path}` 在本地已经有内容了"
 
   joined:
-    en: "`%{variant}` was checked in as `%{path}`, waiting to be joined into `%{target}`"
-    zh-CN: "`%{variant}` 已签入为 `%{path}`，等待并入 `%{target}`"
+    en: "`%{variant}` was brought in as `%{path}`, waiting to be joined into `%{target}`"
+    zh-CN: "`%{variant}` 已带入为 `%{path}`，等待并入 `%{target}`"
 
   err_no_track:
     en: The Layout being worked in tracks no Vault
@@ -118,12 +118,12 @@ checkin:
     zh-CN: 请用 `rola layout set-track <保险库>` 指定它所追踪的保险库，然后重试
 
   err_argument:
-    en: "`rola checkin` was given operands it cannot use"
-    zh-CN: "`rola checkin` 收到的参数无法使用"
+    en: "`rola bring` was given operands it cannot use"
+    zh-CN: "`rola bring` 收到的参数无法使用"
 
   err_argument_help:
     en: Name the upstream path, and the local path to land it at, with `--join` naming the one file a variant merges into
-    zh-CN: 请给出要签入的上游路径与要落到的本地路径，合并变体时用 `--join` 指定唯一的待合入文件
+    zh-CN: 请给出要带入的上游路径与要落到的本地路径，合并变体时用 `--join` 指定唯一的待合入文件
 
   err_unknown:
     en: "The Vault's Layout names nothing by `%{reference}`"
@@ -141,9 +141,9 @@ checkin:
 
   err_unnamed_help:
     en: |
-        Please give the local position this UUID is to be checked in to
+        Please give the local position this UUID is to be brought in to
     zh-CN: |
-        请指定该 UUID 需要签入到的本地的位置
+        请指定该 UUID 需要带入到的本地的位置
 
   err_taken:
     en: "Something is already at `%{path}` here"
@@ -166,8 +166,8 @@ checkin:
         布局内无法记录多个指向同一 UUID 的条目
 
   err_failed:
-    en: "The checkin could not go on: %{cause}"
-    zh-CN: "签入无法继续：%{cause}"
+    en: "The bring could not go on: %{cause}"
+    zh-CN: "带入无法继续：%{cause}"
 
   err_failed_help:
     en: |
@@ -180,8 +180,8 @@ checkin:
     zh-CN: 本地没有该版本所指向的内容
 
   result_summary:
-    en: "%{checked} checked in, %{failed} not done"
-    zh-CN: "已签入 %{checked} 项，未完成 %{failed} 项"
+    en: "%{brought} brought in, %{failed} not done"
+    zh-CN: "已带入 %{brought} 项，未完成 %{failed} 项"
 
   err_tree_mark:
     en: The tree landed without its `.rola-tree` mark

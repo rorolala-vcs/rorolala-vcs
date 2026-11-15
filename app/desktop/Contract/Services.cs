@@ -307,7 +307,7 @@ public sealed record DialogChoice(string Label, Action Chosen);
 /// A question with more answers than yes and no.
 /// </summary>
 /// <remarks>
-/// A checkin that half fits the work is the case this exists for: leaving it out, moving what is in the way, and
+/// A bring that half fits the work is the case this exists for: leaving it out, moving what is in the way, and
 /// giving up are three different things to do about one question, and a yes-or-no dialog would have to ask twice.
 /// The choices are shown in the order given, the first is the default and the last is what the window's close
 /// button comes to, so the last one is the answer that does nothing.

@@ -134,7 +134,7 @@ pub fn complete_sync(ctx: ShellContext) -> Suggest {
 /// [bound](crate::vault::cmd_vault_bind). What the Vault holds now is fetched first, and the plan
 /// says what is to move: a `Uuid` only this Layout holds goes up at the path the work tracks it at,
 /// a version the Vault is behind on goes up when this account holds it, one this Layout is behind
-/// on comes down, and a `Uuid` only the Vault holds is named rather than brought, `checkin` is
+/// on comes down, and a `Uuid` only the Vault holds is named rather than brought, `bring` is
 /// what brings one.
 ///
 /// `--up-only` and `--down-only` keep the plan to one direction; neither, or `--both`, is both.

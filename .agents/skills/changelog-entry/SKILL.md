@@ -84,7 +84,7 @@ not a free-form tag or a file extension.
 
 | change                             | scope                                 |
 | ---------------------------------- | ------------------------------------- |
-| `app/cli/rola`, a command          | `["app", "rola", "checkin"]`          |
+| `app/cli/rola`, a command          | `["app", "rola", "bring"]`            |
 | `app/desktop/Core`, the theme      | `["app", "RorolalaDesktop", "theme"]` |
 | `modules/vault`, a file or area    | `["modules", "vault", "config"]`      |
 | `utils/cli-theme`, colour handling | `["utils", "cli-theme", "colorize"]`  |
@@ -131,13 +131,13 @@ not one commit.
 
 ```markdown
 ---
-summary: Fix the blocking read in checkin
+summary: Fix the blocking read in bring
 category: bugfix
-scope: ["app", "rola", "checkin"]
+scope: ["app", "rola", "bring"]
 breaking: false
 ---
 
-The `checkin` command no longer blocks when the Vault answers before the reader is ready. The
+The `bring` command no longer blocks when the Vault answers before the reader is ready. The
 stream is drained on a worker instead of the caller's thread.
 ```
 

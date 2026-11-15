@@ -1,7 +1,7 @@
 //! Putting a version's content back into the tree.
 //!
 //! A version is what the Layout names and the store is what it means, so a run that brings a
-//! version down, `rola sync`'s pull and `rola checkin`, writes the content at the path and then
+//! version down, `rola sync`'s pull and `rola bring`, writes the content at the path and then
 //! writes down that the two agree. A path left marked as disagreed would be reported as changed by
 //! the very next reading, which is the one thing a pull must not leave behind.
 //!

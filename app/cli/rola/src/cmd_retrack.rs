@@ -1473,7 +1473,7 @@ fn end_merge(
         return Err(failed(error.to_string()));
     }
 
-    // A variant file that is already gone is one the merge can still be ended from: what was checked
+    // A variant file that is already gone is one the merge can still be ended from: what was brought
     // in is the content the record names, and the file was only how it was shown.
     if let Some(disk) = disk
         && disk.is_file()

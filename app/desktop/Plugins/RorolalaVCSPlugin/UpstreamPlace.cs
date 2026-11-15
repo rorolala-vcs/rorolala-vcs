@@ -87,13 +87,13 @@ internal static class UpstreamSpots
 /// <remarks>
 /// A folder is not an entry, so what a drop of one brings is what stands under it, the folder's own entry included,
 /// since a path may be both. A path the copy no longer names is dropped rather than guessed at: the copy moved under the
-/// drag, and what is not there is not something a checkin can name.
+/// drag, and what is not there is not something a bring can name.
 /// </remarks>
 internal static class UpstreamBringing
 {
     /// <summary>Every entry a drag of these carries brings, deduplicated and in the order it was carried.</summary>
     /// <remarks>
-    /// The walk a folder makes, and the one a checkin is planned from: a folder is not an entry, so what it brings is what
+    /// The walk a folder makes, and the one a bring is planned from: a folder is not an entry, so what it brings is what
     /// stands under it, its own entry included, since a path may be both. A uuid one carry already brought is not brought
     /// again, because the command line would be naming it twice.
     /// </remarks>
@@ -177,9 +177,9 @@ internal static class UpstreamBringing
 /// the pointer moves.
 /// </para>
 /// <para>
-/// The actions are the command line's, as everywhere else in this plugin: bringing entries in is a checkin of their
+/// The actions are the command line's, as everywhere else in this plugin: bringing entries in is a bring of their
 /// paths, and moving one is a <c>layout path move</c> against the Layout the level is of, made when the entry is
-/// dropped on a folder's row. A checkin is planned before it is run, see [`CheckinFlow`], because the command line
+/// dropped on a folder's row. A bring is planned before it is run, see [`BringFlow`], because the command line
 /// refuses a run whole for the first reference it will not take: a folder dragged in, a choice of rows cut out and
 /// pasted into a directory, and a row's own menu item all come to the same plan, and the same question where the plan
 /// does not fit. Moving one entry is still one run, because that is what a folder's row does.
@@ -301,8 +301,8 @@ internal sealed class UpstreamPlace
     /// <summary>Whether the account has been asked for, so a run that failed is not asked again on every draw.</summary>
     private bool _accountTried;
 
-    /// <summary>What a checkin of a drag comes to, and what the user is asked about one that does not fit.</summary>
-    private readonly CheckinFlow _checkin;
+    /// <summary>What a bring of a drag comes to, and what the user is asked about one that does not fit.</summary>
+    private readonly BringFlow _bring;
 
     /// <summary>Makes the provider.</summary>
     /// <param name="host">The host, for the reports and for what a failure is shown through.</param>
@@ -320,7 +320,7 @@ internal sealed class UpstreamPlace
         _log = log;
         _hub = hub;
         _fetch = fetch;
-        _checkin = new CheckinFlow(host, log, hub, Tree);
+        _bring = new BringFlow(host, log, hub, Tree);
 
         // What a place answers is a snapshot of the copies, so it is let go of when they may have moved: the files having
         // changed is every command of this plugin's own answer that they have, and the base moving is a different work.
@@ -766,7 +766,7 @@ internal sealed class UpstreamPlace
     /// </summary>
     /// <remarks>
     /// A drag of files is refused rather than guessed at: what it carries is where the files are on disk, and a place's
-    /// rows are paths a Layout names, the two are different questions, and a checkin of a file's content is not what
+    /// rows are paths a Layout names, the two are different questions, and a bring of a file's content is not what
     /// dropping one on a row means. A drag from another Layout is refused too, since a move is one Layout's own.
     /// </remarks>
     /// <param name="address">The place being dropped on.</param>
@@ -1101,7 +1101,7 @@ internal sealed class UpstreamPlace
     /// Whether a directory takes a drag of entries of this work's upstream.
     /// </summary>
     /// <remarks>
-    /// A checkin brings what the Layout being worked in tracks, so a drag from another Vault's copy, or from a Layout of
+    /// A bring carries what the Layout being worked in tracks, so a drag from another Vault's copy, or from a Layout of
     /// the Workspace's own, which is not an upstream at all, is not one a directory can take: there is no run that would
     /// name it. What is left is the work's own upstream, dropped on a directory of the work.
     /// <para>
@@ -1125,7 +1125,7 @@ internal sealed class UpstreamPlace
         var source = carrying[0].Source;
 
         // Something already here is still a drop worth taking, because what it is owed is a word rather than nothing: a
-        // drag that cannot be checked in is a drag the user is told about, not one that quietly did nothing.
+        // drag that cannot be brought in is a drag the user is told about, not one that quietly did nothing.
         return source.Vault is { Length: > 0 } vault
             && carrying.All(carry => string.Equals(carry.Source.Key, source.Key, StringComparison.Ordinal))
             && string.Equals(vault, Tracked(), StringComparison.Ordinal)
@@ -1134,7 +1134,7 @@ internal sealed class UpstreamPlace
             && UpstreamBringing.Entries(tree, carrying).Count > 0;
     }
 
-    /// <summary>Takes the drag: what it carried is planned into a checkin, which is what the user is asked about.</summary>
+    /// <summary>Takes the drag: what it carried is planned into a bring, which is what the user is asked about.</summary>
     /// <remarks>
     /// What is planned is every entry the drag comes to, a folder's rows included, and the planning is what leaves the
     /// ones that cannot come in for a question rather than for a run that refuses the lot.
@@ -1165,7 +1165,7 @@ internal sealed class UpstreamPlace
             return false;
         }
 
-        _checkin.Start(source, carrying, Path.GetFullPath(directory));
+        _bring.Start(source, carrying, Path.GetFullPath(directory));
 
         return true;
     }
@@ -1469,7 +1469,7 @@ internal sealed class UpstreamPlace
 
     /// <summary>The empty folders this place holds at one level, which nothing read from the Vault has.</summary>
     /// <remarks>
-    /// A folder this side made is no longer a row as soon as the copy names it: a checkin or a move into its path is the
+    /// A folder this side made is no longer a row as soon as the copy names it: a bring or a move into its path is the
     /// work arriving, and what was a suggestion is then a folder of the Vault's own. The suggestion itself has been used
     /// up by then and is let go of (see <see cref="Settle"/>), so a path the work later leaves does not bring it back.
     /// </remarks>
@@ -1783,9 +1783,9 @@ internal sealed class UpstreamPlace
 
     /// <summary>What a row offers, which is what may be done with the entry it is.</summary>
     /// <remarks>
-    /// A folder is a row with something to do even when no entry stands at its path: what is under it is checked in at
+    /// A folder is a row with something to do even when no entry stands at its path: what is under it is brought in at
     /// once, which is the same plan a drag of the folder makes. A folder of another Vault's copy is offered nothing,
-    /// since a checkin brings what the Layout being worked in tracks.
+    /// since a bring carries what the Layout being worked in tracks.
     /// </remarks>
     /// <param name="source">The Layout it is of.</param>
     /// <param name="spot">The row.</param>
@@ -1797,7 +1797,7 @@ internal sealed class UpstreamPlace
 
         if (spot.Entry is not { } entry)
         {
-            // A folder with nothing under it is nothing to check in, and nothing else about it is worth a menu.
+            // A folder with nothing under it is nothing to bring in, and nothing else about it is worth a menu.
             if (!spot.Folder)
             {
                 return null;
@@ -1822,9 +1822,9 @@ internal sealed class UpstreamPlace
                     ? new ContextMenuItem[]
                     {
                         new(
-                            ["menu.entry.version", "menu.entry.checkin"],
+                            ["menu.entry.version", "menu.entry.bring"],
                             10,
-                            _ => _checkin.Start(
+                            _ => _bring.Start(
                                 source,
                                 [new UpstreamCarry(source, spot.Path)],
                                 destination: null
@@ -1852,24 +1852,24 @@ internal sealed class UpstreamPlace
                     ),
                 }
                 : []),
-            // A checkin brings what the Layout being worked in *tracks*, so an entry of another Vault's copy, or of a
-            // Layout of the Workspace's own, is not something a checkin can name: what there is to do with it is read it,
+            // A bring carries what the Layout being worked in *tracks*, so an entry of another Vault's copy, or of a
+            // Layout of the Workspace's own, is not something a bring can name: what there is to do with it is read it,
             // and move it where it belongs.
             //
-            // An entry this side already holds is offered the same item: the checkin is planned against what is here, and
+            // An entry this side already holds is offered the same item: the bring is planned against what is here, and
             // one held under another name is exactly what the plan's move answer is for.
             .. (tracked && source.Vault is { Length: > 0 }
                 ? new ContextMenuItem[]
                 {
                     new(
-                        ["menu.entry.version", "menu.entry.checkin"],
+                        ["menu.entry.version", "menu.entry.bring"],
                         10,
-                        _ => _checkin.Start(source, entry, spot.Path),
+                        _ => _bring.Start(source, entry, spot.Path),
                         Icons.Download
                     ),
                 }
                 : []),
-            // What a held entry is owed is where this work names it, since that is the one thing about it a checkin
+            // What a held entry is owed is where this work names it, since that is the one thing about it a bring
             // cannot say; what it is not held at is worth copying out instead.
             held
                 ? new ContextMenuItem(
@@ -2091,7 +2091,7 @@ internal sealed class UpstreamPlace
     }
 
     /// <summary>
-    /// The Vault the Layout being worked in tracks, which is the one a checkin brings entries from.
+    /// The Vault the Layout being worked in tracks, which is the one a bring carries entries from.
     /// </summary>
     /// <remarks>
     /// The list of Layouts is read in the background, so this is empty until it lands: a drop judged in that moment is
@@ -2250,7 +2250,7 @@ internal sealed class UpstreamPlace
     /// The Layouts the Workspace works in, asking for them in the background when they are not here yet.
     /// </summary>
     /// <remarks>
-    /// The tracked Vault is read from it, which is what a drop on a directory and a row's checkin item are judged by, so
+    /// The tracked Vault is read from it, which is what a drop on a directory and a row's bring item are judged by, so
     /// the read is asked for as soon as anything wants either, not only when the list of Layouts is opened.
     /// </remarks>
     /// <returns>The Layouts, or nothing while the read is going or when it failed.</returns>

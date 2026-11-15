@@ -8,7 +8,7 @@ namespace RorolalaVCSPlugin;
 /// </summary>
 /// <remarks>
 /// These are the doors that move ownership without making a version: the Vault holds the entry, the two
-/// commands ask it to put this account's name on it or take it off, and nothing is checked in. The plugin
+/// commands ask it to put this account's name on it or take it off, and nothing is brought in. The plugin
 /// owns only the words a run is made with, since the exchange and the account it is spoken as are the
 /// command line's.
 /// </remarks>

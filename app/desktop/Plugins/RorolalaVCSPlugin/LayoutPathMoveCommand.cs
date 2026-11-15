@@ -54,7 +54,7 @@ internal static class LayoutPathMoveCommand
             "move",
         ];
 
-        // The Layout being worked in is what a run moves in when it names none: a checkin that moves a local copy over
+        // The Layout being worked in is what a run moves in when it names none: a bring that moves a local copy over
         // is about the work as it stands, and naming a Layout would move one that is not the one on screen.
         if (layout is { Length: > 0 })
         {

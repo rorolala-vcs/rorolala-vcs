@@ -532,7 +532,7 @@ public sealed class VariantGraphTests
                 && chip.Entry is not { Side: not "local" }
             );
 
-    /// <summary>A merge in progress is named on the variant it was checked in as, and drawn as pending.</summary>
+    /// <summary>A merge in progress is named on the variant it was brought in as, and drawn as pending.</summary>
     [Fact]
     public void AMergeInProgressIsDrawnAsAPendingCard()
     {

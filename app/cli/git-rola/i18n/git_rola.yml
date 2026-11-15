@@ -7,8 +7,8 @@ git_rola:
 
       The rola commands are:
         init       Initialize a rola workspace inside the work tree
-        check      Check the difference between the work tree and currently checked-in assets
-        restore    Restore checked-in assets that have been modified
+        check      Check the difference between the work tree and currently brought-in assets
+        restore    Restore brought-in assets that have been modified
         update     Re-parse rola.toml and update files
         hook       Hook behavior provided; runs among the registered hooks
     zh-CN: |
@@ -16,8 +16,8 @@ git_rola:
 
       rola 命令：
          init       在工作树内初始化 rola 工作区
-         check      检查工作树和当前签入素材内容的差异
-         restore    将已经签入但修改的素材换原
+         check      检查工作树和当前带入素材内容的差异
+         restore    将已经带入但修改的素材换原
          update     重新解析 `rola.toml` 并更新文件
          hook       提供的钩子行为，它会在注册的钩子中执行
   version:

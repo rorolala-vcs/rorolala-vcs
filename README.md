@@ -8,7 +8,7 @@ Other langs: [English](./README.md) | [中文](./README_zh_CN.md)
 
 `ROLA` is a version control system designed for **artistic creation and multi-person collaboration**. Its purpose is to let **game and film/TV projects** produce and manage binary asset data more flexibly:
 
-- In `ROLA`, your working directory is called a **"Workspace"**. A workspace can freely check in **individual asset files** or **tree files managed as a whole** from upstream, each tracked by its own **independent version chain**.
+- In `ROLA`, your working directory is called a **"Workspace"**. A workspace can freely bring in **individual asset files** or **tree files managed as a whole** from upstream, each tracked by its own **independent version chain**.
 
 - You are free to modify file contents locally, but only the file's **owner** can actually advance its version: **"Don't worry — the GUI will tell you whether you're allowed to modify the file."**
 
@@ -34,7 +34,7 @@ Alternatively, you can browse and [download previous versions](https://github.co
 
 ### Desktop
 
-After installation, you can find the `ROLALauncher` entry in your system, where you can **connect to a vault and create a workspace**; once inside a workspace, you can check in assets, modify them, and create versions to sync with others:
+After installation, you can find the `ROLALauncher` entry in your system, where you can **connect to a vault and create a workspace**; once inside a workspace, you can bring in assets, modify them, and create versions to sync with others:
 
 <p align="center">
   <img src="./res/screenshots/rola-desktop-preview.png" style="width: 100%;" alt="ROLADesktop">

@@ -124,7 +124,7 @@ mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267f
 # for and the two would be different traits with one name.
 arg-picker = "0.4.0"
 
-# Globbing over the Vault's Layout paths, which is how `rola checkin` reads a reference that names
+# Globbing over the Vault's Layout paths, which is how `rola bring` reads a reference that names
 # several entries at once. The full syntax is wanted rather than a bare `*`: a Vault's paths are a
 # tree, so `**` is what reaches into one.
 globset = "0.4.20"

@@ -1250,7 +1250,7 @@ pub struct ResultStatus {
 pub struct MergingItem {
     /// The file it is to be joined into.
     target: String,
-    /// The variant that was checked in.
+    /// The variant that was brought in.
     variant: String,
     /// The path its file lies at, or lay at before a move.
     path: String,

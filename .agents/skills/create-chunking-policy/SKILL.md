@@ -272,7 +272,7 @@ rola track big.mb -m "edited one object"    # later writes reuse the recorded pr
 
 - `--policy` applies to every file in that run; an unknown name is refused before any file is read, with
   the available names listed.
-- The preference is recorded on the version, and survives `sync`, `fetch`, `checkin` and
+- The preference is recorded on the version, and survives `sync`, `fetch`, `bring` and
   `layout entry`.
 - A file whose recorded preference names a policy this build lacks is an error and writes nothing — there is no silent fallback, because falling back writes a version that deduplicates against nothing
   already stored.

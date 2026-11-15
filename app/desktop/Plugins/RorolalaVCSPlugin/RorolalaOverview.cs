@@ -1374,7 +1374,7 @@ internal sealed class OverviewView : UserControl
     /// asked about rather than done, the one operation of the six whose effect a reader might not have meant.
     /// Cancelling a merge is asked about for the same reason and one of its own: it takes the variant file
     /// away, and what that file holds is not kept anywhere the file is not, the record says which variant it
-    /// was checked in as, and the content that is to be joined comes back only from the Vault.
+    /// was brought in as, and the content that is to be joined comes back only from the Vault.
     /// <para>
     /// The other operations are not asked about, and that is deliberate: a move that is taken back is a move
     /// made again, a loss that is confirmed is a record of what already happened, and a claim is answered by

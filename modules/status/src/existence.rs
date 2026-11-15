@@ -1,7 +1,7 @@
 //! Whether the content a variant, a version or a Layout entry points at is stored here.
 //!
 //! A version names content, and the name is only usable while what it names is here: a retrack to a
-//! version, a restore of an entry, and a checkin against it all read the variant the version fixes
+//! version, a restore of an entry, and a bring against it all read the variant the version fixes
 //! and the content the variant's `storage` field names. This reading answers whether that chain ends
 //! in content this store holds: the version object, the variant object, and the content itself, all
 //! of its chunks included.

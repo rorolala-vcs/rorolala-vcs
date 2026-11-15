@@ -117,7 +117,7 @@
 
 ```sh
 python .agents/skills/write-documents/scripts/check_symbols.py
-python .agents/skills/write-documents/scripts/check_symbols.py app/cli/rola/i18n/cmd_checkin.yml
+python .agents/skills/write-documents/scripts/check_symbols.py app/cli/rola/i18n/cmd_bring.yml
 python .agents/skills/write-documents/scripts/check_phrases.py --strict
 ```
 

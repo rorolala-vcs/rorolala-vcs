@@ -35,7 +35,7 @@ internal static class LayoutEntryRemoveCommand
             "remove",
         ];
 
-        // The Layout being worked in is what a run removes from when it names none: a checkin that takes a local
+        // The Layout being worked in is what a run removes from when it names none: a bring that takes a local
         // record away is about the work as it stands, and naming a Layout would write one that is not the one on screen.
         if (layout is { Length: > 0 })
         {

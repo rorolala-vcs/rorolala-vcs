@@ -18,11 +18,11 @@ public sealed record Rename(string From, string To, bool Modified, bool Strong);
 
 /// <summary>One variant waiting to be joined into one file.</summary>
 /// <param name="Target">The file it is to be joined into.</param>
-/// <param name="Variant">The variant that was checked in, as the hex it is named by.</param>
+/// <param name="Variant">The variant that was brought in, as the hex it is named by.</param>
 /// <param name="Path">The path its file lies at, or lay at before a move.</param>
 /// <param name="Moved">
 /// Where the tree holds its file now, when a move was found. A variant file that is not where the
-/// record puts it is found again by what it holds, since what it holds is what was checked in.
+/// record puts it is found again by what it holds, since what it holds is what was brought in.
 /// </param>
 public sealed record Merge(string Target, string Variant, string Path, string? Moved);
 
@@ -30,7 +30,7 @@ public sealed record Merge(string Target, string Variant, string Path, string? M
 /// <remarks>
 /// The reasons are told apart because what is to be done about them differs: a variant file that
 /// moved is confirmed, one that is gone is looked for, and a file that changed underneath is not
-/// the merge that was checked in.
+/// the merge that was brought in.
 /// </remarks>
 public enum BrokenKind
 {

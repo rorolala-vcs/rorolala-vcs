@@ -365,13 +365,13 @@ exit_codes:
     en: "`rola sync` was given arguments it cannot use"
     zh-CN: "`rola sync` 收到了无法使用的参数"
 
-  checkin:
+  bring:
     en: A `Uuid` the Vault holds could not be brought into the Layout
     zh-CN: 无法将保险库持有的 `Uuid` 带入布局
 
-  checkin_argument:
-    en: "`rola checkin` was given arguments it cannot use"
-    zh-CN: "`rola checkin` 收到了无法使用的参数"
+  bring_argument:
+    en: "`rola bring` was given arguments it cannot use"
+    zh-CN: "`rola bring` 收到了无法使用的参数"
 
   retrack:
     en: A file's version pointer could not be moved back

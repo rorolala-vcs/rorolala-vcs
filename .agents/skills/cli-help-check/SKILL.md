@@ -67,7 +67,7 @@ from anywhere.
 - `scripts/check_output.py` — runs the built binary and measures the real output, or checks
   captured files; `--no-color` is used. This is the authoritative width check.
   - no arguments — top-level help in `en` and `zh-CN`;
-  - `checkin storage` — those commands in both languages;
+  - `bring storage` — those commands in both languages;
   - `--command "storage ls-remote-manifests"` — a command path containing spaces;
   - `--file out.txt` — a captured output (repeatable);
   - `--strict` — exit 1 on findings (never use this as a release gate);
@@ -78,7 +78,7 @@ Run from the project root:
 ```sh
 python .agents/skills/cli-help-check/scripts/audit_help.py
 python .agents/skills/cli-help-check/scripts/check_output.py
-python .agents/skills/cli-help-check/scripts/check_output.py checkin
+python .agents/skills/cli-help-check/scripts/check_output.py bring
 ```
 
 If `build/bin/rola.exe` (or `build/bin/rola`) is missing or older than the edited YAML, say so. If

@@ -50,12 +50,12 @@ is `librorolala`, which ties the modules together for the command and the C ABI.
 
 ## One command end to end
 
-`rola checkin` is a useful trace because it crosses most layers:
+`rola bring` is a useful trace because it crosses most layers:
 
-1. `app/cli/rola/src/cmd_checkin.rs` declares `#[command(node = "checkin", entry = EntryCheckin)]`.
-   The function `checkin` picks the operands that can be refused on the spot and returns `Next` for
-   those. The rest becomes a `StateCheckin` value.
-2. `#[chain(routeify)] handle_checkin` receives `StateCheckin` and the resources the framework
+1. `app/cli/rola/src/cmd_bring.rs` declares `#[command(node = "bring", entry = EntryBring)]`.
+   The function `bring` picks the operands that can be refused on the spot and returns `Next` for
+   those. The rest becomes a `StateBring` value.
+2. `#[chain(routeify)] handle_bring` receives `StateBring` and the resources the framework
    injects, such as `ResWorkspace`, `ResVCSIndex` and `ResRorolalaStorage`.
 3. The handler reads `librorolala::layout`, `librorolala::vcs`, `librorolala::storage`,
    `librorolala::tree` and `librorolala::workspace`, and brings content through
@@ -64,7 +64,7 @@ is `librorolala`, which ties the modules together for the command and the C ABI.
 5. The words come from `app/cli/rola/i18n/` through `t!`. Results go to stdout; progress and errors
    go to stderr.
 
-A command that is one file, one node and one shape is the rule this follows. Use `cmd_checkin.rs` as
+A command that is one file, one node and one shape is the rule this follows. Use `cmd_bring.rs` as
 the example when the command you are reading is smaller.
 
 ## Fast checks

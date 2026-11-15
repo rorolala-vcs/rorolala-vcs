@@ -3,7 +3,7 @@
 //!
 //! The plan is read off three things: the Layout being worked in, the copy of the Vault's Layout a
 //! fetch brings here, and the index below both. A `Uuid` only one side holds is a creation or a
-//! file to check in; one both hold is compared by version, along the chain the index keeps, to say
+//! file to bring in; one both hold is compared by version, along the chain the index keeps, to say
 //! which side is ahead. Ownership is read from the Vault's copy, since the Vault is where it is
 //! kept, and a file changed here is read off the working tree, since that is what a pull would
 //! overwrite.
@@ -112,7 +112,7 @@ pub enum Kind {
     Refused,
     /// Bringing the Vault's version down would overwrite a file changed here.
     Blocked,
-    /// The Vault holds a `Uuid` this Layout does not; `checkin` is what brings one.
+    /// The Vault holds a `Uuid` this Layout does not; `bring` is what brings one.
     RemoteOnly,
     /// The two name it as different things, a file and a tree, so neither side may take it.
     #[serde(rename = "kind_mismatch")]
@@ -324,7 +324,7 @@ const fn kind_name(kind: EntryKind) -> &'static str {
 
 /// What the Vault holds and this Layout does not.
 ///
-/// It is not the sync's to bring, a `Uuid` enters a Layout by `checkin`, so these are named
+/// It is not the sync's to bring, a `Uuid` enters a Layout by `bring`, so these are named
 /// rather than planned.
 fn remote_only(local: &Layout, remote: &Layout, direction: Direction) -> Vec<Entry> {
     if !kept(Kind::RemoteOnly, direction) {

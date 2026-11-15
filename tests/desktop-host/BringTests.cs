@@ -4,7 +4,7 @@ using RorolalaVCSPlugin;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// A checkin worked out before anything is run: which entries can come in, which are already here, which are here
+/// A bring worked out before anything is run: which entries can come in, which are already here, which are here
 /// under another name, and which cannot land at all.
 /// </summary>
 /// <remarks>
@@ -13,11 +13,11 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// land, and what is already in the way, because that judgement is what the question to the user is built from.
 /// The runs themselves are checked beside this, as the arguments they are given.
 /// </remarks>
-public sealed class CheckinTests
+public sealed class BringTests
 {
     /// <summary>Every entry of a folder is placed against what this side holds, at its own path or another.</summary>
     [Fact]
-    public void ACheckinIsPlannedAgainstWhatIsAlreadyHere()
+    public void ABringIsPlannedAgainstWhatIsAlreadyHere()
     {
         LayoutEntry[] local =
         [
@@ -35,7 +35,7 @@ public sealed class CheckinTests
             local
         );
 
-        var plan = CheckinPlanning.Of(
+        var plan = BringPlanning.Of(
             tree,
             local,
             Path.GetTempPath(),
@@ -44,7 +44,7 @@ public sealed class CheckinTests
             [new UpstreamCarry(Origin, "A")]
         );
 
-        // The one nothing is in the way of is clean, the one this side checked in under an older name can be moved
+        // The one nothing is in the way of is clean, the one this side brought in under an older name can be moved
         // over, the one named where the Vault names it is already here, and the path another entry occupies cannot land
         // at all.
         Assert.Equal(["A/sub/e.psd"], plan.Clean.Select(step => step.Landing));
@@ -54,7 +54,7 @@ public sealed class CheckinTests
         Assert.Equal(["A/d.fbx"], plan.Taken.Select(step => step.Landing));
 
         // Three of the four are left out of a run as it stands, which is what the question says and what a partial
-        // checkin is counted by.
+        // bring is counted by.
         Assert.True(plan.Blocks);
         Assert.Equal(3, plan.Left);
         Assert.Equal(["A/sub/e.psd"], plan.References());
@@ -63,7 +63,7 @@ public sealed class CheckinTests
 
     /// <summary>A plan that fits asks nothing: everything is clean and a run is made of the lot.</summary>
     [Fact]
-    public void ACheckinThatFitsAsksNothing()
+    public void ABringThatFitsAsksNothing()
     {
         LayoutEntry[] local = [];
         var tree = UpstreamEntriesTree.Build(
@@ -71,7 +71,7 @@ public sealed class CheckinTests
             local
         );
 
-        var plan = CheckinPlanning.Of(
+        var plan = BringPlanning.Of(
             tree,
             local,
             Path.GetTempPath(),
@@ -102,7 +102,7 @@ public sealed class CheckinTests
         // it was put, with the tree it holds under it.
         var carrying = new[] { new UpstreamCarry(Origin, "Assets") };
 
-        var landed = CheckinPlanning.Of(tree, local, root, under, "origin", carrying);
+        var landed = BringPlanning.Of(tree, local, root, under, "origin", carrying);
 
         // The destination is a prefix: `Assets/` is remade under it, which is what makes a folder dragged in the tree
         // it is rather than its files alone.
@@ -110,7 +110,7 @@ public sealed class CheckinTests
         Assert.Equal(under, landed.Destination);
 
         // A directory that is the root itself adds no segment, which is the same place the Vault's own path is relative to.
-        var atRoot = CheckinPlanning.Of(tree, local, root, root, "origin", carrying);
+        var atRoot = BringPlanning.Of(tree, local, root, root, "origin", carrying);
 
         Assert.Equal("Assets/hero.psd", atRoot.Clean[0].Landing);
     }
@@ -119,7 +119,7 @@ public sealed class CheckinTests
     [Fact]
     public void AFileOnDiskTakesThePlaceAnEntryWouldLandIn()
     {
-        var root = Path.Combine(Path.GetTempPath(), "rorolala-checkin-" + Guid.NewGuid());
+        var root = Path.Combine(Path.GetTempPath(), "rorolala-bring-" + Guid.NewGuid());
         var held = Path.Combine(root, "Assets");
 
         Directory.CreateDirectory(held);
@@ -130,7 +130,7 @@ public sealed class CheckinTests
             LayoutEntry[] local = [];
             var tree = UpstreamEntriesTree.Build([Entry("Assets/hero.psd", "b")], local);
 
-            var plan = CheckinPlanning.Of(
+            var plan = BringPlanning.Of(
                 tree,
                 local,
                 root,
@@ -140,7 +140,7 @@ public sealed class CheckinTests
             );
 
             // The command line would refuse the run for the file being there, and moving a local file out of the way is
-            // not what would settle it: what the user is offered is leaving it out or giving the checkin up.
+            // not what would settle it: what the user is offered is leaving it out or giving the bring up.
             Assert.Equal(["Assets/hero.psd"], plan.Taken.Select(step => step.Landing));
             Assert.Empty(plan.Clean);
             Assert.True(plan.Blocks);
@@ -151,7 +151,7 @@ public sealed class CheckinTests
         }
     }
 
-    /// <summary>A path that is a file and a directory at once is one of the things a checkin cannot land.</summary>
+    /// <summary>A path that is a file and a directory at once is one of the things a bring cannot land.</summary>
     [Fact]
     public void AnEntryThatWouldBeAFileAndAFolderAtOnceIsTaken()
     {
@@ -161,7 +161,7 @@ public sealed class CheckinTests
             local
         );
 
-        var plan = CheckinPlanning.Of(
+        var plan = BringPlanning.Of(
             tree,
             local,
             Path.GetTempPath(),
@@ -172,7 +172,7 @@ public sealed class CheckinTests
 
         // `A` cannot be the file the entry is and the directory the other entry is under, so neither lands by itself: the
         // run is asked about rather than started and left half written.
-        Assert.All(plan.Steps, step => Assert.Equal(CheckinBlocker.Taken, step.Blocker));
+        Assert.All(plan.Steps, step => Assert.Equal(BringBlocker.Taken, step.Blocker));
         Assert.Empty(plan.Clean);
         Assert.True(plan.Blocks);
     }
@@ -197,7 +197,7 @@ public sealed class CheckinTests
             local
         );
 
-        var plan = CheckinPlanning.Of(
+        var plan = BringPlanning.Of(
             tree,
             local,
             root,
@@ -210,7 +210,7 @@ public sealed class CheckinTests
 
         // Pasted into a directory of the work rather than at its root, the same folder is made under it.
         var under = Path.Combine(root, "art");
-        var inside = CheckinPlanning.Of(
+        var inside = BringPlanning.Of(
             tree,
             local,
             root,
@@ -245,7 +245,7 @@ public sealed class CheckinTests
             local
         );
 
-        var plan = CheckinPlanning.Of(
+        var plan = BringPlanning.Of(
             tree,
             local,
             root,
@@ -261,7 +261,7 @@ public sealed class CheckinTests
         Assert.Equal(1, plan.Here);
 
         var under = Path.Combine(root, "art");
-        var inside = CheckinPlanning.Of(
+        var inside = BringPlanning.Of(
             tree,
             local,
             root,

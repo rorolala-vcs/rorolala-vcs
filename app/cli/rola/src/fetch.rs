@@ -1,7 +1,7 @@
 //! Content a run brings from the Vaults it can reach, at the moment it is needed.
 //!
 //! A Layout names versions, and a version is only a meaning once the store holds what it stored.
-//! Which is what a run that writes a version's content back (a pull, a restore, a checkin) has to
+//! Which is what a run that writes a version's content back (a pull, a restore, a bring) has to
 //! have in front of it, and what it should not pay for until then: a Vault is reached for one
 //! object that is not here, not for a whole store that mostly is.
 //!
@@ -215,7 +215,7 @@ impl<'a> Sources<'a> {
     /// failure of the run, it is one more thing that was not brought.
     ///
     /// What is answered is the keys that were wanted and are still not here, so that a caller which
-    /// needs them, a checkin handing over a version, says so rather than leaving a version behind
+    /// needs them, a bring handing over a version, says so rather than leaving a version behind
     /// that nothing can produce.
     pub fn bring(&self, store: &RorolalaStorage, keys: &[Key]) -> Vec<Key> {
         if self.offline || self.candidates.is_empty() || keys.is_empty() {
@@ -321,7 +321,7 @@ impl<'a> Sources<'a> {
     /// A run with no candidate has nowhere to bring anything from, which is not the same as a run
     /// that asked and was not answered: the first says the content never had a way here, the second
     /// says it had one and did not come. A caller that fails on what it did not get needs to know
-    /// which it is, or a local checkin is accused of a fetch it never made.
+    /// which it is, or a local bring is accused of a fetch it never made.
     #[must_use]
     pub fn can_ask(&self) -> bool {
         !self.candidates.is_empty()

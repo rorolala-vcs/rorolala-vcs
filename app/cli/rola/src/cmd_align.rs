@@ -741,7 +741,7 @@ fn delete(
     ResultAlign::one(AlignDid::Deleted, path.as_str().to_owned()).into()
 }
 
-/// Ends the merge a variant file was checked in for, taking its record away.
+/// Ends the merge a variant file was brought in for, taking its record away.
 ///
 /// The variant file itself is not touched: the run that ends a merge has already taken it away, and
 /// one that is still there is a file the reading will report in its own words.
@@ -857,7 +857,7 @@ fn assert_variant_move(
     relocate_variant(merging, layout, root, target, from, &to)
 }
 
-/// Puts a variant file back, taking the content the variant was checked in with out of the store.
+/// Puts a variant file back, taking the content the variant was brought in with out of the store.
 ///
 /// It is the other half of ending a merge: a variant file taken away can be brought back as long as
 /// the record waits, and the content it is written from is the variant's own rather than a version's.
@@ -1331,7 +1331,7 @@ fn write_stored(
         .map_err(|error| align_failed(error.to_string()))
 }
 
-/// The content the variant `hash` was checked in with.
+/// The content the variant `hash` was brought in with.
 fn variant_storage(
     vcs: &VCSIndex,
     runtime: &tokio::runtime::Runtime,

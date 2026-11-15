@@ -3,7 +3,7 @@
 //! A variant file lies where a merge record reads it from the target's path, and a run that moves it
 //! with the filesystem rather than with `rola fs-ops mv` leaves the record saying one thing and the
 //! tree holding another. The file is found again by what it holds: a variant names the content it
-//! was checked in with, and a move does not change that, so the untagged file whose digest is the
+//! was brought in with, and a move does not change that, so the untagged file whose digest is the
 //! variant's own is the one that moved.
 //!
 //! Finding it here rather than in the reading of the tree is deliberate: a variant file is not a
@@ -103,7 +103,7 @@ pub fn variant_moves(
     moves
 }
 
-/// The content the variant `hash` was checked in with, when the index holds it.
+/// The content the variant `hash` was brought in with, when the index holds it.
 fn storage_of(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,

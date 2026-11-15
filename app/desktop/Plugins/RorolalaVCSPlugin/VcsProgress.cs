@@ -27,7 +27,7 @@ internal static class VcsProgress
     {
         "rorolala_vcs.progress.sync" => Icons.Sync,
         "rorolala_vcs.progress.fetch" => Icons.CloudDownload,
-        "rorolala_vcs.progress.checkin" => Icons.CloudUpload,
+        "rorolala_vcs.progress.bring" => Icons.CloudDownload,
         "rorolala_vcs.progress.hold" => Icons.Lock,
         "rorolala_vcs.progress.giveup" => Icons.LockOpen,
         "rorolala_vcs.progress.track" => Icons.Add,

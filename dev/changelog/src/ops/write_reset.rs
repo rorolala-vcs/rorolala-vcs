@@ -19,7 +19,7 @@ const DRAFT_TEMPLATE: &str = concat!(
     "summary: \"\"\n",
     "# bugfix | optimized | feature | refactor\n",
     "category: bugfix\n",
-    "# The scopes this touches, primary first: [\"app\", \"rola\", \"checkin\"].\n",
+    "# The scopes this touches, primary first: [\"app\", \"rola\", \"bring\"].\n",
     "scope: []\n",
     "# Whether this is an incompatible change.\n",
     "breaking: false\n",

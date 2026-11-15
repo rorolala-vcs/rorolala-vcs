@@ -146,7 +146,7 @@ internal enum GraphLinkKind
     /// <summary>A recorded merge: the variant this one was recorded as merging in.</summary>
     Join,
 
-    /// <summary>A merge in progress: the variant is checked in and waits to be joined into its file.</summary>
+    /// <summary>A merge in progress: the variant is brought in and waits to be joined into its file.</summary>
     Merging,
 
     /// <summary>A draft based on the version the file records, which a track would continue.</summary>

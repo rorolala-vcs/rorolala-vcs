@@ -1,4 +1,4 @@
-//! The `rola checkin` command: bringing a `Uuid` the Vault holds into the Layout being worked in.
+//! The `rola bring` command: bringing a `Uuid` the Vault holds into the Layout being worked in.
 //!
 //! A `Uuid` enters a Layout by being tracked and enters the Vault's Layout by going up, which
 //! leaves what only the Vault holds out of reach: a sync names it rather than bringing it, since a
@@ -64,7 +64,7 @@ use crate::complete::{
     IndexObject, filling_flag, flag_value, index_hashes, index_keys, offer, positional,
     strip_written, typing_flag,
 };
-use crate::exit_codes::{EC_ERR_CHECKIN, EC_ERR_CHECKIN_ARGUMENT, EC_HELP};
+use crate::exit_codes::{EC_ERR_BRING, EC_ERR_BRING_ARGUMENT, EC_HELP};
 use crate::failure::failure;
 use crate::fetch::{self, Sources};
 use crate::hash::resolve as resolve_hash;
@@ -74,7 +74,7 @@ use crate::progress::Reporting;
 use crate::sync;
 use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
 
-/// The file a variant is to be joined into, for the mode that checks a variant in rather than
+/// The file a variant is to be joined into, for the mode that brings a variant in rather than
 /// bringing a `Uuid` the Vault holds into this Layout.
 const ARG_JOIN: PickerArg<'static, Option<String>> = arg![join: Option<String>];
 
@@ -99,31 +99,31 @@ const ARG_TREE_MERGE: PickerArg<'static, Flag> = arg![tree_merge: Flag];
 const UNPLACED: &str = "@/";
 
 #[help(buffer)]
-pub fn help_checkin(_: EntryCheckin, ec: &mut ResExitCode) {
-    r_eprintln!("{}", trd!(t!("checkin.help")).trim());
+pub fn help_bring(_: EntryBring, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("bring.help")).trim());
     ec.exit_code = EC_HELP;
 }
 
-#[metadata(EntryCheckin)]
-pub fn desc_checkin() -> Description {
-    t!("checkin.description").to_string().into()
+#[metadata(EntryBring)]
+pub fn desc_bring() -> Description {
+    t!("bring.description").to_string().into()
 }
 
-/// Completes what `rola checkin` can be given next.
+/// Completes what `rola bring` can be given next.
 ///
 /// Every word names where something is to land here, so the filesystem answers it. Which entry a
 /// reference names is the Vault's to say, and a reference is read there rather than here, so there
 /// is nothing of the Vault to list. The variant mode is the one thing only this run knows: its
 /// first word is a variant the index holds, and the rest is a place like any other.
-#[completion(EntryCheckin)]
-pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> Suggest {
+#[completion(EntryBring)]
+pub fn complete_bring(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> Suggest {
     if typing_flag(&ctx) {
         return strip_written(
             &ctx,
             suggest! {
-                ARG_JOIN: t!("checkin.complete.join"),
-                ARG_BY_NAME: t!("checkin.complete.by_name"),
-                ARG_TREE_MERGE: t!("checkin.complete.tree_merge"),
+                ARG_JOIN: t!("bring.complete.join"),
+                ARG_BY_NAME: t!("bring.complete.by_name"),
+                ARG_TREE_MERGE: t!("bring.complete.tree_merge"),
             },
         );
     }
@@ -132,7 +132,7 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
         return Suggest::file_comp();
     }
 
-    if flag_value(&ctx, &ARG_JOIN).is_some() && positional(&ctx, "checkin") == 0 {
+    if flag_value(&ctx, &ARG_JOIN).is_some() && positional(&ctx, "bring") == 0 {
         return offer(
             &ctx,
             index_hashes(index.get_ref().as_ref(), IndexObject::Variant),
@@ -162,7 +162,7 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
 ///
 /// A reference that names a folder of the Vault's Layout, whether an entry stands at that path or
 /// only things below it, brings everything that stands under it as well, at the paths they have
-/// there: checking a folder in is bringing in the tree it is.
+/// there: bringing a folder in is bringing in the tree it is.
 ///
 /// What a reference names has to be something this Layout does not already hold, and every landing
 /// has to be somewhere nothing is: a name this Layout already gives, a file already at the path, or
@@ -175,12 +175,12 @@ pub fn complete_checkin(ctx: ShellContext, index: &mut LazyRes<ResVCSIndex>) -> 
 ///
 /// # Errors
 ///
-/// Renders [`ErrorCheckinNoTrack`] when the Layout being worked in tracks no Vault,
-/// [`ErrorCheckinArgument`] when the operands name nothing to bring in or a destination several
-/// references cannot share, and [`ErrorCheckinUnknown`], [`ErrorCheckinKnown`],
-/// [`ErrorCheckinUnnamed`] or [`ErrorCheckinTaken`] when one reference cannot be brought in.
-#[command(node = "checkin", entry = EntryCheckin)]
-pub fn checkin(args: EntryCheckin) -> Next {
+/// Renders [`ErrorBringNoTrack`] when the Layout being worked in tracks no Vault,
+/// [`ErrorBringArgument`] when the operands name nothing to bring in or a destination several
+/// references cannot share, and [`ErrorBringUnknown`], [`ErrorBringKnown`],
+/// [`ErrorBringUnnamed`] or [`ErrorBringTaken`] when one reference cannot be brought in.
+#[command(node = "bring", entry = EntryBring)]
+pub fn bring(args: EntryBring) -> Next {
     // Picking cannot fail: the positions are one list, and an absent one is the empty list.
     let picked = args
         .pick(arg![Vec<String>])
@@ -200,15 +200,15 @@ pub fn checkin(args: EntryCheckin) -> Next {
         Err(next) => return next,
     };
 
-    if let Some(next) = crate::unmatched::refused(&unmatched, "checkin") {
+    if let Some(next) = crate::unmatched::refused(&unmatched, "bring") {
         return next;
     }
 
     let Some((refs, to)) = split(join.as_deref(), words) else {
-        return ErrorCheckinArgument.into();
+        return ErrorBringArgument.into();
     };
 
-    StateCheckin {
+    StateBring {
         refs,
         to,
         join,
@@ -218,16 +218,16 @@ pub fn checkin(args: EntryCheckin) -> Next {
     .into()
 }
 
-/// The state a checkin starts in.
+/// The state a bring starts in.
 #[derive(Grouped)]
-pub struct StateCheckin {
-    /// What to bring in: paths in the Vault's Layout and `Uuid`s, or the one variant a merge checks
+pub struct StateBring {
+    /// What to bring in: paths in the Vault's Layout and `Uuid`s, or the one variant a merge brings
     /// in.
     refs: Vec<String>,
     /// Where they are to land here, or nothing to land each at the path the Vault names it by, and
     /// for the variant mode, where its file is to lie.
     to: Option<String>,
-    /// The file a variant is to be joined into, when this run checks one in.
+    /// The file a variant is to be joined into, when this run brings one in.
     join: Option<String>,
     /// Whether each reference keeps only its own name under the destination.
     by_name: bool,
@@ -236,8 +236,8 @@ pub struct StateCheckin {
 }
 
 #[chain(routeify)]
-pub fn handle_checkin(
-    state: StateCheckin,
+pub fn handle_bring(
+    state: StateBring,
     workspace: &mut LazyRes<ResWorkspace>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
@@ -248,7 +248,7 @@ pub fn handle_checkin(
     force: &ResForce,
     concurrency: &ResConcurrency,
 ) -> Next {
-    let StateCheckin {
+    let StateBring {
         refs,
         to,
         join,
@@ -268,13 +268,13 @@ pub fn handle_checkin(
         Err(error) => return failed(&error),
     };
 
-    // A variant is not a `Uuid` the Vault's Layout names, so the mode that checks one in reads its
+    // A variant is not a `Uuid` the Vault's Layout names, so the mode that brings one in reads its
     // own operands and asks for the Vault only when what it wants is not here: a merge of something
     // already synced is local work, and a Workspace that tracks no Vault can still do it.
     if let Some(target) = join {
         let variant = refs.first().map_or_default(String::as_str);
 
-        return checkin_variant(
+        return bring_variant(
             &target,
             variant,
             to.as_deref(),
@@ -297,7 +297,7 @@ pub fn handle_checkin(
         Err(error) => return failed(&error),
     };
     let Some(track) = track else {
-        return ErrorCheckinNoTrack.into();
+        return ErrorBringNoTrack.into();
     };
 
     let vault_name = remote.get_ref().name_or_default(track)?;
@@ -306,7 +306,7 @@ pub fn handle_checkin(
     let account_name = current.get_ref().must_bind()?;
     let account = account_named(&account_name, Some(held), None)?;
 
-    // The content a checkin brings is asked of whichever Vault holds it, and the one the Layout
+    // The content a bring carries is asked of whichever Vault holds it, and the one the Layout
     // tracks is asked first. What is read from that Vault is its Layout, a copy is still what the
     // references are read against, while the objects themselves may come from any Vault that has
     // them, since a key is the hash of what it names.
@@ -344,7 +344,7 @@ pub fn handle_checkin(
         Err(error) => return error.into(),
     };
 
-    // The index is what names the objects a checkin reads, and it is the light half: it is moved
+    // The index is what names the objects a bring reads, and it is the light half: it is moved
     // whole, while the content is asked for by what `bring_in` finds it needs. Both are the run's
     // progress: the index crosses first and every content after it, so a reader watching the
     // capsule sees the blocks arrive rather than a bar that stops at the index.
@@ -360,7 +360,7 @@ pub fn handle_checkin(
     ) {
         reporting.finish();
 
-        return ErrorCheckinFailed {
+        return ErrorBringFailed {
             cause: error.to_string(),
         }
         .into();
@@ -373,7 +373,7 @@ pub fn handle_checkin(
         Err(cause) => {
             reporting.finish();
 
-            return ErrorCheckinFailed { cause }.into();
+            return ErrorBringFailed { cause }.into();
         }
     };
 
@@ -392,7 +392,7 @@ pub fn handle_checkin(
     drop(sources);
     reporting.finish();
 
-    ResultCheckedIn {
+    ResultBroughtIn {
         layout: DEFAULT_LAYOUT_NAME.to_owned(),
         vault: vault_name,
         entries,
@@ -401,7 +401,7 @@ pub fn handle_checkin(
     .into()
 }
 
-/// Checks a variant in to be joined into a file this Layout names.
+/// Brings a variant in to be joined into a file this Layout names.
 ///
 /// What comes in is not a path of the Vault's Layout but a variant the index holds, content that
 /// already happened elsewhere and is to be joined into a file here without either side giving up.
@@ -412,7 +412,7 @@ pub fn handle_checkin(
 /// The variant and its content are asked of the Vault the Layout tracks only when they are not here;
 /// a merge of something already synced is local work, so a run that has both does not need a Vault,
 /// an account, or a reachable one.
-fn checkin_variant(
+fn bring_variant(
     target: &str,
     variant: &str,
     at: Option<&str>,
@@ -435,7 +435,7 @@ fn checkin_variant(
     {
         Ok(key) => key,
         Err(miss) => {
-            let said = miss.reason(variant, || t!("checkin.err_join_hash").trim().to_string());
+            let said = miss.reason(variant, || t!("bring.err_join_hash").trim().to_string());
 
             return join_failed(target, said);
         }
@@ -444,21 +444,21 @@ fn checkin_variant(
     let root = held.get_root();
     let cwd = std::env::current_dir().ok();
     let Some(id) = target_id(layout, root, cwd.as_deref(), target) else {
-        return join_failed(target, t!("checkin.err_join_target").trim());
+        return join_failed(target, t!("bring.err_join_target").trim());
     };
     let Some(data) = layout.entry(id) else {
-        return join_failed(target, t!("checkin.err_join_target").trim());
+        return join_failed(target, t!("bring.err_join_target").trim());
     };
 
     let mut merging = Merging::read(root);
 
     // One variant joins one file once: a second waiting on the same file would leave the first with
-    // nowhere to go, and the same variant checked in twice would be two names for one thing.
+    // nowhere to go, and the same variant brought in twice would be two names for one thing.
     if merging.at(id).is_some() {
-        return join_failed(target, t!("checkin.err_join_merging").trim());
+        return join_failed(target, t!("bring.err_join_merging").trim());
     }
     if merging.holds_variant(variant_key.digest()) {
-        return join_failed(target, t!("checkin.err_join_checked_in").trim());
+        return join_failed(target, t!("bring.err_join_brought_in").trim());
     }
 
     let runtime = match index_runtime() {
@@ -478,7 +478,7 @@ fn checkin_variant(
     }
 
     let Some(variant_object) = found else {
-        return join_failed(target, t!("checkin.err_join_unknown").trim());
+        return join_failed(target, t!("bring.err_join_unknown").trim());
     };
 
     // A variant is joined into a file whose history it shares: the two chains have to meet at some
@@ -492,17 +492,17 @@ fn checkin_variant(
             variant_object.base_version(),
         ) {
             Ok(true) => {}
-            Ok(false) => return join_failed(target, t!("checkin.err_join_off_chain").trim()),
+            Ok(false) => return join_failed(target, t!("bring.err_join_off_chain").trim()),
             Err(cause) => return join_failed(target, cause),
         }
     }
 
     let Some(store) = storage.get_ref().as_ref() else {
-        return join_failed(target, t!("checkin.err_join_no_store").trim());
+        return join_failed(target, t!("bring.err_join_no_store").trim());
     };
     let content = Key::new(*variant_object.storage_hash());
 
-    // The content itself is brought the way any other checkin brings it: asked of whichever Vault
+    // The content itself is brought the way any other bring carries it: asked of whichever Vault
     // holds it, when there is an account to ask as and a run that may reach one at all.
     let account = current
         .get_ref()
@@ -534,12 +534,12 @@ fn checkin_variant(
     // A version is only a meaning once what it stored is here. A run that could have asked for it
     // and did not get it fails now, rather than handing over a name whose content is nowhere and
     // leaving the next run to discover it. A run with no Vault to ask never had a way to bring it,
-    // which is a checkin of what is here rather than a fetch that failed.
+    // which is a bring of what is here rather than a fetch that failed.
     if let Some((missing, can_ask)) = brought
         && can_ask
         && !missing.is_empty()
     {
-        return join_failed(target, t!("checkin.err_join_no_content").trim());
+        return join_failed(target, t!("bring.err_join_no_content").trim());
     }
 
     // A tree variant's content is a structure rather than a file's bytes: what is put beside the
@@ -558,7 +558,7 @@ fn checkin_variant(
         && let Some(structure) = &tree_structure
     {
         let Some(tree_path) = layout.path_of(id) else {
-            return join_failed(target, t!("checkin.err_join_target").trim());
+            return join_failed(target, t!("bring.err_join_target").trim());
         };
         let tree_dir = root.join(tree_path.to_path_buf());
 
@@ -627,7 +627,7 @@ fn checkin_variant(
             return join_failed(target, error.to_string());
         }
 
-        return ResultCheckinJoin {
+        return ResultBringJoin {
             target: target.to_owned(),
             variant: variant.to_owned(),
             path: tree_path.as_str().to_owned(),
@@ -642,18 +642,18 @@ fn checkin_variant(
         && let Some(target_path) = layout.path_of(id)
         && !Merging::place_holds(&target_path, Path::new(at))
     {
-        return join_failed(target, t!("checkin.err_join_place").trim());
+        return join_failed(target, t!("bring.err_join_place").trim());
     }
 
     let pending = Pending::new(id, *variant_key.digest(), at.map(PathBuf::from));
     let Some(path) = merging.variant_path(layout, &pending) else {
-        return join_failed(target, t!("checkin.err_join_place").trim());
+        return join_failed(target, t!("bring.err_join_place").trim());
     };
     let disk = root.join(path.to_path_buf());
 
     // Nothing is written over: a file already at the place is something to be told about rather than
-    // replaced, which is how `checkin` reads a landing everywhere else. A tree may take an empty
-    // directory, the same way a checkin lands one.
+    // replaced, which is how `bring` reads a landing everywhere else. A tree may take an empty
+    // directory, the same way a bring lands one.
     let taken = if tree_structure.is_some() {
         disk.exists()
             && !(disk.is_dir()
@@ -664,7 +664,7 @@ fn checkin_variant(
     if taken {
         return join_failed(
             target,
-            t!("checkin.err_join_taken", path = path.as_str()).trim(),
+            t!("bring.err_join_taken", path = path.as_str()).trim(),
         );
     }
 
@@ -711,7 +711,7 @@ fn checkin_variant(
         return join_failed(target, error.to_string());
     }
 
-    ResultCheckinJoin {
+    ResultBringJoin {
         target: target.to_owned(),
         variant: variant.to_owned(),
         path: path.as_str().to_owned(),
@@ -732,16 +732,16 @@ fn index_from_vault(
     offline: bool,
 ) -> Result<(), String> {
     let Some(vault_name) = tracked_vault(held) else {
-        return Err(t!("checkin.err_join_no_track").trim().to_owned());
+        return Err(t!("bring.err_join_no_track").trim().to_owned());
     };
     let Some(account_name) = current.get_ref().must_bind().ok() else {
-        return Err(t!("checkin.err_join_no_account").trim().to_owned());
+        return Err(t!("bring.err_join_no_account").trim().to_owned());
     };
     let Some(account) = account_named(&account_name, Some(held), None).ok() else {
-        return Err(t!("checkin.err_join_no_account").trim().to_owned());
+        return Err(t!("bring.err_join_no_account").trim().to_owned());
     };
     let Ok(target) = remote.get_ref().vault_or_default(vault_name) else {
-        return Err(t!("checkin.err_join_no_vault").trim().to_owned());
+        return Err(t!("bring.err_join_no_vault").trim().to_owned());
     };
 
     let reporting = Reporting::start(*progress);
@@ -813,7 +813,7 @@ fn shares_history(
     while seen.insert(current) {
         let version = match runtime.block_on(index.read(Key::new(current))) {
             Ok(VCSIndexObject::Version(version)) => version,
-            Ok(_) => return Err(t!("checkin.err_join_chain").trim().to_owned()),
+            Ok(_) => return Err(t!("bring.err_join_chain").trim().to_owned()),
             Err(error) => return Err(error.reason()),
         };
 
@@ -825,7 +825,7 @@ fn shares_history(
 
         let variant = match runtime.block_on(index.read(Key::new(*version.variant()))) {
             Ok(VCSIndexObject::Variant(variant)) => variant,
-            Ok(_) => return Err(t!("checkin.err_join_chain").trim().to_owned()),
+            Ok(_) => return Err(t!("bring.err_join_chain").trim().to_owned()),
             Err(error) => return Err(error.reason()),
         };
 
@@ -867,16 +867,16 @@ fn shares_history(
     Ok(false)
 }
 
-/// The failure a variant that could not be checked in is answered with.
+/// The failure a variant that could not be brought in is answered with.
 fn join_failed(target: &str, cause: impl Into<String>) -> Next {
-    ErrorCheckinJoin {
+    ErrorBringJoin {
         target: target.to_owned(),
         cause: cause.into(),
     }
     .into()
 }
 
-/// Moves the index to what the Vault holds, which is what names the objects a checkin reads.
+/// Moves the index to what the Vault holds, which is what names the objects a bring reads.
 ///
 /// Only the index: it is light, and it is what tells a version from its content. The content itself
 /// is asked for one object at a time, by what [`bring_in`] finds it needs, see [`Sources`].
@@ -924,14 +924,14 @@ enum Refusal {
 /// The failure a refused reference is answered with.
 fn refused(refusal: Refusal) -> Next {
     match refusal {
-        Refusal::Argument => ErrorCheckinArgument.into(),
-        Refusal::Unknown(reference) => ErrorCheckinUnknown { reference }.into(),
-        Refusal::Unnamed(uuid) => ErrorCheckinUnnamed {
+        Refusal::Argument => ErrorBringArgument.into(),
+        Refusal::Unknown(reference) => ErrorBringUnknown { reference }.into(),
+        Refusal::Unnamed(uuid) => ErrorBringUnnamed {
             uuid: uuid.to_string(),
         }
         .into(),
-        Refusal::Taken(path) => ErrorCheckinTaken { path }.into(),
-        Refusal::Known(uuid) => ErrorCheckinKnown { uuid }.into(),
+        Refusal::Taken(path) => ErrorBringTaken { path }.into(),
+        Refusal::Known(uuid) => ErrorBringKnown { uuid }.into(),
     }
 }
 
@@ -1026,7 +1026,7 @@ fn resolve(
 /// Everything the references name, each entry once and in the order the references name them, with
 /// where each of them lands.
 ///
-/// A reference that names a folder of the copy brings what stands under it as well: checking a
+/// A reference that names a folder of the copy brings what stands under it as well: bringing a
 /// folder in is bringing in the tree it is, and a path that names only the directory, no entry
 /// stands there, names what is under it rather than nothing. An entry several references name, a
 /// glob and a path that reaches into what it matched, is one request rather than a clash, so it is
@@ -1209,7 +1209,7 @@ fn matching(reference: &str, paths: &[LayoutPath]) -> Result<Vec<LayoutPath>, Re
 /// Splits the operands the way `mv` reads its own: everything but the last word is what is to come
 /// in, and the last, when there is more than one word, is where it is to go.
 ///
-/// The variant mode reads the same words differently: the first is the variant to check in and, when
+/// The variant mode reads the same words differently: the first is the variant to bring in and, when
 /// a second is written, it is where that variant's file is to lie rather than another reference.
 ///
 /// `None` is a run that named nothing at all, or one that named more than a mode can hold.
@@ -1270,7 +1270,7 @@ fn destination(root: &Path, to: Option<&str>) -> Result<Destination, Refusal> {
 /// that is a directory, or the destination itself when that is the whole name.
 ///
 /// A path keeps all of itself under a directory, and a glob match keeps what it has below the
-/// directory the glob selects from: that is what makes checking a folder in bring the folder, the
+/// directory the glob selects from: that is what makes bringing a folder in bring the folder, the
 /// tree it is, remade where it is put, while `Assets/*` brings what is in `Assets` rather than
 /// `Assets` again.
 ///
@@ -1337,7 +1337,7 @@ fn prefix(relative: &Path) -> String {
 
 /// Puts each version's content at its path, and makes the Layout name it.
 ///
-/// What could not be done is named rather than stopping the run: a checkin is not one write but
+/// What could not be done is named rather than stopping the run: a bring is not one write but
 /// several, and what went in is worth reporting beside what did not.
 fn bring_in(
     held: &librorolala::workspace::Workspace,
@@ -1348,11 +1348,11 @@ fn bring_in(
     runtime: &tokio::runtime::Runtime,
     wanted: Vec<Wanted>,
     sources: &Sources<'_>,
-) -> (Vec<CheckinItem>, Vec<String>) {
+) -> (Vec<BringItem>, Vec<String>) {
     let mut entries = Vec::new();
     let mut failed = Vec::new();
 
-    // The readings are gathered in one cache and the Layout changes in one batch, so a checkin of
+    // The readings are gathered in one cache and the Layout changes in one batch, so a bring of
     // many files reads what others wrote once, writes the Layout once per shard, and writes the
     // cache once, rather than doing each of those for every file.
     let mut checkout = Checkout::open(layout, held.get_root());
@@ -1399,7 +1399,7 @@ fn bring_in(
         let Wanted { id, data, path } = wanted;
 
         let (Some(stored), Some(store)) = (stored, store) else {
-            failed.push(format!("{id}: {}", t!("checkin.no_content").trim()));
+            failed.push(format!("{id}: {}", t!("bring.no_content").trim()));
 
             continue;
         };
@@ -1449,7 +1449,7 @@ fn bring_in(
                 continue;
             }
             let Ok(tree) = Tree::open(held.get_root(), &disk) else {
-                failed.push(format!("{id}: {}", t!("checkin.err_tree_mark").trim()));
+                failed.push(format!("{id}: {}", t!("bring.err_tree_mark").trim()));
 
                 continue;
             };
@@ -1470,7 +1470,7 @@ fn bring_in(
                 continue;
             }
 
-            entries.push(CheckinItem {
+            entries.push(BringItem {
                 uuid: id.to_string(),
                 remote_path: remote.path_of(id).map(|path| path.as_str().to_owned()),
                 local_path: path.as_str().to_owned(),
@@ -1501,7 +1501,7 @@ fn bring_in(
             continue;
         }
 
-        entries.push(CheckinItem {
+        entries.push(BringItem {
             uuid: id.to_string(),
             remote_path: remote.path_of(id).map(|path| path.as_str().to_owned()),
             local_path: path.as_str().to_owned(),
@@ -1521,219 +1521,217 @@ fn bring_in(
 
 /// Error: the Layout being worked in tracks no Vault.
 #[derive(Grouped)]
-pub struct ErrorCheckinNoTrack;
+pub struct ErrorBringNoTrack;
 
-impl Failure for ErrorCheckinNoTrack {
+impl Failure for ErrorBringNoTrack {
     fn name(&self) -> &'static str {
-        "error_checkin_no_track"
+        "error_bring_no_track"
     }
 
     fn reason(&self) -> String {
-        t!("checkin.err_no_track").trim().to_string()
+        t!("bring.err_no_track").trim().to_string()
     }
 }
 
-failure!(ErrorCheckinNoTrack);
+failure!(ErrorBringNoTrack);
 
 #[renderer(buffer)]
-pub fn render_error_checkin_no_track(error: ErrorCheckinNoTrack, ec: &mut ResExitCode) {
+pub fn render_error_bring_no_track(error: ErrorBringNoTrack, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("checkin.err_no_track_help").trim()));
-    ec.exit_code = EC_ERR_CHECKIN;
+    r_eprintln!("{}", help_line!(t!("bring.err_no_track_help").trim()));
+    ec.exit_code = EC_ERR_BRING;
 }
 
-/// Error: `rola checkin` was given arguments it cannot use.
+/// Error: `rola bring` was given arguments it cannot use.
 #[derive(Grouped)]
-pub struct ErrorCheckinArgument;
+pub struct ErrorBringArgument;
 
-impl Failure for ErrorCheckinArgument {
+impl Failure for ErrorBringArgument {
     fn name(&self) -> &'static str {
-        "error_checkin_argument"
+        "error_bring_argument"
     }
 
     fn reason(&self) -> String {
-        t!("checkin.err_argument").trim().to_string()
+        t!("bring.err_argument").trim().to_string()
     }
 }
 
-failure!(ErrorCheckinArgument);
+failure!(ErrorBringArgument);
 
 #[renderer(buffer)]
-pub fn render_error_checkin_argument(error: ErrorCheckinArgument, ec: &mut ResExitCode) {
+pub fn render_error_bring_argument(error: ErrorBringArgument, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("checkin.err_argument_help").trim()));
-    ec.exit_code = EC_ERR_CHECKIN_ARGUMENT;
+    r_eprintln!("{}", help_line!(t!("bring.err_argument_help").trim()));
+    ec.exit_code = EC_ERR_BRING_ARGUMENT;
 }
 
 /// Error: the Vault's Layout names nothing by the reference given.
 #[derive(Grouped)]
-pub struct ErrorCheckinUnknown {
+pub struct ErrorBringUnknown {
     /// The reference that names nothing.
     pub reference: String,
 }
 
-impl Failure for ErrorCheckinUnknown {
+impl Failure for ErrorBringUnknown {
     fn name(&self) -> &'static str {
-        "error_checkin_unknown"
+        "error_bring_unknown"
     }
 
     fn reason(&self) -> String {
-        t!("checkin.err_unknown", reference = self.reference)
+        t!("bring.err_unknown", reference = self.reference)
             .trim()
             .to_string()
     }
 }
 
-failure!(ErrorCheckinUnknown);
+failure!(ErrorBringUnknown);
 
 #[renderer(buffer)]
-pub fn render_error_checkin_unknown(error: ErrorCheckinUnknown, ec: &mut ResExitCode) {
+pub fn render_error_bring_unknown(error: ErrorBringUnknown, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("checkin.err_unknown_help").trim()));
-    ec.exit_code = EC_ERR_CHECKIN;
+    r_eprintln!("{}", help_line!(t!("bring.err_unknown_help").trim()));
+    ec.exit_code = EC_ERR_BRING;
 }
 
 /// Error: the Vault's Layout gives the `Uuid` no path, and nothing here names where it is to land.
 #[derive(Grouped)]
-pub struct ErrorCheckinUnnamed {
+pub struct ErrorBringUnnamed {
     /// The `Uuid` the Vault's Layout gives no path.
     pub uuid: String,
 }
 
-impl Failure for ErrorCheckinUnnamed {
+impl Failure for ErrorBringUnnamed {
     fn name(&self) -> &'static str {
-        "error_checkin_unnamed"
+        "error_bring_unnamed"
     }
 
     fn reason(&self) -> String {
-        t!("checkin.err_unnamed", uuid = self.uuid)
-            .trim()
-            .to_string()
+        t!("bring.err_unnamed", uuid = self.uuid).trim().to_string()
     }
 }
 
-failure!(ErrorCheckinUnnamed);
+failure!(ErrorBringUnnamed);
 
 #[renderer(buffer)]
-pub fn render_error_checkin_unnamed(error: ErrorCheckinUnnamed, ec: &mut ResExitCode) {
+pub fn render_error_bring_unnamed(error: ErrorBringUnnamed, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("checkin.err_unnamed_help").trim()));
-    ec.exit_code = EC_ERR_CHECKIN;
+    r_eprintln!("{}", help_line!(t!("bring.err_unnamed_help").trim()));
+    ec.exit_code = EC_ERR_BRING;
 }
 
 /// Error: something is already at the path the reference was to be named by.
 #[derive(Grouped)]
-pub struct ErrorCheckinTaken {
+pub struct ErrorBringTaken {
     /// The path that is already something.
     pub path: String,
 }
 
-impl Failure for ErrorCheckinTaken {
+impl Failure for ErrorBringTaken {
     fn name(&self) -> &'static str {
-        "error_checkin_taken"
+        "error_bring_taken"
     }
 
     fn reason(&self) -> String {
-        t!("checkin.err_taken", path = self.path).trim().to_string()
+        t!("bring.err_taken", path = self.path).trim().to_string()
     }
 }
 
-failure!(ErrorCheckinTaken);
+failure!(ErrorBringTaken);
 
 #[renderer(buffer)]
-pub fn render_error_checkin_taken(error: ErrorCheckinTaken, ec: &mut ResExitCode) {
+pub fn render_error_bring_taken(error: ErrorBringTaken, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("checkin.err_taken_help").trim()));
-    ec.exit_code = EC_ERR_CHECKIN;
+    r_eprintln!("{}", help_line!(t!("bring.err_taken_help").trim()));
+    ec.exit_code = EC_ERR_BRING;
 }
 
 /// Error: this Layout already holds the `Uuid` the reference names.
 #[derive(Grouped)]
-pub struct ErrorCheckinKnown {
+pub struct ErrorBringKnown {
     /// The `Uuid` this Layout already holds.
     pub uuid: String,
 }
 
-impl Failure for ErrorCheckinKnown {
+impl Failure for ErrorBringKnown {
     fn name(&self) -> &'static str {
-        "error_checkin_known"
+        "error_bring_known"
     }
 
     fn reason(&self) -> String {
-        t!("checkin.err_known", uuid = self.uuid).trim().to_string()
+        t!("bring.err_known", uuid = self.uuid).trim().to_string()
     }
 }
 
-failure!(ErrorCheckinKnown);
+failure!(ErrorBringKnown);
 
 #[renderer(buffer)]
-pub fn render_error_checkin_known(error: ErrorCheckinKnown, ec: &mut ResExitCode) {
+pub fn render_error_bring_known(error: ErrorBringKnown, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("checkin.err_known_help").trim()));
-    ec.exit_code = EC_ERR_CHECKIN;
+    r_eprintln!("{}", help_line!(t!("bring.err_known_help").trim()));
+    ec.exit_code = EC_ERR_BRING;
 }
 
 /// Error: the exchange could not be made.
 #[derive(Grouped)]
-pub struct ErrorCheckinFailed {
+pub struct ErrorBringFailed {
     /// What the exchange failed with.
     pub cause: String,
 }
 
-impl Failure for ErrorCheckinFailed {
+impl Failure for ErrorBringFailed {
     fn name(&self) -> &'static str {
-        "error_checkin_failed"
+        "error_bring_failed"
     }
 
     fn reason(&self) -> String {
-        t!("checkin.err_failed", cause = self.cause)
+        t!("bring.err_failed", cause = self.cause)
             .trim()
             .to_string()
     }
 }
 
-failure!(ErrorCheckinFailed);
+failure!(ErrorBringFailed);
 
 #[renderer(buffer)]
-pub fn render_error_checkin_failed(error: ErrorCheckinFailed, ec: &mut ResExitCode) {
+pub fn render_error_bring_failed(error: ErrorBringFailed, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("checkin.err_failed_help").trim()));
-    ec.exit_code = EC_ERR_CHECKIN;
+    r_eprintln!("{}", help_line!(t!("bring.err_failed_help").trim()));
+    ec.exit_code = EC_ERR_BRING;
 }
 
-/// Error: a variant could not be checked in to be joined into a file.
+/// Error: a variant could not be brought in to be joined into a file.
 #[derive(Grouped)]
-pub struct ErrorCheckinJoin {
+pub struct ErrorBringJoin {
     /// The file it was to be joined into, as the run named it.
     pub target: String,
-    /// Why it could not be checked in.
+    /// Why it could not be brought in.
     pub cause: String,
 }
 
-impl Failure for ErrorCheckinJoin {
+impl Failure for ErrorBringJoin {
     fn name(&self) -> &'static str {
-        "error_checkin_join"
+        "error_bring_join"
     }
 
     fn reason(&self) -> String {
-        t!("checkin.err_join", target = self.target, cause = self.cause)
+        t!("bring.err_join", target = self.target, cause = self.cause)
             .trim()
             .to_string()
     }
 }
 
-failure!(ErrorCheckinJoin);
+failure!(ErrorBringJoin);
 
 #[renderer(buffer)]
-pub fn render_error_checkin_join(error: ErrorCheckinJoin, ec: &mut ResExitCode) {
+pub fn render_error_bring_join(error: ErrorBringJoin, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("checkin.err_join_help").trim()));
-    ec.exit_code = EC_ERR_CHECKIN;
+    r_eprintln!("{}", help_line!(t!("bring.err_join_help").trim()));
+    ec.exit_code = EC_ERR_BRING;
 }
 
 /// One entry that came in.
 #[derive(Serialize)]
-pub struct CheckinItem {
+pub struct BringItem {
     /// The `Uuid` it is known by.
     uuid: String,
     /// The path the Vault's Layout names it by, when it names one.
@@ -1744,19 +1742,19 @@ pub struct CheckinItem {
 
 /// Result: what the Vault held was brought in.
 #[derive(StructuralData, Serialize, Grouped)]
-pub struct ResultCheckedIn {
+pub struct ResultBroughtIn {
     /// The Layout it came into.
     layout: String,
     /// The Vault it came from.
     vault: String,
     /// What came in.
-    entries: Vec<CheckinItem>,
+    entries: Vec<BringItem>,
     /// What could not be brought in, one line each.
     failed: Vec<String>,
 }
 
 #[renderer(buffer)]
-pub fn render_result_checked_in(result: ResultCheckedIn, ec: &mut ResExitCode) {
+pub fn render_result_brought_in(result: ResultBroughtIn, ec: &mut ResExitCode) {
     for entry in &result.entries {
         r_println!(
             "{}  {}  ->  {}",
@@ -1773,35 +1771,35 @@ pub fn render_result_checked_in(result: ResultCheckedIn, ec: &mut ResExitCode) {
     r_println!(
         "{}",
         t!(
-            "checkin.result_summary",
-            checked = result.entries.len(),
+            "bring.result_summary",
+            brought = result.entries.len(),
             failed = result.failed.len()
         )
         .trim()
     );
 
     if !result.failed.is_empty() {
-        ec.exit_code = EC_ERR_CHECKIN;
+        ec.exit_code = EC_ERR_BRING;
     }
 }
 
-/// Result: a variant was checked in to be joined into a file.
+/// Result: a variant was brought in to be joined into a file.
 #[derive(StructuralData, Serialize, Grouped)]
-pub struct ResultCheckinJoin {
+pub struct ResultBringJoin {
     /// The file it is to be joined into, as the run named it.
     target: String,
-    /// The variant that was checked in.
+    /// The variant that was brought in.
     variant: String,
     /// The path its file was written to.
     path: String,
 }
 
 #[renderer(buffer)]
-pub fn render_result_checkin_join(result: ResultCheckinJoin) {
+pub fn render_result_bring_join(result: ResultBringJoin) {
     r_println!(
         "{}",
         t!(
-            "checkin.joined",
+            "bring.joined",
             target = result.target,
             variant = result.variant,
             path = result.path

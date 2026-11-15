@@ -640,7 +640,7 @@ struct EntryJson {
 /// One merge in progress.
 #[derive(Debug, Serialize)]
 struct MergingJson {
-    /// The variant that was checked in, as the hex it is named by.
+    /// The variant that was brought in, as the hex it is named by.
     variant: String,
     /// The `Uuid` of the file it is to be joined into.
     target: String,

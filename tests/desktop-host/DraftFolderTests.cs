@@ -250,7 +250,7 @@ public sealed class DraftFolderTests
         Assert.Equal("rorolala_vcs.ownership.held_by", badge.HoverKey);
     }
 
-    /// <summary>The ownership menu runs the Vault's own door, not a checkin.</summary>
+    /// <summary>The ownership menu runs the Vault's own door, not a bring.</summary>
     [Fact]
     public void OwnershipRunsTheVaultsOwnDoor()
     {
@@ -260,8 +260,8 @@ public sealed class DraftFolderTests
         Assert.Contains("layout", take);
         Assert.Contains("req-ownership", take);
         Assert.Contains("giveup-ownership", give);
-        Assert.DoesNotContain("checkin", take);
-        Assert.DoesNotContain("checkin", give);
+        Assert.DoesNotContain("bring", take);
+        Assert.DoesNotContain("bring", give);
     }
 
     /// <summary>An entry as the copy names it, with a path and the `Uuid` it is known by.</summary>
