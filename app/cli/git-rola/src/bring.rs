@@ -13,7 +13,7 @@
 //!
 //! The reading of the operands is `rola bring`'s (`app/cli/rola/src/cmd_bring.rs`, the `split` down
 //! to `landing_taken`): the same words mean the same thing in both programs, and a change to one
-//! belongs in the other. The Vault side is [`upstream`](crate::upstream)'s, shared with `update`.
+//! belongs in the other. The Vault side is [`upstream`]'s, shared with `update`.
 
 // mingling's `#[command]` expands the entry type and the dispatch function beside the command, and
 // the expansion is not documented; the items this module writes carry their own docs.

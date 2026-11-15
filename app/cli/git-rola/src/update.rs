@@ -10,7 +10,7 @@
 //! and the variant it points at, and the content the variant stored is brought into the project's
 //! store. Everything is resolved before the lock is written, and a resolution that fails writes
 //! nothing: the lock is only ever the result of a whole pass. The reaching itself is
-//! [`upstream`](crate::upstream)'s, shared with `bring`.
+//! [`upstream`]'s, shared with `bring`.
 //!
 //! The content is brought into the project's own store, `.rola/storage/`, which is the same store the
 //! rest of the commands read their materials out of. That is deliberate: the store is
