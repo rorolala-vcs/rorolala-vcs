@@ -274,10 +274,7 @@ tokio.workspace = true
 
 [build-dependencies]
 rorolala-dev-bindgen.workspace = true
-# The tree's icons, drawn by this crate's build script before any build script that links one in.
-rorolala-utils-icons.workspace = true
 serde_json.workspace = true
-toml.workspace = true
 
 [dev-dependencies]
 # The tests of the C ABI's own glue make a Workspace and name paths in a Layout, which is done by

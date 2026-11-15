@@ -2403,7 +2403,7 @@ fn empty_cache(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.stderr_has(
         "the way out names the Vault to fetch",
         &ran,
-        "rola layout fetch vault",
+        "rola fetch vault",
     );
     checked.wants(
         "reading it made nothing in it",

@@ -43,3 +43,10 @@ just_template.workspace = true
 [target.'cfg(windows)'.build-dependencies]
 embed-resource.workspace = true
 rorolala-utils-icons.workspace = true
+
+# `rorolala-utils-icons` is a build-dependency for its build script alone: it draws the icon this
+# program's build script links in, and no line here names the crate. Cargo reads the sources for a
+# name and cannot see an edge that only orders two build scripts, so its report of the dependency is
+# told to stay quiet.
+[lints.cargo]
+unused_dependencies = "allow"
