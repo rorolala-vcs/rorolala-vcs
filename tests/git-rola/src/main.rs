@@ -364,11 +364,15 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     );
 
     // A wrapped command is git's to answer, flags and all: `-h` is git's own usage request, and
-    // nothing about the work tree moves.
+    // nothing about the work tree moves. What status git gives its own `-h` differs between its
+    // versions and platforms, so what is checked is whose answer it is rather than the number.
     let before = run.git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]);
     let usage = run.rola(repo, &["switch", "-h"]);
-    checked.exits("a wrapped command's `-h` is git's to answer", &usage, 129);
-    checked.stdout_has("the answer is git's usage of the command", &usage, "usage: git switch");
+    checked.stdout_has(
+        "a wrapped command's `-h` is answered by git",
+        &usage,
+        "usage: git switch",
+    );
     checked.wants(
         "the program's own usage is not written over it",
         !usage.stdout.contains("usage: git rola"),
@@ -1263,18 +1267,20 @@ fn reaching(run: &Run, repo: &Path, checked: &mut Checked) {
     );
 
     // `--help` right after the command never reaches the program: git turns it into its own
-    // documentation lookup, and there is no page for `rola` to find. That is git's search, not this
-    // program's failure, and it is left as git answers it.
+    // documentation lookup, and there is no page for `rola` to find. What that lookup answers with
+    // is the machine's (a man page that is not installed, or an HTML file that is not there), so
+    // what is checked is that the program did not answer it.
     let documented = run.git(repo, &["rola", "--help"]);
-    checked.exits(
-        "`git rola --help` is git's documentation lookup",
-        &documented,
-        128,
+    checked.wants(
+        "`git rola --help` is not the program's answer",
+        !documented.success(),
+        &said(&documented),
     );
+    checked.stdout_empty("git's documentation lookup writes no answer", &documented);
     checked.stderr_has(
         "the lookup names the documentation it could not find",
         &documented,
-        "documentation file not found",
+        "git-rola",
     );
 }
 
