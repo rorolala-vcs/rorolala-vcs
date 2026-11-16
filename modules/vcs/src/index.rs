@@ -1993,14 +1993,18 @@ mod tests {
 
         // Nothing names the object, but it was written inside the grace, so the plan keeps it and
         // says so rather than taking it away.
-        let plan = run(index.collect_plan(&BTreeSet::new(), grace())).unwrap().unwrap();
+        let plan = run(index.collect_plan(&BTreeSet::new(), grace()))
+            .unwrap()
+            .unwrap();
         assert_eq!(plan.removed(), 0);
         assert_eq!(plan.kept_by_grace(), 1);
 
         // The grace reaches packed objects through the pack file's own modification time: the
         // object packed here is as fresh as the pack that holds it.
         run(index.repack(&silent())).unwrap().unwrap();
-        let packed = run(index.collect_plan(&BTreeSet::new(), grace())).unwrap().unwrap();
+        let packed = run(index.collect_plan(&BTreeSet::new(), grace()))
+            .unwrap()
+            .unwrap();
         assert_eq!(packed.removed(), 0);
         assert_eq!(packed.kept_by_grace(), 1);
 
@@ -2034,7 +2038,9 @@ mod tests {
             stale(&index, key);
         }
 
-        let plan = run(index.collect_plan(&BTreeSet::new(), grace())).unwrap().unwrap();
+        let plan = run(index.collect_plan(&BTreeSet::new(), grace()))
+            .unwrap()
+            .unwrap();
         assert_eq!(plan.removed(), 3);
 
         let report = run(index.collect(&plan, &silent())).unwrap().unwrap();
