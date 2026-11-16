@@ -1,4 +1,4 @@
-//! `cli`: what the `rola` program does when someone runs it.
+﻿//! `cli`: what the `rola` program does when someone runs it.
 //!
 //! A program rather than a set of tests cargo runs, because what it checks is a program a caller
 //! meets: the built `rola`, started the way a terminal starts it, told things and read back. What
@@ -45,10 +45,12 @@ fn main() {
     let ignoreme = sandbox.join("ignoreme");
     let switching = sandbox.join("switching");
     let joining = sandbox.join("joining");
+    let git_rola = sandbox.join("git-rola");
+    let tree_project = sandbox.join("git-rola-tree");
 
     for dir in [
         &home, &data, &rola_home, &empty, &plain, &initme, &files, &held, &claimed, &cached,
-        &ignoreme, &switching, &joining,
+        &ignoreme, &switching, &joining, &git_rola, &tree_project,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -76,6 +78,8 @@ fn main() {
     index(&rola, &ws, &mut checked);
     existence(&rola, &ws, &files, &mut checked);
     movement(&rola, &plain, &files, &mut checked);
+    git_rola_move(&rola, &git_rola, &mut checked);
+    git_rola_tree(&rola, &tree_project, &mut checked);
     accounts(&rola, &plain, &ws, &mut checked);
     lookback(&rola, &ws, &mut checked);
     merging(&rola, &ws, &files, &mut checked);
@@ -1111,6 +1115,229 @@ fn movement(rola: &Rola, plain: &Path, files: &Path, checked: &mut Checked) {
 
     let ran = rola.run(plain, &["fs-ops", "cp"]);
     checked.exits("a copy without its paths is refused", &ran, 110);
+}
+
+/// A move in a git-rola project, whose record is `rola.toml` and `rola.lock` rather than a Layout.
+///
+/// The project is a directory with a `.git` and a `rola.toml`; no git command is run, because what
+/// the move reads is the two files rather than the repository they sit in.
+fn git_rola_move(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    fs::create_dir_all(dir.join(".git")).expect("the git directory of a project");
+    fs::create_dir_all(dir.join("Assets")).expect("a folder for the material");
+    fs::create_dir_all(dir.join("Source")).expect("another folder");
+
+    fs::write(
+        dir.join("rola.toml"),
+        "# where the work comes from\n[vaults]\norigin = \"rola://127.0.0.1/rainbow\"\n\n[[mapping]]\nfrom = \"00000000-0000-0000-0000-000000000001\"\nto = \"/Assets/hero.psd\"\npin = \"latest\"\n\n[[mapping]]\nfrom = \"00000000-0000-0000-0000-000000000002\"\nto = \"/Source/c.fbx\"\npin = \"latest\"\n",
+    )
+    .expect("the project file");
+    fs::write(
+        dir.join("rola.lock"),
+        "? FORMAT 2\n? VAULT origin rola://127.0.0.1/rainbow\n/Assets/hero.psd blake3:0000000000000000000000000000000000000000000000000000000000000000 file\n/Source/c.fbx blake3:1111111111111111111111111111111111111111111111111111111111111111 file\n",
+    )
+    .expect("the lock");
+    fs::write(dir.join("Assets/hero.psd"), "art\n").expect("the material");
+
+    let ran = rola.run(dir, &["fs-ops", "mv", "Assets/hero.psd", "Assets/hero-moved.psd"]);
+    checked.exits("a material is moved in a git-rola project", &ran, 0);
+    checked.wants(
+        "the material is at its new name and not the old one",
+        dir.join("Assets/hero-moved.psd").is_file() && !dir.join("Assets/hero.psd").exists(),
+        &said(&ran),
+    );
+
+    let toml = fs::read_to_string(dir.join("rola.toml")).expect("the project file");
+    checked.wants(
+        "the mapping names the new path",
+        toml.contains("to = \"/Assets/hero-moved.psd\""),
+        &toml,
+    );
+    checked.wants(
+        "the mapping the move is not about is kept",
+        toml.contains("to = \"/Source/c.fbx\""),
+        &toml,
+    );
+    checked.wants(
+        "the project file keeps its comment",
+        toml.contains("# where the work comes from"),
+        &toml,
+    );
+
+    let lock = fs::read_to_string(dir.join("rola.lock")).expect("the lock");
+    checked.wants(
+        "the lock names the new path",
+        lock.contains("/Assets/hero-moved.psd"),
+        &lock,
+    );
+    checked.wants(
+        "the lock no longer names the old path",
+        !lock.contains("/Assets/hero.psd "),
+        &lock,
+    );
+    checked.wants(
+        "the lock keeps the content and the kind",
+        lock.contains("blake3:0000") && lock.contains(" file"),
+        &lock,
+    );
+
+    // A file the record does not name moves without either file changing.
+    fs::write(dir.join("notes.txt"), "notes\n").expect("a file the record does not name");
+    let before = fs::read(dir.join("rola.toml")).expect("the project file");
+
+    let ran = rola.run(dir, &["fs-ops", "mv", "notes.txt", "notes-moved.txt"]);
+    checked.exits("a file the record does not name is moved", &ran, 0);
+    checked.wants(
+        "the project file is left as it was",
+        fs::read(dir.join("rola.toml")).ok() == Some(before),
+        &said(&ran),
+    );
+
+    // A destination the project already names is refused before anything moves.
+    let ran = rola.run(dir, &["fs-ops", "mv", "Assets/hero-moved.psd", "Source/c.fbx"]);
+    checked.exits("a destination the project names is refused", &ran, 111);
+    checked.stderr_has("the refusal says the project names it", &ran, "already names");
+    checked.wants(
+        "the refused move moved nothing",
+        dir.join("Assets/hero-moved.psd").is_file(),
+        &said(&ran),
+    );
+
+    // A move out of the project cannot be named by its toml, so it is refused. The path is written
+    // whole because a relative destination is read from the source's own directory, where a `..`
+    // need not leave the project at all.
+    let outside = dir.parent().expect("a parent directory").join("outside.psd");
+    let ran = rola.run(dir, &["fs-ops", "mv", "Assets/hero-moved.psd", &text(&outside)]);
+    checked.exits("a move out of the project is refused", &ran, 111);
+    checked.stderr_has("the refusal says the path is outside", &ran, "outside");
+}
+
+/// Moves and removals around a tree: a file inside one is only the file, the tree is the material.
+///
+/// A tree is one entry of the lock rather than the paths in it, so a move or a removal of a file
+/// inside it is the file's own and leaves `rola.toml` and `rola.lock` alone; the tree's own
+/// directory is the material, so moving or removing it takes the mapping and the material with it.
+fn git_rola_tree(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    fs::create_dir_all(dir.join(".git")).expect("the git directory of a project");
+    fs::create_dir_all(dir.join("Tree")).expect("a tree's directory");
+    fs::write(dir.join("Tree/a.txt"), "art\n").expect("a file inside the tree");
+
+    fs::write(
+        dir.join("rola.toml"),
+        "# a tree, recorded as one entry\n[vaults]\norigin = \"rola://127.0.0.1/rainbow\"\n\n[[mapping]]\nfrom = \"00000000-0000-0000-0000-000000000003\"\nto = \"/Tree\"\npin = \"latest\"\n",
+    )
+    .expect("the project file");
+    fs::write(
+        dir.join("rola.lock"),
+        "? FORMAT 2\n? VAULT origin rola://127.0.0.1/rainbow\n/Tree blake3:2222222222222222222222222222222222222222222222222222222222222222 tree\n",
+    )
+    .expect("the lock");
+
+    let before_toml = fs::read(dir.join("rola.toml")).expect("the project file");
+    let before_lock = fs::read(dir.join("rola.lock")).expect("the lock");
+
+    // A file inside the tree is moved and nothing of the record says so.
+    let ran = rola.run(
+        dir,
+        &[
+            "fs-ops",
+            "mv",
+            &text(&dir.join("Tree/a.txt")),
+            &text(&dir.join("Tree/b.txt")),
+        ],
+    );
+    checked.exits("a file inside a tree is moved", &ran, 0);
+    checked.wants(
+        "the file inside the tree is at its new name",
+        dir.join("Tree/b.txt").is_file() && !dir.join("Tree/a.txt").exists(),
+        &said(&ran),
+    );
+    checked.wants(
+        "moving a file inside a tree leaves the project file alone",
+        fs::read(dir.join("rola.toml")).ok() == Some(before_toml.clone()),
+        &said(&ran),
+    );
+    checked.wants(
+        "moving a file inside a tree leaves the lock alone",
+        fs::read(dir.join("rola.lock")).ok() == Some(before_lock.clone()),
+        &said(&ran),
+    );
+
+    // The tree's directory is the material: moving it moves the whole directory and the record.
+    let ran = rola.run(
+        dir,
+        &["fs-ops", "mv", &text(&dir.join("Tree")), &text(&dir.join("Moved"))],
+    );
+    checked.exits("a tree is moved with its directory", &ran, 0);
+    checked.wants(
+        "the whole directory is at its new name",
+        dir.join("Moved/b.txt").is_file() && !dir.join("Tree").exists(),
+        &said(&ran),
+    );
+
+    let toml = fs::read_to_string(dir.join("rola.toml")).expect("the project file");
+    let lock = fs::read_to_string(dir.join("rola.lock")).expect("the lock");
+
+    checked.wants(
+        "the mapping names the tree's new path",
+        toml.contains("to = \"/Moved\""),
+        &toml,
+    );
+    checked.wants(
+        "the lock keeps the content and the kind at the new path",
+        lock.contains("/Moved blake3:2222") && lock.contains(" tree"),
+        &lock,
+    );
+    checked.wants(
+        "the lock no longer names the old path",
+        !lock.contains("/Tree "),
+        &lock,
+    );
+
+    // A file inside the tree is removed and nothing of the record says so.
+    fs::write(dir.join("Moved/c.txt"), "art\n").expect("another file inside the tree");
+    let before_toml = fs::read(dir.join("rola.toml")).expect("the project file");
+    let before_lock = fs::read(dir.join("rola.lock")).expect("the lock");
+
+    let ran = rola.run(dir, &["fs-ops", "rm", &text(&dir.join("Moved/c.txt"))]);
+    checked.exits("a file inside a tree is removed", &ran, 0);
+    checked.wants(
+        "the file inside the tree is gone",
+        !dir.join("Moved/c.txt").exists(),
+        &said(&ran),
+    );
+    checked.wants(
+        "removing a file inside a tree leaves the project file alone",
+        fs::read(dir.join("rola.toml")).ok() == Some(before_toml.clone()),
+        &said(&ran),
+    );
+    checked.wants(
+        "removing a file inside a tree leaves the lock alone",
+        fs::read(dir.join("rola.lock")).ok() == Some(before_lock.clone()),
+        &said(&ran),
+    );
+
+    // The tree's own directory is removed with its mapping and its material.
+    let ran = rola.run(dir, &["fs-ops", "rm", &text(&dir.join("Moved"))]);
+    checked.exits("a tree is removed with its directory", &ran, 0);
+    checked.wants(
+        "the tree's directory is gone",
+        !dir.join("Moved").exists(),
+        &said(&ran),
+    );
+
+    let toml = fs::read_to_string(dir.join("rola.toml")).expect("the project file");
+    let lock = fs::read_to_string(dir.join("rola.lock")).expect("the lock");
+
+    checked.wants(
+        "the mapping is taken out of the project file",
+        !toml.contains("/Moved") && !toml.contains("[[mapping]]"),
+        &toml,
+    );
+    checked.wants(
+        "the material is taken out of the lock",
+        !lock.contains("/Moved"),
+        &lock,
+    );
 }
 
 /// The accounts a run can act as, and the key pairs they are.

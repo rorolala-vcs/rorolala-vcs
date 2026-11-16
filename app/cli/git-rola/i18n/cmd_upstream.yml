@@ -1,0 +1,6 @@
+_version: 2
+
+upstream:
+  usage:
+    en: git rola upstream [<vault>]
+    zh-CN: git rola upstream [<vault>]

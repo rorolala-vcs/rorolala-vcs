@@ -11,6 +11,7 @@ git_rola:
         check      Report the materials that differ from rola.lock
         entries    List the paths rola.lock names, one a line
         bring      Sign a Vault's entries in to this project
+        upstream   List the paths a Vault's Layout names, one a line
         restore    Put named materials back from rola.lock
         refresh    Put the working tree back in step with rola.lock
         update     Resolve rola.toml through the Vaults and rewrite rola.lock
@@ -27,6 +28,7 @@ git_rola:
         check      报告与 `rola.lock` 不同的素材
         entries    列出 `rola.lock` 命名的路径，一行一个
         bring      把保险库布局里的条目签入本项目
+        upstream   列出保险库布局命名的路径，一行一个
         restore    从 `rola.lock` 把指名的素材放回去
         refresh    按 `rola.lock` 让工作区回到正轨
         update     通过保险库解析 `rola.toml` 并重写 `rola.lock`

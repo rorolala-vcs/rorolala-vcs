@@ -21,6 +21,7 @@ use mingling::{
 };
 use rorolala_utils_cli_theme::trd;
 use rorolala_utils_location::Locate as _;
+use rorolala_utils_location::normalize;
 use rust_i18n::t;
 use uuid::Uuid;
 
@@ -126,6 +127,63 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv) -> Next {
             .into();
         }
     };
+
+    // A git-rola project keeps its record in `rola.toml` and `rola.lock` rather than in a Workspace
+    // Layout, so a move inside one changes those two files instead of the Layout below. The move is
+    // still where an entry lies rather than what it holds, which is why the lock keeps its content
+    // hash and kind. The plan is worked out before anything moves, so a record this build cannot
+    // read is a refusal rather than a move half made.
+    let from = whole(&cwd, &from);
+    let to = whole(&cwd, &to);
+
+    if let Some(root) = cmd_fs_ops::git_rola::project_of(&from) {
+        if !to.starts_with(&root) {
+            return ErrorFsOpsBlocked {
+                path: to.display().to_string(),
+                kind: FsOpsBlock::Outside,
+            }
+            .into();
+        }
+
+        let from_text = cmd_fs_ops::git_rola::relative(&root, &from);
+        let to_text = cmd_fs_ops::git_rola::relative(&root, &to);
+
+        match cmd_fs_ops::git_rola::taken(&root, &to_text) {
+            Ok(true) => {
+                return ErrorFsOpsBlocked {
+                    path: to.display().to_string(),
+                    kind: FsOpsBlock::Project,
+                }
+                .into();
+            }
+            Ok(false) => {}
+            Err(failed) => return cmd_fs_ops::failed_record("mv", &failed),
+        }
+
+        let planned = match cmd_fs_ops::git_rola::plan(&root, &from_text, &to_text) {
+            Ok(planned) => planned,
+            Err(failed) => return cmd_fs_ops::failed_record("mv", &failed),
+        };
+
+        if let Err(error) = cmd_fs_ops::move_to(&from, &to) {
+            return ErrorFsOpsFailed {
+                verb: "mv",
+                cause: error.to_string(),
+            }
+            .into();
+        }
+
+        if let Err(failed) = cmd_fs_ops::git_rola::commit(planned) {
+            return cmd_fs_ops::failed_record("mv", &failed);
+        }
+
+        return ResultFsOps {
+            verb: "mv",
+            from: from.display().to_string(),
+            to: Some(to.display().to_string()),
+        }
+        .into();
+    }
 
     // The Workspace each path sits in, looked for from the paths themselves and never from where the
     // run was made: a run made outside any Workspace still keeps the tree its paths are in step. What
@@ -254,6 +312,20 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv) -> Next {
         to: Some(to.display().to_string()),
     }
     .into()
+}
+
+/// The whole of a path, so that a relative name is read where the run was made.
+///
+/// The project a move is in is looked for from the paths themselves, which needs the whole path:
+/// a relative one walks up to nothing and would answer with the empty path for a root.
+fn whole(cwd: &Path, path: &Path) -> PathBuf {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+
+    normalize(&path)
 }
 
 /// Writes down that the moved path holds what it held where it was.

@@ -32,12 +32,13 @@ public sealed record LogicalAddress(string Scheme, string Payload)
 {
     /// <summary>Whether a prefix is one a plugin may claim.</summary>
     /// <remarks>
-    /// One or more lower-case segments joined by a dot, each opening with a letter: the shape of an identity
-    /// elsewhere in this contract, so that a prefix cannot be something that reads as part of the payload, a
-    /// space, an <c>@</c>, or a path separator.
+    /// One or more lower-case segments joined by a dot, each opening with a letter and able to hold hyphens
+    /// after it: the shape of an identity elsewhere in this contract, so that a prefix cannot be something that
+    /// reads as part of the payload, a space, an <c>@</c>, or a path separator. A hyphen is allowed because a
+    /// program's own name may carry one, as <c>git-rola</c> does.
     /// </remarks>
     private static readonly Regex Grammar = new(
-        "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$",
+        "^[a-z][a-z0-9_]*(?:-[a-z0-9_]+)*(\\.[a-z][a-z0-9_]*(?:-[a-z0-9_]+)*)*$",
         RegexOptions.CultureInvariant
     );
 

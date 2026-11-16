@@ -1023,7 +1023,7 @@ internal sealed class LauncherWindow : Window
             return;
         }
 
-        if (Workspaces.Of(path) != WorkspaceState.Workspace)
+        if (Workspaces.Of(path) is not (WorkspaceState.Workspace or WorkspaceState.GitProject))
         {
             _ = Notice(RolaI18N.Get("launcher.workspace.title"), RolaI18N.Get("launcher.workspace.gone", path));
 
@@ -1202,7 +1202,7 @@ internal sealed class LauncherWindow : Window
             return;
         }
 
-        if (Workspaces.Of(picked) != WorkspaceState.Workspace)
+        if (Workspaces.Of(picked) is not (WorkspaceState.Workspace or WorkspaceState.GitProject))
         {
             await Notice(RolaI18N.Get("launcher.import.title"), RolaI18N.Get("launcher.import.not_a_workspace", picked));
 

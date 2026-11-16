@@ -1,4 +1,4 @@
-﻿//! Git support for rola, as a program Git reaches for as `git rola`.
+//! Git support for rola, as a program Git reaches for as `git rola`.
 //!
 //! A command is a node of this program's dispatch tree, a chain that does the work, and a renderer
 //! that writes the answer through mingling's buffer. What it says is git's: `fatal:` and `error:`
@@ -47,6 +47,7 @@ mod settle;
 mod source;
 mod update;
 mod upstream;
+mod upstream_list;
 mod usage;
 mod wildmatch;
 mod wrap;

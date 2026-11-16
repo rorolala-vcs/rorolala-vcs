@@ -756,11 +756,7 @@ fn signed_in(state: StateBring) -> Result<ResultBrought, BringFailure> {
 /// `origin` is the name the project template writes, so it is preferred over whatever a map happens
 /// to hold first; a project that names neither still gets the default its mappings use.
 fn vault_name(config: &ProjectConfig, asked: Option<&str>) -> Result<String, BringFailure> {
-    asked
-        .map(str::to_owned)
-        .or_else(|| config.defaults.vault.clone())
-        .or_else(|| config.vault("origin").map(|_| "origin".to_owned()))
-        .or_else(|| config.default_vault().map(str::to_owned))
+    upstream::vault_name(config, asked)
         .ok_or_else(|| BringFailure::Fatal(t!("update.err_no_vault").to_string()))
 }
 

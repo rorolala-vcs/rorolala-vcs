@@ -85,6 +85,14 @@ const DIRECTORY_ARG: &str = "-CurrentDir:";
 /// which is what lets a template name a program it was never told about.
 const EXE_ENV: &str = "ROLA_EXE";
 
+/// What the path of the `git-rola` program beside this one is handed over under.
+///
+/// The Git plugin's view runs `git rola`'s commands, which are the program exported beside this one
+/// rather than a word a `PATH` happens to answer. The environment rather than an argument because a
+/// child of the window, the command itself, inherits it, which is the same reason `ROLA_EXE` is
+/// there.
+const GIT_EXE_ENV: &str = "ROLA_GIT_EXE";
+
 /// What the style the window's own frame is drawn in is handed over under.
 ///
 /// The three names are the Desktop program's own (`Windows`, `Mac`, `TillingWM`) and what a run writes is
@@ -419,7 +427,11 @@ pub fn handle_desktop(state: StateDesktop, language: &ResLanguage, cwd: &ResCurr
 
     let mut command = Command::new(&program);
 
-    command.current_dir(&at).env(EXE_ENV, &here).args(told);
+    command
+        .current_dir(&at)
+        .env(EXE_ENV, &here)
+        .env(GIT_EXE_ENV, git_rola(&here))
+        .args(told);
 
     // A window's host is a console program because it has to be able to print a report to the
     // terminal that started it, while a launcher starts it with no console at all. Left alone, the
@@ -448,6 +460,19 @@ pub fn handle_desktop(state: StateDesktop, language: &ResLanguage, cwd: &ResCurr
 /// knows, has nothing wider to open onto, and opens onto where it was made.
 fn opening_at(cwd: &Path) -> PathBuf {
     Workspace::locate(cwd).map_or_else(|| cwd.to_path_buf(), |held| held.get_root().to_path_buf())
+}
+
+/// The `git-rola` program beside the `rola` program at `here`.
+///
+/// The two are exported into one directory, so the one a window's git views are to run is the one
+/// beside the program that was asked for the window. The suffix is the platform's, so a program
+/// built with one name on one platform and another on the next is found by the name it was built
+/// with rather than by a spelling this file would have to know.
+fn git_rola(here: &Path) -> PathBuf {
+    let name = format!("git-rola{}", std::env::consts::EXE_SUFFIX);
+
+    here.parent()
+        .map_or_else(|| PathBuf::from(&name), |directory| directory.join(&name))
 }
 
 /// The state a query of the machine's window style starts in.
@@ -683,7 +708,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use super::{WindowStyle, is_tiling, opening_at};
+    use super::{WindowStyle, git_rola, is_tiling, opening_at};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -741,6 +766,19 @@ mod tests {
             Some(WindowStyle::TillingWm)
         );
         assert_eq!(WindowStyle::named("MAC"), Some(WindowStyle::Mac));
+    }
+
+    #[test]
+    fn the_git_program_is_the_one_beside_this_one() {
+        let here = PathBuf::from("C:/tools/rola/rola.exe");
+
+        assert_eq!(
+            git_rola(&here),
+            PathBuf::from(format!(
+                "C:/tools/rola/git-rola{}",
+                std::env::consts::EXE_SUFFIX
+            ))
+        );
     }
 
     #[test]

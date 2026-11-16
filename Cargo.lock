@@ -3581,6 +3581,7 @@ dependencies = [
  "librorolala",
  "mingling",
  "minus",
+ "rola-define-format",
  "rorolala-cli-setups",
  "rorolala-errors",
  "rorolala-utils-cli-theme",
@@ -3594,6 +3595,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "toml_edit 0.22.27",
  "unicode-width 0.2.2",
  "uuid",
 ]

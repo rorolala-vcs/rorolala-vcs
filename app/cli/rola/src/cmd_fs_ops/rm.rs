@@ -16,6 +16,7 @@ use mingling::{
 };
 use rorolala_utils_cli_theme::trd;
 use rorolala_utils_location::Locate as _;
+use rorolala_utils_location::normalize;
 use rust_i18n::t;
 use uuid::Uuid;
 
@@ -109,6 +110,46 @@ pub fn handle_fs_ops_rm(state: StateFsOpsRm) -> Next {
             .into();
         }
     };
+
+    let path = if path.is_absolute() {
+        path
+    } else {
+        cwd.join(path)
+    };
+    let path = normalize(&path);
+
+    // A git-rola project keeps its record in `rola.toml` and `rola.lock`, so a removal inside one
+    // takes the mapping and the material out of them. A file inside a tree is neither: the tree is
+    // one material rather than the paths in it, so removing a file there leaves the record as it is
+    // and is only the file's removal. A tree's own directory is the material itself, so its removal
+    // takes the mapping and the whole directory with it.
+    if let Some(root) = cmd_fs_ops::git_rola::project_of(&path) {
+        let relative = cmd_fs_ops::git_rola::relative(&root, &path);
+
+        let planned = match cmd_fs_ops::git_rola::removing(&root, &relative) {
+            Ok(planned) => planned,
+            Err(failed) => return cmd_fs_ops::failed_record("rm", &failed),
+        };
+
+        if let Err(error) = cmd_fs_ops::remove_at(&path) {
+            return ErrorFsOpsFailed {
+                verb: "rm",
+                cause: error.to_string(),
+            }
+            .into();
+        }
+
+        if let Err(failed) = cmd_fs_ops::git_rola::commit(planned) {
+            return cmd_fs_ops::failed_record("rm", &failed);
+        }
+
+        return ResultFsOps {
+            verb: "rm",
+            from: path.display().to_string(),
+            to: None,
+        }
+        .into();
+    }
 
     // What the removal is about in the Layout being worked in, when there is one. It is the Workspace
     // the path itself sits in, and never the one the run was made in: a path in no Workspace has

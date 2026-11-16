@@ -134,15 +134,16 @@ impl Material {
 
 /// A `rola.lock` read whole: the Vaults it can fetch from and the materials it places.
 ///
-/// The materials are held sorted by path and free of duplicates, so one set of materials has one
-/// spelling and [`encode`](Lock::encode) is deterministic.
+/// The materials are held in the order they are placed: every tree before every file, a deeper path
+/// before a shallower one, and a path before a longer one that starts with it. One set of materials
+/// therefore has one spelling, and [`encode`](Lock::encode) is deterministic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lock {
     /// The format version the lock is in.
     format: u32,
     /// The Vaults content can be fetched from, in the order they were written.
     vaults: Vec<Vault>,
-    /// The materials, sorted by path.
+    /// The materials, in the order they are placed.
     materials: Vec<Material>,
 }
 
@@ -173,7 +174,15 @@ impl Lock {
         }
 
         let mut materials = materials;
-        materials.sort_by(|left, right| left.path().cmp(right.path()));
+        materials.sort_by(|left, right| {
+            let left_tree = left.kind() == MaterialKind::Tree;
+            let right_tree = right.kind() == MaterialKind::Tree;
+
+            right_tree
+                .cmp(&left_tree)
+                .then_with(|| depth(right.path().as_str()).cmp(&depth(left.path().as_str())))
+                .then_with(|| left.path().cmp(right.path()))
+        });
 
         Ok(Self {
             format: FORMAT_VERSION,
@@ -204,11 +213,16 @@ impl Lock {
         &self.vaults
     }
 
-    /// The materials, sorted by path.
+    /// The materials, in the order they are placed.
     #[must_use]
     pub fn materials(&self) -> &[Material] {
         &self.materials
     }
+}
+
+/// How many parts a path has, so that a deeper one sorts before a shallower one.
+fn depth(path: &str) -> usize {
+    path.matches('/').count()
 }
 
 #[cfg(test)]
@@ -238,8 +252,17 @@ mod tests {
         )
     }
 
+    /// A tree at `path_text`, holding content `byte`.
+    fn tree(path_text: &str, byte: u8) -> Material {
+        Material::new(
+            path(path_text),
+            ContentHash::from_digest([byte; 32]),
+            MaterialKind::Tree,
+        )
+    }
+
     #[test]
-    fn a_lock_sorts_its_materials_by_path_and_keeps_its_vaults_in_order() {
+    fn a_lock_puts_trees_before_files_and_deeper_paths_first() {
         let lock = Lock::new(
             vec![
                 vault("origin", "rola://a/default"),
@@ -248,6 +271,9 @@ mod tests {
             vec![
                 material("/Source/character.fbx", 2),
                 material("/Assets/hero.psd", 1),
+                material("/Assets/Maps/level.psd", 5),
+                tree("/Textures", 4),
+                tree("/Assets/Textures/sub", 3),
             ],
         )
         .unwrap();
@@ -263,7 +289,16 @@ mod tests {
             .map(|vault| vault.name().as_str())
             .collect();
 
-        assert_eq!(paths, ["Assets/hero.psd", "Source/character.fbx"]);
+        assert_eq!(
+            paths,
+            [
+                "Assets/Textures/sub",
+                "Textures",
+                "Assets/Maps/level.psd",
+                "Assets/hero.psd",
+                "Source/character.fbx"
+            ]
+        );
         assert_eq!(names, ["origin", "mirror"]);
         assert_eq!(lock.format(), crate::FORMAT_VERSION);
     }

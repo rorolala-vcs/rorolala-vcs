@@ -78,8 +78,8 @@ impl Lock {
     /// Writes the lock as the text of a `rola.lock`.
     ///
     /// The spelling is one: the format first, the Vaults in the order they were written, the
-    /// materials by path, every line ended with a newline. So two locks holding the same thing are
-    /// the same bytes.
+    /// materials in the order they are placed, every line ended with a newline. So two locks
+    /// holding the same thing are the same bytes.
     #[must_use]
     pub fn encode(&self) -> String {
         let mut text = String::new();
@@ -345,10 +345,10 @@ mod tests {
         assert_eq!(
             text,
             format!(
-                "? FORMAT 2\n? VAULT origin rola://127.0.0.1:7717/default\n/Assets/hero.psd {} file\n/Source/character.fbx {} file\n/Textures {} tree\n",
+                "? FORMAT 2\n? VAULT origin rola://127.0.0.1:7717/default\n/Textures {} tree\n/Assets/hero.psd {} file\n/Source/character.fbx {} file\n",
+                token(3),
                 token(1),
-                token(2),
-                token(3)
+                token(2)
             )
         );
         assert_eq!(Lock::decode(&text).unwrap(), lock);

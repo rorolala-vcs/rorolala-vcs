@@ -63,6 +63,7 @@ fn main() {
     checking(&run, &repo, &mut checked);
     restoring(&run, &repo, &mut checked);
     bringing(&run, &repo, &elsewhere, &mut checked);
+    upstream(&run, &repo, &elsewhere, &mut checked);
     refreshing(&run, &repo, &mut checked);
     listing(&run, sandbox.dir(), &repo, &elsewhere, &mut checked);
     reaching(&run, &repo, &mut checked);
@@ -142,7 +143,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
             "See 'git rola <command>'",
         );
 
-        for command in ["init", "hook", "check", "entries", "bring", "restore", "refresh", "update", "help", "version"] {
+        for command in ["init", "hook", "check", "entries", "bring", "upstream", "restore", "refresh", "update", "help", "version"] {
             checked.stdout_has(&format!("the usage lists `{command}`"), &help, command);
         }
 
@@ -168,7 +169,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     );
 
     // Each command writes down its own use, and `--help` as its first word asks for it with success.
-    for command in ["init", "hook", "check", "entries", "bring", "restore", "refresh", "update", "help", "version"] {
+    for command in ["init", "hook", "check", "entries", "bring", "upstream", "restore", "refresh", "update", "help", "version"] {
         let help = run.rola(elsewhere, &[command, "--help"]);
         checked.exits(&format!("`{command} --help` ends successfully"), &help, 0);
         checked.stdout_has(
@@ -184,7 +185,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     }
 
     // `-h` is git's usage request inside a command: the same text, on stdout, with 129.
-    for command in ["init", "hook", "check", "entries", "bring", "restore", "refresh", "update", "help", "version"] {
+    for command in ["init", "hook", "check", "entries", "bring", "upstream", "restore", "refresh", "update", "help", "version"] {
         let usage = run.rola(elsewhere, &[command, "-h"]);
         checked.exits(&format!("`{command} -h` is a usage request"), &usage, 129);
         checked.stdout_has(
@@ -1030,6 +1031,50 @@ fn bringing(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     );
 }
 
+/// Reading a Vault's Layout: the paths `git rola upstream` lists, and the ways it refuses.
+///
+/// The suite's sandbox holds no account, so a run that would reach a Vault stops before it: what is
+/// checked is that the command reads its operand, finds the project, and says what it is missing.
+fn upstream(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
+    let outside = run.rola(elsewhere, &["upstream"]);
+    checked.exits("an upstream outside a project is refused", &outside, 128);
+    checked.stderr_has(
+        "the refusal says there is no project",
+        &outside,
+        "fatal: not inside a rola project",
+    );
+
+    let extra = run.rola(elsewhere, &["upstream", "one", "two"]);
+    checked.exits("an upstream with two operands is refused", &extra, 129);
+    checked.stderr_has(
+        "the refusal is the command's use",
+        &extra,
+        "usage: git rola upstream",
+    );
+    checked.stdout_empty("the refusal is not a result", &extra);
+
+    let undeclared = run.rola(repo, &["upstream", "nosuch"]);
+    checked.exits(
+        "an upstream of a Vault the project does not declare is refused",
+        &undeclared,
+        128,
+    );
+    checked.stderr_has(
+        "the refusal names the Vault",
+        &undeclared,
+        "is not named in [vaults]",
+    );
+
+    let refused = run.rola(repo, &["upstream"]);
+    checked.exits("an upstream with no account is refused", &refused, 128);
+    checked.stderr_has(
+        "the refusal names the account it needs",
+        &refused,
+        "no account is named",
+    );
+    checked.stdout_empty("a refused upstream writes no answer", &refused);
+}
+
 /// Applying the lock to the work tree: no Vault, no `rola.toml`, and no lock written.
 fn refreshing(run: &Run, repo: &Path, checked: &mut Checked) {
     let before_exclude = exclude_text(repo);
@@ -1374,6 +1419,7 @@ fn trees(run: &Run, sandbox: &Path, checked: &mut Checked) {
 
     // A file changed inside the tree is one difference, named by the path inside it.
     fs::write(project.join("Assets/Textures/sub/b.psd"), b"an edit\n").expect("an edit");
+    fs::write(project.join("Assets/Textures/a.png"), b"another edit\n").expect("another edit");
     let check = run.rola(&project, &["check"]);
     checked.exits("a changed file inside a tree is a difference", &check, 1);
     checked.stdout_has(
@@ -1381,13 +1427,33 @@ fn trees(run: &Run, sandbox: &Path, checked: &mut Checked) {
         &check,
         " M Assets/Textures/sub/b.psd",
     );
+    checked.stdout_has(
+        "the other changed file is named",
+        &check,
+        " M Assets/Textures/a.png",
+    );
 
-    // A path inside the tree selects the whole tree, which is written back as the lock names it.
+    // A file named inside the tree is put back on its own, and the tree's other file keeps what
+    // it holds.
     let restored = run.rola(&project, &["restore", "Assets/Textures/sub/b.psd"]);
-    checked.exits("a path inside a tree restores it", &restored, 0);
+    checked.exits("a file inside a tree is restored", &restored, 0);
     checked.wants(
-        "the tree's file is back",
+        "the file inside the tree is back",
         holds_at(&project, "Assets/Textures/sub/b.psd", second),
+        &said(&restored),
+    );
+    checked.wants(
+        "the tree's other file is still the edit",
+        holds_at(&project, "Assets/Textures/a.png", b"another edit\n"),
+        &said(&restored),
+    );
+
+    // The tree's own path puts the whole tree back.
+    let restored = run.rola(&project, &["restore", "Assets/Textures"]);
+    checked.exits("the tree's own path restores the tree", &restored, 0);
+    checked.wants(
+        "the whole tree is the lock's again",
+        holds_at(&project, "Assets/Textures/a.png", first),
         &said(&restored),
     );
 

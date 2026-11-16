@@ -12,8 +12,69 @@ rorolala_git:
     en: Git
     zh-CN: Git
 
+  menu:
+    root:
+      en: Git
+      zh-CN: Git
+    open:
+      en: Open the git-rola view
+      zh-CN: 打开 git-rola 视图
+    read_again:
+      en: Read again
+      zh-CN: 重新读取
+    category:
+      en: Git
+      zh-CN: Git
+    refresh:
+      en: Refresh
+      zh-CN: 刷新
+    update:
+      en: Update
+      zh-CN: 更新
+
+  place:
+    title:
+      en: git rola
+      zh-CN: git rola
+    vault:
+      en: "git rola: %{vault}"
+      zh-CN: "git rola：%{vault}"
+    inside:
+      en: "git rola: %{vault}/%{path}"
+      zh-CN: "git rola：%{vault}/%{path}"
+    failed:
+      en: "the Vault %{vault} could not be read: %{said}"
+      zh-CN: "读不到保险库 %{vault}：%{said}"
+    no_program:
+      en: this window was handed no git-rola program, so a Vault cannot be read
+      zh-CN: 这个窗口没有拿到 git-rola 程序，读不到保险库
+
+  notice:
+    bring_failed:
+      en: the entry could not be signed in
+      zh-CN: 条目没能签入
+    command_failed:
+      en: the command did not finish
+      zh-CN: 命令没有完成
+
+  mark:
+    wrong_hover:
+      en: The file's content is not what the lock records
+      zh-CN: 该文件内容和记录的不符
+
 rorolala_file_system:
   hides:
     git_ignored:
       en: Git Ignored Files
       zh-CN: Git 忽略文件
+
+# The restore's leaf, under the category the Rorolala plugin opens: the key is the same one the
+# command line's own words are stated under, so the menu reads as one menu rather than two.
+menu:
+  entry:
+    git_rola:
+      en: Git-Rola View
+      zh-CN: Git-Rola 视图
+    to_lock:
+      en: To rola.lock record
+      zh-CN: 至 rola.lock 记录

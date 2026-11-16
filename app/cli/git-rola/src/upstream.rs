@@ -167,6 +167,20 @@ impl VaultSource {
     }
 }
 
+/// The Vault a project's mappings go through when the run names none.
+///
+/// The answer is the project's `defaults.vault`, then `origin` when the project declares one, then
+/// the first Vault it declares. A project declaring none has no answer, which is what a run asking
+/// for a Vault has to be told rather than be given one it did not name.
+#[must_use]
+pub fn vault_name(config: &ProjectConfig, asked: Option<&str>) -> Option<String> {
+    asked
+        .map(str::to_owned)
+        .or_else(|| config.defaults.vault.clone())
+        .or_else(|| config.vault("origin").map(|_| "origin".to_owned()))
+        .or_else(|| config.default_vault().map(str::to_owned))
+}
+
 /// The account a run acts as, found the way the rest of rola finds it.
 ///
 /// The name is the one the user's own file carries, and the key is looked for where rola looks: the

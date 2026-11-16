@@ -161,6 +161,17 @@ icons = [
 ]
 
 [[set]]
+plugin = "GitVCSPlugin"
+key = "rorolala_git"
+
+# The pictures this plugin draws: the mark a material wears when what it holds is not what the
+# project's lock records, the download arrow the Open item wears, the same one the VCS plugin's
+# Upstream item draws, and the refresh arrow the restore's menu item wears. All are the artwork the
+# VCS plugin draws for the same words, drawn here again so that this plugin's keys are its own, the
+# way every set is one project's.
+icons = ["edit_note", "download", "refresh"]
+
+[[set]]
 plugin = "RorolalaDesktop"
 source = "app/desktop/Core"
 key = "rorolala"

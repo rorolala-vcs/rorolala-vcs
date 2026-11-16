@@ -70,6 +70,14 @@ fs_ops:
     en: "`%{path}` is a variant file, and a place outside the Workspace is one no merge can hold"
     zh-CN: "`%{path}` 是变体文件，而工作区之外的位置无法承载合并"
 
+  err_blocked_project:
+    en: "This project's `rola.toml` or `rola.lock` already names `%{path}`"
+    zh-CN: "本项目的 `rola.toml` 或 `rola.lock` 已命名 `%{path}`"
+
+  err_blocked_outside:
+    en: "`%{path}` is outside the git-rola project, and its `rola.toml` cannot name a path outside it"
+    zh-CN: "`%{path}` 在 git-rola 项目之外，项目的 `rola.toml` 无法命名项目之外的路径"
+
   err_blocked_help:
     en: Keep the change within what the Layout allows, and it is applied whole rather than half made
     zh-CN: 请让改动落在布局允许的范围内，改动会被整体执行，而不会只做一半

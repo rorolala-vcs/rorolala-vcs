@@ -5,7 +5,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use rola_define_format::{ContentHash, Lock, LockPath, MaterialKind};
+use rola_define_format::{ContentHash, Lock, LockPath, Material, MaterialKind};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::content::{ContentSource, digest_of};
@@ -274,7 +274,7 @@ pub fn attach(
     let mut attached = BTreeMap::new();
     let mut failures = Vec::new();
 
-    for material in lock.materials() {
+    for material in placement(lock.materials()) {
         let path = material.path();
         let relative = disk_path(path);
         let target = working.join(&relative);
@@ -305,6 +305,33 @@ pub fn attach(
     Ok(failures)
 }
 
+/// The materials in the order they are placed: every tree before every file.
+///
+/// A tree's placement is the whole directory its structure names, so a file placed before it would
+/// be taken away by it. The order is the lock's when this build wrote it, and is made again here
+/// because a lock read from a file may list its materials in any order. A deeper path comes first
+/// within each kind, as the lock writes them.
+fn placement(materials: &[Material]) -> Vec<&Material> {
+    let mut ordered: Vec<&Material> = materials.iter().collect();
+
+    ordered.sort_by(|left, right| {
+        let left_tree = left.kind() == MaterialKind::Tree;
+        let right_tree = right.kind() == MaterialKind::Tree;
+
+        right_tree
+            .cmp(&left_tree)
+            .then_with(|| depth(right.path().as_str()).cmp(&depth(left.path().as_str())))
+            .then_with(|| left.path().cmp(right.path()))
+    });
+
+    ordered
+}
+
+/// How many parts a path has, so that a deeper one sorts before a shallower one.
+fn depth(path: &str) -> usize {
+    path.matches('/').count()
+}
+
 /// Puts `only` of `lock`'s materials back, replacing whatever is at their paths.
 ///
 /// `only` naming none means every material. What the lock does not name is not touched: a run
@@ -325,7 +352,7 @@ pub fn restore(
 ) -> Result<Vec<(String, Error)>, Error> {
     let mut failures = Vec::new();
 
-    for material in lock.materials() {
+    for material in placement(lock.materials()) {
         if !only.is_empty() && !only.contains(material.path()) {
             continue;
         }
@@ -544,7 +571,7 @@ mod tests {
     use rorolala_storage::Key;
     use rorolala_tree::{FileMode, TreeEntry, TreeStructure};
 
-    use super::{Placed, Private, State, attach, detach, restore};
+    use super::{Placed, Private, State, attach, detach, placement, restore};
     use crate::content::{ContentSource, LocalStore, digest_of};
     use crate::error::Error;
 
@@ -589,6 +616,29 @@ mod tests {
             .collect();
 
         Lock::new(vec![], materials).unwrap()
+    }
+
+    #[test]
+    fn a_placement_puts_every_tree_before_every_file() {
+        let materials = vec![
+            material("/Assets/hero.psd", [1; 32]),
+            tree_material("/Assets/Textures", [2; 32]),
+            material("/Assets/Textures/deep.psd", [3; 32]),
+        ];
+
+        let order: Vec<&str> = placement(&materials)
+            .iter()
+            .map(|material| material.path().as_str())
+            .collect();
+
+        assert_eq!(
+            order,
+            [
+                "Assets/Textures",
+                "Assets/Textures/deep.psd",
+                "Assets/hero.psd"
+            ]
+        );
     }
 
     /// Puts `content` at `path` and brings the state in line with it.

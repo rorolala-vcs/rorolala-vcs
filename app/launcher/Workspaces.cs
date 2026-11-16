@@ -6,6 +6,9 @@ internal enum WorkspaceState
     /// <summary>A Workspace: a directory holding the data directory a Workspace keeps.</summary>
     Workspace,
 
+    /// <summary>A git repository with a rola.toml, which the Desktop's git-rola view opens on.</summary>
+    GitProject,
+
     /// <summary>The directory is not there.</summary>
     Missing,
 
@@ -27,9 +30,18 @@ internal static class Workspaces
     /// <summary>The directory a Workspace keeps its own files under.</summary>
     public const string DataDirectory = ".rola";
 
+    /// <summary>The file that, beside a <c>.git</c>, makes a directory a git-rola project.</summary>
+    public const string ProjectFile = "rola.toml";
+
     /// <summary>
     /// What a directory is.
     /// </summary>
+    /// <remarks>
+    /// A git-rola project is a git repository with a <c>rola.toml</c>. It is not a Workspace, and it is worth
+    /// opening on anyway: the Desktop's git-rola view reads the project's Vaults and its lock, and the file tree
+    /// shows the materials the lock places. A <c>.git</c> that is a file rather than a directory is what a work
+    /// tree and a submodule have, which is why both are asked about.
+    /// </remarks>
     /// <param name="path">The directory.</param>
     /// <returns>What it is.</returns>
     public static WorkspaceState Of(string path)
@@ -39,8 +51,16 @@ internal static class Workspaces
             return WorkspaceState.Missing;
         }
 
-        return Directory.Exists(Path.Combine(path, DataDirectory))
-            ? WorkspaceState.Workspace
+        if (Directory.Exists(Path.Combine(path, DataDirectory)))
+        {
+            return WorkspaceState.Workspace;
+        }
+
+        var git = Path.Combine(path, ".git");
+
+        return File.Exists(Path.Combine(path, ProjectFile))
+            && (Directory.Exists(git) || File.Exists(git))
+            ? WorkspaceState.GitProject
             : WorkspaceState.NotWorkspace;
     }
 

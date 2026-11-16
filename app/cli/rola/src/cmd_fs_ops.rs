@@ -46,6 +46,7 @@ use crate::exit_codes::{EC_ERR_FS_OPS_ARGUMENT, EC_ERR_FS_OPS_FAILED, EC_HELP};
 use crate::failure::failure;
 
 pub mod cp;
+pub mod git_rola;
 pub mod mv;
 pub mod rm;
 
@@ -168,6 +169,18 @@ impl Failure for ErrorFsOpsFailed {
 }
 
 failure!(ErrorFsOpsFailed);
+
+/// The failure of reading or writing a git-rola project's record, said as a failed operation.
+///
+/// The path is kept beside the words because the words are the reader's language and the file is
+/// the one thing the reader has to look at.
+pub fn failed_record(verb: &'static str, failed: &git_rola::Failed) -> Next {
+    ErrorFsOpsFailed {
+        verb,
+        cause: format!("{}: {}", failed.path.display(), failed.said),
+    }
+    .into()
+}
 
 #[renderer(buffer)]
 pub fn render_error_fs_ops_failed(error: ErrorFsOpsFailed, ec: &mut ResExitCode) {
@@ -375,6 +388,10 @@ pub enum FsOpsBlock {
     Named,
     /// A variant file would be moved to where no record can say it lies.
     Variant,
+    /// A git-rola project already names the destination in its toml or its lock.
+    Project,
+    /// The destination is outside the git-rola project the source is in.
+    Outside,
 }
 
 impl Failure for ErrorFsOpsBlocked {
@@ -386,6 +403,8 @@ impl Failure for ErrorFsOpsBlocked {
         let said = match &self.kind {
             FsOpsBlock::Named => t!("fs_ops.err_blocked_named", path = self.path),
             FsOpsBlock::Variant => t!("fs_ops.err_blocked_variant", path = self.path),
+            FsOpsBlock::Project => t!("fs_ops.err_blocked_project", path = self.path),
+            FsOpsBlock::Outside => t!("fs_ops.err_blocked_outside", path = self.path),
         };
 
         said.trim().to_string()

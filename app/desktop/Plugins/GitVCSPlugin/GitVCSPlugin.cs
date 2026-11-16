@@ -36,10 +36,101 @@ public sealed class GitVCSPlugin : IRolaPlugin
 
         host.I18n.RegisterDirectory(Translations());
 
+        // The pictures this plugin draws, which the badge and the restore's menu item are read by:
+        // a picture is looked up by key, so the library has to hold it before a listing asks.
+        Icons.Declare(host.Icons);
+
         // The File System plugin's catalogue, reached the way a preset is: this plugin is started after
         // that one, so the catalogue it adds to is the one the setting was declared over, and the option
         // this adds is offered the moment the preference panel is drawn (see HideRegistry).
         HideRegistry.Register(new GitIgnored());
+
+        // The git-rola@ place: the Vaults a git-rola project declares and each one's Layout, read
+        // through `git rola upstream`. The prefix carries a hyphen, which the contract's grammar was
+        // widened to allow for exactly this name.
+        var place = new GitRolaPlace(host);
+
+        host.LogicalViews.Register(GitRolaPlace.Scheme, place);
+        host.Drops.Add(new GitRolaDrops(host));
+
+        host.Menu.AddTopLevel("rorolala_git.menu.root", 70);
+        host.Menu.AddItem(
+            "rorolala_git.menu.root",
+            new MenuItem("rorolala_git.menu.open", 10, place.OpenRoot)
+        );
+
+        // From a directory of the work, where a person stands when they wonder what upstream holds,
+        // and only where there is a project to ask: a git repository with no rola.toml has nothing
+        // for this place to read.
+        host.ContextMenus.Add(
+            ContextMenuTarget.Directory,
+            new ContextMenuItem(
+                ["menu.entry.open", "menu.entry.git_rola"],
+                70,
+                _ => place.OpenRoot(),
+                Icons.Download,
+                Applies: target => GitRolaToml.ProjectOf(GitRolaActions.Chosen(target)) is not null
+            )
+        );
+
+        // What a signed-in material is marked with in the tree: grey while it holds what the lock
+        // records, the program's error red when it does not. The check is one answer read by both
+        // the colour and the badge, so it is made once and handed to both.
+        var check = new GitRolaCheck(host);
+
+        EntryColourProviders.Register(new GitRolaColour(host.Palette, check));
+        EntryMarkProviders.Register(new GitRolaBadge(check, host.Palette));
+        host.ThemeChanged += (_, _) => host.Files.Redraw();
+
+        // The commands a right-click on the work offers, in the command line's own words: the two
+        // whole-project commands under one category, and the restore under its own, since it is
+        // about the files chosen rather than the project.
+        foreach (var target in new[] { ContextMenuTarget.Directory, ContextMenuTarget.File })
+        {
+            host.ContextMenus.Add(
+                target,
+                new ContextMenuItem(
+                    [GitRolaActions.Category, GitRolaActions.Refresh],
+                    80,
+                    choice => GitRolaActions.RunRefresh(host, choice),
+                    Applies: GitRolaActions.InProject
+                )
+            );
+            host.ContextMenus.Add(
+                target,
+                new ContextMenuItem(
+                    [GitRolaActions.Category, GitRolaActions.Update],
+                    90,
+                    choice => GitRolaActions.RunUpdate(host, choice),
+                    Applies: GitRolaActions.InProject
+                )
+            );
+        }
+
+        host.ContextMenus.Add(
+            ContextMenuTarget.File,
+            new ContextMenuItem(
+                [GitRolaActions.RestoreCategory, GitRolaActions.RestoreToLock],
+                100,
+                choice => GitRolaActions.RunRestore(host, choice),
+                GitRolaActions.RestoreIcon,
+                Applies: GitRolaActions.FilesInProject
+            )
+        );
+
+        // A tree is one material, so its own directory is what a restore of the whole tree names:
+        // a file inside it restores that file, and this puts the tree back the way a file's item
+        // puts the file back.
+        host.ContextMenus.Add(
+            ContextMenuTarget.Directory,
+            new ContextMenuItem(
+                [GitRolaActions.RestoreCategory, GitRolaActions.RestoreToLock],
+                100,
+                choice => GitRolaActions.RunRestore(host, choice),
+                GitRolaActions.RestoreIcon,
+                Applies: GitRolaActions.TreeInProject
+            )
+        );
     }
 
     /// <summary>

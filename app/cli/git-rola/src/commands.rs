@@ -11,12 +11,17 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use librorolala::tree::EntryKind as TreeKind;
 use mingling::{
     Grouped,
     macros::{buffer, chain, command, r_eprintln, r_println, renderer},
     res::ResExitCode,
 };
-use rola_git_support::{Error as GitError, Project, Repository, Session};
+use rola_define_format::{ContentHash, Lock, LockPath, MaterialKind};
+use rola_git_support::{
+    ContentSource, Error as GitError, Project, Repository, Session, structure as read_structure,
+};
+use rorolala_utils_location::normalize;
 use rust_i18n::t;
 
 use crate::Next;
@@ -250,8 +255,10 @@ pub fn handle_hook(state: StateHook) -> Next {
 /// under the variables that shape them. A name that selects nothing is refused before anything is
 /// written, so a run that mistypes one restores nothing.
 ///
-/// A tree is one material, so a name inside it selects the whole tree, which is written back as the
-/// structure the lock names. A file the structure does not name is left where it is.
+/// A tree is one material, and its own path selects the whole tree, which is written back as the
+/// structure the lock names. A name inside a tree selects only what it names there: a file of the
+/// tree is put back on its own, and a directory of it takes the files under it. A wildcard inside
+/// a tree still selects the whole tree.
 #[command(node = "restore", entry = EntryRestore)]
 pub fn restore(words: Vec<String>) -> Next {
     let names = operands(&words);
@@ -360,20 +367,171 @@ fn restore_materials(names: &[String]) -> Result<ResultRestore, RestoreFailure> 
             .to_path_buf()
     };
 
-    let only =
-        crate::pathspec::select(&lock, &base, &prefix, names).map_err(RestoreFailure::Pathspec)?;
+    let names = inside_names(&lock, &base, names);
+
+    let only = crate::pathspec::select(&lock, &base, &prefix, &names.names)
+        .map_err(RestoreFailure::Pathspec)?;
 
     let source = crate::source::of(session.project());
-    let failures = session
-        .restore(&lock, &only.materials, &source)
-        .map_err(|error| RestoreFailure::Fatal(error.to_string()))?;
 
-    Ok(ResultRestore {
-        failures: failures
+    // What a name inside a tree restores is put back here, not by session.restore: an empty list
+    // of materials there means every material, and a run of names that all point inside a tree has
+    // none of its own to select.
+    let mut failures: Vec<(String, String)> = if only.materials.is_empty() {
+        Vec::new()
+    } else {
+        session
+            .restore(&lock, &only.materials, &source)
+            .map_err(|error| RestoreFailure::Fatal(error.to_string()))?
             .into_iter()
             .map(|(path, error)| (path, error.to_string()))
-            .collect(),
-    })
+            .collect()
+    };
+
+    failures.extend(restore_inside(
+        &lock,
+        &only.materials,
+        &source,
+        session.project(),
+        &names.inside,
+    ));
+
+    Ok(ResultRestore { failures })
+}
+
+/// The names split into the materials they select and the places they name inside a tree.
+struct Names {
+    /// The names a material is selected whole by.
+    names: Vec<String>,
+    /// The places inside a tree, by the tree's path and the path inside it.
+    inside: Vec<(LockPath, String)>,
+}
+
+/// Splits the literal names that point inside a tree from the rest.
+///
+/// A tree is one material, so a name at or above it selects the whole tree, which is `pathspec`'s
+/// to answer. A literal name strictly inside one is this run's to put back on its own, so it is
+/// taken out of what `pathspec` sees; a wildcard is left there, where it still means the tree.
+fn inside_names(lock: &Lock, base: &Path, names: &[String]) -> Names {
+    let trees: Vec<&str> = lock
+        .materials()
+        .iter()
+        .filter(|material| material.kind() == MaterialKind::Tree)
+        .map(|material| material.path().as_str())
+        .collect();
+    let mut kept = Vec::with_capacity(names.len());
+    let mut inside = Vec::new();
+
+    for name in names {
+        if name.contains(['*', '?', '[']) {
+            kept.push(name.clone());
+
+            continue;
+        }
+
+        let joined = normalize(&base.join(name));
+        let text = joined.to_string_lossy().replace('\\', "/");
+        let text = text.trim_start_matches('/');
+        let mut found = false;
+
+        for tree in &trees {
+            if let Some(rest) = text
+                .strip_prefix(tree)
+                .and_then(|rest| rest.strip_prefix('/'))
+                && !rest.is_empty()
+                && let Ok(path) = LockPath::new(tree)
+            {
+                inside.push((path, rest.to_owned()));
+                found = true;
+
+                break;
+            }
+        }
+
+        if !found {
+            kept.push(name.clone());
+        }
+    }
+
+    Names {
+        names: kept,
+        inside,
+    }
+}
+
+/// Puts back the places named inside a tree, a file of it or the files under a directory of it.
+///
+/// A tree the run also selected whole is skipped: the whole restore writes every path in it, and a
+/// second write would be the same bytes written twice and a failure reported twice.
+fn restore_inside(
+    lock: &Lock,
+    whole: &[LockPath],
+    source: &crate::source::Source,
+    project: &Project,
+    inside: &[(LockPath, String)],
+) -> Vec<(String, String)> {
+    let mut failures = Vec::new();
+
+    for (tree, rest) in inside {
+        if whole.contains(tree) {
+            continue;
+        }
+
+        let Some(material) = lock
+            .materials()
+            .iter()
+            .find(|material| material.path() == tree)
+        else {
+            continue;
+        };
+
+        let structure = match read_structure(source, material.content()) {
+            Ok(structure) => structure,
+            Err(error) => {
+                failures.push((tree.as_str().to_owned(), error.to_string()));
+
+                continue;
+            }
+        };
+
+        for entry in structure.entries() {
+            if entry.kind() != TreeKind::File {
+                continue;
+            }
+
+            let path = entry.path();
+            let under = path
+                .strip_prefix(rest.as_str())
+                .is_some_and(|tail| tail.starts_with('/'));
+
+            if path != rest.as_str() && !under {
+                continue;
+            }
+
+            let Some(storage) = entry.storage() else {
+                continue;
+            };
+
+            let full = format!("{}/{path}", tree.as_str());
+            let disk = project.root().join(full.split('/').collect::<PathBuf>());
+
+            if let Some(parent) = disk.parent()
+                && let Err(error) = fs::create_dir_all(parent)
+            {
+                failures.push((full, error.to_string()));
+
+                continue;
+            }
+
+            let content = ContentHash::from_digest(*storage.digest());
+
+            if let Err(error) = source.write(content, &disk) {
+                failures.push((full, error.to_string()));
+            }
+        }
+    }
+
+    failures
 }
 
 /// Updates `rola.lock` and puts the project's materials in step with it
@@ -550,4 +708,47 @@ fn install_hooks(git_dir: &Path) -> Result<bool, String> {
     }
 
     Ok(every_written)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use rola_define_format::{ContentHash, Lock, LockPath, Material, MaterialKind};
+
+    use super::inside_names;
+
+    /// A lock naming a tree and a file beside it.
+    fn held() -> Lock {
+        let materials = vec![
+            Material::new(
+                LockPath::new("Tree").unwrap(),
+                ContentHash::from_digest([1; 32]),
+                MaterialKind::Tree,
+            ),
+            Material::new(
+                LockPath::new("Other/x").unwrap(),
+                ContentHash::from_digest([2; 32]),
+                MaterialKind::File,
+            ),
+        ];
+
+        Lock::new(vec![], materials).unwrap()
+    }
+
+    #[test]
+    fn a_name_inside_a_tree_is_split_from_the_rest() {
+        let names: Vec<String> = ["Tree/a.txt", "Tree", "Other/x", "Tree/*"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+
+        let split = inside_names(&held(), Path::new(""), &names);
+
+        assert_eq!(split.names, ["Tree", "Other/x", "Tree/*"]);
+        assert_eq!(
+            split.inside,
+            [(LockPath::new("Tree").unwrap(), "a.txt".to_owned())]
+        );
+    }
 }

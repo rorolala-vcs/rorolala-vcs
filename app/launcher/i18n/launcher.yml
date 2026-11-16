@@ -115,6 +115,9 @@ launcher:
     not_workspace:
       en: Not a Workspace
       zh-CN: 不是工作区
+    git_project:
+      en: Git project
+      zh-CN: git 项目
     gone:
       en: "%{path} is not a Workspace any more"
       zh-CN: "%{path} 已经不是一个工作区了"
@@ -136,8 +139,8 @@ launcher:
       en: Add a Workspace
       zh-CN: 导入工作区
     not_a_workspace:
-      en: "%{path} is not a Workspace: it holds no .rola directory"
-      zh-CN: "%{path} 不是工作区：其中没有 `.rola` 目录"
+      en: "%{path} is neither a Workspace nor a git repository with a rola.toml"
+      zh-CN: "%{path} 既不是工作区，也不是带 `rola.toml` 的 git 仓库"
 
   account:
     title:

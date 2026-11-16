@@ -173,10 +173,12 @@ internal sealed class WorkspaceCard : Border
         {
             WorkspaceState.Missing => RolaI18N.Get("launcher.workspace.missing"),
             WorkspaceState.NotWorkspace => RolaI18N.Get("launcher.workspace.not_workspace"),
+            WorkspaceState.GitProject => RolaI18N.Get("launcher.workspace.git_project"),
             _ => string.Empty,
         };
 
-        _state.Foreground = State == WorkspaceState.Workspace ? skin.Muted : skin.Alarm;
+        _state.Foreground =
+            State is WorkspaceState.Workspace or WorkspaceState.GitProject ? skin.Muted : skin.Alarm;
     }
 
     /// <summary>

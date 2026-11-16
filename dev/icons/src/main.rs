@@ -109,9 +109,34 @@ struct Manifest {
 }
 
 fn main() -> ExitCode {
-    let root = std::env::args()
-        .nth(1)
-        .map_or_else(|| PathBuf::from("."), PathBuf::from);
+    let mut args = std::env::args().skip(1);
+    let first = args.next();
+
+    // A picture that is not from the set is drawn by naming it on its own, which is how a vendored
+    // logo is turned into the picture the icon library holds.
+    if first.as_deref() == Some("--render") {
+        let (Some(source), Some(picture)) = (args.next(), args.next()) else {
+            eprintln!("--render takes the SVG to draw and the picture to write");
+
+            return ExitCode::FAILURE;
+        };
+
+        let size = args
+            .next()
+            .and_then(|size| size.parse().ok())
+            .unwrap_or(64u16);
+
+        return match render(Path::new(&source), Path::new(&picture), size) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("{error}");
+
+                ExitCode::FAILURE
+            }
+        };
+    }
+
+    let root = first.map_or_else(|| PathBuf::from("."), PathBuf::from);
 
     match draw(&root) {
         Ok(()) => ExitCode::SUCCESS,
@@ -120,6 +145,37 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Draws one SVG that is not from the set, as the size it is asked for.
+fn render(source: &Path, picture: &Path, size: u16) -> Result<(), String> {
+    let text = fs::read_to_string(source)
+        .map_err(|error| format!("`{}` could not be read: {error}", source.display()))?;
+
+    let options = resvg::usvg::Options::default();
+    let tree = resvg::usvg::Tree::from_str(&text, &options).map_err(|error| {
+        format!(
+            "`{}` could not be read as a picture: {error}",
+            source.display()
+        )
+    })?;
+
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(u32::from(size), u32::from(size))
+        .ok_or_else(|| format!("a {size}-pixel square could not be made"))?;
+
+    let scale = f32::from(size) / tree.size().width();
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+
+    pixmap
+        .save_png(picture)
+        .map_err(|error| format!("`{}` could not be written: {error}", picture.display()))?;
+    println!("==> {}", picture.display());
+
+    Ok(())
 }
 
 /// Draws every picture every set names, and writes what goes beside them.
