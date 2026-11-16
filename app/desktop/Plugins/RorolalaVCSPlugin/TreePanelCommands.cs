@@ -33,6 +33,9 @@ internal static class TreePanelCommands
         /// <summary>The encoding the description is written in, which is the command line's.</summary>
         private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
+        // WORKAROUND: the draft description is the command line's file, read and written here because no
+        // command reads a draft and `tree write-desc` would be a process per edit of the field. It can go when
+        // the ABI exposes the draft, read and write, as one thing.
         /// <summary>Where a tree keeps the description of its next version.</summary>
         /// <param name="tree">The tree's root.</param>
         /// <returns>The file's path.</returns>

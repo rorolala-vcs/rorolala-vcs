@@ -381,6 +381,9 @@ internal sealed class AccountsPanel : UserControl
             )
         );
 
+    // WORKAROUND: `rola` lists and generates keys but removes none, so the pair is deleted here. It can go
+    // when the command line owns the removal, which is where the two files and what taking them away means
+    // belong.
     /// <summary>Takes an account's pair away, in the place the command line finds it.</summary>
     /// <param name="name">The account.</param>
     private void Remove(string name)

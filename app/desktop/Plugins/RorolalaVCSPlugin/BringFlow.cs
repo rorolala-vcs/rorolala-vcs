@@ -580,6 +580,9 @@ internal sealed class BringFlow
         return string.Join((char)10, lines);
     }
 
+    // WORKAROUND: files are moved here rather than through `rola fs-ops mv`, because a move has to be taken
+    // back when the Layout record that names it does not follow. It can go when a move can be asked for and
+    // undone in two calls.
     /// <summary>
     /// Moves the local copies of the entries that are here under another name to where the Vault names them.
     /// </summary>
