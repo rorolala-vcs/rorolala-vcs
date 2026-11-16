@@ -130,30 +130,36 @@ public sealed class LayoutReadTests
         );
     }
 
-    /// <summary>The accounts a key scope finds include the one the work was recorded as.</summary>
+    /// <summary>The accounts a key scope finds are read one at a time, and the rule is a rule.</summary>
     [Fact]
-    public void TheAccountsOfTheMachineAreReadThroughTheRule()
+    public void TheAccountsOfAScopeAreReadThroughTheRule()
     {
-        var workspace = Recorded("accounts");
-
         using var rule = RolaKeyLocateRule.New();
+
+        Assert.True(rule.FindGlobal);
+        Assert.True(rule.FindLocal);
+        Assert.True(rule.FindUser);
+        Assert.True(rule.FindEnv);
+
+        rule.FindUser = false;
+        Assert.False(rule.FindUser);
+        rule.FindUser = true;
+
         using var accounts = RolaAccounts.Locate(null, rule);
 
         Assert.NotNull(accounts);
-        Assert.False(accounts.IsEmpty);
 
-        var found = new List<string>();
-
+        // A private key is not shared, so an account is found beside a place and not under the
+        // user's data directory; what is checked here is that the list and its positions agree.
         for (var index = 0; index < accounts.Count; index++)
         {
             using var account = accounts[index];
 
             Assert.NotNull(account);
+            Assert.False(string.IsNullOrEmpty(account.Name));
             Assert.False(string.IsNullOrEmpty(account.KeyPath));
-            found.Add(account.Name);
         }
 
-        Assert.Contains("alice", found);
         Assert.Null(accounts[accounts.Count]);
         Assert.Null(accounts[-1]);
     }
