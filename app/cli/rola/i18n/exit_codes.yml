@@ -125,6 +125,10 @@ exit_codes:
     en: This Workspace has merges waiting
     zh-CN: 工作区有等待中的合并
 
+  pack_argument:
+    en: "A `rola pack` command was given arguments it cannot use"
+    zh-CN: "`rola pack` 收到了无法使用的参数"
+
   vcs_index_no_index:
     en: This run is nowhere a version control index is
     zh-CN: 本次运行不在任何版本控制索引中

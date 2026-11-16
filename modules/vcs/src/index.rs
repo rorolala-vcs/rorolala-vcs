@@ -1946,6 +1946,11 @@ mod tests {
             .unwrap();
     }
 
+    /// The grace a test that does not name one keeps to.
+    fn grace() -> std::time::Duration {
+        std::time::Duration::from_hours(24)
+    }
+
     #[test]
     fn a_collecting_takes_what_the_plan_names_and_keeps_the_rest_readable() {
         let index = index("collect");
@@ -1956,7 +1961,7 @@ mod tests {
         stale(&index, &keys[2]);
 
         let keep: BTreeSet<Hash> = keys[..2].iter().copied().collect();
-        let plan = run(index.collect_plan(&keep)).unwrap().unwrap();
+        let plan = run(index.collect_plan(&keep, grace())).unwrap().unwrap();
         assert_eq!(plan.removed(), 1);
         assert_eq!(plan.kept_by_grace(), 0);
 
@@ -1988,16 +1993,32 @@ mod tests {
 
         // Nothing names the object, but it was written inside the grace, so the plan keeps it and
         // says so rather than taking it away.
-        let plan = run(index.collect_plan(&BTreeSet::new())).unwrap().unwrap();
+        let plan = run(index.collect_plan(&BTreeSet::new(), grace())).unwrap().unwrap();
         assert_eq!(plan.removed(), 0);
         assert_eq!(plan.kept_by_grace(), 1);
 
         // The grace reaches packed objects through the pack file's own modification time: the
         // object packed here is as fresh as the pack that holds it.
         run(index.repack(&silent())).unwrap().unwrap();
-        let packed = run(index.collect_plan(&BTreeSet::new())).unwrap().unwrap();
+        let packed = run(index.collect_plan(&BTreeSet::new(), grace())).unwrap().unwrap();
         assert_eq!(packed.removed(), 0);
         assert_eq!(packed.kept_by_grace(), 1);
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn a_grace_of_zero_suppresses_the_keeping() {
+        let index = index("collect-suppressed");
+        run(index.write(variant_named(7))).unwrap().unwrap();
+
+        // Nothing names the object, and the run asked for no grace at all: what was written a
+        // moment ago is what the plan takes, the caller having said it wants nothing held back.
+        let plan = run(index.collect_plan(&BTreeSet::new(), std::time::Duration::ZERO))
+            .unwrap()
+            .unwrap();
+        assert_eq!(plan.removed(), 1);
+        assert_eq!(plan.kept_by_grace(), 0);
 
         let _ = fs::remove_dir_all(index.get_root());
     }
@@ -2013,7 +2034,7 @@ mod tests {
             stale(&index, key);
         }
 
-        let plan = run(index.collect_plan(&BTreeSet::new())).unwrap().unwrap();
+        let plan = run(index.collect_plan(&BTreeSet::new(), grace())).unwrap().unwrap();
         assert_eq!(plan.removed(), 3);
 
         let report = run(index.collect(&plan, &silent())).unwrap().unwrap();
@@ -2040,7 +2061,7 @@ mod tests {
         stale(&index, &keys[1]);
 
         let keep: BTreeSet<Hash> = keys[..1].iter().copied().collect();
-        let plan = run(index.collect_plan(&keep)).unwrap().unwrap();
+        let plan = run(index.collect_plan(&keep, grace())).unwrap().unwrap();
         assert_eq!(plan.removed(), 1);
 
         // The object the plan names goes away by hand, the way another run's removal would: the

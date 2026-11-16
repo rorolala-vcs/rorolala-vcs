@@ -26,16 +26,6 @@ use crate::error::VCSIndexError;
 /// The directory packs are kept under, inside an index.
 const PACKED_DIR: &str = "packed";
 
-/// How recently an object may have been written to be kept by a collecting run that has no
-/// reference for it.
-///
-/// The same bargain the store strikes: a collecting run reads its references before anything is
-/// taken away, and a run that writes an object between that reading and the collecting has written
-/// one no reference the run saw names, since an ordinary write holds no lock. What was written
-/// recently enough is kept rather than taken, and the next collecting run decides it on the
-/// references it sees.
-const GRACE: Duration = Duration::from_hours(24);
-
 /// Where an object is read from while the index is laid out afresh.
 pub enum Source {
     /// A loose file, which holds the whole framed entry.
@@ -393,10 +383,12 @@ impl VCSIndex {
     /// Works out what a collecting run that keeps `keep` would take away.
     ///
     /// Every object the index holds is asked whether the keys handed in name it. What none of them
-    /// names is what the plan takes away, with one exception: an object written recently enough to
-    /// sit inside the grace is kept all the same, and counted in
-    /// [`kept_by_grace`](CollectPlan::kept_by_grace) instead, see `GRACE` for why. A loose object
-    /// carries its own file's modification time, a packed one its pack file's.
+    /// names is what the plan takes away, with one exception: an object written within the `grace`
+    /// is kept all the same, and counted in [`kept_by_grace`](CollectPlan::kept_by_grace)
+    /// instead. A loose object carries its own file's modification time, a packed one its pack
+    /// file's. The grace is what keeps a run that wrote an object after the references were read
+    /// from losing that object; a grace of zero suppresses the keeping, and how long the grace is
+    /// is the caller's to say rather than this index's.
     ///
     /// This reads the index and changes nothing, so a run can show what a collecting would do and
     /// ask before it does it. The collecting that carries a plan out enumerates the index again,
@@ -407,10 +399,20 @@ impl VCSIndex {
     ///
     /// Returns [`VCSIndexError::Io`] if a pack index cannot be read, and
     /// [`VCSIndexError::Malformed`] if it does not decode.
-    pub async fn collect_plan(&self, keep: &BTreeSet<Hash>) -> Result<CollectPlan, VCSIndexError> {
+    pub async fn collect_plan(
+        &self,
+        keep: &BTreeSet<Hash>,
+        grace: Duration,
+    ) -> Result<CollectPlan, VCSIndexError> {
         let loose = self.list_loose_keys().await?;
         let packs = self.packs().await?;
-        let fresh_since = SystemTime::now().checked_sub(GRACE);
+
+        // The grace is measured from now, backwards: an object written after this moment less the
+        // grace is one the collecting keeps whatever the references say. A clock that cannot
+        // answer keeps everything on the grace, which is the safe side of the two mistakes: taking
+        // an object that was just written costs the object, keeping one that is truly dead costs
+        // only the space until the next collecting run.
+        let fresh_since = SystemTime::now().checked_sub(grace);
 
         let mut plan = CollectPlan::default();
         let mut seen: BTreeSet<Hash> = BTreeSet::new();
@@ -428,12 +430,12 @@ impl VCSIndex {
             let path = self.object_path(key);
             let metadata = tokio::fs::metadata(&path).await;
 
-            let fresh = fresh_since.as_ref().is_some_and(|since| {
+            let fresh = fresh_since.is_some_and(|since| {
                 metadata
                     .as_ref()
                     .ok()
                     .and_then(|metadata| metadata.modified().ok())
-                    .is_some_and(|modified| modified > *since)
+                    .is_some_and(|modified| modified > since)
             });
 
             if fresh {
@@ -463,7 +465,7 @@ impl VCSIndex {
                         self.written_since(&Source::Packed(*index, *entry), since)
                             .await
                     }
-                    None => false,
+                    None => true,
                 };
 
                 if fresh {

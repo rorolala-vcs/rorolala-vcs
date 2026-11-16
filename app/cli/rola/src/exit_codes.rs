@@ -186,6 +186,9 @@ pub const EC_ERR_PACK_GC_NO_LAYOUT: i32 = 105;
 /// `exit_codes.pack_gc_merging`
 pub const EC_ERR_PACK_GC_MERGING: i32 = 106;
 
+/// `exit_codes.pack_argument`
+pub const EC_ERR_PACK_ARGUMENT: i32 = 107;
+
 // File operations
 
 /// `exit_codes.fs_ops_argument`

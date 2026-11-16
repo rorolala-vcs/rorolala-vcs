@@ -12,6 +12,7 @@
 //! anything away, which is why a failure here stops the collecting rather than narrowing it.
 
 use std::collections::{BTreeSet, HashSet};
+use std::time::Duration;
 
 use rorolala_errors::Failure as _;
 use rorolala_layout::{EntryKind, Layout};
@@ -19,6 +20,18 @@ use rorolala_storage::{Blake3Hash, Key, RorolalaStorage};
 use rorolala_tree::TreeStructure;
 use rorolala_utils_progress::Progress;
 use rorolala_vcs::{Hash, VCSIndex, VCSIndexObject};
+
+/// How long an entry nothing references is kept after it was written, when neither the
+/// configuration nor the run says otherwise.
+///
+/// A collecting run reads its references before anything is taken away, and a run that writes an
+/// entry between that reading and the collecting has written one no reference the run saw names:
+/// an ordinary write holds no lock, so the lock cannot keep it out. What was written recently
+/// enough is kept rather than taken, so the window a write can be lost through closes for as long
+/// as this says, and the next collecting run decides the entry on the reference's own merit. A
+/// Vault's or a Workspace's configuration names another length under `[gc]`, and a run names
+/// another with `--grace`; zero suppresses the keeping.
+pub const DEFAULT_GRACE: Duration = Duration::from_hours(24);
 
 /// What the roots keep, by the store each set is swept with.
 #[derive(Clone, Debug, Default)]

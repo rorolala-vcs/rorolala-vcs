@@ -7,7 +7,9 @@
 //! after, so a collecting that stops halfway leaves content behind that nothing names rather than
 //! a reference with nothing under it.
 
-use librorolala::storage::{CollectPlan as StoragePlan, Lockable as _};
+use librorolala::gc::DEFAULT_GRACE;
+use librorolala::storage::CollectPlan as StoragePlan;
+use librorolala::storage::Lockable as _;
 use librorolala::vcs::CollectPlan as IndexPlan;
 use librorolala::workspace::Merging;
 use mingling::{
@@ -17,13 +19,15 @@ use mingling::{
     res::{ResConfirm, ResExitCode},
 };
 use rorolala_cli_setups::{
-    ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
+    ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResVault, ResVaultConfig, ResWorkspace,
+    ResWorkspaceConfig,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line};
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_progress::Progress;
 use rust_i18n::t;
+use std::time::Duration;
 
 use crate::Next;
 use crate::exit_codes::{
@@ -44,6 +48,8 @@ pub fn collect(
     index: &ResVCSIndex,
     vault: &ResVault,
     workspace: &ResWorkspace,
+    vault_config: &ResVaultConfig,
+    workspace_config: &ResWorkspaceConfig,
     force: bool,
     confirm: ResConfirm,
     progress_setting: ResProgressSetting,
@@ -66,6 +72,14 @@ pub fn collect(
     {
         return ErrorGcMerging.into();
     }
+
+    // How long the collecting holds what nothing references: what the run said with `--grace`
+    // comes first, the configuration of the Vault or Workspace the roots came from comes second,
+    // and the collecting run's own default comes last. One value holds for both stores, since a
+    // run that protected them differently would protect the write half way.
+    let grace = state.grace.unwrap_or_else(|| {
+        config_grace(vault_config, workspace_config).map_or(DEFAULT_GRACE, Duration::from_secs)
+    });
 
     // Both stores are read even when only one is swept: the closure needs the index to know what
     // content is wanted, and the store to know what a tree's structure names.
@@ -109,7 +123,7 @@ pub fn collect(
     };
 
     // The plans are read-only, so they are made outside the locks and shown for the confirmation.
-    let plans = match plans_of(&runtime, vcs, store, &live, state) {
+    let plans = match plans_of(&runtime, vcs, store, &live, state, grace) {
         Ok(plans) => plans,
         Err(cause) => {
             reporting.finish();
@@ -199,11 +213,12 @@ fn plans_of(
     store: &librorolala::storage::RorolalaStorage,
     live: &librorolala::gc::Live,
     state: super::StatePack,
+    grace: Duration,
 ) -> Result<Plans, String> {
     let index = if state.index {
         Some(
             runtime
-                .block_on(vcs.collect_plan(live.index()))
+                .block_on(vcs.collect_plan(live.index(), grace))
                 .map_err(|error| error.to_string())?,
         )
     } else {
@@ -213,7 +228,7 @@ fn plans_of(
     let storage = if state.storage {
         Some(
             runtime
-                .block_on(store.collect_plan(live.objects(), live.manifests()))
+                .block_on(store.collect_plan(live.objects(), live.manifests(), grace))
                 .map_err(|error| error.to_string())?,
         )
     } else {
@@ -221,6 +236,29 @@ fn plans_of(
     };
 
     Ok(Plans { index, storage })
+}
+
+/// How long the configuration says an entry nothing references is kept, when it says.
+///
+/// The Vault the roots came from is asked first, the Workspace second, and a configuration that
+/// says nothing is answered with nothing, which is the run's own default to fill.
+fn config_grace(
+    vault_config: &ResVaultConfig,
+    workspace_config: &ResWorkspaceConfig,
+) -> Option<u64> {
+    if let Some(config) = vault_config.config() {
+        return config
+            .gc_config()
+            .and_then(librorolala::vault::GcConfig::grace);
+    }
+
+    if let Some(config) = workspace_config.config() {
+        return config
+            .gc_config()
+            .and_then(librorolala::workspace::GcConfig::grace);
+    }
+
+    None
 }
 
 /// The numbers the confirmation is asked about, taken from whichever plans were made.

@@ -5,6 +5,9 @@ pack:
     garbage_collect:
       en: Collect what the layout does not reference
       zh-CN: 收集 Layout 未引用的对象
+    grace:
+      en: How long to keep what nothing references, like 24h; 0 keeps nothing
+      zh-CN: 无引用对象的保留时长，如 24h；0 表示不保留
     no_index:
       en: Do not tidy the index
       zh-CN: 不整理索引
@@ -17,6 +20,7 @@ pack:
         **Usage**: rola [[GREEN]]__pack__[[/]]
         **Flags**:
              __--garbage-collect__    Collect what the Layout does not reference, then tidy the rest
+             __--grace__              How long to keep what nothing references, like `24h`; `0` keeps nothing
              __--no-index__           Do not tidy the index, leave it as it is
              __--no-storage__         Do not tidy the store, leave it as it is
 
@@ -28,9 +32,10 @@ pack:
         **用法**：rola [[GREEN]]__pack__[[/]]
         **标识**：
              __--garbage-collect__    剔除 Layout 未引用的对象，然后整理余下对象
+             __--grace__              无引用对象的保留时长，如 `24h`；`0` 表示不保留
              __--no-index__           不整理索引，保持原样
              __--no-storage__         不整理仓库，保持原样
-             
+
         > [!Note]
         > `--garbage-collect` 标识会做出不可逆删除，所以会做出询问
         > 可用 `--force` 抑制
@@ -38,6 +43,26 @@ pack:
   cmd_pack_description:
     en: Tidy the objects of the store and the index, or collect what the Layout does not reference
     zh-CN: 整理仓库与索引中的对象，或收集 Layout 未引用的对象
+
+  err_grace_without_collect:
+    en: "`--grace` was given, and this run is not collecting"
+    zh-CN: "给出了 `--grace`，但本次运行不是收集"
+
+  err_grace_without_collect_help:
+    en: |
+        Please give `--garbage-collect` beside it, or leave `--grace` out
+    zh-CN: |
+        请与 `--garbage-collect` 一同给出，或省略 `--grace`
+
+  err_grace_format:
+    en: "`%{value}` is not a grace the run can hold"
+    zh-CN: "`%{value}` 不是可用的保留时长"
+
+  err_grace_format_help:
+    en: |
+        Please write a number with its unit, like `2h`, `30m`, `2d` or `600s`; a number alone counts seconds, and `0` keeps nothing
+    zh-CN: |
+        请写成数字加单位的形式，如 `2h`、`30m`、`2d` 或 `600s`；单独的数字按秒计，`0` 表示不保留
 
   result_packed:
     en: The objects have been tidied again

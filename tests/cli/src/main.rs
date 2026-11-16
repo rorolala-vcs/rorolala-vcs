@@ -1161,8 +1161,13 @@ fn collecting(
     checked.exits("a file nothing references is stored", &ran, 0);
     let key = ran.stdout.trim().to_owned();
 
-    let ran = rola.run(ws, &["pack", "--garbage-collect", "--force"]);
-    checked.exits("a collecting ends successfully", &ran, 0);
+    // What the run names with `--grace` is what the collecting holds it by: a day keeps what was
+    // written a moment ago, and says so.
+    let ran = rola.run(
+        ws,
+        &["pack", "--garbage-collect", "--grace", "24h", "--force"],
+    );
+    checked.exits("a collecting with a named grace ends successfully", &ran, 0);
     checked.stdout_has(
         "what was written a moment ago is taken by nothing",
         &ran,
@@ -1177,23 +1182,69 @@ fn collecting(
     let ran = rola.run(ws, &["storage", "ls-storaged"]);
     checked.stdout_has("the kept entry is still listed", &ran, &key);
 
-    // A collecting runs against the stores as they stand when it runs, so what was fresh is stale
-    // by the next one, whatever packing moved it into since.
-    stale_storage(&ws.join(".rola/storage"));
+    // A grace beside a laying-out is a word that would do nothing, so it is refused, and so is one
+    // the run cannot read.
+    let ran = rola.run(ws, &["pack", "--grace", "24h", "--force"]);
+    checked.exits("a grace beside a laying-out is refused", &ran, 107);
+    checked.stderr_has(
+        "the refusal says the grace has nothing to hold",
+        &ran,
+        "not collecting",
+    );
 
-    let ran = rola.run(ws, &["pack", "--garbage-collect", "--force"]);
-    checked.exits("the collecting of what is stale is made", &ran, 0);
+    let ran = rola.run(
+        ws,
+        &[
+            "pack",
+            "--garbage-collect",
+            "--grace",
+            "nonsense",
+            "--force",
+        ],
+    );
+    checked.exits("a grace the run cannot read is refused", &ran, 107);
+    checked.stderr_has("the refusal names what was written", &ran, "nonsense");
+
+    // `--grace 0` is the run asking for nothing to be held back: what was written a moment ago is
+    // taken all the same.
+    let ran = rola.run(
+        ws,
+        &["pack", "--garbage-collect", "--grace", "0", "--force"],
+    );
+    checked.exits("a collecting with no grace takes the fresh entry", &ran, 0);
     checked.stdout_has(
-        "what was taken away is said with its counts",
+        "what was written a moment ago is taken",
         &ran,
         "1 store entries",
     );
 
     let ran = rola.run(ws, &["storage", "ls-storaged"]);
     checked.wants(
-        "what was taken away is not listed",
+        "what the run refused to hold back is gone",
         ran.stdout.trim().is_empty(),
         &said(&ran),
+    );
+
+    // The configuration is the default the run fills with when it names nothing itself: a
+    // Workspace whose file suppresses the grace collects without the flag saying so.
+    let config = ws.join(".rola/workspace.toml");
+    let held = fs::read_to_string(&config).unwrap_or_default();
+    fs::write(&config, format!("{held}\n[gc]\ngrace = 0\n")).expect("the Workspace configuration");
+
+    fs::write(&source, "written again, nothing names this\n").expect("another loose file");
+    let ran = rola.run(ws, &["storage", "write-file", &text(&source)]);
+    checked.exits("another file nothing references is stored", &ran, 0);
+
+    let ran = rola.run(ws, &["pack", "--garbage-collect", "--force"]);
+    checked.exits(
+        "the configuration's grace is what the collecting keeps by",
+        &ran,
+        0,
+    );
+    checked.stdout_has(
+        "what the configuration suppressed was taken",
+        &ran,
+        "1 store entries",
     );
 
     // A run in neither a Vault nor a Workspace has no roots at all, and is refused rather than

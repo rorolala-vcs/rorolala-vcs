@@ -30,17 +30,19 @@ use mingling::{
     res::{ResConfirm, ResExitCode},
 };
 use rorolala_cli_setups::{
-    ResForce, ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
+    ResForce, ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResVault, ResVaultConfig,
+    ResWorkspace, ResWorkspaceConfig,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
+use std::time::Duration;
 
 use crate::Next;
 use crate::complete::{strip_written, typing_flag};
 use crate::exit_codes::{
-    EC_ERR_PACK_FAILED, EC_ERR_PACK_LOCKED, EC_ERR_PACK_NO_STORAGE, EC_ERR_PACK_NOTHING_TO_PACK,
-    EC_HELP,
+    EC_ERR_PACK_ARGUMENT, EC_ERR_PACK_FAILED, EC_ERR_PACK_LOCKED, EC_ERR_PACK_NO_STORAGE,
+    EC_ERR_PACK_NOTHING_TO_PACK, EC_HELP,
 };
 use crate::failure::failure;
 use crate::progress::Reporting;
@@ -49,6 +51,9 @@ pub mod gc;
 
 /// Collects what the Layout does not reference, instead of only laying out what is there.
 const ARG_GARBAGE_COLLECT: PickerArg<'static, Flag> = arg![garbage_collect: Flag];
+
+/// How long an entry nothing references is kept after it was written, this run over.
+const ARG_GRACE: PickerArg<'static, Option<String>> = arg![grace: Option<String>];
 
 /// Lay the index's objects out too. Absent means the index is left as it is.
 const ARG_NO_INDEX: PickerArg<'static, Flag> = arg![no_index: Flag];
@@ -70,7 +75,8 @@ pub fn desc_pack() -> Description {
 /// Completes what `rola pack` can be given next.
 ///
 /// What is laid out is whatever store and index the run works on, and the things a caller chooses
-/// are which of the two to leave alone and whether the run collects instead.
+/// are which of the two to leave alone, whether the run collects instead, and how long the
+/// collecting holds what nothing references.
 #[completion(EntryPack)]
 pub fn complete_pack(ctx: ShellContext) -> Suggest {
     if typing_flag(&ctx) {
@@ -78,6 +84,7 @@ pub fn complete_pack(ctx: ShellContext) -> Suggest {
             &ctx,
             suggest! {
                 ARG_GARBAGE_COLLECT: t!("pack.complete.garbage_collect"),
+                ARG_GRACE: t!("pack.complete.grace"),
                 ARG_NO_INDEX: t!("pack.complete.no_index"),
                 ARG_NO_STORAGE: t!("pack.complete.no_storage"),
             },
@@ -130,9 +137,11 @@ pub fn complete_pack(ctx: ShellContext) -> Suggest {
 /// the roots could not be worked out or a side could not be swept, which has taken nothing away.
 #[command(node = "pack", entry = EntryPack)]
 pub fn pack(args: EntryPack) -> Next {
-    // UNWRAP: Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
-    let (garbage_collect, no_index, no_storage, unmatched) = args
+    // UNWRAP: Picking flags cannot fail: a flag that is absent is `Inactive`, not an error, and a
+    // valued flag that is absent is `None`.
+    let (garbage_collect, grace, no_index, no_storage, unmatched) = args
         .pick(ARG_GARBAGE_COLLECT)
+        .pick(ARG_GRACE)
         .pick(ARG_NO_INDEX)
         .pick(ARG_NO_STORAGE)
         .pick(&UNMATCHED)
@@ -142,12 +151,53 @@ pub fn pack(args: EntryPack) -> Next {
         return next;
     }
 
+    let collecting = matches!(garbage_collect, Flag::Active);
+
+    // A grace is the collecting's to carry: one given to a run that lays out only is a word that
+    // would do nothing, and is refused rather than dropped.
+    let grace = match grace {
+        Some(_) if !collecting => return ErrorGraceWithoutCollect.into(),
+        Some(text) => match parse_grace(&text) {
+            Some(grace) => Some(grace),
+            None => return ErrorGraceFormat { value: text }.into(),
+        },
+        None => None,
+    };
+
     StatePack {
-        garbage_collect: matches!(garbage_collect, Flag::Active),
+        garbage_collect: collecting,
+        grace,
         storage: matches!(no_storage, Flag::Inactive),
         index: matches!(no_index, Flag::Inactive),
     }
     .into()
+}
+
+/// The grace `text` names, as the run is to hold it.
+///
+/// A grace is written as a number with the unit that says what the number counts, `s`, `m`, `h` or
+/// `d`, and a number with no unit counts seconds. A grace of zero is the run asking for nothing to
+/// be held back, which is the whole of what suppressing the grace is.
+fn parse_grace(text: &str) -> Option<Duration> {
+    let text = text.trim();
+    let digits = text.len()
+        - text
+            .chars()
+            .rev()
+            .take_while(char::is_ascii_alphabetic)
+            .count();
+
+    let (number, unit) = text.split_at(digits);
+    let seconds: u64 = number.parse().ok()?;
+    let multiplier = match unit {
+        "" | "s" => 1,
+        "m" => 60,
+        "h" => 3_600,
+        "d" => 86_400,
+        _ => return None,
+    };
+
+    Some(Duration::from_secs(seconds.saturating_mul(multiplier)))
 }
 
 /// The state a packing run starts in.
@@ -158,6 +208,9 @@ pub fn pack(args: EntryPack) -> Next {
 pub struct StatePack {
     /// Whether the run collects what the Layout does not reference, rather than only laying out.
     garbage_collect: bool,
+    /// How long the collecting holds what nothing references, when the run said; absent is the
+    /// configuration's to say, and a configuration that says nothing holds the default.
+    grace: Option<Duration>,
     /// Whether the store is to be laid out.
     storage: bool,
     /// Whether the index is to be laid out.
@@ -171,6 +224,8 @@ pub fn handle_pack(
     index: &mut LazyRes<ResVCSIndex>,
     vault: &mut LazyRes<ResVault>,
     workspace: &mut LazyRes<ResWorkspace>,
+    vault_config: &mut LazyRes<ResVaultConfig>,
+    workspace_config: &mut LazyRes<ResWorkspaceConfig>,
     force: &ResForce,
     confirm: &ResConfirm,
     progress: &ResProgressSetting,
@@ -190,6 +245,8 @@ pub fn handle_pack(
             index.get_ref(),
             vault.get_ref(),
             workspace.get_ref(),
+            vault_config.get_ref(),
+            workspace_config.get_ref(),
             **force,
             *confirm,
             *progress,
@@ -361,6 +418,64 @@ pub fn render_error_pack_failed(error: ErrorPackFailed, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("pack.err_pack_failed_help").trim()));
     ec.exit_code = EC_ERR_PACK_FAILED;
+}
+
+/// Error: `--grace` was given, and the run is not collecting.
+///
+/// A grace is how long a collecting holds what nothing references, so a laying-out has nothing to
+/// hold: the word would do nothing, and is refused rather than dropped, since a run that read it
+/// and went on would never know it was not doing what it said.
+#[derive(Grouped)]
+pub struct ErrorGraceWithoutCollect;
+
+impl Failure for ErrorGraceWithoutCollect {
+    fn name(&self) -> &'static str {
+        "error_pack_grace_without_collect"
+    }
+
+    fn reason(&self) -> String {
+        t!("pack.err_grace_without_collect").trim().to_string()
+    }
+}
+
+failure!(ErrorGraceWithoutCollect);
+
+#[renderer(buffer)]
+pub fn render_error_grace_without_collect(error: ErrorGraceWithoutCollect, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("pack.err_grace_without_collect_help").trim())
+    );
+    ec.exit_code = EC_ERR_PACK_ARGUMENT;
+}
+
+/// Error: what `--grace` was given is not a grace the run can hold.
+#[derive(Grouped)]
+pub struct ErrorGraceFormat {
+    /// What was written where a grace was asked for.
+    value: String,
+}
+
+impl Failure for ErrorGraceFormat {
+    fn name(&self) -> &'static str {
+        "error_pack_grace_format"
+    }
+
+    fn reason(&self) -> String {
+        t!("pack.err_grace_format", value = self.value)
+            .trim()
+            .to_string()
+    }
+}
+
+failure!(ErrorGraceFormat);
+
+#[renderer(buffer)]
+pub fn render_error_grace_format(error: ErrorGraceFormat, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("pack.err_grace_format_help").trim()));
+    ec.exit_code = EC_ERR_PACK_ARGUMENT;
 }
 
 /// Error: another run holds the store's lock.

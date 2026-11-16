@@ -144,18 +144,6 @@ impl LockingGuard<RorolalaStorage> {
 }
 
 impl RorolalaStorage {
-    /// How recently an entry may have been written to be kept by a collecting run that has no
-    /// reference for it.
-    ///
-    /// A collecting run reads its references before anything is taken away, and a run that writes
-    /// an entry between that reading and the collecting has written one no reference the run saw
-    /// names: an ordinary write holds the store's lock for no part of itself, so the lock cannot
-    /// keep it out. What was written recently enough is kept rather than taken, so the window a
-    /// write can be lost through closes for as long as this says. The next collecting run arrives
-    /// after the write's reference has landed, and keeps or takes the entry on the reference's own
-    /// merit.
-    const GRACE: Duration = Duration::from_hours(24);
-
     /// The packing itself, with no lock around it: reach it through [`LockingGuard::pack`], which
     /// holds the store against another run for the whole of the work.
     ///
@@ -429,9 +417,15 @@ impl RorolalaStorage {
     /// Every entry the store holds is asked whether one of the keys handed in names it: an object
     /// entry survives on `objects`, a manifest entry survives on `manifests`. What survives on
     /// neither is what the plan takes away, with one exception: an entry whose bytes were written
-    /// recently enough to sit inside the grace is kept all the same, and counted in
-    /// [`kept_by_grace`](CollectPlan::kept_by_grace) instead. The grace is what keeps a run that
-    /// wrote an entry after the references were read from losing that entry, see `GRACE`.
+    /// within the `grace` is kept all the same, and counted in
+    /// [`kept_by_grace`](CollectPlan::kept_by_grace) instead.
+    ///
+    /// The grace is what keeps a run that wrote an entry after the references were read from
+    /// losing that entry: an ordinary write holds the store's lock for no part of itself, so the
+    /// lock cannot keep the write out of the window between the reading and the taking away. The
+    /// next collecting run arrives after the write's reference has landed, and keeps or takes the
+    /// entry on the reference's own merit; a grace of zero suppresses the keeping, and how long
+    /// the grace is is the caller's to say rather than this store's.
     ///
     /// This reads the store and changes nothing, so a run can show what a collecting would do and
     /// ask before it does it. The collecting that carries a plan out enumerates the store again,
@@ -446,16 +440,17 @@ impl RorolalaStorage {
         &self,
         objects: &BTreeSet<Key>,
         manifests: &BTreeSet<Key>,
+        grace: Duration,
     ) -> Result<CollectPlan, Error> {
         let state = self.root_state();
         let (entries, _) = self.survey(&state).await?;
 
         // The grace is measured from now, backwards: an entry written after this moment less the
-        // grace is one the collecting keeps whatever the references say. A clock that cannot answer
-        // keeps nothing on the grace, which is the safe side of the two mistakes: taking an entry
-        // that was just written costs the entry, keeping one that is truly dead costs only the
-        // space until the next collecting run.
-        let fresh_since = SystemTime::now().checked_sub(Self::GRACE);
+        // grace is one the collecting keeps whatever the references say. A clock that cannot
+        // answer keeps everything on the grace, which is the safe side of the two mistakes: taking
+        // an entry that was just written costs the entry, keeping one that is truly dead costs
+        // only the space until the next collecting run.
+        let fresh_since = SystemTime::now().checked_sub(grace);
 
         let mut plan = CollectPlan::default();
         for ((kind, key), (len, source)) in entries {
@@ -469,7 +464,7 @@ impl RorolalaStorage {
 
             let fresh = match fresh_since {
                 Some(fresh_since) => self.written_since(&source, fresh_since).await?,
-                None => false,
+                None => true,
             };
 
             if fresh {

@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use rorolala_utils_constants::STORAGE_CONFIG_PATH;
 use rorolala_utils_location::Locate as _;
@@ -1239,6 +1239,11 @@ fn stale(store: &RorolalaStorage, key: &Key) {
     file.set_modified(SystemTime::UNIX_EPOCH).unwrap();
 }
 
+/// The grace a test that does not name one keeps to.
+fn grace() -> Duration {
+    Duration::from_hours(24)
+}
+
 /// How long the entry `plain` is kept as, written raw and whole.
 fn framed_len(plain: &[u8]) -> u64 {
     let frame = Frame {
@@ -1269,7 +1274,7 @@ async fn a_collecting_plan_takes_what_no_key_names_and_is_not_fresh() {
 
     let objects: BTreeSet<Key> = keys[..2].iter().copied().collect();
     let plan = store
-        .collect_plan(&objects, &BTreeSet::new())
+        .collect_plan(&objects, &BTreeSet::new(), grace())
         .await
         .unwrap();
 
@@ -1295,7 +1300,7 @@ async fn a_collecting_takes_away_what_the_plan_names_and_keeps_the_rest_readable
 
     let objects: BTreeSet<Key> = keys[..2].iter().copied().collect();
     let plan = store
-        .collect_plan(&objects, &BTreeSet::new())
+        .collect_plan(&objects, &BTreeSet::new(), grace())
         .await
         .unwrap();
     let guard = store.lock().await.unwrap();
@@ -1326,7 +1331,7 @@ async fn an_entry_just_written_is_kept_by_the_grace() {
     // Nothing names the entry, but it was written inside the grace, so the plan keeps it and says
     // so rather than taking it away.
     let plan = store
-        .collect_plan(&BTreeSet::new(), &BTreeSet::new())
+        .collect_plan(&BTreeSet::new(), &BTreeSet::new(), grace())
         .await
         .unwrap();
     assert_eq!(plan.removed(), 0);
@@ -1336,11 +1341,28 @@ async fn an_entry_just_written_is_kept_by_the_grace() {
     // packed here is as fresh as the pack that holds it.
     store.lock().await.unwrap().pack(&keys).await.unwrap();
     let packed = store
-        .collect_plan(&BTreeSet::new(), &BTreeSet::new())
+        .collect_plan(&BTreeSet::new(), &BTreeSet::new(), grace())
         .await
         .unwrap();
     assert_eq!(packed.removed(), 0);
     assert_eq!(packed.kept_by_grace(), 1);
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn a_grace_of_zero_suppresses_the_keeping() {
+    let (parent, store) = store("collect-suppressed");
+    whole_objects(&store, &[b"written a moment ago"]).await;
+
+    // Nothing names the entry, and the run asked for no grace at all: what was written a moment
+    // ago is what the plan takes, the caller having said it wants nothing held back.
+    let plan = store
+        .collect_plan(&BTreeSet::new(), &BTreeSet::new(), Duration::ZERO)
+        .await
+        .unwrap();
+    assert_eq!(plan.removed(), 1);
+    assert_eq!(plan.kept_by_grace(), 0);
 
     let _ = fs::remove_dir_all(&parent);
 }
@@ -1354,7 +1376,7 @@ async fn a_collecting_that_keeps_nothing_empties_the_store() {
     }
 
     let plan = store
-        .collect_plan(&BTreeSet::new(), &BTreeSet::new())
+        .collect_plan(&BTreeSet::new(), &BTreeSet::new(), grace())
         .await
         .unwrap();
     assert_eq!(plan.removed(), 3);
@@ -1385,7 +1407,7 @@ async fn an_entry_gone_between_the_plan_and_the_collecting_is_skipped() {
 
     let objects: BTreeSet<Key> = keys[..1].iter().copied().collect();
     let plan = store
-        .collect_plan(&objects, &BTreeSet::new())
+        .collect_plan(&objects, &BTreeSet::new(), grace())
         .await
         .unwrap();
     assert_eq!(plan.removed(), 1);

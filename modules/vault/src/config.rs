@@ -34,6 +34,9 @@ pub struct Config {
     vault: MetaConfig,
     /// Who may act as an administrator of the Vault.
     auth: AuthConfig,
+    /// What a collecting run in this Vault is told about what was written recently.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    gc: Option<GcConfig>,
 }
 
 impl Config {
@@ -77,6 +80,33 @@ impl Config {
     /// change to any other part of it does.
     pub const fn auth_config_mut(&mut self) -> &mut AuthConfig {
         &mut self.auth
+    }
+
+    /// What a collecting run in this Vault is told, when the configuration says.
+    #[must_use]
+    pub const fn gc_config(&self) -> Option<&GcConfig> {
+        self.gc.as_ref()
+    }
+}
+
+/// What a collecting run in this Vault is told about what was written recently.
+///
+/// It is written under `[gc]`. The grace is how long an entry nothing references is kept after it
+/// was written, so a run that is still putting its reference down does not lose what it wrote; a
+/// grace of zero suppresses the keeping, and a table that says nothing leaves the collecting run's
+/// own default.
+#[derive(Debug, Default, Clone, Copy, Configure, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GcConfig {
+    /// How long an entry nothing references is kept, in seconds; zero keeps nothing.
+    grace: Option<u64>,
+}
+
+impl GcConfig {
+    /// How long an entry nothing references is kept, in seconds, when the file says.
+    #[must_use]
+    pub const fn grace(&self) -> Option<u64> {
+        self.grace
     }
 }
 
