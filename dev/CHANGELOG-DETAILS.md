@@ -267,7 +267,11 @@ The rest of the read surface is filled in beside them: `parse_rola_vault_address
 
 `rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. `rola_tree_status_json` takes a directory and answers with the tree's status as JSON: what its staging area holds beside the recorded version, what the work changed without being staged, what the work holds and the staging area does not, what a merge left in conflict and whether the tree is a wrong change. A caller that cannot decode `.rola-tree` hands the bytes or the directory over instead of keeping a second copy of the format. Text that is not hex or bytes that are not a structure answer as `null`, and a directory with no tree or no readable status answers as `null`, so an answer is always JSON. The strings are freed with `free_string`.
 
-### 35. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+### 35. [`modules`] [`rola-sharp`] Read Layouts, configuration, tree marks and identities from C#
+
+`RolaSharp` gains the wrapper classes the Desktop's reads need: `RolaLayouts` and `RolaLayoutEntries` for the Layout a place holds and what its entries say, `RolaWorkspaceConfig` for the Vaults a Workspace knows, `RolaTreeMark` for a tree's id and staged description, `RolaVault`, `RolaAccount`, `RolaAccounts`, `RolaMember`, `RolaMembers` and `RolaKeyLocateRule` for the identities a key scope finds, and `RolaPaths` for the names the two programs share. A reading of entries carries the state a place needs: a copy that was never fetched is told apart from a name that is wrong. Every class parses the same JSON the command line writes, so a panel reads one document whichever side answered it.
+
+### 36. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
 
 The new `rorolala-tree` crate holds what a tree is: a canonically ordered structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path; a path both sides changed differently becomes a conflict copy.
 
