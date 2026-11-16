@@ -13,12 +13,14 @@ use std::path::Path;
 
 use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::Layout;
+use rorolala_tree::consts::{DESCRIPTION, ENTRY_ID, MARK};
 use rorolala_tree::{Tree, TreeStatus};
 use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
+use serde::Serialize;
 
 pub use rorolala_status::*;
 
@@ -160,6 +162,75 @@ fn tree_status(directory: &Path) -> Option<TreeStatus> {
     Some(status)
 }
 
+/// Whether `directory` is the root of a tree.
+///
+/// The answer is the mark alone: a tree is a directory holding a `.rola-tree` directory, and
+/// nothing about the Workspace, the Layout, the index or the store is read. That is what makes it
+/// the cheap question a listing asks about every directory it draws, beside
+/// [`tree_status_json`], which is the whole reading of one.
+///
+/// # FFI
+///
+/// `true` when the directory holds the tree's mark, `false` otherwise, including when the path is
+/// not a directory.
+#[must_use]
+#[lazyffi(export = rola_is_tree)]
+pub fn is_tree(directory: &Path) -> bool {
+    directory.join(MARK).is_dir()
+}
+
+/// The id of a tree and the description of its next version, as the C ABI writes them.
+#[derive(Debug, Serialize)]
+struct TreeMark {
+    /// The Layout entry id the tree keeps, empty when the file says nothing.
+    id: String,
+    /// Whether a description is staged for the next version.
+    described: bool,
+    /// The description itself, empty when none is staged.
+    description: String,
+}
+
+/// The id of the tree at `directory` and the description staged for it, as one JSON document.
+///
+/// A tree's id is what tells a tree that moved from one that was lost and another that appeared;
+/// the description is what the next version is to say. A caller that read `.rola-tree` itself
+/// would be keeping a second copy of the format, which is what [`tree_status_json`] exists to
+/// avoid for the status; this is the same answer for the two fields the status does not carry.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`,
+/// `{"id":"<uuid>","described":true,"description":"..."}`, or `null` when the directory is not the
+/// root of a tree. `id` is empty when the file is there and cannot be read, and `description` is
+/// empty when none is staged.
+#[must_use]
+#[lazyffi(export = rola_tree_mark_json)]
+pub fn tree_mark_json(directory: &Path) -> String {
+    tree_mark(directory).map_or_else(
+        || "null".to_owned(),
+        |mark| serde_json::to_string(&mark).unwrap_or_else(|_| "null".to_owned()),
+    )
+}
+
+/// The mark of the tree at `directory`, when the directory is the root of one.
+fn tree_mark(directory: &Path) -> Option<TreeMark> {
+    let mark = directory.join(MARK);
+
+    if !mark.is_dir() {
+        return None;
+    }
+
+    let id = std::fs::read_to_string(mark.join(ENTRY_ID))
+        .map_or_else(|_| String::new(), |id| id.trim().to_owned());
+    let description = std::fs::read_to_string(mark.join(DESCRIPTION)).ok();
+
+    Some(TreeMark {
+        id,
+        described: description.is_some(),
+        description: description.unwrap_or_default(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::ffi::{CStr, CString, c_char};
@@ -174,7 +245,9 @@ mod tests {
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
 
-    use super::{RolaStatus, Status, free_rola_status, locate_rola_status};
+    use super::{
+        RolaStatus, Status, free_rola_status, is_tree, locate_rola_status, tree_mark_json,
+    };
 
     /// A directory of its own, emptied first so a rerun starts clean.
     ///
@@ -256,6 +329,39 @@ mod tests {
         let dir = scratch("absent");
 
         assert!(read(&dir).is_null(), "{dir:?}");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_directory_without_the_mark_is_no_tree() {
+        let dir = scratch("not-tree");
+
+        assert!(!is_tree(&dir));
+        assert_eq!(tree_mark_json(&dir), "null");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_trees_id_and_staged_description_cross_as_data() {
+        let dir = scratch("tree-mark");
+        let mark = dir.join(".rola-tree");
+        fs::create_dir_all(&mark).unwrap();
+        fs::write(mark.join("id"), "1a2b3c4d").unwrap();
+
+        assert!(is_tree(&dir));
+
+        let answer: serde_json::Value = serde_json::from_str(&tree_mark_json(&dir)).unwrap();
+        assert_eq!(answer["id"], "1a2b3c4d");
+        assert_eq!(answer["described"], false);
+        assert_eq!(answer["description"], "");
+
+        fs::write(mark.join("description"), "the next version").unwrap();
+
+        let answer: serde_json::Value = serde_json::from_str(&tree_mark_json(&dir)).unwrap();
+        assert_eq!(answer["described"], true);
+        assert_eq!(answer["description"], "the next version");
 
         let _ = fs::remove_dir_all(&dir);
     }

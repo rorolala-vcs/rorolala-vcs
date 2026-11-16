@@ -19,8 +19,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use librorolala::layout::{LayoutPath, MutableData};
+use librorolala::vault::Vault;
+use librorolala::workspace::{Config as WorkspaceConfig, Workspace};
 use rorolala_book_search::{SourceArticle, encode};
+use rorolala_utils_configure::Configure as _;
+use rorolala_utils_location::Locate as _;
 use rorolala_utils_sandbox::bin_dir;
+use uuid::Uuid;
 
 /// The file a module holds its own C11 program in.
 const MODULE_SOURCE: &str = "test.c";
@@ -83,12 +89,22 @@ fn main() {
     checked.report();
 }
 
-/// The book a C program searches, and the directory the walk it is located by starts in.
+/// The places a C program reads: the book it searches, the Workspace and Vault it lists, and the tree it marks.
 struct Fixture {
     /// The book file itself, which is opened directly.
     book: PathBuf,
     /// A directory beside the book's, as a program's own directory would be.
     beside: PathBuf,
+    /// A Workspace working in a Layout that names entries.
+    workspace: PathBuf,
+    /// A Vault whose own Layout names an entry.
+    vault: PathBuf,
+    /// The root of a tree, with an id and a staged description.
+    tree: PathBuf,
+    /// The key the fixture Workspace's store holds some content under.
+    storage_key: String,
+    /// A directory the C programs may write into, which is the scratch this run made.
+    scratch: PathBuf,
 }
 
 /// Writes the fixture book and the directory it is located from.
@@ -122,7 +138,112 @@ fn fixture(scratch: &Path) -> Fixture {
     let beside = scratch.join("bin");
     fs::create_dir_all(&beside).expect("a directory beside the book's");
 
-    Fixture { book, beside }
+    let workspace = workspace_fixture(scratch);
+    let storage_key = storage_fixture(&workspace, scratch);
+
+    Fixture {
+        book,
+        beside,
+        workspace,
+        vault: vault_fixture(scratch),
+        tree: tree_fixture(scratch),
+        storage_key,
+        scratch: scratch.to_path_buf(),
+    }
+}
+
+/// Puts one small file in the fixture Workspace's store, answering the key it is kept under.
+fn storage_fixture(workspace: &Path, scratch: &Path) -> String {
+    let located = Workspace::locate(workspace).expect("the fixture Workspace locates");
+    let store = located
+        .get_current_rola_storage()
+        .expect("the fixture Workspace has a store");
+    let file = scratch.join("fixture-content.bin");
+    fs::write(&file, b"fixture content").expect("the fixture content is written");
+
+    let runtime = tokio::runtime::Runtime::new().expect("a runtime of the fixture's own");
+
+    runtime
+        .block_on(librorolala::storage::store_file(&store, &file))
+        .expect("the fixture content is stored")
+        .to_string()
+}
+
+/// A Workspace working in a Layout that names two entries, one of them deprecated.
+///
+/// The Vaults it knows are bound as well, so the configuration read has something to list: a
+/// binding is the one thing a Workspace's configuration holds that a caller can see.
+fn workspace_fixture(scratch: &Path) -> PathBuf {
+    let dir = scratch.join("workspace");
+    Workspace::create(&dir).expect("the fixture Workspace is made");
+
+    let workspace = Workspace::locate(&dir).expect("the fixture Workspace locates");
+    let layout = workspace.layout().expect("the fixture Layout opens");
+
+    layout
+        .create_entry(
+            Uuid::from_u128(1),
+            MutableData::new(Some("alice".to_owned()), [1; 32], "the hero".to_owned()),
+        )
+        .expect("the fixture entry is made");
+    layout
+        .create_path(&LayoutPath::new("art/hero.psd").expect("a path"), Uuid::from_u128(1))
+        .expect("the fixture path is named");
+    layout
+        .create_entry(
+            Uuid::from_u128(2),
+            MutableData::new(None, [2; 32], String::new()),
+        )
+        .expect("the deprecated fixture entry is made");
+    layout
+        .create_path(
+            &LayoutPath::new("@/removed/old.psd").expect("a path"),
+            Uuid::from_u128(2),
+        )
+        .expect("the deprecated fixture path is named");
+
+    let path = workspace.config_path();
+    let mut config = WorkspaceConfig::read_from(&path).expect("the fixture configuration reads");
+    config.vaults_mut().bind("studio", "tcp://127.0.0.1:9270");
+    config.vaults_mut().bind("alpha", "ssh://alice@example.test/vault");
+    config.default_config_mut().set_vault("studio");
+    config
+        .write_to(&path)
+        .expect("the fixture configuration writes");
+
+    dir
+}
+
+/// A Vault whose own Layout names one entry.
+fn vault_fixture(scratch: &Path) -> PathBuf {
+    let dir = scratch.join("vault");
+    Vault::create(&dir).expect("the fixture Vault is made");
+
+    let vault = Vault::locate(&dir).expect("the fixture Vault locates");
+    let layout = vault.layout().expect("the fixture Vault Layout opens");
+
+    layout
+        .create_entry(
+            Uuid::from_u128(3),
+            MutableData::new(Some("bob".to_owned()), [3; 32], "the vault's file".to_owned()),
+        )
+        .expect("the Vault's fixture entry is made");
+    layout
+        .create_path(&LayoutPath::new("shared.psd").expect("a path"), Uuid::from_u128(3))
+        .expect("the Vault's fixture path is named");
+
+    dir
+}
+
+/// The root of a tree, with an id and a description staged for the next version.
+fn tree_fixture(scratch: &Path) -> PathBuf {
+    let dir = scratch.join("tree");
+    let mark = dir.join(".rola-tree");
+    fs::create_dir_all(&mark).expect("the tree's mark");
+    fs::write(mark.join("id"), "tree-id").expect("the tree's id");
+    fs::write(mark.join("description"), "what the next version says").expect("the tree's draft");
+
+    dir
 }
 
 /// The modules of this suite, in name order.
@@ -182,6 +303,21 @@ const BOOK_VARIABLE: &str = "ROLA_BOOK";
 /// The environment variable a module is handed the directory to locate the book from in.
 const LOCATE_VARIABLE: &str = "ROLA_BOOK_LOCATE";
 
+/// The environment variable a module is handed the fixture Workspace's path in.
+const WORKSPACE_VARIABLE: &str = "ROLA_WORKSPACE";
+
+/// The environment variable a module is handed the fixture Vault's path in.
+const VAULT_VARIABLE: &str = "ROLA_VAULT";
+
+/// The environment variable a module is handed the fixture tree's path in.
+const TREE_VARIABLE: &str = "ROLA_TREE";
+
+/// The environment variable a module is handed the key the fixture store holds content under.
+const STORAGE_KEY_VARIABLE: &str = "ROLA_STORAGE_KEY";
+
+/// The environment variable a module is handed a directory it may write into.
+const SCRATCH_VARIABLE: &str = "ROLA_SCRATCH";
+
 /// Compiles one module against the header and runs it, answering whether it was happy.
 ///
 /// The standard is C11 and every warning is an error, which is what makes the header's own
@@ -232,6 +368,11 @@ fn answers(
     let ran = Command::new(executable)
         .env(BOOK_VARIABLE, &fixture.book)
         .env(LOCATE_VARIABLE, &fixture.beside)
+        .env(WORKSPACE_VARIABLE, &fixture.workspace)
+        .env(VAULT_VARIABLE, &fixture.vault)
+        .env(TREE_VARIABLE, &fixture.tree)
+        .env(STORAGE_KEY_VARIABLE, &fixture.storage_key)
+        .env(SCRATCH_VARIABLE, &fixture.scratch)
         .output()
         .unwrap_or_else(|error| panic!("running {}: {error}", executable.display()));
 

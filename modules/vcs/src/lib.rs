@@ -23,6 +23,7 @@ mod lookback;
 mod message;
 mod variant;
 mod version;
+pub mod view;
 
 pub use creator::*;
 pub use error::*;

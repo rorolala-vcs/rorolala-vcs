@@ -1066,8 +1066,13 @@ dependencies = [
 name = "it-ffi-c"
 version = "0.1.0"
 dependencies = [
+ "librorolala",
  "rorolala-book-search",
+ "rorolala-utils-configure",
+ "rorolala-utils-location",
  "rorolala-utils-sandbox",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -1321,6 +1326,7 @@ dependencies = [
  "rola-desktop-pty",
  "rorolala-auth",
  "rorolala-book-search",
+ "rorolala-chunking",
  "rorolala-daemon",
  "rorolala-dev-bindgen",
  "rorolala-errors",
@@ -2165,6 +2171,7 @@ dependencies = [
  "rorolala-utils-location",
  "rorolala-utils-progress",
  "serde",
+ "serde_json",
  "tokio",
 ]
 

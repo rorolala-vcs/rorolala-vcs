@@ -34,5 +34,28 @@ int main(void) {
     want(strcmp(no_workspace, "null") == 0, "a directory outside a Workspace reads as null");
     free_string(no_workspace);
 
+    /* The mark is the cheap question a listing asks about every directory it draws. */
+    const char *tree = getenv("ROLA_TREE");
+    const char *workspace = getenv("ROLA_WORKSPACE");
+    want(tree != NULL && rola_is_tree(tree), "a directory with the mark is a tree");
+    want(workspace != NULL, "the runner names the fixture Workspace");
+    if (workspace != NULL) {
+        want(!rola_is_tree(workspace), "a Workspace's root is not a tree");
+    }
+
+    /* The id and the description are the data beside the mark, and both cross as data. */
+    char *mark = rola_tree_mark_json(tree);
+    want(mark != NULL && strstr(mark, "\"id\":\"tree-id\"") != NULL, "a tree carries its id");
+    want(mark != NULL && strstr(mark, "\"described\":true") != NULL,
+         "a staged description is marked as one");
+    want(mark != NULL && strstr(mark, "\"description\":\"what the next version says\"") != NULL,
+         "the staged description crosses as data");
+    free_string(mark);
+
+    char *no_mark = rola_tree_mark_json(workspace);
+    want(no_mark != NULL && strcmp(no_mark, "null") == 0,
+         "a directory without the mark has no mark to read");
+    free_string(no_mark);
+
     return finish();
 }

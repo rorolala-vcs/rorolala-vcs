@@ -28,6 +28,7 @@ use serde::Serialize;
 use crate::error::{
     ParseVCSIndexObjectError, VCSIndexError, VCSIndexReadingError, VCSIndexWritingError,
 };
+use crate::view;
 use crate::{Creator, Hash, Message, Variant, Version};
 
 mod backend;
@@ -1006,6 +1007,150 @@ impl VCSIndex {
             .expect_message()
             .map_err(|_| VCSIndexReadingError::Malformed)
     }
+
+    /// One index object, as `rola vcs-index read --json` writes it.
+    ///
+    /// The object is read whole and written as the view the command writes, so a caller parses the
+    /// same document whether it asked the command line or the library.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VCSIndexReadingError`] if nothing is stored under `hash`, what is stored is not an
+    /// index object this build knows, what came back does not hash to it, or the index fails.
+    ///
+    /// # FFI
+    ///
+    /// Blocks until the read is done. The answer is an owned JSON string the caller releases with
+    /// `free_string`; a failure is a `RolaVCSIndexReadingError *` the caller releases with
+    /// `free_rola_vcsindex_reading_error`.
+    #[lazyffi(export = rola_vcsindex_object_json)]
+    pub fn object_json(&self, hash: &str) -> Result<String, VCSIndexReadingError> {
+        let key = Hash::from_str(hash).map_err(|_| VCSIndexReadingError::Malformed)?;
+        let object =
+            run(self.read(key)).map_err(|error| VCSIndexReadingError::Io(error.into()))??;
+        let number = match &object {
+            VCSIndexObject::Version(version) => {
+                run(self.version_num(version)).ok().and_then(Result::ok)
+            }
+            _ => None,
+        };
+
+        // Writing this view cannot fail: it is strings, numbers and lists of them, with no map key
+        // that is not a string and no float. A failure would answer `null`, which a caller reads as
+        // no object rather than as a document, and is unreachable besides.
+        Ok(serde_json::to_string(&view::view_of(object, number))
+            .unwrap_or_else(|_| "null".to_owned()))
+    }
+
+    /// Every object the index holds, as the three listings `rola vcs-index ls-*` write.
+    ///
+    /// The versions carry the number traced for each and the variant it points at when that is
+    /// stored, the variants carry the version they are based on when that is stored, and the text
+    /// objects are their hashes, which is what `ls-str` lists.
+    ///
+    /// # FFI
+    ///
+    /// Blocks until the listing is read. The answer is an owned JSON string the caller releases
+    /// with `free_string`, `{"versions":[...],"variants":[...],"string_hashes":[...]}`, or the JSON
+    /// `null` when the keys cannot be listed or an object cannot be read.
+    #[must_use]
+    #[lazyffi(export = rola_vcsindex_list_json)]
+    pub fn list_json(&self) -> String {
+        let Ok(runtime) = tokio::runtime::Runtime::new() else {
+            return "null".to_owned();
+        };
+        let Ok(objects) = runtime.block_on(self.read_objects()) else {
+            return "null".to_owned();
+        };
+
+        let mut versions = Vec::new();
+        let mut variants = Vec::new();
+        let mut string_hashes = Vec::new();
+
+        for (key, object) in objects {
+            match object {
+                VCSIndexObject::Version(version) => {
+                    let number = runtime.block_on(self.version_num(&version)).ok();
+                    let variant = runtime
+                        .block_on(self.read(Hash::new(*version.variant())))
+                        .ok()
+                        .and_then(|object| object.expect_variant().ok());
+                    versions.push(ItemVersion {
+                        version_num: number,
+                        version,
+                        variant,
+                    });
+                }
+                VCSIndexObject::Variant(variant) => {
+                    let version = runtime
+                        .block_on(self.read(Hash::new(*variant.base_version())))
+                        .ok()
+                        .and_then(|object| object.expect_version().ok());
+                    variants.push(ItemVariant { variant, version });
+                }
+                VCSIndexObject::Creator(_) | VCSIndexObject::Message(_) => {
+                    string_hashes.push(key.hex());
+                }
+            }
+        }
+
+        let answer = ListAnswer {
+            versions,
+            variants,
+            string_hashes,
+        };
+
+        serde_json::to_string(&answer).unwrap_or_else(|_| "null".to_owned())
+    }
+
+    /// The root version's hash, as the hex it is written down by.
+    ///
+    /// # FFI
+    ///
+    /// An owned string the caller releases with `free_string`, the hex of the root version, or the
+    /// JSON `null` when the index does not hold it.
+    #[must_use]
+    #[lazyffi(export = rola_vcsindex_rootver)]
+    pub fn rootver(&self) -> String {
+        let hash = Version::root().hash();
+
+        match run(self.read(hash)) {
+            Ok(Ok(_)) => hash.hex(),
+            _ => "null".to_owned(),
+        }
+    }
+}
+
+/// The three listings one index has, as `vcs-index ls-versions`, `ls-variants` and `ls-str` write
+/// them.
+#[derive(Debug, Serialize)]
+struct ListAnswer {
+    /// The versions, with the number traced for each and the variant it points at.
+    versions: Vec<ItemVersion>,
+    /// The variants, with the version each is based on.
+    variants: Vec<ItemVariant>,
+    /// The hashes of the text objects, which is what `ls-str` lists.
+    string_hashes: Vec<String>,
+}
+
+/// One version, its number, and the variant it points at when it can be read.
+#[derive(Debug, Serialize)]
+struct ItemVersion {
+    /// The number worked out for the version, or nothing when the chain could not be traced.
+    version_num: Option<u64>,
+    /// The version.
+    version: Version,
+    /// The variant it points at, when one is stored.
+    variant: Option<Variant>,
+}
+
+/// One variant, with the version it is based on when it can be read.
+#[derive(Debug, Serialize)]
+struct ItemVariant {
+    /// The variant.
+    variant: Variant,
+    /// The version it is based on, when one is stored.
+    version: Option<Version>,
 }
 
 /// The Variant `object` is, or a read that did not hold one.

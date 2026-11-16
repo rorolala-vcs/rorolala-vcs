@@ -8,4 +8,11 @@ publish = false
 # The suite writes one small book of its own for the C program to search: the file is data the
 # checks are made against, and it is made by the crate that reads it rather than committed as bytes.
 rorolala-book-search = { path = "../../modules/book-search" }
+# The Workspace, Vault and tree fixtures are made through the library, so what a C program reads is
+# what the commands would have left there rather than a hand-written copy of the formats.
+librorolala = { path = "../.." }
+rorolala-utils-configure = { path = "../../utils/configure" }
+rorolala-utils-location = { path = "../../utils/location" }
 rorolala-utils-sandbox = { path = "../../utils/sandbox" }
+tokio = { version = "1.53.1", features = ["rt-multi-thread"] }
+uuid = "1"

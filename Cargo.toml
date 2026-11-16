@@ -250,6 +250,7 @@ authors.workspace = true
 [dependencies]
 rorolala-auth.workspace = true
 rorolala-book-search.workspace = true
+rorolala-chunking.workspace = true
 rorolala-daemon.workspace = true
 rorolala-errors.workspace = true
 rorolala-ignore.workspace = true

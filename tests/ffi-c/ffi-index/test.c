@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "rorolala_ffi.h"
@@ -45,6 +46,31 @@ int main(void) {
     want(index != NULL, "locate_rola_vcs_index finds the Workspace's index");
     want(locate_rola_vcs_index(plain) == NULL, "locate_rola_vcs_index answers with nothing elsewhere");
     if (index != NULL) {
+        /* An index with nothing in it lists three empty sets and has no root version yet. */
+        char *list = rola_vcsindex_list_json(index);
+        want(list != NULL && strstr(list, "\"versions\":[]") != NULL,
+             "an empty index lists no versions");
+        want(list != NULL && strstr(list, "\"variants\":[]") != NULL,
+             "an empty index lists no variants");
+        want(list != NULL && strstr(list, "\"string_hashes\":[]") != NULL,
+             "an empty index lists no text objects");
+        free_string(list);
+
+        char *root = rola_vcsindex_rootver(index);
+        want(root != NULL && strcmp(root, "null") == 0,
+             "an index with nothing in it has no root version");
+        free_string(root);
+
+        /* Naming a key nothing is stored under is a failure the caller frees. */
+        RorolalaResult object = rola_vcsindex_object_json(
+            index,
+            "blake3:2222222222222222222222222222222222222222222222222222222222222222"
+        );
+        want(object.tag == RorolalaResult_Err, "a key nothing is stored under is a failure");
+        if (object.tag == RorolalaResult_Err && object.payload != NULL) {
+            free_rola_vcsindex_reading_error(object.payload);
+        }
+
         free_rola_vcsindex(index);
     }
 
@@ -70,6 +96,28 @@ int main(void) {
             }
         } else if (rebuilt.payload != NULL) {
             free_rola_inverse_index_error(rebuilt.payload);
+        }
+
+        /* The dependents of a key are a list read by position, and an empty index has none. */
+        RorolalaResult dependents = get_store_dependents(
+            inverse,
+            "blake3:3333333333333333333333333333333333333333333333333333333333333333"
+        );
+        want(dependents.tag == RorolalaResult_Ok, "an empty index has an answer for any key");
+        if (dependents.tag == RorolalaResult_Ok) {
+            RolaHashList *hashes = dependents.payload;
+            want(hashes != NULL, "the dependents cross as a list");
+            if (hashes != NULL) {
+                want(rola_hash_list_len(hashes) == 0, "an empty index has no dependents");
+
+                char *first = read_rola_hash_list_by_index(hashes, 0);
+                want(first != NULL && first[0] == '\0', "past the end there is no hash");
+                free_string(first);
+
+                free_rola_hash_list(hashes);
+            }
+        } else if (dependents.payload != NULL) {
+            free_rola_inverse_index_reading_error(dependents.payload);
         }
 
         free_rola_inverse_index(inverse);

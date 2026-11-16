@@ -44,6 +44,145 @@ internal struct RorolalaResult
     public nint payload;
 }
 
+internal enum RolaLayoutErrorTag : int
+{
+    /// <summary>
+    /// No Workspace holds the directory, and it is not inside a Vault either.
+    /// </summary>
+    RolaLayoutError_NoWorkspace = 0,
+    /// <summary>
+    /// The Workspace is not working in a Layout.
+    /// </summary>
+    RolaLayoutError_NoLayout = 1,
+    /// <summary>
+    /// The copy of a Vault's Layout a name asked for was never fetched here.
+    /// </summary>
+    RolaLayoutError_NotCached = 2,
+    /// <summary>
+    /// The name is not one a place has a Layout under.
+    /// </summary>
+    RolaLayoutError_Missing = 3,
+    /// <summary>
+    /// The Layout is there, but it could not be read.
+    /// </summary>
+    RolaLayoutError_Read = 4,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaLayoutErrorRead
+{
+    /// <summary>
+    /// Why it could not.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaLayoutErrorPayload
+{
+    /// <summary>
+    /// The Layout is there, but it could not be read.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaLayoutErrorRead Read;
+}
+
+/// <summary>
+/// What reading a Layout failed with.
+///
+/// The tag says which case it is. `Read` carries the reason the Layout could not be read.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaLayoutError
+{
+    public RolaLayoutErrorTag tag;
+    public RolaLayoutErrorPayload payload;
+}
+
+internal enum RolaStorageErrorTag : int
+{
+    /// <summary>
+    /// No Workspace or Vault holds the directory, so there is no store to read.
+    /// </summary>
+    RolaStorageError_NoStore = 0,
+    /// <summary>
+    /// Nothing is stored under the key.
+    /// </summary>
+    RolaStorageError_NotFound = 1,
+    /// <summary>
+    /// The destination the content was to be written to is already there.
+    /// </summary>
+    RolaStorageError_Exists = 2,
+    /// <summary>
+    /// The key does not read as one this build knows.
+    /// </summary>
+    RolaStorageError_Malformed = 3,
+    /// <summary>
+    /// The store itself failed, or what it holds does not read.
+    /// </summary>
+    RolaStorageError_Read = 4,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaStorageErrorNotFound
+{
+    /// <summary>
+    /// The key nothing is stored under, as the hex it is written by.
+    /// </summary>
+    public nint key;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaStorageErrorExists
+{
+    /// <summary>
+    /// The path that is already there.
+    /// </summary>
+    public nint path;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaStorageErrorRead
+{
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaStorageErrorPayload
+{
+    /// <summary>
+    /// Nothing is stored under the key.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaStorageErrorNotFound NotFound;
+    /// <summary>
+    /// The destination the content was to be written to is already there.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaStorageErrorExists Exists;
+    /// <summary>
+    /// The store itself failed, or what it holds does not read.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaStorageErrorRead Read;
+}
+
+/// <summary>
+/// What reading a store failed with.
+///
+/// The tag says which case it is. `NotFound` carries the key nothing is stored under, `Exists` the
+/// path that is already there, and `Read` the reason the store failed.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaStorageError
+{
+    public RolaStorageErrorTag tag;
+    public RolaStorageErrorPayload payload;
+}
+
 internal enum RolaAuthErrorTag : int
 {
     /// <summary>
@@ -1639,6 +1778,12 @@ internal static partial class RorolalaBinding
     internal static extern nint ROLA_PRIVATE_KEY_EXTENSION();
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_layout_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_storage_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_account(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -1807,6 +1952,51 @@ internal static partial class RorolalaBinding
     internal static extern void free_configure_error(nint value);
 
     /// <summary>
+    /// Parses `text` as the address a Vault answers at.
+    ///
+    /// Returns a result: `Ok` is a `RolaVaultAddress *`, owned, released with
+    /// `free_rola_vault_address`; `Err` is a `RolaAddrError *`, owned, released with
+    /// `free_rola_addr_error`, and it names the target that would not read as an address.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `RolaVaultAddress *`, owned; release it with `free_rola_vault_address`
+    /// - `Err`: `RolaAddrError *`, owned; release it with `free_rola_addr_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult parse_rola_vault_address(nint text);
+
+    /// <summary>
+    /// Every chunking policy this build carries, in name order.
+    ///
+    /// An owned JSON array the caller releases with `free_string`,
+    /// `[{"name":"psd-basic","extensions":["psd","psb"]}]`. The order is the names', which is the order
+    /// a report, a completion list and a refusal name the policies in.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_chunking_policies_json();
+
+    /// <summary>
+    /// The Vaults the Workspace holding `directory` knows, as `rola vault ls --json` writes them.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"vaults":[{"name","address","is_default"}],"default":null,"gc":null}`, or `null` when there is
+    /// no configuration to read. `vaults` is in name order, `is_default` marks the one `default` names,
+    /// and `gc` is `null` or `{"grace":N}`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_workspace_config_json(nint directory);
+
+    /// <summary>
+    /// What the Vault holding `directory` says about itself, as one JSON document.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"name","description","admins":[...],"max_concurrency":N}`, or `null` when there is no Vault or
+    /// no configuration to read.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vault_config_json(nint directory);
+
+    /// <summary>
     /// Which Vaults can provide what a variant, a version or a Layout entry names.
     ///
     /// `directory` is the directory the Workspace is searched upwards from, and `request` is a UTF-8
@@ -1827,6 +2017,33 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_search_source_json(nint directory, nint request);
+
+    /// <summary>
+    /// Which Layouts the place holding `directory` has, as `rola layout ls --json` writes them.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"layouts":[{"name","is_current",
+    /// "tracking"}]}`. `name` is `main` for a Workspace and `truth` for a Vault, `tracking` is empty
+    /// when it tracks none, and `null` is answered when neither holds the directory or a Workspace
+    /// holds no Layout.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layouts_json(nint directory);
+
+    /// <summary>
+    /// What a Layout's entries hold, as `rola layout entries --json` writes it.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"entries":[{"path","uuid",
+    /// "version","owner","description","deprecated"}]}`, in path order and then `Uuid` order. `path` is
+    /// `.` for the root entry, `version` is the hex the version is stored under, `owner` is empty when
+    /// no account holds it, and `deprecated` says whether the Vault moved it under `@/removed/`. A
+    /// failure is a `RolaLayoutError *` the caller releases with `free_rola_layout_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaLayoutError *`, owned; release it with `free_rola_layout_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_layout_entries_json(nint directory, nint layout);
 
     /// <summary>
     /// Every member whose public key `rule` finds, highest priority first.
@@ -1903,6 +2120,68 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint rola_tree_status_json(nint directory);
+
+    /// <summary>
+    /// Whether `directory` is the root of a tree.
+    ///
+    /// `true` when the directory holds the tree's mark, `false` otherwise, including when the path is
+    /// not a directory.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_is_tree(nint directory);
+
+    /// <summary>
+    /// The id of the tree at `directory` and the description staged for it, as one JSON document.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"&lt;uuid&gt;","described":true,"description":"..."}`, or `null` when the directory is not the
+    /// root of a tree. `id` is empty when the file is there and cannot be read, and `description` is
+    /// empty when none is staged.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_mark_json(nint directory);
+
+    /// <summary>
+    /// Every object the store holding `directory` holds, as `rola storage ls-storaged --json` writes it.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"keys":["blake3:..."]}`, in the
+    /// order the store answers. A failure is a `RolaStorageError *` the caller releases with
+    /// `free_rola_storage_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_storage_objects_json(nint directory);
+
+    /// <summary>
+    /// Every content key the store holding `directory` keeps as a manifest, as
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"keys":["blake3:..."]}`, in the
+    /// order the store answers. A failure is a `RolaStorageError *` the caller releases with
+    /// `free_rola_storage_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_storage_manifests_json(nint directory);
+
+    /// <summary>
+    /// Writes the content stored under `hash` to `destination`.
+    ///
+    /// `Ok` carries nothing; a failure is a `RolaStorageError *` the caller releases with
+    /// `free_rola_storage_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_storage_extract(nint directory, nint hash, nint destination);
 
     /// <summary>
     /// Opens the book at `path`.
@@ -2128,6 +2407,22 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint locate_rola_inverse_index(nint dir);
+
+    /// <summary>
+    /// How many hashes the list holds.
+    ///
+    /// The count, as a `uintptr_t`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_hash_list_len(nint list);
+
+    /// <summary>
+    /// The hash at `index`, counting from zero.
+    ///
+    /// An owned string the caller releases with `free_string`, an empty one past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint read_rola_hash_list_by_index(nint list, nuint index);
 
     /// <summary>
     /// Whether the objects a variant, a version or a Layout entry names are stored here.
@@ -3384,6 +3679,39 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult read_message_from_index(nint self, nint hash);
+
+    /// <summary>
+    /// One index object, as `rola vcs-index read --json` writes it.
+    ///
+    /// Blocks until the read is done. The answer is an owned JSON string the caller releases with
+    /// `free_string`; a failure is a `RolaVCSIndexReadingError *` the caller releases with
+    /// `free_rola_vcsindex_reading_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcsindex_reading_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_vcsindex_object_json(nint self, nint hash);
+
+    /// <summary>
+    /// Every object the index holds, as the three listings `rola vcs-index ls-*` write.
+    ///
+    /// Blocks until the listing is read. The answer is an owned JSON string the caller releases
+    /// with `free_string`, `{"versions":[...],"variants":[...],"string_hashes":[...]}`, or the JSON
+    /// `null` when the keys cannot be listed or an object cannot be read.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vcsindex_list_json(nint self);
+
+    /// <summary>
+    /// The root version's hash, as the hex it is written down by.
+    ///
+    /// An owned string the caller releases with `free_string`, the hex of the root version, or the
+    /// JSON `null` when the index does not hold it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vcsindex_rootver(nint self);
 
     /// <summary>
     /// The kind of this variant

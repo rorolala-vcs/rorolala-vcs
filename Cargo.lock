@@ -2303,6 +2303,7 @@ dependencies = [
  "rola-desktop-pty",
  "rorolala-auth",
  "rorolala-book-search",
+ "rorolala-chunking",
  "rorolala-daemon",
  "rorolala-dev-bindgen",
  "rorolala-errors",
@@ -4084,6 +4085,7 @@ dependencies = [
  "rorolala-utils-location",
  "rorolala-utils-progress",
  "serde",
+ "serde_json",
  "tokio",
 ]
 

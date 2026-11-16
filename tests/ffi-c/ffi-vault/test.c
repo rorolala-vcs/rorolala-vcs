@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "rorolala_ffi.h"
@@ -57,6 +58,22 @@ int main(void) {
 
         free_rola_vault(vault);
     }
+
+    /* What the Vault says about itself is data, and its one Layout is named truth. */
+    char *config = rola_vault_config_json(dir);
+    want(config != NULL && strcmp(config, "null") != 0, "a Vault has a configuration");
+    want(config != NULL && strstr(config, "\"description\":\"New Rola Vault\"") != NULL,
+         "a Vault says what it is");
+    want(config != NULL && strstr(config, "\"admins\":[]") != NULL,
+         "a new Vault has no administrator");
+    want(config != NULL && strstr(config, "\"max_concurrency\":") != NULL,
+         "a Vault carries what its daemon may serve at once");
+    free_string(config);
+
+    char *layouts = rola_layouts_json(dir);
+    want(layouts != NULL && strstr(layouts, "\"name\":\"truth\"") != NULL,
+         "a Vault's Layout is named truth");
+    free_string(layouts);
 
     remove_tree(dir);
     remove_tree(plain);

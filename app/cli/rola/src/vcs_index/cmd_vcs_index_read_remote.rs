@@ -31,7 +31,9 @@ use crate::exit_codes::EC_HELP;
 use crate::format::ResFormat;
 use crate::hash::looks_like_hash;
 use crate::keys::account_named;
-use crate::vcs_index::cmd_vcs_index_read::{DEFAULT_FORMAT, ResultVcsIndexRead, view_of};
+use librorolala::vcs::view::view_of;
+
+use crate::vcs_index::cmd_vcs_index_read::{DEFAULT_FORMAT, ResultVcsIndexRead};
 use crate::vcs_index::{ErrorVcsIndexArgument, ErrorVcsIndexNotFound, hash_of, read_remote};
 
 #[help(buffer)]

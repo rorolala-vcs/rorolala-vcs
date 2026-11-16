@@ -257,11 +257,17 @@ A dock pulled into a window of its own is now owned by the main window. Closing 
 
 `rola desktop` now starts a host beside the Desktop rather than the Desktop itself. The host forwards the line that says the window is up, keeps the Desktop's error stream, and when the run ends with a non-zero code writes the report to a log and opens a window that shows it. A Desktop run that throws also writes the exception's stack to that stream, so the stack survives the window that wrote it. A start that found the Desktop already running, exit code 174, is passed through without a report.
 
-### 33. [`librorolala`] [`tree`] Read a tree's entries and status as JSON across the C ABI
+### 33. [`librorolala`] [`ffi`] Read Layouts, configuration, storage and tree marks across the C ABI
+
+The C ABI gains the reads a Desktop window needs without starting the command line beside it. `rola_layouts_json` answers the Layout a place holds, and `rola_layout_entries_json` answers what one Layout's entries hold, naming the working Layout, a Vault's own or the copy a fetch left; a failure is a `RolaLayoutError` that tells "no Workspace" from "nothing fetched" and "no such name". `rola_workspace_config_json` lists the Vaults a Workspace knows and which it reaches for, and `rola_vault_config_json` says what a Vault is and who administers it. `rola_is_tree` asks the cheap question a listing asks of every directory, and `rola_tree_mark_json` carries a tree's id and the description staged for its next version.
+
+The rest of the read surface is filled in beside them: `parse_rola_vault_address` gives the handle the `vault_address_read_*` accessors read, `rola_vcsindex_object_json`, `rola_vcsindex_list_json` and `rola_vcsindex_rootver` read an index as the command's `--json` writes it, `rola_hash_list_len` and `read_rola_hash_list_by_index` make the inverse index's answers readable, `rola_chunking_policies_json` lists the policies the build carries, and `rola_storage_objects_json`, `rola_storage_manifests_json` and `rola_storage_extract` read a store, the last writing the content to a path the caller names. Each answer is the JSON the command's `--json` writes, so a caller parses one document whichever side answered it.
+
+### 34. [`librorolala`] [`tree`] Read a tree's entries and status as JSON across the C ABI
 
 `rola_tree_entries_json` takes a tree structure's bytes as hex and answers with its entries as JSON: each entry's path, kind, mode, storage key and link target. `rola_tree_status_json` takes a directory and answers with the tree's status as JSON: what its staging area holds beside the recorded version, what the work changed without being staged, what the work holds and the staging area does not, what a merge left in conflict and whether the tree is a wrong change. A caller that cannot decode `.rola-tree` hands the bytes or the directory over instead of keeping a second copy of the format. Text that is not hex or bytes that are not a structure answer as `null`, and a directory with no tree or no readable status answers as `null`, so an answer is always JSON. The strings are freed with `free_string`.
 
-### 34. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
+### 35. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge
 
 The new `rorolala-tree` crate holds what a tree is: a canonically ordered structure object built from paths, kinds, modes and content keys, with its own binary format and strict decoding. It stages work in a `.rola-tree/staging` store, keeps a baseline structure and a fingerprint cache beside it, reads status by comparing the recorded version, the staged structure and the work, and merges two structures over their shared version path by path; a path both sides changed differently becomes a conflict copy.
 

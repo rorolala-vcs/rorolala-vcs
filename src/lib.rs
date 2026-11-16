@@ -15,15 +15,25 @@ use rorolala_workspace::Workspace;
 
 use rorolala_auth::{Account, Accounts, KeyLocateRule, Member, Members};
 
+pub mod address;
+pub mod chunking_read;
+pub mod config_read;
 pub mod existence;
 pub mod gc;
+pub mod layout_read;
 mod ownership;
 pub mod status;
+pub mod storage_read;
 
+pub use address::*;
+pub use chunking_read::*;
+pub use config_read::*;
 pub use existence::*;
 pub use gc::*;
+pub use layout_read::*;
 pub use ownership::*;
 pub use status::*;
+pub use storage_read::*;
 
 /// Authentication
 pub use rorolala_auth as auth;

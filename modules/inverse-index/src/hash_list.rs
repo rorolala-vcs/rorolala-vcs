@@ -42,6 +42,28 @@ impl HashList {
     }
 }
 
+/// How many hashes the list holds.
+///
+/// # FFI
+///
+/// The count, as a `uintptr_t`.
+#[must_use]
+#[lazyffi(export = rola_hash_list_len)]
+pub fn len(list: &HashList) -> usize {
+    list.count()
+}
+
+/// The hash at `index`, counting from zero.
+///
+/// # FFI
+///
+/// An owned string the caller releases with `free_string`, an empty one past the end.
+#[must_use]
+#[lazyffi(export = read_rola_hash_list_by_index)]
+pub fn at(list: &HashList, index: usize) -> String {
+    list.hashes().nth(index).unwrap_or_default().to_owned()
+}
+
 impl From<Vec<Hash>> for HashList {
     fn from(hashes: Vec<Hash>) -> Self {
         Self(hashes.iter().map(Hash::hex).collect::<Vec<_>>().join("\n"))
@@ -58,7 +80,7 @@ impl From<HashList> for String {
 mod tests {
     use rorolala_vcs::Hash;
 
-    use super::HashList;
+    use super::{HashList, at, len};
 
     #[test]
     fn a_list_is_hashes_one_a_line() {
@@ -73,5 +95,17 @@ mod tests {
 
         // Nothing to list is an empty string, not a string of one empty hash.
         assert!(HashList::from(Vec::<Hash>::new()).is_empty());
+    }
+
+    #[test]
+    fn a_list_is_read_by_position() {
+        let list = HashList::from(vec![Hash::new([0x0f; 32]), Hash::new([0xab; 32])]);
+
+        assert_eq!(len(&list), 2);
+        assert_eq!(at(&list, 0), "0f".repeat(32));
+        assert_eq!(at(&list, 1), "ab".repeat(32));
+
+        // Past the end there is no hash, which is an empty string rather than a made-up one.
+        assert_eq!(at(&list, 2), "");
     }
 }

@@ -55,8 +55,9 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 30. [`app`] [`RorolalaDesktop`] [`window`] Name the program and workspace in the title row. [See details](dev/CHANGELOG-DETAILS.md#30-app-rorolaladesktop-window-name-the-program-and-workspace-in-the-title-row)
 31. [`app`] [`RorolalaDesktop`] [`windows`] Own and restore floating dock windows. [See details](dev/CHANGELOG-DETAILS.md#31-app-rorolaladesktop-windows-own-and-restore-floating-dock-windows)
 32. [`app`] [`RorolalaDesktopHost`] Report a Desktop run that ends with a crash. [See details](dev/CHANGELOG-DETAILS.md#32-app-rorolaladesktophost-report-a-desktop-run-that-ends-with-a-crash)
-33. [`librorolala`] [`tree`] Read a tree's entries and status as JSON across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#33-librorolala-tree-read-a-trees-entries-and-status-as-json-across-the-c-abi)
-34. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge. [See details](dev/CHANGELOG-DETAILS.md#34-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
+33. [`librorolala`] [`ffi`] Read Layouts, configuration, storage and tree marks across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#33-librorolala-ffi-read-layouts-configuration-storage-and-tree-marks-across-the-c-abi)
+34. [`librorolala`] [`tree`] Read a tree's entries and status as JSON across the C ABI. [See details](dev/CHANGELOG-DETAILS.md#34-librorolala-tree-read-a-trees-entries-and-status-as-json-across-the-c-abi)
+35. [`modules`] [`tree`] Read a directory as one version, with staging, baselines and a three-way merge. [See details](dev/CHANGELOG-DETAILS.md#35-modules-tree-read-a-directory-as-one-version-with-staging-baselines-and-a-three-way-merge)
 
 ## Refactor
 
