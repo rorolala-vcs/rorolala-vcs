@@ -48,10 +48,28 @@ fn main() {
     let git_rola = sandbox.join("git-rola");
     let tree_project = sandbox.join("git-rola-tree");
     let gcws = sandbox.join("gcws");
+    let gcvault = sandbox.join("gcvault");
+    let gcchain = sandbox.join("gcchain");
 
     for dir in [
-        &home, &data, &rola_home, &empty, &plain, &initme, &files, &held, &claimed, &cached,
-        &ignoreme, &switching, &joining, &git_rola, &tree_project, &gcws,
+        &home,
+        &data,
+        &rola_home,
+        &empty,
+        &plain,
+        &initme,
+        &files,
+        &held,
+        &claimed,
+        &cached,
+        &ignoreme,
+        &switching,
+        &joining,
+        &git_rola,
+        &tree_project,
+        &gcws,
+        &gcvault,
+        &gcchain,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -79,7 +97,6 @@ fn main() {
     index(&rola, &ws, &mut checked);
     existence(&rola, &ws, &files, &mut checked);
     movement(&rola, &plain, &files, &mut checked);
-    collecting(&rola, &empty, &gcws, &mut checked);
     git_rola_move(&rola, &git_rola, &mut checked);
     git_rola_tree(&rola, &tree_project, &mut checked);
     accounts(&rola, &plain, &ws, &mut checked);
@@ -96,6 +113,11 @@ fn main() {
     ownership(&rola, &claimed, &mut checked);
     empty_cache(&rola, &cached, &mut checked);
     uuid_switch(&rola, &switching, &mut checked);
+
+    // Collecting is last, since the tracked work it makes acts as an account and installs a key,
+    // which is machine state the scenarios about accounts read: what runs after it would meet a
+    // current account that collecting chose.
+    collecting(&rola, &empty, &gcws, &gcvault, &gcchain, &mut checked);
 
     checked.report();
 }
@@ -1042,8 +1064,7 @@ fn existence(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     checked.exits("a check answers every target", &ran, 0);
     checked.wants(
         "the answers keep the order asked",
-        ran.stdout.lines().collect::<Vec<_>>()
-            == [format!("{version} yes"), format!("{root} no")],
+        ran.stdout.lines().collect::<Vec<_>>() == [format!("{version} yes"), format!("{root} no")],
         &said(&ran),
     );
 
@@ -1051,12 +1072,13 @@ fn existence(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
     let absent = "0".repeat(64);
     let ran = rola.run(ws, &["vcs-index", "can-retrack-offline", &absent]);
     checked.exits("a hash nothing holds is answered", &ran, 0);
-    checked.stdout_has("the answer says it is not here", &ran, &format!("{absent} no"));
-
-    let ran = rola.run(
-        ws,
-        &["vcs-index", "can-retrack-offline", "not-a-path.psd"],
+    checked.stdout_has(
+        "the answer says it is not here",
+        &ran,
+        &format!("{absent} no"),
     );
+
+    let ran = rola.run(ws, &["vcs-index", "can-retrack-offline", "not-a-path.psd"]);
     checked.exits("a word that names nothing is refused", &ran, 123);
 
     let ran = rola.run(
@@ -1082,10 +1104,7 @@ fn existence(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
 
     // A search is the one thing here that reaches the network, and the two things it cannot do
     // are refused before it reaches anything.
-    let ran = rola.run(
-        ws,
-        &["vcs-index", "search-source", &version, "--offline"],
-    );
+    let ran = rola.run(ws, &["vcs-index", "search-source", &version, "--offline"]);
     checked.exits("an offline run may not search", &ran, 252);
 
     let ran = rola.run(ws, &["vcs-index", "search-source", &version]);
@@ -1121,10 +1140,18 @@ fn movement(rola: &Rola, plain: &Path, files: &Path, checked: &mut Checked) {
 
 /// Collecting what the Layout does not reference, what `rola pack --garbage-collect` does.
 ///
-/// The workspace here is one whose Layout names nothing, so everything its store holds is what a
-/// collecting takes away. What was written a moment ago is kept all the same, the grace holds a
-/// write whose reference has not landed yet, and it is the next collecting that decides it.
-fn collecting(rola: &Rola, empty: &Path, ws: &Path, checked: &mut Checked) {
+/// Three shapes of run, one each: a Workspace whose Layout names nothing, so everything its store
+/// holds is what a collecting takes away; a Vault, whose truth Layout is the roots the same way;
+/// and a Workspace with real tracked work, whose whole chain is what a collecting must keep while
+/// what nothing names goes beside it.
+fn collecting(
+    rola: &Rola,
+    empty: &Path,
+    ws: &Path,
+    vault: &Path,
+    chain: &Path,
+    checked: &mut Checked,
+) {
     let ran = rola.run(empty, &["create", &text(ws)]);
     checked.exits("a Workspace to collect in is made", &ran, 0);
 
@@ -1152,7 +1179,7 @@ fn collecting(rola: &Rola, empty: &Path, ws: &Path, checked: &mut Checked) {
 
     // A collecting runs against the stores as they stand when it runs, so what was fresh is stale
     // by the next one, whatever packing moved it into since.
-    stale_everything(ws);
+    stale_storage(&ws.join(".rola/storage"));
 
     let ran = rola.run(ws, &["pack", "--garbage-collect", "--force"]);
     checked.exits("the collecting of what is stale is made", &ran, 0);
@@ -1173,7 +1200,11 @@ fn collecting(rola: &Rola, empty: &Path, ws: &Path, checked: &mut Checked) {
     // answered with a collecting that would take everything away.
     let ran = rola.run(empty, &["pack", "--garbage-collect", "--force"]);
     checked.exits("a collecting without a Layout is refused", &ran, 105);
-    checked.stderr_has("the refusal says there are no roots", &ran, "No Layout was found");
+    checked.stderr_has(
+        "the refusal says there are no roots",
+        &ran,
+        "No Layout was found",
+    );
 
     // A Workspace with merges waiting keeps what no chain names, so it is refused outright.
     let merging = ws.join(".rola/MERGING");
@@ -1183,18 +1214,141 @@ fn collecting(rola: &Rola, empty: &Path, ws: &Path, checked: &mut Checked) {
     )
     .expect("a merge in progress");
     let ran = rola.run(ws, &["pack", "--garbage-collect", "--force"]);
-    checked.exits("a collecting beside a merge in progress is refused", &ran, 106);
+    checked.exits(
+        "a collecting beside a merge in progress is refused",
+        &ran,
+        106,
+    );
     checked.stderr_has("the refusal says what is waiting", &ran, "merges waiting");
     fs::remove_file(&merging).expect("the merge in progress taken away");
+
+    collecting_in_vault(rola, empty, vault, checked);
+    collecting_beside_work(rola, chain, checked);
 }
 
-/// Moves every file of the Workspace's store back in time, so a collecting counts them stale.
+/// Collecting inside a Vault, whose truth Layout is the roots the same way a Workspace's is.
+fn collecting_in_vault(rola: &Rola, empty: &Path, vault: &Path, checked: &mut Checked) {
+    let ran = rola.run(empty, &["--vault", "create", &text(vault)]);
+    checked.exits("a Vault to collect in is made", &ran, 0);
+
+    let source = vault.join("orphan.txt");
+    fs::write(&source, "nothing names this either\n").expect("a file nothing references");
+    let ran = rola.run(vault, &["storage", "write-file", &text(&source)]);
+    checked.exits("the Vault's store is written", &ran, 0);
+
+    // Written a moment ago, so the grace keeps it; the truth Layout names nothing, and what it
+    // does not name is what the next collecting takes.
+    let ran = rola.run(vault, &["pack", "--garbage-collect", "--force"]);
+    checked.exits("a collecting in the Vault ends successfully", &ran, 0);
+    checked.stdout_has(
+        "the fresh entry is taken by nothing",
+        &ran,
+        "Removed 0 index entries",
+    );
+
+    stale_storage(&vault.join("storage"));
+
+    let ran = rola.run(vault, &["pack", "--garbage-collect", "--force"]);
+    checked.exits("the stale entry is collected from the Vault", &ran, 0);
+    checked.stdout_has(
+        "what the Vault's collecting took away is said",
+        &ran,
+        "1 store entries",
+    );
+
+    let ran = rola.run(vault, &["storage", "ls-storaged"]);
+    checked.wants(
+        "the Vault's store holds nothing after the collecting",
+        ran.stdout.trim().is_empty(),
+        &said(&ran),
+    );
+}
+
+/// Collecting beside real tracked work: the chain survives, what nothing names goes.
+fn collecting_beside_work(rola: &Rola, chain: &Path, checked: &mut Checked) {
+    let ran = rola.run(chain, &["init"]);
+    checked.exits("a Workspace to track in is made", &ran, 0);
+
+    let ran = rola.run(chain, &["key", "generate", "--install", "collector"]);
+    checked.exits("a key to act as is installed", &ran, 0);
+    let ran = rola.run(chain, &["account", "collector"]);
+    checked.exits("the work acts as the account", &ran, 0);
+
+    let file = chain.join("work.txt");
+    fs::write(&file, "first\n").expect("a file to record");
+    let ran = rola.run(
+        chain,
+        &["track", "work.txt", "--message", "first", "--no-editor"],
+    );
+    checked.exits("the first version is recorded", &ran, 0);
+
+    fs::write(&file, "second\n").expect("the file is advanced");
+    let ran = rola.run(
+        chain,
+        &["track", "work.txt", "--message", "second", "--no-editor"],
+    );
+    checked.exits("the second version is recorded", &ran, 0);
+
+    // Both versions' content is on the chain the entry names, so a collecting takes none of it,
+    // whatever packing lays it into and whatever the grace says about its age.
+    let listed = |rola: &Rola, checked: &mut Checked, what: &str| {
+        let ran = rola.run(chain, &["storage", "ls-storaged", "--json"]);
+        checked.exits(what, &ran, 0);
+        json(&ran)
+            .and_then(|value| {
+                value
+                    .get("keys")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|listed| listed.len())
+            })
+            .unwrap_or_default()
+    };
+
+    let dead = chain.join("dead.txt");
+    fs::write(&dead, "nothing names this\n").expect("a file nothing references");
+    let ran = rola.run(chain, &["storage", "write-file", &text(&dead)]);
+    checked.exits(
+        "an entry nothing references is stored beside the chain",
+        &ran,
+        0,
+    );
+
+    let before = listed(rola, checked, "the store is listed before the collecting");
+
+    // The chain's content is stale here too, and is kept on the reference's own merit: the grace
+    // only ever holds what nothing names.
+    stale_storage(&chain.join(".rola/storage"));
+
+    let ran = rola.run(chain, &["pack", "--garbage-collect", "--force"]);
+    checked.exits("the collecting beside the chain is made", &ran, 0);
+    checked.stdout_has(
+        "what was taken away is the one entry nothing names",
+        &ran,
+        "1 store entries",
+    );
+
+    let after = listed(rola, checked, "the store is listed after the collecting");
+    checked.wants(
+        "the collecting took one entry and no more",
+        after + 1 == before,
+        &said(&ran),
+    );
+
+    // The entry still names the version it was at, and the chain behind it is still there to walk.
+    let version = entry_field(rola, chain, "work.txt", "version");
+    checked.wants(
+        "the tracked entry still names its version",
+        version.is_some(),
+        "",
+    );
+}
+
+/// Moves every file of the store rooted at `storage` back in time, so a collecting counts them
+/// stale.
 ///
 /// The grace is measured from the entry file's modification time, and a test that wants an entry
 /// taken away sets the time back rather than waiting a day for it to be one.
-fn stale_everything(ws: &Path) {
-    let storage = ws.join(".rola/storage");
-
+fn stale_storage(storage: &Path) {
     for directory in ["obj", "manifest", "packed"] {
         stale_below(&storage.join(directory));
     }
@@ -1238,7 +1392,10 @@ fn git_rola_move(rola: &Rola, dir: &Path, checked: &mut Checked) {
     .expect("the lock");
     fs::write(dir.join("Assets/hero.psd"), "art\n").expect("the material");
 
-    let ran = rola.run(dir, &["fs-ops", "mv", "Assets/hero.psd", "Assets/hero-moved.psd"]);
+    let ran = rola.run(
+        dir,
+        &["fs-ops", "mv", "Assets/hero.psd", "Assets/hero-moved.psd"],
+    );
     checked.exits("a material is moved in a git-rola project", &ran, 0);
     checked.wants(
         "the material is at its new name and not the old one",
@@ -1293,9 +1450,16 @@ fn git_rola_move(rola: &Rola, dir: &Path, checked: &mut Checked) {
     );
 
     // A destination the project already names is refused before anything moves.
-    let ran = rola.run(dir, &["fs-ops", "mv", "Assets/hero-moved.psd", "Source/c.fbx"]);
+    let ran = rola.run(
+        dir,
+        &["fs-ops", "mv", "Assets/hero-moved.psd", "Source/c.fbx"],
+    );
     checked.exits("a destination the project names is refused", &ran, 111);
-    checked.stderr_has("the refusal says the project names it", &ran, "already names");
+    checked.stderr_has(
+        "the refusal says the project names it",
+        &ran,
+        "already names",
+    );
     checked.wants(
         "the refused move moved nothing",
         dir.join("Assets/hero-moved.psd").is_file(),
@@ -1305,8 +1469,14 @@ fn git_rola_move(rola: &Rola, dir: &Path, checked: &mut Checked) {
     // A move out of the project cannot be named by its toml, so it is refused. The path is written
     // whole because a relative destination is read from the source's own directory, where a `..`
     // need not leave the project at all.
-    let outside = dir.parent().expect("a parent directory").join("outside.psd");
-    let ran = rola.run(dir, &["fs-ops", "mv", "Assets/hero-moved.psd", &text(&outside)]);
+    let outside = dir
+        .parent()
+        .expect("a parent directory")
+        .join("outside.psd");
+    let ran = rola.run(
+        dir,
+        &["fs-ops", "mv", "Assets/hero-moved.psd", &text(&outside)],
+    );
     checked.exits("a move out of the project is refused", &ran, 111);
     checked.stderr_has("the refusal says the path is outside", &ran, "outside");
 }
@@ -1365,7 +1535,12 @@ fn git_rola_tree(rola: &Rola, dir: &Path, checked: &mut Checked) {
     // The tree's directory is the material: moving it moves the whole directory and the record.
     let ran = rola.run(
         dir,
-        &["fs-ops", "mv", &text(&dir.join("Tree")), &text(&dir.join("Moved"))],
+        &[
+            "fs-ops",
+            "mv",
+            &text(&dir.join("Tree")),
+            &text(&dir.join("Moved")),
+        ],
     );
     checked.exits("a tree is moved with its directory", &ran, 0);
     checked.wants(
