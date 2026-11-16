@@ -85,8 +85,95 @@ fn main() {
         );
     }
 
+    cross_checks(&fixture, &bin, &mut checked);
+
     let _ = fs::remove_dir_all(&scratch);
     checked.report();
+}
+
+/// What the library writes and what the command writes are one document.
+///
+/// The ABI's answers are the JSON the commands write, which is what lets a caller parse one
+/// document whichever side answered it. The checks here are the promise made where the exports are
+/// declared: the fixture Workspace is read both ways, and the two documents are compared as values
+/// rather than as text, so key order is not a difference.
+fn cross_checks(fixture: &Fixture, bin: &Path, checked: &mut Checked) {
+    let workspace = &fixture.workspace;
+
+    checked.wants(
+        "the Layouts the library writes are the ones the command writes",
+        same(
+            bin,
+            workspace,
+            &["--json", "layout", "ls"],
+            &librorolala::layouts_json(workspace),
+            None,
+        ),
+        "",
+    );
+
+    let entries = librorolala::layout_entries_json(workspace, "").unwrap_or_default();
+
+    checked.wants(
+        "the entries the library writes are the ones the command writes",
+        same(
+            bin,
+            workspace,
+            &["--json", "layout", "entries"],
+            &entries,
+            None,
+        ),
+        "",
+    );
+
+    checked.wants(
+        "the Vault bindings the library writes are the ones the command writes",
+        same(
+            bin,
+            workspace,
+            &["--json", "vault", "ls"],
+            &librorolala::workspace_config_json(workspace),
+            Some("vaults"),
+        ),
+        "",
+    );
+}
+
+/// Whether the library's answer and the command's are one document.
+///
+/// `key` names the member both documents are compared by, for a read whose answer carries more than
+/// the command's does; `None` compares the whole document.
+fn same(
+    bin: &Path,
+    directory: &Path,
+    arguments: &[&str],
+    library: &str,
+    key: Option<&str>,
+) -> bool {
+    let program = bin.join(format!("rola{}", env::consts::EXE_SUFFIX));
+    let Ok(output) = Command::new(program)
+        .args(arguments)
+        .current_dir(directory)
+        .output()
+    else {
+        return false;
+    };
+
+    if !output.status.success() {
+        return false;
+    }
+
+    let (Ok(library), Ok(command)) = (
+        serde_json::from_str::<serde_json::Value>(library),
+        serde_json::from_slice::<serde_json::Value>(&output.stdout),
+    ) else {
+        return false;
+    };
+
+    match key {
+        Some(key) => library[key] == command[key],
+        None => library == command,
+    }
 }
 
 /// The places a C program reads: the book it searches, the Workspace and Vault it lists, and the tree it marks.
@@ -187,7 +274,10 @@ fn workspace_fixture(scratch: &Path) -> PathBuf {
         )
         .expect("the fixture entry is made");
     layout
-        .create_path(&LayoutPath::new("art/hero.psd").expect("a path"), Uuid::from_u128(1))
+        .create_path(
+            &LayoutPath::new("art/hero.psd").expect("a path"),
+            Uuid::from_u128(1),
+        )
         .expect("the fixture path is named");
     layout
         .create_entry(
@@ -205,7 +295,9 @@ fn workspace_fixture(scratch: &Path) -> PathBuf {
     let path = workspace.config_path();
     let mut config = WorkspaceConfig::read_from(&path).expect("the fixture configuration reads");
     config.vaults_mut().bind("studio", "tcp://127.0.0.1:9270");
-    config.vaults_mut().bind("alpha", "ssh://alice@example.test/vault");
+    config
+        .vaults_mut()
+        .bind("alpha", "ssh://alice@example.test/vault");
     config.default_config_mut().set_vault("studio");
     config
         .write_to(&path)
@@ -225,11 +317,18 @@ fn vault_fixture(scratch: &Path) -> PathBuf {
     layout
         .create_entry(
             Uuid::from_u128(3),
-            MutableData::new(Some("bob".to_owned()), [3; 32], "the vault's file".to_owned()),
+            MutableData::new(
+                Some("bob".to_owned()),
+                [3; 32],
+                "the vault's file".to_owned(),
+            ),
         )
         .expect("the Vault's fixture entry is made");
     layout
-        .create_path(&LayoutPath::new("shared.psd").expect("a path"), Uuid::from_u128(3))
+        .create_path(
+            &LayoutPath::new("shared.psd").expect("a path"),
+            Uuid::from_u128(3),
+        )
         .expect("the Vault's fixture path is named");
 
     dir
