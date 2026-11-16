@@ -11,6 +11,7 @@ lz4.workspace = true
 rorolala-chunking.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-location.workspace = true
+rorolala-utils-progress.workspace = true
 serde.workspace = true
 size.workspace = true
 tokio = { workspace = true, features = ["io-util"] }

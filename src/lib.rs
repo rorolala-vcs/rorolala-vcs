@@ -16,10 +16,12 @@ use rorolala_workspace::Workspace;
 use rorolala_auth::{Account, Accounts, KeyLocateRule, Member, Members};
 
 pub mod existence;
+pub mod gc;
 mod ownership;
 pub mod status;
 
 pub use existence::*;
+pub use gc::*;
 pub use ownership::*;
 pub use status::*;
 

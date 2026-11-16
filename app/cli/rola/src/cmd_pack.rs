@@ -5,6 +5,17 @@
 //! a scattering of loose files becomes as few packs as the store's `max_pack_size` allows. What each
 //! object *is* does not change, a pack holds the entries exactly as they sat loose, so this is a way
 //! to keep the same objects in fewer files, not a step a reader has to know happened.
+//!
+//! With `--garbage-collect` it is a collecting instead: what a Layout does not reference is taken
+//! away, from the index and the store, and what is left is laid out afresh, see [`gc`].
+
+// `#[chain]` copies the attributes of the function it is given onto the struct it generates, so a
+// lint allowed on the handler below is reported as defined twice. The allow lives here, where it
+// covers the signatures that need it: a handler's parameters are the resources the framework
+// injects, and their number follows the command rather than a signature this project shaped, and
+// the small resources are taken by reference for the same reason `storage sync-all` takes them so,
+// that a copy would read a state of its own.
+#![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
 use librorolala::storage::Lockable as _;
 use mingling::{
@@ -16,9 +27,11 @@ use mingling::{
     },
     metadata::Description,
     picker::{EntryPicker, PickerArg, value::Flag},
-    res::ResExitCode,
+    res::{ResConfirm, ResExitCode},
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex};
+use rorolala_cli_setups::{
+    ResForce, ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
+};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
@@ -30,6 +43,12 @@ use crate::exit_codes::{
     EC_HELP,
 };
 use crate::failure::failure;
+use crate::progress::Reporting;
+
+pub mod gc;
+
+/// Collects what the Layout does not reference, instead of only laying out what is there.
+const ARG_GARBAGE_COLLECT: PickerArg<'static, Flag> = arg![garbage_collect: Flag];
 
 /// Lay the index's objects out too. Absent means the index is left as it is.
 const ARG_NO_INDEX: PickerArg<'static, Flag> = arg![no_index: Flag];
@@ -50,14 +69,15 @@ pub fn desc_pack() -> Description {
 
 /// Completes what `rola pack` can be given next.
 ///
-/// A packing names nothing: what is laid out is whatever store and index the run works on, and the
-/// only thing a caller chooses is which of the two to leave alone.
+/// What is laid out is whatever store and index the run works on, and the things a caller chooses
+/// are which of the two to leave alone and whether the run collects instead.
 #[completion(EntryPack)]
 pub fn complete_pack(ctx: ShellContext) -> Suggest {
     if typing_flag(&ctx) {
         return strip_written(
             &ctx,
             suggest! {
+                ARG_GARBAGE_COLLECT: t!("pack.complete.garbage_collect"),
                 ARG_NO_INDEX: t!("pack.complete.no_index"),
                 ARG_NO_STORAGE: t!("pack.complete.no_storage"),
             },
@@ -90,16 +110,29 @@ pub fn complete_pack(ctx: ShellContext) -> Suggest {
 /// The run has to be somewhere a store or an index can be found, inside one, or inside a Vault or
 /// Workspace that keeps one.
 ///
+/// With `--garbage-collect` the run collects instead of only laying out: what the Layout of the
+/// Vault or Workspace the run stands in does not reference is taken away, from the index and the
+/// store, and what is left is laid out afresh. The two `--no-*` flags say the same about which
+/// sides are swept as they say about which are laid out, and both stores are read either way,
+/// since the roots are worked out from both. A collecting is shown for the confirmation before it
+/// happens, and `--force` answers it in advance. A run in neither a Vault nor a Workspace has no
+/// roots, and a Workspace with merges waiting keeps what no chain names, so both are refused
+/// rather than collected from.
+///
 /// # Errors
 ///
 /// Renders [`ErrorNothingToPack`] when both `--no-index` and `--no-storage` were written, which
 /// leaves nothing to lay out, [`ErrorPackNoStorage`] when the run is nowhere a store or an index
 /// is, [`ErrorPackLocked`] when one is locked by another run, and [`ErrorPackFailed`] when the
-/// objects could not be read or a pack could not be written.
+/// objects could not be read or a pack could not be written. A collecting renders
+/// [`gc::ErrorGcNoLayout`] when the run stands in neither a Vault nor a Workspace,
+/// [`gc::ErrorGcMerging`] when the Workspace holds merges waiting, and [`gc::ErrorGcFailed`] when
+/// the roots could not be worked out or a side could not be swept, which has taken nothing away.
 #[command(node = "pack", entry = EntryPack)]
 pub fn pack(args: EntryPack) -> Next {
     // UNWRAP: Picking flags cannot fail: a flag that is absent is `Inactive`, not an error.
-    let (no_index, no_storage, unmatched) = args
+    let (garbage_collect, no_index, no_storage, unmatched) = args
+        .pick(ARG_GARBAGE_COLLECT)
         .pick(ARG_NO_INDEX)
         .pick(ARG_NO_STORAGE)
         .pick(&UNMATCHED)
@@ -110,6 +143,7 @@ pub fn pack(args: EntryPack) -> Next {
     }
 
     StatePack {
+        garbage_collect: matches!(garbage_collect, Flag::Active),
         storage: matches!(no_storage, Flag::Inactive),
         index: matches!(no_index, Flag::Inactive),
     }
@@ -118,11 +152,12 @@ pub fn pack(args: EntryPack) -> Next {
 
 /// The state a packing run starts in.
 ///
-/// A packing names nothing: what is laid out is whatever store and index the run works on, so the
-/// whole of what it is told is already in where the run happens to be and which of the two flags
-/// were written.
+/// What is laid out is whatever store and index the run works on, so the whole of what it is told
+/// is already in where the run happens to be and which of the flags were written.
 #[derive(Grouped, Clone, Copy)]
 pub struct StatePack {
+    /// Whether the run collects what the Layout does not reference, rather than only laying out.
+    garbage_collect: bool,
     /// Whether the store is to be laid out.
     storage: bool,
     /// Whether the index is to be laid out.
@@ -134,11 +169,31 @@ pub fn handle_pack(
     state: StatePack,
     storage: &mut LazyRes<ResRorolalaStorage>,
     index: &mut LazyRes<ResVCSIndex>,
+    vault: &mut LazyRes<ResVault>,
+    workspace: &mut LazyRes<ResWorkspace>,
+    force: &ResForce,
+    confirm: &ResConfirm,
+    progress: &ResProgressSetting,
 ) -> Next {
     // Both flags together leave nothing to lay out, which is a run that would do nothing rather
     // than one that happens to find nothing: it is said apart from `ErrorPackNoStorage`.
     if !state.storage && !state.index {
         return ErrorNothingToPack.into();
+    }
+
+    // A collecting is its own shape of run: roots, closure, confirmation, sweep. Everything from
+    // here on is the ordinary laying-out.
+    if state.garbage_collect {
+        return gc::collect(
+            state,
+            storage.get_ref(),
+            index.get_ref(),
+            vault.get_ref(),
+            workspace.get_ref(),
+            **force,
+            *confirm,
+            *progress,
+        );
     }
 
     let store = if state.storage {
@@ -156,12 +211,22 @@ pub fn handle_pack(
         return ErrorPackNoStorage.into();
     }
 
+    // The run says what it is doing while it does it, down a channel read on a thread of its own,
+    // and the reader is ended before anything else is said, so the lines it left on the terminal
+    // are gone by the time there are results to read. Every way out below finishes it first: a
+    // run that forgets to finish leaks the thread until the program ends. The `Progress` handed
+    // to the work is a fresh clone per call, dropped when the call returns: a clone held past
+    // `finish` would keep the channel open and the reader waiting on it forever.
+    let reporting = Reporting::start(*progress);
+
     // The store and the index are asynchronous and a command is not, so the two meet here: the
     // objects are read and the packs written by each, and a runtime of this run's own is what waits
     // for them, see `cmd_storage_write_file`.
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {
+            reporting.finish();
+
             return ErrorPackFailed {
                 cause: error.to_string(),
             }
@@ -178,6 +243,8 @@ pub fn handle_pack(
         let guard = match runtime.block_on(store.lock()) {
             Ok(guard) => guard,
             Err(error) => {
+                reporting.finish();
+
                 return ErrorPackLocked {
                     cause: error.to_string(),
                 }
@@ -185,9 +252,11 @@ pub fn handle_pack(
             }
         };
 
-        match runtime.block_on(guard.repack()) {
+        match runtime.block_on(guard.repack(&reporting.progress())) {
             Ok(was) => changed |= was,
             Err(error) => {
+                reporting.finish();
+
                 return ErrorPackFailed {
                     cause: error.to_string(),
                 }
@@ -200,6 +269,8 @@ pub fn handle_pack(
         let guard = match runtime.block_on(store.lock()) {
             Ok(guard) => guard,
             Err(error) => {
+                reporting.finish();
+
                 return ErrorPackLocked {
                     cause: error.to_string(),
                 }
@@ -207,9 +278,11 @@ pub fn handle_pack(
             }
         };
 
-        match runtime.block_on(guard.repack()) {
+        match runtime.block_on(guard.repack(&reporting.progress())) {
             Ok(was) => changed |= was,
             Err(error) => {
+                reporting.finish();
+
                 return ErrorPackFailed {
                     cause: error.to_string(),
                 }
@@ -217,6 +290,8 @@ pub fn handle_pack(
             }
         }
     }
+
+    reporting.finish();
 
     ResultPacked { changed }.into()
 }

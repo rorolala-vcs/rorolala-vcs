@@ -177,6 +177,15 @@ pub const EC_ERR_PACK_LOCKED: i32 = 102;
 /// `exit_codes.pack_nothing_to_pack`
 pub const EC_ERR_PACK_NOTHING_TO_PACK: i32 = 103;
 
+/// `exit_codes.pack_gc_failed`
+pub const EC_ERR_PACK_GC_FAILED: i32 = 104;
+
+/// `exit_codes.pack_gc_no_layout`
+pub const EC_ERR_PACK_GC_NO_LAYOUT: i32 = 105;
+
+/// `exit_codes.pack_gc_merging`
+pub const EC_ERR_PACK_GC_MERGING: i32 = 106;
+
 // File operations
 
 /// `exit_codes.fs_ops_argument`

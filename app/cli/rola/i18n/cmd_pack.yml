@@ -2,6 +2,9 @@ _version: 2
 
 pack:
   complete:
+    garbage_collect:
+      en: Collect what the layout does not reference
+      zh-CN: 收集 Layout 未引用的对象
     no_index:
       en: Do not tidy the index
       zh-CN: 不整理索引
@@ -13,18 +16,28 @@ pack:
         # Tidy the objects of the store and the index into packs
         **Usage**: rola [[GREEN]]__pack__[[/]]
         **Flags**:
-             __--no-index__      Do not tidy the index, leave it as it is
-             __--no-storage__    Do not tidy the store, leave it as it is
+             __--garbage-collect__    Collect what the Layout does not reference, then tidy the rest
+             __--no-index__           Do not tidy the index, leave it as it is
+             __--no-storage__         Do not tidy the store, leave it as it is
+
+        > [!Note]
+        > The `--garbage-collect` flag makes irreversible deletions, so it will ask first
+        > Suppress the questions with `--force`
     zh-CN: |
         # 把仓库与索引中的对象整理进 pack
         **用法**：rola [[GREEN]]__pack__[[/]]
         **标识**：
-             __--no-index__      不整理索引，保持原样
-             __--no-storage__    不整理仓库，保持原样
+             __--garbage-collect__    剔除 Layout 未引用的对象，然后整理余下对象
+             __--no-index__           不整理索引，保持原样
+             __--no-storage__         不整理仓库，保持原样
+             
+        > [!Note]
+        > `--garbage-collect` 标识会做出不可逆删除，所以会做出询问
+        > 可用 `--force` 抑制
 
   cmd_pack_description:
-    en: Tidy the objects of the store and the index
-    zh-CN: 整理仓库与索引中的对象
+    en: Tidy the objects of the store and the index, or collect what the Layout does not reference
+    zh-CN: 整理仓库与索引中的对象，或收集 Layout 未引用的对象
 
   result_packed:
     en: The objects have been tidied again
@@ -33,6 +46,26 @@ pack:
   result_nothing:
     en: The objects are already laid out like this
     zh-CN: 对象已经是这样的布局
+
+  gc_confirm:
+    en: "Will remove %{index_entries} index entries and %{storage_entries} store entries, %{index_bytes} and %{storage_bytes} bytes. Continue?"
+    zh-CN: "将从索引剔除 %{index_entries} 条，从仓库剔除 %{storage_entries} 条，分别占 %{index_bytes} 与 %{storage_bytes} 字节。继续吗？"
+
+  result_gc:
+    en: "Removed %{index_entries} index entries (%{index_bytes} bytes) and %{storage_entries} store entries (%{storage_bytes} bytes)"
+    zh-CN: 已从索引剔除 %{index_entries} 条（%{index_bytes} 字节），从仓库剔除 %{storage_entries} 条（%{storage_bytes} 字节）
+
+  result_gc_nothing:
+    en: Nothing is unreferenced
+    zh-CN: 没有 0 引用的对象
+
+  result_gc_grace:
+    en: "%{kept} entries were kept because they were written recently; the next collecting decides them"
+    zh-CN: 有 %{kept} 条因刚写入而被保留，由下一次收集再作决定
+
+  result_declined:
+    en: Declined, nothing was removed
+    zh-CN: 已取消，未删除任何对象
 
   err_no_storage:
     en: This run is not inside any store or index
@@ -53,6 +86,36 @@ pack:
         Please leave out at least one of `--no-index` and `--no-storage`, so that the store or the index is tidied
     zh-CN: |
         请至少省略 `--no-index` 与 `--no-storage` 其中之一，以便整理仓库或索引
+
+  err_gc_failed:
+    en: "Garbage collection failed: %{reason}"
+    zh-CN: "垃圾收集失败：%{reason}"
+
+  err_gc_failed_help:
+    en: |
+        See the reason above; a failed run removes nothing, so it is safe to retry
+    zh-CN: |
+        看上面的原因；失败的一轮什么也没删，重试是安全的
+
+  err_gc_no_layout:
+    en: No Layout was found to collect from
+    zh-CN: 没有找到可作为根集合的 Layout
+
+  err_gc_no_layout_help:
+    en: |
+        Please run `rola pack --garbage-collect` inside a Vault or a Workspace
+    zh-CN: |
+        请在保险库或工作区内运行 `rola pack --garbage-collect`
+
+  err_gc_merging:
+    en: This Workspace has merges waiting
+    zh-CN: 工作区有等待中的合并
+
+  err_gc_merging_help:
+    en: |
+        Please finish or give up the waiting merges first, then collect again
+    zh-CN: |
+        请先完成或放弃等待中的合并，再执行收集
 
   err_pack_failed:
     en: "The objects in the store could not be packed: %{reason}"

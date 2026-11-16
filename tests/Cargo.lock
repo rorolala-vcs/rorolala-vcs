@@ -2014,6 +2014,7 @@ dependencies = [
  "rorolala-chunking",
  "rorolala-utils-constants",
  "rorolala-utils-location",
+ "rorolala-utils-progress",
  "serde",
  "size",
  "tokio",
@@ -2162,6 +2163,7 @@ dependencies = [
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
+ "rorolala-utils-progress",
  "serde",
  "tokio",
 ]

@@ -14,9 +14,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use rorolala_storage::{Codec, FRAME_VERSION, Frame, Layout, PackEntry, PackIndex};
+use rorolala_utils_progress::Progress;
 
 use super::{VCSIndex, VCSIndexObject, VCSWrite, entries};
 use crate::Hash;
@@ -24,6 +25,16 @@ use crate::error::VCSIndexError;
 
 /// The directory packs are kept under, inside an index.
 const PACKED_DIR: &str = "packed";
+
+/// How recently an object may have been written to be kept by a collecting run that has no
+/// reference for it.
+///
+/// The same bargain the store strikes: a collecting run reads its references before anything is
+/// taken away, and a run that writes an object between that reading and the collecting has written
+/// one no reference the run saw names, since an ordinary write holds no lock. What was written
+/// recently enough is kept rather than taken, and the next collecting run decides it on the
+/// references it sees.
+const GRACE: Duration = Duration::from_hours(24);
 
 /// Where an object is read from while the index is laid out afresh.
 pub enum Source {
@@ -294,11 +305,14 @@ impl VCSIndex {
     /// The new pack is written and the old ones dropped only once it is there, so a reader that
     /// arrives in the middle finds every object in the packs it already knew.
     ///
+    /// The work is said to `progress` as one task the length of the objects being written, begun
+    /// once the enumeration has said how many there are.
+    ///
     /// # Errors
     ///
     /// Returns [`VCSIndexError::Io`] if an object cannot be read or a pack cannot be written, and
     /// [`VCSIndexError::Malformed`] if a path it needs cannot be named.
-    pub async fn repack(&self) -> Result<bool, VCSIndexError> {
+    pub async fn repack(&self, progress: &Progress) -> Result<bool, VCSIndexError> {
         let loose = self.list_loose_keys().await?;
         let packs = self.packs().await?;
 
@@ -329,6 +343,12 @@ impl VCSIndex {
             return Ok(false);
         }
 
+        // The writing is the part worth watching, and its length is known only once the
+        // enumeration has said how many objects there are, so the task is begun here rather than
+        // by the caller, who cannot know the number either.
+        let total = u64::try_from(sources.len()).unwrap_or(u64::MAX);
+        let mut task = progress.begin("", Some(total));
+
         // The new pack is written at a number no pack holds, so the old ones are not written over
         // while they are still what a reader would find.
         let mut framed = Vec::new();
@@ -340,7 +360,9 @@ impl VCSIndex {
 
             framed.extend_from_slice(&bytes);
             directory.push(PackEntry::new(*key, offset, len));
+            task.advance_by(1);
         }
+        task.finish();
 
         // The pack is claimed under a number nothing else is writing, and the one it replaces is
         // dropped only once it is whole: a reader that arrives in the middle finds every object in
@@ -368,6 +390,243 @@ impl VCSIndex {
         Ok(true)
     }
 
+    /// Works out what a collecting run that keeps `keep` would take away.
+    ///
+    /// Every object the index holds is asked whether the keys handed in name it. What none of them
+    /// names is what the plan takes away, with one exception: an object written recently enough to
+    /// sit inside the grace is kept all the same, and counted in
+    /// [`kept_by_grace`](CollectPlan::kept_by_grace) instead, see `GRACE` for why. A loose object
+    /// carries its own file's modification time, a packed one its pack file's.
+    ///
+    /// This reads the index and changes nothing, so a run can show what a collecting would do and
+    /// ask before it does it. The collecting that carries a plan out enumerates the index again,
+    /// so what arrives or vanishes between this and the collecting is the collecting's to find: an
+    /// object that arrives is kept, one already gone is skipped.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VCSIndexError::Io`] if a pack index cannot be read, and
+    /// [`VCSIndexError::Malformed`] if it does not decode.
+    pub async fn collect_plan(&self, keep: &BTreeSet<Hash>) -> Result<CollectPlan, VCSIndexError> {
+        let loose = self.list_loose_keys().await?;
+        let packs = self.packs().await?;
+        let fresh_since = SystemTime::now().checked_sub(GRACE);
+
+        let mut plan = CollectPlan::default();
+        let mut seen: BTreeSet<Hash> = BTreeSet::new();
+
+        // The loose copy is the one a laying-out reads, so it is the one this plan measures: a key
+        // both loose and packed is one entry, and its freshness and its length are the loose
+        // file's.
+        for key in &loose {
+            seen.insert(*key);
+
+            if keep.contains(key) {
+                continue;
+            }
+
+            let path = self.object_path(key);
+            let metadata = tokio::fs::metadata(&path).await;
+
+            let fresh = fresh_since.as_ref().is_some_and(|since| {
+                metadata
+                    .as_ref()
+                    .ok()
+                    .and_then(|metadata| metadata.modified().ok())
+                    .is_some_and(|modified| modified > *since)
+            });
+
+            if fresh {
+                plan.kept_by_grace += 1;
+            } else {
+                plan.removed
+                    .insert(*key, metadata.map_or(0_u64, |metadata| metadata.len()));
+            }
+        }
+
+        for index in &packs {
+            let Some(directory) = self.read_pack_index(*index).await? else {
+                continue;
+            };
+
+            for entry in directory.entries() {
+                if !seen.insert(entry.key()) {
+                    continue;
+                }
+
+                if keep.contains(&entry.key()) {
+                    continue;
+                }
+
+                let fresh = match fresh_since {
+                    Some(since) => {
+                        self.written_since(&Source::Packed(*index, *entry), since)
+                            .await
+                    }
+                    None => false,
+                };
+
+                if fresh {
+                    plan.kept_by_grace += 1;
+                } else {
+                    plan.removed.insert(entry.key(), entry.len());
+                }
+            }
+        }
+
+        Ok(plan)
+    }
+
+    /// Whether the object `source` names was written after `since`.
+    ///
+    /// A loose object carries its own file's modification time, a packed one the pack file's: a
+    /// pack written recently counts as recent all through, which keeps a whole pack of fresh
+    /// objects rather than asking one file for each of them.
+    async fn written_since(&self, source: &Source, since: SystemTime) -> bool {
+        let path = match source {
+            Source::Loose(path) => path.clone(),
+            Source::Packed(index, _) => self.pack_path(*index),
+        };
+
+        tokio::fs::metadata(&path)
+            .await
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .is_some_and(|modified| modified > since)
+    }
+
+    /// The collecting itself: takes away what `plan` says nothing wants, and lays the rest out in
+    /// one pack.
+    ///
+    /// This is [`collect_plan`](Self::collect_plan) carried out, against the index as it stands
+    /// when it runs: what was written since the plan was made is kept, what is already gone is
+    /// skipped, and the entries the plan names go last. The pack written here is made whole before
+    /// any old one is dropped, a reader that arrives in the middle finds every object in the packs
+    /// it already knew, the same bargain the laying-out strikes.
+    ///
+    /// A plan that takes nothing away and an index already one pack and nothing loose is left
+    /// alone; a plan that takes nothing away and an index scattered otherwise is laid out as a
+    /// laying-out would, taking nothing away.
+    ///
+    /// The work is said to `progress` as one task the length of the objects being written, begun
+    /// once the enumeration has said how many there are.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VCSIndexError::Io`] if an object cannot be read or a pack cannot be written, and
+    /// [`VCSIndexError::Malformed`] if a path it needs cannot be named.
+    pub async fn collect(
+        &self,
+        plan: &CollectPlan,
+        progress: &Progress,
+    ) -> Result<CollectReport, VCSIndexError> {
+        let loose = self.list_loose_keys().await?;
+        let packs = self.packs().await?;
+        let dead = plan.dead();
+
+        // Everything the index holds, under the key it is held by, kept and taken apart: the plan
+        // is executed against the index as it stands, so what arrived since it was made is kept
+        // and what is already gone is counted as nothing taken.
+        let mut kept: BTreeMap<Hash, Source> = BTreeMap::new();
+        let mut taken_len = 0_u64;
+        let mut taken = 0_usize;
+
+        for index in &packs {
+            let Some(directory) = self.read_pack_index(*index).await? else {
+                continue;
+            };
+
+            for entry in directory.entries() {
+                if dead.contains(&entry.key()) {
+                    taken += 1;
+                    taken_len = taken_len.saturating_add(entry.len());
+                } else {
+                    kept.insert(entry.key(), Source::Packed(*index, *entry));
+                }
+            }
+        }
+        for key in &loose {
+            if dead.contains(key) {
+                // A loose object's length is its file's, which is the whole framed entry.
+                let len = tokio::fs::metadata(self.object_path(key))
+                    .await
+                    .map_or(0_u64, |metadata| metadata.len());
+                taken += 1;
+                taken_len = taken_len.saturating_add(len);
+            } else {
+                kept.insert(*key, Source::Loose(self.object_path(key)));
+            }
+        }
+
+        // A plan that takes nothing away and an index already one pack and nothing loose is left
+        // alone rather than written over as it stands.
+        if dead.is_empty() && loose.is_empty() && packs.len() <= 1 {
+            return Ok(CollectReport {
+                kept_by_grace: plan.kept_by_grace,
+                ..CollectReport::default()
+            });
+        }
+
+        // The writing is the part worth watching, and its length is known only once the
+        // enumeration has said how many objects there are, so the task is begun here rather than
+        // by the caller, who cannot know the number either.
+        let total = u64::try_from(kept.len()).unwrap_or(u64::MAX);
+        let mut task = progress.begin("", Some(total));
+
+        // What is kept is laid down as one pack, at a number no pack holds, so the old ones are
+        // not written over while they are still what a reader would find. An index keeping nothing
+        // writes none: its packs are taken away whole below, which is the collecting it asked for.
+        let fresh = if kept.is_empty() {
+            None
+        } else {
+            let mut framed = Vec::new();
+            let mut directory = PackIndex::default();
+            for (key, source) in &kept {
+                let bytes = self.read_source(source).await?;
+                let offset = framed.len() as u64;
+                let len = bytes.len() as u64;
+
+                framed.extend_from_slice(&bytes);
+                directory.push(PackEntry::new(*key, offset, len));
+                task.advance_by(1);
+            }
+
+            let claimed = self.claim_pack().await?;
+            tokio::fs::write(self.pack_path(claimed), &framed).await?;
+            write_whole_durably(&self.pack_index_path(claimed), &directory.encode()).await?;
+
+            Some(claimed)
+        };
+        task.finish();
+
+        // What the pack now holds is not loose any more, and what the plan took away goes with the
+        // packs that held it: a loose object has only this removal to go by, one already gone
+        // drops as nothing.
+        for key in &loose {
+            let _ = tokio::fs::remove_file(self.object_path(key)).await;
+        }
+        for index in &packs {
+            drop_pack(self, *index).await?;
+        }
+
+        if let Some(fresh) = fresh {
+            // The number the fresh pack was claimed under is one nothing has read yet, and the
+            // listing that named the old packs is no longer the truth of the directory.
+            let state = self.pack_state();
+            forget_pack_index(&state, fresh);
+            forget_packs(&state);
+        }
+
+        prune_empty_directories(&self.path.join(super::OBJECTS_DIR)).await;
+
+        Ok(CollectReport {
+            removed: taken,
+            removed_len: taken_len,
+            kept_by_grace: plan.kept_by_grace,
+            changed: true,
+        })
+    }
+
     /// Lays the loose objects, or the packs, out in one pack, when there are enough of them to be
     /// worth it.
     ///
@@ -389,7 +648,12 @@ impl VCSIndex {
             return Ok(false);
         }
 
-        self.repack().await
+        // A laying-out that is a step of a write nobody asked to watch goes unsaid: the run doing
+        // the writing is the one a reader is watching, and this work is part of that rather than a
+        // show of its own.
+        let progress = Progress::silent();
+
+        self.repack(&progress).await
     }
 
     /// Drops the object stored under `key`, whether it is loose or in a pack.
@@ -606,6 +870,94 @@ fn index_of_pack(name: &str) -> Option<u64> {
         .and_then(|rest| rest.strip_suffix(".idx"))
         .and_then(|number| number.parse().ok())
         .filter(|index| name == format!("packed_{index}.idx"))
+}
+
+/// What an index collecting run would take away, worked out before anything is asked of the caller.
+///
+/// The plan is read-only work: it enumerates the index, asks each object whether the keys the caller
+/// handed in name it, and holds what is left over. Making one changes nothing, so a run can show
+/// what a collecting would do and ask before it does it, which is what a taking-away that cannot be
+/// undone owes the caller.
+#[derive(Clone, Default)]
+pub struct CollectPlan {
+    /// The keys the plan takes away, each with how long its entry is, frames included.
+    removed: BTreeMap<Hash, u64>,
+    /// How many objects the plan keeps although no key the caller handed in names them, because
+    /// they were written recently enough to sit inside the grace.
+    kept_by_grace: usize,
+}
+
+impl CollectPlan {
+    /// How many objects the plan takes away.
+    #[must_use]
+    pub fn removed(&self) -> usize {
+        self.removed.len()
+    }
+
+    /// How many bytes the objects the plan takes away occupy, frames included.
+    #[must_use]
+    pub fn removed_len(&self) -> u64 {
+        self.removed
+            .values()
+            .fold(0_u64, |all, len| all.saturating_add(*len))
+    }
+
+    /// How many objects the plan keeps on the grace alone.
+    ///
+    /// These are objects no key the caller handed in names, but which were written recently enough
+    /// that taking them could take a write that is still on its way: they are kept, and the next
+    /// collecting run decides them on the references it sees.
+    #[must_use]
+    pub const fn kept_by_grace(&self) -> usize {
+        self.kept_by_grace
+    }
+
+    /// The keys the plan takes away, so the collecting that carries this plan out knows what to
+    /// leave out of the pack it writes.
+    fn dead(&self) -> BTreeSet<Hash> {
+        self.removed.keys().copied().collect()
+    }
+}
+
+/// What an index collecting run took away, and whether it changed anything.
+#[derive(Clone, Copy, Default)]
+pub struct CollectReport {
+    /// How many objects were taken away, as the collecting found them: one already gone between
+    /// the plan and the collecting is not counted, there is nothing left of it.
+    removed: usize,
+    /// How many bytes the objects taken away occupy, frames included.
+    removed_len: u64,
+    /// How many objects were kept on the grace alone, as the plan counted them.
+    kept_by_grace: usize,
+    /// Whether the index was changed: a pack written, old ones dropped, objects taken away.
+    changed: bool,
+}
+
+impl CollectReport {
+    /// How many objects were taken away.
+    #[must_use]
+    pub const fn removed(&self) -> usize {
+        self.removed
+    }
+
+    /// How many bytes the objects taken away occupy, frames included.
+    #[must_use]
+    pub const fn removed_len(&self) -> u64 {
+        self.removed_len
+    }
+
+    /// How many objects were kept on the grace alone.
+    #[must_use]
+    pub const fn kept_by_grace(&self) -> usize {
+        self.kept_by_grace
+    }
+
+    /// Whether anything changed: a collecting that took nothing away and found the index already
+    /// one pack and nothing loose changed nothing.
+    #[must_use]
+    pub const fn changed(&self) -> bool {
+        self.changed
+    }
 }
 
 /// Drops the pack of `index` and its index, the index first.

@@ -9,6 +9,7 @@ rorolala-storage.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
+rorolala-utils-progress.workspace = true
 blake3.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["io-util"] }

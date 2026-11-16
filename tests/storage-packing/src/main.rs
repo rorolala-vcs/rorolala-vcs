@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use librorolala::storage::{
     AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_MAGIC, Key, Lockable as _, PackEntry,
-    PackIndex, RorolalaStorage, StorageBackend as _, internals::Internals as _,
+    PackIndex, Progress, RorolalaStorage, StorageBackend as _, internals::Internals as _,
 };
 use rorolala_utils_sandbox::{Guard, Sandbox};
 
@@ -1130,7 +1130,7 @@ async fn repacking_merges_the_packs_there_are(sandbox: &Sandbox, checked: &mut C
         .lock()
         .await
         .expect("the store is free to lock")
-        .repack()
+        .repack(&Progress::silent())
         .await
         .expect("the packs are merged");
     checked.wants("repacking changes the store", merged, &format!("{merged}"));
@@ -1183,7 +1183,7 @@ async fn repacking_rolls_over_at_the_size_the_store_allows(
         .lock()
         .await
         .expect("the store is free to lock")
-        .repack()
+        .repack(&Progress::silent())
         .await
         .expect("the store is laid out");
 
@@ -1242,7 +1242,7 @@ async fn repacking_leaves_a_store_already_laid_out_alone(sandbox: &Sandbox, chec
         .lock()
         .await
         .expect("the store is free to lock")
-        .repack()
+        .repack(&Progress::silent())
         .await
         .expect("the store is laid out");
     let packs = store.packs().await.unwrap_or_default();
@@ -1250,7 +1250,7 @@ async fn repacking_leaves_a_store_already_laid_out_alone(sandbox: &Sandbox, chec
         .lock()
         .await
         .expect("the store is free to lock")
-        .repack()
+        .repack(&Progress::silent())
         .await
         .expect("the store is left alone");
 
@@ -1308,7 +1308,7 @@ async fn repacking_leaves_a_pack_that_does_not_read_where_it_is(
         .lock()
         .await
         .expect("the store is free to lock")
-        .repack()
+        .repack(&Progress::silent())
         .await
         .expect("repacking runs");
 
@@ -1343,7 +1343,7 @@ async fn a_manifest_is_packed_with_the_manifests(sandbox: &Sandbox, checked: &mu
         .lock()
         .await
         .expect("the store is free to lock")
-        .repack()
+        .repack(&Progress::silent())
         .await
         .expect("the store is laid out");
 
@@ -1475,7 +1475,7 @@ async fn packing_leaves_no_empty_directories(sandbox: &Sandbox, checked: &mut Ch
         .lock()
         .await
         .expect("the store is free to lock")
-        .repack()
+        .repack(&Progress::silent())
         .await
         .expect("the store is laid out");
 
@@ -1532,7 +1532,7 @@ async fn repacking_numbers_the_packs_from_nothing(sandbox: &Sandbox, checked: &m
         .lock()
         .await
         .expect("the store is free to lock")
-        .repack()
+        .repack(&Progress::silent())
         .await
         .expect("the store is laid out");
     let packs = store.packs().await.unwrap_or_default();
@@ -1556,7 +1556,7 @@ async fn repacking_numbers_the_packs_from_nothing(sandbox: &Sandbox, checked: &m
         .lock()
         .await
         .expect("the store is free to lock")
-        .repack()
+        .repack(&Progress::silent())
         .await
         .expect("the store is laid out again");
     let packs = store.packs().await.unwrap_or_default();

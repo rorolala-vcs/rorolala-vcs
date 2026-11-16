@@ -3,10 +3,12 @@
 //! The tests are in a file of their own so that the store is what the rest of the module is about;
 //! they reach into it more deeply than a caller can, which is what a test of a layout has to do.
 
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::SystemTime;
 
 use rorolala_utils_constants::STORAGE_CONFIG_PATH;
 use rorolala_utils_location::Locate as _;
@@ -18,8 +20,9 @@ use super::consts::{
 };
 use super::entry::key_of;
 use crate::{
-    AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_VERSION, Frame, Key, Layout, Manifest,
-    StorageBackend as _, TransferableBackend as _, ZIP_MAGIC, store_file, transfer,
+    AlgorithmChoice, Chunk, Chunking, Codec, Error, FRAME_VERSION, Frame, Key, Layout,
+    Lockable as _, Manifest, Progress, StorageBackend as _, TransferableBackend as _, ZIP_MAGIC,
+    store_file, transfer,
 };
 
 /// A directory of its own, emptied first so a rerun starts clean.
@@ -1222,4 +1225,187 @@ async fn publishing_from_another_store_carries_objects_and_manifests() {
 
     let _ = fs::remove_dir_all(&source_parent);
     let _ = fs::remove_dir_all(&target_parent);
+}
+
+/// Moves the loose object of `key` back in time, so a collecting run counts it as stale.
+///
+/// The grace is measured from the entry file's modification time, so a test that wants an entry
+/// taken away sets the time back rather than waiting a day for the entry to be one.
+fn stale(store: &RorolalaStorage, key: &Key) {
+    let file = fs::File::options()
+        .write(true)
+        .open(store.object_path(key))
+        .unwrap();
+    file.set_modified(SystemTime::UNIX_EPOCH).unwrap();
+}
+
+/// How long the entry `plain` is kept as, written raw and whole.
+fn framed_len(plain: &[u8]) -> u64 {
+    let frame = Frame {
+        version: FRAME_VERSION,
+        codec: Codec::Raw,
+        layout: Layout::Single,
+        plain_len: plain.len() as u64,
+    };
+
+    (frame.encode().len() + plain.len()) as u64
+}
+
+/// Writes `contents` as whole objects, and answers their keys in the order they were written.
+async fn whole_objects(store: &RorolalaStorage, contents: &[&[u8]]) -> Vec<Key> {
+    let mut keys = Vec::new();
+    for content in contents {
+        keys.push(store.write_object(content, Codec::Raw).await.unwrap());
+    }
+
+    keys
+}
+
+#[tokio::test]
+async fn a_collecting_plan_takes_what_no_key_names_and_is_not_fresh() {
+    let (parent, store) = store("collect-plan");
+    let keys = whole_objects(&store, &[b"kept one", b"kept two", b"taken away"]).await;
+    stale(&store, &keys[2]);
+
+    let objects: BTreeSet<Key> = keys[..2].iter().copied().collect();
+    let plan = store
+        .collect_plan(&objects, &BTreeSet::new())
+        .await
+        .unwrap();
+
+    // The plan holds what it would take, and the numbers a caller shows for it are the entries
+    // and the bytes of that, the entry's frame included.
+    assert_eq!(plan.removed(), 1);
+    assert_eq!(plan.removed_len(), framed_len(b"taken away"));
+    assert_eq!(plan.kept_by_grace(), 0);
+
+    // Making a plan changes nothing: everything the store held before it still holds.
+    assert!(holds(&store, &keys[0]).await);
+    assert!(holds(&store, &keys[2]).await);
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn a_collecting_takes_away_what_the_plan_names_and_keeps_the_rest_readable() {
+    let (parent, store) = store("collect-run");
+    let contents: &[&[u8]] = &[b"kept one", b"kept two", b"taken away"];
+    let keys = whole_objects(&store, contents).await;
+    stale(&store, &keys[2]);
+
+    let objects: BTreeSet<Key> = keys[..2].iter().copied().collect();
+    let plan = store
+        .collect_plan(&objects, &BTreeSet::new())
+        .await
+        .unwrap();
+    let guard = store.lock().await.unwrap();
+    let report = guard.collect(&plan, &Progress::silent()).await.unwrap();
+    drop(guard);
+
+    assert_eq!(report.removed(), 1);
+    assert_eq!(report.removed_len(), framed_len(b"taken away"));
+    assert_eq!(report.kept_by_grace(), 0);
+    assert!(report.changed());
+
+    // What the plan took away is gone, and what it kept is what it was.
+    assert!(!holds(&store, &keys[2]).await);
+    let out = parent.join("out");
+    for (key, content) in keys[..2].iter().zip(contents) {
+        store.extract_file(key, &out).await.unwrap();
+        assert_eq!(fs::read(&out).unwrap(), *content);
+    }
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn an_entry_just_written_is_kept_by_the_grace() {
+    let (parent, store) = store("collect-grace");
+    let keys = whole_objects(&store, &[b"written a moment ago"]).await;
+
+    // Nothing names the entry, but it was written inside the grace, so the plan keeps it and says
+    // so rather than taking it away.
+    let plan = store
+        .collect_plan(&BTreeSet::new(), &BTreeSet::new())
+        .await
+        .unwrap();
+    assert_eq!(plan.removed(), 0);
+    assert_eq!(plan.kept_by_grace(), 1);
+
+    // The grace reaches packed entries through the pack file's own modification time: the entry
+    // packed here is as fresh as the pack that holds it.
+    store.lock().await.unwrap().pack(&keys).await.unwrap();
+    let packed = store
+        .collect_plan(&BTreeSet::new(), &BTreeSet::new())
+        .await
+        .unwrap();
+    assert_eq!(packed.removed(), 0);
+    assert_eq!(packed.kept_by_grace(), 1);
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn a_collecting_that_keeps_nothing_empties_the_store() {
+    let (parent, store) = store("collect-empty");
+    let keys = whole_objects(&store, &[b"one", b"two", b"three"]).await;
+    for key in &keys {
+        stale(&store, key);
+    }
+
+    let plan = store
+        .collect_plan(&BTreeSet::new(), &BTreeSet::new())
+        .await
+        .unwrap();
+    assert_eq!(plan.removed(), 3);
+
+    let guard = store.lock().await.unwrap();
+    let report = guard.collect(&plan, &Progress::silent()).await.unwrap();
+    drop(guard);
+
+    assert_eq!(report.removed(), 3);
+    assert!(report.changed());
+
+    // Nothing is held any more, and nothing is named by anything the store keeps: the packs that
+    // held what went away went with it.
+    for key in &keys {
+        assert!(!holds(&store, key).await);
+    }
+    assert_eq!(store.list_all_keys().await.unwrap(), Vec::new());
+
+    let _ = fs::remove_dir_all(&parent);
+}
+
+#[tokio::test]
+async fn an_entry_gone_between_the_plan_and_the_collecting_is_skipped() {
+    let (parent, store) = store("collect-gone");
+    let contents: &[&[u8]] = &[b"kept", b"gone already"];
+    let keys = whole_objects(&store, contents).await;
+    stale(&store, &keys[1]);
+
+    let objects: BTreeSet<Key> = keys[..1].iter().copied().collect();
+    let plan = store
+        .collect_plan(&objects, &BTreeSet::new())
+        .await
+        .unwrap();
+    assert_eq!(plan.removed(), 1);
+
+    // The entry the plan names goes away by hand, the way another run's removal would: the
+    // collecting that carries the plan out finds nothing under the key and takes nothing.
+    fs::remove_file(store.object_path(&keys[1])).unwrap();
+
+    let guard = store.lock().await.unwrap();
+    let report = guard.collect(&plan, &Progress::silent()).await.unwrap();
+    drop(guard);
+
+    assert_eq!(report.removed(), 0);
+    assert_eq!(report.removed_len(), 0);
+    assert!(report.changed());
+
+    // What was to be kept was still written, so it reads back as it was.
+    let out = parent.join("out");
+    store.extract_file(&keys[0], &out).await.unwrap();
+    assert_eq!(fs::read(&out).unwrap(), contents[0]);
+
+    let _ = fs::remove_dir_all(&parent);
 }

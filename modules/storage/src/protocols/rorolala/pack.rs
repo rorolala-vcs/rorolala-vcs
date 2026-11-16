@@ -15,9 +15,10 @@ use std::io;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use rorolala_chunking::Chunker as _;
+use rorolala_utils_progress::{Progress, Task};
 use tokio::sync::Mutex as AsyncMutex;
 
 use super::RorolalaStorage;
@@ -92,18 +93,69 @@ impl LockingGuard<RorolalaStorage> {
     /// and over does not climb a number that says how often it was packed. The directories the loose
     /// entries sat in, empty once they moved, go as well.
     ///
+    /// The work is said to `progress` as one task the length of the entries being written, begun once
+    /// the enumeration has said how many there are.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::Io`] if an entry cannot be read or a pack or index cannot be written, and
     /// [`Error::Malformed`] if a path it needs cannot be named.
-    pub async fn repack(&self) -> Result<bool, Error> {
+    pub async fn repack(&self, progress: &Progress) -> Result<bool, Error> {
         let store: &RorolalaStorage = self;
 
-        store.repack().await
+        store.repack(progress).await
+    }
+
+    /// Takes away the entries a collecting plan says nothing wants, and lays the rest out afresh.
+    ///
+    /// This is [`collect_plan`](RorolalaStorage::collect_plan) carried out, under the store's lock:
+    /// the entries the plan names are the ones the packs written here leave out, and everything
+    /// else the store holds, whatever was written since the plan was made included, is written
+    /// into the packs again. The packs are written and made durable before any old one is dropped,
+    /// their indexes first, and the numbering is started over, so a run cut short is a store
+    /// holding a pack too many rather than an entry too few, the same bargain the laying-out
+    /// strikes.
+    ///
+    /// The plan is executed against the store as it stands when this runs, not as it stood when the
+    /// plan was made: an entry that arrived since is kept, one that is already gone is skipped, so
+    /// a plan made a while ago is safe to carry out.
+    ///
+    /// A plan that takes nothing away and a store already laid out as its kept entries would be
+    /// laid out is left alone. A plan that takes nothing away and a store holding loose entries is
+    /// laid out as a packing would, moving them into packs and taking nothing away.
+    ///
+    /// What was taken away, and whether anything changed, is all this answers; the work itself is
+    /// said to `progress` as one task the length of the entries being written, begun once the
+    /// enumeration has said how many there are.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if an entry cannot be read or a pack or index cannot be written, and
+    /// [`Error::Malformed`] if a path it needs cannot be named.
+    pub async fn collect(
+        &self,
+        plan: &CollectPlan,
+        progress: &Progress,
+    ) -> Result<CollectReport, Error> {
+        let store: &RorolalaStorage = self;
+
+        store.collect(plan, progress).await
     }
 }
 
 impl RorolalaStorage {
+    /// How recently an entry may have been written to be kept by a collecting run that has no
+    /// reference for it.
+    ///
+    /// A collecting run reads its references before anything is taken away, and a run that writes
+    /// an entry between that reading and the collecting has written one no reference the run saw
+    /// names: an ordinary write holds the store's lock for no part of itself, so the lock cannot
+    /// keep it out. What was written recently enough is kept rather than taken, so the window a
+    /// write can be lost through closes for as long as this says. The next collecting run arrives
+    /// after the write's reference has landed, and keeps or takes the entry on the reference's own
+    /// merit.
+    const GRACE: Duration = Duration::from_hours(24);
+
     /// The packing itself, with no lock around it: reach it through [`LockingGuard::pack`], which
     /// holds the store against another run for the whole of the work.
     ///
@@ -178,7 +230,13 @@ impl RorolalaStorage {
         // A pack holds one kind, so the entries are taken kind by kind.
         entries.sort_unstable_by_key(|(kind, key, _, _)| (*kind, *key));
 
-        let written = self.write_packs(&entries).await?;
+        // A packing that is a step of a write nobody asked to watch lays its packs out silently: a
+        // sync or a track carrying the keys is the run a reader is watching, and the packs written
+        // here are part of that run's work rather than a show of their own.
+        let progress = Progress::silent();
+        let mut task = progress.begin("", None);
+        let written = self.write_packs(&entries, &mut task).await?;
+        task.finish();
 
         // What moved into a pack is not loose any more. This is a move rather than a drop: what the key
         // promises is still held, in another place, and a read finds it either way.
@@ -221,11 +279,14 @@ impl RorolalaStorage {
     /// packing a store over and over does not climb a number that says how often it was packed. The
     /// directories the loose entries sat in, empty once they moved, go as well.
     ///
+    /// The work is said to `progress` as one task the length of the entries being written, begun
+    /// once the enumeration has said how many there are.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::Io`] if an entry cannot be read or a pack or index cannot be written, and
     /// [`Error::Malformed`] if a path it needs cannot be named.
-    pub(crate) async fn repack(&self) -> Result<bool, Error> {
+    pub(crate) async fn repack(&self, progress: &Progress) -> Result<bool, Error> {
         // Packs are changed one at a time within this process, the same as any other change to them,
         // see `root_state`.
         let state = self.root_state();
@@ -233,50 +294,7 @@ impl RorolalaStorage {
 
         // Everything the store holds, wherever it holds it, under the kind and key it is held by: an
         // entry named by two packs, or one both packed and loose, is one entry here and is written once.
-        let mut existing: Vec<(PackKind, u64, Arc<PackIndex>)> = Vec::new();
-        let mut entries: BTreeMap<(PackKind, Key), (u64, Source)> = BTreeMap::new();
-
-        for kind in [PackKind::Object, PackKind::Manifest] {
-            for index in self.packs_of(&state, kind).await? {
-                let Some(directory) = self.pack_index(&state, kind, index).await? else {
-                    continue;
-                };
-
-                for entry in directory.entries() {
-                    entries.insert(
-                        (kind, entry.key()),
-                        (
-                            entry.len(),
-                            Source::Packed {
-                                index,
-                                offset: entry.offset(),
-                                len: entry.len(),
-                            },
-                        ),
-                    );
-                }
-
-                existing.push((kind, index, directory));
-            }
-        }
-
-        // A loose entry is read from the file it is in, and it is written in place of a pack entry that
-        // names the same kind and key: the two are the same bytes, so this decides only which copy is
-        // dropped afterwards.
-        for kind in [PackKind::Object, PackKind::Manifest] {
-            for key in self.loose_keys(kind).await? {
-                let path = self.entry_path(kind, &key);
-
-                match tokio::fs::metadata(&path).await {
-                    Ok(metadata) => {
-                        entries.insert((kind, key), (metadata.len(), Source::Loose(path)));
-                    }
-                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                    Err(error) => return Err(error.into()),
-                }
-            }
-        }
-
+        let (entries, existing) = self.survey(&state).await?;
         let ordered: Vec<Planned> = entries
             .into_iter()
             .map(|((kind, key), (len, source))| (kind, key, len, source))
@@ -300,7 +318,13 @@ impl RorolalaStorage {
             return Ok(false);
         }
 
-        let written = self.write_packs(&ordered).await?;
+        // The writing is the part worth watching, and its length is known only once the enumeration
+        // has said how many entries there are, so the task is begun here rather than by the caller,
+        // who cannot know the number either.
+        let total = u64::try_from(ordered.len()).unwrap_or(u64::MAX);
+        let mut task = progress.begin("", Some(total));
+        let written = self.write_packs(&ordered, &mut task).await?;
+        task.finish();
 
         // Nothing could be read to write again, every source was gone between being listed and being
         // read. The store is left as it is rather than having packs dropped that what is here could not
@@ -334,6 +358,268 @@ impl RorolalaStorage {
         self.prune_empty_directories().await?;
 
         Ok(true)
+    }
+
+    /// Everything the store holds, wherever it holds it, and the packs that hold it.
+    ///
+    /// An entry named by two packs, or one both packed and loose, is one entry in the map: the
+    /// loose copy wins, the two are the same bytes, and the loose one is the one a laying-out reads
+    /// and drops afterwards. The pack indexes read on the way come back too, since a laying-out
+    /// that replaces them wants the list it replaces them by, and a collecting wants the packs it
+    /// is to drop.
+    async fn survey(
+        &self,
+        state: &RootState,
+    ) -> Result<
+        (
+            BTreeMap<(PackKind, Key), (u64, Source)>,
+            Vec<(PackKind, u64, Arc<PackIndex>)>,
+        ),
+        Error,
+    > {
+        let mut existing: Vec<(PackKind, u64, Arc<PackIndex>)> = Vec::new();
+        let mut entries: BTreeMap<(PackKind, Key), (u64, Source)> = BTreeMap::new();
+
+        for kind in [PackKind::Object, PackKind::Manifest] {
+            for index in self.packs_of(state, kind).await? {
+                let Some(directory) = self.pack_index(state, kind, index).await? else {
+                    continue;
+                };
+
+                for entry in directory.entries() {
+                    entries.insert(
+                        (kind, entry.key()),
+                        (
+                            entry.len(),
+                            Source::Packed {
+                                index,
+                                offset: entry.offset(),
+                                len: entry.len(),
+                            },
+                        ),
+                    );
+                }
+
+                existing.push((kind, index, directory));
+            }
+        }
+
+        // A loose entry is read from the file it is in, and it is written in place of a pack entry
+        // that names the same kind and key: the two are the same bytes, so this decides only which
+        // copy is dropped afterwards.
+        for kind in [PackKind::Object, PackKind::Manifest] {
+            for key in self.loose_keys(kind).await? {
+                let path = self.entry_path(kind, &key);
+
+                match tokio::fs::metadata(&path).await {
+                    Ok(metadata) => {
+                        entries.insert((kind, key), (metadata.len(), Source::Loose(path)));
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.into()),
+                }
+            }
+        }
+
+        Ok((entries, existing))
+    }
+
+    /// Works out what a collecting run that keeps `objects` and `manifests` would take away.
+    ///
+    /// Every entry the store holds is asked whether one of the keys handed in names it: an object
+    /// entry survives on `objects`, a manifest entry survives on `manifests`. What survives on
+    /// neither is what the plan takes away, with one exception: an entry whose bytes were written
+    /// recently enough to sit inside the grace is kept all the same, and counted in
+    /// [`kept_by_grace`](CollectPlan::kept_by_grace) instead. The grace is what keeps a run that
+    /// wrote an entry after the references were read from losing that entry, see `GRACE`.
+    ///
+    /// This reads the store and changes nothing, so a run can show what a collecting would do and
+    /// ask before it does it. The collecting that carries a plan out enumerates the store again,
+    /// so what arrives or vanishes between this and the collecting is the collecting's to find: an
+    /// entry that arrives is kept, one already gone is skipped.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if an entry or a pack index cannot be read, and [`Error::Malformed`]
+    /// if a path it needs cannot be named.
+    pub async fn collect_plan(
+        &self,
+        objects: &BTreeSet<Key>,
+        manifests: &BTreeSet<Key>,
+    ) -> Result<CollectPlan, Error> {
+        let state = self.root_state();
+        let (entries, _) = self.survey(&state).await?;
+
+        // The grace is measured from now, backwards: an entry written after this moment less the
+        // grace is one the collecting keeps whatever the references say. A clock that cannot answer
+        // keeps nothing on the grace, which is the safe side of the two mistakes: taking an entry
+        // that was just written costs the entry, keeping one that is truly dead costs only the
+        // space until the next collecting run.
+        let fresh_since = SystemTime::now().checked_sub(Self::GRACE);
+
+        let mut plan = CollectPlan::default();
+        for ((kind, key), (len, source)) in entries {
+            let named = match kind {
+                PackKind::Object => objects.contains(&key),
+                PackKind::Manifest => manifests.contains(&key),
+            };
+            if named {
+                continue;
+            }
+
+            let fresh = match fresh_since {
+                Some(fresh_since) => self.written_since(&source, fresh_since).await?,
+                None => false,
+            };
+
+            if fresh {
+                plan.kept_by_grace += 1;
+            } else {
+                plan.removed.push((kind, key, len, source));
+            }
+        }
+
+        Ok(plan)
+    }
+
+    /// Whether the entry `source` names was written after `since`.
+    ///
+    /// A loose entry carries its own file's modification time, a packed entry the pack file's: a
+    /// pack written recently counts as recent all through, which keeps whole packs of fresh
+    /// entries rather than asking one file for each of them.
+    async fn written_since(&self, source: &Source, since: SystemTime) -> Result<bool, Error> {
+        let path = match source {
+            Source::Loose(path) => path.clone(),
+            Source::Packed { index, .. } => self.pack_path(*index),
+        };
+
+        Ok(tokio::fs::metadata(&path)
+            .await
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .is_some_and(|modified| modified > since))
+    }
+
+    /// The collecting itself, with no lock around it: reach it through
+    /// [`LockingGuard::collect`], which holds the store against another run for the whole of the
+    /// work.
+    ///
+    /// The plan is executed against the store as it stands now: everything that is not what the
+    /// plan takes away is written into packs again, the packs the store held before go last, and
+    /// the numbering starts over. A run cut short is a store holding a pack too many rather than
+    /// an entry too few, the same bargain the laying-out strikes, and a store that could not be
+    /// written again is left as it stands rather than having packs dropped that what is here could
+    /// not rebuild.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] if an entry cannot be read or a pack or index cannot be written, and
+    /// [`Error::Malformed`] if a path it needs cannot be named.
+    pub(crate) async fn collect(
+        &self,
+        plan: &CollectPlan,
+        progress: &Progress,
+    ) -> Result<CollectReport, Error> {
+        // Packs are changed one at a time within this process, the same as any other change to
+        // them, see `root_state`.
+        let state = self.root_state();
+        let _packing = state.packing.lock().await;
+
+        let (entries, existing) = self.survey(&state).await?;
+        let dead = plan.dead();
+        let ordered: Vec<Planned> = entries
+            .iter()
+            .filter(|(named, _)| !dead.contains(named))
+            .map(|((kind, key), (len, source))| (*kind, *key, *len, source.clone()))
+            .collect();
+
+        // What the store would look like written afresh, against what it looks like now: a plan
+        // that takes nothing away and a store already laid out as its kept entries would be laid
+        // out is left alone rather than written over as it stands. A plan that takes something
+        // away always writes, since the packs standing hold what it takes away.
+        if dead.is_empty() {
+            let mut planned = planned_groups(&ordered, self.max_pack_size().await);
+            let mut current: Vec<Vec<Key>> = existing
+                .iter()
+                .map(|(_, _, directory)| directory.entries().iter().map(PackEntry::key).collect())
+                .collect();
+            planned.sort();
+            current.sort();
+
+            let loose = ordered
+                .iter()
+                .any(|(_, _, _, source)| matches!(source, Source::Loose(_)));
+            if !loose && planned == current {
+                return Ok(CollectReport {
+                    kept_by_grace: plan.kept_by_grace,
+                    ..CollectReport::default()
+                });
+            }
+        }
+
+        // The writing is the part worth watching, and its length is known only once the
+        // enumeration has said how many entries there are, so the task is begun here rather than
+        // by the caller, who cannot know the number either.
+        let total = u64::try_from(ordered.len()).unwrap_or(u64::MAX);
+        let mut task = progress.begin("", Some(total));
+        let written = self.write_packs(&ordered, &mut task).await?;
+        task.finish();
+
+        // What was actually taken: the entries the plan names that were still here when this run
+        // enumerated, and the bytes they occupy. One already gone between the plan and this run is
+        // not taken and not counted, there is nothing left of it.
+        let mut taken = 0_usize;
+        let mut taken_len = 0_u64;
+        for (named, (len, _)) in &entries {
+            if dead.contains(named) {
+                taken += 1;
+                taken_len = taken_len.saturating_add(*len);
+            }
+        }
+
+        // Nothing that was to be kept could be read to write again, every kept source was gone
+        // between being listed and being read. The store is left as it is rather than having packs
+        // dropped that what is here could not rebuild. A store with nothing kept has nothing to
+        // lose: its packs are taken away whole, which is the collecting it asked for.
+        if written.is_empty() && !ordered.is_empty() {
+            return Ok(CollectReport {
+                kept_by_grace: plan.kept_by_grace,
+                ..CollectReport::default()
+            });
+        }
+
+        // What is in a pack now is not loose any more; a key that was already packed is not loose
+        // at all, so the drop is a no-op for it.
+        for (_, kind, keys) in &written {
+            for key in keys {
+                self.drop_entry(&self.entry_path(*kind, key)).await?;
+            }
+        }
+
+        // What the plan takes away goes last: the packs holding it are dropped just below, but an
+        // entry sitting loose has only this to go by. One already gone drops as nothing.
+        for (kind, key) in &dead {
+            self.drop_entry(&self.entry_path(*kind, key)).await?;
+        }
+
+        // The old packs go last, and only once the new ones are there. Their indexes go first,
+        // since a pack is found by its index, and a `.pack` left behind by a write cut short is
+        // garbage rather than a store that does not hold together.
+        for (kind, index, _) in &existing {
+            self.drop_pack(&state, *kind, *index).await?;
+        }
+
+        // The packs the store is left with are numbered from nothing, without a gap, the same way
+        // a laying-out leaves them.
+        self.renumber(&state, &written).await?;
+        self.prune_empty_directories().await?;
+
+        Ok(CollectReport {
+            removed: taken,
+            removed_len: taken_len,
+            kept_by_grace: plan.kept_by_grace,
+            changed: true,
+        })
     }
 
     /// Renames the packs that were just written to the numbers they belong at, from nothing up.
@@ -415,6 +701,10 @@ impl RorolalaStorage {
     /// take it while this pack is being written, and no reader can reach a pack that is not finished,
     /// a pack is found by its index, which is written last.
     ///
+    /// The work is said to `task` as it goes, one step per entry this attempts to write, whether or
+    /// not the entry is still there when it is read: a store losing entries between listing and
+    /// reading does not strand the bar short of its end.
+    ///
     /// What is answered is each pack that was written, its kind, and the keys it holds, in the order
     /// they were written. A pack whose entries all turned out to be gone is given back rather than left
     /// empty: a pack nothing names is not a pack.
@@ -425,6 +715,7 @@ impl RorolalaStorage {
     async fn write_packs(
         &self,
         entries: &[Planned],
+        task: &mut Task,
     ) -> Result<Vec<(u64, PackKind, Vec<Key>)>, Error> {
         use tokio::io::AsyncWriteExt as _;
 
@@ -444,6 +735,8 @@ impl RorolalaStorage {
                     // An entry the store stopped holding between being listed and being read is left
                     // out: it is gone, so there is nothing to move and no entry to name.
                     let Some(bytes) = self.read_source(source).await? else {
+                        task.advance_by(1);
+
                         continue;
                     };
 
@@ -453,6 +746,7 @@ impl RorolalaStorage {
                         .push(PackEntry::new(*key, packing.size, bytes.len() as u64));
                     packing.size += bytes.len() as u64;
                     keys.push(*key);
+                    task.advance_by(1);
                 }
 
                 // Every entry vanished, so the number is given back rather than a pack made of nothing.
@@ -1398,7 +1692,103 @@ impl Batch {
 /// are read from.
 type Planned = (PackKind, Key, u64, Source);
 
+/// What a collecting run would take away, worked out before anything is asked of the caller.
+///
+/// The plan is read-only work: it enumerates the store, asks each entry whether one of the keys the
+/// caller handed in names it, and holds what is left over. Making one changes nothing, so a run can
+/// show what a collecting would do and ask before it does it, which is what a taking-away that
+/// cannot be undone owes the caller.
+#[derive(Clone, Default)]
+pub struct CollectPlan {
+    /// The entries the plan takes away, in kind then key order: which kind, which key, how long the
+    /// entry is, and where its bytes sit.
+    removed: Vec<Planned>,
+    /// How many entries the plan keeps although no key the caller handed in names them, because
+    /// they were written recently enough to sit inside the grace.
+    kept_by_grace: usize,
+}
+
+impl CollectPlan {
+    /// How many entries the plan takes away.
+    #[must_use]
+    pub const fn removed(&self) -> usize {
+        self.removed.len()
+    }
+
+    /// How many bytes the entries the plan takes away occupy, frames included.
+    #[must_use]
+    pub fn removed_len(&self) -> u64 {
+        self.removed
+            .iter()
+            .fold(0_u64, |all, (_, _, len, _)| all.saturating_add(*len))
+    }
+
+    /// How many entries the plan keeps on the grace alone.
+    ///
+    /// These are entries no key the caller handed in names, but which were written recently enough
+    /// that taking them could take a write that is still on its way: they are kept, and the next
+    /// collecting run decides them on the references it sees.
+    #[must_use]
+    pub const fn kept_by_grace(&self) -> usize {
+        self.kept_by_grace
+    }
+
+    /// The kind and key of every entry the plan takes away, so the collecting that carries this
+    /// plan out knows what to leave out of the packs it writes.
+    fn dead(&self) -> BTreeSet<(PackKind, Key)> {
+        self.removed
+            .iter()
+            .map(|(kind, key, _, _)| (*kind, *key))
+            .collect()
+    }
+}
+
+/// What a collecting run took away, and whether it changed anything.
+#[derive(Clone, Copy, Default)]
+pub struct CollectReport {
+    /// How many entries were taken away, as the collecting found them: an entry already gone
+    /// between the plan and the collecting is not counted, there is nothing left of it.
+    removed: usize,
+    /// How many bytes the entries taken away occupy, frames included.
+    removed_len: u64,
+    /// How many entries were kept on the grace alone, as the plan counted them.
+    kept_by_grace: usize,
+    /// Whether the store was changed: packs written, old ones dropped, entries taken away.
+    changed: bool,
+}
+
+impl CollectReport {
+    /// How many entries were taken away.
+    #[must_use]
+    pub const fn removed(&self) -> usize {
+        self.removed
+    }
+
+    /// How many bytes the entries taken away occupy, frames included.
+    #[must_use]
+    pub const fn removed_len(&self) -> u64 {
+        self.removed_len
+    }
+
+    /// How many entries were kept on the grace alone.
+    #[must_use]
+    pub const fn kept_by_grace(&self) -> usize {
+        self.kept_by_grace
+    }
+
+    /// Whether anything changed: a collecting that took nothing away and found the store already
+    /// laid out as its kept entries would be laid out changed nothing.
+    #[must_use]
+    pub const fn changed(&self) -> bool {
+        self.changed
+    }
+}
+
 /// Where an entry being written into a pack is read from.
+///
+/// A plan holds one entry to a source and is copied by whoever keeps it, so the enum is cloned
+/// cheaply rather than borrowed through the plan.
+#[derive(Clone)]
 enum Source {
     /// The loose entry file it sits in.
     Loose(PathBuf),

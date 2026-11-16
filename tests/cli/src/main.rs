@@ -1,4 +1,4 @@
-﻿//! `cli`: what the `rola` program does when someone runs it.
+//! `cli`: what the `rola` program does when someone runs it.
 //!
 //! A program rather than a set of tests cargo runs, because what it checks is a program a caller
 //! meets: the built `rola`, started the way a terminal starts it, told things and read back. What
@@ -47,10 +47,11 @@ fn main() {
     let joining = sandbox.join("joining");
     let git_rola = sandbox.join("git-rola");
     let tree_project = sandbox.join("git-rola-tree");
+    let gcws = sandbox.join("gcws");
 
     for dir in [
         &home, &data, &rola_home, &empty, &plain, &initme, &files, &held, &claimed, &cached,
-        &ignoreme, &switching, &joining, &git_rola, &tree_project,
+        &ignoreme, &switching, &joining, &git_rola, &tree_project, &gcws,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -78,6 +79,7 @@ fn main() {
     index(&rola, &ws, &mut checked);
     existence(&rola, &ws, &files, &mut checked);
     movement(&rola, &plain, &files, &mut checked);
+    collecting(&rola, &empty, &gcws, &mut checked);
     git_rola_move(&rola, &git_rola, &mut checked);
     git_rola_tree(&rola, &tree_project, &mut checked);
     accounts(&rola, &plain, &ws, &mut checked);
@@ -1115,6 +1117,104 @@ fn movement(rola: &Rola, plain: &Path, files: &Path, checked: &mut Checked) {
 
     let ran = rola.run(plain, &["fs-ops", "cp"]);
     checked.exits("a copy without its paths is refused", &ran, 110);
+}
+
+/// Collecting what the Layout does not reference, what `rola pack --garbage-collect` does.
+///
+/// The workspace here is one whose Layout names nothing, so everything its store holds is what a
+/// collecting takes away. What was written a moment ago is kept all the same, the grace holds a
+/// write whose reference has not landed yet, and it is the next collecting that decides it.
+fn collecting(rola: &Rola, empty: &Path, ws: &Path, checked: &mut Checked) {
+    let ran = rola.run(empty, &["create", &text(ws)]);
+    checked.exits("a Workspace to collect in is made", &ran, 0);
+
+    let source = ws.join("loose.txt");
+    fs::write(&source, "nothing names this\n").expect("a file nothing references");
+    let ran = rola.run(ws, &["storage", "write-file", &text(&source)]);
+    checked.exits("a file nothing references is stored", &ran, 0);
+    let key = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(ws, &["pack", "--garbage-collect", "--force"]);
+    checked.exits("a collecting ends successfully", &ran, 0);
+    checked.stdout_has(
+        "what was written a moment ago is taken by nothing",
+        &ran,
+        "Removed 0 index entries",
+    );
+    checked.stderr_has(
+        "the grace is said, and what it kept is counted",
+        &ran,
+        "written recently",
+    );
+
+    let ran = rola.run(ws, &["storage", "ls-storaged"]);
+    checked.stdout_has("the kept entry is still listed", &ran, &key);
+
+    // A collecting runs against the stores as they stand when it runs, so what was fresh is stale
+    // by the next one, whatever packing moved it into since.
+    stale_everything(ws);
+
+    let ran = rola.run(ws, &["pack", "--garbage-collect", "--force"]);
+    checked.exits("the collecting of what is stale is made", &ran, 0);
+    checked.stdout_has(
+        "what was taken away is said with its counts",
+        &ran,
+        "1 store entries",
+    );
+
+    let ran = rola.run(ws, &["storage", "ls-storaged"]);
+    checked.wants(
+        "what was taken away is not listed",
+        ran.stdout.trim().is_empty(),
+        &said(&ran),
+    );
+
+    // A run in neither a Vault nor a Workspace has no roots at all, and is refused rather than
+    // answered with a collecting that would take everything away.
+    let ran = rola.run(empty, &["pack", "--garbage-collect", "--force"]);
+    checked.exits("a collecting without a Layout is refused", &ran, 105);
+    checked.stderr_has("the refusal says there are no roots", &ran, "No Layout was found");
+
+    // A Workspace with merges waiting keeps what no chain names, so it is refused outright.
+    let merging = ws.join(".rola/MERGING");
+    fs::write(
+        &merging,
+        format!("00000000-0000-0000-0000-000000000000 {}\n", "0".repeat(64)),
+    )
+    .expect("a merge in progress");
+    let ran = rola.run(ws, &["pack", "--garbage-collect", "--force"]);
+    checked.exits("a collecting beside a merge in progress is refused", &ran, 106);
+    checked.stderr_has("the refusal says what is waiting", &ran, "merges waiting");
+    fs::remove_file(&merging).expect("the merge in progress taken away");
+}
+
+/// Moves every file of the Workspace's store back in time, so a collecting counts them stale.
+///
+/// The grace is measured from the entry file's modification time, and a test that wants an entry
+/// taken away sets the time back rather than waiting a day for it to be one.
+fn stale_everything(ws: &Path) {
+    let storage = ws.join(".rola/storage");
+
+    for directory in ["obj", "manifest", "packed"] {
+        stale_below(&storage.join(directory));
+    }
+}
+
+/// Moves every file under `directory` back in time, through the directories it holds.
+fn stale_below(directory: &Path) {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        if path.is_dir() {
+            stale_below(&path);
+        } else if let Ok(file) = fs::File::options().write(true).open(&path) {
+            let _ = file.set_modified(std::time::SystemTime::UNIX_EPOCH);
+        }
+    }
 }
 
 /// A move in a git-rola project, whose record is `rola.toml` and `rola.lock` rather than a Layout.

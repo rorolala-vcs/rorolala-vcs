@@ -14,7 +14,8 @@ use std::path::{Path, PathBuf};
 
 use librorolala::storage::{StorageBackend as _, transfer};
 use librorolala::vcs::{
-    Creator, Message, ROOT_VERSION, VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version,
+    Creator, Message, Progress, ROOT_VERSION, VCSIndex, VCSIndexObject, VCSWrite as _, Variant,
+    Version,
 };
 use rorolala_utils_sandbox::{Guard, Sandbox};
 
@@ -114,7 +115,7 @@ async fn repacking_lays_loose_objects_into_one_pack(sandbox: &Sandbox, checked: 
         "the objects were not both loose",
     );
 
-    let made = index.repack().await.expect("the index is packed");
+    let made = index.repack(&Progress::silent()).await.expect("the index is packed");
     checked.wants("packing makes a pack", made, &format!("{made}"));
     checked.wants(
         "nothing is left loose once it is packed",
@@ -130,7 +131,7 @@ async fn repacking_lays_loose_objects_into_one_pack(sandbox: &Sandbox, checked: 
 
     checked.wants(
         "packing an index already laid out changes nothing",
-        !index.repack().await.expect("the index is packed again"),
+        !index.repack(&Progress::silent()).await.expect("the index is packed again"),
         "the second packing changed something",
     );
 
@@ -155,7 +156,7 @@ async fn a_packed_object_reads_through_a_fresh_handle(sandbox: &Sandbox, checked
         .write(variant.clone())
         .await
         .expect("the variant is written");
-    index.repack().await.expect("the index is packed");
+    index.repack(&Progress::silent()).await.expect("the index is packed");
 
     let reopened = VCSIndex::at(sandbox.join("reopen")).expect("the index is there");
 
@@ -179,7 +180,7 @@ async fn removing_a_packed_object_takes_it_out_of_the_pack(
         .await
         .expect("the variant is written");
     let removed_key = index.write(removed).await.expect("the version is written");
-    index.repack().await.expect("the index is packed");
+    index.repack(&Progress::silent()).await.expect("the index is packed");
 
     index
         .remove(&removed_key)
@@ -366,7 +367,7 @@ async fn a_creator_and_a_message_round_trip_and_survive_a_pack(
 
     // The pack takes everything under `obj/`, whatever kind it is, so both go into it and read
     // back the same.
-    index.repack().await.expect("the index is packed");
+    index.repack(&Progress::silent()).await.expect("the index is packed");
 
     checked.wants(
         "a packed creator reads back as it was written",

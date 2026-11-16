@@ -33,6 +33,10 @@ mod paths;
 // one it cannot keep in a field or hand to a function.
 pub use pack::Batch;
 
+// The same for a collecting run: a caller plans one, shows it, and carries it out, and the plan and
+// the report are what it names.
+pub use pack::{CollectPlan, CollectReport};
+
 // The same for a run of reads: a caller that reads a content's chunks through one opened batch
 // names the batch it holds, so the type is reachable from outside the crate.
 pub use content::{ObjectBatch, PublishReport};

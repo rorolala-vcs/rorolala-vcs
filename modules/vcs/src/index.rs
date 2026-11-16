@@ -1,4 +1,4 @@
-﻿//! The version control index: where a run's variants and versions are kept.
+//! The version control index: where a run's variants and versions are kept.
 //!
 //! The index is a store of its own, kept in a directory of its own and addressed by the same
 //! kind of key a store is, but it is not the store: what it holds are the index objects the
@@ -36,7 +36,11 @@ mod pack;
 
 pub use object::{VCSIndexKind, VCSWrite};
 use pack::Source;
-pub use pack::VCSIndexBatch;
+pub use pack::{CollectPlan, CollectReport, VCSIndexBatch};
+
+// The laying-out and the collecting say their work through a `Progress`, so the type a caller
+// hands in is named here rather than making a caller reach into the crate it comes from.
+pub use rorolala_utils_progress::Progress;
 
 /// The directory loose objects are kept under, inside an index.
 const OBJECTS_DIR: &str = "obj";
@@ -1105,6 +1109,7 @@ impl From<rorolala_storage::Error> for VCSIndexError {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1120,6 +1125,11 @@ mod tests {
     use super::{VCSIndex, VCSWrite, run};
     use crate::error::{VCSIndexError, VCSIndexReadingError};
     use crate::{Creator, Hash, Message, Variant, Version};
+
+    /// A progress nobody hears, for a laying-out a test is not watching.
+    fn silent() -> rorolala_utils_progress::Progress {
+        rorolala_utils_progress::Progress::silent()
+    }
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -1326,13 +1336,13 @@ mod tests {
 
         // The first repacking moves both loose objects into one pack; the second finds them there
         // already and changes nothing.
-        assert!(run(index.repack()).unwrap().unwrap());
+        assert!(run(index.repack(&silent())).unwrap().unwrap());
         assert_eq!(run(index.packs()).unwrap().unwrap(), vec![0]);
         assert_eq!(
             run(index.list_loose_keys()).unwrap().unwrap(),
             Vec::<Hash>::new()
         );
-        assert!(!run(index.repack()).unwrap().unwrap());
+        assert!(!run(index.repack(&silent())).unwrap().unwrap());
 
         // What each object is does not change: every read that worked before works after.
         assert_eq!(
@@ -1445,7 +1455,7 @@ mod tests {
         let index = index("batch-claim");
         let packed = variant();
         let packed_key = run(index.write(packed)).unwrap().unwrap();
-        run(index.repack()).unwrap().unwrap();
+        run(index.repack(&silent())).unwrap().unwrap();
 
         // Pack 0 is there, so what a batch claims is 1: two writers never take one number for two
         // packs, which is what keeps a pack from being written over while another names it.
@@ -1463,7 +1473,7 @@ mod tests {
         );
 
         // A repacking gathers both packs into one, and every object is still where it was.
-        assert!(run(index.repack()).unwrap().unwrap());
+        assert!(run(index.repack(&silent())).unwrap().unwrap());
         assert_eq!(run(index.packs()).unwrap().unwrap().len(), 1);
         assert!(run(index.holds_object(&packed_key)).unwrap().unwrap());
         assert!(run(index.holds_object(&other_key)).unwrap().unwrap());
@@ -1476,7 +1486,7 @@ mod tests {
         let index = index("broken-pack");
         let packed = variant();
         let packed_key = run(index.write(packed)).unwrap().unwrap();
-        run(index.repack()).unwrap().unwrap();
+        run(index.repack(&silent())).unwrap().unwrap();
 
         // Something loose written after the pack, so a listing has something it must still find.
         let loose = Version::new_bare_version([8_u8; 32], 0);
@@ -1513,14 +1523,14 @@ mod tests {
     fn a_batch_presence_is_read_from_the_packs_and_the_loose_tree_once() {
         let held = index("batch-presence");
         let packed_key = run(held.write(variant())).unwrap().unwrap();
-        run(held.repack()).unwrap().unwrap();
+        run(held.repack(&silent())).unwrap().unwrap();
 
         // Two keys laid into the pack, and one written after it, which is the loose tree, and one
         // this index has never held.
         let also_packed = Version::new_bare_version([8_u8; 32], 0);
         let loose = Version::new_bare_version([9_u8; 32], 0);
         let also_packed_key = run(held.write(also_packed)).unwrap().unwrap();
-        run(held.repack()).unwrap().unwrap();
+        run(held.repack(&silent())).unwrap().unwrap();
         let loose_key = run(held.write(loose)).unwrap().unwrap();
 
         let elsewhere = index("batch-presence-elsewhere");
@@ -1563,7 +1573,7 @@ mod tests {
     fn a_key_a_pack_names_is_held_though_the_pack_file_is_gone() {
         let index = index("pack-gone");
         let key = run(index.write(variant())).unwrap().unwrap();
-        run(index.repack()).unwrap().unwrap();
+        run(index.repack(&silent())).unwrap().unwrap();
 
         // The index still names the key; the pack file is what a read opens. Held is the index's
         // answer, so the key is held and not producible, a transfer asks for it and is told there
@@ -1644,7 +1654,7 @@ mod tests {
         let removed = Version::new_bare_version([4_u8; 32], 0);
         let kept_key = run(index.write(kept.clone())).unwrap().unwrap();
         let removed_key = run(index.write(removed)).unwrap().unwrap();
-        run(index.repack()).unwrap().unwrap();
+        run(index.repack(&silent())).unwrap().unwrap();
 
         run(index.remove_object(&removed_key)).unwrap().unwrap();
 
@@ -1672,7 +1682,7 @@ mod tests {
         // An object loose and packed at once: the framed entry is kept beside the pack, then laid
         // down again where a loose copy lives.
         let entry = fs::read(index.object_path(&removed_key)).unwrap();
-        run(index.repack()).unwrap().unwrap();
+        run(index.repack(&silent())).unwrap().unwrap();
         let loose = index.object_path(&removed_key);
         fs::create_dir_all(loose.parent().unwrap()).unwrap();
         fs::write(&loose, &entry).unwrap();
@@ -1810,7 +1820,7 @@ mod tests {
         run(index.write(creator.clone())).unwrap().unwrap();
         run(index.write(message.clone())).unwrap().unwrap();
 
-        run(index.repack()).unwrap().unwrap();
+        run(index.repack(&silent())).unwrap().unwrap();
 
         assert_eq!(run(index.list_loose_keys()).unwrap().unwrap(), Vec::new());
         assert_eq!(
@@ -1914,6 +1924,135 @@ mod tests {
         wanted.sort_unstable();
 
         assert_eq!(named, wanted);
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    /// A Variant like any other, whose storage hash names it apart.
+    fn variant_named(tag: u8) -> Variant {
+        Variant::new_bare_variant([tag; 32], [1_u8; 32], None, [0_u8; 32], [0_u8; 32], 0)
+    }
+
+    /// Moves the loose object of `key` back in time, so a collecting run counts it as stale.
+    ///
+    /// The grace is measured from the entry file's modification time, so a test that wants an
+    /// object taken away sets the time back rather than waiting a day for it to be one.
+    fn stale(index: &VCSIndex, key: &Hash) {
+        let file = fs::File::options()
+            .write(true)
+            .open(index.object_path(key))
+            .unwrap();
+        file.set_modified(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap();
+    }
+
+    #[test]
+    fn a_collecting_takes_what_the_plan_names_and_keeps_the_rest_readable() {
+        let index = index("collect");
+        let keys: Vec<Hash> = [1_u8, 2, 3]
+            .into_iter()
+            .map(|tag| run(index.write(variant_named(tag))).unwrap().unwrap())
+            .collect();
+        stale(&index, &keys[2]);
+
+        let keep: BTreeSet<Hash> = keys[..2].iter().copied().collect();
+        let plan = run(index.collect_plan(&keep)).unwrap().unwrap();
+        assert_eq!(plan.removed(), 1);
+        assert_eq!(plan.kept_by_grace(), 0);
+
+        // A plan changes nothing: everything written is still there to read.
+        for key in &keys {
+            run(index.read(*key)).unwrap().unwrap();
+        }
+
+        let report = run(index.collect(&plan, &silent())).unwrap().unwrap();
+        assert_eq!(report.removed(), 1);
+        assert!(report.changed());
+
+        // What the plan took away is gone, and what it kept reads back as it was.
+        assert!(matches!(
+            run(index.read(keys[2])).unwrap(),
+            Err(VCSIndexReadingError::NotFound { .. })
+        ));
+        for key in &keys[..2] {
+            run(index.read(*key)).unwrap().unwrap();
+        }
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn an_object_just_written_is_kept_by_the_grace() {
+        let index = index("collect-grace");
+        run(index.write(variant_named(7))).unwrap().unwrap();
+
+        // Nothing names the object, but it was written inside the grace, so the plan keeps it and
+        // says so rather than taking it away.
+        let plan = run(index.collect_plan(&BTreeSet::new())).unwrap().unwrap();
+        assert_eq!(plan.removed(), 0);
+        assert_eq!(plan.kept_by_grace(), 1);
+
+        // The grace reaches packed objects through the pack file's own modification time: the
+        // object packed here is as fresh as the pack that holds it.
+        run(index.repack(&silent())).unwrap().unwrap();
+        let packed = run(index.collect_plan(&BTreeSet::new())).unwrap().unwrap();
+        assert_eq!(packed.removed(), 0);
+        assert_eq!(packed.kept_by_grace(), 1);
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn a_collecting_that_keeps_nothing_empties_the_index() {
+        let index = index("collect-empty");
+        let keys: Vec<Hash> = [1_u8, 2, 3]
+            .into_iter()
+            .map(|tag| run(index.write(variant_named(tag))).unwrap().unwrap())
+            .collect();
+        for key in &keys {
+            stale(&index, key);
+        }
+
+        let plan = run(index.collect_plan(&BTreeSet::new())).unwrap().unwrap();
+        assert_eq!(plan.removed(), 3);
+
+        let report = run(index.collect(&plan, &silent())).unwrap().unwrap();
+        assert_eq!(report.removed(), 3);
+        assert!(report.changed());
+
+        // Nothing is held any more, and the packs that held what went away went with it.
+        assert_eq!(
+            run(index.list_object_keys()).unwrap().unwrap(),
+            [] as [Hash; 0]
+        );
+        assert_eq!(run(index.packs()).unwrap().unwrap(), [] as [u64; 0]);
+
+        let _ = fs::remove_dir_all(index.get_root());
+    }
+
+    #[test]
+    fn an_object_gone_between_the_plan_and_the_collecting_is_skipped() {
+        let index = index("collect-gone");
+        let keys: Vec<Hash> = [1_u8, 2]
+            .into_iter()
+            .map(|tag| run(index.write(variant_named(tag))).unwrap().unwrap())
+            .collect();
+        stale(&index, &keys[1]);
+
+        let keep: BTreeSet<Hash> = keys[..1].iter().copied().collect();
+        let plan = run(index.collect_plan(&keep)).unwrap().unwrap();
+        assert_eq!(plan.removed(), 1);
+
+        // The object the plan names goes away by hand, the way another run's removal would: the
+        // collecting that carries the plan out finds nothing under the key and takes nothing.
+        fs::remove_file(index.object_path(&keys[1])).unwrap();
+
+        let report = run(index.collect(&plan, &silent())).unwrap().unwrap();
+        assert_eq!(report.removed(), 0);
+        assert!(report.changed());
+
+        // What was to be kept was still written, so it reads back as it was.
+        run(index.read(keys[0])).unwrap().unwrap();
 
         let _ = fs::remove_dir_all(index.get_root());
     }

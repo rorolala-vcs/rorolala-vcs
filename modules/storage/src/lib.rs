@@ -77,3 +77,11 @@ pub use protocols::RorolalaStorage;
 /// Both are named here for the same reason [`RorolalaStorage`] is: a caller keeps one in a field
 /// or hands it to a function, and a type it cannot write down it cannot do either with.
 pub use protocols::{Batch, ObjectBatch, PublishReport};
+
+/// A collecting run's plan and its report, named here for the same reason [`Batch`] is.
+///
+/// The packing and the laying-out say their work through a `Progress`, the one
+/// `rorolala_utils_progress` hands out, so that type is re-exported beside them rather than making
+/// a caller name the crate it comes from.
+pub use protocols::{CollectPlan, CollectReport};
+pub use rorolala_utils_progress::Progress;
