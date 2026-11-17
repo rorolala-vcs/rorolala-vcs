@@ -1,4 +1,4 @@
-//! Recording the content of one file as a version, and naming it in the Layout.
+﻿//! Recording the content of one file as a version, and naming it in the Layout.
 
 use std::path::Path;
 
@@ -50,6 +50,7 @@ pub fn track_file(
     creator: &str,
     message: &str,
     policy: &str,
+    owner: Option<&str>,
 ) -> Result<TrackedFile, WriteError> {
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
@@ -122,7 +123,7 @@ pub fn track_file(
         &layout,
         id,
         *written.version.digest(),
-        None,
+        owner.map(str::to_owned),
         String::new(),
         existing.is_some(),
     )?;
@@ -145,7 +146,8 @@ pub fn track_file(
 ///
 /// An owned JSON string the caller releases with `free_string`,
 /// `{"id":"...","storage":"...","variant":"...","version":"..."}`, or a `RolaWriteError *` the
-/// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice.
+/// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice, and
+/// `owner` is empty when the entry has no owner.
 ///
 /// # Errors
 ///
@@ -158,9 +160,18 @@ pub fn track_file_at(
     creator: &str,
     message: &str,
     policy: &str,
+    owner: &str,
 ) -> Result<String, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
-    let tracked = track_file(&workspace, directory, path, creator, message, policy)?;
+    let tracked = track_file(
+        &workspace,
+        directory,
+        path,
+        creator,
+        message,
+        policy,
+        (!owner.is_empty()).then_some(owner),
+    )?;
 
     serde_json::to_string(&tracked).map_err(|error| WriteError::Json {
         reason: error.to_string(),
@@ -185,7 +196,7 @@ mod tests {
         let workspace = Workspace::locate(&dir).unwrap();
         fs::write(dir.join("a.txt"), b"one").unwrap();
 
-        let tracked = track_file(&workspace, &dir, "a.txt", "alice", "first", "").unwrap();
+        let tracked = track_file(&workspace, &dir, "a.txt", "alice", "first", "", None).unwrap();
 
         let layout = workspace.layout().unwrap();
         let path = rorolala_layout::LayoutPath::from_relative("a.txt".as_ref()).unwrap();
