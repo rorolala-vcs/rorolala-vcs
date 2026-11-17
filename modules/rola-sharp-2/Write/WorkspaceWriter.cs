@@ -48,6 +48,41 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Moves a path's record to a version, or one version back when none is named.</summary>
+    /// <param name="path">The path, relative to the Workspace root or absolute.</param>
+    /// <param name="target">The version key, or nothing for one version back.</param>
+    /// <param name="onlyIndex">Leave the work on disk alone.</param>
+    /// <returns>What was written.</returns>
+    public Retracked RetrackFile(string path, string? target = null, bool onlyIndex = false)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var directory = Utf8(_workspace.Root.FullName);
+        var at = Utf8(path);
+        var named = Utf8(target ?? string.Empty);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_retrack_file(directory, at, named, onlyIndex);
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new Retracked(
+                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
+                RolaJson.Text(document.RootElement, "version") ?? string.Empty
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(named);
+        }
+    }
+
     /// <summary>Puts a version's content back at a path and records that the two agree.</summary>
     /// <param name="path">The path, relative to the Workspace root or absolute.</param>
     /// <param name="version">The version key.</param>

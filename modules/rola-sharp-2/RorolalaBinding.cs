@@ -2919,6 +2919,21 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_progress_next_json(nint progress);
 
     /// <summary>
+    /// Moves the record of a path under a Workspace to a version.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. An empty `target` moves one version back, and `only_index` leaves the
+    /// work on disk alone.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_retrack_file(nint directory, nint path, nint target, [MarshalAs(UnmanagedType.U1)] bool only_index);
+
+    /// <summary>
     /// Puts a file's content into the store a directory is in.
     ///
     /// An owned JSON string the caller releases with `free_string`, `{"key":"blake3:...","chunked":false}`,
