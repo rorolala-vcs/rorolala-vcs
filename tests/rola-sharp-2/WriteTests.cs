@@ -231,6 +231,31 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_layout_track_is_set_and_cleared()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+            var track = Path.Combine(directory, ".rola", "layout", "TRACK");
+
+            writer.SetTrack("origin");
+            Assert.True(File.Exists(track));
+
+            writer.ClearTrack();
+            Assert.False(File.Exists(track));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_shared_paths_are_the_librarys_own()
     {
         var root = Path.Combine(Path.GetTempPath(), "rola-sharp-paths");
