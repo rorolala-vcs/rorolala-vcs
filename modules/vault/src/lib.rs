@@ -122,6 +122,28 @@ impl Vault {
         )
     }
 
+    /// The Layout this Vault keeps, when there is one to read.
+    ///
+    /// It makes nothing: a Vault with no Layout is a Vault with no work recorded, and a reader is
+    /// told that rather than handed one that was made on the way. A read must not create the sixteen
+    /// logs [`Layout::open`] would; a write command calls [`layout`](Self::layout).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`rorolala_layout::LayoutError`] if a Layout that is there cannot be read.
+    pub fn layout_if_there(&self) -> Result<Option<Layout>, rorolala_layout::LayoutError> {
+        match Layout::open_existing(
+            self.current_dir
+                .join(LAYOUT_DIR)
+                .components()
+                .collect::<PathBuf>(),
+        ) {
+            Ok(layout) => Ok(Some(layout)),
+            Err(error) if error.is_not_found() => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
     /// The store this Vault keeps, if it has one.
     ///
     /// A Vault keeps its store under [`STORAGE_DIR`], and having one is what a directory

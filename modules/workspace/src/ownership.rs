@@ -76,7 +76,7 @@ impl Ownership {
     /// one of those, the Workspace still has answers, and they say that nothing is known yet.
     #[must_use]
     pub fn open(workspace: &Workspace, me: Option<String>) -> Option<Self> {
-        let local = workspace.layout_if_there().ok().flatten()?;
+        let local = workspace.layout_readonly().ok().flatten()?;
         let vault = workspace.layout_track().ok().flatten()?;
 
         // Opening a copy makes one where none is there, so a copy that was never fetched is asked

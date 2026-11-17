@@ -33,7 +33,7 @@ use librorolala::tree::{EntryKind as TreeEntryKind, Staging, Tree, TreeStructure
 use librorolala::vcs::VCSIndex;
 use librorolala::workspace::{Merging, Pending, Workspace};
 use librorolala::workspace_analyze::{
-    Cache, PathRename, TreeDiff, cache_path, entry_of, tree_diff,
+    Cache, PathRename, TreeDiff, cache_path, entry_of, tree_diff_remembering,
 };
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
@@ -488,7 +488,7 @@ pub fn handle_align(
     // The reading is taken unfiltered: a variant file the tree holds somewhere unexpected is found
     // among the untagged, and the ignore rules filtering them would hide exactly the files a merge
     // is waiting for. The rules' say over the run is made at the selection instead, below.
-    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty()) {
+    let diff = match tree_diff_remembering(&layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty()) {
         Ok(diff) => diff,
         Err(error) => {
             return ErrorAlignFailed {

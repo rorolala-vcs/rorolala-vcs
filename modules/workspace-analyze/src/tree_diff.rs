@@ -122,17 +122,17 @@ pub struct TreeDiff {
     pub failed: Vec<FailedPath>,
 }
 
-/// How the tree under `workspace` stands beside `layout`.
+/// How the tree under `workspace` stands beside `layout`, without writing anything.
 ///
 /// Every list is in [`LayoutPath`] order, so the same tree answers the same way twice. `alike` is
 /// how alike two text files have to be to count as the same file moved: `0.0` is any likeness,
 /// `1.0` is no change at all, and anything past either end is taken as the end. It never touches a
 /// binary file, which is the same file moved only when its digest is the one it had.
 ///
-/// It writes down what it read, so a move can be told from a loss and a gain next time, and so that
-/// a file that is moved after it changed is recognised as the same file. What a change is told by is
-/// not that reading, though, but the digest the Layout was last known to agree with: a file that
-/// changed and stayed changed is reported as changed until something records it.
+/// It reads the cache the last write left, and does not change it. What a change is told by is not
+/// that cache, though, but the digest the Layout was last known to agree with: a file that changed
+/// and stayed changed is reported as changed until something records it. A write that wants the
+/// next reading to remember this one calls [`tree_diff_remembering`].
 ///
 /// `rules` is the Workspace's ignore rule set, and it governs exactly one list: a path the tree
 /// holds and the Layout does not name is left out of [`TreeDiff::untagged`] when the rules say so,
@@ -145,16 +145,45 @@ pub struct TreeDiff {
 /// # Errors
 ///
 /// Returns [`TreeDiffError::Layout`] if the Layout cannot be read back, and [`TreeDiffError::Io`]
-/// if the tree cannot be walked or what was found cannot be written down. A single file that
-/// cannot be read is not one of these: it is recorded in [`TreeDiff::failed`].
-// The whole scan is one pass: a split would have to re-establish the order its borrows are taken
-// in, and the early returns the scan answers with would become a step's own.
-#[allow(clippy::too_many_lines)]
+/// if the tree cannot be walked. A single file that cannot be read is not one of these: it is
+/// recorded in [`TreeDiff::failed`].
 pub fn tree_diff(
     layout: &Layout,
     workspace: &Workspace,
     alike: f32,
     rules: &IgnoreRuleSet,
+) -> Result<TreeDiff, TreeDiffError> {
+    tree_diff_with(layout, workspace, alike, rules, false)
+}
+
+/// The same reading as [`tree_diff`], and it writes down what it read.
+///
+/// A move can be told from a loss and a gain next time, and a file moved after it changed is
+/// recognised as the same file. Only a write flow calls it: `track`, `align`, `checkout` and
+/// `retrack` are what have something new to remember.
+///
+/// # Errors
+///
+/// Returns what [`tree_diff`] does, and [`TreeDiffError::Io`] when the cache cannot be written.
+pub fn tree_diff_remembering(
+    layout: &Layout,
+    workspace: &Workspace,
+    alike: f32,
+    rules: &IgnoreRuleSet,
+) -> Result<TreeDiff, TreeDiffError> {
+    tree_diff_with(layout, workspace, alike, rules, true)
+}
+
+/// The reading both entries above make, writing the cache only when `remember` says so.
+// The whole scan is one pass: a split would have to re-establish the order its borrows are taken
+// in, and the early returns the scan answers with would become a step's own.
+#[allow(clippy::too_many_lines)]
+fn tree_diff_with(
+    layout: &Layout,
+    workspace: &Workspace,
+    alike: f32,
+    rules: &IgnoreRuleSet,
+    remember: bool,
 ) -> Result<TreeDiff, TreeDiffError> {
     layout.refresh()?;
 
@@ -374,16 +403,21 @@ pub fn tree_diff(
     // still names but the tree no longer holds, what it held when it was last seen, which is all
     // that is left of it to recognise a move by. The digest the Layout agrees with is carried along,
     // since it is not the reading that changes it.
-    let mut next = Cache::empty();
-    for (path, entry) in &current {
-        next.insert(path.clone(), entry.clone());
-    }
-    for path in &lost {
-        if let Some(was) = previous.get(path) {
-            next.insert(path.clone(), was.clone());
+    // A reading that only wanted to know does not write: the cache is what a write flow leaves for
+    // the next one, and a read that changed it would make the same question answer differently
+    // depending on who asked it.
+    if remember {
+        let mut next = Cache::empty();
+        for (path, entry) in &current {
+            next.insert(path.clone(), entry.clone());
         }
+        for path in &lost {
+            if let Some(was) = previous.get(path) {
+                next.insert(path.clone(), was.clone());
+            }
+        }
+        next.write(&cache_path)?;
     }
-    next.write(&cache_path)?;
 
     // A path that moved is one move, not also a loss and a gain: what was paired comes out of the
     // two lists it would otherwise sit in.
@@ -714,7 +748,7 @@ mod tests {
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
 
-    use super::{PathRename, tree_diff};
+    use super::{PathRename, cache_path, tree_diff, tree_diff_remembering};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -766,6 +800,23 @@ mod tests {
     }
 
     #[test]
+    fn a_read_does_not_write_the_cache() {
+        let (dir, workspace) = workspace("read-only");
+        track(&workspace, 1, "kept.txt");
+        fs::write(dir.join("kept.txt"), b"kept").unwrap();
+
+        let layout = working(&workspace);
+        let cache = cache_path(&dir, &layout);
+        let _ = fs::remove_file(&cache);
+
+        let _ = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        assert!(!cache.exists(), "a read wrote the cache");
+
+        let _ = tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        assert!(cache.exists(), "a write did not write the cache");
+    }
+
+    #[test]
     fn what_the_layout_names_and_the_tree_does_not_is_lost() {
         let (dir, workspace) = workspace("lost");
         track(&workspace, 1, "kept.txt");
@@ -775,7 +826,8 @@ mod tests {
         fs::write(dir.join("new.txt"), b"new").unwrap();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.lost, vec![path("gone.txt")], "{diff:?}");
         assert_eq!(diff.untagged, vec![path("new.txt")], "{diff:?}");
@@ -792,11 +844,12 @@ mod tests {
 
         let layout = working(&workspace);
         // A first reading writes down what the file holds, so the move can be told next time.
-        tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         fs::rename(dir.join("a.txt"), dir.join("b.txt")).unwrap();
 
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(
             diff.renamed,
@@ -820,13 +873,14 @@ mod tests {
 
         let layout = working(&workspace);
         // A first reading writes down what the file holds, so the change can be told next time.
-        tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         // Long enough that the change is a change in time as well as in content.
         sleep(Duration::from_millis(20));
         fs::write(dir.join("a.txt"), b"after\n").unwrap();
 
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.modified, vec![path("a.txt")], "{diff:?}");
         assert!(diff.renamed.is_empty(), "{diff:?}");
@@ -840,13 +894,14 @@ mod tests {
 
         let layout = working(&workspace);
         // A first reading writes down what the file holds, so the move can be told next time.
-        tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         // The same prose, moved, with a line added: alike enough to be the same file.
         fs::remove_file(dir.join("a.txt")).unwrap();
         fs::write(dir.join("b.txt"), b"one\ntwo\nthree\nfour\nfive\n").unwrap();
 
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(
             diff.renamed,
@@ -872,7 +927,8 @@ mod tests {
         fs::write(dir.join("seen.txt"), b"here").unwrap();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.untagged, vec![path("seen.txt")], "{diff:?}");
     }
@@ -894,14 +950,14 @@ mod tests {
 
         let layout = working(&workspace);
         // A first reading writes the cache the move is told by.
-        tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         // A file the rules ignore, and a tracked file moved into a place the rules ignore.
         fs::write(dir.join("scratch.mb"), b"scratch").unwrap();
         fs::rename(dir.join("kept.txt"), dir.join("kept.mb")).unwrap();
 
         let ignoring = rules(&dir, "*.mb\n");
-        let diff = tree_diff(&layout, &workspace, 0.5, &ignoring).unwrap();
+        let diff = tree_diff_remembering(&layout, &workspace, 0.5, &ignoring).unwrap();
 
         assert!(diff.untagged.is_empty(), "{diff:?}");
         assert_eq!(diff.ignored, vec![path("scratch.mb")], "{diff:?}");
@@ -916,7 +972,8 @@ mod tests {
         );
 
         // The same reading without the rules sees the gain, since that is what the tree holds.
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
         assert_eq!(diff.untagged, vec![path("scratch.mb")], "{diff:?}");
     }
 
@@ -932,7 +989,7 @@ mod tests {
 
         let layout = working(&workspace);
         let ignoring = rules(&dir, "*.mb\n");
-        let diff = tree_diff(&layout, &workspace, 0.5, &ignoring).unwrap();
+        let diff = tree_diff_remembering(&layout, &workspace, 0.5, &ignoring).unwrap();
 
         assert_eq!(diff.lost, vec![path("gone.txt")], "{diff:?}");
         assert!(diff.untagged.is_empty(), "{diff:?}");
@@ -954,7 +1011,8 @@ mod tests {
         expected.sort_unstable();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.untagged, expected, "{diff:?}");
         assert!(diff.failed.is_empty(), "{diff:?}");
@@ -986,7 +1044,8 @@ mod tests {
         fs::write(dir.join("notes.txt"), b"notes").unwrap();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.untagged_trees, vec![path("main")], "{diff:?}");
         assert_eq!(diff.untagged, vec![path("notes.txt")], "{diff:?}");
@@ -999,7 +1058,8 @@ mod tests {
         make_tree(&dir, "main");
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert!(diff.lost.is_empty(), "{diff:?}");
         assert!(diff.untagged_trees.is_empty(), "{diff:?}");
@@ -1012,7 +1072,8 @@ mod tests {
         track_tree(&workspace, 1, &path("main"));
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.lost, vec![path("main")], "{diff:?}");
         assert!(diff.untagged_trees.is_empty(), "{diff:?}");
@@ -1033,7 +1094,8 @@ mod tests {
         fs::rename(dir.join("main"), dir.join("archive").join("main")).unwrap();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(
             diff.renamed,
@@ -1058,7 +1120,8 @@ mod tests {
         fs::rename(dir.join("main"), dir.join("archive").join("main")).unwrap();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.lost, vec![path("main")], "{diff:?}");
         assert_eq!(diff.untagged_trees, vec![path("archive/main")], "{diff:?}");
@@ -1072,7 +1135,7 @@ mod tests {
 
         let layout = working(&workspace);
         let ignoring = rules(&dir, "main/\n");
-        let diff = tree_diff(&layout, &workspace, 0.5, &ignoring).unwrap();
+        let diff = tree_diff_remembering(&layout, &workspace, 0.5, &ignoring).unwrap();
 
         assert!(diff.untagged_trees.is_empty(), "{diff:?}");
         assert_eq!(diff.ignored, vec![path("main")], "{diff:?}");
@@ -1086,7 +1149,8 @@ mod tests {
         fs::write(dir.join("keep~theirs"), b"theirs").unwrap();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.untagged, vec![path("raw.psd")], "{diff:?}");
     }
@@ -1098,7 +1162,8 @@ mod tests {
         fs::write(dir.join("inside.txt"), b"inside").unwrap();
 
         let layout = working(&workspace);
-        let diff = tree_diff(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
+        let diff =
+            tree_diff_remembering(&layout, &workspace, 0.5, &IgnoreRuleSet::empty()).unwrap();
 
         assert_eq!(diff.untagged_trees, vec![LayoutPath::root()], "{diff:?}");
         assert!(diff.untagged.is_empty(), "{diff:?}");

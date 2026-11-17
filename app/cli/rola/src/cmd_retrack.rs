@@ -39,7 +39,7 @@ use librorolala::storage::{Blake3Hash, Key, RorolalaStorage, StorageBackend as _
 use librorolala::tree::{EntryKind as TreeEntryKind, Staging, Tree, TreeStructure, read_structure};
 use librorolala::vcs::{VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version};
 use librorolala::workspace::{Merging, Pending, Workspace};
-use librorolala::workspace_analyze::{Cache, cache_path, entry_of, tree_diff};
+use librorolala::workspace_analyze::{Cache, cache_path, entry_of, tree_diff_remembering};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -723,7 +723,7 @@ fn record_version(asked: RecordingVersion<'_>) -> Result<Next, Next> {
     let pending = merging.at(id).cloned();
     // Retracking moves a version pointer of an entry the Layout names, which the ignore rules
     // have no jurisdiction over, so the reading is taken unfiltered.
-    let diff = match tree_diff(layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty()) {
+    let diff = match tree_diff_remembering(layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty()) {
         Ok(diff) => diff,
         Err(error) => return Err(failed(error.to_string())),
     };
@@ -998,7 +998,7 @@ fn switch_uuid(asked: Switching<'_>) -> Next {
     // both read from the tree as it stands before the Layout changes: a tree read after the change
     // has no entry naming the variant's file, so a move of one is not found again.
     let diff = if pending.is_some() || action == SwitchAction::Content {
-        match tree_diff(layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty()) {
+        match tree_diff_remembering(layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty()) {
             Ok(diff) => Some(diff),
             Err(error) => return failed(error.to_string()),
         }

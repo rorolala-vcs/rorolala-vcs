@@ -45,7 +45,9 @@ use librorolala::storage::{
 use librorolala::tree::{Staging, Tree};
 use librorolala::vcs::{Creator, Message, VCSIndex, VCSIndexBatch, Variant, Version};
 use librorolala::workspace::{DATA_DIR, Merging, Pending, Workspace};
-use librorolala::workspace_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
+use librorolala::workspace_analyze::{
+    Cache, PathRename, cache_path, entry_of, tree_diff_remembering, walk,
+};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -387,7 +389,7 @@ fn record(
     // Recording works on a tree that is settled: a path the Layout names and the tree does not hold
     // is something to settle first, with `rola align`, rather than something to record around. A
     // move is not one of these, naming a path where it is now is how a move is confirmed.
-    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE, &rules) {
+    let diff = match tree_diff_remembering(&layout, held, DEFAULT_ALIKE, &rules) {
         Ok(diff) => diff,
         Err(error) => return fail(error.to_string()),
     };

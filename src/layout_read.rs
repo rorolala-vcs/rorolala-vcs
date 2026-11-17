@@ -120,13 +120,13 @@ pub fn layouts_json(directory: &Path) -> String {
 /// The Layout the place holding `directory` works in, with the label it is listed under.
 fn place(directory: &Path) -> Option<(Layout, &'static str)> {
     if let Some(workspace) = Workspace::locate(directory) {
-        let layout = workspace.layout_if_there().ok().flatten()?;
+        let layout = workspace.layout_readonly().ok().flatten()?;
 
         return Some((layout, DEFAULT_LAYOUT_NAME));
     }
 
     let vault = Vault::locate(directory)?;
-    let layout = vault.layout().ok()?;
+    let layout = vault.layout_if_there().ok().flatten()?;
 
     Some((layout, VAULT_LAYOUT_NAME))
 }
@@ -241,7 +241,7 @@ fn chosen(directory: &Path, name: &str) -> Result<Layout, LayoutReadError> {
         }
 
         return workspace
-            .layout_if_there()
+            .layout_readonly()
             .map_err(|error| read(&error))?
             .ok_or(LayoutReadError::NoLayout);
     }
@@ -251,7 +251,10 @@ fn chosen(directory: &Path, name: &str) -> Result<Layout, LayoutReadError> {
             return Err(LayoutReadError::Missing);
         }
 
-        return vault.layout().map_err(|error| read(&error));
+        return vault
+            .layout_if_there()
+            .map_err(|error| read(&error))?
+            .ok_or(LayoutReadError::NoLayout);
     }
 
     Err(LayoutReadError::NoWorkspace)

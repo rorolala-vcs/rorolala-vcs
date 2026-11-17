@@ -671,7 +671,7 @@ mod tests {
     use rorolala_utils_constants::VAULT_LAYOUT_NAME;
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
-    use rorolala_workspace_analyze::remember_moved;
+    use rorolala_workspace_analyze::{remember_moved, tree_diff_remembering};
     use uuid::Uuid;
 
     use super::{PathState, Status};
@@ -730,6 +730,15 @@ mod tests {
             &IgnoreRuleSet::empty(),
         )
         .unwrap()
+    }
+
+    /// Writes down the reading a write flow would leave, so a later reading can tell a move.
+    ///
+    /// `Status::read` no longer writes the cache; a test that wants the next reading to recognise a
+    /// move primes it the way `track` or `checkout` does.
+    fn remember(workspace: &Workspace) {
+        tree_diff_remembering(&working(workspace), workspace, 0.5, &IgnoreRuleSet::empty())
+            .unwrap();
     }
 
     /// Makes the Layout name `text` as a tree entry.
@@ -813,6 +822,8 @@ mod tests {
         track(&workspace, 1, "kept.txt");
         fs::write(dir.join("kept.txt"), b"before\n").unwrap();
 
+        remember(&workspace);
+
         assert_eq!(read(&workspace).modified, Vec::<String>::new());
 
         // Long enough that the change is a change in time as well as in content.
@@ -836,8 +847,7 @@ mod tests {
         track(&workspace, 1, "a.txt");
         fs::write(dir.join("a.txt"), b"the same content\n").unwrap();
 
-        // A first reading writes down what the file holds, so the move can be told next time.
-        let _ = read(&workspace);
+        remember(&workspace);
 
         fs::rename(dir.join("a.txt"), dir.join("b.txt")).unwrap();
 
@@ -940,8 +950,7 @@ mod tests {
         track(&workspace, 1, "a.txt");
         fs::write(dir.join("a.txt"), b"the same content\n").unwrap();
 
-        // A first reading writes down what the file holds, so the move can be told next time.
-        let _ = read(&workspace);
+        remember(&workspace);
 
         fs::rename(dir.join("a.txt"), dir.join("b.txt")).unwrap();
 
@@ -972,7 +981,7 @@ mod tests {
         .unwrap();
 
         fs::write(dir.join("hero.psd"), b"before\n").unwrap();
-        let _ = read(&workspace);
+        remember(&workspace);
 
         sleep(Duration::from_millis(20));
         fs::write(dir.join("hero.psd"), b"after\n").unwrap();
@@ -1036,8 +1045,7 @@ mod tests {
         track(&workspace, 1, "a.txt");
         fs::write(dir.join("a.txt"), b"before\n").unwrap();
 
-        // A first reading writes down what the file holds, which is what the Layout then agrees with.
-        let _ = read(&workspace);
+        remember(&workspace);
 
         sleep(Duration::from_millis(20));
         fs::write(dir.join("a.txt"), b"after\n").unwrap();
