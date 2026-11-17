@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace RolaSharp.V2;
 
 /// <summary>Why a read did not produce what the caller asked for.</summary>
@@ -41,6 +43,11 @@ public enum RolaReadErrorKind
 }
 
 /// <summary>What a read failed with, as a value a caller can catch.</summary>
+[SuppressMessage(
+    "Naming",
+    "CA1710:Identifiers should have correct suffix",
+    Justification = "the issue names the type RolaReadError, and the C ABI error carries the same name"
+)]
 public sealed class RolaReadError : Exception
 {
     /// <summary>Makes a read failure.</summary>

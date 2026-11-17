@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
 namespace RolaSharp.V2;
@@ -68,6 +69,11 @@ public sealed class UserScoop : Scoop
 
     /// <summary>The daemon this user's registrations are read through.</summary>
     /// <returns>The daemon scope.</returns>
+    [SuppressMessage(
+        "Design",
+        "CA1024:Use properties where appropriate",
+        Justification = "the issue names GetDaemonScoop, and a method reads as the action of asking for a scope"
+    )]
     public DaemonScoop GetDaemonScoop() => new(this);
 
     /// <inheritdoc/>
