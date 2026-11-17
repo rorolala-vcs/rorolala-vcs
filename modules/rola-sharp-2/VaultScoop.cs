@@ -4,7 +4,12 @@ using System.Text.Json;
 namespace RolaSharp.V2;
 
 /// <summary>A Vault: the directory a server-side Vault keeps, and everything under it.</summary>
-public sealed class VaultScoop : Scoop, IDisposable
+public sealed class VaultScoop
+    : Scoop,
+        IDisposable,
+        IVCSIndexAccessable,
+        IStorageAccessable,
+        ILayoutAccessable
 {
     private readonly string _root;
     private nint _handle;
@@ -40,6 +45,9 @@ public sealed class VaultScoop : Scoop, IDisposable
 
     /// <summary>The truth Layout the Vault keeps.</summary>
     public TruthLayoutScoop TruthLayout => new(_root);
+
+    /// <summary>The Layout the Vault works from.</summary>
+    public LayoutScoop Layout => TruthLayout;
 
     /// <summary>The store the Vault keeps.</summary>
     public StorageScoop Storage => new(RolaPaths.VaultStorage(_root));

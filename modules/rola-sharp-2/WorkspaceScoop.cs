@@ -4,7 +4,12 @@ using System.Text.Json;
 namespace RolaSharp.V2;
 
 /// <summary>A Workspace: the directory a run works in, and everything under it.</summary>
-public sealed class WorkspaceScoop : Scoop, IDisposable
+public sealed class WorkspaceScoop
+    : Scoop,
+        IDisposable,
+        IVCSIndexAccessable,
+        IStorageAccessable,
+        ILayoutAccessable
 {
     private readonly string _root;
     private nint _handle;
@@ -54,6 +59,9 @@ public sealed class WorkspaceScoop : Scoop, IDisposable
 
     /// <summary>The Layout the Workspace works in.</summary>
     public LocalLayoutScoop LocalLayout => new(_root);
+
+    /// <summary>The Layout the Workspace works in.</summary>
+    public LayoutScoop Layout => LocalLayout;
 
     /// <summary>The copy of a Vault's truth Layout a fetch left here.</summary>
     /// <param name="vault">The Vault whose copy is read.</param>
