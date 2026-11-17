@@ -7,6 +7,7 @@
 
 pub mod cancel;
 pub mod error;
+pub mod index;
 pub mod labels;
 pub mod layout;
 pub mod progress;
@@ -15,6 +16,7 @@ pub mod workspace;
 
 pub use cancel::*;
 pub use error::*;
+pub use index::*;
 pub use labels::*;
 pub use layout::*;
 pub use progress::*;
