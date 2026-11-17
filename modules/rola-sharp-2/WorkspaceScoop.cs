@@ -29,10 +29,9 @@ public sealed class WorkspaceScoop
     public static WorkspaceScoop Open(string start)
     {
         var at = new DirectoryInfo(Path.GetFullPath(start));
-        var data = NativeText.Taken(RorolalaBinding.ROLA_WORKSPACE_DATA_DIR());
         while (at is not null)
         {
-            if (Directory.Exists(Path.Combine(at.FullName, data)))
+            if (Directory.Exists(RolaPaths.WorkspaceData(at.FullName)))
             {
                 return new WorkspaceScoop(at.FullName);
             }

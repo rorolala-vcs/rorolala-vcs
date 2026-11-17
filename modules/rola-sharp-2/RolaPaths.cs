@@ -22,6 +22,12 @@ public static class RolaPaths
     public static string VaultIgnoreRules(string root) =>
         Resolve(root, RorolalaBinding.ROLA_VAULT_IGNORE_RULES_DIR);
 
+    /// <summary>Where a Workspace keeps the data that makes it one.</summary>
+    /// <param name="root">The Workspace's root.</param>
+    /// <returns>The directory, as an absolute path.</returns>
+    public static string WorkspaceData(string root) =>
+        Resolve(root, RorolalaBinding.ROLA_WORKSPACE_DATA_DIR);
+
     /// <summary>Where a Workspace keeps its store.</summary>
     /// <param name="root">The Workspace's root.</param>
     /// <returns>The store's directory, as an absolute path.</returns>
