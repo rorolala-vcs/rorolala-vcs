@@ -74,9 +74,7 @@ pub fn tree_reset(args: EntryTreeReset, workspace: &mut LazyRes<ResWorkspace>) -
             paths: result.paths,
         }
         .into(),
-        Err(librorolala::write::WriteError::InvalidPath { .. }) => {
-            ErrorTreeResetArgument.into()
-        }
+        Err(librorolala::write::WriteError::InvalidPath { .. }) => ErrorTreeResetArgument.into(),
         Err(librorolala::write::WriteError::NotATree { path }) => {
             ErrorTreeNotATree::new(path).into()
         }

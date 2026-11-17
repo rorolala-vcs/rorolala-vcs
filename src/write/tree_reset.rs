@@ -5,9 +5,7 @@ use std::path::Path;
 
 use rorolala_layout::Layout;
 use rorolala_storage::{Lockable as _, RorolalaStorage};
-use rorolala_tree::{
-    EntryKind, Staging, Tree, TreeEntry, TreeStructure, conflict_copy,
-};
+use rorolala_tree::{EntryKind, Staging, Tree, TreeEntry, TreeStructure, conflict_copy};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
@@ -313,11 +311,7 @@ fn under(scope: &str, path: &str) -> bool {
 /// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, and the failures
 /// [`reset`] names.
 #[lazyffi(export = rola_write_tree_reset)]
-pub fn reset_at(
-    directory: &Path,
-    target: &str,
-    paths: &str,
-) -> Result<String, WriteError> {
+pub fn reset_at(directory: &Path, target: &str, paths: &str) -> Result<String, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let paths: Vec<String> = serde_json::from_str(paths).map_err(|error| WriteError::Json {
         reason: error.to_string(),
