@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
-use rorolala_layout::LayoutPath;
+use rorolala_layout::{LayoutPath, MutableData};
 use rorolala_storage::Key;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
@@ -12,7 +12,12 @@ use rorolala_workspace::Workspace;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::write::{WriteError, checkout::restore, layout::set_version, tree::relative_to};
+use crate::write::{
+    WriteError,
+    checkout::restore,
+    layout::{set_version, switch_entry},
+    tree::relative_to,
+};
 
 /// What retracking one path wrote.
 #[derive(Debug, Clone, Serialize)]
@@ -25,8 +30,9 @@ pub struct Retracked {
 
 /// Moves the record of `path` to `target`, or one version back when it is not named.
 ///
-/// `only_index` leaves the work on disk alone; otherwise the content of the target version is
-/// written back before the Layout names it.
+/// `fork` gives the path a fresh `Uuid` holding what it records now, and cannot be given with a
+/// target. `only_index` leaves the work on disk alone; otherwise the content of the target version
+/// is written back before the Layout names it.
 ///
 /// # Errors
 ///
@@ -38,6 +44,7 @@ pub fn retrack_file(
     cwd: &Path,
     path: &str,
     target: Option<&str>,
+    fork: bool,
     only_index: bool,
 ) -> Result<Retracked, WriteError> {
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
@@ -69,6 +76,27 @@ pub fn retrack_file(
         what: format!("Layout entry {id}"),
     })?;
     let current = Key::new(entry.version());
+    if fork {
+        if target.is_some() {
+            return Err(WriteError::Precondition {
+                what: path.to_owned(),
+                reason: "a fork names no target version".to_owned(),
+            });
+        }
+        let data = MutableData::new(
+            entry.owner().map(str::to_owned),
+            entry.version(),
+            entry.description().to_owned(),
+        )
+        .with_preference(entry.preference().map(str::to_owned));
+        let forked = Uuid::new_v4();
+        switch_entry(&layout, &layout_path, forked, data)?;
+
+        return Ok(Retracked {
+            id: forked,
+            version: current,
+        });
+    }
     let named = if let Some(text) = target {
         Key::from_str(text).map_err(|error| WriteError::Precondition {
             what: format!("version `{text}`"),
@@ -112,8 +140,8 @@ pub fn retrack_file(
 ///
 /// An owned JSON string the caller releases with `free_string`,
 /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-/// `free_rola_write_error`. An empty `target` moves one version back, and `only_index` leaves the
-/// work on disk alone.
+/// `free_rola_write_error`. An empty `target` moves one version back, `fork` gives the path a fresh
+/// `Uuid`, and `only_index` leaves the work on disk alone.
 ///
 /// # Errors
 ///
@@ -124,11 +152,12 @@ pub fn retrack_file_at(
     directory: &Path,
     path: &str,
     target: &str,
+    fork: bool,
     only_index: bool,
 ) -> Result<String, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let target = (!target.is_empty()).then_some(target);
-    let retracked = retrack_file(&workspace, directory, path, target, only_index)?;
+    let retracked = retrack_file(&workspace, directory, path, target, fork, only_index)?;
 
     serde_json::to_string(&retracked).map_err(|error| WriteError::Json {
         reason: error.to_string(),
@@ -157,10 +186,20 @@ mod tests {
         fs::write(dir.join("a.txt"), b"two").unwrap();
         track_file(&workspace, &dir, "a.txt", "alice", "second", "", None).unwrap();
 
-        let back = retrack_file(&workspace, &dir, "a.txt", None, false).unwrap();
+        let back = retrack_file(&workspace, &dir, "a.txt", None, false, false).unwrap();
 
         assert_eq!(back.version, first.version);
         assert_eq!(fs::read(dir.join("a.txt")).unwrap(), b"one");
+
+        let forked = retrack_file(&workspace, &dir, "a.txt", None, true, true).unwrap();
+        assert_ne!(forked.id, first.id);
+        assert_eq!(
+            workspace
+                .layout()
+                .unwrap()
+                .id_of(&rorolala_layout::LayoutPath::from_relative("a.txt".as_ref()).unwrap()),
+            Some(forked.id)
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
