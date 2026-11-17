@@ -1997,6 +1997,16 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_vault_config_json(nint directory);
 
     /// <summary>
+    /// The Vaults the machine's daemon serves, by namespace.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"vaults":[{"name":"default","path":"/vaults/default"}]}`, or `null` when the table cannot be
+    /// read.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_daemon_vaults_json();
+
+    /// <summary>
     /// Which Vaults can provide what a variant, a version or a Layout entry names.
     ///
     /// `directory` is the directory the Workspace is searched upwards from, and `request` is a UTF-8
@@ -2066,7 +2076,19 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_account_locate(nint vault, nint rule);
 
     /// <summary>
-    /// The account named `account_name`, if a local root holds its private key.
+    /// Every account whose private key is directly inside `keys`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_user_accounts(nint keys, nint rule);
+
+    /// <summary>
+    /// Every member whose public key is directly inside `keys`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_user_members(nint keys, nint rule);
+
+    /// <summary>
+    /// The account named `account_name`, if any scope the rule turns on holds its private key.
     ///
     /// Returns an owned `RolaAccount *`, or `NULL` when there is nothing; release it with `free_rola_account`.
     /// </summary>
@@ -2182,6 +2204,34 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_storage_extract(nint directory, nint hash, nint destination);
+
+    /// <summary>
+    /// The chunks a manifest names, when the content under `hash` was stored chunked.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"chunks":[{"key":"blake3:...","len":N}]}`, or `null` when the content is not chunked. A failure
+    /// is a `RolaStorageError *` the caller releases with `free_rola_storage_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_storage_manifest_json(nint directory, nint hash);
+
+    /// <summary>
+    /// The structure stored under `hash`, as the entries a tree version names.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, or `null` when the content does not
+    /// decode as a tree structure. A failure is a `RolaStorageError *` the caller releases with
+    /// `free_rola_storage_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_tree_structure_json(nint directory, nint hash);
 
     /// <summary>
     /// Opens the book at `path`.
