@@ -3,12 +3,12 @@
 ;
 ; What it installs is the layout `cargo dev export` lays down, taken as it stands: the command line programs
 ; and the two libraries beside them, the Desktop program with its plugins, and the completion scripts, with
-; README and LICENSE going in with all of it. It is offered as two presets over the parts, `compact`, the
-; command line and its interface, and `full`, everything, with every part still on the page for a reader who
-; wants one left out. What it *does*, beyond copying, is the three things that make a program reachable
-; rather than merely present, a block in the user's `$PROFILE`, an entry on the path, and a context menu
-; item, and each of them is written conservatively, so that an uninstall removes what this installer wrote
-; and nothing else.
+; README and LICENSE going in with all of it. The parts are offered one by one, under two headings: what
+; the programs need to work at all, which every install has, and the Desktop program, the editor helper and
+; the completions, which a reader asks for. What it *does*, beyond copying, is the three things that make a
+; program reachable rather than merely present, a block in the user's `$PROFILE`, an entry on the path, and
+; a context menu item, and each of them is written conservatively, so that an uninstall removes what this
+; installer wrote and nothing else.
 ;
 ; It is compiled with the pinned Inno Setup that `cargo dev publish` lays out; the four things that differ
 ; from one build to the next are given to it on the command line rather than written here.
@@ -85,7 +85,9 @@ WizardSmallImageFile=..\..\..\res\icons\rorolala-title.png
 ; `res/icons/installer/installer.toml` by the workspace build script, so a build makes it before this is
 ; compiled (see `res/icons/.gitignore`).
 SetupIconFile=..\..\..\res\icons\installer\installer.ico
-UninstallDisplayIcon={app}\bin\desktop\RorolalaDesktop.exe
+; The icon the uninstall entry is drawn with is a required program rather than the Desktop program, which a
+; reader may leave out: an icon file that is not there is one Windows draws as nothing.
+UninstallDisplayIcon={app}\bin\rola.exe
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -110,19 +112,17 @@ Name: "zh"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 ; needs is not here. The rest of the wizard is Inno's own and is translated by the language file above.
 [CustomMessages]
 en.TitleSubtitle=A version control system designed for binary assets
+en.Required=Required components
+en.Extras=Desktop, editor, completions
+en.Custom=Custom
 en.Rola=The command line (rola)
-en.Compact=Compact
-en.Full=Full
 en.RolaEdit=The editor helper (rola-edit)
 en.Lib=The C ABI and its bindings (library, header, RolaSharp)
-en.Desktop=The Desktop program
-en.Shortcuts=Start menu shortcuts
+en.Desktop=The Desktop program, its shortcut and the context menu
 en.Daemon=The daemon and its window (rola-daemon, rola-daemon-gui)
 en.Jj=Jujutsu support (rola-jj)
 en.Git=Git support (git-rola)
-en.Completions=The PowerShell completion scripts
-en.Profile=The block in your PowerShell profile
-en.Menu=The "Open with Rorolala Desktop" context menu
+en.Completions=The completions and the profile block
 en.Path=Add the programs to your path
 en.OpenWith=Open with Rorolala Desktop
 en.RuntimeTitle=Rorolala
@@ -134,19 +134,17 @@ en.Missed=The programs are installed, but this could not be written:
 ; have is an error rather than a spare, and the two are fetched and left out together.
 #if FileExists(AddBackslash(CompilerPath) + "Languages\ChineseSimplified.isl")
 zh.TitleSubtitle=为二进制资产设计的版本控制系统
+zh.Required=必要组件
+zh.Extras=桌面、编辑器、补全
+zh.Custom=自定义
 zh.Rola=命令行程序（rola）
-zh.Compact=精简
-zh.Full=完整
 zh.RolaEdit=编辑器助手（rola-edit）
 zh.Lib=C ABI 与其绑定（库、头文件、RolaSharp）
-zh.Desktop=桌面端程序
-zh.Shortcuts=开始菜单快捷方式
+zh.Desktop=桌面端程序及其开始菜单项与右键菜单
 zh.Daemon=服务端与其窗口（rola-daemon、rola-daemon-gui）
 zh.Jj=Jujutsu 支持（rola-jj）
 zh.Git=Git 支持（git-rola）
-zh.Completions=PowerShell 补全脚本
-zh.Profile=写入 PowerShell profile 的段落
-zh.Menu=“用 Rorolala Desktop 打开”右键菜单
+zh.Completions=PowerShell 补全脚本与 profile 段落
 zh.Path=把程序加入 PATH
 zh.OpenWith=用 Rorolala Desktop 打开
 zh.RuntimeTitle=Rorolala
@@ -155,46 +153,51 @@ zh.RuntimeRefused=桌面端程序需要 .NET Desktop Runtime {#DotnetMajor}。
 zh.Missed=程序已安装，但下面这些没能写入：
 #endif
 
-[Components]
-; One component per thing a reader may want or not want, and the two presets those parts add up to: a
-; quick or full install is a set of the parts below named in one go, and a reader who picks no preset is
-; offered every part one by one. Everything is offered and everything starts selected, what was installed
-; last time is not remembered, so the state a page opens in should be the whole of it, and the one
-; component that cannot be cleared is the command line, since the Desktop program is opened by it and the
-; context menu runs it: a Desktop program with no way to open it is a directory nobody can start.
-;
-; `compact` is the command line and its interface and nothing that is only ever reached from a shell: the
-; Desktop program, the daemon it talks to, the completion scripts, the path entry and the context menu.
-; `full` is that and the parts a developer reaches for, the editor helper, the C ABI, Jujutsu, Git and
-; the ones the picker keeps off the compact list, which is why it is the one that is selected to begin
-; with and the one Inno is named for, so a reader who reads nothing gets all of it.
-Name: "compact"; Description: "{cm:Compact}"; Types: compact custom
-Name: "full"; Description: "{cm:Full}"; Types: full custom; Flags: fixed
+[Types]
+; The parts are chosen one by one rather than as presets, so the one type is a custom type, which is what
+; leaves every part on the page a box of its own. It keeps the name `full` because that is the name an
+; earlier install of this package left in the registry and Setup reads back on an upgrade; its description
+; is what a reader sees, and it is not a preset.
+Name: "full"; Description: "{cm:Custom}"; Flags: iscustom
 
-Name: "rola"; Description: "{cm:Rola}"; Types: compact full custom; Flags: fixed
-Name: "editor"; Description: "{cm:RolaEdit}"; Types: full custom
-Name: "lib"; Description: "{cm:Lib}"; Types: full custom
-Name: "desktop"; Description: "{cm:Desktop}"; Types: compact full custom
-Name: "shortcuts"; Description: "{cm:Shortcuts}"; Types: full custom
-Name: "daemon"; Description: "{cm:Daemon}"; Types: compact full custom
-Name: "jj"; Description: "{cm:Jj}"; Types: full custom
-Name: "git"; Description: "{cm:Git}"; Types: full custom
-Name: "completions"; Description: "{cm:Completions}"; Types: compact full custom
-Name: "profile"; Description: "{cm:Profile}"; Types: full custom
-Name: "menu"; Description: "{cm:Menu}"; Types: compact full custom
-Name: "path"; Description: "{cm:Path}"; Types: compact full custom
+[Components]
+; Two headings over the parts, one per thing a reader is weighing: what the programs are, and what makes a
+; machine pleasant to work with. On a machine with no earlier install only the fixed parts are on, and the
+; second group is off until a reader asks for a part of it; an upgrade opens with the parts that install
+; had, since Setup keeps them.
+;
+; A name with a backslash in it is a part of the tree the page draws: a part is written under its group,
+; and it cannot be ticked while its group is clear. The second group is not nested under the first because
+; there is no install without the required parts, which is the dependency that would be drawn otherwise.
+Name: "required"; Description: "{cm:Required}"; Flags: fixed
+
+Name: "required\rola"; Description: "{cm:Rola}"; Flags: fixed
+Name: "required\daemon"; Description: "{cm:Daemon}"; Flags: fixed
+Name: "required\lib"; Description: "{cm:Lib}"; Flags: fixed
+Name: "required\path"; Description: "{cm:Path}"; Flags: fixed
+Name: "required\git"; Description: "{cm:Git}"; Flags: fixed
+
+Name: "extras"; Description: "{cm:Extras}"
+Name: "extras\desktop"; Description: "{cm:Desktop}"
+Name: "extras\editor"; Description: "{cm:RolaEdit}"
+Name: "extras\completions"; Description: "{cm:Completions}"
+
+; Jujutsu support is kept and not carried: this line and the [Files] entry that installs `rola-jj.exe` are
+; commented out together, so bringing it back is uncommenting both. The two words that name it stay in
+; [CustomMessages], where a message nothing asks for is simply not read.
+; Name: "extras\jj"; Description: "{cm:Jj}"
 
 [Files]
 ; What every install has, whatever was chosen above: the command line itself, which is the one program that
 ; cannot be left out (the Desktop program is opened by it, and the context menu runs it) beside the words
 ; that say what this is. README and LICENSE carry no component because there is nothing to leave them out
 ; for: they are two small files, and a layout a reader is handed should have the terms it is handed under.
-Source: "{#SourceDir}\bin\rola.exe"; DestDir: "{app}\bin"; Components: rola; Flags: ignoreversion
+Source: "{#SourceDir}\bin\rola.exe"; DestDir: "{app}\bin"; Components: required\rola; Flags: ignoreversion
 
 ; The parts of the command line that are not the command line: the helper a run opens edits in and the C ABI
 ; a consumer links against.
-Source: "{#SourceDir}\bin\rola-edit.exe"; DestDir: "{app}\bin"; Components: editor; Flags: ignoreversion
-Source: "{#SourceDir}\lib\*"; DestDir: "{app}\lib"; Components: lib; Flags: ignoreversion
+Source: "{#SourceDir}\bin\rola-edit.exe"; DestDir: "{app}\bin"; Components: extras\editor; Flags: ignoreversion
+Source: "{#SourceDir}\lib\*"; DestDir: "{app}\lib"; Components: required\lib; Flags: ignoreversion
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -203,26 +206,26 @@ Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 ; It carries no component because there is no program that does not read it.
 Source: "{#SourceDir}\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; The daemon and Jujutsu are programs of their own rather than parts of the command line: what a reader
-; installs is what they use. The daemon's window is laid down beside the daemon it starts, since that is
-; where it looks for it, the two are one component because a window without the daemon it starts is a
-; program that opens only to say it cannot.
-Source: "{#SourceDir}\bin\rola-daemon.exe"; DestDir: "{app}\bin"; Components: daemon; Flags: ignoreversion
-Source: "{#SourceDir}\bin\rola-daemon-gui.exe"; DestDir: "{app}\bin"; Components: daemon; Flags: ignoreversion
-Source: "{#SourceDir}\bin\rola-jj.exe"; DestDir: "{app}\bin"; Components: jj; Flags: ignoreversion
-Source: "{#SourceDir}\bin\git-rola.exe"; DestDir: "{app}\bin"; Components: git; Flags: ignoreversion
+; The daemon and Git support are programs of their own rather than parts of the command line, and both are
+; required here: what a reader installs is what they use. The daemon's window is laid down beside the daemon
+; it starts, since that is where it looks for it, the two are one component because a window without the
+; daemon it starts is a program that opens only to say it cannot.
+Source: "{#SourceDir}\bin\rola-daemon.exe"; DestDir: "{app}\bin"; Components: required\daemon; Flags: ignoreversion
+Source: "{#SourceDir}\bin\rola-daemon-gui.exe"; DestDir: "{app}\bin"; Components: required\daemon; Flags: ignoreversion
+Source: "{#SourceDir}\bin\git-rola.exe"; DestDir: "{app}\bin"; Components: required\git; Flags: ignoreversion
+
+; Jujutsu support is not carried yet: the component is commented out in [Components], so this entry is
+; commented out with it, and the two are uncommented together.
+; Source: "{#SourceDir}\bin\rola-jj.exe"; DestDir: "{app}\bin"; Components: extras\jj; Flags: ignoreversion
 
 ; The Desktop program: the whole directory it was published as, plugins and translations included, since
-; what it is made of is what it reads beside itself.
-Source: "{#SourceDir}\bin\desktop\*"; DestDir: "{app}\bin\desktop"; Components: desktop; Flags: ignoreversion recursesubdirs createallsubdirs
+; what it is made of is what it reads beside itself. The script the context menu runs is laid down with it,
+; because the menu is a way into this program and has no meaning without it.
+Source: "{#SourceDir}\bin\desktop\*"; DestDir: "{app}\bin\desktop"; Components: extras\desktop; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourcePath}\desktop-here.vbs"; DestDir: "{app}\bin"; Components: extras\desktop; Flags: ignoreversion
 
-; The completion scripts, whose whole purpose is to be sourced from the profile the code below writes.
-Source: "{#SourceDir}\scripts\*"; DestDir: "{app}\scripts"; Components: completions; Flags: ignoreversion recursesubdirs createallsubdirs
-
-; What the context menu runs: a script of this installer's own, taken from beside this script rather than from the
-; layout, since it is the installer's and not the export's. It is laid beside the command line, where it finds
-; that command by being next to it.
-Source: "{#SourcePath}\desktop-here.vbs"; DestDir: "{app}\bin"; Components: menu; Flags: ignoreversion
+; The completion scripts, whose whole purpose is to be sourced from the profile block written below.
+Source: "{#SourceDir}\scripts\*"; DestDir: "{app}\scripts"; Components: extras\completions; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 ; The launcher, which is where a reader starts: it lists the Workspaces on this machine and opens one through
@@ -231,13 +234,14 @@ Source: "{#SourcePath}\desktop-here.vbs"; DestDir: "{app}\bin"; Components: menu
 ; to the command line is the third item. Each item carries the name of the program it starts, so that what a
 ; reader finds on the menu is what they would name on a command line.
 ;
-; The daemon's window is offered on its own as well: it is started before a Workspace is opened and
-; keeps running behind one, so opening it is not opening the Desktop program. The entry asks for both
-; the shortcut and the daemon components, since a shortcut to a program whose component was cleared
-; would open nothing.
-Name: "{group}\ROLALauncher"; Filename: "{app}\bin\desktop\ROLALauncher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\bin\desktop\ROLALauncher.exe"; IconIndex: 0; Components: shortcuts
-Name: "{group}\ROLADaemon"; Filename: "{app}\bin\rola-daemon-gui.exe"; WorkingDir: "{app}"; IconFilename: "{app}\bin\rola-daemon-gui.exe"; IconIndex: 0; Components: shortcuts and daemon
-Name: "{group}\Rorolala"; Filename: "{app}\bin\rola.exe"; WorkingDir: "{app}"; Comment: "The command line"; Components: shortcuts
+; The launcher is written with the Desktop component, since it is published from that directory and a
+; shortcut to a program that was not installed would open nothing. The daemon's window and the command
+; line are offered on their own and written by every install, since the programs behind them are required:
+; the daemon is started before a Workspace is opened and keeps running behind one, so opening it is not
+; opening the Desktop program.
+Name: "{group}\ROLALauncher"; Filename: "{app}\bin\desktop\ROLALauncher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\bin\desktop\ROLALauncher.exe"; IconIndex: 0; Components: extras\desktop
+Name: "{group}\ROLADaemon"; Filename: "{app}\bin\rola-daemon-gui.exe"; WorkingDir: "{app}"; IconFilename: "{app}\bin\rola-daemon-gui.exe"; IconIndex: 0
+Name: "{group}\Rorolala"; Filename: "{app}\bin\rola.exe"; WorkingDir: "{app}"; Comment: "The command line"
 Name: "{group}\Uninstall Rorolala"; Filename: "{uninstallexe}"
 
 [Registry]
@@ -251,12 +255,15 @@ Name: "{group}\Uninstall Rorolala"; Filename: "{uninstallexe}"
 ; menu happened to leave the process: a shell would open a console window over whatever the reader was doing, and
 ; a click on the folder itself starts in the folder's parent. The script it runs is the one beside the command
 ; line, which starts that command hidden, see `desktop-here.vbs`.
-Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\RorolalaDesktop"; ValueType: string; ValueName: ""; ValueData: "{cm:OpenWith}"; Components: menu; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\RorolalaDesktop"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\bin\desktop\RorolalaDesktop.exe"; Components: menu
-Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\RorolalaDesktop\command"; ValueType: string; ValueName: ""; ValueData: "wscript.exe //B //Nologo ""{app}\bin\desktop-here.vbs"" ""%V"""; Components: menu; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\Directory\shell\RorolalaDesktop"; ValueType: string; ValueName: ""; ValueData: "{cm:OpenWith}"; Components: menu; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\Directory\shell\RorolalaDesktop"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\bin\desktop\RorolalaDesktop.exe"; Components: menu
-Root: HKCU; Subkey: "Software\Classes\Directory\shell\RorolalaDesktop\command"; ValueType: string; ValueName: ""; ValueData: "wscript.exe //B //Nologo ""{app}\bin\desktop-here.vbs"" ""%V"""; Components: menu; Flags: uninsdeletekey
+;
+; Both are written with the Desktop component, since the item is a way into that program and an item whose
+; program is not installed would open nothing.
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\RorolalaDesktop"; ValueType: string; ValueName: ""; ValueData: "{cm:OpenWith}"; Components: extras\desktop; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\RorolalaDesktop"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\bin\desktop\RorolalaDesktop.exe"; Components: extras\desktop
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\RorolalaDesktop\command"; ValueType: string; ValueName: ""; ValueData: "wscript.exe //B //Nologo ""{app}\bin\desktop-here.vbs"" ""%V"""; Components: extras\desktop; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\RorolalaDesktop"; ValueType: string; ValueName: ""; ValueData: "{cm:OpenWith}"; Components: extras\desktop; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\RorolalaDesktop"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\bin\desktop\RorolalaDesktop.exe"; Components: extras\desktop
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\RorolalaDesktop\command"; ValueType: string; ValueName: ""; ValueData: "wscript.exe //B //Nologo ""{app}\bin\desktop-here.vbs"" ""%V"""; Components: extras\desktop; Flags: uninsdeletekey
 
 [Code]
 const
@@ -364,21 +371,15 @@ begin
     end;
 end;
 
-{ What the block says, given where this install put its programs and which parts of it were asked for.
+{ What the block says, given where this install put its programs.
 
-  The lines are the reader's choices and not this installer's: the completions are sourced only where the scripts
-  were installed, and the path is set only where that was asked for. A block that named a script that is not
-  there, or that put a directory on the path for a reader who said no, would be undoing the choice they just
-  made.
+  The block is written only where the completions were asked for, so the two scripts it sources are the ones
+  this install laid down. The path line is written with them, because the required parts put the programs
+  there and a shell that was already open when this install ran would not find them until the next logon.
 
   The last two lines are comments, and that is the same kind of choice: a reader who wants an editor or a language
   uncomments the one they want, which is a decision this installer has no business making for them. }
-function BlockFor(
-  const Bin: String;
-  const Scripts: String;
-  Completions: Boolean;
-  Path: Boolean
-): TArrayOfString;
+function BlockFor(const Bin, Scripts: String): TArrayOfString;
 var
   Said: TArrayOfString;
   At: Integer;
@@ -390,23 +391,17 @@ begin
   Said[At] := '{#ProfileBegin}';
   At := At + 1;
 
-  if Completions then
-  begin
-    SetArrayLength(Said, At + 1);
-    Said[At] := '. "' + Scripts + '\rola\rola-completion.ps1"';
-    At := At + 1;
+  SetArrayLength(Said, At + 1);
+  Said[At] := '. "' + Scripts + '\rola\rola-completion.ps1"';
+  At := At + 1;
 
-    SetArrayLength(Said, At + 1);
-    Said[At] := '. "' + Scripts + '\rola-daemon\rola-daemon-completion.ps1"';
-    At := At + 1;
-  end;
+  SetArrayLength(Said, At + 1);
+  Said[At] := '. "' + Scripts + '\rola-daemon\rola-daemon-completion.ps1"';
+  At := At + 1;
 
-  if Path then
-  begin
-    SetArrayLength(Said, At + 1);
-    Said[At] := '$env:Path = "' + Bin + ';" + $env:Path';
-    At := At + 1;
-  end;
+  SetArrayLength(Said, At + 1);
+  Said[At] := '$env:Path = "' + Bin + ';" + $env:Path';
+  At := At + 1;
 
   SetArrayLength(Said, At + 1);
   Said[At] := '# Uncomment to choose the editor a run opens its edits in, and the language it speaks:';
@@ -611,8 +606,8 @@ end;
   what an install that says it added something should check.
 
   A machine that refuses it is a machine where the rest of the install is still worth having, the programs are
-  there and the profile is written, so a refusal is answered with False rather than thrown: an exception out of
-  here would take the whole install back over one line of the environment. }
+  there and whatever else was asked for stands, so a refusal is answered with False rather than thrown: an
+  exception out of here would take the whole install back over one line of the environment. }
 function AddToPath: Boolean;
 var
   Said: String;
@@ -702,7 +697,8 @@ end;
 
   A silent install is neither asked nor stopped. There is nobody there to answer, and Inno answers a script's
   question for them, with "no", so a run that asked one would be a run that refused itself. What is said in
-  that case is the log, and what is installed is everything. }
+  that case is the log, and what is installed is what the page would have installed with nothing ticked: the
+  required parts. }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
@@ -732,9 +728,9 @@ begin
 
   Missed := '';
 
-  { The block is a component of its own, and what is written into it depends on two others: a reader may want the
-    completions sourced, or the path set, or one of the two. }
-  if WizardIsComponentSelected('profile') then
+  { The block belongs to the completion scripts, since it is what sources them: it is written where they were
+    asked for, and nowhere else. }
+  if WizardIsComponentSelected('extras\completions') then
   begin
     Said := Profiles;
 
@@ -743,12 +739,7 @@ begin
       try
         WriteBlock(
           Said[At],
-          BlockFor(
-            BinDirectory,
-            ExpandConstant('{app}\scripts'),
-            WizardIsComponentSelected('completions'),
-            WizardIsComponentSelected('path')
-          )
+          BlockFor(BinDirectory, ExpandConstant('{app}\scripts'))
         );
       except
         Log('the profile block could not be written to ' + Said[At] + ': ' + GetExceptionMessage);
@@ -757,7 +748,7 @@ begin
     end;
   end;
 
-  if WizardIsComponentSelected('path') and not AddToPath then
+  if WizardIsComponentSelected('required\path') and not AddToPath then
     Missed := Missed + #13#10 + BinDirectory + '  (the path)';
 
   if Missed <> '' then
