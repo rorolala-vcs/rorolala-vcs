@@ -262,7 +262,7 @@ public sealed class WriteTests
             var workspace = new WorkspaceScoop(directory);
             workspace.Read();
             var writer = new WorkspaceWriter(workspace);
-            var track = Path.Combine(directory, ".rola", "layout", "TRACK");
+            var track = RolaPaths.LayoutTrackFile(directory);
 
             writer.SetTrack("origin");
             Assert.True(File.Exists(track));

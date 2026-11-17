@@ -34,6 +34,19 @@ public static class RolaPaths
     public static string VaultStorage(string root) =>
         Resolve(root, RorolalaBinding.ROLA_VAULT_STORAGE_DIR);
 
+    /// <summary>Where a Workspace records the Vault its Layout tracks.</summary>
+    /// <param name="root">The Workspace's root.</param>
+    /// <returns>The track file's path, as an absolute path.</returns>
+    public static string LayoutTrackFile(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        var layout = NativeText.Taken(RorolalaBinding.ROLA_WORKSPACE_LAYOUT_DIR());
+        var track = NativeText.Taken(RorolalaBinding.ROLA_LAYOUT_TRACK_FILE());
+
+        return Path.GetFullPath(Path.Combine(root, layout, track));
+    }
+
     /// <summary>Resolves a relative path the native side names against a place's root.</summary>
     /// <param name="root">The place's root.</param>
     /// <param name="read">The native reader of the relative path.</param>
