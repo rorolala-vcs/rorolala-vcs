@@ -66,6 +66,9 @@ public sealed class WorkspaceScoop : Scoop, IDisposable
     /// <summary>The VCS index the Workspace keeps.</summary>
     public VCSIndexScoop VCSIndex => new(_root);
 
+    /// <summary>How the Workspace's tree stands beside its Layout.</summary>
+    public StatusScoop Status => new(_root);
+
     /// <inheritdoc/>
     protected override void IsValid()
     {

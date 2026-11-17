@@ -126,6 +126,28 @@ public sealed class WriteTests
         Assert.NotEqual(workspace, vault);
     }
 
+    [Fact]
+    public void A_workspace_status_reads_its_untagged_work()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            File.WriteAllText(Path.Combine(directory, "loose.txt"), "loose");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var status = workspace.Status;
+            status.Read();
+
+            Assert.Contains(status.Status.Untagged, path => path == "loose.txt");
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
     private static string Scratch() =>
         Directory.CreateTempSubdirectory("rola-sharp-write-").FullName;
 
