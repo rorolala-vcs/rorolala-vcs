@@ -70,6 +70,22 @@ internal static class WriteResults
         return new RolaWriteError(kind, null, reason);
     }
 
+    /// <summary>The failure an action carried.</summary>
+    /// <param name="payload">The native error, which this takes ownership of.</param>
+    /// <returns>The failure.</returns>
+    public static RolaWriteError Action(nint payload)
+    {
+        var error = Marshal.PtrToStructure<RolaActionError>(payload);
+        var reason =
+            error.tag is RolaActionErrorTag.RolaActionError_Io
+                ? NativeText.Taken(error.payload.Io)
+                : string.Empty;
+
+        RorolalaBinding.free_rola_action_error(payload);
+
+        return new RolaWriteError(RolaWriteErrorKind.Action, null, reason);
+    }
+
     private static (string? Path, string Reason) Read(NativeWriteError error) =>
         error.tag switch
         {
