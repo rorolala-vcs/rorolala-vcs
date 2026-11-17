@@ -78,6 +78,11 @@ public sealed class VaultScoop
     /// <summary>The tree the Vault holds.</summary>
     public TreeScoop Tree => new(_root);
 
+    /// <summary>A tree at a path under the Vault.</summary>
+    /// <param name="path">The tree's path, relative to the Vault root.</param>
+    /// <returns>The scope over the tree.</returns>
+    public TreeScoop TreeAt(string path) => new(Path.Combine(_root, path));
+
     /// <summary>The graph around one version.</summary>
     /// <param name="target">The version to draw around.</param>
     /// <returns>The scope over the graph.</returns>

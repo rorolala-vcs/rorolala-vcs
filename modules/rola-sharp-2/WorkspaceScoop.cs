@@ -84,6 +84,14 @@ public sealed class WorkspaceScoop
     /// <summary>The tree the Workspace holds.</summary>
     public TreeScoop Tree => new(_root);
 
+    /// <summary>A tree at a path under the Workspace.</summary>
+    /// <param name="path">The tree's path, relative to the Workspace root.</param>
+    /// <returns>The scope over the tree.</returns>
+    public TreeScoop TreeAt(string path) => new(Path.Combine(_root, path));
+
+    /// <summary>The built-in book, looked for from the Workspace.</summary>
+    public BookScoop Book => new(_root);
+
     /// <summary>What holds each entry of the tracked Vault, from the fetched copy.</summary>
     public OwnershipScoop Ownership => new(_root);
 
