@@ -6,7 +6,6 @@
 
 use std::io::Read as _;
 
-use librorolala::tree::Staging;
 use mingling::{
     Grouped, LazyRes, Suggest,
     consts::UNMATCHED,
@@ -23,7 +22,7 @@ use rust_i18n::t;
 use crate::Next;
 use crate::exit_codes::{EC_ERR_TREE_FAILED, EC_HELP};
 use crate::failure::failure;
-use crate::tree::cmd_tree::{ErrorTreeShouldInWorkspace, locate};
+use crate::tree::cmd_tree::ErrorTreeShouldInWorkspace;
 
 #[help(buffer)]
 pub fn help_tree_write_desc(_: EntryTreeWriteDesc, ec: &mut ResExitCode) {
@@ -70,11 +69,6 @@ pub fn tree_write_desc(args: EntryTreeWriteDesc, workspace: &mut LazyRes<ResWork
         return ErrorTreeShouldInWorkspace.into();
     };
 
-    let tree = match locate(held, None) {
-        Ok(tree) => tree,
-        Err(next) => return next,
-    };
-
     let text = match text.as_deref() {
         Some("-") | None => {
             let mut read = String::new();
@@ -87,15 +81,18 @@ pub fn tree_write_desc(args: EntryTreeWriteDesc, workspace: &mut LazyRes<ResWork
         Some(text) => text.to_owned(),
     };
 
-    let staging = Staging::new(tree.root());
-    if let Err(error) = staging.ensure_store() {
-        return ErrorTreeWriteDescFailed::new(error.to_string()).into();
-    }
-    if let Err(error) = staging.write_description(Some(&text)) {
-        return ErrorTreeWriteDescFailed::new(error.to_string()).into();
-    }
+    let cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(error) => return ErrorTreeWriteDescArgument::new(error.to_string()).into(),
+    };
 
-    ResultTreeWriteDesc { bytes: text.len() }.into()
+    match librorolala::write::tree::write_description(held, &cwd, &text) {
+        Ok(bytes) => ResultTreeWriteDesc { bytes }.into(),
+        Err(librorolala::write::WriteError::Tree { reason }) => {
+            ErrorTreeWriteDescFailed::new(reason).into()
+        }
+        Err(error) => ErrorTreeWriteDescFailed::new(error.to_string()).into(),
+    }
 }
 
 /// Result: the description was written.

@@ -100,6 +100,11 @@ pub enum WriteError {
         /// Why it stopped.
         reason: String,
     },
+    /// A tree could not be read or written.
+    Tree {
+        /// Why it failed.
+        reason: String,
+    },
 }
 
 impl fmt::Display for WriteError {
@@ -132,7 +137,8 @@ impl fmt::Display for WriteError {
             | Self::Storage { reason }
             | Self::Index { reason }
             | Self::Json { reason }
-            | Self::Internal { reason } => formatter.write_str(reason),
+            | Self::Internal { reason }
+            | Self::Tree { reason } => formatter.write_str(reason),
         }
     }
 }
