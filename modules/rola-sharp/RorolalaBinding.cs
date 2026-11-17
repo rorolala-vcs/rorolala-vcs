@@ -348,6 +348,10 @@ internal enum RolaWriteErrorTag : int
     /// The write stopped for a reason this build does not name.
     /// </summary>
     RolaWriteError_Internal = 20,
+    /// <summary>
+    /// A tree could not be read or written.
+    /// </summary>
+    RolaWriteError_Tree = 21,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -478,6 +482,15 @@ internal struct RolaWriteErrorInternal
     public nint reason;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorTree
+{
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
 [StructLayout(LayoutKind.Explicit)]
 internal struct RolaWriteErrorPayload
 {
@@ -541,6 +554,11 @@ internal struct RolaWriteErrorPayload
     /// </summary>
     [FieldOffset(0)]
     public RolaWriteErrorInternal Internal;
+    /// <summary>
+    /// A tree could not be read or written.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorTree Tree;
 }
 
 /// <summary>
@@ -2798,6 +2816,20 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_write_storage_put_file(nint directory, nint file, nint policy);
+
+    /// <summary>
+    /// Writes the description of the tree a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"bytes":N}`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `target` is the tree's
+    /// path, relative to `directory`, and empty for the directory itself.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tree_description(nint directory, nint target, nint text);
 
     /// <summary>
     /// Makes the Layout of the Workspace holding a directory track a Vault.
