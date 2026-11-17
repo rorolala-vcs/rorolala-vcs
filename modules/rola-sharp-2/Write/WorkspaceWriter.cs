@@ -48,6 +48,25 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Writes down that a path now holds what the Layout names.</summary>
+    /// <param name="path">The path, relative to the Workspace root.</param>
+    public void Remember(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var directory = Utf8(_workspace.Root.FullName);
+        var at = Utf8(path);
+        try
+        {
+            Check(RorolalaBinding.rola_write_checkout_remember(directory, at));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+        }
+    }
+
     /// <summary>Records a file's content as a version and names it in the Layout.</summary>
     /// <param name="path">The file's path, relative to the Workspace root or absolute.</param>
     /// <param name="creator">The creator's name.</param>

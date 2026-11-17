@@ -433,10 +433,14 @@ public sealed class WriteTests
             Assert.Equal("alice", layout.Find("a.psd")?.Owner);
 
             File.WriteAllText(Path.Combine(directory, "a.psd"), "content again");
-            var again = writer.TrackFile("a.psd", "alice", "second");
+            var again = writer.TrackFile("a.psd", "alice", "second", owner: "alice");
 
             Assert.Equal(tracked.Id, again.Id);
             Assert.NotEqual(tracked.Version, again.Version);
+
+            writer.Remember("a.psd");
+            layout.Read();
+            Assert.Equal("alice", layout.Find("a.psd")?.Owner);
         }
         finally
         {
