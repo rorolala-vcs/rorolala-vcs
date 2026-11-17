@@ -49,13 +49,24 @@ public sealed class VariantGraphScoop : Scoop, IDisposable
         Dispose();
         cancellationToken.ThrowIfCancellationRequested();
 
-        _reading =
-            VariantGraphReading.Locate(_root, _request)
-            ?? throw new RolaReadError(
-                RolaReadErrorKind.Unavailable,
+        try
+        {
+            _reading =
+                VariantGraphReading.Locate(_root, _request)
+                ?? throw new RolaReadError(
+                    RolaReadErrorKind.Unavailable,
+                    _root,
+                    "the Workspace has no variant graph to draw"
+                );
+        }
+        catch (InvalidOperationException error)
+        {
+            throw new RolaReadError(
+                RolaReadErrorKind.Unreadable,
                 _root,
-                "the Workspace has no variant graph to draw"
+                error.Message
             );
+        }
     }
 
     /// <summary>Gives the reading back.</summary>
