@@ -1351,6 +1351,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -1956,12 +1957,10 @@ dependencies = [
 name = "rorolala-layout"
 version = "0.4.0"
 dependencies = [
- "rorolala-errors",
  "rorolala-storage",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
- "rorolala-vcs",
  "tokio",
  "unicode-normalization",
  "uuid",
