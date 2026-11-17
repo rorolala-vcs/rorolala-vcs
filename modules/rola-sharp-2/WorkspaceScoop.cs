@@ -82,6 +82,12 @@ public sealed class WorkspaceScoop
     /// <returns>The scope over the graph.</returns>
     public VersionGraphScoop VersionGraph(string target) => new(_root, target);
 
+    /// <summary>The variant graph the Workspace's entries draw.</summary>
+    /// <param name="request">The window to draw, or nothing for the default one.</param>
+    /// <returns>The scope over the graph.</returns>
+    public VariantGraphScoop VariantGraph(VariantGraphRequest? request = null) =>
+        new(_root, request);
+
     /// <summary>How the Workspace's tree stands beside its Layout.</summary>
     public StatusScoop Status => new(_root);
 
