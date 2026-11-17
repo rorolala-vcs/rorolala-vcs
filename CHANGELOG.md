@@ -6,7 +6,8 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Feature
 
-1. [`modules`] [`rola-sharp-2`] Add the second-generation C# bindings. [See details](dev/CHANGELOG-DETAILS.md#1-modules-rola-sharp-2-add-the-second-generation-c-bindings)
+1. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#1-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
+2. [`modules`] [`rola-sharp-2`] Add the second-generation C# bindings. [See details](dev/CHANGELOG-DETAILS.md#2-modules-rola-sharp-2-add-the-second-generation-c-bindings)
 
 # 0.3.0 (2026-11-17)
 
