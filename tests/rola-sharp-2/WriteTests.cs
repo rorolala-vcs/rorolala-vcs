@@ -115,6 +115,41 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_layout_path_is_bound_moved_and_removed()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var layout = workspace.LocalLayout;
+            layout.Read();
+            var writer = new LayoutWriter(layout);
+            var id = Guid.NewGuid();
+            var version = $"blake3:{new string('0', 64)}";
+
+            writer.InsertEntry(id, "a.psd", version, null, "first");
+            layout.Read();
+            Assert.NotNull(layout.Find("a.psd"));
+
+            writer.MovePath("a.psd", "b.psd");
+            layout.Read();
+            Assert.Null(layout.Find("a.psd"));
+            Assert.NotNull(layout.Find("b.psd"));
+
+            writer.RemovePath("b.psd");
+            layout.Read();
+            Assert.Null(layout.Find("b.psd"));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_shared_paths_are_the_librarys_own()
     {
         var root = Path.Combine(Path.GetTempPath(), "rola-sharp-paths");

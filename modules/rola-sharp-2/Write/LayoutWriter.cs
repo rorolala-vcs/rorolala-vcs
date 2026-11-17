@@ -48,23 +48,72 @@ public sealed class LayoutWriter : Writer
     /// <summary>Moves the entry at one path to another.</summary>
     /// <param name="from">The path the entry is at.</param>
     /// <param name="to">The path it is to be at.</param>
-    public void MovePath(string from, string to) =>
-        Apply(JsonSerializer.Serialize(new[] { new { op = "move_path", from, to } }));
+    public void MovePath(string from, string to)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var fromPath = Utf8(from);
+        var toPath = Utf8(to);
+        try
+        {
+            Check(RorolalaBinding.rola_write_layout_move_path(directory, layout, fromPath, toPath));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(fromPath);
+            Marshal.FreeCoTaskMem(toPath);
+        }
+    }
 
     /// <summary>Removes a path, leaving its entry.</summary>
     /// <param name="path">The path to remove.</param>
-    public void RemovePath(string path) =>
-        Apply(JsonSerializer.Serialize(new[] { new { op = "remove_path", path } }));
+    public void RemovePath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var target = Utf8(path);
+        try
+        {
+            Check(RorolalaBinding.rola_write_layout_remove_path(directory, layout, target));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(target);
+        }
+    }
 
     /// <summary>Binds a path to an entry.</summary>
     /// <param name="path">The path to bind.</param>
     /// <param name="uuid">The entry it names.</param>
-    public void CreatePath(string path, Guid uuid) =>
-        Apply(
-            JsonSerializer.Serialize(
-                new[] { new { op = "create_path", path, uuid = uuid.ToString() } }
-            )
-        );
+    public void CreatePath(string path, Guid uuid)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var target = Utf8(path);
+        var id = Utf8(uuid.ToString());
+        try
+        {
+            Check(RorolalaBinding.rola_write_layout_create_path(directory, layout, target, id));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(target);
+            Marshal.FreeCoTaskMem(id);
+        }
+    }
 
     /// <summary>Makes an entry, and binds a path to it.</summary>
     /// <param name="uuid">The Uuid the entry is known by.</param>
@@ -121,6 +170,14 @@ public sealed class LayoutWriter : Writer
                 }
             )
         );
+
+    private static void Check(RorolalaResult answer)
+    {
+        if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+        {
+            throw WriteResults.From(answer.payload);
+        }
+    }
 
     private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);
 }
