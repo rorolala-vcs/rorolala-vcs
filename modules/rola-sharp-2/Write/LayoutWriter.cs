@@ -20,6 +20,56 @@ public sealed class LayoutWriter : Writer
     public LayoutWriter(LayoutScoop layout) =>
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
 
+    /// <summary>Changes everything an entry holds, in one write.</summary>
+    /// <param name="id">The entry's id.</param>
+    /// <param name="version">The version key.</param>
+    /// <param name="owner">The account, or nothing.</param>
+    /// <param name="description">What it says about itself.</param>
+    /// <param name="preference">The cut it prefers, or nothing.</param>
+    public void SetAll(
+        Guid id,
+        string version,
+        string? owner,
+        string description,
+        string? preference
+    )
+    {
+        ArgumentNullException.ThrowIfNull(version);
+        ArgumentNullException.ThrowIfNull(description);
+
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var uuid = Utf8(id.ToString());
+        var at = Utf8(version);
+        var held = Utf8(owner ?? string.Empty);
+        var words = Utf8(description);
+        var cut = Utf8(preference ?? string.Empty);
+        try
+        {
+            Check(
+                RorolalaBinding.rola_write_layout_set_all(
+                    directory,
+                    layout,
+                    uuid,
+                    at,
+                    held,
+                    words,
+                    cut
+                )
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(uuid);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(held);
+            Marshal.FreeCoTaskMem(words);
+            Marshal.FreeCoTaskMem(cut);
+        }
+    }
+
     /// <summary>Changes the version one entry names.</summary>
     /// <param name="id">The entry's id.</param>
     /// <param name="version">The version key.</param>
