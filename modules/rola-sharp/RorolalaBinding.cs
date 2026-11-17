@@ -2865,6 +2865,21 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_tree_add(nint directory, nint target, nint paths, [MarshalAs(UnmanagedType.U1)] bool include_ignored);
 
     /// <summary>
+    /// Makes the tree a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"path":".","collapsed":0,
+    /// "is_root":true}`, or a `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    /// `target` is the tree's path, empty for the directory itself, and `force` says the caller has
+    /// agreed to the collapse.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tree_init(nint directory, nint target, [MarshalAs(UnmanagedType.U1)] bool force);
+
+    /// <summary>
     /// Stages the removal of paths from the tree a directory is in.
     ///
     /// An owned JSON string the caller releases with `free_string`, `{"paths":[...],"cached":false}`,
