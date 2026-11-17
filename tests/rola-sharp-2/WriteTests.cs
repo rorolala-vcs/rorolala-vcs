@@ -81,6 +81,51 @@ public sealed class WriteTests
         }
     }
 
+    [Fact]
+    public void A_creator_and_a_message_are_written_to_the_index()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var index = workspace.VCSIndex;
+            index.Read();
+            var writer = new VCSIndexWriter(index);
+
+            var creator = writer.WriteCreator("alice");
+            var message = writer.WriteMessage("first");
+
+            Assert.False(string.IsNullOrEmpty(creator));
+            Assert.False(string.IsNullOrEmpty(message));
+            Assert.Contains("alice", index.ObjectJson(creator), StringComparison.Ordinal);
+
+            index.Read();
+            Assert.Contains(
+                index.Listing!.StringHashes,
+                key => key == creator || key == message
+            );
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
+    public void The_shared_paths_are_the_librarys_own()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "rola-sharp-paths");
+        var workspace = RolaPaths.WorkspaceStorage(root);
+        var vault = RolaPaths.VaultStorage(root);
+
+        Assert.StartsWith(Path.GetFullPath(root), workspace, StringComparison.Ordinal);
+        Assert.StartsWith(Path.GetFullPath(root), vault, StringComparison.Ordinal);
+        Assert.NotEqual(workspace, vault);
+    }
+
     private static string Scratch() =>
         Directory.CreateTempSubdirectory("rola-sharp-write-").FullName;
 

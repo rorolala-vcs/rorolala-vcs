@@ -63,6 +63,9 @@ public sealed class WorkspaceScoop : Scoop, IDisposable
     /// <summary>The store the Workspace keeps.</summary>
     public StorageScoop Storage => new(RolaPaths.WorkspaceStorage(_root));
 
+    /// <summary>The VCS index the Workspace keeps.</summary>
+    public VCSIndexScoop VCSIndex => new(_root);
+
     /// <inheritdoc/>
     protected override void IsValid()
     {

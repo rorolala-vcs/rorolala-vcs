@@ -44,6 +44,9 @@ public sealed class VaultScoop : Scoop, IDisposable
     /// <summary>The store the Vault keeps.</summary>
     public StorageScoop Storage => new(RolaPaths.VaultStorage(_root));
 
+    /// <summary>The VCS index the Vault keeps.</summary>
+    public VCSIndexScoop VCSIndex => new(_root);
+
     /// <inheritdoc/>
     protected override void IsValid()
     {

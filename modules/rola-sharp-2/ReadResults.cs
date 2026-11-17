@@ -53,4 +53,30 @@ internal static class ReadResults
 
         return new RolaReadError(kind, null, reason);
     }
+
+    /// <summary>The failure a VCS index read carried.</summary>
+    /// <param name="payload">The native error, which this takes ownership of.</param>
+    /// <returns>The failure.</returns>
+    public static RolaReadError VcsIndex(nint payload)
+    {
+        var error = Marshal.PtrToStructure<RolaVCSIndexReadingError>(payload);
+        var kind = error.tag switch
+        {
+            RolaVCSIndexReadingErrorTag.RolaVCSIndexReadingError_NotFound =>
+                RolaReadErrorKind.NotFound,
+            RolaVCSIndexReadingErrorTag.RolaVCSIndexReadingError_Malformed =>
+                RolaReadErrorKind.Marshalling,
+            RolaVCSIndexReadingErrorTag.RolaVCSIndexReadingError_Corrupt =>
+                RolaReadErrorKind.Unreadable,
+            _ => RolaReadErrorKind.Unreadable,
+        };
+        var reason =
+            error.tag is RolaVCSIndexReadingErrorTag.RolaVCSIndexReadingError_Io
+                ? NativeText.Taken(error.payload.Io)
+                : string.Empty;
+
+        RorolalaBinding.free_rola_vcsindex_reading_error(payload);
+
+        return new RolaReadError(kind, null, reason);
+    }
 }
