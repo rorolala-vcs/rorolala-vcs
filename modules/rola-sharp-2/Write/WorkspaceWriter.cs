@@ -53,14 +53,15 @@ public sealed class WorkspaceWriter : Writer
     /// <param name="target">The version key, or nothing for one version back.</param>
     /// <param name="fork">Give the path a fresh Uuid holding what it records now.</param>
     /// <param name="onlyIndex">Leave the work on disk alone.</param>
+    /// <param name="force">Go past changes the record does not name.</param>
     /// <returns>What was written.</returns>
     public Retracked RetrackFile(
         string path,
         string? target = null,
         bool fork = false,
-        bool onlyIndex = false
-    )
-    {
+        bool onlyIndex = false,
+        bool force = false
+    ) {
         ArgumentNullException.ThrowIfNull(path);
 
         var directory = Utf8(_workspace.Root.FullName);
@@ -73,7 +74,8 @@ public sealed class WorkspaceWriter : Writer
                 at,
                 named,
                 fork,
-                onlyIndex
+                onlyIndex,
+                force
             );
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
