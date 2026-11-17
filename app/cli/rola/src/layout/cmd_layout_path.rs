@@ -530,12 +530,9 @@ pub fn handle_layout_path_move(
         Err(next) => return next,
     };
 
-    if let Err(error) = librorolala::write::layout::move_path(
-        &layout,
-        workspace.get_ref().as_ref(),
-        &from,
-        &to,
-    ) {
+    if let Err(error) =
+        librorolala::write::layout::move_path(&layout, workspace.get_ref().as_ref(), &from, &to)
+    {
         return match error {
             librorolala::write::WriteError::NotFound { .. } => ErrorLayoutMissing.into(),
             librorolala::write::WriteError::Layout { reason } => {
