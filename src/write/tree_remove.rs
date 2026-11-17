@@ -368,7 +368,7 @@ fn prune_empty(root: &Path, mut at: Option<&Path>) {
 }
 
 /// Takes out the directory entries a removal left with nothing under them.
-fn prune_empty_directories(entries: &mut BTreeMap<String, TreeEntry>) {
+pub(crate) fn prune_empty_directories(entries: &mut BTreeMap<String, TreeEntry>) {
     let directories: Vec<String> = entries
         .iter()
         .filter(|(_, entry)| entry.kind() == EntryKind::Directory)

@@ -14,6 +14,7 @@ pub mod progress;
 pub mod storage;
 pub mod tree;
 pub mod tree_remove;
+pub mod tree_reset;
 pub mod workspace;
 
 pub use cancel::*;
@@ -25,4 +26,5 @@ pub use progress::*;
 pub use storage::*;
 pub use tree::*;
 pub use tree_remove::*;
+pub use tree_reset::*;
 pub use workspace::*;

@@ -449,7 +449,7 @@ fn changes(before: &BTreeMap<String, TreeEntry>, after: &TreeStructure) -> Vec<A
 }
 
 /// `path` inside `root`, or nothing when it is not.
-fn relative_to(root: &Path, path: &Path) -> Option<String> {
+pub(crate) fn relative_to(root: &Path, path: &Path) -> Option<String> {
     let relative = path.strip_prefix(root).ok()?;
     if relative.as_os_str().is_empty() {
         return Some(String::new());

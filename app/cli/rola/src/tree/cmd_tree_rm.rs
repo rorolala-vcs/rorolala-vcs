@@ -4,10 +4,6 @@
 // what the command needs of the run rather than a signature this program shaped.
 #![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
-use std::collections::BTreeMap;
-use std::path::Path;
-
-use librorolala::tree::{EntryKind, TreeEntry};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -165,46 +161,6 @@ pub fn handle_tree_rm(state: StateTreeRm, workspace: &mut LazyRes<ResWorkspace>)
         }
         Err(error) => ErrorTreeRmFailed::new(error.to_string()).into(),
     }
-}
-
-/// Takes out the directory entries a removal left with nothing under them.
-pub fn prune_empty_directories(entries: &mut BTreeMap<String, TreeEntry>) {
-    let directories: Vec<String> = entries
-        .iter()
-        .filter(|(_, entry)| entry.kind() == EntryKind::Directory)
-        .map(|(path, _)| path.clone())
-        .collect();
-
-    for directory in directories {
-        if !entries
-            .keys()
-            .any(|path| path != &directory && under(&directory, path))
-        {
-            entries.remove(&directory);
-        }
-    }
-}
-
-/// `path` inside `root`, or nothing when it is not.
-pub fn relative_to(root: &Path, path: &Path) -> Option<String> {
-    let relative = path.strip_prefix(root).ok()?;
-    if relative.as_os_str().is_empty() {
-        return Some(String::new());
-    }
-
-    relative
-        .components()
-        .map(|component| component.as_os_str().to_str().map(str::to_owned))
-        .collect::<Option<Vec<_>>>()
-        .map(|parts| parts.join("/"))
-}
-
-/// Whether `path` is `scope` itself or under it.
-pub fn under(scope: &str, path: &str) -> bool {
-    path == scope
-        || path
-            .strip_prefix(scope)
-            .is_some_and(|rest| rest.starts_with('/'))
 }
 
 /// Result: work of a tree was staged as removed.
