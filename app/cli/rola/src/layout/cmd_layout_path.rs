@@ -9,7 +9,6 @@ use librorolala::daemon::{
     EntryRemove, PathMove, action_move_remote_path, action_remove_remote_path,
 };
 use librorolala::layout::EntryKind as LayoutEntryKind;
-use librorolala::workspace::Merging;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -23,7 +22,6 @@ use mingling::{
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
-use rorolala_utils_location::Locate as _;
 use rust_i18n::t;
 
 use crate::Next;
@@ -532,20 +530,19 @@ pub fn handle_layout_path_move(
         Err(next) => return next,
     };
 
-    if let Err(error) = layout.move_path(&from, &to) {
-        return failed(&error);
-    }
-
-    // A file a variant is waiting for takes its variant file with it, when this is a Workspace's own
-    // Layout: a Vault has no merge in progress to keep.
-    if let Some(held) = workspace.get_ref().as_ref() {
-        let merging = Merging::read(held.get_root());
-
-        if let Some(target) = layout.id_of(&to)
-            && let Err(error) = merging.follow(held.get_root(), target, &from, &to)
-        {
-            return ErrorLayoutFailed::new(error.to_string()).into();
-        }
+    if let Err(error) = librorolala::write::layout::move_path(
+        &layout,
+        workspace.get_ref().as_ref(),
+        &from,
+        &to,
+    ) {
+        return match error {
+            librorolala::write::WriteError::NotFound { .. } => ErrorLayoutMissing.into(),
+            librorolala::write::WriteError::Layout { reason } => {
+                ErrorLayoutFailed::new(reason).into()
+            }
+            other => ErrorLayoutFailed::new(other.to_string()).into(),
+        };
     }
 
     ResultLayoutContent {

@@ -8,7 +8,7 @@ use rorolala_storage::Key;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vault::Vault;
-use rorolala_workspace::Workspace;
+use rorolala_workspace::{Merging, Workspace};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -176,6 +176,72 @@ pub fn apply(layout: &Layout, ops: &[LayoutOp]) -> Result<(), WriteError> {
     batch.commit().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })
+}
+
+/// Moves the entry at one path to another, and takes a waiting merge with it.
+///
+/// The Layout is moved first and the merge record follows, because the record names the entry by
+/// the path it is at: a failure to follow leaves the Layout's move in place, and the next merge
+/// attempt sees the path it now has.
+///
+/// # Errors
+///
+/// Returns [`WriteError::Layout`] when the move does not apply, and [`WriteError::NotFound`] when
+/// the path names nothing.
+pub fn move_path(
+    layout: &Layout,
+    workspace: Option<&Workspace>,
+    from: &LayoutPath,
+    to: &LayoutPath,
+) -> Result<(), WriteError> {
+    layout.move_path(from, to).map_err(|error| match error {
+        rorolala_layout::LayoutError::NotFound => WriteError::NotFound {
+            what: format!("Layout path `{}`", from.as_str()),
+        },
+        other => WriteError::Layout {
+            reason: other.to_string(),
+        },
+    })?;
+
+    let Some(workspace) = workspace else {
+        return Ok(());
+    };
+    let Some(target) = layout.id_of(to) else {
+        return Ok(());
+    };
+    let merging = Merging::read(workspace.get_root());
+    merging
+        .follow(workspace.get_root(), target, from, to)
+        .map_err(|error| WriteError::Layout {
+            reason: error.to_string(),
+        })
+}
+
+/// Moves one path of a Layout a directory holds.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`,
+/// [`WriteError::NoLayout`] when it has no Layout, [`WriteError::InvalidPath`] when a path is not
+/// one a Layout accepts, and [`WriteError::Layout`] when the move does not apply.
+#[lazyffi(export = rola_write_layout_move_path)]
+pub fn move_path_at(
+    directory: &Path,
+    layout: &str,
+    from: &str,
+    to: &str,
+) -> Result<(), WriteError> {
+    let target = open(directory, layout)?;
+    let from = path_of(from)?;
+    let to = path_of(to)?;
+    let workspace = Workspace::locate(directory);
+
+    move_path(&target, workspace.as_ref(), &from, &to)
 }
 
 /// One change, as a request document names it.
