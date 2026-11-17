@@ -413,6 +413,36 @@ pub fn set_description(layout: &Layout, id: Uuid, description: &str) -> Result<(
     )
 }
 
+/// Changes the cut an entry prefers, leaving its content, owner and description as they are.
+///
+/// An empty `preference` clears it, which is what a run does when the store may choose.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NotFound`] when the entry is not there, and [`WriteError::Layout`] when the
+/// write does not apply.
+pub fn set_preference(
+    layout: &Layout,
+    id: Uuid,
+    preference: Option<&str>,
+) -> Result<(), WriteError> {
+    let entry = layout.entry(id).ok_or_else(|| WriteError::NotFound {
+        what: format!("Layout entry {id}"),
+    })?;
+    let data = MutableData::new(
+        entry.owner().map(str::to_owned),
+        entry.version(),
+        entry.description().to_owned(),
+    )
+    .with_preference(preference.map(str::to_owned));
+
+    layout
+        .update_entry(id, data)
+        .map_err(|error| WriteError::Layout {
+            reason: error.to_string(),
+        })
+}
+
 /// Drops an entry, and the path that named it.
 ///
 /// # Errors
@@ -527,6 +557,35 @@ pub fn set_description_at(
         reason: error.to_string(),
     })?;
     set_description(&target, id, description)?;
+
+    Ok(String::new())
+}
+
+/// Changes the cut one entry of a Layout a directory holds prefers.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in; an
+/// empty `preference` clears it.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoLayout`] when the Layout is not there, [`WriteError::InvalidPath`] when
+/// the entry id does not read, and the failures [`set_preference`] names.
+#[lazyffi(export = rola_write_layout_set_preference)]
+pub fn set_preference_at(
+    directory: &Path,
+    layout: &str,
+    uuid: &str,
+    preference: &str,
+) -> Result<String, WriteError> {
+    let target = open(directory, layout)?;
+    let id = Uuid::from_str(uuid).map_err(|error| WriteError::InvalidPath {
+        path: uuid.to_owned(),
+        reason: error.to_string(),
+    })?;
+    set_preference(&target, id, (!preference.is_empty()).then_some(preference))?;
 
     Ok(String::new())
 }
