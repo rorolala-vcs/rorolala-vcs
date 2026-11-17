@@ -205,6 +205,29 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_vault_is_found_from_a_nested_directory()
+    {
+        var directory = Scratch();
+        try
+        {
+            var vault = Path.Combine(directory, "vault");
+            RunRola(directory, $"create --vault \"{vault}\"");
+            var nested = Directory.CreateDirectory(Path.Combine(vault, "sub")).FullName;
+
+            var scope = VaultScoop.Open(nested);
+
+            Assert.Equal(
+                Path.GetFullPath(vault).TrimEnd(Path.DirectorySeparatorChar),
+                scope.Root.FullName.TrimEnd(Path.DirectorySeparatorChar)
+            );
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_builtin_book_is_searchable()
     {
         var root = RepositoryRoot();
