@@ -2562,6 +2562,21 @@ internal static partial class RorolalaBinding
     internal static extern bool rola_cancellation_is_cancelled(nint cancellation);
 
     /// <summary>
+    /// Writes one object into the index a directory is in.
+    ///
+    /// An owned string the caller releases with `free_string`, the key the object was written under,
+    /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. The request is one
+    /// object, `{"kind":"variant",...}`, `{"kind":"version",...}`, `{"kind":"creator",...}` or
+    /// `{"kind":"message",...}`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_index_object_json(nint directory, nint request);
+
+    /// <summary>
     /// Applies a batch of changes named as JSON to the Layout a directory is in.
     ///
     /// An empty string on success, or a `RolaWriteError *` the caller releases with
