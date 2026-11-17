@@ -1808,7 +1808,7 @@ fn restore(
     // What was written is what the Layout names again, so the reading has to be told: a path left
     // marked as disagreed would be reported as changed by the very next reading.
     if let Err(cause) = remember(layout, root, path.as_str()) {
-        return Err(failed(cause));
+        return Err(failed(cause.to_string()));
     }
 
     Ok(())

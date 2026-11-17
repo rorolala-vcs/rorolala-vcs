@@ -1509,7 +1509,7 @@ fn bring_in(
     }
 
     if let Err(cause) = checkout.finish() {
-        failed.push(cause);
+        failed.push(cause.to_string());
     }
 
     if let Err(error) = batch.commit() {

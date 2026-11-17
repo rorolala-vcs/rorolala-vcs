@@ -6,6 +6,7 @@
 //! caller enter the same function, so the order cannot drift between them.
 
 pub mod cancel;
+pub mod checkout;
 pub mod error;
 pub mod index;
 pub mod labels;
@@ -20,6 +21,7 @@ pub mod tree_reset;
 pub mod workspace;
 
 pub use cancel::*;
+pub use checkout::*;
 pub use error::*;
 pub use index::*;
 pub use labels::*;
