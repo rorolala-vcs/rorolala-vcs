@@ -388,6 +388,30 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_file_is_tracked_and_named()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            File.WriteAllText(Path.Combine(directory, "a.psd"), "content");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+
+            var tracked = writer.TrackFile("a.psd", "alice", "first");
+
+            Assert.NotEqual(Guid.Empty, tracked.Id);
+            Assert.False(string.IsNullOrEmpty(tracked.Version));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_tree_path_is_staged()
     {
         var directory = Scratch();

@@ -2850,6 +2850,20 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_storage_put_file(nint directory, nint file, nint policy);
 
     /// <summary>
+    /// Records one file's content as a version in the Workspace a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","storage":"...","variant":"...","version":"..."}`, or a `RolaWriteError *` the
+    /// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_track_file(nint directory, nint path, nint creator, nint message, nint policy);
+
+    /// <summary>
     /// Writes the description of the tree a directory is in.
     ///
     /// An owned JSON string the caller releases with `free_string`, `{"bytes":N}`, or a

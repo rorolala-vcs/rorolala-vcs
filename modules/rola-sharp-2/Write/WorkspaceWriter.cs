@@ -48,6 +48,61 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Records a file's content as a version and names it in the Layout.</summary>
+    /// <param name="path">The file's path, relative to the Workspace root or absolute.</param>
+    /// <param name="creator">The creator's name.</param>
+    /// <param name="message">What the version says was done.</param>
+    /// <param name="policy">A chunking policy, or nothing for the store's own choice.</param>
+    /// <returns>What was written.</returns>
+    public TrackedFile TrackFile(
+        string path,
+        string creator,
+        string message,
+        string? policy = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(creator);
+        ArgumentNullException.ThrowIfNull(message);
+
+        var directory = Utf8(_workspace.Root.FullName);
+        var at = Utf8(path);
+        var author = Utf8(creator);
+        var words = Utf8(message);
+        var chunking = Utf8(policy ?? string.Empty);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_track_file(
+                directory,
+                at,
+                author,
+                words,
+                chunking
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new TrackedFile(
+                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
+                RolaJson.Text(document.RootElement, "storage") ?? string.Empty,
+                RolaJson.Text(document.RootElement, "variant") ?? string.Empty,
+                RolaJson.Text(document.RootElement, "version") ?? string.Empty
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(author);
+            Marshal.FreeCoTaskMem(words);
+            Marshal.FreeCoTaskMem(chunking);
+        }
+    }
+
     /// <summary>Makes the Workspace's Layout track a Vault.</summary>
     /// <param name="track">The Vault's name.</param>
     public void SetTrack(string track)
