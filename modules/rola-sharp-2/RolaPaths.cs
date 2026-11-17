@@ -46,6 +46,24 @@ public static class RolaPaths
     public static string WorkspaceReadonlyLayouts(string root) =>
         Resolve(root, RorolalaBinding.ROLA_WORKSPACE_READONLY_LAYOUTS_DIR);
 
+    /// <summary>Where a Workspace keeps the accounts it knows.</summary>
+    /// <param name="root">The Workspace's root.</param>
+    /// <returns>The directory, as an absolute path.</returns>
+    public static string WorkspaceKeys(string root) =>
+        Resolve(root, RorolalaBinding.ROLA_WORKSPACE_KEYS_DIR);
+
+    /// <summary>Where a Workspace keeps its readings cache.</summary>
+    /// <param name="root">The Workspace's root.</param>
+    /// <returns>The directory, as an absolute path.</returns>
+    public static string WorkspaceCache(string root) =>
+        Resolve(root, RorolalaBinding.ROLA_WORKSPACE_CACHE_DIR);
+
+    /// <summary>The file a run edits to write the next message.</summary>
+    /// <param name="root">The Workspace's root.</param>
+    /// <returns>The file's path, as an absolute path.</returns>
+    public static string WorkspaceEditing(string root) =>
+        Resolve(root, RorolalaBinding.ROLA_WORKSPACE_EDITING_PATH);
+
     /// <summary>The Workspace configuration file.</summary>
     /// <param name="root">The Workspace's root.</param>
     /// <returns>The file's path, as an absolute path.</returns>
@@ -69,6 +87,18 @@ public static class RolaPaths
     /// <returns>The file's path, as an absolute path.</returns>
     public static string VaultConfig(string root) =>
         Resolve(root, RorolalaBinding.ROLA_VAULT_CONFIG_PATH);
+
+    /// <summary>Where a Vault keeps the accounts it knows.</summary>
+    /// <param name="root">The Vault's root.</param>
+    /// <returns>The directory, as an absolute path.</returns>
+    public static string VaultKeys(string root) =>
+        Resolve(root, RorolalaBinding.ROLA_VAULT_KEYS_DIR);
+
+    /// <summary>Where a Vault keeps the Vaults inside it.</summary>
+    /// <param name="root">The Vault's root.</param>
+    /// <returns>The directory, as an absolute path.</returns>
+    public static string VaultVaults(string root) =>
+        Resolve(root, RorolalaBinding.ROLA_VAULT_VAULTS_DIR);
 
     /// <summary>Where a Vault keeps its store.</summary>
     /// <param name="root">The Vault's root.</param>
