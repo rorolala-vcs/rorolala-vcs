@@ -49,5 +49,26 @@ public static class ReadApi
         }
     }
 
+    /// <summary>Runs one read on the thread pool, stopping it when the caller asks.</summary>
+    /// <param name="directory">The directory the request's relative paths are read against.</param>
+    /// <param name="request">The request, as the C ABI's aggregate read names it.</param>
+    /// <param name="cancellationToken">The caller's token.</param>
+    /// <returns>The document, or nothing when the read has no document.</returns>
+    public static Task<string?> JsonAsync(
+        string directory,
+        string request,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.Run(
+            () =>
+            {
+                using var cancellation = Cancellation.New();
+                using var registration = cancellationToken.Register(cancellation.Cancel);
+
+                return Json(directory, request, cancellation);
+            },
+            CancellationToken.None
+        );
+
     private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);
 }
