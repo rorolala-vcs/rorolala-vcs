@@ -445,6 +445,10 @@ public sealed class WriteTests
             new LayoutWriter(workspace.Layout).SetOwner(tracked.Id, "bob");
             layout.Read();
             Assert.Equal("bob", layout.Find("a.psd")?.Owner);
+
+            new LayoutWriter(workspace.Layout).SetDescription(tracked.Id, "changed");
+            layout.Read();
+            Assert.Equal("changed", layout.Find("a.psd")?.Description);
         }
         finally
         {

@@ -20,6 +20,37 @@ public sealed class LayoutWriter : Writer
     public LayoutWriter(LayoutScoop layout) =>
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
 
+    /// <summary>Changes what one entry says about itself.</summary>
+    /// <param name="id">The entry's id.</param>
+    /// <param name="description">What it is to say.</param>
+    public void SetDescription(Guid id, string description)
+    {
+        ArgumentNullException.ThrowIfNull(description);
+
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var uuid = Utf8(id.ToString());
+        var words = Utf8(description);
+        try
+        {
+            Check(
+                RorolalaBinding.rola_write_layout_set_description(
+                    directory,
+                    layout,
+                    uuid,
+                    words
+                )
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(uuid);
+            Marshal.FreeCoTaskMem(words);
+        }
+    }
+
     /// <summary>Changes the account that holds one entry.</summary>
     /// <param name="id">The entry's id.</param>
     /// <param name="owner">The account, or nothing to clear the owner.</param>
