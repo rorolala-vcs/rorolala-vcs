@@ -5,6 +5,11 @@ using RolaSharp.V2;
 
 namespace RolaSharp.V2.Write;
 
+/// <summary>One path a staging changed.</summary>
+/// <param name="Path">The path, as the tree writes it.</param>
+/// <param name="Kind">What happened: <c>added</c>, <c>updated</c> or <c>deleted</c>.</param>
+public sealed record TreeAddChange(string Path, string Kind);
+
 /// <summary>What a tree removal staged.</summary>
 /// <param name="Paths">The paths that left the staged structure.</param>
 /// <param name="Cached">Whether the work was left where it was.</param>
@@ -48,6 +53,57 @@ public sealed class TreeWriter : Writer
             Marshal.FreeCoTaskMem(directory);
             Marshal.FreeCoTaskMem(at);
             Marshal.FreeCoTaskMem(words);
+        }
+    }
+
+    /// <summary>Stages work into the tree at a target.</summary>
+    /// <param name="paths">The paths to stage.</param>
+    /// <param name="target">The tree's path, or nothing for the Workspace root.</param>
+    /// <param name="includeIgnored">Stage work the rules would ignore.</param>
+    /// <returns>What the staged structure changed.</returns>
+    public IReadOnlyList<TreeAddChange> Add(
+        IEnumerable<string> paths,
+        string? target = null,
+        bool includeIgnored = false
+    )
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        var directory = Utf8(_workspace.Root.FullName);
+        var at = Utf8(target ?? string.Empty);
+        var list = Utf8(JsonSerializer.Serialize(paths));
+        try
+        {
+            var answer = RorolalaBinding.rola_write_tree_add(
+                directory,
+                at,
+                list,
+                includeIgnored
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+            var changes =
+                RolaJson
+                    .Items(document.RootElement, "changes")
+                    ?.EnumerateArray()
+                    .Select(item => new TreeAddChange(
+                        RolaJson.Text(item, "path") ?? string.Empty,
+                        RolaJson.Text(item, "kind") ?? string.Empty
+                    ))
+                    .ToArray()
+                ?? [];
+
+            return changes;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(list);
         }
     }
 
