@@ -404,6 +404,12 @@ public sealed class WriteTests
 
             Assert.NotEqual(Guid.Empty, tracked.Id);
             Assert.False(string.IsNullOrEmpty(tracked.Version));
+
+            File.WriteAllText(Path.Combine(directory, "a.psd"), "content again");
+            var again = writer.TrackFile("a.psd", "alice", "second");
+
+            Assert.Equal(tracked.Id, again.Id);
+            Assert.NotEqual(tracked.Version, again.Version);
         }
         finally
         {
