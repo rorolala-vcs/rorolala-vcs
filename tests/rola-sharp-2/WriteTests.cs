@@ -180,6 +180,35 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void An_aggregate_read_answers_and_can_be_cancelled()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+
+            var json = ReadApi.Json(directory, "{\"kind\":\"layouts\",\"path\":\"\"}");
+            Assert.Contains("main", json, StringComparison.Ordinal);
+
+            using var cancellation = Cancellation.New();
+            cancellation.Cancel();
+            var error = Assert.Throws<RolaReadError>(
+                () =>
+                    ReadApi.Json(
+                        directory,
+                        "{\"kind\":\"layouts\",\"path\":\"\"}",
+                        cancellation
+                    )
+            );
+            Assert.Equal(RolaReadErrorKind.Cancelled, error.Kind);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_shared_paths_are_the_librarys_own()
     {
         var root = Path.Combine(Path.GetTempPath(), "rola-sharp-paths");

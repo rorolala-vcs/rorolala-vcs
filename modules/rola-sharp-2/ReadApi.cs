@@ -1,0 +1,53 @@
+using System.Runtime.InteropServices;
+
+using RolaSharp.V2.Write;
+
+namespace RolaSharp.V2;
+
+/// <summary>One read named by a JSON request, with a cancellation the caller may set.</summary>
+public static class ReadApi
+{
+    /// <summary>Runs one read.</summary>
+    /// <param name="directory">The directory the request's relative paths are read against.</param>
+    /// <param name="request">The request, as the C ABI's aggregate read names it.</param>
+    /// <param name="cancellation">The cancellation, or nothing for one nobody sets.</param>
+    /// <returns>The document, or nothing when the read has no document.</returns>
+    public static string? Json(
+        string directory,
+        string request,
+        Cancellation? cancellation = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var owned = cancellation is null ? Cancellation.New() : null;
+        var token = cancellation ?? owned!;
+        var directoryText = Utf8(directory);
+        var requestText = Utf8(request);
+        try
+        {
+            var answer = RorolalaBinding.rola_v2_read_json(
+                directoryText,
+                requestText,
+                token.Handle
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw ReadResults.V2(answer.payload);
+            }
+
+            var json = NativeText.Taken(answer.payload);
+
+            return json is "" or "null" ? null : json;
+        }
+        finally
+        {
+            owned?.Dispose();
+            Marshal.FreeCoTaskMem(directoryText);
+            Marshal.FreeCoTaskMem(requestText);
+        }
+    }
+
+    private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);
+}

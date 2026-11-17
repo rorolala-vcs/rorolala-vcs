@@ -7,6 +7,17 @@ public sealed class Cancellation : IDisposable
 
     private Cancellation(nint handle) => _handle = handle;
 
+    /// <summary>The native cancellation, for the reads that take one.</summary>
+    internal nint Handle
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_handle == 0, this);
+
+            return _handle;
+        }
+    }
+
     /// <summary>Makes a cancellation nobody has set.</summary>
     /// <returns>The handle, which the caller releases.</returns>
     public static Cancellation New()

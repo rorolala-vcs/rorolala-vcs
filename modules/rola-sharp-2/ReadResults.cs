@@ -104,6 +104,39 @@ internal static class ReadResults
         return new RolaReadError(kind, null, reason);
     }
 
+    /// <summary>The failure an aggregate read carried.</summary>
+    /// <param name="payload">The native error, which this takes ownership of.</param>
+    /// <returns>The failure.</returns>
+    public static RolaReadError V2(nint payload)
+    {
+        var error = Marshal.PtrToStructure<RolaV2ReadError>(payload);
+        var kind = error.tag switch
+        {
+            RolaV2ReadErrorTag.RolaV2ReadError_InvalidRequest => RolaReadErrorKind.InvalidArgument,
+            RolaV2ReadErrorTag.RolaV2ReadError_NoWorkspace => RolaReadErrorKind.NoWorkspace,
+            RolaV2ReadErrorTag.RolaV2ReadError_NoLayout => RolaReadErrorKind.NoLayout,
+            RolaV2ReadErrorTag.RolaV2ReadError_NoStore => RolaReadErrorKind.NoVault,
+            RolaV2ReadErrorTag.RolaV2ReadError_NoIndex => RolaReadErrorKind.NotFound,
+            RolaV2ReadErrorTag.RolaV2ReadError_NotFound => RolaReadErrorKind.NotFound,
+            RolaV2ReadErrorTag.RolaV2ReadError_Cancelled => RolaReadErrorKind.Cancelled,
+            _ => RolaReadErrorKind.Unreadable,
+        };
+        var reason = error.tag switch
+        {
+            RolaV2ReadErrorTag.RolaV2ReadError_InvalidRequest => NativeText.Taken(
+                error.payload.InvalidRequest.reason
+            ),
+            RolaV2ReadErrorTag.RolaV2ReadError_Unreadable => NativeText.Taken(
+                error.payload.Unreadable.reason
+            ),
+            _ => string.Empty,
+        };
+
+        RorolalaBinding.free_rola_v2read_error(payload);
+
+        return new RolaReadError(kind, null, reason);
+    }
+
     /// <summary>The failure a book read carried.</summary>
     /// <param name="payload">The native error, which this takes ownership of.</param>
     /// <returns>The failure.</returns>
