@@ -336,6 +336,125 @@ pub fn remove_path_at(directory: &Path, layout: &str, path: &str) -> Result<(), 
     remove_path(&target, &path)
 }
 
+/// Makes or changes what an entry holds.
+///
+/// A preference the entry already had is kept: setting the holder, the version or the words is not
+/// saying anything about how the content is cut, and clearing it would quietly change what the next
+/// write does.
+///
+/// # Errors
+///
+/// Returns [`WriteError::Layout`] when the entry is already there for `update == false`, is not
+/// there for `update == true`, or the write itself fails.
+pub fn write_entry(
+    layout: &Layout,
+    id: Uuid,
+    version: [u8; 32],
+    owner: Option<String>,
+    description: String,
+    update: bool,
+) -> Result<(), WriteError> {
+    let data = MutableData::new(owner, version, description);
+    let data = match layout.entry(id) {
+        Some(existing) => data.with_preference(existing.preference().map(str::to_owned)),
+        None => data,
+    };
+
+    let written = if update {
+        layout.update_entry(id, data)
+    } else {
+        layout.create_entry(id, data)
+    };
+
+    written.map_err(|error| WriteError::Layout {
+        reason: error.to_string(),
+    })
+}
+
+/// Drops an entry, and the path that named it.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NotFound`] when the entry is not there, and [`WriteError::Layout`] when the
+/// removal does not apply.
+pub fn remove_entry(layout: &Layout, id: Uuid) -> Result<(), WriteError> {
+    layout.remove_entry(id).map_err(|error| match error {
+        rorolala_layout::LayoutError::NotFound => WriteError::NotFound {
+            what: format!("Layout entry {id}"),
+        },
+        other => WriteError::Layout {
+            reason: other.to_string(),
+        },
+    })
+}
+
+/// Makes or changes an entry of a Layout a directory holds.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+/// `owner` and `description` are empty when the entry has neither. `update` says whether the entry
+/// must already be there.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`,
+/// [`WriteError::NoLayout`] when it has no Layout, [`WriteError::InvalidPath`] when the `Uuid` or the
+/// version is not one the Layout accepts, and [`WriteError::Layout`] when the write does not apply.
+#[lazyffi(export = rola_write_layout_write_entry)]
+pub fn write_entry_at(
+    directory: &Path,
+    layout: &str,
+    uuid: &str,
+    version: &str,
+    owner: &str,
+    description: &str,
+    update: bool,
+) -> Result<(), WriteError> {
+    let target = open(directory, layout)?;
+    let id = Uuid::from_str(uuid).map_err(|error| WriteError::InvalidPath {
+        path: uuid.to_owned(),
+        reason: error.to_string(),
+    })?;
+    let key = Key::from_str(version).map_err(|error| WriteError::Precondition {
+        what: format!("version `{version}`"),
+        reason: error.to_string(),
+    })?;
+
+    write_entry(
+        &target,
+        id,
+        *key.digest(),
+        (!owner.is_empty()).then(|| owner.to_owned()),
+        description.to_owned(),
+        update,
+    )
+}
+
+/// Drops an entry of a Layout a directory holds.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`,
+/// [`WriteError::NoLayout`] when it has no Layout, [`WriteError::InvalidPath`] when the `Uuid` is not
+/// one the Layout accepts, and [`WriteError::Layout`] when the removal does not apply.
+#[lazyffi(export = rola_write_layout_remove_entry)]
+pub fn remove_entry_at(directory: &Path, layout: &str, uuid: &str) -> Result<(), WriteError> {
+    let target = open(directory, layout)?;
+    let id = Uuid::from_str(uuid).map_err(|error| WriteError::InvalidPath {
+        path: uuid.to_owned(),
+        reason: error.to_string(),
+    })?;
+
+    remove_entry(&target, id)
+}
+
 /// One change, as a request document names it.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
