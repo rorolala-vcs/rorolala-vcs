@@ -62,6 +62,68 @@ pub fn rebuild_tree_cache(workspace: &Workspace) -> Result<CacheReport, WriteErr
     Ok(CacheReport { paths, bytes })
 }
 
+/// Makes the Layout track a Vault.
+///
+/// # Errors
+///
+/// Returns [`WriteError::Layout`] when the Layout cannot be read or the track file cannot be written.
+pub fn set_track(workspace: &Workspace, track: &str) -> Result<(), WriteError> {
+    workspace
+        .set_layout_track(track)
+        .map_err(|error| WriteError::Layout {
+            reason: error.to_string(),
+        })
+}
+
+/// Makes the Layout track no Vault.
+///
+/// # Errors
+///
+/// Returns [`WriteError::Layout`] when the track file cannot be removed.
+pub fn clear_track(workspace: &Workspace) -> Result<(), WriteError> {
+    workspace
+        .un_track_layout()
+        .map_err(|error| WriteError::Layout {
+            reason: error.to_string(),
+        })
+}
+
+/// Makes the Layout of the Workspace holding a directory track a Vault.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, and
+/// [`WriteError::Layout`] when the track file cannot be written.
+#[lazyffi(export = rola_write_workspace_set_track)]
+pub fn set_track_at(directory: &Path, track: &str) -> Result<(), WriteError> {
+    let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
+
+    set_track(&workspace, track)
+}
+
+/// Makes the Layout of the Workspace holding a directory track no Vault.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, and
+/// [`WriteError::Layout`] when the track file cannot be removed.
+#[lazyffi(export = rola_write_workspace_clear_track)]
+pub fn clear_track_at(directory: &Path) -> Result<(), WriteError> {
+    let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
+
+    clear_track(&workspace)
+}
+
 /// Rebuilds the tree cache of the Workspace holding a directory.
 ///
 /// # FFI

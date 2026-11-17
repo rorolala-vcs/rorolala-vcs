@@ -19,7 +19,7 @@ use crate::Next;
 use crate::complete::{offer, typing_flag, vault_names};
 use crate::exit_codes::EC_HELP;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
-use crate::layout::{ErrorLayoutArgument, ErrorLayoutTrackNotBound, failed};
+use crate::layout::{ErrorLayoutArgument, ErrorLayoutTrackNotBound, failed_write};
 
 #[help(buffer)]
 pub fn help_layout_set_track(_: EntryLayoutSetTrack, ec: &mut ResExitCode) {
@@ -102,8 +102,8 @@ pub fn handle_layout_set_track(
         return ErrorLayoutTrackNotBound { track }.into();
     }
 
-    if let Err(error) = workspace.set_layout_track(&track) {
-        return failed(&error);
+    if let Err(error) = librorolala::write::workspace::set_track(workspace, &track) {
+        return failed_write(error);
     }
 
     ResultLayoutSetTrack { track }.into()

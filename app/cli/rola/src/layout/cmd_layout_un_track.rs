@@ -16,7 +16,7 @@ use rust_i18n::t;
 use crate::Next;
 use crate::exit_codes::EC_HELP;
 use crate::layout::ErrorLayoutShouldInWorkspace as ErrorShouldInWorkspace;
-use crate::layout::failed;
+use crate::layout::failed_write;
 
 #[help(buffer)]
 pub fn help_layout_un_track(_: EntryLayoutUnTrack, ec: &mut ResExitCode) {
@@ -64,8 +64,8 @@ pub fn handle_layout_un_track(
         return ErrorShouldInWorkspace.into();
     };
 
-    if let Err(error) = workspace.un_track_layout() {
-        return failed(&error);
+    if let Err(error) = librorolala::write::workspace::clear_track(workspace) {
+        return failed_write(error);
     }
 
     ResultLayoutUnTrack.into()
