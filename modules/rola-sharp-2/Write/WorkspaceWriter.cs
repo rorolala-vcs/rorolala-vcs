@@ -72,7 +72,7 @@ public sealed class WorkspaceWriter : Writer
     /// <param name="creator">The creator's name.</param>
     /// <param name="message">What the version says was done.</param>
     /// <param name="policy">A chunking policy, or nothing for the store's own choice.</param>
-    /// <param name="owner">The account that holds the entry, or nothing.</param>
+    /// <param name="owner">The account that holds the entry, or nothing to keep the existing owner.</param>
     /// <returns>What was written.</returns>
     public TrackedFile TrackFile(
         string path,

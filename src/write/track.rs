@@ -1,4 +1,4 @@
-﻿//! Recording the content of one file as a version, and naming it in the Layout.
+//! Recording the content of one file as a version, and naming it in the Layout.
 
 use std::path::Path;
 
@@ -36,7 +36,7 @@ pub struct TrackedFile {
 ///
 /// `path` is relative to `cwd`, or absolute; it must be inside the Workspace. `creator` and
 /// `message` become the version's creator and message, and `policy` names a chunking policy or is
-/// empty for the store's own choice.
+/// empty for the store's own choice. A `None` owner keeps the owner the entry already has.
 ///
 /// # Errors
 ///
@@ -85,6 +85,9 @@ pub fn track_file(
             reason: error.to_string(),
         })?;
     let existing = layout.id_of(&layout_path);
+    let existing_owner = existing
+        .and_then(|id| layout.entry(id))
+        .and_then(|entry| entry.owner().map(str::to_owned));
     if let Some(id) = existing
         && layout
             .entry(id)
@@ -123,7 +126,7 @@ pub fn track_file(
         &layout,
         id,
         *written.version.digest(),
-        owner.map(str::to_owned),
+        owner.map(str::to_owned).or(existing_owner),
         String::new(),
         existing.is_some(),
     )?;
