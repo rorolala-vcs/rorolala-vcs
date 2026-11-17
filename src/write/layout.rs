@@ -392,6 +392,27 @@ pub fn set_owner(layout: &Layout, id: Uuid, owner: Option<&str>) -> Result<(), W
     )
 }
 
+/// Changes the description of an entry, leaving its content and owner as they are.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NotFound`] when the entry is not there, and [`WriteError::Layout`] when the
+/// write does not apply.
+pub fn set_description(layout: &Layout, id: Uuid, description: &str) -> Result<(), WriteError> {
+    let entry = layout.entry(id).ok_or_else(|| WriteError::NotFound {
+        what: format!("Layout entry {id}"),
+    })?;
+
+    write_entry(
+        layout,
+        id,
+        entry.version(),
+        entry.owner().map(str::to_owned),
+        description.to_owned(),
+        true,
+    )
+}
+
 /// Drops an entry, and the path that named it.
 ///
 /// # Errors
@@ -478,6 +499,34 @@ pub fn set_owner_at(
         reason: error.to_string(),
     })?;
     set_owner(&target, id, (!owner.is_empty()).then_some(owner))?;
+
+    Ok(String::new())
+}
+
+/// Changes the description of one entry of a Layout a directory holds.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoLayout`] when the Layout is not there, [`WriteError::InvalidPath`] when
+/// the entry id does not read, and the failures [`set_description`] names.
+#[lazyffi(export = rola_write_layout_set_description)]
+pub fn set_description_at(
+    directory: &Path,
+    layout: &str,
+    uuid: &str,
+    description: &str,
+) -> Result<String, WriteError> {
+    let target = open(directory, layout)?;
+    let id = Uuid::from_str(uuid).map_err(|error| WriteError::InvalidPath {
+        path: uuid.to_owned(),
+        reason: error.to_string(),
+    })?;
+    set_description(&target, id, description)?;
 
     Ok(String::new())
 }
