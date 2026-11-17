@@ -53,12 +53,14 @@ public sealed class WorkspaceWriter : Writer
     /// <param name="creator">The creator's name.</param>
     /// <param name="message">What the version says was done.</param>
     /// <param name="policy">A chunking policy, or nothing for the store's own choice.</param>
+    /// <param name="owner">The account that holds the entry, or nothing.</param>
     /// <returns>What was written.</returns>
     public TrackedFile TrackFile(
         string path,
         string creator,
         string message,
-        string? policy = null
+        string? policy = null,
+        string? owner = null
     )
     {
         ArgumentNullException.ThrowIfNull(path);
@@ -70,6 +72,7 @@ public sealed class WorkspaceWriter : Writer
         var author = Utf8(creator);
         var words = Utf8(message);
         var chunking = Utf8(policy ?? string.Empty);
+        var held = Utf8(owner ?? string.Empty);
         try
         {
             var answer = RorolalaBinding.rola_write_track_file(
@@ -77,7 +80,8 @@ public sealed class WorkspaceWriter : Writer
                 at,
                 author,
                 words,
-                chunking
+                chunking,
+                held
             );
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
@@ -100,6 +104,7 @@ public sealed class WorkspaceWriter : Writer
             Marshal.FreeCoTaskMem(author);
             Marshal.FreeCoTaskMem(words);
             Marshal.FreeCoTaskMem(chunking);
+            Marshal.FreeCoTaskMem(held);
         }
     }
 

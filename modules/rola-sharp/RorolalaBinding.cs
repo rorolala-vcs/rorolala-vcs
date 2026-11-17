@@ -2854,14 +2854,15 @@ internal static partial class RorolalaBinding
     ///
     /// An owned JSON string the caller releases with `free_string`,
     /// `{"id":"...","storage":"...","variant":"...","version":"..."}`, or a `RolaWriteError *` the
-    /// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice.
+    /// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice, and
+    /// `owner` is empty when the entry has no owner.
     ///
     /// Returns a result:
     /// - `Ok`: `char *`, owned; release it with `free_string`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_write_track_file(nint directory, nint path, nint creator, nint message, nint policy);
+    internal static extern RorolalaResult rola_write_track_file(nint directory, nint path, nint creator, nint message, nint policy, nint owner);
 
     /// <summary>
     /// Writes the description of the tree a directory is in.
