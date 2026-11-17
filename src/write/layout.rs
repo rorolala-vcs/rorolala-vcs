@@ -371,6 +371,27 @@ pub fn write_entry(
     })
 }
 
+/// Changes the account that holds an entry, leaving its content and description as they are.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NotFound`] when the entry is not there, and [`WriteError::Layout`] when the
+/// write does not apply.
+pub fn set_owner(layout: &Layout, id: Uuid, owner: Option<&str>) -> Result<(), WriteError> {
+    let entry = layout.entry(id).ok_or_else(|| WriteError::NotFound {
+        what: format!("Layout entry {id}"),
+    })?;
+
+    write_entry(
+        layout,
+        id,
+        entry.version(),
+        owner.map(str::to_owned),
+        entry.description().to_owned(),
+        true,
+    )
+}
+
 /// Drops an entry, and the path that named it.
 ///
 /// # Errors
@@ -430,6 +451,35 @@ pub fn write_entry_at(
         description.to_owned(),
         update,
     )
+}
+
+/// Changes the owner of one entry of a Layout a directory holds.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in; an
+/// empty `owner` clears the owner.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoLayout`] when the Layout is not there, [`WriteError::InvalidPath`] when
+/// the entry id does not read, and the failures [`set_owner`] names.
+#[lazyffi(export = rola_write_layout_set_owner)]
+pub fn set_owner_at(
+    directory: &Path,
+    layout: &str,
+    uuid: &str,
+    owner: &str,
+) -> Result<String, WriteError> {
+    let target = open(directory, layout)?;
+    let id = Uuid::from_str(uuid).map_err(|error| WriteError::InvalidPath {
+        path: uuid.to_owned(),
+        reason: error.to_string(),
+    })?;
+    set_owner(&target, id, (!owner.is_empty()).then_some(owner))?;
+
+    Ok(String::new())
 }
 
 /// Drops an entry of a Layout a directory holds.
