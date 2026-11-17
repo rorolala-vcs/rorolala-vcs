@@ -400,10 +400,14 @@ public sealed class WriteTests
             workspace.Read();
             var writer = new WorkspaceWriter(workspace);
 
-            var tracked = writer.TrackFile("a.psd", "alice", "first");
+            var tracked = writer.TrackFile("a.psd", "alice", "first", owner: "alice");
 
             Assert.NotEqual(Guid.Empty, tracked.Id);
             Assert.False(string.IsNullOrEmpty(tracked.Version));
+
+            var layout = workspace.Layout;
+            layout.Read();
+            Assert.Equal("alice", layout.Find("a.psd")?.Owner);
 
             File.WriteAllText(Path.Combine(directory, "a.psd"), "content again");
             var again = writer.TrackFile("a.psd", "alice", "second");
