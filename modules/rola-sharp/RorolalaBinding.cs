@@ -2879,6 +2879,20 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_tree_remove_paths(nint directory, nint target, nint paths, [MarshalAs(UnmanagedType.U1)] bool cached, [MarshalAs(UnmanagedType.U1)] bool recursive, [MarshalAs(UnmanagedType.U1)] bool force);
 
     /// <summary>
+    /// Resets the staging area of the tree a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"whole":false,"paths":[...]}`, or
+    /// a `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a JSON array of
+    /// strings, and `target` is the tree's path, empty for the directory itself.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tree_reset(nint directory, nint target, nint paths);
+
+    /// <summary>
     /// Makes the Layout of the Workspace holding a directory track a Vault.
     ///
     /// An empty string on success, or a `RolaWriteError *` the caller releases with
