@@ -125,6 +125,11 @@ pub fn retrack_file(
         Key::new(*base)
     };
 
+    index
+        .read_version(&named.to_string())
+        .map_err(|error| WriteError::Index {
+            reason: format!("{error:?}"),
+        })?;
     if only_index {
         set_version(&layout, id, *named.digest())?;
     } else {
@@ -200,6 +205,9 @@ mod tests {
                 .id_of(&rorolala_layout::LayoutPath::from_relative("a.txt".as_ref()).unwrap()),
             Some(forked.id)
         );
+
+        let absent = rorolala_storage::Key::new([9; 32]).to_string();
+        assert!(retrack_file(&workspace, &dir, "a.txt", Some(&absent), false, true).is_err());
 
         let _ = fs::remove_dir_all(&dir);
     }
