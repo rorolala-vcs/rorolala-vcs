@@ -2461,9 +2461,11 @@ internal static partial class RorolalaBinding
     /// What a Layout's entries hold, as `rola layout entries --json` writes it.
     ///
     /// An owned JSON string the caller releases with `free_string`, `{"entries":[{"path","uuid",
-    /// "version","owner","description","deprecated"}]}`, in path order and then `Uuid` order. `path` is
+    /// "version","owner","description","preference","deprecated"}]}`, in path order and then `Uuid`
+    /// order. `path` is
     /// `.` for the root entry, `version` is the hex the version is stored under, `owner` is empty when
-    /// no account holds it, and `deprecated` says whether the Vault moved it under `@/removed/`. A
+    /// no account holds it, `preference` is empty when the store may choose, and `deprecated` says
+    /// whether the Vault moved it under `@/removed/`. A
     /// failure is a `RolaLayoutError *` the caller releases with `free_rola_layout_error`.
     ///
     /// Returns a result:
@@ -2815,6 +2817,20 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_write_layout_set_description(nint directory, nint layout, nint uuid, nint description);
+
+    /// <summary>
+    /// Changes the cut one entry of a Layout a directory holds prefers.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in; an
+    /// empty `preference` clears it.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_set_preference(nint directory, nint layout, nint uuid, nint preference);
 
     /// <summary>
     /// Drops an entry of a Layout a directory holds.

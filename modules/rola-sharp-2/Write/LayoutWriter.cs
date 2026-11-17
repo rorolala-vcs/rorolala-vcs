@@ -20,6 +20,35 @@ public sealed class LayoutWriter : Writer
     public LayoutWriter(LayoutScoop layout) =>
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
 
+    /// <summary>Changes the cut one entry prefers.</summary>
+    /// <param name="id">The entry's id.</param>
+    /// <param name="preference">The chunking policy, or nothing to clear it.</param>
+    public void SetPreference(Guid id, string? preference)
+    {
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var uuid = Utf8(id.ToString());
+        var cut = Utf8(preference ?? string.Empty);
+        try
+        {
+            Check(
+                RorolalaBinding.rola_write_layout_set_preference(
+                    directory,
+                    layout,
+                    uuid,
+                    cut
+                )
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(uuid);
+            Marshal.FreeCoTaskMem(cut);
+        }
+    }
+
     /// <summary>Changes what one entry says about itself.</summary>
     /// <param name="id">The entry's id.</param>
     /// <param name="description">What it is to say.</param>

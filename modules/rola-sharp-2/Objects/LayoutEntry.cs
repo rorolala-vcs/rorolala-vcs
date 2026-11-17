@@ -6,6 +6,7 @@ namespace RolaSharp.V2;
 /// <param name="Version">The version it is at, as hex.</param>
 /// <param name="Owner">The account that holds it, empty when none does.</param>
 /// <param name="Description">What it says about itself.</param>
+/// <param name="Preference">The chunking policy it prefers, empty when none.</param>
 /// <param name="Deprecated">Whether the Vault has moved it out of the work.</param>
 public sealed record LayoutEntry(
     string Path,
@@ -13,5 +14,6 @@ public sealed record LayoutEntry(
     string Version,
     string Owner,
     string Description,
+    string Preference,
     bool Deprecated
 );

@@ -122,6 +122,7 @@ public class LayoutScoop : Scoop
                     RolaJson.Text(item, "version") ?? string.Empty,
                     RolaJson.Text(item, "owner") ?? string.Empty,
                     RolaJson.Text(item, "description") ?? string.Empty,
+                    RolaJson.Text(item, "preference") ?? string.Empty,
                     RolaJson.Flag(item, "deprecated")
                 )
             );
