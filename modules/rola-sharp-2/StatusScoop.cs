@@ -57,6 +57,7 @@ public sealed class StatusScoop : Scoop, IDisposable
     {
         _status?.Dispose();
         _status = null;
+        Loaded = false;
         GC.SuppressFinalize(this);
     }
 }
