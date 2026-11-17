@@ -10,6 +10,24 @@ namespace RolaSharp.V2.IntegrationTests;
 public sealed class WriteTests
 {
     [Fact]
+    public void A_cancellation_is_set_and_read()
+    {
+        using var cancellation = Cancellation.New();
+
+        Assert.False(cancellation.IsCancelled);
+        cancellation.Cancel();
+        Assert.True(cancellation.IsCancelled);
+    }
+
+    [Fact]
+    public void A_progress_handle_starts_empty()
+    {
+        using var progress = Progress.New();
+
+        Assert.Null(progress.NextJson());
+    }
+
+    [Fact]
     public void A_file_is_stored_and_extracted_again()
     {
         var directory = Scratch();
