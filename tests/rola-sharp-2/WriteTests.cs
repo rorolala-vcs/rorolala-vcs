@@ -161,7 +161,7 @@ public sealed class WriteTests
     public void The_builtin_book_is_searchable()
     {
         var root = RepositoryRoot();
-        var book = new BookScoop(Path.Combine(root, "build", "docs"));
+        var book = BookScoop.Open(Path.Combine(root, "build", "docs", "builtin.book"));
         book.Read();
 
         Assert.True(book.ArticleCount > 0);

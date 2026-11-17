@@ -31,11 +31,19 @@ public sealed record BookHit(
 public sealed class BookScoop : Scoop, IDisposable
 {
     private readonly string _start;
+    private readonly bool _direct;
     private nint _handle;
 
     /// <summary>Makes a scope that looks for the book at or above a directory.</summary>
     /// <param name="start">Where the search starts.</param>
-    public BookScoop(string start) => _start = Path.GetFullPath(start);
+    public BookScoop(string start) => (_start, _direct) = (Path.GetFullPath(start), false);
+
+    private BookScoop(string path, bool direct) => (_start, _direct) = (Path.GetFullPath(path), direct);
+
+    /// <summary>Opens one book file by name.</summary>
+    /// <param name="path">The book's path.</param>
+    /// <returns>The scope over the book.</returns>
+    public static BookScoop Open(string path) => new(path, true);
 
     /// <summary>How many articles the book holds.</summary>
     public int ArticleCount { get; private set; }
@@ -126,7 +134,22 @@ public sealed class BookScoop : Scoop, IDisposable
         var start = Utf8(_start);
         try
         {
-            var handle = RorolalaBinding.locate_rola_book_search(start);
+            nint handle;
+            if (_direct)
+            {
+                var answer = RorolalaBinding.open_rola_book_search(start);
+                if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+                {
+                    throw ReadResults.Book(answer.payload);
+                }
+
+                handle = answer.payload;
+            }
+            else
+            {
+                handle = RorolalaBinding.locate_rola_book_search(start);
+            }
+
             if (handle == 0)
             {
                 throw new RolaReadError(
