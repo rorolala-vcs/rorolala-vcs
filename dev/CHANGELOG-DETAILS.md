@@ -12,7 +12,7 @@ The write workflows behind `rola layout path` and `rola layout entry` now live i
 
 ### 2. [`modules`] [`rola-sharp-2`] Add the second-generation C# bindings
 
-`RolaSharp.V2` is the second generation of the C# bindings: a generated `RorolalaBinding`, the `Scoop` family over users, daemons, Workspaces, Vaults, Layouts, stores, VCS indexes, statuses, trees, ownership, inverse indexes, version graphs, books and ignore rules, and the writers over storage, Layouts, the tree cache, VCS indexes and file versions. The read side no longer writes the tree cache; the write side calls the same `librorolala` workflows as the command line.
+`RolaSharp.V2` is the second generation of the C# bindings: a generated `RorolalaBinding`, the `Scoop` family over users, daemons, Workspaces, Vaults, Layouts, stores, VCS indexes, statuses, trees, ownership, inverse indexes, version graphs, books and ignore rules, and the writers over storage, Layouts, the tree cache, VCS indexes and file versions. The read side no longer writes the tree cache; the write side calls the same `librorolala` workflows as the command line. Workspace and Vault scopes can be opened from any nested directory.
 
 # 0.3.0 (2026-11-17)
 
