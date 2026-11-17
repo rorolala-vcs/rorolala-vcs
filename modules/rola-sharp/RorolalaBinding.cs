@@ -2790,6 +2790,20 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_layout_write_entry(nint directory, nint layout, nint uuid, nint version, nint owner, nint description, [MarshalAs(UnmanagedType.U1)] bool update);
 
     /// <summary>
+    /// Changes the owner of one entry of a Layout a directory holds.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in; an
+    /// empty `owner` clears the owner.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_set_owner(nint directory, nint layout, nint uuid, nint owner);
+
+    /// <summary>
     /// Drops an entry of a Layout a directory holds.
     ///
     /// An empty string on success, or a `RolaWriteError *` the caller releases with

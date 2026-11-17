@@ -20,6 +20,30 @@ public sealed class LayoutWriter : Writer
     public LayoutWriter(LayoutScoop layout) =>
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
 
+    /// <summary>Changes the account that holds one entry.</summary>
+    /// <param name="id">The entry's id.</param>
+    /// <param name="owner">The account, or nothing to clear the owner.</param>
+    public void SetOwner(Guid id, string? owner)
+    {
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var uuid = Utf8(id.ToString());
+        var held = Utf8(owner ?? string.Empty);
+        try
+        {
+            Check(
+                RorolalaBinding.rola_write_layout_set_owner(directory, layout, uuid, held)
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(uuid);
+            Marshal.FreeCoTaskMem(held);
+        }
+    }
+
     /// <summary>Applies a batch of changes named as JSON.</summary>
     /// <param name="ops">The changes, as the native request shape.</param>
     public void Apply(string ops)
