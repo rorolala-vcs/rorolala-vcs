@@ -27,7 +27,7 @@ use crate::complete::{
 };
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutMissing, LayoutDid, ResultLayoutContent, chosen_writable,
-    failed, path_of, switch_entry,
+    failed_write, path_of,
 };
 
 #[help(buffer)]
@@ -142,8 +142,8 @@ pub fn handle_layout_path_new_uuid(
     };
 
     let id = Uuid::new_v4();
-    if let Err(error) = switch_entry(&layout, &path, id, data) {
-        return failed(&error);
+    if let Err(error) = librorolala::write::layout::switch_entry(&layout, &path, id, data) {
+        return failed_write(error);
     }
 
     ResultLayoutContent {

@@ -455,6 +455,90 @@ pub fn remove_entry_at(directory: &Path, layout: &str, uuid: &str) -> Result<(),
     remove_entry(&target, id)
 }
 
+/// Gives the entry at a path a new `Uuid`, keeping what it holds.
+///
+/// The old entry is dropped and an entry under `id` is made or changed in one batch, so a reader sees
+/// the path naming one of them and never neither.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NotFound`] when the path names nothing, and [`WriteError::Layout`] when the
+/// batch does not apply.
+pub fn switch_entry(
+    layout: &Layout,
+    path: &LayoutPath,
+    id: Uuid,
+    data: MutableData,
+) -> Result<(), WriteError> {
+    let Some(old) = layout.id_of(path) else {
+        return Err(WriteError::NotFound {
+            what: format!("Layout path `{}`", path.as_str()),
+        });
+    };
+    if old == id {
+        return Ok(());
+    }
+
+    let mut batch = layout.batch();
+    batch
+        .remove_entry(old)
+        .map_err(|error| WriteError::Layout {
+            reason: error.to_string(),
+        })?;
+
+    let written = if batch.entry(id).is_some() {
+        batch
+            .update_entry(id, data)
+            .and_then(|()| batch.create_path(path, id))
+    } else {
+        batch.create_file(id, data, path)
+    };
+    written.map_err(|error| WriteError::Layout {
+        reason: error.to_string(),
+    })?;
+
+    batch.commit().map_err(|error| WriteError::Layout {
+        reason: error.to_string(),
+    })
+}
+
+/// Gives the entry at a path of a Layout a directory holds a new `Uuid`.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`,
+/// [`WriteError::NoLayout`] when it has no Layout, [`WriteError::InvalidPath`] when a path, a `Uuid`
+/// or a version does not read, and [`WriteError::Layout`] when the batch does not apply.
+#[lazyffi(export = rola_write_layout_switch_entry)]
+pub fn switch_entry_at(
+    directory: &Path,
+    layout: &str,
+    path: &str,
+    uuid: &str,
+    version: &str,
+    owner: &str,
+    description: &str,
+) -> Result<(), WriteError> {
+    let target = open(directory, layout)?;
+    let path = path_of(path)?;
+    let id = Uuid::from_str(uuid).map_err(|error| WriteError::InvalidPath {
+        path: uuid.to_owned(),
+        reason: error.to_string(),
+    })?;
+    let data = mutable(
+        version,
+        (!owner.is_empty()).then(|| owner.to_owned()),
+        (!description.is_empty()).then(|| description.to_owned()),
+    )?;
+
+    switch_entry(&target, &path, id, data)
+}
+
 /// One change, as a request document names it.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
