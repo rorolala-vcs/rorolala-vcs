@@ -272,6 +272,9 @@ public sealed class WriteTests
             var changes = writer.Add(["one.txt"], "tree");
 
             Assert.Contains(changes, change => change.Path == "one.txt");
+
+            var reset = writer.Reset(["one.txt"], "tree");
+            Assert.Contains("one.txt", reset.Paths);
         }
         finally
         {

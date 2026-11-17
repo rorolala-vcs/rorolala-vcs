@@ -10,6 +10,11 @@ namespace RolaSharp.V2.Write;
 /// <param name="Kind">What happened: <c>added</c>, <c>updated</c> or <c>deleted</c>.</param>
 public sealed record TreeAddChange(string Path, string Kind);
 
+/// <summary>What a reset did.</summary>
+/// <param name="Whole">Whether the whole staging area was cleared.</param>
+/// <param name="Paths">The paths reset, or none for the whole area.</param>
+public sealed record TreeReset(bool Whole, IReadOnlyList<string> Paths);
+
 /// <summary>What a tree removal staged.</summary>
 /// <param name="Paths">The paths that left the staged structure.</param>
 /// <param name="Cached">Whether the work was left where it was.</param>
@@ -53,6 +58,44 @@ public sealed class TreeWriter : Writer
             Marshal.FreeCoTaskMem(directory);
             Marshal.FreeCoTaskMem(at);
             Marshal.FreeCoTaskMem(words);
+        }
+    }
+
+    /// <summary>Resets the staged paths, or the whole staging area when none are named.</summary>
+    /// <param name="paths">The paths to reset.</param>
+    /// <param name="target">The tree's path, or nothing for the Workspace root.</param>
+    /// <returns>What was reset.</returns>
+    public TreeReset Reset(IEnumerable<string> paths, string? target = null)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        var directory = Utf8(_workspace.Root.FullName);
+        var at = Utf8(target ?? string.Empty);
+        var list = Utf8(JsonSerializer.Serialize(paths));
+        try
+        {
+            var answer = RorolalaBinding.rola_write_tree_reset(directory, at, list);
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+            var reset =
+                RolaJson
+                    .Items(document.RootElement, "paths")
+                    ?.EnumerateArray()
+                    .Select(item => item.GetString() ?? string.Empty)
+                    .ToArray()
+                ?? [];
+
+            return new TreeReset(RolaJson.Flag(document.RootElement, "whole"), reset);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(list);
         }
     }
 
