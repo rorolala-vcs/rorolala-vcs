@@ -443,6 +443,30 @@ pub fn set_preference(
         })
 }
 
+/// Changes the version an entry names, leaving its owner, description and preference as they are.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NotFound`] when the entry is not there, and [`WriteError::Layout`] when the
+/// write does not apply.
+pub fn set_version(layout: &Layout, id: Uuid, version: [u8; 32]) -> Result<(), WriteError> {
+    let entry = layout.entry(id).ok_or_else(|| WriteError::NotFound {
+        what: format!("Layout entry {id}"),
+    })?;
+    let data = MutableData::new(
+        entry.owner().map(str::to_owned),
+        version,
+        entry.description().to_owned(),
+    )
+    .with_preference(entry.preference().map(str::to_owned));
+
+    layout
+        .update_entry(id, data)
+        .map_err(|error| WriteError::Layout {
+            reason: error.to_string(),
+        })
+}
+
 /// Drops an entry, and the path that named it.
 ///
 /// # Errors
@@ -586,6 +610,39 @@ pub fn set_preference_at(
         reason: error.to_string(),
     })?;
     set_preference(&target, id, (!preference.is_empty()).then_some(preference))?;
+
+    Ok(String::new())
+}
+
+/// Changes the version one entry of a Layout a directory holds names.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoLayout`] when the Layout is not there, [`WriteError::InvalidPath`] when
+/// the entry id does not read, [`WriteError::Precondition`] when the version key does not read, and
+/// the failures [`set_version`] names.
+#[lazyffi(export = rola_write_layout_set_version)]
+pub fn set_version_at(
+    directory: &Path,
+    layout: &str,
+    uuid: &str,
+    version: &str,
+) -> Result<String, WriteError> {
+    let target = open(directory, layout)?;
+    let id = Uuid::from_str(uuid).map_err(|error| WriteError::InvalidPath {
+        path: uuid.to_owned(),
+        reason: error.to_string(),
+    })?;
+    let key = Key::from_str(version).map_err(|error| WriteError::Precondition {
+        what: format!("version `{version}`"),
+        reason: error.to_string(),
+    })?;
+    set_version(&target, id, *key.digest())?;
 
     Ok(String::new())
 }
