@@ -1,0 +1,22 @@
+//! Writing a Workspace, a Vault, a store and an index: the operations the command line and the C
+//! ABI share.
+//!
+//! The modules own one object at a time. What this module owns is the order: what is read before
+//! what is written, which failure stops the run, and how a caller stops it. A command and a C
+//! caller enter the same function, so the order cannot drift between them.
+
+pub mod cancel;
+pub mod error;
+pub mod labels;
+pub mod layout;
+pub mod progress;
+pub mod storage;
+pub mod workspace;
+
+pub use cancel::*;
+pub use error::*;
+pub use labels::*;
+pub use layout::*;
+pub use progress::*;
+pub use storage::*;
+pub use workspace::*;

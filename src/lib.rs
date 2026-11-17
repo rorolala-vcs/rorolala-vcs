@@ -24,6 +24,7 @@ pub mod layout_read;
 mod ownership;
 pub mod status;
 pub mod storage_read;
+pub mod write;
 
 pub use address::*;
 pub use chunking_read::*;
@@ -34,6 +35,7 @@ pub use layout_read::*;
 pub use ownership::*;
 pub use status::*;
 pub use storage_read::*;
+pub use write::*;
 
 /// Authentication
 pub use rorolala_auth as auth;
