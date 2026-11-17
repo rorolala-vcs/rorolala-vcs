@@ -1,14 +1,18 @@
 //! Writing down that a path holds what the Layout now names.
 
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use rorolala_layout::{Layout, LayoutPath};
+use rorolala_storage::Key;
 use rorolala_utils_lazyffi::lazyffi;
-use rorolala_utils_location::Locate as _;
+use rorolala_utils_location::{Locate as _, normalize};
+use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
 use rorolala_workspace_analyze::{Cache, cache_path, entry_of};
+use serde::Serialize;
 
-use crate::write::WriteError;
+use crate::write::{WriteError, layout::set_version, storage::extract_file, tree::relative_to};
 
 /// A run's readings of the tree, written down once when the run is done.
 pub struct Checkout {
@@ -95,6 +99,108 @@ pub fn remember(layout: &Layout, root: &Path, path: &str) -> Result<(), WriteErr
     let mut checkout = Checkout::open(layout, root);
     checkout.remember(path)?;
     checkout.finish()
+}
+
+/// What restoring one path wrote.
+#[derive(Debug, Clone, Serialize)]
+pub struct Restored {
+    /// The Layout entry the path names.
+    pub id: uuid::Uuid,
+    /// The version the Layout now records.
+    pub version: Key,
+}
+
+/// Puts the content of `version` at `path`, and writes down that the two agree.
+///
+/// `path` is relative to `cwd` or absolute, and must be inside the Workspace and name an entry.
+///
+/// # Errors
+///
+/// Returns [`WriteError::InvalidPath`] when the path is outside the Workspace or names no entry,
+/// [`WriteError::Precondition`] when the version does not read, [`WriteError::Index`] when the index
+/// cannot be read, and [`WriteError::Storage`] when the content cannot be extracted.
+pub fn restore(
+    workspace: &Workspace,
+    cwd: &Path,
+    path: &str,
+    version: &str,
+) -> Result<Restored, WriteError> {
+    let layout = workspace.layout().map_err(|error| WriteError::Layout {
+        reason: error.to_string(),
+    })?;
+    let store = workspace
+        .get_current_rola_storage()
+        .ok_or(WriteError::NoStore)?;
+    let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
+    let root = normalize(workspace.get_root());
+    let resolved = if Path::new(path).is_absolute() {
+        Path::new(path).to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+    let resolved = normalize(&resolved);
+    let relative = relative_to(&root, &resolved).ok_or_else(|| WriteError::InvalidPath {
+        path: path.to_owned(),
+        reason: "the path is outside the Workspace".to_owned(),
+    })?;
+    let layout_path = LayoutPath::new(&relative).map_err(|error| WriteError::InvalidPath {
+        path: path.to_owned(),
+        reason: error.to_string(),
+    })?;
+    let id = layout
+        .id_of(&layout_path)
+        .ok_or_else(|| WriteError::InvalidPath {
+            path: path.to_owned(),
+            reason: "the Layout names no such path".to_owned(),
+        })?;
+    let target = Key::from_str(version).map_err(|error| WriteError::Precondition {
+        what: format!("version `{version}`"),
+        reason: error.to_string(),
+    })?;
+    let named = index
+        .read_version(&target.to_string())
+        .map_err(|error| WriteError::Index {
+            reason: format!("{error:?}"),
+        })?;
+    let variant = index
+        .read_variant(&Key::new(*named.variant()).to_string())
+        .map_err(|error| WriteError::Index {
+            reason: format!("{error:?}"),
+        })?;
+    let content = Key::new(*variant.storage_hash());
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
+        reason: error.to_string(),
+    })?;
+    runtime.block_on(extract_file(&store, &content, &resolved))?;
+    set_version(&layout, id, *target.digest())?;
+    remember(&layout, &root, &relative)?;
+
+    Ok(Restored {
+        id,
+        version: target,
+    })
+}
+
+/// Puts a version's content back at a path under a Workspace.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`,
+/// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, and the failures
+/// [`restore`] names.
+#[lazyffi(export = rola_write_checkout_restore)]
+pub fn restore_at(directory: &Path, path: &str, version: &str) -> Result<String, WriteError> {
+    let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
+    let restored = restore(&workspace, directory, path, version)?;
+
+    serde_json::to_string(&restored).map_err(|error| WriteError::Json {
+        reason: error.to_string(),
+    })
 }
 
 /// Writes down that a path under a Workspace holds what its Layout now names.
