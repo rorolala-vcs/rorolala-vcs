@@ -183,6 +183,297 @@ internal struct RolaStorageError
     public RolaStorageErrorPayload payload;
 }
 
+internal enum RolaWriteErrorTag : int
+{
+    /// <summary>
+    /// No Workspace holds the directory.
+    /// </summary>
+    RolaWriteError_NoWorkspace = 0,
+    /// <summary>
+    /// The Workspace is working in no Layout.
+    /// </summary>
+    RolaWriteError_NoLayout = 1,
+    /// <summary>
+    /// No Workspace or Vault holds a store.
+    /// </summary>
+    RolaWriteError_NoStore = 2,
+    /// <summary>
+    /// No Workspace, Vault or directory holds an index.
+    /// </summary>
+    RolaWriteError_NoIndex = 3,
+    /// <summary>
+    /// No account is bound, or the account named is not here.
+    /// </summary>
+    RolaWriteError_NoAccount = 4,
+    /// <summary>
+    /// The Layout tracks no Vault.
+    /// </summary>
+    RolaWriteError_NoTrack = 5,
+    /// <summary>
+    /// The copy of a Vault's Layout a name asked for was never fetched here.
+    /// </summary>
+    RolaWriteError_NotCached = 6,
+    /// <summary>
+    /// The action needs the Vault and the run was told to stay offline.
+    /// </summary>
+    RolaWriteError_Offline = 7,
+    /// <summary>
+    /// Another run holds the lock the write needs.
+    /// </summary>
+    RolaWriteError_Locked = 8,
+    /// <summary>
+    /// A path is not one the write accepts.
+    /// </summary>
+    RolaWriteError_InvalidPath = 9,
+    /// <summary>
+    /// The thing the write names is not there.
+    /// </summary>
+    RolaWriteError_NotFound = 10,
+    /// <summary>
+    /// The write would break a rule it cannot break.
+    /// </summary>
+    RolaWriteError_Precondition = 11,
+    /// <summary>
+    /// Ownership refuses the write.
+    /// </summary>
+    RolaWriteError_Ownership = 12,
+    /// <summary>
+    /// The caller asked the write to stop.
+    /// </summary>
+    RolaWriteError_Cancelled = 13,
+    /// <summary>
+    /// An exchange with the Vault failed.
+    /// </summary>
+    RolaWriteError_Action = 14,
+    /// <summary>
+    /// A Layout could not be read or written.
+    /// </summary>
+    RolaWriteError_Layout = 15,
+    /// <summary>
+    /// A store could not be read or written.
+    /// </summary>
+    RolaWriteError_Storage = 16,
+    /// <summary>
+    /// An index could not be read or written.
+    /// </summary>
+    RolaWriteError_Index = 17,
+    /// <summary>
+    /// A file or a directory failed.
+    /// </summary>
+    RolaWriteError_Io = 18,
+    /// <summary>
+    /// A JSON document did not read as the shape a request or a plan has.
+    /// </summary>
+    RolaWriteError_Json = 19,
+    /// <summary>
+    /// The write stopped for a reason this build does not name.
+    /// </summary>
+    RolaWriteError_Internal = 20,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorLocked
+{
+    /// <summary>
+    /// The path whose lock is held.
+    /// </summary>
+    public nint path;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorInvalidPath
+{
+    /// <summary>
+    /// The path that was refused.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// Why it was refused.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorNotFound
+{
+    /// <summary>
+    /// What is not there.
+    /// </summary>
+    public nint what;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorPrecondition
+{
+    /// <summary>
+    /// What the precondition is about.
+    /// </summary>
+    public nint what;
+    /// <summary>
+    /// Why it does not hold.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorOwnership
+{
+    /// <summary>
+    /// The path ownership is about.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// What ownership says, as a short word.
+    /// </summary>
+    public nint what;
+    /// <summary>
+    /// Why, when there is a longer reason.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorAction
+{
+    /// <summary>
+    /// Why the exchange failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorLayout
+{
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorStorage
+{
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorIndex
+{
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorIo
+{
+    /// <summary>
+    /// The path that failed.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorJson
+{
+    /// <summary>
+    /// Why it did not.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorInternal
+{
+    /// <summary>
+    /// Why it stopped.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaWriteErrorPayload
+{
+    /// <summary>
+    /// Another run holds the lock the write needs.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorLocked Locked;
+    /// <summary>
+    /// A path is not one the write accepts.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorInvalidPath InvalidPath;
+    /// <summary>
+    /// The thing the write names is not there.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorNotFound NotFound;
+    /// <summary>
+    /// The write would break a rule it cannot break.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorPrecondition Precondition;
+    /// <summary>
+    /// Ownership refuses the write.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorOwnership Ownership;
+    /// <summary>
+    /// An exchange with the Vault failed.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorAction Action;
+    /// <summary>
+    /// A Layout could not be read or written.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorLayout Layout;
+    /// <summary>
+    /// A store could not be read or written.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorStorage Storage;
+    /// <summary>
+    /// An index could not be read or written.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorIndex Index;
+    /// <summary>
+    /// A file or a directory failed.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorIo Io;
+    /// <summary>
+    /// A JSON document did not read as the shape a request or a plan has.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorJson Json;
+    /// <summary>
+    /// The write stopped for a reason this build does not name.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorInternal Internal;
+}
+
+/// <summary>
+/// Why a write did not finish.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteError
+{
+    public RolaWriteErrorTag tag;
+    public RolaWriteErrorPayload payload;
+}
+
 internal enum RolaAuthErrorTag : int
 {
     /// <summary>
@@ -1784,6 +2075,15 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_storage_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_cancellation(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_progress(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_account(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -2232,6 +2532,94 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_tree_structure_json(nint directory, nint hash);
+
+    /// <summary>
+    /// Makes a cancellation a C caller can set.
+    ///
+    /// A `RolaCancellation *` the caller releases with `free_rola_cancellation`, or null when one cannot
+    /// be made.
+    ///
+    /// Returns an owned `RolaCancellation *`, or `NULL` when there is nothing; release it with `free_rola_cancellation`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_cancellation_new();
+
+    /// <summary>
+    /// Asks a write to stop.
+    ///
+    /// Nothing is returned. The write checks the flag at its next step.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void rola_cancellation_cancel(nint cancellation);
+
+    /// <summary>
+    /// Whether a write has been asked to stop.
+    ///
+    /// The flag as a `bool`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_cancellation_is_cancelled(nint cancellation);
+
+    /// <summary>
+    /// Applies a batch of changes named as JSON to the Layout a directory is in.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_apply(nint directory, nint layout, nint ops);
+
+    /// <summary>
+    /// Makes a progress handle for a C caller.
+    ///
+    /// A `RolaProgress *` the caller releases with `free_rola_progress`, or null when one cannot be
+    /// made.
+    ///
+    /// Returns an owned `RolaProgress *`, or `NULL` when there is nothing; release it with `free_rola_progress`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_progress_new();
+
+    /// <summary>
+    /// The next event a write has said, as JSON.
+    ///
+    /// An owned string the caller releases with `free_string`, or the JSON `null` when nothing is
+    /// waiting. The shape is `rorolala_utils_progress::Signal`'s serde output.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_progress_next_json(nint progress);
+
+    /// <summary>
+    /// Puts a file's content into the store a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"key":"blake3:...","chunked":false}`,
+    /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is the empty
+    /// string when the store is to choose the cut.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_storage_put_file(nint directory, nint file, nint policy);
+
+    /// <summary>
+    /// Rebuilds the tree cache of the Workspace holding a directory.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"paths":N,"bytes":N}`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_workspace_rebuild_cache(nint directory);
 
     /// <summary>
     /// Opens the book at `path`.
