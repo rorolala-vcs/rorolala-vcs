@@ -299,6 +299,11 @@ public sealed class WriteTests
 
             var reset = writer.Reset(["one.txt"], "tree");
             Assert.Contains("one.txt", reset.Paths);
+
+            writer.Add(["one.txt"], "tree");
+            var removed = writer.Remove(["one.txt"], "tree");
+            Assert.Contains("one.txt", removed.Paths);
+            Assert.False(File.Exists(Path.Combine(directory, "tree", "one.txt")));
         }
         finally
         {
