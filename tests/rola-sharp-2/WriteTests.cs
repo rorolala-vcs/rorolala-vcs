@@ -245,6 +245,29 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_workspace_paths_come_from_the_library()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+
+            var layout = RolaPaths.WorkspaceLayout(directory);
+            Assert.True(Directory.Exists(layout));
+            Assert.StartsWith(
+                layout,
+                RolaPaths.LayoutTrackFile(directory),
+                StringComparison.Ordinal
+            );
+            Assert.True(Directory.Exists(RolaPaths.WorkspaceIndex(directory)));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_workspace_exposes_its_ignore_rules()
     {
         var directory = Scratch();
