@@ -2,6 +2,12 @@
 
 This document records all Changelog entries for Rorolala VCS starting from 0.1.0, managed by the `cargo changelog` command built into this project.
 
+# 0.4.0 (Unreleased)
+
+## Feature
+
+1. [`modules`] [`rola-sharp-2`] Add the second-generation C# bindings. [See details](dev/CHANGELOG-DETAILS.md#1-modules-rola-sharp-2-add-the-second-generation-c-bindings)
+
 # 0.3.0 (2026-11-17)
 
 ## Bugfix

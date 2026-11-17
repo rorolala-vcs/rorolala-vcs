@@ -2,6 +2,14 @@
 
 This document records all Changelog entries for Rorolala VCS starting from 0.1.0, managed by the `cargo changelog` command built into this project.
 
+# 0.4.0 (Unreleased)
+
+## Feature
+
+### 1. [`modules`] [`rola-sharp-2`] Add the second-generation C# bindings
+
+`RolaSharp.V2` is the second generation of the C# bindings: a generated `RorolalaBinding`, the `Scoop` family over users, daemons, Workspaces, Vaults, Layouts, stores, VCS indexes, statuses, trees, ownership, inverse indexes, version graphs, books and ignore rules, and the writers over storage, Layouts, the tree cache and VCS indexes. The read side no longer writes the tree cache; the write side calls the same `librorolala` workflows as the command line.
+
 # 0.3.0 (2026-11-17)
 
 ## Bugfix
