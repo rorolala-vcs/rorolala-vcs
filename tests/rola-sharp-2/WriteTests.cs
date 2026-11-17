@@ -453,6 +453,13 @@ public sealed class WriteTests
             new LayoutWriter(workspace.Layout).SetPreference(tracked.Id, "psd-basic");
             layout.Read();
             Assert.Equal("psd-basic", layout.Find("a.psd")?.Preference);
+
+            new LayoutWriter(workspace.Layout).SetVersion(tracked.Id, tracked.Version);
+            layout.Read();
+            Assert.Equal(
+                tracked.Version.Replace("blake3:", string.Empty),
+                layout.Find("a.psd")?.Version
+            );
         }
         finally
         {
