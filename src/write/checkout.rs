@@ -3,6 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use rorolala_layout::{Layout, LayoutPath};
+use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_location::Locate as _;
+use rorolala_workspace::Workspace;
 use rorolala_workspace_analyze::{Cache, cache_path, entry_of};
 
 use crate::write::WriteError;
@@ -92,6 +95,28 @@ pub fn remember(layout: &Layout, root: &Path, path: &str) -> Result<(), WriteErr
     let mut checkout = Checkout::open(layout, root);
     checkout.remember(path)?;
     checkout.finish()
+}
+
+/// Writes down that a path under a Workspace holds what its Layout now names.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, [`WriteError::Layout`]
+/// when its Layout cannot be read, and the failures [`remember`] names.
+#[lazyffi(export = rola_write_checkout_remember)]
+pub fn remember_at(directory: &Path, path: &str) -> Result<String, WriteError> {
+    let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
+    let layout = workspace.layout().map_err(|error| WriteError::Layout {
+        reason: error.to_string(),
+    })?;
+    remember(&layout, workspace.get_root(), path)?;
+
+    Ok(String::new())
 }
 
 #[cfg(test)]
