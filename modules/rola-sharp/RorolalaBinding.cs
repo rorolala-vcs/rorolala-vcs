@@ -352,6 +352,10 @@ internal enum RolaWriteErrorTag : int
     /// A tree could not be read or written.
     /// </summary>
     RolaWriteError_Tree = 21,
+    /// <summary>
+    /// No tree holds the path.
+    /// </summary>
+    RolaWriteError_NotAtree = 22,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -491,6 +495,15 @@ internal struct RolaWriteErrorTree
     public nint reason;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorNotAtree
+{
+    /// <summary>
+    /// The path that is not inside a tree.
+    /// </summary>
+    public nint path;
+}
+
 [StructLayout(LayoutKind.Explicit)]
 internal struct RolaWriteErrorPayload
 {
@@ -559,6 +572,11 @@ internal struct RolaWriteErrorPayload
     /// </summary>
     [FieldOffset(0)]
     public RolaWriteErrorTree Tree;
+    /// <summary>
+    /// No tree holds the path.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorNotAtree NotATree;
 }
 
 /// <summary>
@@ -2830,6 +2848,21 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_write_tree_description(nint directory, nint target, nint text);
+
+    /// <summary>
+    /// Stages work into the tree a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"changes":[{"path":"a","kind":"added"}]}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `paths` is a JSON array of strings, and `target` is the tree's path,
+    /// empty for the directory itself.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tree_add(nint directory, nint target, nint paths, [MarshalAs(UnmanagedType.U1)] bool include_ignored);
 
     /// <summary>
     /// Stages the removal of paths from the tree a directory is in.
