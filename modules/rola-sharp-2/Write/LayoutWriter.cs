@@ -115,6 +115,72 @@ public sealed class LayoutWriter : Writer
         }
     }
 
+    /// <summary>Makes or changes what an entry holds.</summary>
+    /// <param name="uuid">The entry's Uuid.</param>
+    /// <param name="version">The version it holds, as a key.</param>
+    /// <param name="owner">The account that holds it, or nothing.</param>
+    /// <param name="description">What it says about itself, or nothing.</param>
+    /// <param name="update">Whether the entry must already be there.</param>
+    public void SetEntry(
+        Guid uuid,
+        string version,
+        string? owner = null,
+        string? description = null,
+        bool update = false
+    )
+    {
+        ArgumentNullException.ThrowIfNull(version);
+
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var id = Utf8(uuid.ToString());
+        var at = Utf8(version);
+        var holder = Utf8(owner ?? string.Empty);
+        var words = Utf8(description ?? string.Empty);
+        try
+        {
+            Check(
+                RorolalaBinding.rola_write_layout_write_entry(
+                    directory,
+                    layout,
+                    id,
+                    at,
+                    holder,
+                    words,
+                    update
+                )
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(id);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(holder);
+            Marshal.FreeCoTaskMem(words);
+        }
+    }
+
+    /// <summary>Drops an entry, and the path that named it.</summary>
+    /// <param name="uuid">The entry's Uuid.</param>
+    public void RemoveEntry(Guid uuid)
+    {
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var id = Utf8(uuid.ToString());
+        try
+        {
+            Check(RorolalaBinding.rola_write_layout_remove_entry(directory, layout, id));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(id);
+        }
+    }
+
     /// <summary>Makes an entry, and binds a path to it.</summary>
     /// <param name="uuid">The Uuid the entry is known by.</param>
     /// <param name="path">The path to bind.</param>

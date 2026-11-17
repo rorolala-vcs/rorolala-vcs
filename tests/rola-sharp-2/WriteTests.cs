@@ -142,6 +142,14 @@ public sealed class WriteTests
             writer.RemovePath("b.psd");
             layout.Read();
             Assert.Null(layout.Find("b.psd"));
+
+            writer.SetEntry(id, version, null, "changed", update: true);
+            layout.Read();
+            Assert.Equal("changed", layout.Entries.Single(entry => entry.Uuid == id.ToString()).Description);
+
+            writer.RemoveEntry(id);
+            layout.Read();
+            Assert.DoesNotContain(layout.Entries, entry => entry.Uuid == id.ToString());
         }
         finally
         {
