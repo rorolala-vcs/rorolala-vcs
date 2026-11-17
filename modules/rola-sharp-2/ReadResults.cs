@@ -103,4 +103,26 @@ internal static class ReadResults
 
         return new RolaReadError(kind, null, reason);
     }
+
+    /// <summary>The failure a book read carried.</summary>
+    /// <param name="payload">The native error, which this takes ownership of.</param>
+    /// <returns>The failure.</returns>
+    public static RolaReadError Book(nint payload)
+    {
+        var error = Marshal.PtrToStructure<RolaBookError>(payload);
+        var reason = error.tag switch
+        {
+            RolaBookErrorTag.RolaBookError_Malformed => NativeText.Taken(
+                error.payload.Malformed.detail
+            ),
+            RolaBookErrorTag.RolaBookError_Duplicate => NativeText.Taken(
+                error.payload.Duplicate.name
+            ),
+            _ => string.Empty,
+        };
+
+        RorolalaBinding.free_rola_book_error(payload);
+
+        return new RolaReadError(RolaReadErrorKind.Unreadable, null, reason);
+    }
 }

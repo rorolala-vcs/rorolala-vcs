@@ -158,6 +158,28 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_rule_ignores_a_path()
+    {
+        var directory = Scratch();
+        try
+        {
+            var rules = Path.Combine(directory, "rules");
+            Directory.CreateDirectory(rules);
+            File.WriteAllText(Path.Combine(rules, "ignore"), "*.tmp\n");
+
+            var ignore = new IgnoreScoop(rules, directory);
+            ignore.Read();
+
+            Assert.True(ignore.IsIgnored("a.tmp"));
+            Assert.False(ignore.IsIgnored("a.psd"));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_shared_paths_are_the_librarys_own()
     {
         var root = Path.Combine(Path.GetTempPath(), "rola-sharp-paths");
