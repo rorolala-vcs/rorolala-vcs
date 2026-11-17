@@ -42,7 +42,7 @@ public sealed class VaultScoop : Scoop, IDisposable
     public TruthLayoutScoop TruthLayout => new(_root);
 
     /// <summary>The store the Vault keeps.</summary>
-    public StorageScoop Storage => new(_root);
+    public StorageScoop Storage => new(Path.Combine(_root, "storage"));
 
     /// <inheritdoc/>
     protected override void IsValid()

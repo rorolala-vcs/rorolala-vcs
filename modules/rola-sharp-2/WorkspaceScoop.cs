@@ -21,6 +21,20 @@ public sealed class WorkspaceScoop : Scoop, IDisposable
     /// <summary>The Workspace's root.</summary>
     public DirectoryInfo Root => new(_root);
 
+    /// <summary>The native Workspace, for the writes that hold it.</summary>
+    internal nint Handle
+    {
+        get
+        {
+            if (_handle == 0)
+            {
+                throw new InvalidOperationException("call Read first");
+            }
+
+            return _handle;
+        }
+    }
+
     /// <summary>Whether the Workspace is locked.</summary>
     public bool Locked
     {
@@ -47,7 +61,7 @@ public sealed class WorkspaceScoop : Scoop, IDisposable
     public TruthLayoutScoop TruthLayout(string vault) => new(_root, vault);
 
     /// <summary>The store the Workspace keeps.</summary>
-    public StorageScoop Storage => new(_root);
+    public StorageScoop Storage => new(Path.Combine(_root, ".rola", "storage"));
 
     /// <inheritdoc/>
     protected override void IsValid()

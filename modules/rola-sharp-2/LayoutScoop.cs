@@ -21,6 +21,12 @@ public class LayoutScoop : Scoop
         _name = name;
     }
 
+    /// <summary>The directory the Layout's place is rooted in.</summary>
+    public DirectoryInfo Root => new(_root);
+
+    /// <summary>The name the Layout is read by, or nothing for the one being worked in.</summary>
+    public string? Name => _name;
+
     /// <summary>What the Layout holds, in path order and then Uuid order.</summary>
     public IReadOnlyList<LayoutEntry> Entries
     {

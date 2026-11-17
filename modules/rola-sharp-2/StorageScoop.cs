@@ -14,6 +14,9 @@ public sealed class StorageScoop : Scoop
     /// <param name="root">The directory the store is rooted in.</param>
     public StorageScoop(string root) => _root = Path.GetFullPath(root);
 
+    /// <summary>The directory the store is rooted in.</summary>
+    public DirectoryInfo Root => new(_root);
+
     /// <summary>Every object key the store holds.</summary>
     public IReadOnlyList<string> Keys
     {
