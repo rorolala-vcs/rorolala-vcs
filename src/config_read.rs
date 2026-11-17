@@ -11,6 +11,7 @@
 
 use std::path::Path;
 
+use rorolala_daemon::{Namespaces, registry_path};
 use rorolala_utils_configure::Configure as _;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
@@ -135,6 +136,53 @@ pub fn vault_config_json(directory: &Path) -> String {
     };
 
     serde_json::to_string(&answer).unwrap_or_else(|_| "null".to_owned())
+}
+
+/// The Vaults the machine's daemon serves, by namespace.
+///
+/// The table is the daemon's own registry, under the user's data home. A machine that has
+/// registered nothing has an empty table, which is an empty list rather than a failure; a table
+/// that is there and cannot be read is `null`, since the reader cannot tell what is served.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`,
+/// `{"vaults":[{"name":"default","path":"/vaults/default"}]}`, or `null` when the table cannot be
+/// read.
+#[must_use]
+#[lazyffi(export = rola_daemon_vaults_json)]
+pub fn daemon_vaults_json() -> String {
+    let Some(path) = registry_path() else {
+        return "{\"vaults\":[]}".to_owned();
+    };
+    let Ok(namespaces) = Namespaces::read_from(&path) else {
+        return "null".to_owned();
+    };
+    let vaults: Vec<DaemonVaultItem> = namespaces
+        .iter()
+        .map(|(name, path)| DaemonVaultItem {
+            name: name.to_owned(),
+            path: path.display().to_string(),
+        })
+        .collect();
+
+    serde_json::to_string(&DaemonVaultsAnswer { vaults }).unwrap_or_else(|_| "null".to_owned())
+}
+
+/// One Vault the daemon serves.
+#[derive(Debug, Serialize)]
+struct DaemonVaultItem {
+    /// The namespace it answers under.
+    name: String,
+    /// The directory the Vault sits at.
+    path: String,
+}
+
+/// The daemon's registered Vaults.
+#[derive(Debug, Serialize)]
+struct DaemonVaultsAnswer {
+    /// The Vaults, in namespace order.
+    vaults: Vec<DaemonVaultItem>,
 }
 
 #[cfg(test)]

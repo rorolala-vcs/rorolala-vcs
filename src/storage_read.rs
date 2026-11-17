@@ -12,7 +12,11 @@ use std::fmt;
 use std::path::Path;
 use std::str::FromStr as _;
 
-use rorolala_storage::{Error as StorageError, Key, RorolalaStorage, StorageBackend as _};
+use rorolala_storage::internals::Internals as _;
+use rorolala_storage::{
+    Error as StorageError, Key, RorolalaStorage, StorageBackend as _, TransferableBackend as _,
+};
+use rorolala_tree::TreeStructure;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use serde::Serialize;
@@ -153,6 +157,112 @@ pub fn extract(directory: &Path, hash: &str, destination: &Path) -> Result<(), S
         .map_err(storage_error)
 }
 
+/// The chunks a manifest names, when the content under `hash` was stored chunked.
+///
+/// A manifest is what a chunked object is put back together from; a caller that has the key but
+/// not the chunks cannot produce the content. The answer is `null` when the content is kept whole,
+/// which is a fact about how it was stored rather than a failure.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`,
+/// `{"chunks":[{"key":"blake3:...","len":N}]}`, or `null` when the content is not chunked. A failure
+/// is a `RolaStorageError *` the caller releases with `free_rola_storage_error`.
+///
+/// # Errors
+///
+/// Returns [`StorageReadError::NoStore`] when no Workspace or Vault holds `directory`,
+/// [`StorageReadError::Malformed`] when `hash` is not a key this build reads,
+/// [`StorageReadError::NotFound`] when the store does not hold the key, or
+/// [`StorageReadError::Read`] when the manifest cannot be read.
+#[lazyffi(export = rola_storage_manifest_json)]
+pub fn manifest_json(directory: &Path, hash: &str) -> Result<String, StorageReadError> {
+    let store = RorolalaStorage::locate(directory).ok_or(StorageReadError::NoStore)?;
+    let key = Key::from_str(hash).map_err(|_| StorageReadError::Malformed)?;
+    let runtime = runtime()?;
+
+    let manifest = runtime
+        .block_on(store.read_manifest(&key))
+        .map_err(storage_error)?;
+
+    let Some(manifest) = manifest else {
+        return Ok("null".to_owned());
+    };
+
+    let answer = ManifestAnswer {
+        chunks: manifest
+            .chunks()
+            .iter()
+            .map(|chunk| ChunkItem {
+                key: chunk.key(),
+                len: chunk.len(),
+            })
+            .collect(),
+    };
+
+    serde_json::to_string(&answer).map_err(|error| StorageReadError::Read {
+        reason: error.to_string(),
+    })
+}
+
+/// The structure stored under `hash`, as the entries a tree version names.
+///
+/// A tree entry's storage key is the structure itself, written whole; a caller that has the key but
+/// not the format has no way to reach the files inside it. The bytes are decoded here and cross as
+/// data, the same shape [`rola_tree_entries_json`](crate::tree_entries_json) writes from hex.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`, or `null` when the content does not
+/// decode as a tree structure. A failure is a `RolaStorageError *` the caller releases with
+/// `free_rola_storage_error`.
+///
+/// # Errors
+///
+/// Returns [`StorageReadError::NoStore`] when no Workspace or Vault holds `directory`,
+/// [`StorageReadError::Malformed`] when `hash` is not a key this build reads,
+/// [`StorageReadError::NotFound`] when the store does not hold the key, and
+/// [`StorageReadError::Read`] when the content cannot be read.
+#[lazyffi(export = rola_tree_structure_json)]
+pub fn tree_structure_json(directory: &Path, hash: &str) -> Result<String, StorageReadError> {
+    let store = RorolalaStorage::locate(directory).ok_or(StorageReadError::NoStore)?;
+    let key = Key::from_str(hash).map_err(|_| StorageReadError::Malformed)?;
+    let runtime = runtime()?;
+
+    let Some(bytes) = runtime
+        .block_on(store.content(&key))
+        .map_err(storage_error)?
+    else {
+        return Err(StorageReadError::NotFound {
+            key: key.to_string(),
+        });
+    };
+
+    let Ok(structure) = TreeStructure::decode(&bytes) else {
+        return Ok("null".to_owned());
+    };
+
+    serde_json::to_string(&structure).map_err(|error| StorageReadError::Read {
+        reason: error.to_string(),
+    })
+}
+
+/// One chunk of a manifest.
+#[derive(Debug, Serialize)]
+struct ChunkItem {
+    /// The key the chunk is stored under.
+    key: Key,
+    /// How many bytes the chunk holds.
+    len: u64,
+}
+
+/// The chunks of a chunked object.
+#[derive(Debug, Serialize)]
+struct ManifestAnswer {
+    /// The chunks, in the order the content is put back together.
+    chunks: Vec<ChunkItem>,
+}
+
 /// A runtime of this call's own, so a synchronous export can drive an asynchronous store.
 fn runtime() -> Result<tokio::runtime::Runtime, StorageReadError> {
     tokio::runtime::Runtime::new().map_err(|error| StorageReadError::Read {
@@ -178,10 +288,14 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use rorolala_storage::Codec;
     use rorolala_storage::RorolalaStorage;
+    use rorolala_tree::{FileMode, TreeEntry, TreeStructure};
     use rorolala_utils_location::Locate as _;
 
-    use super::{StorageReadError, extract, manifests_json, objects_json};
+    use super::{
+        StorageReadError, extract, manifest_json, manifests_json, objects_json, tree_structure_json,
+    };
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -312,6 +426,41 @@ mod tests {
             extract(&dir, &missing, &target),
             Err(StorageReadError::NotFound { .. })
         ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn whole_content_has_no_manifest() {
+        let dir = scratch("whole");
+        let _ = RorolalaStorage::create(&dir);
+        let key = kept(&dir, b"stored whole");
+
+        assert_eq!(manifest_json(&dir, &key).unwrap(), "null");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_tree_structure_reads_back_as_entries() {
+        let dir = scratch("structure");
+        let store = RorolalaStorage::create(&dir);
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let content = runtime
+            .block_on(store.write_object(b"inside", Codec::Raw))
+            .unwrap();
+        let structure =
+            TreeStructure::build(None, [TreeEntry::file("a", FileMode::Regular, content)]).unwrap();
+        let key = runtime
+            .block_on(store.write_object(&structure.encode(), Codec::Raw))
+            .unwrap();
+
+        let answer: serde_json::Value =
+            serde_json::from_str(&tree_structure_json(&dir, &key.to_string()).unwrap()).unwrap();
+        let entries = answer["entries"].as_array().unwrap();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["path"], "a");
 
         let _ = fs::remove_dir_all(&dir);
     }

@@ -5,7 +5,7 @@
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use rorolala_utils_constants::WORKSPACE_KEYS_DIR;
 use rorolala_utils_lazyffi::lazyffi;
@@ -162,7 +162,29 @@ pub fn account_locate(vault: &Vault, rule: &KeyLocateRule) -> Accounts {
     auth::locate_accounts(&roots_beside(vault), rule)
 }
 
-/// The account named `account_name`, if a local root holds its private key.
+/// Every account whose private key is directly inside `keys`.
+///
+/// It is the user-scoped counterpart of [`account_locate`]: the caller names the directory that
+/// holds the accounts, usually the user's own `rola/keys`, rather than a Workspace or a Vault. The
+/// rule still says which scopes to search, but an account is only ever a private key, so only the
+/// local root named here can answer.
+#[must_use]
+#[lazyffi(export = rola_user_accounts)]
+pub fn user_accounts(keys: &Path, rule: &KeyLocateRule) -> Accounts {
+    auth::locate_accounts(&[keys.to_path_buf()], rule)
+}
+
+/// Every member whose public key is directly inside `keys`.
+///
+/// It is the user-scoped counterpart of [`member_locate`]. The rule's other scopes are still
+/// searched, since a public key is meant to be shared; `keys` is the local root the caller names.
+#[must_use]
+#[lazyffi(export = rola_user_members)]
+pub fn user_members(keys: &Path, rule: &KeyLocateRule) -> Members {
+    auth::locate_members(&[keys.to_path_buf()], rule)
+}
+
+/// The account named `account_name`, if any scope the rule turns on holds its private key.
 ///
 /// The lazy counterpart of [`account_locate`], which also only looks in the local roots.
 /// The Vault and the Workspace are both looked for from the current directory.
