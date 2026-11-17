@@ -2694,6 +2694,20 @@ internal static partial class RorolalaBinding
     internal static extern bool rola_cancellation_is_cancelled(nint cancellation);
 
     /// <summary>
+    /// Records a file's content as a variant and a version in the index a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"variant":"blake3:...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases
+    /// with `free_rola_write_error`. `join` is the empty string when the variant merges nothing.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_index_file_version(nint directory, nint storage, nint @base, nint join, nint creator, nint message);
+
+    /// <summary>
     /// Writes one object into the index a directory is in.
     ///
     /// An owned string the caller releases with `free_string`, the key the object was written under,

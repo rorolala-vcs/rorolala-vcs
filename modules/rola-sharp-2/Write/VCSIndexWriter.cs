@@ -67,6 +67,67 @@ public sealed class VCSIndexWriter : Writer
         return WriteJson(JsonSerializer.Serialize(new { kind = "message", text }));
     }
 
+    /// <summary>Records a file's content as a variant and a version.</summary>
+    /// <param name="storage">The content's key.</param>
+    /// <param name="baseVersion">The variant the file was on.</param>
+    /// <param name="join">The variant a merge brings in, or nothing.</param>
+    /// <param name="creator">The creator's name.</param>
+    /// <param name="message">What the version says was done.</param>
+    /// <returns>The variant and the version.</returns>
+    public FileVersion WriteFileVersion(
+        string storage,
+        string baseVersion,
+        string? join,
+        string creator,
+        string message
+    )
+    {
+        ArgumentNullException.ThrowIfNull(storage);
+        ArgumentNullException.ThrowIfNull(baseVersion);
+        ArgumentNullException.ThrowIfNull(creator);
+        ArgumentNullException.ThrowIfNull(message);
+
+        var directory = Utf8(_index.Root.FullName);
+        var content = Utf8(storage);
+        var baseAt = Utf8(baseVersion);
+        var joined = Utf8(join ?? string.Empty);
+        var author = Utf8(creator);
+        var words = Utf8(message);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_index_file_version(
+                directory,
+                content,
+                baseAt,
+                joined,
+                author,
+                words
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new FileVersion(
+                RolaJson.Text(document.RootElement, "variant") ?? string.Empty,
+                RolaJson.Text(document.RootElement, "version") ?? string.Empty
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(content);
+            Marshal.FreeCoTaskMem(baseAt);
+            Marshal.FreeCoTaskMem(joined);
+            Marshal.FreeCoTaskMem(author);
+            Marshal.FreeCoTaskMem(words);
+        }
+    }
+
+    private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);
+
     private string WriteJson(string request)
     {
         var directory = Marshal.StringToCoTaskMemUTF8(_index.Root.FullName);

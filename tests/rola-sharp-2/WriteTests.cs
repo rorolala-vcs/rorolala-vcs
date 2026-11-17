@@ -269,6 +269,35 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_file_content_becomes_a_variant_and_a_version()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var storage = workspace.Storage;
+            storage.Read();
+            var content = new StorageWriter(storage).Write("content"u8.ToArray());
+            var index = workspace.VCSIndex;
+            index.Read();
+            var writer = new VCSIndexWriter(index);
+            var root = $"blake3:{new string('0', 64)}";
+
+            var written = writer.WriteFileVersion(content.Key, root, null, "alice", "first");
+
+            Assert.False(string.IsNullOrEmpty(written.Variant));
+            Assert.False(string.IsNullOrEmpty(written.Version));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void An_inverse_index_is_rebuilt()
     {
         var directory = Scratch();
