@@ -438,6 +438,10 @@ public sealed class WriteTests
             Assert.Equal(tracked.Id, again.Id);
             Assert.NotEqual(tracked.Version, again.Version);
 
+            var restored = writer.Restore("a.psd", tracked.Version);
+            Assert.Equal(tracked.Id, restored.Id);
+            Assert.Equal("content", File.ReadAllText(Path.Combine(directory, "a.psd")));
+
             writer.Remember("a.psd");
             layout.Read();
             Assert.Equal("alice", layout.Find("a.psd")?.Owner);

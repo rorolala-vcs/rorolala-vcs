@@ -48,6 +48,41 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Puts a version's content back at a path and records that the two agree.</summary>
+    /// <param name="path">The path, relative to the Workspace root or absolute.</param>
+    /// <param name="version">The version key.</param>
+    /// <returns>What was written.</returns>
+    public Restored Restore(string path, string version)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(version);
+
+        var directory = Utf8(_workspace.Root.FullName);
+        var at = Utf8(path);
+        var named = Utf8(version);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_checkout_restore(directory, at, named);
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new Restored(
+                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
+                RolaJson.Text(document.RootElement, "version") ?? string.Empty
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(named);
+        }
+    }
+
     /// <summary>Writes down that a path now holds what the Layout names.</summary>
     /// <param name="path">The path, relative to the Workspace root.</param>
     public void Remember(string path)

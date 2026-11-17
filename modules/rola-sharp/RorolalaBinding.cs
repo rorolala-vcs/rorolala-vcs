@@ -2696,6 +2696,20 @@ internal static partial class RorolalaBinding
     internal static extern bool rola_cancellation_is_cancelled(nint cancellation);
 
     /// <summary>
+    /// Puts a version's content back at a path under a Workspace.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_checkout_restore(nint directory, nint path, nint version);
+
+    /// <summary>
     /// Writes down that a path under a Workspace holds what its Layout now names.
     ///
     /// An empty string on success, or a `RolaWriteError *` the caller releases with
