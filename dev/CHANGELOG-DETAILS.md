@@ -8,7 +8,7 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ### 1. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala
 
-The write workflows behind `rola layout path` and `rola layout entry` now live in `librorolala::write`: storage puts and extracts, Layout batches, path bind, unbind, move and switch, entry write and remove, the tree cache rebuild, VCS index object writes, file version writes, single file tracking and the checkout cache writes. The tree's own writes live there too: `tree init`, `tree add`, `tree rm`, `tree reset` and `tree write-desc`. The command line and the C ABI call the same functions, so their order, their checks and their failures cannot drift.
+The write workflows behind `rola layout path` and `rola layout entry` now live in `librorolala::write`: storage puts and extracts, Layout batches, path bind, unbind, move and switch, entry write, remove and owner changes, the tree cache rebuild, VCS index object writes, file version writes, single file tracking and the checkout cache writes. The tree's own writes live there too: `tree init`, `tree add`, `tree rm`, `tree reset` and `tree write-desc`. The command line and the C ABI call the same functions, so their order, their checks and their failures cannot drift.
 
 ### 2. [`modules`] [`rola-sharp-2`] Add the second-generation C# bindings
 
