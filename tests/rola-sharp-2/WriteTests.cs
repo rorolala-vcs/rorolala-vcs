@@ -186,6 +186,25 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_workspace_is_found_from_a_nested_directory()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            var nested = Directory.CreateDirectory(Path.Combine(directory, "sub")).FullName;
+
+            var workspace = WorkspaceScoop.Open(nested);
+
+            Assert.Equal(Path.GetFullPath(directory), workspace.Root.FullName.TrimEnd(Path.DirectorySeparatorChar));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_builtin_book_is_searchable()
     {
         var root = RepositoryRoot();

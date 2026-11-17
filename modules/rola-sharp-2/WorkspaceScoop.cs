@@ -23,6 +23,26 @@ public sealed class WorkspaceScoop
     public WorkspaceScoop(DirectoryInfo directory)
         : this(directory?.FullName ?? throw new ArgumentNullException(nameof(directory))) { }
 
+    /// <summary>Finds the Workspace a path is in and makes a scope over its root.</summary>
+    /// <param name="start">Any path inside the Workspace.</param>
+    /// <returns>The scope over the Workspace.</returns>
+    public static WorkspaceScoop Open(string start)
+    {
+        var at = new DirectoryInfo(Path.GetFullPath(start));
+        var data = NativeText.Taken(RorolalaBinding.ROLA_WORKSPACE_DATA_DIR());
+        while (at is not null)
+        {
+            if (Directory.Exists(Path.Combine(at.FullName, data)))
+            {
+                return new WorkspaceScoop(at.FullName);
+            }
+
+            at = at.Parent;
+        }
+
+        throw new RolaReadError(RolaReadErrorKind.Unavailable, start, "no Workspace is there");
+    }
+
     /// <summary>The Workspace's root.</summary>
     public DirectoryInfo Root => new(_root);
 

@@ -23,6 +23,26 @@ public sealed class VaultScoop
     public VaultScoop(DirectoryInfo directory)
         : this(directory?.FullName ?? throw new ArgumentNullException(nameof(directory))) { }
 
+    /// <summary>Finds the Vault a path is in and makes a scope over its root.</summary>
+    /// <param name="start">Any path inside the Vault.</param>
+    /// <returns>The scope over the Vault.</returns>
+    public static VaultScoop Open(string start)
+    {
+        var at = new DirectoryInfo(Path.GetFullPath(start));
+        var config = NativeText.Taken(RorolalaBinding.ROLA_VAULT_CONFIG_PATH());
+        while (at is not null)
+        {
+            if (File.Exists(Path.Combine(at.FullName, config)))
+            {
+                return new VaultScoop(at.FullName);
+            }
+
+            at = at.Parent;
+        }
+
+        throw new RolaReadError(RolaReadErrorKind.Unavailable, start, "no Vault is there");
+    }
+
     /// <summary>The Vault's root.</summary>
     public DirectoryInfo Root => new(_root);
 
