@@ -55,6 +55,9 @@ public sealed class VaultScoop
     /// <summary>The VCS index the Vault keeps.</summary>
     public VCSIndexScoop VCSIndex => new(_root);
 
+    /// <summary>The inverse index the Vault keeps.</summary>
+    public InverseIndexScoop InverseIndex => new(_root);
+
     /// <inheritdoc/>
     protected override void IsValid()
     {

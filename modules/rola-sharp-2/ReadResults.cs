@@ -79,4 +79,28 @@ internal static class ReadResults
 
         return new RolaReadError(kind, null, reason);
     }
+
+    /// <summary>The failure an inverse-index read carried.</summary>
+    /// <param name="payload">The native error, which this takes ownership of.</param>
+    /// <returns>The failure.</returns>
+    public static RolaReadError Inverse(nint payload)
+    {
+        var error = Marshal.PtrToStructure<RolaInverseIndexReadingError>(payload);
+        var kind = error.tag switch
+        {
+            RolaInverseIndexReadingErrorTag.RolaInverseIndexReadingError_NotFound =>
+                RolaReadErrorKind.NotFound,
+            RolaInverseIndexReadingErrorTag.RolaInverseIndexReadingError_Malformed =>
+                RolaReadErrorKind.Marshalling,
+            _ => RolaReadErrorKind.Unreadable,
+        };
+        var reason =
+            error.tag is RolaInverseIndexReadingErrorTag.RolaInverseIndexReadingError_Read
+                ? NativeText.Taken(error.payload.Read.cause)
+                : string.Empty;
+
+        RorolalaBinding.free_rola_inverse_index_reading_error(payload);
+
+        return new RolaReadError(kind, null, reason);
+    }
 }

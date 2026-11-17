@@ -74,6 +74,9 @@ public sealed class WorkspaceScoop
     /// <summary>The VCS index the Workspace keeps.</summary>
     public VCSIndexScoop VCSIndex => new(_root);
 
+    /// <summary>The inverse index the Workspace keeps.</summary>
+    public InverseIndexScoop InverseIndex => new(_root);
+
     /// <summary>How the Workspace's tree stands beside its Layout.</summary>
     public StatusScoop Status => new(_root);
 
