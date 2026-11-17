@@ -61,7 +61,7 @@ public sealed class WorkspaceScoop : Scoop, IDisposable
     public TruthLayoutScoop TruthLayout(string vault) => new(_root, vault);
 
     /// <summary>The store the Workspace keeps.</summary>
-    public StorageScoop Storage => new(Path.Combine(_root, ".rola", "storage"));
+    public StorageScoop Storage => new(RolaPaths.WorkspaceStorage(_root));
 
     /// <inheritdoc/>
     protected override void IsValid()
