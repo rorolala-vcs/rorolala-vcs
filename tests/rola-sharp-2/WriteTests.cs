@@ -158,6 +158,17 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void The_builtin_book_is_searchable()
+    {
+        var root = RepositoryRoot();
+        var book = new BookScoop(Path.Combine(root, "build", "docs"));
+        book.Read();
+
+        Assert.True(book.ArticleCount > 0);
+        Assert.NotEmpty(book.Search("rola", 3));
+    }
+
+    [Fact]
     public void A_workspace_exposes_its_ignore_rules()
     {
         var directory = Scratch();
@@ -389,6 +400,22 @@ public sealed class WriteTests
 
     private static string Scratch() =>
         Directory.CreateTempSubdirectory("rola-sharp-write-").FullName;
+
+    private static string RepositoryRoot()
+    {
+        var at = new DirectoryInfo(AppContext.BaseDirectory);
+        while (at is not null)
+        {
+            if (Directory.Exists(Path.Combine(at.FullName, "build", "docs")))
+            {
+                return at.FullName;
+            }
+
+            at = at.Parent;
+        }
+
+        throw new InvalidOperationException("the repository root was not found");
+    }
 
     private static void RunRola(string directory, string arguments)
     {
