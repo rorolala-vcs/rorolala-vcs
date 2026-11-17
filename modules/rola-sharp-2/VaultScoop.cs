@@ -29,10 +29,9 @@ public sealed class VaultScoop
     public static VaultScoop Open(string start)
     {
         var at = new DirectoryInfo(Path.GetFullPath(start));
-        var config = NativeText.Taken(RorolalaBinding.ROLA_VAULT_CONFIG_PATH());
         while (at is not null)
         {
-            if (File.Exists(Path.Combine(at.FullName, config)))
+            if (File.Exists(RolaPaths.VaultConfig(at.FullName)))
             {
                 return new VaultScoop(at.FullName);
             }
