@@ -13,6 +13,7 @@ pub mod layout;
 pub mod progress;
 pub mod storage;
 pub mod tree;
+pub mod tree_remove;
 pub mod workspace;
 
 pub use cancel::*;
@@ -23,4 +24,5 @@ pub use layout::*;
 pub use progress::*;
 pub use storage::*;
 pub use tree::*;
+pub use tree_remove::*;
 pub use workspace::*;

@@ -7,10 +7,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use librorolala::layout::Layout;
-use librorolala::storage::{Lockable as _, RorolalaStorage, key_of_file};
-use librorolala::tree::{EntryKind, Tree, TreeEntry, TreeStructure};
-use librorolala::vcs::VCSIndex;
+use librorolala::tree::{EntryKind, TreeEntry};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -22,7 +19,7 @@ use mingling::{
     picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResForce, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResForce, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
@@ -31,8 +28,7 @@ use crate::Next;
 use crate::complete::{strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_TREE_ARGUMENT, EC_ERR_TREE_FAILED, EC_HELP};
 use crate::failure::failure;
-use crate::layout::chosen;
-use crate::tree::cmd_tree::{ErrorTreeShouldInWorkspace, locate, resolve};
+use crate::tree::cmd_tree::ErrorTreeShouldInWorkspace;
 
 /// Stage the removal but leave the work where it is.
 const ARG_CACHED: PickerArg<'static, Flag> = arg![cached: Flag];
@@ -124,39 +120,9 @@ pub struct StateTreeRm {
 }
 
 #[chain(routeify)]
-pub fn handle_tree_rm(
-    state: StateTreeRm,
-    workspace: &mut LazyRes<ResWorkspace>,
-    vault: &mut LazyRes<ResVault>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
-    index: &mut LazyRes<ResVCSIndex>,
-) -> Next {
-    let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
-        Ok(layout) => layout,
-        Err(next) => return next,
-    };
+pub fn handle_tree_rm(state: StateTreeRm, workspace: &mut LazyRes<ResWorkspace>) -> Next {
     let Some(held) = workspace.get_ref().as_ref() else {
         return ErrorTreeShouldInWorkspace.into();
-    };
-
-    let Some(store) = storage.get_ref().as_ref() else {
-        return ErrorTreeRmFailed::new(t!("tree.err_no_store").trim().to_string()).into();
-    };
-    let Some(index) = index.get_ref().as_ref() else {
-        return ErrorTreeRmFailed::new(t!("tree.err_no_index").trim().to_string()).into();
-    };
-
-    let Some(first) = state.paths.first() else {
-        return ErrorTreeRmArgument.into();
-    };
-    let tree = match locate(held, Some(first)) {
-        Ok(tree) => tree,
-        Err(next) => return next,
-    };
-
-    let runtime = match tokio::runtime::Runtime::new() {
-        Ok(runtime) => runtime,
-        Err(error) => return ErrorTreeRmFailed::new(error.to_string()).into(),
     };
 
     let StateTreeRm {
@@ -166,149 +132,39 @@ pub fn handle_tree_rm(
         paths,
     } = state;
 
-    match remove(
-        &tree,
-        &layout,
-        store,
-        index,
+    let Some(first) = paths.first() else {
+        return ErrorTreeRmArgument.into();
+    };
+    let Ok(cwd) = std::env::current_dir() else {
+        return ErrorTreeRmArgument.into();
+    };
+
+    match librorolala::write::tree_remove::remove_paths_for_workspace(
+        held,
+        &cwd,
+        first,
         &paths,
-        (cached, recursive, force),
-        &runtime,
-    ) {
-        Ok(result) => result.into(),
-        Err(next) => next,
-    }
-}
-
-/// Removes the paths named from the staged structure.
-fn remove(
-    tree: &Tree,
-    layout: &Layout,
-    store: &RorolalaStorage,
-    index: &VCSIndex,
-    paths: &[String],
-    (cached, recursive, force): (bool, bool, bool),
-    runtime: &tokio::runtime::Runtime,
-) -> Result<ResultTreeRm, Next> {
-    let staging = tree.staging();
-    let _guard = match runtime.block_on(staging.lock()) {
-        Ok(guard) => guard,
-        Err(error) => return Err(ErrorTreeRmFailed::new(error.to_string()).into()),
-    };
-
-    let base = match staging.structure() {
-        Ok(Some(staged)) => staged,
-        Ok(None) => match runtime.block_on(tree.recorded_structure(layout, index, store)) {
-            Ok(recorded) => recorded,
-            Err(error) => return Err(ErrorTreeRmFailed::new(error.to_string()).into()),
+        librorolala::write::tree_remove::RemoveOptions {
+            cached,
+            recursive,
+            force,
         },
-        Err(error) => return Err(ErrorTreeRmFailed::new(error.to_string()).into()),
-    };
-
-    let mut entries: BTreeMap<String, TreeEntry> = base
-        .entries()
-        .iter()
-        .map(|entry| (entry.path().to_owned(), entry.clone()))
-        .collect();
-    let mut conflicts = match staging.conflicts() {
-        Ok(conflicts) => conflicts,
-        Err(error) => return Err(ErrorTreeRmFailed::new(error.to_string()).into()),
-    };
-
-    let cwd = std::env::current_dir().map_err(|_| ErrorTreeRmArgument.to_chain())?;
-    let root = tree.root().to_path_buf();
-    let mut targets: Vec<String> = Vec::new();
-
-    for given in paths {
-        let resolved = resolve(&cwd, given);
-        let Some(relative) = relative_to(&root, &resolved) else {
-            return Err(ErrorTreeRmArgument.into());
-        };
-
-        match entries.get(&relative) {
-            Some(entry) if entry.kind() == EntryKind::Directory => {
-                if !recursive {
-                    return Err(ErrorTreeRmArgument.into());
-                }
-                if holds_tree_or_data(&root, &relative) {
-                    return Err(ErrorTreeRmArgument.into());
-                }
-
-                let held: Vec<String> = entries
-                    .keys()
-                    .filter(|path| under(&relative, path))
-                    .cloned()
-                    .collect();
-                targets.extend(held);
-            }
-            Some(_) => targets.push(relative),
-            None => {
-                if relative.is_empty() {
-                    return Err(ErrorTreeRmArgument.into());
-                }
-
-                // A path the tree never had is not something to remove, but one that is already
-                // gone from the work is a removal to stage.
-                if !root.join(&relative).exists() {
-                    return Err(ErrorTreeRmArgument.into());
-                }
-
-                return Err(ErrorTreeRmArgument.into());
-            }
+    ) {
+        Ok(removal) => ResultTreeRm {
+            actions: removal
+                .paths
+                .iter()
+                .map(|path| format!("{} {}", t!("tree.rm.deleted").trim(), path))
+                .collect(),
+            cached: removal.cached,
         }
-    }
-
-    targets.sort_unstable();
-    targets.dedup();
-
-    let mut actions = Vec::new();
-    for path in &targets {
-        let Some(entry) = entries.get(path).cloned() else {
-            continue;
-        };
-
-        if !cached
-            && entry.kind() == EntryKind::File
-            && !force
-            && let Some(storage) = entry.storage()
-        {
-            let disk = root.join(path);
-            match key_of_file(&disk) {
-                Ok(key) if key.digest() == storage.digest() => {}
-                Ok(_) => return Err(ErrorTreeRmDirty { path: path.clone() }.into()),
-                Err(_) => {}
-            }
+        .into(),
+        Err(librorolala::write::WriteError::InvalidPath { .. }) => ErrorTreeRmArgument.into(),
+        Err(librorolala::write::WriteError::Precondition { what, .. }) => {
+            ErrorTreeRmDirty { path: what }.into()
         }
-
-        entries.remove(path);
-        if let Some(at) = conflicts.iter().position(|held| held == path) {
-            conflicts.remove(at);
-            let theirs = librorolala::tree::conflict_copy(path);
-            let _ = std::fs::remove_file(root.join(theirs));
-        }
-
-        if !cached {
-            take_work(&root, path, entry.kind());
-        }
-
-        actions.push(format!("{} {}", t!("tree.rm.deleted").trim(), path));
+        Err(error) => ErrorTreeRmFailed::new(error.to_string()).into(),
     }
-
-    prune_empty_directories(&mut entries);
-
-    let structure = match TreeStructure::build(None, entries.values().cloned()) {
-        Ok(structure) => structure,
-        Err(error) => return Err(ErrorTreeRmFailed::new(error.to_string()).into()),
-    };
-
-    if let Err(error) = staging.write_structure(&structure) {
-        return Err(ErrorTreeRmFailed::new(error.to_string()).into());
-    }
-    if let Err(error) = staging.write_conflicts(&conflicts) {
-        return Err(ErrorTreeRmFailed::new(error.to_string()).into());
-    }
-
-    Ok(ResultTreeRm { actions, cached })
 }
 
 /// Takes out the directory entries a removal left with nothing under them.
@@ -327,48 +183,6 @@ pub fn prune_empty_directories(entries: &mut BTreeMap<String, TreeEntry>) {
             entries.remove(&directory);
         }
     }
-}
-
-/// Deletes `path` under `root`, when it is there.
-fn take_work(root: &Path, path: &str, kind: EntryKind) {
-    let disk = root.join(path);
-
-    match kind {
-        EntryKind::Directory => {
-            let _ = std::fs::remove_dir(&disk);
-        }
-        EntryKind::File | EntryKind::Symlink => {
-            let _ = std::fs::remove_file(&disk);
-            prune_empty(root, disk.parent());
-        }
-    }
-}
-
-/// Removes the directories a file's removal left empty, up to but not including the tree's root.
-fn prune_empty(root: &Path, mut at: Option<&Path>) {
-    while let Some(directory) = at {
-        if directory == root
-            || !directory.starts_with(root)
-            || std::fs::remove_dir(directory).is_err()
-        {
-            break;
-        }
-
-        at = directory.parent();
-    }
-}
-
-/// Whether the directory at `path` holds a tree of its own or the Workspace's data.
-fn holds_tree_or_data(root: &Path, path: &str) -> bool {
-    let disk = root.join(path);
-
-    disk.join(".rola-tree").is_dir()
-        || disk.join(".rola").is_dir()
-        || std::fs::read_dir(&disk).is_ok_and(|entries| {
-            entries.filter_map(Result::ok).any(|entry| {
-                entry.path().join(".rola-tree").is_dir() || entry.path().join(".rola").is_dir()
-            })
-        })
 }
 
 /// `path` inside `root`, or nothing when it is not.
