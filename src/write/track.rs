@@ -99,21 +99,33 @@ pub fn track_file(
         });
     }
 
-    let base = match existing.and_then(|id| layout.entry(id)) {
-        Some(entry) if entry.version() != [0; 32] => entry.version(),
-        _ => [0; 32],
-    };
-
     let runtime = tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
         reason: error.to_string(),
     })?;
+    let (base, base_num) = match existing.and_then(|id| layout.entry(id)) {
+        Some(entry) if entry.version() != [0; 32] => {
+            let version = index
+                .read_version(&Key::new(entry.version()).to_string())
+                .map_err(|error| WriteError::Index {
+                    reason: format!("{error:?}"),
+                })?;
+            let number = runtime
+                .block_on(index.version_num(&version))
+                .map_err(|error| WriteError::Index {
+                    reason: format!("{error:?}"),
+                })?;
+
+            (entry.version(), number)
+        }
+        _ => ([0; 32], rorolala_vcs::ROOT_VERSION),
+    };
     let stored = runtime.block_on(put_file(
         &store,
         &resolved,
         (!policy.is_empty()).then_some(policy),
     ))?;
 
-    let written = write_file_version(&index, &stored.key, &base, None, creator, message)?;
+    let written = write_file_version(&index, &stored.key, &base, base_num, None, creator, message)?;
     let id = existing.unwrap_or_else(Uuid::new_v4);
     write_entry(
         &layout,

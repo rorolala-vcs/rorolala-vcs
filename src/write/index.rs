@@ -6,7 +6,7 @@ use std::str::FromStr;
 use rorolala_storage::Key;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
-use rorolala_vcs::{Creator, Message, VCSIndex, VCSWrite as _, Variant, Version};
+use rorolala_vcs::{Creator, Message, ROOT_VERSION, VCSIndex, VCSWrite as _, Variant, Version};
 use serde::{Deserialize, Serialize};
 
 use crate::write::WriteError;
@@ -34,6 +34,7 @@ pub fn write_file_version(
     index: &VCSIndex,
     storage: &Key,
     base: &[u8; 32],
+    base_num: u64,
     join: Option<&[u8; 32]>,
     creator_name: &str,
     message_text: &str,
@@ -50,6 +51,18 @@ pub fn write_file_version(
         })?;
     let creator_key = *creator.hash().digest();
     let message_key = *message.hash().digest();
+    let (base, base_num) = if *base == [0; 32] {
+        let root = Version::root();
+        index
+            .write_version(&root)
+            .map_err(|error| WriteError::Index {
+                reason: format!("{error:?}"),
+            })?;
+
+        (*root.hash().digest(), ROOT_VERSION)
+    } else {
+        (*base, base_num)
+    };
     index
         .write_creator(&creator)
         .map_err(|error| WriteError::Index {
@@ -63,11 +76,11 @@ pub fn write_file_version(
 
     let variant = Variant::new_bare_variant(
         *storage.digest(),
-        *base,
+        base,
         join.copied(),
         creator_key,
         message_key,
-        0,
+        base_num,
     );
     let variant_key = *variant.hash().digest();
     index
@@ -76,7 +89,7 @@ pub fn write_file_version(
             reason: format!("{error:?}"),
         })?;
 
-    let version = Version::new_bare_version(variant_key, 0);
+    let version = Version::new_bare_version(variant_key, base_num.wrapping_add(1));
     let version_key = *version.hash().digest();
     index
         .write_version(&version)
@@ -118,10 +131,28 @@ pub fn write_file_version_at(
         .then(|| digest(join, "join"))
         .transpose()?;
 
+    let base_num = if base == [0; 32] {
+        ROOT_VERSION
+    } else {
+        let runtime = tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
+            reason: error.to_string(),
+        })?;
+        let version = index
+            .read_version(&Key::new(base).to_string())
+            .map_err(|error| WriteError::Index {
+                reason: format!("{error:?}"),
+            })?;
+        runtime
+            .block_on(index.version_num(&version))
+            .map_err(|error| WriteError::Index {
+                reason: format!("{error:?}"),
+            })?
+    };
     let written = write_file_version(
         &index,
         &Key::new(storage),
         &base,
+        base_num,
         join.as_ref(),
         creator,
         message,
@@ -259,7 +290,7 @@ mod tests {
     use std::fs;
 
     use rorolala_utils_location::Locate as _;
-    use rorolala_vcs::VCSIndex;
+    use rorolala_vcs::{ROOT_VERSION, VCSIndex};
 
     use super::{write_file_version, write_object_json};
 
@@ -276,8 +307,16 @@ mod tests {
             .block_on(store.write_object(b"content", rorolala_storage::Codec::Raw))
             .unwrap();
 
-        let written =
-            write_file_version(&index, &content, &[0; 32], None, "alice", "first").unwrap();
+        let written = write_file_version(
+            &index,
+            &content,
+            &[0; 32],
+            ROOT_VERSION,
+            None,
+            "alice",
+            "first",
+        )
+        .unwrap();
 
         assert_ne!(written.version.to_string(), "");
         assert!(
