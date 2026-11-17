@@ -269,6 +269,44 @@ mod tests {
     use crate::write::track::track_file;
 
     #[test]
+    fn only_index_leaves_the_work_alone() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-retrack-index-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        let first = track_file(&workspace, &dir, "a.txt", "alice", "first", "", None).unwrap();
+        fs::write(dir.join("a.txt"), b"two").unwrap();
+        track_file(&workspace, &dir, "a.txt", "alice", "second", "", None).unwrap();
+
+        retrack_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            Some(&first.version.to_string()),
+            RetrackOptions {
+                only_index: true,
+                ..RetrackOptions::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(fs::read(dir.join("a.txt")).unwrap(), b"two");
+        assert_eq!(
+            workspace
+                .layout()
+                .unwrap()
+                .entry(first.id)
+                .map(|entry| entry.version()),
+            Some(*first.version.digest())
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_path_moves_back_one_version() {
         let dir = std::env::temp_dir().join(format!("rola-write-retrack-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);

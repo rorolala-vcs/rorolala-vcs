@@ -477,6 +477,18 @@ public sealed class WriteTests
 
             var forked = writer.RetrackFile("a.psd", fork: true, onlyIndex: true);
             Assert.NotEqual(tracked.Id, forked.Id);
+
+            File.WriteAllText(Path.Combine(directory, "b.psd"), "other");
+            var other = writer.TrackFile("b.psd", "alice", "other");
+            Assert.Throws<RolaWriteError>(
+                () =>
+                    writer.RetrackFile(
+                        "a.psd",
+                        other.Version,
+                        onlyIndex: true,
+                        denyJump: true
+                    )
+            );
         }
         finally
         {
