@@ -199,12 +199,30 @@ mod tests {
         let workspace = Workspace::locate(&dir).unwrap();
         fs::write(dir.join("a.txt"), b"one").unwrap();
 
-        let tracked = track_file(&workspace, &dir, "a.txt", "alice", "first", "", None).unwrap();
+        let tracked = track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            "",
+            Some("alice"),
+        )
+        .unwrap();
 
         let layout = workspace.layout().unwrap();
         let path = rorolala_layout::LayoutPath::from_relative("a.txt".as_ref()).unwrap();
         assert_eq!(layout.id_of(&path), Some(tracked.id));
         assert_ne!(tracked.version.to_string(), "");
+
+        fs::write(dir.join("a.txt"), b"two").unwrap();
+        track_file(&workspace, &dir, "a.txt", "alice", "second", "", None).unwrap();
+        assert_eq!(
+            layout
+                .entry(tracked.id)
+                .and_then(|entry| entry.owner().map(str::to_owned)),
+            Some("alice".to_owned())
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
