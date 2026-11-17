@@ -6,10 +6,131 @@ use std::str::FromStr;
 use rorolala_storage::Key;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
-use rorolala_vcs::{Creator, Message, VCSIndex, Variant, Version};
-use serde::Deserialize;
+use rorolala_vcs::{Creator, Message, VCSIndex, VCSWrite as _, Variant, Version};
+use serde::{Deserialize, Serialize};
 
 use crate::write::WriteError;
+
+/// The variant and version a file's content was recorded as.
+#[derive(Debug, Clone, Serialize)]
+pub struct FileVersion {
+    /// The variant the version points at.
+    pub variant: Key,
+    /// The version the Layout records.
+    pub version: Key,
+}
+
+/// Records a file's content as a variant and a version.
+///
+/// The creator and the message are written first, because the variant names them. `base` is the
+/// variant the file was on, or the root's zero hash for a first version; `join` is the variant a
+/// merge brings in.
+///
+/// # Errors
+///
+/// Returns [`WriteError::Precondition`] when the creator or the message is too long, and
+/// [`WriteError::Index`] when the index refuses a write.
+pub fn write_file_version(
+    index: &VCSIndex,
+    storage: &Key,
+    base: &[u8; 32],
+    join: Option<&[u8; 32]>,
+    creator_name: &str,
+    message_text: &str,
+) -> Result<FileVersion, WriteError> {
+    let creator =
+        Creator::try_from(creator_name.to_owned()).map_err(|error| WriteError::Precondition {
+            what: "creator".to_owned(),
+            reason: error.to_string(),
+        })?;
+    let message =
+        Message::try_from(message_text.to_owned()).map_err(|error| WriteError::Precondition {
+            what: "message".to_owned(),
+            reason: error.to_string(),
+        })?;
+    let creator_key = *creator.hash().digest();
+    let message_key = *message.hash().digest();
+    index
+        .write_creator(&creator)
+        .map_err(|error| WriteError::Index {
+            reason: format!("{error:?}"),
+        })?;
+    index
+        .write_message(&message)
+        .map_err(|error| WriteError::Index {
+            reason: format!("{error:?}"),
+        })?;
+
+    let variant = Variant::new_bare_variant(
+        *storage.digest(),
+        *base,
+        join.copied(),
+        creator_key,
+        message_key,
+        0,
+    );
+    let variant_key = *variant.hash().digest();
+    index
+        .write_variant(&variant)
+        .map_err(|error| WriteError::Index {
+            reason: format!("{error:?}"),
+        })?;
+
+    let version = Version::new_bare_version(variant_key, 0);
+    let version_key = *version.hash().digest();
+    index
+        .write_version(&version)
+        .map_err(|error| WriteError::Index {
+            reason: format!("{error:?}"),
+        })?;
+
+    Ok(FileVersion {
+        variant: Key::new(variant_key),
+        version: Key::new(version_key),
+    })
+}
+
+/// Records a file's content as a variant and a version in the index a directory is in.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`,
+/// `{"variant":"blake3:...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases
+/// with `free_rola_write_error`. `join` is the empty string when the variant merges nothing.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoIndex`] when no index is there, [`WriteError::Precondition`] when a key
+/// or a text does not read, and [`WriteError::Index`] when the index refuses a write.
+#[lazyffi(export = rola_write_index_file_version)]
+pub fn write_file_version_at(
+    directory: &Path,
+    storage: &str,
+    base: &str,
+    join: &str,
+    creator: &str,
+    message: &str,
+) -> Result<String, WriteError> {
+    let index = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
+    let storage = digest(storage, "storage")?;
+    let base = digest(base, "base")?;
+    let join = (!join.is_empty())
+        .then(|| digest(join, "join"))
+        .transpose()?;
+
+    let written = write_file_version(
+        &index,
+        &Key::new(storage),
+        &base,
+        join.as_ref(),
+        creator,
+        message,
+    )?;
+
+    serde_json::to_string(&written).map_err(|error| WriteError::Json {
+        reason: error.to_string(),
+    })
+}
 
 /// One object, as a request document names it.
 #[derive(Debug, Deserialize)]
@@ -140,7 +261,34 @@ mod tests {
     use rorolala_utils_location::Locate as _;
     use rorolala_vcs::VCSIndex;
 
-    use super::write_object_json;
+    use super::{write_file_version, write_object_json};
+
+    #[test]
+    fn a_file_version_names_its_variant_and_creator() {
+        let dir = std::env::temp_dir().join(format!("rola-write-version-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let _ = rorolala_workspace::Workspace::create(&dir);
+        let index = VCSIndex::locate(&dir).unwrap();
+        let store = rorolala_storage::RorolalaStorage::create(dir.join(".rola/storage"));
+        let content = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(store.write_object(b"content", rorolala_storage::Codec::Raw))
+            .unwrap();
+
+        let written =
+            write_file_version(&index, &content, &[0; 32], None, "alice", "first").unwrap();
+
+        assert_ne!(written.version.to_string(), "");
+        assert!(
+            index
+                .object_json(&written.version.to_string())
+                .unwrap()
+                .contains("\"kind\":\"version\"")
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_creator_and_a_message_are_written() {
