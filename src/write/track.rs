@@ -100,14 +100,7 @@ pub fn track_file(
     }
 
     let base = match existing.and_then(|id| layout.entry(id)) {
-        Some(entry) if entry.version() != [0; 32] => {
-            let version = index
-                .read_version(&Key::new(entry.version()).to_string())
-                .map_err(|error| WriteError::Index {
-                    reason: format!("{error:?}"),
-                })?;
-            *version.variant()
-        }
+        Some(entry) if entry.version() != [0; 32] => entry.version(),
         _ => [0; 32],
     };
 
