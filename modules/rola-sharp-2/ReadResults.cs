@@ -137,6 +137,22 @@ internal static class ReadResults
         return new RolaReadError(kind, null, reason);
     }
 
+    /// <summary>The failure building an inverse index carried.</summary>
+    /// <param name="payload">The native error, which this takes ownership of.</param>
+    /// <returns>The failure.</returns>
+    public static RolaReadError InverseBuild(nint payload)
+    {
+        var error = Marshal.PtrToStructure<RolaInverseIndexError>(payload);
+        var reason =
+            error.tag is RolaInverseIndexErrorTag.RolaInverseIndexError_Io
+                ? NativeText.Taken(error.payload.Io)
+                : string.Empty;
+
+        RorolalaBinding.free_rola_inverse_index_error(payload);
+
+        return new RolaReadError(RolaReadErrorKind.Unreadable, null, reason);
+    }
+
     /// <summary>The failure a book read carried.</summary>
     /// <param name="payload">The native error, which this takes ownership of.</param>
     /// <returns>The failure.</returns>

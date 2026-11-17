@@ -2,6 +2,32 @@ using System.Runtime.InteropServices;
 
 namespace RolaSharp.V2;
 
+/// <summary>What building an inverse index found.</summary>
+/// <param name="Mode">The mode it was built in.</param>
+/// <param name="Objects">How many objects it read.</param>
+/// <param name="ObjectsRead">How many of those it read whole.</param>
+/// <param name="Variants">How many variants it saw.</param>
+/// <param name="Versions">How many versions it saw.</param>
+/// <param name="Creators">How many creators it saw.</param>
+/// <param name="Messages">How many messages it saw.</param>
+/// <param name="VersionsNumbered">How many versions it numbered.</param>
+/// <param name="Entries">How many edges it wrote.</param>
+/// <param name="Dependents">How many dependents it wrote.</param>
+/// <param name="Fingerprint">The fingerprint it wrote.</param>
+public sealed record InverseIndexReport(
+    string Mode,
+    ulong Objects,
+    ulong ObjectsRead,
+    ulong Variants,
+    ulong Versions,
+    ulong Creators,
+    ulong Messages,
+    ulong VersionsNumbered,
+    ulong Entries,
+    ulong Dependents,
+    string Fingerprint
+);
+
 /// <summary>The inverse index a Workspace or a Vault keeps: what each key is used by.</summary>
 public sealed class InverseIndexScoop : Scoop, IDisposable
 {
@@ -126,6 +152,44 @@ public sealed class InverseIndexScoop : Scoop, IDisposable
         finally
         {
             Marshal.FreeCoTaskMem(path);
+        }
+    }
+
+    /// <summary>Builds the inverse index from the VCS index.</summary>
+    /// <param name="full">Whether to read every object rather than only what changed.</param>
+    /// <returns>What the build found.</returns>
+    public InverseIndexReport Rebuild(bool full = false)
+    {
+        EnsureHandle();
+
+        var answer = full
+            ? RorolalaBinding.rebuild_full_rola_inverse_index(_handle)
+            : RorolalaBinding.rebuild_rola_inverse_index(_handle);
+        if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+        {
+            throw ReadResults.InverseBuild(answer.payload);
+        }
+
+        var report = answer.payload;
+        try
+        {
+            return new InverseIndexReport(
+                NativeText.Taken(RorolalaBinding.inverse_index_report_mode(report)),
+                RorolalaBinding.inverse_index_report_objects(report),
+                RorolalaBinding.inverse_index_report_objects_read(report),
+                RorolalaBinding.inverse_index_report_variants(report),
+                RorolalaBinding.inverse_index_report_versions(report),
+                RorolalaBinding.inverse_index_report_creators(report),
+                RorolalaBinding.inverse_index_report_messages(report),
+                RorolalaBinding.inverse_index_report_versions_numbered(report),
+                RorolalaBinding.inverse_index_report_entries(report),
+                RorolalaBinding.inverse_index_report_dependents(report),
+                NativeText.Taken(RorolalaBinding.inverse_index_report_fingerprint(report))
+            );
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_inverse_index_report(report);
         }
     }
 
