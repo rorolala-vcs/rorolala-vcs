@@ -54,13 +54,15 @@ public sealed class WorkspaceWriter : Writer
     /// <param name="fork">Give the path a fresh Uuid holding what it records now.</param>
     /// <param name="onlyIndex">Leave the work on disk alone.</param>
     /// <param name="force">Go past changes the record does not name.</param>
+    /// <param name="denyJump">Refuse a target off the path's chain.</param>
     /// <returns>What was written.</returns>
     public Retracked RetrackFile(
         string path,
         string? target = null,
         bool fork = false,
         bool onlyIndex = false,
-        bool force = false
+        bool force = false,
+        bool denyJump = false
     ) {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -75,7 +77,8 @@ public sealed class WorkspaceWriter : Writer
                 named,
                 fork,
                 onlyIndex,
-                force
+                force,
+                denyJump
             );
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
