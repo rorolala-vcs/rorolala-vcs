@@ -49,6 +49,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RorolalaDesktopMenu", "util
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RorolalaDesktopMenu.Tests", "utils\desktop-menu\test\RorolalaDesktopMenu.Tests.csproj", "{C36FFF50-7E4E-4043-AA18-E39B12587AEB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RolaSharp.V2", "modules\rola-sharp-2\RolaSharp.V2.csproj", "{480AE21B-6A74-42B8-AB42-C8D3A6607344}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -227,6 +229,18 @@ Global
 		{C36FFF50-7E4E-4043-AA18-E39B12587AEB}.Release|x64.Build.0 = Release|Any CPU
 		{C36FFF50-7E4E-4043-AA18-E39B12587AEB}.Release|x86.ActiveCfg = Release|Any CPU
 		{C36FFF50-7E4E-4043-AA18-E39B12587AEB}.Release|x86.Build.0 = Release|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Debug|x64.Build.0 = Debug|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Debug|x86.Build.0 = Debug|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Release|Any CPU.Build.0 = Release|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Release|x64.ActiveCfg = Release|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Release|x64.Build.0 = Release|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Release|x86.ActiveCfg = Release|Any CPU
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -252,5 +266,6 @@ Global
 		{567FE24A-30AD-46C0-8C18-00FE7DBB074C} = {2D381ACE-511A-6FCB-0210-FF2056444902}
 		{E8F8FCFB-ECB5-40F5-81F8-36693C4F6A83} = {40C59F42-05A5-44BB-9008-4771BC6A0170}
 		{C36FFF50-7E4E-4043-AA18-E39B12587AEB} = {40C59F42-05A5-44BB-9008-4771BC6A0170}
+		{480AE21B-6A74-42B8-AB42-C8D3A6607344} = {3F9B2C41-7E5A-42D8-9B6C-1A2B3C4D5E6F}
 	EndGlobalSection
 EndGlobal

@@ -43,6 +43,9 @@ const EXAMPLE_ICON_SET: &str = "example";
 /// The C# bindings' own file inside the .NET output: it is a library with nothing beside it.
 const RSHARP_DLL: &str = "RolaSharp/bin/Release/net8.0/RolaSharp.dll";
 
+/// The second-generation bindings' own file inside the .NET output.
+const RSHARP_V2_DLL: &str = "RolaSharp.V2/bin/Release/net8.0/RolaSharp.V2.dll";
+
 /// Restores what `args` names, answering from what is already cached before the feed is asked.
 ///
 /// The sources are taken away first, which resolves from the global packages folder without a word;
@@ -481,7 +484,12 @@ pub fn publish_rsharp(workspace: &Workspace) -> Result<(), Error> {
     let bindings = workspace.cs_target_dir()?.join(RSHARP_DLL);
     let into = workspace.build_dir()?.join("lib/RolaSharp.dll");
 
-    copy_file(&bindings, &into)
+    copy_file(&bindings, &into)?;
+
+    let bindings_v2 = workspace.cs_target_dir()?.join(RSHARP_V2_DLL);
+    let into_v2 = workspace.build_dir()?.join("lib/RolaSharp.V2.dll");
+
+    copy_file(&bindings_v2, &into_v2)
 }
 
 /// The platform the Desktop program is laid out for, as .NET spells one.

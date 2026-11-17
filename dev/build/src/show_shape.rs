@@ -118,6 +118,10 @@ fn shape() -> Result<Vec<String>, Error> {
             workspace.launcher_project().display()
         ),
         format!("rsharp project = {}", workspace.rsharp_project().display()),
+        format!(
+            "rsharp v2 project = {}",
+            workspace.rsharp_v2_project().display()
+        ),
         format!("nuget offline = {}", workspace.nuget_offline().display()),
         String::new(),
         format!("programs = {}", paths::PROGRAMS.join(" ")),

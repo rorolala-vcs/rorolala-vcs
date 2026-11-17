@@ -81,6 +81,9 @@ const SOLUTION: &str = "RorolalaSharp.sln";
 /// The C# bindings to the C ABI.
 const RSHARP_PROJECT: &str = "modules/rola-sharp/RolaSharp.csproj";
 
+/// The second-generation C# bindings, built beside the first while the desktop migrates.
+const RSHARP_V2_PROJECT: &str = "modules/rola-sharp-2/RolaSharp.V2.csproj";
+
 /// The script that builds the Win32 window over the daemon into an export, on Windows.
 #[cfg(windows)]
 const DAEMON_WINDOW_SCRIPT: &str = "app/daemon-win/scripts/daemon-win-build.ps1";
@@ -427,6 +430,12 @@ impl Workspace {
     #[must_use]
     pub fn rsharp_project(&self) -> PathBuf {
         self.root.join(RSHARP_PROJECT)
+    }
+
+    /// The second-generation C# bindings, built beside the first while the desktop migrates.
+    #[must_use]
+    pub fn rsharp_v2_project(&self) -> PathBuf {
+        self.root.join(RSHARP_V2_PROJECT)
     }
 
     /// The `NuGet` configuration a restore is tried with first.
