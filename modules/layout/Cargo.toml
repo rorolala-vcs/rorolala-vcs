@@ -9,7 +9,6 @@ rorolala-storage.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-lazyffi.workspace = true
 rorolala-utils-location.workspace = true
-rorolala-vcs.workspace = true
 tokio.workspace = true
 unicode-normalization.workspace = true
 uuid.workspace = true
