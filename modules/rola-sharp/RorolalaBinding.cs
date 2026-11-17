@@ -99,6 +99,85 @@ internal struct RolaLayoutError
     public RolaLayoutErrorPayload payload;
 }
 
+internal enum RolaV2ReadErrorTag : int
+{
+    /// <summary>
+    /// The request is not one this build knows, or not one of its fields reads.
+    /// </summary>
+    RolaV2ReadError_InvalidRequest = 0,
+    /// <summary>
+    /// No Workspace holds the directory.
+    /// </summary>
+    RolaV2ReadError_NoWorkspace = 1,
+    /// <summary>
+    /// No Layout is there.
+    /// </summary>
+    RolaV2ReadError_NoLayout = 2,
+    /// <summary>
+    /// No store is there.
+    /// </summary>
+    RolaV2ReadError_NoStore = 3,
+    /// <summary>
+    /// No index is there.
+    /// </summary>
+    RolaV2ReadError_NoIndex = 4,
+    /// <summary>
+    /// What the request names is not there.
+    /// </summary>
+    RolaV2ReadError_NotFound = 5,
+    /// <summary>
+    /// What is there did not read.
+    /// </summary>
+    RolaV2ReadError_Unreadable = 6,
+    /// <summary>
+    /// The caller asked the read to stop.
+    /// </summary>
+    RolaV2ReadError_Cancelled = 7,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaV2ReadErrorInvalidRequest
+{
+    /// <summary>
+    /// Why it did not read.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaV2ReadErrorUnreadable
+{
+    /// <summary>
+    /// Why it did not.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaV2ReadErrorPayload
+{
+    /// <summary>
+    /// The request is not one this build knows, or not one of its fields reads.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaV2ReadErrorInvalidRequest InvalidRequest;
+    /// <summary>
+    /// What is there did not read.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaV2ReadErrorUnreadable Unreadable;
+}
+
+/// <summary>
+/// Why an aggregate read did not produce a document.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaV2ReadError
+{
+    public RolaV2ReadErrorTag tag;
+    public RolaV2ReadErrorPayload payload;
+}
+
 internal enum RolaStorageErrorTag : int
 {
     /// <summary>
@@ -2072,6 +2151,9 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_layout_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_v2read_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_storage_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -2420,6 +2502,20 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint rola_current_account();
+
+    /// <summary>
+    /// Runs one read named by a request document.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, or a `RolaV2ReadError *` the caller
+    /// releases with `free_rola_v2_read_error`. The request is one object,
+    /// `{"kind":"tree_status","path":"..."}`, and the cancellation is checked before the read starts.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaV2ReadError *`, owned; release it with `free_rola_v2read_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_v2_read_json(nint directory, nint request, nint cancellation);
 
     /// <summary>
     /// Reads how the work under `directory` stands beside the Layout it works from.
