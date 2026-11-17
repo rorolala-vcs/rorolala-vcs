@@ -1,6 +1,6 @@
 //! Recording the content of one file as a version, and naming it in the Layout.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rorolala_layout::{EntryKind, LayoutPath};
 use rorolala_storage::Key;
@@ -34,9 +34,10 @@ pub struct TrackedFile {
 
 /// Records the content of `path` as a version and binds it in the Layout.
 ///
-/// `path` is relative to `cwd`, or absolute; it must be inside the Workspace. `creator` and
-/// `message` become the version's creator and message, and `policy` names a chunking policy or is
-/// empty for the store's own choice. A `None` owner keeps the owner the entry already has.
+/// `path` is relative to `cwd`, or absolute; it must be inside the Workspace and outside a tree.
+/// `creator` and `message` become the version's creator and message, and `policy` names a chunking
+/// policy or is empty for the store's own choice. A `None` owner keeps the owner the entry already
+/// has.
 ///
 /// # Errors
 ///
@@ -60,30 +61,14 @@ pub fn track_file(
         .ok_or(WriteError::NoStore)?;
     let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
     let root = normalize(workspace.get_root());
-    let resolved = if Path::new(path).is_absolute() {
-        Path::new(path).to_path_buf()
-    } else {
-        cwd.join(path)
-    };
-    let resolved = normalize(&resolved);
-    let relative = resolved
-        .strip_prefix(&root)
-        .map_err(|_| WriteError::InvalidPath {
-            path: path.to_owned(),
-            reason: "the path is outside the Workspace".to_owned(),
-        })?;
-    if !resolved.is_file() {
-        return Err(WriteError::InvalidPath {
-            path: path.to_owned(),
-            reason: "the path is not a file".to_owned(),
-        });
-    }
+    let (resolved, relative) = locate_file(&root, cwd, path)?;
 
-    let layout_path =
-        LayoutPath::from_relative(relative).map_err(|error| WriteError::InvalidPath {
+    let layout_path = LayoutPath::from_relative(Path::new(&relative)).map_err(|error| {
+        WriteError::InvalidPath {
             path: path.to_owned(),
             reason: error.to_string(),
-        })?;
+        }
+    })?;
     let existing = layout.id_of(&layout_path);
     let existing_owner = existing
         .and_then(|id| layout.entry(id))
@@ -146,6 +131,53 @@ pub fn track_file(
         variant: written.variant,
         version: written.version,
     })
+}
+
+/// The file `path` names, and its path inside the Workspace.
+fn locate_file(root: &Path, cwd: &Path, path: &str) -> Result<(PathBuf, String), WriteError> {
+    let resolved = if Path::new(path).is_absolute() {
+        Path::new(path).to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+    let resolved = normalize(&resolved);
+    let relative = resolved
+        .strip_prefix(root)
+        .map_err(|_| WriteError::InvalidPath {
+            path: path.to_owned(),
+            reason: "the path is outside the Workspace".to_owned(),
+        })?;
+    if !resolved.is_file() {
+        return Err(WriteError::InvalidPath {
+            path: path.to_owned(),
+            reason: "the path is not a file".to_owned(),
+        });
+    }
+    let mut above = resolved.parent();
+    while let Some(directory) = above {
+        if !directory.starts_with(root) {
+            break;
+        }
+        if directory.join(rorolala_tree::consts::MARK).is_dir() {
+            return Err(WriteError::InvalidPath {
+                path: path.to_owned(),
+                reason: "the path is inside a tree".to_owned(),
+            });
+        }
+        above = directory.parent();
+    }
+
+    let relative = relative
+        .components()
+        .map(|component| component.as_os_str().to_str().map(str::to_owned))
+        .collect::<Option<Vec<_>>>()
+        .map(|parts| parts.join("/"))
+        .ok_or_else(|| WriteError::InvalidPath {
+            path: path.to_owned(),
+            reason: "the path cannot be written".to_owned(),
+        })?;
+
+    Ok((resolved, relative))
 }
 
 /// Records one file's content as a version in the Workspace a directory is in.
@@ -227,6 +259,21 @@ mod tests {
                 .entry(tracked.id)
                 .and_then(|entry| entry.owner().map(str::to_owned)),
             Some("alice".to_owned())
+        );
+
+        fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
+        fs::write(dir.join("tree/inside.txt"), b"inside").unwrap();
+        assert!(
+            track_file(
+                &workspace,
+                &dir,
+                "tree/inside.txt",
+                "alice",
+                "tree",
+                "",
+                None
+            )
+            .is_err()
         );
 
         let _ = fs::remove_dir_all(&dir);
