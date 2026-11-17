@@ -253,13 +253,26 @@ mod tests {
         assert_ne!(tracked.version.to_string(), "");
 
         fs::write(dir.join("a.txt"), b"two").unwrap();
-        track_file(&workspace, &dir, "a.txt", "alice", "second", "", None).unwrap();
+        let again = track_file(&workspace, &dir, "a.txt", "alice", "second", "", None).unwrap();
         assert_eq!(
             layout
                 .entry(tracked.id)
                 .and_then(|entry| entry.owner().map(str::to_owned)),
             Some("alice".to_owned())
         );
+
+        let index = rorolala_vcs::VCSIndex::locate(&dir).unwrap();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let numbered = |version: rorolala_storage::Key| {
+            let version = index
+                .read_version(&version.to_string())
+                .expect("the version is in the index");
+            runtime
+                .block_on(index.version_num(&version))
+                .expect("the chain reads")
+        };
+        assert_eq!(numbered(tracked.version), 0);
+        assert_eq!(numbered(again.version), 1);
 
         fs::create_dir_all(dir.join("tree/.rola-tree")).unwrap();
         fs::write(dir.join("tree/inside.txt"), b"inside").unwrap();
