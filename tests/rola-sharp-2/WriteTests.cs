@@ -158,6 +158,34 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public async Task An_async_aggregate_read_honours_cancellation()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+
+            using var cancellation = new CancellationTokenSource();
+            await cancellation.CancelAsync();
+
+            var error = await Assert.ThrowsAsync<RolaReadError>(
+                () =>
+                    ReadApi.JsonAsync(
+                        directory,
+                        "{\"kind\":\"layouts\",\"path\":\"\"}",
+                        cancellation.Token
+                    )
+            );
+
+            Assert.Equal(RolaReadErrorKind.Cancelled, error.Kind);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_builtin_book_is_searchable()
     {
         var root = RepositoryRoot();
