@@ -42,6 +42,12 @@ public sealed class WorkspaceScoop
         throw new RolaReadError(RolaReadErrorKind.Unavailable, start, "no Workspace is there");
     }
 
+    /// <summary>Finds the Workspace a path is in and makes a scope over its root.</summary>
+    /// <param name="start">Any directory inside the Workspace.</param>
+    /// <returns>The scope over the Workspace.</returns>
+    public static WorkspaceScoop Open(DirectoryInfo start) =>
+        Open(start?.FullName ?? throw new ArgumentNullException(nameof(start)));
+
     /// <summary>The Workspace's root.</summary>
     public DirectoryInfo Root => new(_root);
 

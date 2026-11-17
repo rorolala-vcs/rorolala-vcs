@@ -42,6 +42,12 @@ public sealed class VaultScoop
         throw new RolaReadError(RolaReadErrorKind.Unavailable, start, "no Vault is there");
     }
 
+    /// <summary>Finds the Vault a path is in and makes a scope over its root.</summary>
+    /// <param name="start">Any directory inside the Vault.</param>
+    /// <returns>The scope over the Vault.</returns>
+    public static VaultScoop Open(DirectoryInfo start) =>
+        Open(start?.FullName ?? throw new ArgumentNullException(nameof(start)));
+
     /// <summary>The Vault's root.</summary>
     public DirectoryInfo Root => new(_root);
 
