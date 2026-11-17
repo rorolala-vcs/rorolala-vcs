@@ -256,6 +256,27 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_tree_description_is_written()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            Directory.CreateDirectory(Path.Combine(directory, "tree", ".rola-tree"));
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new TreeWriter(workspace);
+
+            Assert.Equal(5, writer.WriteDescription("first", "tree"));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_shared_paths_are_the_librarys_own()
     {
         var root = Path.Combine(Path.GetTempPath(), "rola-sharp-paths");
