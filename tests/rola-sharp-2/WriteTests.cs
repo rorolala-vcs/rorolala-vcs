@@ -256,6 +256,30 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_directory_is_made_a_tree()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            Directory.CreateDirectory(Path.Combine(directory, "tree"));
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new TreeWriter(workspace);
+
+            var tree = writer.Init("tree");
+
+            Assert.Equal("tree", tree.Path);
+            Assert.True(Directory.Exists(Path.Combine(directory, "tree", ".rola-tree")));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_tree_path_is_staged()
     {
         var directory = Scratch();

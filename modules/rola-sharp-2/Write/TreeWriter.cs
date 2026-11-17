@@ -10,6 +10,12 @@ namespace RolaSharp.V2.Write;
 /// <param name="Kind">What happened: <c>added</c>, <c>updated</c> or <c>deleted</c>.</param>
 public sealed record TreeAddChange(string Path, string Kind);
 
+/// <summary>What making a tree did.</summary>
+/// <param name="Path">The tree's path, or <c>.</c> for the Workspace root.</param>
+/// <param name="Collapsed">How many entries stopped being files.</param>
+/// <param name="IsRoot">Whether the tree is the Workspace root.</param>
+public sealed record TreeInit(string Path, int Collapsed, bool IsRoot);
+
 /// <summary>What a reset did.</summary>
 /// <param name="Whole">Whether the whole staging area was cleared.</param>
 /// <param name="Paths">The paths reset, or none for the whole area.</param>
@@ -58,6 +64,37 @@ public sealed class TreeWriter : Writer
             Marshal.FreeCoTaskMem(directory);
             Marshal.FreeCoTaskMem(at);
             Marshal.FreeCoTaskMem(words);
+        }
+    }
+
+    /// <summary>Makes a directory a tree.</summary>
+    /// <param name="target">The tree's path, or nothing for the Workspace root.</param>
+    /// <param name="force">Whether to agree to the recorded files collapsing into the tree.</param>
+    /// <returns>What was made.</returns>
+    public TreeInit Init(string? target = null, bool force = false)
+    {
+        var directory = Utf8(_workspace.Root.FullName);
+        var at = Utf8(target ?? string.Empty);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_tree_init(directory, at, force);
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new TreeInit(
+                RolaJson.Text(document.RootElement, "path") ?? string.Empty,
+                (int)(RolaJson.Number(document.RootElement, "collapsed") ?? 0),
+                RolaJson.Flag(document.RootElement, "is_root")
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
         }
     }
 
