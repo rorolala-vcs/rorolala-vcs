@@ -2800,6 +2800,32 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_storage_put_file(nint directory, nint file, nint policy);
 
     /// <summary>
+    /// Makes the Layout of the Workspace holding a directory track a Vault.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_workspace_set_track(nint directory, nint track);
+
+    /// <summary>
+    /// Makes the Layout of the Workspace holding a directory track no Vault.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_workspace_clear_track(nint directory);
+
+    /// <summary>
     /// Rebuilds the tree cache of the Workspace holding a directory.
     ///
     /// An owned JSON string the caller releases with `free_string`, `{"paths":N,"bytes":N}`, or a

@@ -48,6 +48,39 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Makes the Workspace's Layout track a Vault.</summary>
+    /// <param name="track">The Vault's name.</param>
+    public void SetTrack(string track)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+
+        var directory = Utf8(_workspace.Root.FullName);
+        var name = Utf8(track);
+        try
+        {
+            Check(RorolalaBinding.rola_write_workspace_set_track(directory, name));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(name);
+        }
+    }
+
+    /// <summary>Makes the Workspace's Layout track no Vault.</summary>
+    public void ClearTrack()
+    {
+        var directory = Utf8(_workspace.Root.FullName);
+        try
+        {
+            Check(RorolalaBinding.rola_write_workspace_clear_track(directory));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+        }
+    }
+
     /// <summary>Locks the Workspace for as long as the guard lives.</summary>
     /// <returns>The guard, or nothing when the Workspace was locked already.</returns>
     public WorkspaceLock? Lock()
@@ -55,6 +88,14 @@ public sealed class WorkspaceWriter : Writer
         var guard = RorolalaBinding.RolaWorkspace_get_locking_guard(_workspace.Handle);
 
         return guard == 0 ? null : new WorkspaceLock(guard);
+    }
+
+    private static void Check(RorolalaResult answer)
+    {
+        if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+        {
+            throw WriteResults.From(answer.payload);
+        }
     }
 
     private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);
