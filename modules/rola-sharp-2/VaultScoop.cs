@@ -75,6 +75,9 @@ public sealed class VaultScoop
     /// <summary>The ignore rules the Vault hands down.</summary>
     public IgnoreScoop Ignore => new(RolaPaths.VaultIgnoreRules(_root), _root);
 
+    /// <summary>The tree the Vault holds.</summary>
+    public TreeScoop Tree => new(_root);
+
     /// <summary>The graph around one version.</summary>
     /// <param name="target">The version to draw around.</param>
     /// <returns>The scope over the graph.</returns>

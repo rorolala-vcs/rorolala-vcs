@@ -81,6 +81,12 @@ public sealed class WorkspaceScoop
     public IgnoreScoop Ignore =>
         new(RolaPaths.WorkspaceIgnoreRules(_root), _root);
 
+    /// <summary>The tree the Workspace holds.</summary>
+    public TreeScoop Tree => new(_root);
+
+    /// <summary>What holds each entry of the tracked Vault, from the fetched copy.</summary>
+    public OwnershipScoop Ownership => new(_root);
+
     /// <summary>The graph around one version.</summary>
     /// <param name="target">The version to draw around.</param>
     /// <returns>The scope over the graph.</returns>
