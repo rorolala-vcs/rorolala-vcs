@@ -77,6 +77,11 @@ public sealed class WorkspaceScoop
     /// <summary>The inverse index the Workspace keeps.</summary>
     public InverseIndexScoop InverseIndex => new(_root);
 
+    /// <summary>The graph around one version.</summary>
+    /// <param name="target">The version to draw around.</param>
+    /// <returns>The scope over the graph.</returns>
+    public VersionGraphScoop VersionGraph(string target) => new(_root, target);
+
     /// <summary>How the Workspace's tree stands beside its Layout.</summary>
     public StatusScoop Status => new(_root);
 

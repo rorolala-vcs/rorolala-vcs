@@ -58,6 +58,11 @@ public sealed class VaultScoop
     /// <summary>The inverse index the Vault keeps.</summary>
     public InverseIndexScoop InverseIndex => new(_root);
 
+    /// <summary>The graph around one version.</summary>
+    /// <param name="target">The version to draw around.</param>
+    /// <returns>The scope over the graph.</returns>
+    public VersionGraphScoop VersionGraph(string target) => new(_root, target);
+
     /// <inheritdoc/>
     protected override void IsValid()
     {
