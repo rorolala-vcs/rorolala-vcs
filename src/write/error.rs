@@ -105,6 +105,11 @@ pub enum WriteError {
         /// Why it failed.
         reason: String,
     },
+    /// No tree holds the path.
+    NotATree {
+        /// The path that is not inside a tree.
+        path: String,
+    },
 }
 
 impl fmt::Display for WriteError {
@@ -139,6 +144,7 @@ impl fmt::Display for WriteError {
             | Self::Json { reason }
             | Self::Internal { reason }
             | Self::Tree { reason } => formatter.write_str(reason),
+            Self::NotATree { path } => write!(formatter, "{path} is not inside a tree"),
         }
     }
 }

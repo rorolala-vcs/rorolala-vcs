@@ -272,10 +272,20 @@ pub fn remove_paths_at(
     let paths: Vec<String> = serde_json::from_str(paths).map_err(|error| WriteError::Json {
         reason: error.to_string(),
     })?;
+    let tree_root = if target.is_empty() {
+        directory.to_path_buf()
+    } else {
+        let target = Path::new(target);
+        if target.is_absolute() {
+            target.to_path_buf()
+        } else {
+            directory.join(target)
+        }
+    };
     let removal = remove_paths_for_workspace(
         &workspace,
-        directory,
-        target,
+        &tree_root,
+        "",
         &paths,
         RemoveOptions {
             cached,
