@@ -26,6 +26,20 @@ public sealed class VaultScoop
     /// <summary>The Vault's root.</summary>
     public DirectoryInfo Root => new(_root);
 
+    /// <summary>The native Vault, for the writes that hold it.</summary>
+    internal nint Handle
+    {
+        get
+        {
+            if (_handle == 0)
+            {
+                throw new InvalidOperationException("call Read first");
+            }
+
+            return _handle;
+        }
+    }
+
     /// <summary>Whether the Vault is locked.</summary>
     public bool Locked
     {
