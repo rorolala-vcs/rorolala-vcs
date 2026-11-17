@@ -4,7 +4,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use rorolala_layout::{LayoutPath, MutableData};
-use rorolala_storage::Key;
+use rorolala_storage::{Key, key_of_file};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_vcs::VCSIndex;
@@ -46,6 +46,7 @@ pub fn retrack_file(
     target: Option<&str>,
     fork: bool,
     only_index: bool,
+    force: bool,
 ) -> Result<Retracked, WriteError> {
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
@@ -76,6 +77,18 @@ pub fn retrack_file(
         what: format!("Layout entry {id}"),
     })?;
     let current = Key::new(entry.version());
+    let current_version =
+        index
+            .read_version(&current.to_string())
+            .map_err(|error| WriteError::Index {
+                reason: format!("{error:?}"),
+            })?;
+    let current_variant = index
+        .read_variant(&Key::new(*current_version.variant()).to_string())
+        .map_err(|error| WriteError::Index {
+            reason: format!("{error:?}"),
+        })?;
+    let current_storage = Key::new(*current_variant.storage_hash());
     if fork {
         if target.is_some() {
             return Err(WriteError::Precondition {
@@ -103,18 +116,7 @@ pub fn retrack_file(
             reason: error.to_string(),
         })?
     } else {
-        let version =
-            index
-                .read_version(&current.to_string())
-                .map_err(|error| WriteError::Index {
-                    reason: format!("reading version: {error:?}"),
-                })?;
-        let variant = index
-            .read_variant(&Key::new(*version.variant()).to_string())
-            .map_err(|error| WriteError::Index {
-                reason: format!("reading variant: {error:?}"),
-            })?;
-        let base = variant.base_version();
+        let base = current_variant.base_version();
         if *base == [0; 32] {
             return Err(WriteError::Precondition {
                 what: path.to_owned(),
@@ -130,6 +132,17 @@ pub fn retrack_file(
         .map_err(|error| WriteError::Index {
             reason: format!("{error:?}"),
         })?;
+    if !only_index && !force {
+        let on_disk = key_of_file(&resolved).map_err(|error| WriteError::Storage {
+            reason: error.to_string(),
+        })?;
+        if on_disk.digest() != current_storage.digest() {
+            return Err(WriteError::Precondition {
+                what: path.to_owned(),
+                reason: "dirty".to_owned(),
+            });
+        }
+    }
     if only_index {
         set_version(&layout, id, *named.digest())?;
     } else {
@@ -146,7 +159,8 @@ pub fn retrack_file(
 /// An owned JSON string the caller releases with `free_string`,
 /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
 /// `free_rola_write_error`. An empty `target` moves one version back, `fork` gives the path a fresh
-/// `Uuid`, and `only_index` leaves the work on disk alone.
+/// `Uuid`, and `only_index` leaves the work on disk alone. `force` goes past changes the record does
+/// not name.
 ///
 /// # Errors
 ///
@@ -159,10 +173,11 @@ pub fn retrack_file_at(
     target: &str,
     fork: bool,
     only_index: bool,
+    force: bool,
 ) -> Result<String, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let target = (!target.is_empty()).then_some(target);
-    let retracked = retrack_file(&workspace, directory, path, target, fork, only_index)?;
+    let retracked = retrack_file(&workspace, directory, path, target, fork, only_index, force)?;
 
     serde_json::to_string(&retracked).map_err(|error| WriteError::Json {
         reason: error.to_string(),
@@ -191,12 +206,12 @@ mod tests {
         fs::write(dir.join("a.txt"), b"two").unwrap();
         track_file(&workspace, &dir, "a.txt", "alice", "second", "", None).unwrap();
 
-        let back = retrack_file(&workspace, &dir, "a.txt", None, false, false).unwrap();
+        let back = retrack_file(&workspace, &dir, "a.txt", None, false, false, false).unwrap();
 
         assert_eq!(back.version, first.version);
         assert_eq!(fs::read(dir.join("a.txt")).unwrap(), b"one");
 
-        let forked = retrack_file(&workspace, &dir, "a.txt", None, true, true).unwrap();
+        let forked = retrack_file(&workspace, &dir, "a.txt", None, true, true, false).unwrap();
         assert_ne!(forked.id, first.id);
         assert_eq!(
             workspace
@@ -207,7 +222,23 @@ mod tests {
         );
 
         let absent = rorolala_storage::Key::new([9; 32]).to_string();
-        assert!(retrack_file(&workspace, &dir, "a.txt", Some(&absent), false, true).is_err());
+        assert!(
+            retrack_file(&workspace, &dir, "a.txt", Some(&absent), false, true, false).is_err()
+        );
+
+        fs::write(dir.join("a.txt"), b"dirty").unwrap();
+        assert!(
+            retrack_file(
+                &workspace,
+                &dir,
+                "a.txt",
+                Some(&first.version.to_string()),
+                false,
+                false,
+                false
+            )
+            .is_err()
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
