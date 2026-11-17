@@ -2644,6 +2644,19 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_layout_remove_entry(nint directory, nint layout, nint uuid);
 
     /// <summary>
+    /// Gives the entry at a path of a Layout a directory holds a new `Uuid`.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_switch_entry(nint directory, nint layout, nint path, nint uuid, nint version, nint owner, nint description);
+
+    /// <summary>
     /// Applies a batch of changes named as JSON to the Layout a directory is in.
     ///
     /// An empty string on success, or a `RolaWriteError *` the caller releases with
