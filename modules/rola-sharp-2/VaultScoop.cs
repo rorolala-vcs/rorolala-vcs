@@ -72,6 +72,9 @@ public sealed class VaultScoop
     /// <summary>The inverse index the Vault keeps.</summary>
     public InverseIndexScoop InverseIndex => new(_root);
 
+    /// <summary>The ignore rules the Vault hands down.</summary>
+    public IgnoreScoop Ignore => new(RolaPaths.VaultIgnoreRules(_root), _root);
+
     /// <summary>The graph around one version.</summary>
     /// <param name="target">The version to draw around.</param>
     /// <returns>The scope over the graph.</returns>

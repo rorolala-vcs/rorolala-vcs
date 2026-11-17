@@ -158,6 +158,27 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_workspace_exposes_its_ignore_rules()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var ignore = workspace.Ignore;
+            ignore.Read();
+
+            Assert.False(ignore.IsIgnored("a.psd"));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_rule_ignores_a_path()
     {
         var directory = Scratch();
