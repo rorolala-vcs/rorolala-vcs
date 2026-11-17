@@ -37,6 +37,7 @@ use uuid::Uuid;
 
 use librorolala::layout::{Batch, Layout, LayoutError, LayoutPath, MutableData};
 use librorolala::storage::Key;
+use librorolala::write::WriteError;
 
 use crate::Next;
 use crate::exit_codes::{
@@ -525,6 +526,21 @@ pub fn failed(error: &LayoutError) -> Next {
     match error {
         LayoutError::AlreadyExists => ErrorLayoutExists.into(),
         LayoutError::NotFound => ErrorLayoutMissing.into(),
+        other => ErrorLayoutFailed {
+            cause: other.to_string(),
+        }
+        .into(),
+    }
+}
+
+/// Renders a write the library refused, in the Layout command's own words.
+///
+/// The library names the category; the command names the missing path, the refused argument and the
+/// failure the same way it does for its own `LayoutError`s.
+pub fn failed_write(error: WriteError) -> Next {
+    match error {
+        WriteError::NotFound { .. } => ErrorLayoutMissing.into(),
+        WriteError::Layout { reason } => ErrorLayoutFailed { cause: reason }.into(),
         other => ErrorLayoutFailed {
             cause: other.to_string(),
         }

@@ -8,7 +8,6 @@
 use librorolala::daemon::{
     EntryRemove, PathMove, action_move_remote_path, action_remove_remote_path,
 };
-use librorolala::layout::EntryKind as LayoutEntryKind;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -35,7 +34,7 @@ use crate::exit_codes::EC_HELP;
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutFailed, ErrorLayoutHeld, ErrorLayoutMissing,
-    ErrorLayoutPathTaken, LayoutDid, ResultLayoutContent, chosen_writable, failed, path_of,
+    ErrorLayoutPathTaken, LayoutDid, ResultLayoutContent, chosen_writable, failed_write, path_of,
     remote_spec, set_cached_path, set_cached_removed, uuid_of,
 };
 
@@ -146,8 +145,8 @@ pub fn handle_layout_path_create(
         Err(next) => return next,
     };
 
-    if let Err(error) = layout.create_path(&path, id) {
-        return failed(&error);
+    if let Err(error) = librorolala::write::layout::create_path(&layout, &path, id) {
+        return failed_write(error);
     }
 
     ResultLayoutContent {
@@ -326,20 +325,8 @@ pub fn handle_layout_path_remove(
         Err(next) => return next,
     };
 
-    // A tree is one entry rather than a directory of entries, so unbinding its path would leave a
-    // tree the Layout holds and no path can reach, which a listing shows as `.`. What the path is
-    // removed from is the tree's one entry, then.
-    let tree = layout
-        .id_of(&path)
-        .and_then(|id| layout.entry(id).map(|data| (id, data)))
-        .filter(|(_, data)| data.kind() == LayoutEntryKind::Tree);
-
-    if let Some((id, _)) = tree {
-        if let Err(error) = layout.remove_entry(id) {
-            return failed(&error);
-        }
-    } else if let Err(error) = layout.remove_path(&path) {
-        return failed(&error);
+    if let Err(error) = librorolala::write::layout::remove_path(&layout, &path) {
+        return failed_write(error);
     }
 
     ResultLayoutContent {
@@ -533,13 +520,7 @@ pub fn handle_layout_path_move(
     if let Err(error) =
         librorolala::write::layout::move_path(&layout, workspace.get_ref().as_ref(), &from, &to)
     {
-        return match error {
-            librorolala::write::WriteError::NotFound { .. } => ErrorLayoutMissing.into(),
-            librorolala::write::WriteError::Layout { reason } => {
-                ErrorLayoutFailed::new(reason).into()
-            }
-            other => ErrorLayoutFailed::new(other.to_string()).into(),
-        };
+        return failed_write(error);
     }
 
     ResultLayoutContent {

@@ -244,6 +244,98 @@ pub fn move_path_at(
     move_path(&target, workspace.as_ref(), &from, &to)
 }
 
+/// Binds a path to an entry, or reports what stopped it.
+///
+/// # Errors
+///
+/// Returns [`WriteError::Layout`] when the path is already bound or the entry is not there.
+pub fn create_path(layout: &Layout, path: &LayoutPath, id: Uuid) -> Result<(), WriteError> {
+    layout
+        .create_path(path, id)
+        .map_err(|error| WriteError::Layout {
+            reason: error.to_string(),
+        })
+}
+
+/// Unbinds a path, taking a tree's one entry with it.
+///
+/// A tree is one entry rather than a directory of entries, so unbinding its path would leave a tree
+/// the Layout holds and no path can reach. What the path is removed from is the tree's entry, then.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NotFound`] when the path names nothing, and [`WriteError::Layout`] when the
+/// removal does not apply.
+pub fn remove_path(layout: &Layout, path: &LayoutPath) -> Result<(), WriteError> {
+    let tree = layout
+        .id_of(path)
+        .and_then(|id| layout.entry(id).map(|data| (id, data)))
+        .filter(|(_, data)| data.kind() == EntryKind::Tree);
+
+    let removed = match tree {
+        Some((id, _)) => layout.remove_entry(id),
+        None => layout.remove_path(path),
+    };
+
+    removed.map_err(|error| match error {
+        rorolala_layout::LayoutError::NotFound => WriteError::NotFound {
+            what: format!("Layout path `{}`", path.as_str()),
+        },
+        other => WriteError::Layout {
+            reason: other.to_string(),
+        },
+    })
+}
+
+/// Binds a path of a Layout a directory holds.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`,
+/// [`WriteError::NoLayout`] when it has no Layout, [`WriteError::InvalidPath`] when a path or a
+/// `Uuid` is not one the Layout accepts, and [`WriteError::Layout`] when the binding does not apply.
+#[lazyffi(export = rola_write_layout_create_path)]
+pub fn create_path_at(
+    directory: &Path,
+    layout: &str,
+    path: &str,
+    uuid: &str,
+) -> Result<(), WriteError> {
+    let target = open(directory, layout)?;
+    let path = path_of(path)?;
+    let id = Uuid::from_str(uuid).map_err(|error| WriteError::InvalidPath {
+        path: uuid.to_owned(),
+        reason: error.to_string(),
+    })?;
+
+    create_path(&target, &path, id)
+}
+
+/// Removes a path of a Layout a directory holds.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`,
+/// [`WriteError::NoLayout`] when it has no Layout, [`WriteError::InvalidPath`] when a path is not
+/// one a Layout accepts, and [`WriteError::Layout`] when the removal does not apply.
+#[lazyffi(export = rola_write_layout_remove_path)]
+pub fn remove_path_at(directory: &Path, layout: &str, path: &str) -> Result<(), WriteError> {
+    let target = open(directory, layout)?;
+    let path = path_of(path)?;
+
+    remove_path(&target, &path)
+}
+
 /// One change, as a request document names it.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
