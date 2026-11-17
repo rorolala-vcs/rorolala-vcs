@@ -51,9 +51,15 @@ public sealed class WorkspaceWriter : Writer
     /// <summary>Moves a path's record to a version, or one version back when none is named.</summary>
     /// <param name="path">The path, relative to the Workspace root or absolute.</param>
     /// <param name="target">The version key, or nothing for one version back.</param>
+    /// <param name="fork">Give the path a fresh Uuid holding what it records now.</param>
     /// <param name="onlyIndex">Leave the work on disk alone.</param>
     /// <returns>What was written.</returns>
-    public Retracked RetrackFile(string path, string? target = null, bool onlyIndex = false)
+    public Retracked RetrackFile(
+        string path,
+        string? target = null,
+        bool fork = false,
+        bool onlyIndex = false
+    )
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -62,7 +68,13 @@ public sealed class WorkspaceWriter : Writer
         var named = Utf8(target ?? string.Empty);
         try
         {
-            var answer = RorolalaBinding.rola_write_retrack_file(directory, at, named, onlyIndex);
+            var answer = RorolalaBinding.rola_write_retrack_file(
+                directory,
+                at,
+                named,
+                fork,
+                onlyIndex
+            );
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
                 throw WriteResults.From(answer.payload);

@@ -474,6 +474,9 @@ public sealed class WriteTests
                 tracked.Version.Replace("blake3:", string.Empty),
                 layout.Find("a.psd")?.Version
             );
+
+            var forked = writer.RetrackFile("a.psd", fork: true, onlyIndex: true);
+            Assert.NotEqual(tracked.Id, forked.Id);
         }
         finally
         {
