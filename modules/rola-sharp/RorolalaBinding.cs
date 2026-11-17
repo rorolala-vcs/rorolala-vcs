@@ -2507,7 +2507,7 @@ internal static partial class RorolalaBinding
     /// Runs one read named by a request document.
     ///
     /// An owned JSON string the caller releases with `free_string`, or a `RolaV2ReadError *` the caller
-    /// releases with `free_rola_v2_read_error`. The request is one object,
+    /// releases with `free_rola_v2read_error`. The request is one object,
     /// `{"kind":"tree_status","path":"..."}`, and the cancellation is checked before the read starts.
     ///
     /// Returns a result:
