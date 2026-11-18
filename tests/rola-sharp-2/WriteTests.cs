@@ -316,6 +316,7 @@ public sealed class WriteTests
             var workspace = new WorkspaceScoop(directory);
             Assert.True(workspace.Data.Exists);
             Assert.True(workspace.ConfigFile.Exists);
+            Assert.True(workspace.LayoutDirectory.Exists);
             Assert.Throws<RolaReadError>(() => workspace.TreeAt(".."));
             Assert.Throws<RolaReadError>(() => workspace.TruthLayout("../vault"));
             Assert.Throws<RolaReadError>(() => workspace.TruthLayout(""));
