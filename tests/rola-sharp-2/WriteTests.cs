@@ -744,6 +744,9 @@ public sealed class WriteTests
             var report = writer.Collect();
             Assert.NotNull(report.Index);
             Assert.NotNull(report.Storage);
+            var nothing = writer.Collect(storage: false, index: false);
+            Assert.Null(nothing.Index);
+            Assert.Null(nothing.Storage);
         }
         finally
         {
@@ -778,6 +781,9 @@ public sealed class WriteTests
             var report = writer.Collect();
             Assert.NotNull(report.Index);
             Assert.NotNull(report.Storage);
+            var nothing = writer.Collect(storage: false, index: false);
+            Assert.Null(nothing.Index);
+            Assert.Null(nothing.Storage);
         }
         finally
         {
