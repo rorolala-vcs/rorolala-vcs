@@ -337,6 +337,7 @@ public sealed class WriteTests
             var alignedLayout = vault.Layout;
             alignedLayout.Read();
             Assert.Equal("aligned", alignedLayout.Find("a.txt")?.Description);
+            Assert.Throws<RolaWriteError>(() => writer.Align("missing", first.Version));
 
             writer.Restore("a.txt", first.Version);
             Assert.Throws<RolaWriteError>(() => writer.Restore("missing", first.Version));
