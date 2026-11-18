@@ -4,9 +4,10 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use rorolala_layout::{Layout, LayoutPath};
-use rorolala_storage::Key;
+use rorolala_storage::{Key, RorolalaStorage};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
+use rorolala_vault::Vault;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
 use rorolala_workspace_analyze::{Cache, cache_path, entry_of};
@@ -161,15 +162,59 @@ pub fn restore(
         .ok_or(WriteError::NoStore)?;
     let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
     let root = normalize(workspace.get_root());
+    let (restored, relative) = restore_into(&layout, &store, &index, &root, cwd, path, version)?;
+    remember(&layout, &root, &relative)?;
+
+    Ok(restored)
+}
+
+/// Puts the content of `version` at `path` in a Vault.
+///
+/// `path` is relative to `cwd` or absolute, and must be inside the Vault and name an entry.
+///
+/// # Errors
+///
+/// Returns [`WriteError::InvalidPath`] when the path is outside the Vault or names no entry,
+/// [`WriteError::Precondition`] when the version does not read, [`WriteError::Index`] when the index
+/// cannot be read, and [`WriteError::Storage`] when the content cannot be extracted.
+pub fn restore_vault(
+    vault: &Vault,
+    cwd: &Path,
+    path: &str,
+    version: &str,
+) -> Result<Restored, WriteError> {
+    let layout = vault.layout().map_err(|error| WriteError::Layout {
+        reason: error.to_string(),
+    })?;
+    let store = vault
+        .get_current_rola_storage()
+        .ok_or(WriteError::NoStore)?;
+    let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
+    let root = normalize(vault.get_root());
+    let (restored, _) = restore_into(&layout, &store, &index, &root, cwd, path, version)?;
+
+    Ok(restored)
+}
+
+/// Puts a version's content at a path, answering what the Layout now names and where it is.
+fn restore_into(
+    layout: &Layout,
+    store: &RorolalaStorage,
+    index: &VCSIndex,
+    root: &Path,
+    cwd: &Path,
+    path: &str,
+    version: &str,
+) -> Result<(Restored, String), WriteError> {
     let resolved = if Path::new(path).is_absolute() {
         Path::new(path).to_path_buf()
     } else {
         cwd.join(path)
     };
     let resolved = normalize(&resolved);
-    let relative = relative_to(&root, &resolved).ok_or_else(|| WriteError::InvalidPath {
+    let relative = relative_to(root, &resolved).ok_or_else(|| WriteError::InvalidPath {
         path: path.to_owned(),
-        reason: "the path is outside the Workspace".to_owned(),
+        reason: "the path is outside the scope".to_owned(),
     })?;
     let layout_path = LayoutPath::new(&relative).map_err(|error| WriteError::InvalidPath {
         path: path.to_owned(),
@@ -199,14 +244,16 @@ pub fn restore(
     let runtime = tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
         reason: error.to_string(),
     })?;
-    runtime.block_on(extract_file(&store, &content, &resolved))?;
-    set_version(&layout, id, *target.digest())?;
-    remember(&layout, &root, &relative)?;
+    runtime.block_on(extract_file(store, &content, &resolved))?;
+    set_version(layout, id, *target.digest())?;
 
-    Ok(Restored {
-        id,
-        version: target,
-    })
+    Ok((
+        Restored {
+            id,
+            version: target,
+        },
+        relative,
+    ))
 }
 
 /// Puts a version's content back at a path under a Workspace.
@@ -225,6 +272,28 @@ pub fn restore(
 pub fn restore_at(directory: &Path, path: &str, version: &str) -> Result<String, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let restored = restore(&workspace, directory, path, version)?;
+
+    serde_json::to_string(&restored).map_err(|error| WriteError::Json {
+        reason: error.to_string(),
+    })
+}
+
+/// Puts a version's content back at a path under a Vault.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`,
+/// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoVault`] when no Vault holds `directory`, and the failures
+/// [`restore_vault`] names.
+#[lazyffi(export = rola_write_checkout_restore_vault)]
+pub fn restore_vault_at(directory: &Path, path: &str, version: &str) -> Result<String, WriteError> {
+    let vault = Vault::locate(directory).ok_or(WriteError::NoVault)?;
+    let restored = restore_vault(&vault, directory, path, version)?;
 
     serde_json::to_string(&restored).map_err(|error| WriteError::Json {
         reason: error.to_string(),
