@@ -54,6 +54,9 @@ public sealed class WorkspaceScoop
     /// <summary>Where the Workspace keeps the data that makes it one.</summary>
     public DirectoryInfo Data => new(RolaPaths.WorkspaceData(_root));
 
+    /// <summary>The Workspace configuration file.</summary>
+    public FileInfo ConfigFile => new(RolaPaths.WorkspaceConfig(_root));
+
     /// <summary>The native Workspace, for the writes that hold it.</summary>
     internal nint Handle
     {
