@@ -739,6 +739,38 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_sync_plan_reads_the_cached_Vault_Layout()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            File.WriteAllText(Path.Combine(directory, "a.psd"), "content");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+            writer.TrackFile("a.psd", "alice", "first");
+
+            var truth = Path.Combine(
+                RolaPaths.WorkspaceReadonlyLayouts(directory),
+                "vault",
+                RolaPaths.VaultLayoutName
+            );
+            CopyDirectory(RolaPaths.WorkspaceLayout(directory), truth);
+
+            var plan = writer.PlanSync("vault", "alice");
+
+            Assert.Equal("vault", plan.Vault);
+            Assert.True(plan.UpToDate >= 1);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_sync_plan_needs_the_cached_Vault_Layout()
     {
         var directory = Scratch();
@@ -982,6 +1014,20 @@ public sealed class WriteTests
         }
 
         throw new InvalidOperationException("the repository root was not found");
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.GetFiles(source))
+        {
+            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), true);
+        }
+
+        foreach (var directory in Directory.GetDirectories(source))
+        {
+            CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
+        }
     }
 
     private static void RunRola(string directory, string arguments)
