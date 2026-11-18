@@ -749,6 +749,12 @@ public sealed class WriteTests
             var nothing = writer.Collect(storage: false, index: false);
             Assert.Null(nothing.Index);
             Assert.Null(nothing.Storage);
+            var storageOnly = writer.Collect(storage: true, index: false);
+            Assert.Null(storageOnly.Index);
+            Assert.NotNull(storageOnly.Storage);
+            var indexOnly = writer.Collect(storage: false, index: true);
+            Assert.Null(indexOnly.Storage);
+            Assert.NotNull(indexOnly.Index);
         }
         finally
         {
@@ -786,6 +792,12 @@ public sealed class WriteTests
             var nothing = writer.Collect(storage: false, index: false);
             Assert.Null(nothing.Index);
             Assert.Null(nothing.Storage);
+            var storageOnly = writer.Collect(storage: true, index: false);
+            Assert.Null(storageOnly.Index);
+            Assert.NotNull(storageOnly.Storage);
+            var indexOnly = writer.Collect(storage: false, index: true);
+            Assert.Null(indexOnly.Storage);
+            Assert.NotNull(indexOnly.Index);
         }
         finally
         {
