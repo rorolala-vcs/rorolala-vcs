@@ -86,6 +86,12 @@ pub fn remove_paths(
     let targets = collect_targets(&entries, &root, cwd, paths, options.recursive)?;
     apply_targets(&mut entries, &mut conflicts, &root, &targets, options)?;
 
+    let mut checkout = crate::write::checkout::Checkout::open(layout, tree.root());
+    for path in &targets {
+        checkout.forget(path)?;
+    }
+    checkout.finish()?;
+
     prune_empty_directories(&mut entries);
 
     let structure = TreeStructure::build(None, entries.values().cloned()).map_err(|error| {
