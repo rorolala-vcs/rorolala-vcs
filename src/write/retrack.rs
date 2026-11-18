@@ -151,6 +151,7 @@ pub fn retrack_file(
     }
     if options.only_index {
         set_version(&layout, id, *named.digest())?;
+        crate::write::checkout::forget(&layout, &root, &relative)?;
     } else {
         restore(workspace, cwd, path, &named.to_string())?;
     }
@@ -317,6 +318,16 @@ mod tests {
                 .entry(first.id)
                 .map(|entry| entry.version()),
             Some(*first.version.digest())
+        );
+
+        let layout = workspace.layout().unwrap();
+        let cache = rorolala_workspace_analyze::Cache::read(
+            &rorolala_workspace_analyze::cache_path(&dir, &layout),
+        );
+        assert!(
+            cache
+                .get(&rorolala_layout::LayoutPath::from_relative("a.txt".as_ref()).unwrap())
+                .is_none()
         );
 
         let _ = fs::remove_dir_all(&dir);
