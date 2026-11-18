@@ -35,6 +35,18 @@ int main(void) {
         return 2;
     }
 
+    RorolalaResult nowhere = rola_write_track_file(
+        dir,
+        "a.txt",
+        "alice",
+        "first",
+        "",
+        "",
+        ""
+    );
+    want(nowhere.tag == RorolalaResult_Err, "tracking outside a Workspace fails");
+    free_rola_write_error(nowhere.payload);
+
     RorolalaResult made = create_workspace(dir);
     want(made.tag == RorolalaResult_Ok, "a Workspace is made");
 
