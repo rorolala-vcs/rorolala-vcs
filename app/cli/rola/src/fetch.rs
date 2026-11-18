@@ -109,15 +109,6 @@ impl<'a> Sources<'a> {
         self.inner.bring(store, keys)
     }
 
-    /// Sends `keys` to the Vault the run is speaking to.
-    ///
-    /// # Errors
-    ///
-    /// Returns the exchange's own failure as a message.
-    pub fn send(&self, store: Option<&RorolalaStorage>, keys: &[Key]) -> Result<usize, String> {
-        self.inner.send(store, keys)
-    }
-
     /// Whether there is a Vault to ask at all.
     #[must_use]
     pub fn can_ask(&self) -> bool {

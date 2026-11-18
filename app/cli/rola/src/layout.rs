@@ -1,11 +1,11 @@
-//! The `rola layout` namespace: the one Layout a Workspace works in and the one a Vault keeps.
+﻿//! The `rola layout` namespace: the one Layout a Workspace works in and the one a Vault keeps.
 //!
 //! A Workspace works in one Layout and a Vault keeps one. What is here is what the two have in
 //! common (where a run's Layout is, and how a failure to work on it is said) beside the
 //! subcommands, each in a file of its own: listing it, tracking the Vault it goes to, fetching
 //! that Vault's own Layout, and reading and changing what a Layout names.
 
-pub use librorolala::write::layout::{add_cached_entry, cached_copy, set_cached_version};
+pub use librorolala::write::layout::cached_copy;
 
 pub mod cmd_layout;
 pub mod cmd_layout_entries;

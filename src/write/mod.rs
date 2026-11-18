@@ -18,6 +18,7 @@ pub mod progress;
 pub mod retrack;
 pub mod storage;
 pub mod sync;
+pub mod sync_apply;
 pub mod track;
 pub mod tree;
 pub mod tree_init;
