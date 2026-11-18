@@ -22,7 +22,7 @@
 //! one kept whole. What a Vault keeps is not something this side has to learn before it can ask, which
 //! is why asking is one exchange rather than a discovery and a fetching of what it discovered.
 //!
-//! What was brought is said once, on stderr, when the run is done with it: a fetch a run did not
+//! What was brought is answered by [`Sources::took`], for the caller to say: a fetch a run did not
 //! make is one it does not report, and an offline run makes none at all.
 
 use std::cell::RefCell;
@@ -423,6 +423,8 @@ fn chooser(asked: &[Asked], left: &[Key]) -> Option<(usize, Vec<Key>)> {
 
 #[cfg(test)]
 mod tests {
+    use rorolala_utils_location::Locate as _;
+
     use super::*;
 
     /// A key that is told apart from another by its digest alone.
@@ -500,5 +502,23 @@ mod tests {
         let (index, _) = chooser(&asked, &[key(1)]).unwrap();
 
         assert_eq!(index, 1);
+    }
+
+    /// A source with nowhere to ask has nothing to bring and nothing to report.
+    #[test]
+    fn an_offline_source_asks_nobody() {
+        let dir = std::env::temp_dir().join(format!("rola-fetch-offline-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+
+        let account = Account::default();
+        let sources = Sources::new(&workspace, &account, Vec::new(), true).unwrap();
+
+        assert!(!sources.can_ask());
+        assert_eq!(sources.took().len(), 0);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
