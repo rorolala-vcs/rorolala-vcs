@@ -245,6 +245,11 @@ public sealed class WriteTests
             vault.Read();
             var writer = new VaultWriter(vault);
 
+            using (var guard = writer.Lock())
+            {
+                Assert.NotNull(guard);
+            }
+
             var packed = writer.Pack();
 
             Assert.NotNull(packed);
