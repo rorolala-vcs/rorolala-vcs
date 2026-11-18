@@ -1,4 +1,4 @@
-﻿//! Content a run brings from the Vaults it can reach, at the moment it is needed.
+//! Content a run brings from the Vaults it can reach, at the moment it is needed.
 //!
 //! A Layout names versions, and a version is only a meaning once the store holds what it stored.
 //! Which is what a run that writes a version's content back (a pull, a restore, a bring) has to
@@ -518,6 +518,10 @@ mod tests {
 
         assert!(!sources.can_ask());
         assert_eq!(sources.took().len(), 0);
+
+        let store = workspace.get_current_rola_storage().unwrap();
+        let key = key(9);
+        assert_eq!(sources.bring(&store, &[key]), vec![key]);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
