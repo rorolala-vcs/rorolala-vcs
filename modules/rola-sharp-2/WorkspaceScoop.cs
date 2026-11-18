@@ -91,7 +91,21 @@ public sealed class WorkspaceScoop
     /// <summary>The copy of a Vault's truth Layout a fetch left here.</summary>
     /// <param name="vault">The Vault whose copy is read.</param>
     /// <returns>The scope over the copy.</returns>
-    public TruthLayoutScoop TruthLayout(string vault) => new(_root, vault);
+    public TruthLayoutScoop TruthLayout(string vault)
+    {
+        ArgumentNullException.ThrowIfNull(vault);
+        if (
+            vault.Length == 0
+            || vault is "." or ".."
+            || vault.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            || vault.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal)
+        )
+        {
+            throw new RolaReadError(RolaReadErrorKind.InvalidArgument, vault, "the Vault name is not one path component");
+        }
+
+        return new TruthLayoutScoop(_root, vault);
+    }
 
     /// <summary>The store the Workspace keeps.</summary>
     public StorageScoop Storage => new(RolaPaths.WorkspaceStorage(_root));
