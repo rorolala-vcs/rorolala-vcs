@@ -357,6 +357,9 @@ mod tests {
         let report = collect_at(&dir, true, true, 0).unwrap();
         assert!(report.contains("\"removed\":0"), "{report}");
 
+        let neither = collect_at(&dir, false, false, 0).unwrap();
+        assert_eq!(neither, r#"{"index":null,"storage":null}"#);
+
         let _ = fs::remove_dir_all(&dir);
     }
 
