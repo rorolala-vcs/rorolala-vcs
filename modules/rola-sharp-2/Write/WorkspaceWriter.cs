@@ -325,22 +325,17 @@ public sealed class WorkspaceWriter : Writer
     {
         ArgumentNullException.ThrowIfNull(path);
 
-        if (!NoCheck)
-        {
-            var layout = _workspace.Layout;
-            layout.Read();
-            var entry =
-                layout.Find(path)
-                ?? throw new RolaWriteError(
-                    RolaWriteErrorKind.InvalidPath,
-                    path,
-                    "the Layout names no such path"
-                );
+        var layout = _workspace.Layout;
+        layout.Read();
+        var entry =
+            layout.Find(path)
+            ?? throw new RolaWriteError(
+                RolaWriteErrorKind.InvalidPath,
+                path,
+                "the Layout names no such path"
+            );
 
-            new LayoutWriter(layout).RemoveEntry(Guid.Parse(entry.Uuid));
-        }
-
-        Forget(path);
+        RemoveEntry(Guid.Parse(entry.Uuid));
     }
 
     /// <summary>Forgets the reading of a path the run took out.</summary>

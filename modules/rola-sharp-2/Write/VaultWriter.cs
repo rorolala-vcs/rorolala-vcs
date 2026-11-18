@@ -52,20 +52,17 @@ public sealed class VaultWriter : Writer
     {
         ArgumentNullException.ThrowIfNull(path);
 
-        if (!NoCheck)
-        {
-            var layout = _vault.Layout;
-            layout.Read();
-            var entry =
-                layout.Find(path)
-                ?? throw new RolaWriteError(
-                    RolaWriteErrorKind.InvalidPath,
-                    path,
-                    "the Layout names no such path"
-                );
+        var layout = _vault.Layout;
+        layout.Read();
+        var entry =
+            layout.Find(path)
+            ?? throw new RolaWriteError(
+                RolaWriteErrorKind.InvalidPath,
+                path,
+                "the Layout names no such path"
+            );
 
-            new LayoutWriter(layout).RemoveEntry(Guid.Parse(entry.Uuid));
-        }
+        RemoveEntry(Guid.Parse(entry.Uuid));
     }
 
     /// <summary>Reads what a collecting run would take away.</summary>
