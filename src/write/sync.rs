@@ -755,6 +755,8 @@ mod tests {
     use crate::storage::{Codec, Key, RorolalaStorage};
     use crate::tree::{FileMode, TreeEntry, TreeStructure};
     use crate::vcs::{VCSIndex, Variant, Version};
+    use crate::write::WriteError;
+    use rorolala_workspace::Workspace;
 
     use super::{
         Direction, Kind, Relation, chain_store_keys, create_remote_path, decide, kept,
@@ -988,6 +990,19 @@ mod tests {
             decide(&local, &remote, Some("bob"), "alice", Relation::Apart),
             Kind::Refused
         );
+    }
+
+    #[test]
+    fn a_plan_without_a_cached_layout_is_refused() {
+        let dir = std::env::temp_dir().join(format!("rola-write-sync-plan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+
+        let error = super::plan_at(&dir, "vault", "alice", "both", false).unwrap_err();
+        assert!(matches!(error, WriteError::NotCached));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
