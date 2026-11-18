@@ -763,6 +763,8 @@ public sealed class WriteTests
 
             Assert.Equal("vault", plan.Vault);
             Assert.True(plan.UpToDate >= 1);
+            Assert.True(writer.PlanSync("vault", "alice", SyncDirection.Up).UpToDate >= 1);
+            Assert.True(writer.PlanSync("vault", "alice", SyncDirection.Down).UpToDate >= 1);
         }
         finally
         {
