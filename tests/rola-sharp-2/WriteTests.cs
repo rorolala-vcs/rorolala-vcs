@@ -253,6 +253,8 @@ public sealed class WriteTests
             var packed = writer.Pack();
 
             Assert.NotNull(packed);
+            Assert.NotNull(writer.Pack(storage: true, index: false));
+            Assert.NotNull(writer.Pack(storage: false, index: true));
         }
         finally
         {
