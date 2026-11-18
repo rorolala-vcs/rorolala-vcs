@@ -736,6 +736,8 @@ public sealed class WriteTests
             Assert.NotNull(plan.Storage);
             Assert.Null(writer.PlanCollect(storage: true, index: false).Index);
             Assert.Null(writer.PlanCollect(storage: false, index: true).Storage);
+            Assert.Null(writer.PlanCollect(storage: false, index: false).Index);
+            Assert.Null(writer.PlanCollect(storage: false, index: false).Storage);
 
             var report = writer.Collect();
             Assert.NotNull(report.Index);
@@ -766,6 +768,8 @@ public sealed class WriteTests
             Assert.NotNull(plan.Storage);
             Assert.Null(writer.PlanCollect(storage: true, index: false).Index);
             Assert.Null(writer.PlanCollect(storage: false, index: true).Storage);
+            Assert.Null(writer.PlanCollect(storage: false, index: false).Index);
+            Assert.Null(writer.PlanCollect(storage: false, index: false).Storage);
 
             var report = writer.Collect();
             Assert.NotNull(report.Index);
