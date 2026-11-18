@@ -51,6 +51,26 @@ int main(void) {
     want(answer.payload != NULL, "the failure carries an error");
 
     free_rola_write_error(answer.payload);
+
+    RorolalaResult made = create_workspace(dir);
+    want(made.tag == RorolalaResult_Ok, "a Workspace is made");
+
+    RorolalaResult empty = rola_write_sync(
+        dir,
+        "vault",
+        "alice",
+        "missing.pem",
+        "rola://127.0.0.1/",
+        "both",
+        false,
+        false,
+        false,
+        false
+    );
+    want(empty.tag == RorolalaResult_Ok, "a run with every side left alone succeeds");
+    want(empty.payload != NULL, "the run answers with its numbers");
+
+    free_string(empty.payload);
     remove_tree(dir);
 
     return finish();

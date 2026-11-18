@@ -973,6 +973,33 @@ mod tests {
     use crate::write::WriteError;
 
     #[test]
+    fn a_sync_run_with_every_side_left_alone_answers_with_nothing() {
+        let dir = std::env::temp_dir().join(format!("rola-write-sync-none-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        rorolala_workspace::Workspace::create(&dir).unwrap();
+
+        let answer = sync_at(
+            &dir,
+            "vault",
+            "alice",
+            "missing.pem",
+            "rola://127.0.0.1/",
+            "both",
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let read: serde_json::Value = serde_json::from_str(&answer).unwrap();
+        assert_eq!(read["applied"], 0);
+        assert_eq!(read["received"], 0);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_sync_run_outside_a_workspace_is_refused() {
         let dir = std::env::temp_dir().join(format!("rola-write-sync-run-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
