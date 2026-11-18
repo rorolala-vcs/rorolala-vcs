@@ -1,4 +1,4 @@
-﻿//! The plan `rola sync` makes: what the Layout being worked in and the Vault it tracks each hold,
+//! The plan `rola sync` makes: what the Layout being worked in and the Vault it tracks each hold,
 //! and what is to move between them.
 //!
 //! The plan is read off three things: the Layout being worked in, the copy of the Vault's Layout a
@@ -756,6 +756,7 @@ mod tests {
     use crate::tree::{FileMode, TreeEntry, TreeStructure};
     use crate::vcs::{VCSIndex, Variant, Version};
     use crate::write::WriteError;
+    use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
 
     use super::{
@@ -1001,6 +1002,47 @@ mod tests {
 
         let error = super::plan_at(&dir, "vault", "alice", "both", false).unwrap_err();
         assert!(matches!(error, WriteError::NotCached));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_plan_reads_the_cached_layout() {
+        let dir = std::env::temp_dir().join(format!("rola-write-sync-plan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        std::fs::write(dir.join("a.txt"), b"one").unwrap();
+        let tracked = crate::write::track::track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            crate::write::track::TrackOptions::default(),
+        )
+        .unwrap();
+
+        let truth = workspace.readonly_layouts_dir("vault", "truth");
+        std::fs::create_dir_all(&truth).unwrap();
+        let remote = crate::layout::Layout::open(&truth).unwrap();
+        let mut batch = remote.batch();
+        batch
+            .create_file(
+                uuid::Uuid::new_v4(),
+                crate::layout::MutableData::new(
+                    None,
+                    *tracked.version.digest(),
+                    "remote".to_owned(),
+                ),
+                &LayoutPath::from_relative("remote.txt".as_ref()).unwrap(),
+            )
+            .unwrap();
+        batch.commit().unwrap();
+
+        let plan = super::plan_at(&dir, "vault", "alice", "both", false).unwrap();
+        assert!(plan.contains("remote.txt"), "{plan}");
 
         let _ = std::fs::remove_dir_all(&dir);
     }
