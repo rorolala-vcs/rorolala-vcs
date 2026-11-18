@@ -341,6 +341,7 @@ public sealed class WriteTests
 
             writer.Restore("a.txt", first.Version);
             Assert.Throws<RolaWriteError>(() => writer.Restore("missing", first.Version));
+            Assert.Throws<RolaWriteError>(() => writer.Restore("a.txt", "not-a-version"));
 
             Assert.Equal("content", File.ReadAllText(Path.Combine(vaultPath, "a.txt")));
 
