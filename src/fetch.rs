@@ -5,14 +5,14 @@
 //! have in front of it, and what it should not pay for until then: a Vault is reached for one
 //! object that is not here, not for a whole store that mostly is.
 //!
-//! Bringing one object is [`action_sync_hashes`](librorolala::daemon::action_sync_hashes_async),
+//! Bringing one object is [`action_sync_hashes`](crate::daemon::action_sync_hashes_async),
 //! which carries the named keys both ways and asks nothing about the rest. Which Vault to ask is
 //! not fixed: every Vault the Workspace has bound is a candidate, and since a key is the hash of its
 //! content, any of them holding it hands back the same object. The one the run named is asked first,
 //! and what it cannot cover is asked of the others.
 //!
 //! Asking costs a connection, so the asking is planned: each candidate is asked *what it holds* once
-//!, [`action_list_remote`](librorolala::daemon::action_list_remote_async), the same listing
+//!, [`action_list_remote`](crate::daemon::action_list_remote_async), the same listing
 //! `storage ls-remote-storaged` prints, and what is left is taken from whichever candidate covers
 //! the most of it, so the fewest Vaults are reached. A candidate that cannot be reached, or that
 //! answers with none of what is left, is passed over rather than waited on.
