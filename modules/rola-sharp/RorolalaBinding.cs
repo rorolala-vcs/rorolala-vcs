@@ -2913,6 +2913,19 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_layout_apply(nint directory, nint layout, nint ops);
 
     /// <summary>
+    /// Lays the store and index of the Workspace a directory is in out afresh.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_pack(nint directory, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index);
+
+    /// <summary>
     /// Makes a progress handle for a C caller.
     ///
     /// A `RolaProgress *` the caller releases with `free_rola_progress`, or null when one cannot be

@@ -154,6 +154,31 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Lays the Workspace's store and index out afresh.</summary>
+    /// <param name="storage">Whether to pack the store.</param>
+    /// <param name="index">Whether to pack the VCS index.</param>
+    /// <returns>What changed.</returns>
+    public Packed Pack(bool storage = true, bool index = true)
+    {
+        var directory = Utf8(_workspace.Root.FullName);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_pack(directory, storage, index);
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new Packed(RolaJson.Flag(document.RootElement, "changed"));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+        }
+    }
+
     /// <summary>Records a file's content as a version and names it in the Layout.</summary>
     /// <param name="path">The file's path, relative to the Workspace root or absolute.</param>
     /// <param name="creator">The creator's name.</param>
