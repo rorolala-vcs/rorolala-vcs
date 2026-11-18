@@ -15,6 +15,29 @@ public sealed class StorageWriter : Writer
     public StorageWriter(StorageScoop storage) =>
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
 
+    /// <summary>Lays the store out afresh.</summary>
+    /// <returns>What changed.</returns>
+    public Packed Pack()
+    {
+        var directory = Utf8(_storage.Root.FullName);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_pack_storage(directory);
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new Packed(RolaJson.Flag(document.RootElement, "changed"));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+        }
+    }
+
     /// <summary>Puts a file's content into the store.</summary>
     /// <param name="file">The file to store.</param>
     /// <param name="policy">The cut to use, or nothing for the store's own choice.</param>

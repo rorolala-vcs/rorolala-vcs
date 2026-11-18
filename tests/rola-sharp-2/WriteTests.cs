@@ -572,6 +572,11 @@ public sealed class WriteTests
             var packed = writer.Pack();
             Assert.NotNull(packed);
 
+            var storePacked = new StorageWriter(workspace.Storage).Pack();
+            Assert.NotNull(storePacked);
+            var indexPacked = new VCSIndexWriter(workspace.VCSIndex).Pack();
+            Assert.NotNull(indexPacked);
+
             File.WriteAllText(Path.Combine(directory, "b.psd"), "other");
             var other = writer.TrackFile("b.psd", "alice", "other");
             Assert.Throws<RolaWriteError>(
