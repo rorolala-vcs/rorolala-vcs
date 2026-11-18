@@ -869,6 +869,25 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_sync_run_needs_an_account()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+
+            Assert.Throws<ArgumentNullException>(() => writer.Sync("vault", null!));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_sync_plan_needs_the_cached_Vault_Layout()
     {
         var directory = Scratch();
