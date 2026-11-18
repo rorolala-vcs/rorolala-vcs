@@ -7,6 +7,7 @@ use rorolala_layout::{LayoutPath, MutableData};
 use rorolala_storage::{Key, key_of_file};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
+use rorolala_vault::Vault;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
 use serde::Serialize;
@@ -14,7 +15,7 @@ use uuid::Uuid;
 
 use crate::write::{
     WriteError,
-    checkout::restore,
+    checkout::{restore, restore_vault},
     layout::{set_version, switch_entry},
     tree::relative_to,
 };
@@ -159,6 +160,115 @@ pub fn retrack_file(
     Ok(Retracked { id, version: named })
 }
 
+/// Moves the record of `path` in a Vault to `target`, or one version back when it is not named.
+///
+/// # Errors
+///
+/// Returns [`WriteError::InvalidPath`] when the path is outside the Vault or names no entry,
+/// [`WriteError::Precondition`] when there is no version to move to, [`WriteError::Index`] when the
+/// history cannot be read, and the failures [`restore_vault`] names.
+pub fn retrack_vault_file(
+    vault: &Vault,
+    cwd: &Path,
+    path: &str,
+    target: Option<&str>,
+    options: RetrackOptions,
+) -> Result<Retracked, WriteError> {
+    let layout = vault.layout().map_err(|error| WriteError::Layout {
+        reason: error.to_string(),
+    })?;
+    let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
+    let root = normalize(vault.get_root());
+    let resolved = if Path::new(path).is_absolute() {
+        Path::new(path).to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+    let resolved = normalize(&resolved);
+    let relative = relative_to(&root, &resolved).ok_or_else(|| WriteError::InvalidPath {
+        path: path.to_owned(),
+        reason: "the path is outside the Vault".to_owned(),
+    })?;
+    let layout_path = LayoutPath::new(&relative).map_err(|error| WriteError::InvalidPath {
+        path: path.to_owned(),
+        reason: error.to_string(),
+    })?;
+    let id = layout
+        .id_of(&layout_path)
+        .ok_or_else(|| WriteError::InvalidPath {
+            path: path.to_owned(),
+            reason: "the Layout names no such path".to_owned(),
+        })?;
+    let entry = layout.entry(id).ok_or_else(|| WriteError::NotFound {
+        what: format!("Layout entry {id}"),
+    })?;
+    let current = Key::new(entry.version());
+    let current_version =
+        index
+            .read_version(&current.to_string())
+            .map_err(|error| WriteError::Index {
+                reason: format!("{error:?}"),
+            })?;
+    let current_variant = index
+        .read_variant(&Key::new(*current_version.variant()).to_string())
+        .map_err(|error| WriteError::Index {
+            reason: format!("{error:?}"),
+        })?;
+    let current_storage = Key::new(*current_variant.storage_hash());
+    if options.fork {
+        if target.is_some() {
+            return Err(WriteError::Precondition {
+                what: path.to_owned(),
+                reason: "a fork names no target version".to_owned(),
+            });
+        }
+        let data = MutableData::new(
+            entry.owner().map(str::to_owned),
+            entry.version(),
+            entry.description().to_owned(),
+        )
+        .with_preference(entry.preference().map(str::to_owned));
+        let forked = Uuid::new_v4();
+        switch_entry(&layout, &layout_path, forked, data)?;
+
+        return Ok(Retracked {
+            id: forked,
+            version: current,
+        });
+    }
+    let named = resolve_target(&current_variant, target, path)?;
+
+    index
+        .read_version(&named.to_string())
+        .map_err(|error| WriteError::Index {
+            reason: format!("{error:?}"),
+        })?;
+    if options.deny_jump && named != current && !is_ancestor(&index, &named, &current)? {
+        return Err(WriteError::Precondition {
+            what: path.to_owned(),
+            reason: "the target is not on the path's chain".to_owned(),
+        });
+    }
+    if !options.only_index && !options.force {
+        let on_disk = key_of_file(&resolved).map_err(|error| WriteError::Storage {
+            reason: error.to_string(),
+        })?;
+        if on_disk.digest() != current_storage.digest() {
+            return Err(WriteError::Precondition {
+                what: path.to_owned(),
+                reason: "dirty".to_owned(),
+            });
+        }
+    }
+    if options.only_index {
+        set_version(&layout, id, *named.digest())?;
+    } else {
+        restore_vault(vault, cwd, path, &named.to_string())?;
+    }
+
+    Ok(Retracked { id, version: named })
+}
+
 /// Whether `ancestor` is `target` or is on the chain behind it.
 fn is_ancestor(index: &VCSIndex, target: &Key, ancestor: &Key) -> Result<bool, WriteError> {
     let mut at = *target;
@@ -253,6 +363,49 @@ pub fn retrack_file_at(
         deny_jump,
     };
     let retracked = retrack_file(&workspace, directory, path, target, options)?;
+
+    serde_json::to_string(&retracked).map_err(|error| WriteError::Json {
+        reason: error.to_string(),
+    })
+}
+
+/// Moves the record of a path under a Vault to a version.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`,
+/// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. An empty `target` moves one version back, `fork` gives the path a fresh
+/// `Uuid`, and `only_index` leaves the work on disk alone. `force` goes past changes the record does
+/// not name, and `deny_jump` refuses a target off the path's chain.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoVault`] when no Vault holds `directory`, and the failures
+/// [`retrack_vault_file`] names.
+#[allow(
+    clippy::fn_params_excessive_bools,
+    reason = "the C ABI spells each retrack flag as its own bool"
+)]
+#[lazyffi(export = rola_write_retrack_vault_file)]
+pub fn retrack_vault_file_at(
+    directory: &Path,
+    path: &str,
+    target: &str,
+    fork: bool,
+    only_index: bool,
+    force: bool,
+    deny_jump: bool,
+) -> Result<String, WriteError> {
+    let vault = Vault::locate(directory).ok_or(WriteError::NoVault)?;
+    let target = (!target.is_empty()).then_some(target);
+    let options = RetrackOptions {
+        fork,
+        only_index,
+        force,
+        deny_jump,
+    };
+    let retracked = retrack_vault_file(&vault, directory, path, target, options)?;
 
     serde_json::to_string(&retracked).map_err(|error| WriteError::Json {
         reason: error.to_string(),
