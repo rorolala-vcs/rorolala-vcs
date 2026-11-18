@@ -66,6 +66,18 @@ public sealed class WorkspaceScoop
     /// <summary>Where the Workspace keeps its VCS index.</summary>
     public DirectoryInfo IndexDirectory => new(RolaPaths.WorkspaceIndex(_root));
 
+    /// <summary>Where the Workspace keeps the accounts it knows.</summary>
+    public DirectoryInfo KeysDirectory => new(RolaPaths.WorkspaceKeys(_root));
+
+    /// <summary>Where the Workspace keeps its reading cache.</summary>
+    public DirectoryInfo CacheDirectory => new(RolaPaths.WorkspaceCache(_root));
+
+    /// <summary>Where the Workspace keeps fetched Layout copies.</summary>
+    public DirectoryInfo ReadonlyLayoutsDirectory => new(RolaPaths.WorkspaceReadonlyLayouts(_root));
+
+    /// <summary>The file a run edits to write the next message.</summary>
+    public FileInfo EditingFile => new(RolaPaths.WorkspaceEditing(_root));
+
     /// <summary>The native Workspace, for the writes that hold it.</summary>
     internal nint Handle
     {

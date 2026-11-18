@@ -60,6 +60,15 @@ public sealed class VaultScoop
     /// <summary>Where the Vault keeps its VCS index.</summary>
     public DirectoryInfo IndexDirectory => new(RolaPaths.VaultIndex(_root));
 
+    /// <summary>Where the Vault keeps its Layout.</summary>
+    public DirectoryInfo LayoutDirectory => new(RolaPaths.VaultLayout(_root));
+
+    /// <summary>Where the Vault keeps the accounts it knows.</summary>
+    public DirectoryInfo KeysDirectory => new(RolaPaths.VaultKeys(_root));
+
+    /// <summary>Where the Vault keeps the Vaults inside it.</summary>
+    public DirectoryInfo VaultsDirectory => new(RolaPaths.VaultVaults(_root));
+
     /// <summary>The native Vault, for the writes that hold it.</summary>
     internal nint Handle
     {
