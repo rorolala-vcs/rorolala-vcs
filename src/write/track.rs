@@ -252,6 +252,7 @@ mod tests {
             "first",
             TrackOptions {
                 owner: Some("alice".to_owned()),
+                description: "note".to_owned(),
                 ..TrackOptions::default()
             },
         )
@@ -277,6 +278,12 @@ mod tests {
                 .entry(tracked.id)
                 .and_then(|entry| entry.owner().map(str::to_owned)),
             Some("alice".to_owned())
+        );
+        assert_eq!(
+            layout
+                .entry(tracked.id)
+                .map(|entry| entry.description().to_owned()),
+            Some("note".to_owned())
         );
 
         let index = rorolala_vcs::VCSIndex::locate(&dir).unwrap();
