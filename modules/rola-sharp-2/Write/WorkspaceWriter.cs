@@ -135,6 +135,30 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Removes a path's record, leaving the work where it is.</summary>
+    /// <param name="path">The path, relative to the Workspace root.</param>
+    public void Untrack(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        if (!NoCheck)
+        {
+            var layout = _workspace.Layout;
+            layout.Read();
+            var entry =
+                layout.Find(path)
+                ?? throw new RolaWriteError(
+                    RolaWriteErrorKind.InvalidPath,
+                    path,
+                    "the Layout names no such path"
+                );
+
+            new LayoutWriter(layout).RemoveEntry(Guid.Parse(entry.Uuid));
+        }
+
+        Forget(path);
+    }
+
     /// <summary>Forgets the reading of a path the run took out.</summary>
     /// <param name="path">The path, relative to the Workspace root.</param>
     public void Forget(string path)
