@@ -1,4 +1,4 @@
-//! Writing a Workspace, a Vault, a store and an index: the operations the command line and the C
+﻿//! Writing a Workspace, a Vault, a store and an index: the operations the command line and the C
 //! ABI share.
 //!
 //! The modules own one object at a time. What this module owns is the order: what is read before
@@ -16,6 +16,7 @@ pub mod pack;
 pub mod progress;
 pub mod retrack;
 pub mod storage;
+pub mod sync;
 pub mod track;
 pub mod tree;
 pub mod tree_init;
