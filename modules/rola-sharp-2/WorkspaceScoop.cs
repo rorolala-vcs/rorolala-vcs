@@ -60,6 +60,12 @@ public sealed class WorkspaceScoop
     /// <summary>Where the Workspace keeps its Layouts.</summary>
     public DirectoryInfo LayoutDirectory => new(RolaPaths.WorkspaceLayout(_root));
 
+    /// <summary>Where the Workspace keeps its store.</summary>
+    public DirectoryInfo StorageDirectory => new(RolaPaths.WorkspaceStorage(_root));
+
+    /// <summary>Where the Workspace keeps its VCS index.</summary>
+    public DirectoryInfo IndexDirectory => new(RolaPaths.WorkspaceIndex(_root));
+
     /// <summary>The native Workspace, for the writes that hold it.</summary>
     internal nint Handle
     {

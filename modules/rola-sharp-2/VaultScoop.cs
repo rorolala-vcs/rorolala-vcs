@@ -54,6 +54,12 @@ public sealed class VaultScoop
     /// <summary>The Vault configuration file.</summary>
     public FileInfo ConfigFile => new(RolaPaths.VaultConfig(_root));
 
+    /// <summary>Where the Vault keeps its store.</summary>
+    public DirectoryInfo StorageDirectory => new(RolaPaths.VaultStorage(_root));
+
+    /// <summary>Where the Vault keeps its VCS index.</summary>
+    public DirectoryInfo IndexDirectory => new(RolaPaths.VaultIndex(_root));
+
     /// <summary>The native Vault, for the writes that hold it.</summary>
     internal nint Handle
     {

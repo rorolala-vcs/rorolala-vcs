@@ -221,6 +221,8 @@ public sealed class WriteTests
                 scope.Root.FullName.TrimEnd(Path.DirectorySeparatorChar)
             );
             Assert.True(scope.ConfigFile.Exists);
+            Assert.True(scope.StorageDirectory.Exists);
+            Assert.True(scope.IndexDirectory.Exists);
             Assert.Throws<RolaReadError>(() => scope.TreeAt(".."));
         }
         finally
@@ -317,6 +319,8 @@ public sealed class WriteTests
             Assert.True(workspace.Data.Exists);
             Assert.True(workspace.ConfigFile.Exists);
             Assert.True(workspace.LayoutDirectory.Exists);
+            Assert.True(workspace.StorageDirectory.Exists);
+            Assert.True(workspace.IndexDirectory.Exists);
             Assert.Throws<RolaReadError>(() => workspace.TreeAt(".."));
             Assert.Throws<RolaReadError>(() => workspace.TruthLayout("../vault"));
             Assert.Throws<RolaReadError>(() => workspace.TruthLayout(""));
