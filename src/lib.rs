@@ -19,6 +19,7 @@ pub mod address;
 pub mod chunking_read;
 pub mod config_read;
 pub mod existence;
+pub mod fetch;
 pub mod gc;
 pub mod layout_read;
 mod ownership;
