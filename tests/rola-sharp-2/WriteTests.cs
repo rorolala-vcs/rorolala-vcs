@@ -220,6 +220,7 @@ public sealed class WriteTests
                 Path.GetFullPath(vault).TrimEnd(Path.DirectorySeparatorChar),
                 scope.Root.FullName.TrimEnd(Path.DirectorySeparatorChar)
             );
+            Assert.Throws<RolaReadError>(() => scope.TreeAt(".."));
         }
         finally
         {
