@@ -68,6 +68,71 @@ public sealed class VaultWriter : Writer
         }
     }
 
+    /// <summary>Records a file's content and names it in the Vault's Layout.</summary>
+    /// <param name="path">The file, relative to the Vault root.</param>
+    /// <param name="creator">Who recorded the version.</param>
+    /// <param name="message">What the version says.</param>
+    /// <param name="policy">The cut to use, or nothing for the store's own choice.</param>
+    /// <param name="owner">The account that holds the entry, or nothing to keep the existing owner.</param>
+    /// <param name="description">What the entry says about itself.</param>
+    /// <returns>The entry and the version written.</returns>
+    public TrackedFile TrackFile(
+        string path,
+        string creator,
+        string message,
+        string? policy = null,
+        string? owner = null,
+        string? description = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(creator);
+        ArgumentNullException.ThrowIfNull(message);
+
+        var directory = Utf8(_vault.Root.FullName);
+        var at = Utf8(path);
+        var author = Utf8(creator);
+        var words = Utf8(message);
+        var chunking = Utf8(policy ?? string.Empty);
+        var held = Utf8(owner ?? string.Empty);
+        var note = Utf8(description ?? string.Empty);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_track_vault_file(
+                directory,
+                at,
+                author,
+                words,
+                chunking,
+                held,
+                note
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new TrackedFile(
+                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
+                RolaJson.Text(document.RootElement, "storage") ?? string.Empty,
+                RolaJson.Text(document.RootElement, "variant") ?? string.Empty,
+                RolaJson.Text(document.RootElement, "version") ?? string.Empty
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(author);
+            Marshal.FreeCoTaskMem(words);
+            Marshal.FreeCoTaskMem(chunking);
+            Marshal.FreeCoTaskMem(held);
+            Marshal.FreeCoTaskMem(note);
+        }
+    }
+
     /// <summary>Lays the Vault's store and index out afresh.</summary>
     /// <param name="storage">Whether to pack the store.</param>
     /// <param name="index">Whether to pack the VCS index.</param>

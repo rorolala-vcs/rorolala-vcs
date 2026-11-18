@@ -300,6 +300,31 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_vault_file_is_tracked()
+    {
+        var directory = Scratch();
+        try
+        {
+            var vaultPath = Path.Combine(directory, "vault");
+            RunRola(directory, $"create --vault \"{vaultPath}\"");
+            File.WriteAllText(Path.Combine(vaultPath, "a.txt"), "content");
+
+            var vault = VaultScoop.Open(vaultPath);
+            vault.Read();
+            var tracked = new VaultWriter(vault).TrackFile("a.txt", "alice", "first");
+
+            var layout = vault.Layout;
+            layout.Read();
+            Assert.NotNull(layout.Find("a.txt"));
+            Assert.NotEqual(Guid.Empty, tracked.Id);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_builtin_book_is_searchable()
     {
         var root = RepositoryRoot();
