@@ -135,6 +135,32 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Removes a Layout entry and the path that names it.</summary>
+    /// <param name="id">The entry's id.</param>
+    public void RemoveEntry(Guid id)
+    {
+        var layout = _workspace.Layout;
+        string? path = null;
+        if (!NoCheck)
+        {
+            layout.Read();
+            var entry =
+                layout.Entries.FirstOrDefault(item => item.Uuid == id.ToString())
+                ?? throw new RolaWriteError(
+                    RolaWriteErrorKind.InvalidPath,
+                    id.ToString(),
+                    "the Layout names no such entry"
+                );
+            path = entry.Path == "." ? null : entry.Path;
+        }
+
+        new LayoutWriter(layout).RemoveEntry(id);
+        if (path is not null)
+        {
+            Forget(path);
+        }
+    }
+
     /// <summary>Removes a path, leaving its entry and its work.</summary>
     /// <param name="path">The path, relative to the Workspace root.</param>
     public void RemovePath(string path)
