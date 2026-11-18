@@ -343,6 +343,11 @@ public sealed class WriteTests
             Assert.Throws<RolaWriteError>(() => writer.Restore("missing", first.Version));
             Assert.Throws<RolaWriteError>(() => writer.Restore("a.txt", "not-a-version"));
 
+            writer.SetAll(first.Id, first.Version, "bob", "set", null);
+            var setLayout = vault.Layout;
+            setLayout.Read();
+            Assert.Equal("bob", setLayout.Find("a.txt")?.Owner);
+
             Assert.Equal("content", File.ReadAllText(Path.Combine(vaultPath, "a.txt")));
 
             var layout = vault.Layout;
