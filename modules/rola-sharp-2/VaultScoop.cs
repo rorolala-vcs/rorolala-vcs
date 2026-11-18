@@ -106,7 +106,23 @@ public sealed class VaultScoop
     /// <summary>A tree at a path under the Vault.</summary>
     /// <param name="path">The tree's path, relative to the Vault root.</param>
     /// <returns>The scope over the tree.</returns>
-    public TreeScoop TreeAt(string path) => new(Path.Combine(_root, path));
+    public TreeScoop TreeAt(string path) => new(Subtree(path));
+
+    /// <summary>A path under the Vault, refusing one that leaves it.</summary>
+    private string Subtree(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var root = Path.GetFullPath(_root);
+        var at = Path.GetFullPath(Path.Combine(root, path));
+        var relative = Path.GetRelativePath(root, at);
+        if (relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            throw new RolaReadError(RolaReadErrorKind.InvalidArgument, path, "the path leaves the Vault");
+        }
+
+        return at;
+    }
 
     /// <summary>The graph around one version.</summary>
     /// <param name="target">The version to draw around.</param>

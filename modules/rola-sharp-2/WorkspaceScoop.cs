@@ -112,7 +112,23 @@ public sealed class WorkspaceScoop
     /// <summary>A tree at a path under the Workspace.</summary>
     /// <param name="path">The tree's path, relative to the Workspace root.</param>
     /// <returns>The scope over the tree.</returns>
-    public TreeScoop TreeAt(string path) => new(Path.Combine(_root, path));
+    public TreeScoop TreeAt(string path) => new(Subtree(path));
+
+    /// <summary>A path under the Workspace, refusing one that leaves it.</summary>
+    private string Subtree(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var root = Path.GetFullPath(_root);
+        var at = Path.GetFullPath(Path.Combine(root, path));
+        var relative = Path.GetRelativePath(root, at);
+        if (relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            throw new RolaReadError(RolaReadErrorKind.InvalidArgument, path, "the path leaves the Workspace");
+        }
+
+        return at;
+    }
 
     /// <summary>The built-in book, looked for from the Workspace.</summary>
     public BookScoop Book => new(_root);

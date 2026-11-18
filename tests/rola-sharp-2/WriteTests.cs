@@ -310,6 +310,9 @@ public sealed class WriteTests
                 StringComparison.Ordinal
             );
             Assert.True(Directory.Exists(RolaPaths.WorkspaceIndex(directory)));
+
+            var workspace = new WorkspaceScoop(directory);
+            Assert.Throws<RolaReadError>(() => workspace.TreeAt(".."));
         }
         finally
         {
