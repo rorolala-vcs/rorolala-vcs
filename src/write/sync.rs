@@ -1,4 +1,4 @@
-﻿//! The plan `rola sync` makes: what the Layout being worked in and the Vault it tracks each hold,
+//! The plan `rola sync` makes: what the Layout being worked in and the Vault it tracks each hold,
 //! and what is to move between them.
 //!
 //! The plan is read off three things: the Layout being worked in, the copy of the Vault's Layout a
@@ -362,7 +362,7 @@ fn remote_only(local: &Layout, remote: &Layout, direction: Direction) -> Vec<Ent
 }
 
 /// Whether a plan for `direction` names this kind of action.
-fn kept(kind: Kind, direction: Direction) -> bool {
+const fn kept(kind: Kind, direction: Direction) -> bool {
     match direction {
         Direction::Both => true,
         Direction::Up => matches!(
@@ -627,6 +627,10 @@ pub async fn chain_store_keys(
 /// The version's storage key is its structure, and the structure names what the version's files
 /// hold. A pull reads the structure after the first exchange and asks for these in a second: the
 /// structure is what says which keys the inside is made of.
+///
+/// # Errors
+///
+/// Returns a message when the version's chain cannot be read.
 pub async fn tree_internal_keys(
     index: &VCSIndex,
     store: &crate::storage::RorolalaStorage,
