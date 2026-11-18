@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::str::FromStr;
 
-use rorolala_layout::{LayoutPath, MutableData};
+use rorolala_layout::{Layout, LayoutPath, MutableData};
 use rorolala_storage::{Key, key_of_file};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
@@ -57,6 +57,17 @@ pub struct RetrackOptions {
 /// Returns [`WriteError::InvalidPath`] when the path is outside the Workspace or names no entry,
 /// [`WriteError::Precondition`] when there is no version to move to, [`WriteError::Index`] when the
 /// history cannot be read, and the failures [`restore`] names.
+/// Moves the record of `path` to `target`, or one version back when it is not named.
+///
+/// `fork` gives the path a fresh `Uuid` holding what it records now, and cannot be given with a
+/// target. `only_index` leaves the work on disk alone; otherwise the content of the target version
+/// is written back before the Layout names it.
+///
+/// # Errors
+///
+/// Returns [`WriteError::InvalidPath`] when the path is outside the Workspace or names no entry,
+/// [`WriteError::Precondition`] when there is no version to move to, [`WriteError::Index`] when the
+/// history cannot be read, and the failures [`restore`] names.
 pub fn retrack_file(
     workspace: &Workspace,
     cwd: &Path,
@@ -69,95 +80,26 @@ pub fn retrack_file(
     })?;
     let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
     let root = normalize(workspace.get_root());
-    let resolved = if Path::new(path).is_absolute() {
-        Path::new(path).to_path_buf()
-    } else {
-        cwd.join(path)
-    };
-    let resolved = normalize(&resolved);
+    let resolved = resolve(cwd, &root, path, "the path is outside the Workspace")?;
     let relative = relative_to(&root, &resolved).ok_or_else(|| WriteError::InvalidPath {
         path: path.to_owned(),
         reason: "the path is outside the Workspace".to_owned(),
     })?;
-    let layout_path = LayoutPath::new(&relative).map_err(|error| WriteError::InvalidPath {
-        path: path.to_owned(),
-        reason: error.to_string(),
-    })?;
-    let id = layout
-        .id_of(&layout_path)
-        .ok_or_else(|| WriteError::InvalidPath {
-            path: path.to_owned(),
-            reason: "the Layout names no such path".to_owned(),
-        })?;
-    let entry = layout.entry(id).ok_or_else(|| WriteError::NotFound {
-        what: format!("Layout entry {id}"),
-    })?;
-    let current = Key::new(entry.version());
-    let current_version =
-        index
-            .read_version(&current.to_string())
-            .map_err(|error| WriteError::Index {
-                reason: format!("{error:?}"),
-            })?;
-    let current_variant = index
-        .read_variant(&Key::new(*current_version.variant()).to_string())
-        .map_err(|error| WriteError::Index {
-            reason: format!("{error:?}"),
-        })?;
-    let current_storage = Key::new(*current_variant.storage_hash());
-    if options.fork {
-        if target.is_some() {
-            return Err(WriteError::Precondition {
-                what: path.to_owned(),
-                reason: "a fork names no target version".to_owned(),
-            });
-        }
-        let data = MutableData::new(
-            entry.owner().map(str::to_owned),
-            entry.version(),
-            entry.description().to_owned(),
-        )
-        .with_preference(entry.preference().map(str::to_owned));
-        let forked = Uuid::new_v4();
-        switch_entry(&layout, &layout_path, forked, data)?;
+    let place = RetrackPlace {
+        layout: &layout,
+        index: &index,
+    };
 
-        return Ok(Retracked {
-            id: forked,
-            version: current,
-        });
-    }
-    let named = resolve_target(&current_variant, target, path)?;
-
-    index
-        .read_version(&named.to_string())
-        .map_err(|error| WriteError::Index {
-            reason: format!("{error:?}"),
-        })?;
-    if options.deny_jump && named != current && !is_ancestor(&index, &named, &current)? {
-        return Err(WriteError::Precondition {
-            what: path.to_owned(),
-            reason: "the target is not on the path's chain".to_owned(),
-        });
-    }
-    if !options.only_index && !options.force {
-        let on_disk = key_of_file(&resolved).map_err(|error| WriteError::Storage {
-            reason: error.to_string(),
-        })?;
-        if on_disk.digest() != current_storage.digest() {
-            return Err(WriteError::Precondition {
-                what: path.to_owned(),
-                reason: "dirty".to_owned(),
-            });
-        }
-    }
-    if options.only_index {
-        set_version(&layout, id, *named.digest())?;
-        crate::write::checkout::forget(&layout, &root, &relative)?;
-    } else {
-        restore(workspace, cwd, path, &named.to_string())?;
-    }
-
-    Ok(Retracked { id, version: named })
+    retrack_in(
+        &place,
+        &resolved,
+        &relative,
+        path,
+        target,
+        options,
+        |version| restore(workspace, cwd, path, version).map(|_| ()),
+        || crate::write::checkout::forget(&layout, &root, &relative),
+    )
 }
 
 /// Moves the record of `path` in a Vault to `target`, or one version back when it is not named.
@@ -179,17 +121,56 @@ pub fn retrack_vault_file(
     })?;
     let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
     let root = normalize(vault.get_root());
-    let resolved = if Path::new(path).is_absolute() {
-        Path::new(path).to_path_buf()
-    } else {
-        cwd.join(path)
-    };
-    let resolved = normalize(&resolved);
+    let resolved = resolve(cwd, &root, path, "the path is outside the Vault")?;
     let relative = relative_to(&root, &resolved).ok_or_else(|| WriteError::InvalidPath {
         path: path.to_owned(),
         reason: "the path is outside the Vault".to_owned(),
     })?;
-    let layout_path = LayoutPath::new(&relative).map_err(|error| WriteError::InvalidPath {
+    let place = RetrackPlace {
+        layout: &layout,
+        index: &index,
+    };
+
+    retrack_in(
+        &place,
+        &resolved,
+        &relative,
+        path,
+        target,
+        options,
+        |version| restore_vault(vault, cwd, path, version).map(|_| ()),
+        || Ok(()),
+    )
+}
+
+/// The parts a retrack works over.
+struct RetrackPlace<'a> {
+    layout: &'a Layout,
+    index: &'a VCSIndex,
+}
+
+/// Moves one path's record, through the scope's own restore and forget.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the scope's restore and forget are handed in beside the path they work on"
+)]
+fn retrack_in<F, G>(
+    place: &RetrackPlace<'_>,
+    resolved: &Path,
+    relative: &str,
+    path: &str,
+    target: Option<&str>,
+    options: RetrackOptions,
+    restore: F,
+    forget: G,
+) -> Result<Retracked, WriteError>
+where
+    F: FnOnce(&str) -> Result<(), WriteError>,
+    G: FnOnce() -> Result<(), WriteError>,
+{
+    let layout = place.layout;
+    let index = place.index;
+    let layout_path = LayoutPath::new(relative).map_err(|error| WriteError::InvalidPath {
         path: path.to_owned(),
         reason: error.to_string(),
     })?;
@@ -229,7 +210,7 @@ pub fn retrack_vault_file(
         )
         .with_preference(entry.preference().map(str::to_owned));
         let forked = Uuid::new_v4();
-        switch_entry(&layout, &layout_path, forked, data)?;
+        switch_entry(layout, &layout_path, forked, data)?;
 
         return Ok(Retracked {
             id: forked,
@@ -243,14 +224,14 @@ pub fn retrack_vault_file(
         .map_err(|error| WriteError::Index {
             reason: format!("{error:?}"),
         })?;
-    if options.deny_jump && named != current && !is_ancestor(&index, &named, &current)? {
+    if options.deny_jump && named != current && !is_ancestor(index, &named, &current)? {
         return Err(WriteError::Precondition {
             what: path.to_owned(),
             reason: "the target is not on the path's chain".to_owned(),
         });
     }
     if !options.only_index && !options.force {
-        let on_disk = key_of_file(&resolved).map_err(|error| WriteError::Storage {
+        let on_disk = key_of_file(resolved).map_err(|error| WriteError::Storage {
             reason: error.to_string(),
         })?;
         if on_disk.digest() != current_storage.digest() {
@@ -261,14 +242,37 @@ pub fn retrack_vault_file(
         }
     }
     if options.only_index {
-        set_version(&layout, id, *named.digest())?;
+        set_version(layout, id, *named.digest())?;
+        forget()?;
     } else {
-        restore_vault(vault, cwd, path, &named.to_string())?;
+        restore(&named.to_string())?;
     }
 
     Ok(Retracked { id, version: named })
 }
 
+/// The resolved path, refused when it is outside the scope.
+fn resolve(
+    cwd: &Path,
+    root: &Path,
+    path: &str,
+    outside: &str,
+) -> Result<std::path::PathBuf, WriteError> {
+    let resolved = if Path::new(path).is_absolute() {
+        Path::new(path).to_path_buf()
+    } else {
+        cwd.join(path)
+    };
+    let resolved = normalize(&resolved);
+    if !resolved.starts_with(root) {
+        return Err(WriteError::InvalidPath {
+            path: path.to_owned(),
+            reason: outside.to_owned(),
+        });
+    }
+
+    Ok(resolved)
+}
 /// Whether `ancestor` is `target` or is on the chain behind it.
 fn is_ancestor(index: &VCSIndex, target: &Key, ancestor: &Key) -> Result<bool, WriteError> {
     let mut at = *target;
