@@ -865,7 +865,7 @@ pub fn set_cached_removed(
 /// Moves the entry `id` of the fetched copy to `version`, leaving its path and holder alone.
 ///
 /// It is what a run that has just set a version in the Vault writes down here, for the same reason
-/// [`add_cached_entry`] does.
+/// [`add_cached_entry`](librorolala::write::layout::add_cached_entry) does.
 ///
 /// # Errors
 ///
