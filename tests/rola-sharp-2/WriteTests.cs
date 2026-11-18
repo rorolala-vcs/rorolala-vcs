@@ -228,6 +228,29 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_vault_packs_its_store_and_index()
+    {
+        var directory = Scratch();
+        try
+        {
+            var vaultPath = Path.Combine(directory, "vault");
+            RunRola(directory, $"create --vault \"{vaultPath}\"");
+
+            var vault = VaultScoop.Open(vaultPath);
+            vault.Read();
+            var writer = new VaultWriter(vault);
+
+            var packed = writer.Pack();
+
+            Assert.NotNull(packed);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_builtin_book_is_searchable()
     {
         var root = RepositoryRoot();
