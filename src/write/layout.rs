@@ -3,8 +3,9 @@
 use std::path::Path;
 use std::str::FromStr;
 
-use rorolala_layout::{EntryKind, Layout, LayoutPath, MutableData};
+use rorolala_layout::{Batch, EntryKind, Layout, LayoutError, LayoutPath, MutableData};
 use rorolala_storage::Key;
+use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vault::Vault;
@@ -1002,6 +1003,60 @@ fn mutable(
         *key.digest(),
         description.unwrap_or_default(),
     ))
+}
+
+/// The copy of a Vault's truth Layout a fetch left in a Workspace.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] when the copy is there but does not read.
+pub fn cached_copy(workspace: &Workspace, vault: &str) -> Result<Option<Layout>, LayoutError> {
+    let Some(dir) = workspace.readonly_layout_copy(vault, VAULT_LAYOUT_NAME) else {
+        return Ok(None);
+    };
+
+    // A directory the Layout's own files are not in is not a copy, and reading it must not make one.
+    match Layout::open_existing(&dir) {
+        Ok(copy) => Ok(Some(copy)),
+        Err(error) if error.is_not_found() => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// Adds an entry to a fetched copy, unless the copy already holds the Uuid or names the path.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] when the entry cannot be made.
+pub fn add_cached_entry(
+    copy: &mut Batch<'_>,
+    id: Uuid,
+    path: &LayoutPath,
+    version: [u8; 32],
+    owner: Option<String>,
+) -> Result<(), LayoutError> {
+    if copy.entry(id).is_some() || copy.names(path) {
+        return Ok(());
+    }
+
+    copy.create_file(id, MutableData::new(owner, version, String::new()), path)
+}
+
+/// Moves an entry of a fetched copy to a version, leaving its path and holder alone.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] when the entry cannot be changed.
+pub fn set_cached_version(
+    copy: &mut Batch<'_>,
+    id: Uuid,
+    version: [u8; 32],
+) -> Result<(), LayoutError> {
+    let Some(data) = copy.entry(id) else {
+        return Ok(());
+    };
+
+    copy.update_entry(id, data.renewed(data.owner().map(str::to_owned), version))
 }
 
 #[cfg(test)]

@@ -5,6 +5,8 @@
 //! subcommands, each in a file of its own: listing it, tracking the Vault it goes to, fetching
 //! that Vault's own Layout, and reading and changing what a Layout names.
 
+pub use librorolala::write::layout::{add_cached_entry, cached_copy, set_cached_version};
+
 pub mod cmd_layout;
 pub mod cmd_layout_entries;
 pub mod cmd_layout_entry;
@@ -850,19 +852,6 @@ pub fn set_cached_removed(
 /// # Errors
 ///
 /// Returns [`LayoutError`] if a copy that is there cannot be read back.
-pub fn cached_copy(workspace: &Workspace, vault: &str) -> Result<Option<Layout>, LayoutError> {
-    let Some(dir) = readonly_layout_copy(workspace, vault, VAULT_LAYOUT_NAME) else {
-        return Ok(None);
-    };
-
-    // A directory the Layout's own files are not in is not a copy, and reading it must not make one.
-    match Layout::open_existing(&dir) {
-        Ok(copy) => Ok(Some(copy)),
-        Err(error) if error.is_not_found() => Ok(None),
-        Err(error) => Err(error),
-    }
-}
-
 /// Adds the entry `id` to the fetched copy, at `path` and `version`, held by `owner`.
 ///
 /// It is what a run that has just made an entry in the Vault writes down here, so that a reading
@@ -873,20 +862,6 @@ pub fn cached_copy(workspace: &Workspace, vault: &str) -> Result<Option<Layout>,
 /// # Errors
 ///
 /// Returns [`LayoutError`] if the change cannot be made in `copy`.
-pub fn add_cached_entry(
-    copy: &mut Batch<'_>,
-    id: Uuid,
-    path: &LayoutPath,
-    version: [u8; 32],
-    owner: Option<String>,
-) -> Result<(), LayoutError> {
-    if copy.entry(id).is_some() || copy.names(path) {
-        return Ok(());
-    }
-
-    copy.create_file(id, MutableData::new(owner, version, String::new()), path)
-}
-
 /// Moves the entry `id` of the fetched copy to `version`, leaving its path and holder alone.
 ///
 /// It is what a run that has just set a version in the Vault writes down here, for the same reason
@@ -895,18 +870,6 @@ pub fn add_cached_entry(
 /// # Errors
 ///
 /// Returns [`LayoutError`] if the change cannot be made in `copy`.
-pub fn set_cached_version(
-    copy: &mut Batch<'_>,
-    id: Uuid,
-    version: [u8; 32],
-) -> Result<(), LayoutError> {
-    let Some(data) = copy.entry(id) else {
-        return Ok(());
-    };
-
-    copy.update_entry(id, data.renewed(data.owner().map(str::to_owned), version))
-}
-
 /// Error: the Vault's Layout has not been fetched, so there is no copy to read.
 #[derive(Grouped)]
 pub struct ErrorLayoutNotCached {
