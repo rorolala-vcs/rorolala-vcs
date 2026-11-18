@@ -717,6 +717,35 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_vault_collects_nothing_it_keeps()
+    {
+        var directory = Scratch();
+        try
+        {
+            var vaultPath = Path.Combine(directory, "vault");
+            RunRola(directory, $"create --vault \"{vaultPath}\"");
+            File.WriteAllText(Path.Combine(vaultPath, "a.psd"), "content");
+
+            var vault = VaultScoop.Open(vaultPath);
+            vault.Read();
+            var writer = new VaultWriter(vault);
+            writer.TrackFile("a.psd", "alice", "first");
+
+            var plan = writer.PlanCollect();
+            Assert.NotNull(plan.Index);
+            Assert.NotNull(plan.Storage);
+
+            var report = writer.Collect();
+            Assert.NotNull(report.Index);
+            Assert.NotNull(report.Storage);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_workspace_collects_nothing_it_keeps()
     {
         var directory = Scratch();
