@@ -274,6 +274,7 @@ public sealed class WriteTests
             layoutWriter.CreatePath("a.txt", id);
 
             new VaultWriter(vault).Untrack("a.txt");
+            Assert.Throws<RolaWriteError>(() => new VaultWriter(vault).Untrack("missing"));
 
             layout.Read();
             Assert.Null(layout.Find("a.txt"));
@@ -652,6 +653,7 @@ public sealed class WriteTests
             writer.TrackFile("a.psd", "alice", "first");
 
             writer.Untrack("a.psd");
+            Assert.Throws<RolaWriteError>(() => writer.Untrack("missing"));
 
             var layout = workspace.Layout;
             layout.Read();
