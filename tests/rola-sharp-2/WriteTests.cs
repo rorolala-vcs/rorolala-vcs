@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
 
 using RolaSharp.V2;
@@ -891,6 +891,38 @@ public sealed class WriteTests
 
             Assert.Equal(0ul, report.Applied);
             Assert.Equal(0ul, report.Received);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
+    public void A_sync_run_refuses_an_address_that_does_not_read()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+
+            var error = Assert.Throws<RolaWriteError>(
+                () =>
+                    writer.SyncAt(
+                        "vault",
+                        "",
+                        "alice",
+                        "missing.pem",
+                        storage: false,
+                        index: false,
+                        layout: false
+                    )
+            );
+
+            Assert.Equal(RolaWriteErrorKind.InvalidPath, error.Kind);
         }
         finally
         {
