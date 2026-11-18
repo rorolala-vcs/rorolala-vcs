@@ -324,10 +324,11 @@ mod tests {
     use std::fs;
 
     use rorolala_utils_location::Locate as _;
+    use rorolala_vault::Vault;
     use rorolala_workspace::Workspace;
 
     use super::{collect_at, plan_at};
-    use crate::write::track::{TrackOptions, track_file};
+    use crate::write::track::{TrackOptions, track_file, track_vault_file};
 
     #[test]
     fn an_empty_workspace_plans_and_collects_nothing() {
@@ -359,6 +360,35 @@ mod tests {
 
         let neither = collect_at(&dir, false, false, 0).unwrap();
         assert_eq!(neither, r#"{"index":null,"storage":null}"#);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_vault_plans_and_collects_nothing_it_keeps() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-collect-vault-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Vault::create(&dir).unwrap();
+        let vault = Vault::locate(&dir).unwrap();
+        fs::write(dir.join("a.txt"), b"one").unwrap();
+        track_vault_file(
+            &vault,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        let plan = plan_at(&dir, true, true, 0).unwrap();
+        assert!(plan.contains("\"index\""), "{plan}");
+        assert!(plan.contains("\"storage\""), "{plan}");
+
+        let report = collect_at(&dir, true, true, 0).unwrap();
+        assert!(report.contains("\"index\""), "{report}");
 
         let _ = fs::remove_dir_all(&dir);
     }
