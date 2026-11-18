@@ -869,6 +869,36 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_sync_run_with_every_side_left_alone_answers_with_nothing()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+
+            var report = writer.SyncAt(
+                "vault",
+                "rola://127.0.0.1/",
+                "alice",
+                "missing.pem",
+                storage: false,
+                index: false,
+                layout: false
+            );
+
+            Assert.Equal(0ul, report.Applied);
+            Assert.Equal(0ul, report.Received);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_sync_run_needs_an_account()
     {
         var directory = Scratch();

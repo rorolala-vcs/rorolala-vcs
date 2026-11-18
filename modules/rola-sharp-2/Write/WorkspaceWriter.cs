@@ -145,11 +145,52 @@ public sealed class WorkspaceWriter : Writer
                 "the Workspace binds no such Vault"
             );
 
+        return SyncAt(
+            vault,
+            binding.Address,
+            account.Name,
+            account.KeyPath,
+            direction,
+            forced,
+            storage,
+            index,
+            layout
+        );
+    }
+
+    /// <summary>Carries a sync run out against an explicit address.</summary>
+    /// <param name="vault">The Vault name the run speaks of.</param>
+    /// <param name="address">The Vault's address.</param>
+    /// <param name="account">The account's name.</param>
+    /// <param name="keyPath">The account's private key file.</param>
+    /// <param name="direction">Which way content may move.</param>
+    /// <param name="forced">Whether the run may change history rather than refuse.</param>
+    /// <param name="storage">Whether the store moves.</param>
+    /// <param name="index">Whether the index moves.</param>
+    /// <param name="layout">Whether the Vault's Layout is read and written.</param>
+    /// <returns>What the run came to.</returns>
+    public SyncReport SyncAt(
+        string vault,
+        string address,
+        string account,
+        string keyPath,
+        SyncDirection direction = SyncDirection.Both,
+        bool forced = false,
+        bool storage = true,
+        bool index = true,
+        bool layout = true
+    )
+    {
+        ArgumentNullException.ThrowIfNull(vault);
+        ArgumentNullException.ThrowIfNull(address);
+        ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(keyPath);
+
         var directory = Utf8(_workspace.Root.FullName);
         var place = Utf8(vault);
-        var me = Utf8(account.Name);
-        var key = Utf8(account.KeyPath);
-        var address = Utf8(binding.Address);
+        var me = Utf8(account);
+        var key = Utf8(keyPath);
+        var where = Utf8(address);
         var way = Utf8(
             direction switch
             {
@@ -165,7 +206,7 @@ public sealed class WorkspaceWriter : Writer
                 place,
                 me,
                 key,
-                address,
+                where,
                 way,
                 forced,
                 storage,
@@ -187,7 +228,7 @@ public sealed class WorkspaceWriter : Writer
             Marshal.FreeCoTaskMem(place);
             Marshal.FreeCoTaskMem(me);
             Marshal.FreeCoTaskMem(key);
-            Marshal.FreeCoTaskMem(address);
+            Marshal.FreeCoTaskMem(where);
             Marshal.FreeCoTaskMem(way);
         }
     }
