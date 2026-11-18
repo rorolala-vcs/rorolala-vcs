@@ -289,6 +289,9 @@ public sealed class WriteTests
             new VaultWriter(vault).RemoveEntry(pathOnly);
             layout.Read();
             Assert.DoesNotContain(layout.Entries, entry => entry.Uuid == pathOnly.ToString());
+            Assert.Throws<RolaWriteError>(
+                () => new VaultWriter(vault).RemoveEntry(Guid.NewGuid())
+            );
         }
         finally
         {
