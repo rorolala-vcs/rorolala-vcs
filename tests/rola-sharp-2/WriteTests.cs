@@ -332,6 +332,12 @@ public sealed class WriteTests
             Assert.Throws<RolaWriteError>(() => writer.RetrackFile("missing"));
             Assert.Throws<RolaWriteError>(() => writer.RetrackFile("a.txt", "not-a-version"));
 
+            writer.Align("a.txt", first.Version, "alice", "aligned", "share");
+            Assert.Equal("content", File.ReadAllText(Path.Combine(vaultPath, "a.txt")));
+            var alignedLayout = vault.Layout;
+            alignedLayout.Read();
+            Assert.Equal("aligned", alignedLayout.Find("a.txt")?.Description);
+
             writer.Restore("a.txt", first.Version);
             Assert.Throws<RolaWriteError>(() => writer.Restore("missing", first.Version));
 

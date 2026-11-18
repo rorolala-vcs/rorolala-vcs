@@ -68,6 +68,64 @@ public sealed class VaultWriter : Writer
         }
     }
 
+    /// <summary>Puts a path on one version and writes what the entry says about it.</summary>
+    /// <param name="path">The path, relative to the Vault root or absolute.</param>
+    /// <param name="version">The version key.</param>
+    /// <param name="owner">The account that holds the entry, or nothing for none.</param>
+    /// <param name="description">What the entry says about itself.</param>
+    /// <param name="preference">The variant to prefer, or nothing for none.</param>
+    /// <returns>The entry and the version the Layout now names.</returns>
+    public Restored Align(
+        string path,
+        string version,
+        string? owner = null,
+        string description = "",
+        string? preference = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(version);
+        ArgumentNullException.ThrowIfNull(description);
+
+        var directory = Utf8(_vault.Root.FullName);
+        var at = Utf8(path);
+        var named = Utf8(version);
+        var held = Utf8(owner ?? string.Empty);
+        var words = Utf8(description);
+        var preferred = Utf8(preference ?? string.Empty);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_align_vault(
+                directory,
+                at,
+                named,
+                held,
+                words,
+                preferred
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new Restored(
+                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
+                RolaJson.Text(document.RootElement, "version") ?? string.Empty
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(named);
+            Marshal.FreeCoTaskMem(held);
+            Marshal.FreeCoTaskMem(words);
+            Marshal.FreeCoTaskMem(preferred);
+        }
+    }
+
     /// <summary>Moves a path's record to a version in the Vault.</summary>
     /// <param name="path">The path, relative to the Vault root.</param>
     /// <param name="target">The version, or nothing for one version back.</param>

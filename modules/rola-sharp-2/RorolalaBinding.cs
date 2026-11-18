@@ -2686,6 +2686,20 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_align(nint directory, nint path, nint version, nint owner, nint description, nint preference);
 
     /// <summary>
+    /// Puts a path under a Vault on one version and writes what the record says about it.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `owner` and `preference` are empty when the entry has none.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_align_vault(nint directory, nint path, nint version, nint owner, nint description, nint preference);
+
+    /// <summary>
     /// Makes a cancellation a C caller can set.
     ///
     /// A `RolaCancellation *` the caller releases with `free_rola_cancellation`, or null when one cannot
