@@ -712,6 +712,28 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_workspace_lock_is_held_and_released()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+
+            using (var guard = writer.Lock())
+            {
+                Assert.NotNull(guard);
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_path_is_aligned_to_a_version()
     {
         var directory = Scratch();
