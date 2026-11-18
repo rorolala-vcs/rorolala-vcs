@@ -317,6 +317,7 @@ public sealed class WriteTests
             Assert.Throws<RolaReadError>(() => workspace.TruthLayout("../vault"));
             Assert.Throws<RolaReadError>(() => workspace.TruthLayout(""));
             Assert.Throws<RolaReadError>(() => workspace.TruthLayout("a/b"));
+            Assert.Throws<RolaReadError>(() => workspace.TruthLayout(" vault"));
         }
         finally
         {

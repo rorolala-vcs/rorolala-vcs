@@ -97,6 +97,7 @@ public sealed class WorkspaceScoop
         if (
             vault.Length == 0
             || vault is "." or ".."
+            || vault.Trim() != vault
             || vault.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
         )
         {
