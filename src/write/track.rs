@@ -32,11 +32,22 @@ pub struct TrackedFile {
     pub version: Key,
 }
 
+/// How a file is to be tracked.
+#[derive(Debug, Clone, Default)]
+pub struct TrackOptions {
+    /// The chunking policy to write with, or empty for the store's own choice.
+    pub policy: String,
+    /// The account that holds the entry, or nothing to keep the existing owner.
+    pub owner: Option<String>,
+    /// What the entry says about itself.
+    pub description: String,
+}
+
 /// Records the content of `path` as a version and binds it in the Layout.
 ///
 /// `path` is relative to `cwd`, or absolute; it must be inside the Workspace and outside a tree.
-/// `creator` and `message` become the version's creator and message, and `policy` names a chunking
-/// policy or is empty for the store's own choice. A `None` owner keeps the owner the entry already
+/// `creator` and `message` become the version's creator and message. `options` names the chunking
+/// policy, the owner and the entry's description; a `None` owner keeps the owner the entry already
 /// has.
 ///
 /// # Errors
@@ -50,8 +61,7 @@ pub fn track_file(
     path: &str,
     creator: &str,
     message: &str,
-    policy: &str,
-    owner: Option<&str>,
+    options: TrackOptions,
 ) -> Result<TrackedFile, WriteError> {
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
@@ -107,7 +117,7 @@ pub fn track_file(
     let stored = runtime.block_on(put_file(
         &store,
         &resolved,
-        (!policy.is_empty()).then_some(policy),
+        (!options.policy.is_empty()).then_some(options.policy.as_str()),
     ))?;
 
     let written = write_file_version(&index, &stored.key, &base, base_num, None, creator, message)?;
@@ -116,8 +126,8 @@ pub fn track_file(
         &layout,
         id,
         *written.version.digest(),
-        owner.map(str::to_owned).or(existing_owner),
-        String::new(),
+        options.owner.or(existing_owner),
+        options.description,
         existing.is_some(),
     )?;
     if existing.is_none() {
@@ -186,8 +196,8 @@ fn locate_file(root: &Path, cwd: &Path, path: &str) -> Result<(PathBuf, String),
 ///
 /// An owned JSON string the caller releases with `free_string`,
 /// `{"id":"...","storage":"...","variant":"...","version":"..."}`, or a `RolaWriteError *` the
-/// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice, and
-/// `owner` is empty when the entry has no owner.
+/// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice,
+/// `owner` is empty when the entry has no owner, and `description` is the entry's description.
 ///
 /// # Errors
 ///
@@ -201,17 +211,15 @@ pub fn track_file_at(
     message: &str,
     policy: &str,
     owner: &str,
+    description: &str,
 ) -> Result<String, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
-    let tracked = track_file(
-        &workspace,
-        directory,
-        path,
-        creator,
-        message,
-        policy,
-        (!owner.is_empty()).then_some(owner),
-    )?;
+    let options = TrackOptions {
+        policy: policy.to_owned(),
+        owner: (!owner.is_empty()).then(|| owner.to_owned()),
+        description: description.to_owned(),
+    };
+    let tracked = track_file(&workspace, directory, path, creator, message, options)?;
 
     serde_json::to_string(&tracked).map_err(|error| WriteError::Json {
         reason: error.to_string(),
@@ -225,7 +233,7 @@ mod tests {
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
 
-    use super::track_file;
+    use super::{TrackOptions, track_file};
 
     #[test]
     fn a_file_is_recorded_and_named() {
@@ -242,8 +250,10 @@ mod tests {
             "a.txt",
             "alice",
             "first",
-            "",
-            Some("alice"),
+            TrackOptions {
+                owner: Some("alice".to_owned()),
+                ..TrackOptions::default()
+            },
         )
         .unwrap();
 
@@ -253,7 +263,15 @@ mod tests {
         assert_ne!(tracked.version.to_string(), "");
 
         fs::write(dir.join("a.txt"), b"two").unwrap();
-        let again = track_file(&workspace, &dir, "a.txt", "alice", "second", "", None).unwrap();
+        let again = track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "second",
+            TrackOptions::default(),
+        )
+        .unwrap();
         assert_eq!(
             layout
                 .entry(tracked.id)
@@ -283,8 +301,7 @@ mod tests {
                 "tree/inside.txt",
                 "alice",
                 "tree",
-                "",
-                None
+                TrackOptions::default()
             )
             .is_err()
         );

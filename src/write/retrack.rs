@@ -266,7 +266,7 @@ mod tests {
     use rorolala_workspace::Workspace;
 
     use super::{RetrackOptions, retrack_file};
-    use crate::write::track::track_file;
+    use crate::write::track::{TrackOptions, track_file};
 
     #[test]
     fn only_index_leaves_the_work_alone() {
@@ -277,9 +277,25 @@ mod tests {
         Workspace::create(&dir).unwrap();
         let workspace = Workspace::locate(&dir).unwrap();
         fs::write(dir.join("a.txt"), b"one").unwrap();
-        let first = track_file(&workspace, &dir, "a.txt", "alice", "first", "", None).unwrap();
+        let first = track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
         fs::write(dir.join("a.txt"), b"two").unwrap();
-        track_file(&workspace, &dir, "a.txt", "alice", "second", "", None).unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "second",
+            TrackOptions::default(),
+        )
+        .unwrap();
 
         retrack_file(
             &workspace,
@@ -314,9 +330,25 @@ mod tests {
         Workspace::create(&dir).unwrap();
         let workspace = Workspace::locate(&dir).unwrap();
         fs::write(dir.join("a.txt"), b"one").unwrap();
-        let first = track_file(&workspace, &dir, "a.txt", "alice", "first", "", None).unwrap();
+        let first = track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
         fs::write(dir.join("a.txt"), b"two").unwrap();
-        track_file(&workspace, &dir, "a.txt", "alice", "second", "", None).unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "second",
+            TrackOptions::default(),
+        )
+        .unwrap();
 
         let back =
             retrack_file(&workspace, &dir, "a.txt", None, RetrackOptions::default()).unwrap();
@@ -361,7 +393,15 @@ mod tests {
         );
 
         fs::write(dir.join("b.txt"), b"other").unwrap();
-        let other = track_file(&workspace, &dir, "b.txt", "alice", "other", "", None).unwrap();
+        let other = track_file(
+            &workspace,
+            &dir,
+            "b.txt",
+            "alice",
+            "other",
+            TrackOptions::default(),
+        )
+        .unwrap();
         assert!(
             retrack_file(
                 &workspace,

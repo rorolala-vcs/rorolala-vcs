@@ -188,7 +188,7 @@ mod tests {
     use rorolala_workspace::Workspace;
 
     use super::pack_workspace;
-    use crate::write::track::track_file;
+    use crate::write::track::{TrackOptions, track_file};
 
     #[test]
     fn a_workspace_packs_its_store_and_index() {
@@ -198,7 +198,15 @@ mod tests {
         Workspace::create(&dir).unwrap();
         let workspace = Workspace::locate(&dir).unwrap();
         fs::write(dir.join("a.txt"), b"one").unwrap();
-        track_file(&workspace, &dir, "a.txt", "alice", "first", "", None).unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
 
         let _packed = pack_workspace(&workspace, true, true).unwrap();
 
