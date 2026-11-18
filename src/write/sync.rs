@@ -1,4 +1,4 @@
-//! The plan `rola sync` makes: what the Layout being worked in and the Vault it tracks each hold,
+﻿//! The plan `rola sync` makes: what the Layout being worked in and the Vault it tracks each hold,
 //! and what is to move between them.
 //!
 //! The plan is read off three things: the Layout being worked in, the copy of the Vault's Layout a
@@ -9,6 +9,7 @@
 //! overwrite.
 
 use std::collections::{BTreeSet, HashMap};
+use std::path::Path;
 
 use crate::ignore::IgnoreRuleSet;
 use crate::layout::{EntryKind, Layout, LayoutPath};
@@ -16,7 +17,11 @@ use crate::storage::{Blake3Hash, Key};
 use crate::vcs::{VCSIndex, VCSIndexObject, VCSIndexReadingError, Version};
 use crate::workspace::Workspace;
 use crate::workspace_analyze::tree_diff;
+use crate::write::WriteError;
 use rorolala_errors::Failure as _;
+use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_location::Locate as _;
 use serde::Serialize;
 
 /// How alike two text files have to be to count as the same file moved.
@@ -681,6 +686,65 @@ async fn read_variant(
 /// A version as the hex a listing prints.
 fn hex(digest: [u8; 32]) -> String {
     Key::new(digest).hex()
+}
+
+/// Builds a sync plan for the Workspace a directory is in, against the cached copy of its Vault's
+/// Layout.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`, the plan, or a `RolaWriteError *`
+/// the caller releases with `free_rola_write_error`. `direction` is `up`, `down` or `both`.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] or [`WriteError::NoIndex`] when the parts are missing,
+/// [`WriteError::NotCached`] when the Vault's Layout was never fetched here, and
+/// [`WriteError::Layout`] or [`WriteError::Internal`] when the plan cannot be made.
+#[lazyffi(export = rola_write_sync_plan)]
+pub fn plan_at(
+    directory: &Path,
+    vault: &str,
+    account: &str,
+    direction: &str,
+    forced: bool,
+) -> Result<String, WriteError> {
+    let workspace =
+        crate::workspace::Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
+    let layout = workspace.layout().map_err(|error| WriteError::Layout {
+        reason: error.to_string(),
+    })?;
+    let copy = workspace
+        .readonly_layout_copy(vault, VAULT_LAYOUT_NAME)
+        .ok_or(WriteError::NotCached)?;
+    let remote =
+        crate::layout::Layout::open_existing(&copy).map_err(|error| WriteError::Layout {
+            reason: error.to_string(),
+        })?;
+    let index = crate::vcs::VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
+    let direction = match direction {
+        "up" => Direction::Up,
+        "down" => Direction::Down,
+        "both" => Direction::Both,
+        other => {
+            return Err(WriteError::Internal {
+                reason: format!("unknown sync direction `{other}`"),
+            });
+        }
+    };
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
+        reason: error.to_string(),
+    })?;
+    let mut plan = runtime
+        .block_on(plan(
+            &workspace, &layout, &remote, &index, account, direction, forced,
+        ))
+        .map_err(|reason| WriteError::Internal { reason })?;
+    vault.clone_into(&mut plan.vault);
+
+    serde_json::to_string(&plan).map_err(|error| WriteError::Json {
+        reason: error.to_string(),
+    })
 }
 
 #[cfg(test)]
