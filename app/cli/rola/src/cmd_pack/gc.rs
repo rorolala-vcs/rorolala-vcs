@@ -1,4 +1,4 @@
-//! The collecting half of `rola pack`: what `--garbage-collect` does, and nothing else.
+﻿//! The collecting half of `rola pack`: what `--garbage-collect` does, and nothing else.
 //!
 //! The roots are the Layout the run stands in: a Vault keeps its truth Layout, a Workspace the one
 //! Layout it works in, and a run in neither has no roots at all, which is refused rather than
@@ -8,10 +8,10 @@
 //! a reference with nothing under it.
 
 use librorolala::gc::DEFAULT_GRACE;
-use librorolala::storage::CollectPlan as StoragePlan;
-use librorolala::storage::Lockable as _;
-use librorolala::vcs::CollectPlan as IndexPlan;
 use librorolala::workspace::Merging;
+use librorolala::write::collect::{
+    Plans, SweepError as SweepFailure, plans as collect_plans, sweep as collect_sweep,
+};
 use mingling::{
     Grouped,
     confirm::YesConfirm,
@@ -25,7 +25,6 @@ use rorolala_cli_setups::{
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line};
 use rorolala_utils_location::Locate as _;
-use rorolala_utils_progress::Progress;
 use rust_i18n::t;
 use std::time::Duration;
 
@@ -123,7 +122,15 @@ pub fn collect(
     };
 
     // The plans are read-only, so they are made outside the locks and shown for the confirmation.
-    let plans = match plans_of(&runtime, vcs, store, &live, state, grace) {
+    let plans = match collect_plans(
+        &runtime,
+        vcs,
+        store,
+        &live,
+        state.index,
+        state.storage,
+        grace,
+    ) {
         Ok(plans) => plans,
         Err(cause) => {
             reporting.finish();
@@ -143,7 +150,7 @@ pub fn collect(
     // The index goes first: a collecting that stops after it leaves content behind that nothing
     // names, which the next collecting takes, where the other order would leave references with
     // nothing under them.
-    let taken = match sweep(&runtime, vcs, store, &plans, &reporting.progress()) {
+    let taken = match collect_sweep(&runtime, vcs, store, &plans, &reporting.progress()) {
         Ok(taken) => taken,
         Err(SweepFailure::Locked(cause)) => {
             reporting.finish();
@@ -203,41 +210,6 @@ fn roots_of(
     Ok(None)
 }
 
-/// The plans both sides would carry out, read-only, made outside the locks.
-///
-/// A plan is carried out against the stores as they stand when the sweep runs, so what arrives
-/// between this and the sweep is kept and what is gone is skipped.
-fn plans_of(
-    runtime: &tokio::runtime::Runtime,
-    vcs: &librorolala::vcs::VCSIndex,
-    store: &librorolala::storage::RorolalaStorage,
-    live: &librorolala::gc::Live,
-    state: super::StatePack,
-    grace: Duration,
-) -> Result<Plans, String> {
-    let index = if state.index {
-        Some(
-            runtime
-                .block_on(vcs.collect_plan(live.index(), grace))
-                .map_err(|error| error.to_string())?,
-        )
-    } else {
-        None
-    };
-
-    let storage = if state.storage {
-        Some(
-            runtime
-                .block_on(store.collect_plan(live.objects(), live.manifests(), grace))
-                .map_err(|error| error.to_string())?,
-        )
-    } else {
-        None
-    };
-
-    Ok(Plans { index, storage })
-}
-
 /// How long the configuration says an entry nothing references is kept, when it says.
 ///
 /// The Vault the roots came from is asked first, the Workspace second, and a configuration that
@@ -260,7 +232,6 @@ fn config_grace(
 
     None
 }
-
 /// The numbers the confirmation is asked about, taken from whichever plans were made.
 fn confirm_of(plans: &Plans) -> String {
     let (index_entries, index_bytes) = plans
@@ -281,68 +252,6 @@ fn confirm_of(plans: &Plans) -> String {
     )
     .trim()
     .to_owned()
-}
-
-/// The plans a collecting carries out, one per side it sweeps.
-struct Plans {
-    /// What the index sweep would take away, when the index is swept.
-    index: Option<IndexPlan>,
-    /// What the store sweep would take away, when the store is swept.
-    storage: Option<StoragePlan>,
-}
-
-/// Why a sweep failed, and what it failed with.
-enum SweepFailure {
-    /// One of the stores was locked by another run.
-    Locked(String),
-    /// The sweep itself could not be carried out.
-    Failed(String),
-}
-
-/// What a sweep took away, by the side it swept.
-struct Taken {
-    /// The index sweep's report, when the index was swept.
-    index: Option<librorolala::vcs::CollectReport>,
-    /// The store sweep's report, when the store was swept.
-    storage: Option<librorolala::storage::CollectReport>,
-}
-
-/// Carries the plans out, under each side's lock, the index first.
-fn sweep(
-    runtime: &tokio::runtime::Runtime,
-    vcs: &librorolala::vcs::VCSIndex,
-    store: &librorolala::storage::RorolalaStorage,
-    plans: &Plans,
-    progress: &Progress,
-) -> Result<Taken, SweepFailure> {
-    let mut taken = Taken {
-        index: None,
-        storage: None,
-    };
-
-    if let Some(plan) = &plans.index {
-        let guard = runtime
-            .block_on(vcs.lock())
-            .map_err(|error| SweepFailure::Locked(error.to_string()))?;
-
-        let report = runtime
-            .block_on(guard.collect(plan, progress))
-            .map_err(|error| SweepFailure::Failed(error.to_string()))?;
-        taken.index = Some(report);
-    }
-
-    if let Some(plan) = &plans.storage {
-        let guard = runtime
-            .block_on(store.lock())
-            .map_err(|error| SweepFailure::Locked(error.to_string()))?;
-
-        let report = runtime
-            .block_on(guard.collect(plan, progress))
-            .map_err(|error| SweepFailure::Failed(error.to_string()))?;
-        taken.storage = Some(report);
-    }
-
-    Ok(taken)
 }
 
 /// What a report says, as the plain numbers a result carries.

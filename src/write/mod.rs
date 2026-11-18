@@ -8,6 +8,7 @@
 pub mod align;
 pub mod cancel;
 pub mod checkout;
+pub mod collect;
 pub mod error;
 pub mod index;
 pub mod labels;
