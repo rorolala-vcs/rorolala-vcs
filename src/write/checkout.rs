@@ -88,6 +88,23 @@ impl Checkout {
                 reason: error.to_string(),
             })
     }
+
+    /// Forgets the reading of a path the run took out.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WriteError::InvalidPath`] when the path is malformed.
+    pub fn forget(&mut self, path: &str) -> Result<(), WriteError> {
+        let path = LayoutPath::new(path).map_err(|error| WriteError::InvalidPath {
+            path: path.to_owned(),
+            reason: error.to_string(),
+        })?;
+        if self.cache.remove(&path).is_some() {
+            self.dirty = true;
+        }
+
+        Ok(())
+    }
 }
 
 /// Writes down that the path `path` under `root` holds what the Layout now names.
@@ -98,6 +115,17 @@ impl Checkout {
 pub fn remember(layout: &Layout, root: &Path, path: &str) -> Result<(), WriteError> {
     let mut checkout = Checkout::open(layout, root);
     checkout.remember(path)?;
+    checkout.finish()
+}
+
+/// Forgets the reading of a path a run took out.
+///
+/// # Errors
+///
+/// Returns the failures [`Checkout::forget`] and [`Checkout::finish`] name.
+pub fn forget(layout: &Layout, root: &Path, path: &str) -> Result<(), WriteError> {
+    let mut checkout = Checkout::open(layout, root);
+    checkout.forget(path)?;
     checkout.finish()
 }
 
@@ -201,6 +229,28 @@ pub fn restore_at(directory: &Path, path: &str, version: &str) -> Result<String,
     serde_json::to_string(&restored).map_err(|error| WriteError::Json {
         reason: error.to_string(),
     })
+}
+
+/// Forgets the reading of a path under a Workspace.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, [`WriteError::Layout`]
+/// when its Layout cannot be read, and the failures [`forget`] names.
+#[lazyffi(export = rola_write_checkout_forget)]
+pub fn forget_at(directory: &Path, path: &str) -> Result<String, WriteError> {
+    let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
+    let layout = workspace.layout().map_err(|error| WriteError::Layout {
+        reason: error.to_string(),
+    })?;
+    forget(&layout, workspace.get_root(), path)?;
+
+    Ok(String::new())
 }
 
 /// Writes down that a path under a Workspace holds what its Layout now names.
