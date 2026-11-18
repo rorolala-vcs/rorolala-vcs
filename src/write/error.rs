@@ -110,6 +110,8 @@ pub enum WriteError {
         /// The path that is not inside a tree.
         path: String,
     },
+    /// No Vault holds the directory.
+    NoVault,
 }
 
 impl fmt::Display for WriteError {
@@ -119,6 +121,7 @@ impl fmt::Display for WriteError {
             Self::NoLayout => formatter.write_str("the Workspace works in no Layout"),
             Self::NoStore => formatter.write_str("no Workspace or Vault holds a store"),
             Self::NoIndex => formatter.write_str("no index is there"),
+            Self::NoVault => formatter.write_str("no Vault holds the directory"),
             Self::NoAccount => formatter.write_str("no account is bound"),
             Self::NoTrack => formatter.write_str("the Layout tracks no Vault"),
             Self::NotCached => formatter.write_str("the Vault's Layout was never fetched here"),

@@ -6,6 +6,7 @@ use rorolala_storage::{Lockable as _, RorolalaStorage};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_progress::Progress;
+use rorolala_vault::Vault;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
 use serde::Serialize;
@@ -114,6 +115,29 @@ pub fn pack_workspace(
     Ok(Packed { changed })
 }
 
+/// Lays a Vault's store and index out afresh.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoStore`] or [`WriteError::NoIndex`] when the parts are missing, and the
+/// failures [`pack_storage`] and [`pack_index`] name.
+pub fn pack_vault(vault: &Vault, storage: bool, index: bool) -> Result<Packed, WriteError> {
+    let mut changed = false;
+
+    if storage {
+        let store = vault
+            .get_current_rola_storage()
+            .ok_or(WriteError::NoStore)?;
+        changed |= pack_storage(&store)?;
+    }
+    if index {
+        let index = VCSIndex::locate(vault.get_root()).ok_or(WriteError::NoIndex)?;
+        changed |= pack_index(&index)?;
+    }
+
+    Ok(Packed { changed })
+}
+
 /// Lays the store and index of the Workspace a directory is in out afresh.
 ///
 /// # FFI
@@ -129,6 +153,27 @@ pub fn pack_workspace(
 pub fn pack_at(directory: &Path, storage: bool, index: bool) -> Result<String, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let packed = pack_workspace(&workspace, storage, index)?;
+
+    serde_json::to_string(&packed).map_err(|error| WriteError::Json {
+        reason: error.to_string(),
+    })
+}
+
+/// Lays the store and index of the Vault a directory is in out afresh.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoVault`] when no Vault holds `directory`, and the failures
+/// [`pack_vault`] names.
+#[lazyffi(export = rola_write_pack_vault)]
+pub fn pack_vault_at(directory: &Path, storage: bool, index: bool) -> Result<String, WriteError> {
+    let vault = Vault::locate(directory).ok_or(WriteError::NoVault)?;
+    let packed = pack_vault(&vault, storage, index)?;
 
     serde_json::to_string(&packed).map_err(|error| WriteError::Json {
         reason: error.to_string(),
