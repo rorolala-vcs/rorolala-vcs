@@ -160,19 +160,22 @@ public sealed class WorkspaceWriter : Writer
     /// <param name="message">What the version says was done.</param>
     /// <param name="policy">A chunking policy, or nothing for the store's own choice.</param>
     /// <param name="owner">The account that holds the entry, or nothing to keep the existing owner.</param>
+    /// <param name="description">What the entry says about itself, or nothing.</param>
     /// <returns>What was written.</returns>
     public TrackedFile TrackFile(
         string path,
         string creator,
         string message,
         string? policy = null,
-        string? owner = null
+        string? owner = null,
+        string? description = null
     )
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(creator);
         ArgumentNullException.ThrowIfNull(message);
 
+        TrackedFile tracked;
         var directory = Utf8(_workspace.Root.FullName);
         var at = Utf8(path);
         var author = Utf8(creator);
@@ -196,7 +199,7 @@ public sealed class WorkspaceWriter : Writer
 
             using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
 
-            return new TrackedFile(
+            tracked = new TrackedFile(
                 Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
                 RolaJson.Text(document.RootElement, "storage") ?? string.Empty,
                 RolaJson.Text(document.RootElement, "variant") ?? string.Empty,
@@ -212,6 +215,13 @@ public sealed class WorkspaceWriter : Writer
             Marshal.FreeCoTaskMem(chunking);
             Marshal.FreeCoTaskMem(held);
         }
+
+        if (description is not null)
+        {
+            new LayoutWriter(_workspace.Layout).SetDescription(tracked.Id, description);
+        }
+
+        return tracked;
     }
 
     /// <summary>Makes the Workspace's Layout track a Vault.</summary>

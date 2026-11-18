@@ -452,7 +452,7 @@ public sealed class WriteTests
             workspace.Read();
             var writer = new WorkspaceWriter(workspace);
 
-            var tracked = writer.TrackFile("a.psd", "alice", "first", owner: "alice");
+            var tracked = writer.TrackFile("a.psd", "alice", "first", owner: "alice", description: "note");
 
             Assert.NotEqual(Guid.Empty, tracked.Id);
             Assert.False(string.IsNullOrEmpty(tracked.Version));
@@ -460,6 +460,7 @@ public sealed class WriteTests
             var layout = workspace.Layout;
             layout.Read();
             Assert.Equal("alice", layout.Find("a.psd")?.Owner);
+            Assert.Equal("note", layout.Find("a.psd")?.Description);
 
             File.WriteAllText(Path.Combine(directory, "a.psd"), "content again");
             var again = writer.TrackFile("a.psd", "alice", "second");
