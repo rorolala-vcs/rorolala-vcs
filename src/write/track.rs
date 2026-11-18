@@ -312,6 +312,17 @@ mod tests {
             )
             .is_err()
         );
+        assert!(
+            track_file(
+                &workspace,
+                &dir,
+                "../outside.txt",
+                "alice",
+                "outside",
+                TrackOptions::default()
+            )
+            .is_err()
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
