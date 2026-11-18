@@ -783,6 +783,10 @@ public sealed class WriteTests
             Assert.NotNull(entry);
             Assert.Equal(first.Version["blake3:".Length..], entry.Version);
             Assert.Equal("aligned", entry.Description);
+
+            writer.SetAll(first.Id, first.Version, "bob", "set", null);
+            layout.Read();
+            Assert.Equal("bob", layout.Find("a.psd")?.Owner);
             Assert.Throws<RolaWriteError>(() => writer.Align("missing", first.Version));
         }
         finally
