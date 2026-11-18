@@ -1043,6 +1043,8 @@ mod tests {
 
         let plan = super::plan_at(&dir, "vault", "alice", "both", false).unwrap();
         assert!(plan.contains("remote.txt"), "{plan}");
+        let parsed: serde_json::Value = serde_json::from_str(&plan).unwrap();
+        assert_eq!(parsed["vault"], "vault");
 
         let _ = std::fs::remove_dir_all(&dir);
     }
