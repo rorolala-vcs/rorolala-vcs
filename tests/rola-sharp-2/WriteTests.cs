@@ -316,12 +316,19 @@ public sealed class WriteTests
 
             var vault = VaultScoop.Open(vaultPath);
             vault.Read();
-            var tracked = new VaultWriter(vault).TrackFile("a.txt", "alice", "first");
+            var writer = new VaultWriter(vault);
+            var first = writer.TrackFile("a.txt", "alice", "first");
+
+            File.WriteAllText(Path.Combine(vaultPath, "a.txt"), "second");
+            writer.TrackFile("a.txt", "alice", "second");
+            writer.Restore("a.txt", first.Version);
+
+            Assert.Equal("content", File.ReadAllText(Path.Combine(vaultPath, "a.txt")));
 
             var layout = vault.Layout;
             layout.Read();
             Assert.NotNull(layout.Find("a.txt"));
-            Assert.NotEqual(Guid.Empty, tracked.Id);
+            Assert.NotEqual(Guid.Empty, first.Id);
         }
         finally
         {

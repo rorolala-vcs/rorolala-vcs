@@ -68,6 +68,41 @@ public sealed class VaultWriter : Writer
         }
     }
 
+    /// <summary>Puts a version's content back at a path in the Vault.</summary>
+    /// <param name="path">The path, relative to the Vault root.</param>
+    /// <param name="version">The version whose content is written.</param>
+    /// <returns>The entry and the version the Layout now names.</returns>
+    public Restored Restore(string path, string version)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(version);
+
+        var directory = Utf8(_vault.Root.FullName);
+        var at = Utf8(path);
+        var named = Utf8(version);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_checkout_restore_vault(directory, at, named);
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new Restored(
+                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
+                RolaJson.Text(document.RootElement, "version") ?? string.Empty
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(named);
+        }
+    }
+
     /// <summary>Records a file's content and names it in the Vault's Layout.</summary>
     /// <param name="path">The file, relative to the Vault root.</param>
     /// <param name="creator">Who recorded the version.</param>

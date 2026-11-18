@@ -2714,6 +2714,20 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_checkout_restore(nint directory, nint path, nint version);
 
     /// <summary>
+    /// Puts a version's content back at a path under a Vault.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_checkout_restore_vault(nint directory, nint path, nint version);
+
+    /// <summary>
     /// Forgets the reading of a path under a Workspace.
     ///
     /// An empty string on success, or a `RolaWriteError *` the caller releases with
