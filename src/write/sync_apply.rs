@@ -966,3 +966,33 @@ pub fn sync_at(
         reason: error.to_string(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::sync_at;
+    use crate::write::WriteError;
+
+    #[test]
+    fn a_sync_run_outside_a_workspace_is_refused() {
+        let dir = std::env::temp_dir().join(format!("rola-write-sync-run-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let error = sync_at(
+            &dir,
+            "vault",
+            "alice",
+            "alice.pem",
+            "rola://127.0.0.1/",
+            "both",
+            false,
+            true,
+            true,
+            true,
+        )
+        .unwrap_err();
+        assert!(matches!(error, WriteError::NoWorkspace));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
