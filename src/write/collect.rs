@@ -359,4 +359,17 @@ mod tests {
 
         let _ = fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn a_collecting_run_outside_a_scope_is_refused() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-collect-none-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let error = plan_at(&dir, true, true, 0).unwrap_err();
+        assert!(matches!(error, crate::write::WriteError::NoLayout));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
