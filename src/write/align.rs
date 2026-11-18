@@ -1,7 +1,8 @@
-//! Puts a path on one version, and writes down what the record says about it.
+﻿//! Puts a path on one version, and writes down what the record says about it.
 
 use std::path::Path;
 
+use rorolala_layout::Layout;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vault::Vault;
@@ -10,7 +11,7 @@ use serde::Serialize;
 
 use crate::write::{
     WriteError,
-    checkout::{restore, restore_vault},
+    checkout::{Restored, restore, restore_vault},
     layout::set_all,
 };
 
@@ -43,19 +44,8 @@ pub fn align_entry(
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })?;
-    set_all(
-        &layout,
-        restored.id,
-        *restored.version.digest(),
-        owner,
-        description,
-        preference,
-    )?;
 
-    Ok(Aligned {
-        id: restored.id,
-        version: restored.version,
-    })
+    align_in(&layout, &restored, owner, description, preference)
 }
 
 /// Puts the content of `version` at `path` in a Vault and makes the entry say what `owner`,
@@ -78,8 +68,20 @@ pub fn align_vault_entry(
     let layout = vault.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })?;
+
+    align_in(&layout, &restored, owner, description, preference)
+}
+
+/// Writes the entry an aligned path now names, in one call.
+fn align_in(
+    layout: &Layout,
+    restored: &Restored,
+    owner: Option<&str>,
+    description: &str,
+    preference: Option<&str>,
+) -> Result<Aligned, WriteError> {
     set_all(
-        &layout,
+        layout,
         restored.id,
         *restored.version.digest(),
         owner,
