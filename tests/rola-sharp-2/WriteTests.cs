@@ -268,6 +268,33 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_workspace_track_file_is_written_and_cleared()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+
+            writer.SetTrack("vault");
+            Assert.Equal(
+                "vault",
+                File.ReadAllText(RolaPaths.LayoutTrackFile(directory)).Trim()
+            );
+
+            writer.ClearTrack();
+            Assert.False(File.Exists(RolaPaths.LayoutTrackFile(directory)));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_workspace_paths_come_from_the_library()
     {
         var directory = Scratch();
