@@ -1,22 +1,27 @@
-﻿//! Carrying a sync plan out: the Layout, the index and the content.
+//! Carrying a sync plan out: the Layout, the index and the content.
 
 use std::str::FromStr as _;
 
 use rorolala_layout::{Batch, Layout, LayoutPath};
 use rorolala_protocol::VaultAddress;
 use rorolala_storage::{Key, RorolalaStorage, StorageBackend as _};
+use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_progress::{Direction as MoveDirection, Progress};
 use rorolala_vcs::VCSIndex;
+use rorolala_workspace::Workspace;
 use uuid::Uuid;
 
 use crate::daemon::{
     EntryWrite, RemoteWrites, action_sync_index_all_async, action_write_remote_entries,
 };
 use crate::fetch::Sources;
+use crate::write::WriteError;
 use crate::write::checkout::Checkout;
 use crate::write::layout::{add_cached_entry, cached_copy, set_cached_version};
 use crate::write::sync::{self, Entry, Kind};
 use rorolala_utils_location::Locate as _;
+use serde::Serialize;
 
 /// Which sides a sync run leaves alone.
 #[derive(Debug, Clone, Copy, Default)]
@@ -61,6 +66,22 @@ pub struct Messages {
     pub exists: String,
     /// An entry taken by another account.
     pub taken: String,
+}
+
+impl Default for Messages {
+    fn default() -> Self {
+        Self {
+            malformed: "the entry does not read".to_owned(),
+            no_content: "the entry's content is not here".to_owned(),
+            missing: "the entry is missing".to_owned(),
+            force: "the version moved apart, so only --force sends it".to_owned(),
+            refused: "another account holds the entry".to_owned(),
+            kind_mismatch: "a file and a tree share the Uuid".to_owned(),
+            written: "written".to_owned(),
+            exists: "already exists".to_owned(),
+            taken: "another account holds it".to_owned(),
+        }
+    }
 }
 /// What one sync run works over: the two Layouts, the index, the store and the Vaults it may ask.
 pub struct Carry<'a> {
@@ -298,6 +319,7 @@ fn sources_of<'a>(
 }
 
 /// What carrying a plan out came to.
+#[derive(Serialize)]
 pub struct Applied {
     /// How many entries were written to the Vault.
     pub applied: usize,
@@ -826,4 +848,121 @@ fn write_reason(outcome: EntryWrite, messages: &Messages) -> String {
         EntryWrite::Refused => messages.refused.clone(),
         EntryWrite::Malformed => messages.malformed.clone(),
     }
+}
+
+/// Carries a sync run out under a Workspace.
+///
+/// # FFI
+///
+/// An owned JSON string the caller releases with `free_string`, the run's numbers, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `direction` is `up`, `down`
+/// or `both`; `layout` says whether the Vault's Layout is read and written. `key_path` is the
+/// private key the run signs with.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] or [`WriteError::NoIndex`] when the parts are missing,
+/// [`WriteError::NotCached`] when the Vault's Layout was never fetched here, and
+/// [`WriteError::Internal`] when the exchange fails.
+#[allow(
+    clippy::fn_params_excessive_bools,
+    clippy::too_many_arguments,
+    reason = "the C ABI spells each side a sync may leave alone as its own bool, beside the account and address it signs for"
+)]
+#[lazyffi(export = rola_write_sync)]
+pub fn sync_at(
+    directory: &std::path::Path,
+    vault: &str,
+    account: &str,
+    key_path: &str,
+    address: &str,
+    direction: &str,
+    forced: bool,
+    storage: bool,
+    index: bool,
+    layout: bool,
+) -> Result<String, WriteError> {
+    let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
+    let read_layout = workspace.layout().map_err(|error| WriteError::Layout {
+        reason: error.to_string(),
+    })?;
+    let vcs = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
+    let store = workspace.get_current_rola_storage();
+    let target = VaultAddress::from_str(address).map_err(|error| WriteError::InvalidPath {
+        path: address.to_owned(),
+        reason: error.to_string(),
+    })?;
+    let signing = crate::auth::Account::from_key_path(account, key_path);
+    let direction = match direction {
+        "up" => sync::Direction::Up,
+        "down" => sync::Direction::Down,
+        "both" => sync::Direction::Both,
+        other => {
+            return Err(WriteError::Internal {
+                reason: format!("unknown sync direction `{other}`"),
+            });
+        }
+    };
+    let runtime = tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
+        reason: error.to_string(),
+    })?;
+    let plan = if layout {
+        let copy = workspace
+            .readonly_layout_copy(vault, VAULT_LAYOUT_NAME)
+            .ok_or(WriteError::NotCached)?;
+        let remote =
+            crate::layout::Layout::open_existing(&copy).map_err(|error| WriteError::Layout {
+                reason: error.to_string(),
+            })?;
+        Some(
+            runtime
+                .block_on(sync::plan(
+                    &workspace,
+                    &read_layout,
+                    &remote,
+                    &vcs,
+                    account,
+                    direction,
+                    forced,
+                ))
+                .map_err(|reason| WriteError::Internal { reason })?,
+        )
+    } else {
+        None
+    };
+    let messages = Messages::default();
+    let candidates = vec![(vault.to_owned(), target.clone())];
+    let carry = Carry {
+        workspace: &workspace,
+        account: &signing,
+        target: &target,
+        layout: &read_layout,
+        index: &vcs,
+        store: store.as_ref(),
+        candidates: &candidates,
+        messages: &messages,
+        runtime: &runtime,
+    };
+    let options = Options {
+        forced,
+        concurrency: 1,
+        skip: Skip {
+            index: !index,
+            storage: !storage,
+            layout: !layout,
+        },
+    };
+    let applied = apply(
+        &Progress::silent(),
+        plan.as_ref(),
+        options,
+        &carry,
+        vault,
+        account,
+    )
+    .map_err(|reason| WriteError::Internal { reason })?;
+
+    serde_json::to_string(&applied).map_err(|error| WriteError::Json {
+        reason: error.to_string(),
+    })
 }

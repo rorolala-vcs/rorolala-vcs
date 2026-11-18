@@ -3131,6 +3131,21 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_sync_plan(nint directory, nint vault, nint account, nint direction, [MarshalAs(UnmanagedType.U1)] bool forced);
 
     /// <summary>
+    /// Carries a sync run out under a Workspace.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, the run's numbers, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `direction` is `up`, `down`
+    /// or `both`; `layout` says whether the Vault's Layout is read and written. `key_path` is the
+    /// private key the run signs with.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_sync(nint directory, nint vault, nint account, nint key_path, nint address, nint direction, [MarshalAs(UnmanagedType.U1)] bool forced, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index, [MarshalAs(UnmanagedType.U1)] bool layout);
+
+    /// <summary>
     /// Records one file's content as a version in the Workspace a directory is in.
     ///
     /// An owned JSON string the caller releases with `free_string`,

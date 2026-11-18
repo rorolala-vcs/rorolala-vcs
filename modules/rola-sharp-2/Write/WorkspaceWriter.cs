@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 using RolaSharp.V2;
@@ -115,6 +115,83 @@ public sealed class WorkspaceWriter : Writer
     /// <returns>What each side took away.</returns>
     public CollectReport Collect(bool storage = true, bool index = true, ulong grace = 0) =>
         Collector.Run(_workspace.Root.FullName, storage, index, grace);
+    /// <summary>Carries a sync run out against a Vault.</summary>
+    /// <param name="vault">The Vault the Workspace binds.</param>
+    /// <param name="account">The account the run signs as.</param>
+    /// <param name="direction">Which way content may move.</param>
+    /// <param name="forced">Whether the run may change history rather than refuse.</param>
+    /// <param name="storage">Whether the store moves.</param>
+    /// <param name="index">Whether the index moves.</param>
+    /// <param name="layout">Whether the Vault's Layout is read and written.</param>
+    /// <returns>What the run came to.</returns>
+    public SyncReport Sync(
+        string vault,
+        AccountScoop account,
+        SyncDirection direction = SyncDirection.Both,
+        bool forced = false,
+        bool storage = true,
+        bool index = true,
+        bool layout = true
+    )
+    {
+        ArgumentNullException.ThrowIfNull(vault);
+        ArgumentNullException.ThrowIfNull(account);
+
+        var binding =
+            _workspace.Config?.Vaults.FirstOrDefault(item => item.Name == vault)
+            ?? throw new RolaWriteError(
+                RolaWriteErrorKind.InvalidPath,
+                vault,
+                "the Workspace binds no such Vault"
+            );
+
+        var directory = Utf8(_workspace.Root.FullName);
+        var place = Utf8(vault);
+        var me = Utf8(account.Name);
+        var key = Utf8(account.KeyPath);
+        var address = Utf8(binding.Address);
+        var way = Utf8(
+            direction switch
+            {
+                SyncDirection.Up => "up",
+                SyncDirection.Down => "down",
+                _ => "both",
+            }
+        );
+        try
+        {
+            var answer = RorolalaBinding.rola_write_sync(
+                directory,
+                place,
+                me,
+                key,
+                address,
+                way,
+                forced,
+                storage,
+                index,
+                layout
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return SyncReports.Parse(document.RootElement);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(place);
+            Marshal.FreeCoTaskMem(me);
+            Marshal.FreeCoTaskMem(key);
+            Marshal.FreeCoTaskMem(address);
+            Marshal.FreeCoTaskMem(way);
+        }
+    }
+
     /// <summary>Builds a sync plan against the cached copy of a Vault's Layout.</summary>
     /// <param name="vault">The Vault the plan is made against.</param>
     /// <param name="account">The account the run acts as.</param>

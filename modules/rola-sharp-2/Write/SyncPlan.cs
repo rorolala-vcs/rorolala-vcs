@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace RolaSharp.V2.Write;
 
@@ -55,6 +55,24 @@ public sealed record SyncPlan(
     ulong UpToDate
 );
 
+/// <summary>What a sync run came to.</summary>
+/// <param name="Applied">How many entries were written to the Vault.</param>
+/// <param name="Received">How many versions were brought down.</param>
+/// <param name="Failed">What was not done, one line each.</param>
+/// <param name="IndexObjects">How many stored objects the index named.</param>
+/// <param name="StorageObjects">How many units of content were sent.</param>
+/// <param name="MissingLayout">Whether the Vault's Layout was not read.</param>
+/// <param name="Took">What each Vault handed over.</param>
+public sealed record SyncReport(
+    ulong Applied,
+    ulong Received,
+    IReadOnlyList<string> Failed,
+    ulong IndexObjects,
+    ulong StorageObjects,
+    bool MissingLayout,
+    IReadOnlyList<(string Vault, ulong Count)> Took
+);
+
 /// <summary>Reads the plan the library answers with.</summary>
 internal static class SyncPlans
 {
@@ -98,6 +116,61 @@ internal static class SyncPlans
             RolaJson.Flag(root, "forced"),
             entries,
             RolaJson.Number(root, "up_to_date") ?? 0
+        );
+    }
+}
+
+/// <summary>Reads what a sync run came to.</summary>
+internal static class SyncReports
+{
+    /// <summary>Reads a report from its JSON.</summary>
+    /// <param name="root">The report's JSON.</param>
+    /// <returns>The report.</returns>
+    public static SyncReport Parse(JsonElement root)
+    {
+        var failed = new List<string>();
+        if (RolaJson.Items(root, "failed") is { } failures)
+        {
+            foreach (var item in failures.EnumerateArray())
+            {
+                if (item.ValueKind is JsonValueKind.String)
+                {
+                    failed.Add(item.GetString() ?? string.Empty);
+                }
+            }
+        }
+
+        var took = new List<(string Vault, ulong Count)>();
+        if (RolaJson.Items(root, "took") is { } taken)
+        {
+            foreach (var item in taken.EnumerateArray())
+            {
+                if (item.ValueKind is not JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                var parts = item.EnumerateArray().ToArray();
+                if (parts.Length == 2 && parts[0].ValueKind is JsonValueKind.String)
+                {
+                    took.Add(
+                        (
+                            parts[0].GetString() ?? string.Empty,
+                            parts[1].GetUInt64()
+                        )
+                    );
+                }
+            }
+        }
+
+        return new SyncReport(
+            RolaJson.Number(root, "applied") ?? 0,
+            RolaJson.Number(root, "received") ?? 0,
+            failed,
+            RolaJson.Number(root, "index_objects") ?? 0,
+            RolaJson.Number(root, "storage_objects") ?? 0,
+            RolaJson.Flag(root, "missing_layout"),
+            took
         );
     }
 }

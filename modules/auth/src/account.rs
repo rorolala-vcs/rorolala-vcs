@@ -43,6 +43,18 @@ impl Account {
         }
     }
 
+    /// Names an account by the private key file at `key_path`.
+    ///
+    /// The public key beside it, if there is one, is found when the account is asked for it.
+    #[must_use]
+    pub fn from_key_path(name: impl Into<String>, key_path: impl Into<PathBuf>) -> Self {
+        Self {
+            name: name.into(),
+            key_path: key_path.into(),
+            public_path: None,
+        }
+    }
+
     /// Reads the account's private key from the file it was found at.
     ///
     /// The key is read afresh, so an account names a file rather than holding a copy of
