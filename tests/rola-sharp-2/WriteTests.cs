@@ -667,6 +667,7 @@ public sealed class WriteTests
             var tracked = writer.TrackFile("a.psd", "alice", "first");
 
             writer.RemoveEntry(tracked.Id);
+            Assert.Throws<RolaWriteError>(() => writer.RemoveEntry(Guid.NewGuid()));
 
             var layout = workspace.Layout;
             layout.Read();
