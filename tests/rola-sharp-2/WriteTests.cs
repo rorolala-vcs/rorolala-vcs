@@ -223,6 +223,7 @@ public sealed class WriteTests
             Assert.True(scope.ConfigFile.Exists);
             Assert.True(scope.StorageDirectory.Exists);
             Assert.True(scope.IndexDirectory.Exists);
+            Assert.True(scope.LayoutDirectory.Exists);
             Assert.Throws<RolaReadError>(() => scope.TreeAt(".."));
         }
         finally
