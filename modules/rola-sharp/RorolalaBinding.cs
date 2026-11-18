@@ -3032,6 +3032,22 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_retrack_file(nint directory, nint path, nint target, [MarshalAs(UnmanagedType.U1)] bool fork, [MarshalAs(UnmanagedType.U1)] bool only_index, [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool deny_jump);
 
     /// <summary>
+    /// Moves the record of a path under a Vault to a version.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. An empty `target` moves one version back, `fork` gives the path a fresh
+    /// `Uuid`, and `only_index` leaves the work on disk alone. `force` goes past changes the record does
+    /// not name, and `deny_jump` refuses a target off the path's chain.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_retrack_vault_file(nint directory, nint path, nint target, [MarshalAs(UnmanagedType.U1)] bool fork, [MarshalAs(UnmanagedType.U1)] bool only_index, [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool deny_jump);
+
+    /// <summary>
     /// Puts a file's content into the store a directory is in.
     ///
     /// An owned JSON string the caller releases with `free_string`, `{"key":"blake3:...","chunked":false}`,

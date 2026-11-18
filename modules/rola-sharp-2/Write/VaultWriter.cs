@@ -68,6 +68,59 @@ public sealed class VaultWriter : Writer
         }
     }
 
+    /// <summary>Moves a path's record to a version in the Vault.</summary>
+    /// <param name="path">The path, relative to the Vault root.</param>
+    /// <param name="target">The version, or nothing for one version back.</param>
+    /// <param name="fork">Whether to give the path a fresh id.</param>
+    /// <param name="onlyIndex">Whether to leave the work on disk alone.</param>
+    /// <param name="force">Whether to go past changes the record does not name.</param>
+    /// <param name="denyJump">Whether to refuse a target off the path's chain.</param>
+    /// <returns>The entry and the version the Layout now names.</returns>
+    public Retracked RetrackFile(
+        string path,
+        string? target = null,
+        bool fork = false,
+        bool onlyIndex = false,
+        bool force = false,
+        bool denyJump = false
+    )
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var directory = Utf8(_vault.Root.FullName);
+        var at = Utf8(path);
+        var named = Utf8(target ?? string.Empty);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_retrack_vault_file(
+                directory,
+                at,
+                named,
+                fork,
+                onlyIndex,
+                force,
+                denyJump
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new Retracked(
+                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
+                RolaJson.Text(document.RootElement, "version") ?? string.Empty
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+            Marshal.FreeCoTaskMem(named);
+        }
+    }
+
     /// <summary>Puts a version's content back at a path in the Vault.</summary>
     /// <param name="path">The path, relative to the Vault root.</param>
     /// <param name="version">The version whose content is written.</param>
