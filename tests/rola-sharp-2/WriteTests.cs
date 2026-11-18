@@ -278,6 +278,13 @@ public sealed class WriteTests
 
             layout.Read();
             Assert.Null(layout.Find("a.txt"));
+
+            var pathOnly = Guid.NewGuid();
+            layoutWriter.SetEntry(pathOnly, $"blake3:{new string('0', 64)}");
+            layoutWriter.CreatePath("b.txt", pathOnly);
+            new VaultWriter(vault).RemovePath("b.txt");
+            layout.Read();
+            Assert.Null(layout.Find("b.txt"));
         }
         finally
         {

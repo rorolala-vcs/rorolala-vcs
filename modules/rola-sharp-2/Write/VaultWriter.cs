@@ -13,6 +13,15 @@ public sealed class VaultWriter : Writer
     public VaultWriter(VaultScoop vault) =>
         _vault = vault ?? throw new ArgumentNullException(nameof(vault));
 
+    /// <summary>Removes a path, leaving its entry and its work.</summary>
+    /// <param name="path">The path, relative to the Vault root.</param>
+    public void RemovePath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        new LayoutWriter(_vault.Layout).RemovePath(path);
+    }
+
     /// <summary>Removes a path's record, leaving the work where it is.</summary>
     /// <param name="path">The path, relative to the Vault root.</param>
     public void Untrack(string path)
