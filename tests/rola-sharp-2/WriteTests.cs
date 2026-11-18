@@ -806,6 +806,12 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void An_account_that_is_not_there_is_not_found()
+    {
+        Assert.Null(AccountScoop.Find("definitely-not-an-account"));
+    }
+
+    [Fact]
     public void A_workspace_lock_is_held_and_released()
     {
         var directory = Scratch();
