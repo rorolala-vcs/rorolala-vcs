@@ -5,6 +5,7 @@
 //! what is written, which failure stops the run, and how a caller stops it. A command and a C
 //! caller enter the same function, so the order cannot drift between them.
 
+pub mod align;
 pub mod cancel;
 pub mod checkout;
 pub mod error;
