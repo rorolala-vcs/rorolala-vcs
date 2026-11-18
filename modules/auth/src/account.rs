@@ -222,6 +222,22 @@ mod tests {
     }
 
     #[test]
+    fn an_account_named_by_a_key_path_reads_that_key() {
+        let signing = Ed25519SigningKey::from_bytes(&[4; 32]);
+        let file = path("bob.pem");
+        let pem = signing.to_pkcs8_pem(LineEnding::LF).unwrap();
+        fs::write(&file, pem.as_str()).unwrap();
+
+        let account = Account::from_key_path("bob", &file);
+
+        assert_eq!(
+            account.get_key().unwrap().public_key().as_bytes(),
+            signing.verifying_key().to_bytes()
+        );
+        assert_eq!(account.name(), "bob");
+    }
+
+    #[test]
     fn an_account_reads_the_private_key_its_file_holds() {
         let signing = Ed25519SigningKey::from_bytes(&[3; 32]);
         let file = path("alice.pem");
