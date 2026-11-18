@@ -733,6 +733,8 @@ public sealed class WriteTests
             var plan = writer.PlanCollect();
             Assert.NotNull(plan.Index);
             Assert.NotNull(plan.Storage);
+            Assert.Null(writer.PlanCollect(storage: true, index: false).Index);
+            Assert.Null(writer.PlanCollect(storage: false, index: true).Storage);
 
             var report = writer.Collect();
             Assert.NotNull(report.Index);
