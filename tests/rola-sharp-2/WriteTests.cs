@@ -534,6 +534,7 @@ public sealed class WriteTests
             Assert.Equal("content again", File.ReadAllText(Path.Combine(directory, "a.psd")));
 
             writer.Remember("a.psd");
+            writer.Forget("a.psd");
             layout.Read();
             Assert.Equal("alice", layout.Find("a.psd")?.Owner);
 

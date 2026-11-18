@@ -135,6 +135,25 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Forgets the reading of a path the run took out.</summary>
+    /// <param name="path">The path, relative to the Workspace root.</param>
+    public void Forget(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var directory = Utf8(_workspace.Root.FullName);
+        var at = Utf8(path);
+        try
+        {
+            Check(RorolalaBinding.rola_write_checkout_forget(directory, at));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(at);
+        }
+    }
+
     /// <summary>Writes down that a path now holds what the Layout names.</summary>
     /// <param name="path">The path, relative to the Workspace root.</param>
     public void Remember(string path)
