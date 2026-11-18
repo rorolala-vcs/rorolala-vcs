@@ -100,6 +100,60 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Builds a sync plan against the cached copy of a Vault's Layout.</summary>
+    /// <param name="vault">The Vault the plan is made against.</param>
+    /// <param name="account">The account the run acts as.</param>
+    /// <param name="direction">Which way content may move.</param>
+    /// <param name="forced">Whether the run may change history rather than refuse.</param>
+    /// <returns>What the run is to do.</returns>
+    public SyncPlan PlanSync(
+        string vault,
+        string account,
+        SyncDirection direction = SyncDirection.Both,
+        bool forced = false
+    )
+    {
+        ArgumentNullException.ThrowIfNull(vault);
+        ArgumentNullException.ThrowIfNull(account);
+
+        var directory = Utf8(_workspace.Root.FullName);
+        var place = Utf8(vault);
+        var me = Utf8(account);
+        var way = Utf8(
+            direction switch
+            {
+                SyncDirection.Up => "up",
+                SyncDirection.Down => "down",
+                _ => "both",
+            }
+        );
+        try
+        {
+            var answer = RorolalaBinding.rola_write_sync_plan(
+                directory,
+                place,
+                me,
+                way,
+                forced
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return SyncPlans.Parse(document.RootElement);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(place);
+            Marshal.FreeCoTaskMem(me);
+            Marshal.FreeCoTaskMem(way);
+        }
+    }
+
     /// <summary>Writes what an entry says, in one call.</summary>
     /// <param name="id">The entry's id.</param>
     /// <param name="version">The version it records.</param>

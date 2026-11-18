@@ -739,6 +739,25 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_sync_plan_needs_the_cached_Vault_Layout()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+
+            Assert.Throws<RolaWriteError>(() => writer.PlanSync("vault", "alice"));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_path_is_aligned_to_a_version()
     {
         var directory = Scratch();
