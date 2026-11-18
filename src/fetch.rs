@@ -85,7 +85,7 @@ pub struct Sources<'a> {
 }
 
 impl<'a> Sources<'a> {
-    /// The Vaults a run may ask: `primary` first, then every other one the Workspace has bound.
+    /// The Vaults a run may ask, in the order they are asked.
     ///
     /// # Errors
     ///
