@@ -711,6 +711,16 @@ pub fn plan_at(
 ) -> Result<String, WriteError> {
     let workspace =
         crate::workspace::Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
+    let direction = match direction {
+        "up" => Direction::Up,
+        "down" => Direction::Down,
+        "both" => Direction::Both,
+        other => {
+            return Err(WriteError::Internal {
+                reason: format!("unknown sync direction `{other}`"),
+            });
+        }
+    };
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })?;
@@ -722,16 +732,6 @@ pub fn plan_at(
             reason: error.to_string(),
         })?;
     let index = crate::vcs::VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
-    let direction = match direction {
-        "up" => Direction::Up,
-        "down" => Direction::Down,
-        "both" => Direction::Both,
-        other => {
-            return Err(WriteError::Internal {
-                reason: format!("unknown sync direction `{other}`"),
-            });
-        }
-    };
     let runtime = tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
         reason: error.to_string(),
     })?;
@@ -995,7 +995,8 @@ mod tests {
 
     #[test]
     fn a_plan_without_a_cached_layout_is_refused() {
-        let dir = std::env::temp_dir().join(format!("rola-write-sync-plan-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-sync-plan-none-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         Workspace::create(&dir).unwrap();
@@ -1003,12 +1004,16 @@ mod tests {
         let error = super::plan_at(&dir, "vault", "alice", "both", false).unwrap_err();
         assert!(matches!(error, WriteError::NotCached));
 
+        let error = super::plan_at(&dir, "vault", "alice", "sideways", false).unwrap_err();
+        assert!(matches!(error, WriteError::Internal { .. }));
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn a_plan_reads_the_cached_layout() {
-        let dir = std::env::temp_dir().join(format!("rola-write-sync-plan-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-sync-plan-read-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         Workspace::create(&dir).unwrap();
