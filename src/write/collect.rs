@@ -1,4 +1,4 @@
-﻿//! What a collecting run would take away, and the sweep that takes it.
+//! What a collecting run would take away, and the sweep that takes it.
 //!
 //! The plans are read before either side is locked, so what the confirmation names is what the run
 //! means to do. The sweep then takes each side under its own lock, the index first and the store
@@ -350,6 +350,9 @@ mod tests {
         let plan = plan_at(&dir, true, true, 0).unwrap();
         assert!(plan.contains("\"index\""), "{plan}");
         assert!(plan.contains("\"storage\""), "{plan}");
+
+        let neither = plan_at(&dir, false, false, 0).unwrap();
+        assert_eq!(neither, r#"{"index":null,"storage":null}"#);
 
         let report = collect_at(&dir, true, true, 0).unwrap();
         assert!(report.contains("\"removed\":0"), "{report}");
