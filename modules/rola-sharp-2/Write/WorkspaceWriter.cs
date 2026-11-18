@@ -100,6 +100,74 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Reads what a collecting run would take away.</summary>
+    /// <param name="storage">Whether the store is swept.</param>
+    /// <param name="index">Whether the index is swept.</param>
+    /// <param name="grace">How long an unreferenced entry is kept, in seconds, or zero for the default.</param>
+    /// <returns>What each side would take away.</returns>
+    public CollectPlan PlanCollect(bool storage = true, bool index = true, ulong grace = 0)
+    {
+        var directory = Utf8(_workspace.Root.FullName);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_collect_plan(
+                directory,
+                storage,
+                index,
+                grace
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new CollectPlan(
+                Collects.Side(document.RootElement, "index"),
+                Collects.Side(document.RootElement, "storage")
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+        }
+    }
+
+    /// <summary>Carries out a collecting run.</summary>
+    /// <param name="storage">Whether the store is swept.</param>
+    /// <param name="index">Whether the index is swept.</param>
+    /// <param name="grace">How long an unreferenced entry is kept, in seconds, or zero for the default.</param>
+    /// <returns>What each side took away.</returns>
+    public CollectReport Collect(bool storage = true, bool index = true, ulong grace = 0)
+    {
+        var directory = Utf8(_workspace.Root.FullName);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_collect_apply(
+                directory,
+                storage,
+                index,
+                grace
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new CollectReport(
+                Collects.Side(document.RootElement, "index"),
+                Collects.Side(document.RootElement, "storage")
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+        }
+    }
+
     /// <summary>Builds a sync plan against the cached copy of a Vault's Layout.</summary>
     /// <param name="vault">The Vault the plan is made against.</param>
     /// <param name="account">The account the run acts as.</param>

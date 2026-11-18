@@ -717,6 +717,34 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_workspace_collects_nothing_it_keeps()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            File.WriteAllText(Path.Combine(directory, "a.psd"), "content");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+            writer.TrackFile("a.psd", "alice", "first");
+
+            var plan = writer.PlanCollect();
+            Assert.NotNull(plan.Index);
+            Assert.NotNull(plan.Storage);
+
+            var report = writer.Collect();
+            Assert.NotNull(report.Index);
+            Assert.NotNull(report.Storage);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_workspace_lock_is_held_and_released()
     {
         var directory = Scratch();

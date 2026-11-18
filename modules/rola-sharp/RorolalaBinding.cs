@@ -2782,6 +2782,34 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_checkout_remember(nint directory, nint path);
 
     /// <summary>
+    /// Reads what a collecting run would take away under a directory.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, the plan's numbers, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. A grace of zero means the
+    /// default.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_collect_plan(nint directory, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index, ulong grace);
+
+    /// <summary>
+    /// Carries out a collecting run under a directory, reading its plan afresh.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, the sweep's numbers, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. A grace of zero means the
+    /// default.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_collect_apply(nint directory, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index, ulong grace);
+
+    /// <summary>
     /// Records a file's content as a variant and a version in the index a directory is in.
     ///
     /// An owned JSON string the caller releases with `free_string`,
