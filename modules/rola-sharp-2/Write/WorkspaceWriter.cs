@@ -100,6 +100,27 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Writes what an entry says, in one call.</summary>
+    /// <param name="id">The entry's id.</param>
+    /// <param name="version">The version it records.</param>
+    /// <param name="owner">The account that holds it, or nothing for none.</param>
+    /// <param name="description">What it says about itself.</param>
+    /// <param name="preference">The variant it prefers, or nothing for none.</param>
+    public void SetAll(
+        Guid id,
+        string version,
+        string? owner = null,
+        string description = "",
+        string? preference = null
+    ) =>
+        new LayoutWriter(_workspace.Layout).SetAll(
+            id,
+            version,
+            owner,
+            description,
+            preference
+        );
+
     /// <summary>Puts a path on one version and writes what the entry says about it.</summary>
     /// <param name="path">The path, relative to the Workspace root or absolute.</param>
     /// <param name="version">The version key.</param>
