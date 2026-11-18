@@ -13,6 +13,28 @@ public sealed class VaultWriter : Writer
     public VaultWriter(VaultScoop vault) =>
         _vault = vault ?? throw new ArgumentNullException(nameof(vault));
 
+    /// <summary>Removes a path's record, leaving the work where it is.</summary>
+    /// <param name="path">The path, relative to the Vault root.</param>
+    public void Untrack(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        if (!NoCheck)
+        {
+            var layout = _vault.Layout;
+            layout.Read();
+            var entry =
+                layout.Find(path)
+                ?? throw new RolaWriteError(
+                    RolaWriteErrorKind.InvalidPath,
+                    path,
+                    "the Layout names no such path"
+                );
+
+            new LayoutWriter(layout).RemoveEntry(Guid.Parse(entry.Uuid));
+        }
+    }
+
     /// <summary>Lays the Vault's store and index out afresh.</summary>
     /// <param name="storage">Whether to pack the store.</param>
     /// <param name="index">Whether to pack the VCS index.</param>

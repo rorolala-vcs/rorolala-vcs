@@ -256,6 +256,35 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_vault_path_is_untracked()
+    {
+        var directory = Scratch();
+        try
+        {
+            var vaultPath = Path.Combine(directory, "vault");
+            RunRola(directory, $"create --vault \"{vaultPath}\"");
+
+            var vault = VaultScoop.Open(vaultPath);
+            vault.Read();
+            var layout = vault.Layout;
+            layout.Read();
+            var id = Guid.NewGuid();
+            var layoutWriter = new LayoutWriter(layout);
+            layoutWriter.SetEntry(id, $"blake3:{new string('0', 64)}");
+            layoutWriter.CreatePath("a.txt", id);
+
+            new VaultWriter(vault).Untrack("a.txt");
+
+            layout.Read();
+            Assert.Null(layout.Find("a.txt"));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void The_builtin_book_is_searchable()
     {
         var root = RepositoryRoot();
