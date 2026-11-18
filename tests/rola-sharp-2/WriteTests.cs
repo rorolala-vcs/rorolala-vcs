@@ -639,6 +639,34 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_tracked_path_is_removed_but_its_entry_stays()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            File.WriteAllText(Path.Combine(directory, "a.psd"), "content");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+            writer.TrackFile("a.psd", "alice", "first");
+
+            writer.RemovePath("a.psd");
+
+            var layout = workspace.Layout;
+            layout.Read();
+            Assert.Null(layout.Find("a.psd"));
+            Assert.Single(layout.Entries);
+            Assert.True(File.Exists(Path.Combine(directory, "a.psd")));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_tracked_path_is_untracked()
     {
         var directory = Scratch();

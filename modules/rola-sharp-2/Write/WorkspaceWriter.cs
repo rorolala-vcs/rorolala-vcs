@@ -135,6 +135,16 @@ public sealed class WorkspaceWriter : Writer
         }
     }
 
+    /// <summary>Removes a path, leaving its entry and its work.</summary>
+    /// <param name="path">The path, relative to the Workspace root.</param>
+    public void RemovePath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        new LayoutWriter(_workspace.Layout).RemovePath(path);
+        Forget(path);
+    }
+
     /// <summary>Removes a path's record, leaving the work where it is.</summary>
     /// <param name="path">The path, relative to the Workspace root.</param>
     public void Untrack(string path)
