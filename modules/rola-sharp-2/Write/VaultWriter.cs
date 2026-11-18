@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace RolaSharp.V2.Write;
@@ -73,69 +73,16 @@ public sealed class VaultWriter : Writer
     /// <param name="index">Whether the index is swept.</param>
     /// <param name="grace">How long an unreferenced entry is kept, in seconds, or zero for the default.</param>
     /// <returns>What each side would take away.</returns>
-    public CollectPlan PlanCollect(bool storage = true, bool index = true, ulong grace = 0)
-    {
-        var directory = Utf8(_vault.Root.FullName);
-        try
-        {
-            var answer = RorolalaBinding.rola_write_collect_plan(
-                directory,
-                storage,
-                index,
-                grace
-            );
-            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
-            {
-                throw WriteResults.From(answer.payload);
-            }
-
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new CollectPlan(
-                Collects.Side(document.RootElement, "index"),
-                Collects.Side(document.RootElement, "storage")
-            );
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(directory);
-        }
-    }
+    public CollectPlan PlanCollect(bool storage = true, bool index = true, ulong grace = 0) =>
+        Collector.Plan(_vault.Root.FullName, storage, index, grace);
 
     /// <summary>Carries out a collecting run.</summary>
     /// <param name="storage">Whether the store is swept.</param>
     /// <param name="index">Whether the index is swept.</param>
     /// <param name="grace">How long an unreferenced entry is kept, in seconds, or zero for the default.</param>
     /// <returns>What each side took away.</returns>
-    public CollectReport Collect(bool storage = true, bool index = true, ulong grace = 0)
-    {
-        var directory = Utf8(_vault.Root.FullName);
-        try
-        {
-            var answer = RorolalaBinding.rola_write_collect_apply(
-                directory,
-                storage,
-                index,
-                grace
-            );
-            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
-            {
-                throw WriteResults.From(answer.payload);
-            }
-
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new CollectReport(
-                Collects.Side(document.RootElement, "index"),
-                Collects.Side(document.RootElement, "storage")
-            );
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(directory);
-        }
-    }
-
+    public CollectReport Collect(bool storage = true, bool index = true, ulong grace = 0) =>
+        Collector.Run(_vault.Root.FullName, storage, index, grace);
     /// <summary>Writes what an entry says, in one call.</summary>
     /// <param name="id">The entry's id.</param>
     /// <param name="version">The version it records.</param>

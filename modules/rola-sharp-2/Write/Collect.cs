@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace RolaSharp.V2.Write;
@@ -43,4 +44,80 @@ internal static class Collects
             RolaJson.Flag(side, "changed")
         );
     }
+}
+
+/// <summary>Calls the collecting exports for a scope.</summary>
+internal static class Collector
+{
+    /// <summary>Reads what a collecting run would take away.</summary>
+    /// <param name="root">The scope's root.</param>
+    /// <param name="storage">Whether the store is swept.</param>
+    /// <param name="index">Whether the index is swept.</param>
+    /// <param name="grace">How long an unreferenced entry is kept, in seconds.</param>
+    /// <returns>What each side would take away.</returns>
+    public static CollectPlan Plan(string root, bool storage, bool index, ulong grace)
+    {
+        var directory = Utf8(root);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_collect_plan(
+                directory,
+                storage,
+                index,
+                grace
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new CollectPlan(
+                Collects.Side(document.RootElement, "index"),
+                Collects.Side(document.RootElement, "storage")
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+        }
+    }
+
+    /// <summary>Carries out a collecting run.</summary>
+    /// <param name="root">The scope's root.</param>
+    /// <param name="storage">Whether the store is swept.</param>
+    /// <param name="index">Whether the index is swept.</param>
+    /// <param name="grace">How long an unreferenced entry is kept, in seconds.</param>
+    /// <returns>What each side took away.</returns>
+    public static CollectReport Run(string root, bool storage, bool index, ulong grace)
+    {
+        var directory = Utf8(root);
+        try
+        {
+            var answer = RorolalaBinding.rola_write_collect_apply(
+                directory,
+                storage,
+                index,
+                grace
+            );
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+
+            return new CollectReport(
+                Collects.Side(document.RootElement, "index"),
+                Collects.Side(document.RootElement, "storage")
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+        }
+    }
+
+    private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);
 }
