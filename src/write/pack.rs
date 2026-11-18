@@ -26,6 +26,17 @@ pub struct Packed {
 /// Returns [`WriteError::Locked`] when the store is held elsewhere, and [`WriteError::Storage`]
 /// when the pack fails.
 pub fn pack_storage(store: &RorolalaStorage) -> Result<bool, WriteError> {
+    let progress = Progress::to(WriteProgress::new());
+    pack_storage_with(store, &progress)
+}
+
+/// Lays a store out afresh under its lock, saying progress to `progress`.
+///
+/// # Errors
+///
+/// Returns [`WriteError::Locked`] when the store is held elsewhere, and [`WriteError::Storage`]
+/// when the pack fails.
+pub fn pack_storage_with(store: &RorolalaStorage, progress: &Progress) -> Result<bool, WriteError> {
     let runtime = tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
         reason: error.to_string(),
     })?;
@@ -34,10 +45,9 @@ pub fn pack_storage(store: &RorolalaStorage) -> Result<bool, WriteError> {
         .map_err(|error| WriteError::Locked {
             path: format!("store: {error}"),
         })?;
-    let progress = Progress::to(WriteProgress::new());
 
     runtime
-        .block_on(guard.repack(&progress))
+        .block_on(guard.repack(progress))
         .map_err(|error| WriteError::Storage {
             reason: error.to_string(),
         })
@@ -50,6 +60,17 @@ pub fn pack_storage(store: &RorolalaStorage) -> Result<bool, WriteError> {
 /// Returns [`WriteError::Locked`] when the index is held elsewhere, and [`WriteError::Index`] when
 /// the pack fails.
 pub fn pack_index(index: &VCSIndex) -> Result<bool, WriteError> {
+    let progress = Progress::to(WriteProgress::new());
+    pack_index_with(index, &progress)
+}
+
+/// Lays a VCS index out afresh under its lock, saying progress to `progress`.
+///
+/// # Errors
+///
+/// Returns [`WriteError::Locked`] when the index is held elsewhere, and [`WriteError::Index`] when
+/// the pack fails.
+pub fn pack_index_with(index: &VCSIndex, progress: &Progress) -> Result<bool, WriteError> {
     let runtime = tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
         reason: error.to_string(),
     })?;
@@ -58,10 +79,9 @@ pub fn pack_index(index: &VCSIndex) -> Result<bool, WriteError> {
         .map_err(|error| WriteError::Locked {
             path: format!("index: {error}"),
         })?;
-    let progress = Progress::to(WriteProgress::new());
 
     runtime
-        .block_on(guard.repack(&progress))
+        .block_on(guard.repack(progress))
         .map_err(|error| WriteError::Index {
             reason: error.to_string(),
         })
