@@ -55,6 +55,21 @@ int main(void) {
     RorolalaResult made = create_workspace(dir);
     want(made.tag == RorolalaResult_Ok, "a Workspace is made");
 
+    RorolalaResult nameless = rola_write_sync(
+        dir,
+        "vault",
+        "alice",
+        "missing.pem",
+        "",
+        "both",
+        false,
+        false,
+        false,
+        false
+    );
+    want(nameless.tag == RorolalaResult_Err, "an empty address is refused");
+    free_rola_write_error(nameless.payload);
+
     RorolalaResult empty = rola_write_sync(
         dir,
         "vault",
