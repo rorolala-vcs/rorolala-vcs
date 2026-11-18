@@ -285,6 +285,10 @@ public sealed class WriteTests
             new VaultWriter(vault).RemovePath("b.txt");
             layout.Read();
             Assert.Null(layout.Find("b.txt"));
+
+            new VaultWriter(vault).RemoveEntry(pathOnly);
+            layout.Read();
+            Assert.DoesNotContain(layout.Entries, entry => entry.Uuid == pathOnly.ToString());
         }
         finally
         {
