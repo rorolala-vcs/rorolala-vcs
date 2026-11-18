@@ -322,6 +322,7 @@ public sealed class WriteTests
             File.WriteAllText(Path.Combine(vaultPath, "a.txt"), "second");
             writer.TrackFile("a.txt", "alice", "second");
             writer.Restore("a.txt", first.Version);
+            Assert.Throws<RolaWriteError>(() => writer.Restore("missing", first.Version));
 
             Assert.Equal("content", File.ReadAllText(Path.Combine(vaultPath, "a.txt")));
 
