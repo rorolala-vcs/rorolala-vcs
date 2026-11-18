@@ -320,11 +320,15 @@ public sealed class WriteTests
             var first = writer.TrackFile("a.txt", "alice", "first");
 
             File.WriteAllText(Path.Combine(vaultPath, "a.txt"), "second");
-            writer.TrackFile("a.txt", "alice", "second");
+            var second = writer.TrackFile("a.txt", "alice", "second");
 
             var retracked = writer.RetrackFile("a.txt");
             Assert.Equal("content", File.ReadAllText(Path.Combine(vaultPath, "a.txt")));
             Assert.Equal(first.Version, retracked.Version);
+
+            var onlyIndex = writer.RetrackFile("a.txt", second.Version, onlyIndex: true);
+            Assert.Equal("content", File.ReadAllText(Path.Combine(vaultPath, "a.txt")));
+            Assert.Equal(second.Version, onlyIndex.Version);
 
             writer.Restore("a.txt", first.Version);
             Assert.Throws<RolaWriteError>(() => writer.Restore("missing", first.Version));
