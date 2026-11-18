@@ -704,6 +704,39 @@ public sealed class WriteTests
     }
 
     [Fact]
+    public void A_path_is_aligned_to_a_version()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+            File.WriteAllText(Path.Combine(directory, "a.psd"), "one");
+
+            var workspace = new WorkspaceScoop(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+            var first = writer.TrackFile("a.psd", "alice", "first");
+
+            File.WriteAllText(Path.Combine(directory, "a.psd"), "two");
+            writer.TrackFile("a.psd", "alice", "second");
+
+            writer.Align("a.psd", first.Version, "alice", "aligned", "share");
+
+            Assert.Equal("one", File.ReadAllText(Path.Combine(directory, "a.psd")));
+            var layout = workspace.Layout;
+            layout.Read();
+            var entry = layout.Find("a.psd");
+            Assert.NotNull(entry);
+            Assert.Equal(first.Version["blake3:".Length..], entry.Version);
+            Assert.Equal("aligned", entry.Description);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void A_tracked_entry_is_removed_by_id()
     {
         var directory = Scratch();
