@@ -207,6 +207,7 @@ public sealed class WorkspaceWriter : Writer
         var words = Utf8(message);
         var chunking = Utf8(policy ?? string.Empty);
         var held = Utf8(owner ?? string.Empty);
+        var note = Utf8(description ?? string.Empty);
         try
         {
             var answer = RorolalaBinding.rola_write_track_file(
@@ -215,7 +216,8 @@ public sealed class WorkspaceWriter : Writer
                 author,
                 words,
                 chunking,
-                held
+                held,
+                note
             );
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
@@ -239,11 +241,7 @@ public sealed class WorkspaceWriter : Writer
             Marshal.FreeCoTaskMem(words);
             Marshal.FreeCoTaskMem(chunking);
             Marshal.FreeCoTaskMem(held);
-        }
-
-        if (description is not null)
-        {
-            new LayoutWriter(_workspace.Layout).SetDescription(tracked.Id, description);
+            Marshal.FreeCoTaskMem(note);
         }
 
         return tracked;
