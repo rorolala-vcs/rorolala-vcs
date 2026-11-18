@@ -737,6 +737,7 @@ public sealed class WriteTests
             Assert.NotNull(entry);
             Assert.Equal(first.Version["blake3:".Length..], entry.Version);
             Assert.Equal("aligned", entry.Description);
+            Assert.Throws<RolaWriteError>(() => writer.Align("missing", first.Version));
         }
         finally
         {
