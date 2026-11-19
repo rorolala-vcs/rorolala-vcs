@@ -23,9 +23,9 @@ internal enum SyncWay
 /// What a sync is told to carry, and what it is told to leave alone.
 /// </summary>
 /// <remarks>
-/// The three parts of a sync are separate on purpose, the command line's own three flags, because a side may
-/// be behind on one and not on another, and because what is left out changes what the run means rather than
-/// only how much it does. What a scope leaves out is both the flags a run is given and what warns about them.
+/// The three parts of a sync are separate on purpose, because a side may be behind on one and not on another,
+/// and because what is left out changes what the run means rather than only how much it does. What a scope
+/// leaves out is both the sides a request moves and what warns about them.
 /// </remarks>
 /// <param name="Index">Whether the index is carried.</param>
 /// <param name="Layout">Whether the Layout is carried.</param>
@@ -37,33 +37,6 @@ internal readonly record struct SyncScope(bool Index, bool Layout, bool Storage)
 
     /// <summary>Whether everything is carried, which is the one scope with nothing to warn about.</summary>
     public bool Everything => Index && Layout && Storage;
-
-    /// <summary>What the command line is told to leave alone, in the order the settings are read in.</summary>
-    /// <returns>The flags a run is given, which is nothing at all when everything is carried.</returns>
-    public IReadOnlyList<string> Flags
-    {
-        get
-        {
-            var flags = new List<string>(3);
-
-            if (!Index)
-            {
-                flags.Add("--no-index");
-            }
-
-            if (!Layout)
-            {
-                flags.Add("--no-layout");
-            }
-
-            if (!Storage)
-            {
-                flags.Add("--no-storage");
-            }
-
-            return flags;
-        }
-    }
 }
 
 /// <summary>

@@ -6,11 +6,11 @@ namespace RorolalaVCSPlugin;
 /// What a sync carries, as the three settings that choose it.
 /// </summary>
 /// <remarks>
-/// The command line takes a sync apart into three parts (the index, the storage, the Layout) and a run that
-/// leaves one behind is a run whose consequences the user has to know, which is why what is left out is the
-/// user's answer and the warning before a run is read from it. All three are on until they are turned off: a
-/// reader who has not thought about it means a sync that carries everything, and a sync that quietly left a
-/// part behind would be a run that did less than it said.
+/// A sync is taken apart into three parts (the index, the storage, the Layout) and a run that leaves one behind
+/// is a run whose consequences the user has to know, which is why what is left out is the user's answer and the
+/// warning before a run is read from it. All three are on until they are turned off: a reader who has not
+/// thought about it means a sync that carries everything, and a sync that quietly left a part behind would be a
+/// run that did less than it said.
 /// <para>
 /// Read through the config rather than kept here, because the setting is the user's and the file is where it
 /// lives: what the dropdown beside the sync buttons changed is what every dock that draws one reads.

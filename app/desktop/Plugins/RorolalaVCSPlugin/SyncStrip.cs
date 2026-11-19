@@ -204,9 +204,9 @@ internal sealed class SyncStrip : StackPanel
     {
         var boxes = new StackPanel { Spacing = 4 };
 
-        Box(boxes, SyncSettings.Index, "rorolala_vcs.sync.index", "--no-index");
-        Box(boxes, SyncSettings.Layout, "rorolala_vcs.sync.layout", "--no-layout");
-        Box(boxes, SyncSettings.Storage, "rorolala_vcs.sync.storage", "--no-storage");
+        Box(boxes, SyncSettings.Index, "rorolala_vcs.sync.index");
+        Box(boxes, SyncSettings.Layout, "rorolala_vcs.sync.layout");
+        Box(boxes, SyncSettings.Storage, "rorolala_vcs.sync.storage");
 
         var more = Button(Glyph(Icons.MoreVert), "rorolala_vcs.sync.more", command: null);
         more.Flyout = new Flyout { Content = boxes };
@@ -218,18 +218,13 @@ internal sealed class SyncStrip : StackPanel
     /// <param name="boxes">Where to put it.</param>
     /// <param name="setting">The setting it stands for.</param>
     /// <param name="label">The key of what it is called.</param>
-    /// <param name="flag">The flag leaving it out gives a run, which is a command line's own word.</param>
-    private void Box(StackPanel boxes, string setting, string label, string flag)
+    private void Box(StackPanel boxes, string setting, string label)
     {
         var box = new CheckBox
         {
             Content = RolaI18N.Get(label),
             IsChecked = SyncSettings.Carries(setting),
         };
-
-        // What the box does is what the flag beside it says, and the flag is the command line's own word for it:
-        // a reader who knows the command knows the box, and one who does not is told which part of a run it is.
-        ToolTip.SetTip(box, flag);
 
         box.IsCheckedChanged += (_, _) =>
         {

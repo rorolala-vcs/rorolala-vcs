@@ -69,11 +69,11 @@ internal sealed class SyncWatcher
 
     /// <summary>Whether a reading of the work itself says there is something to send or bring down.</summary>
     /// <remarks>
-    /// It is the other hand of <see cref="Ready"/>: the plan is the command line's answer about everything a
-    /// run may move, including a local entry the Vault does not name, while a reading of the work names only
-    /// where the Layout's versions stand. A reading that says one side is ahead of, behind, or apart from the
-    /// other is work whatever a plan could or could not say about it, so the buttons are not left unpressable
-    /// while the table beside them says there is something to carry.
+    /// It is the other hand of <see cref="Ready"/>: the plan is the writer's answer about everything a run may
+    /// move, including a local entry the Vault does not name, while a reading of the work names only where the
+    /// Layout's versions stand. A reading that says one side is ahead of, behind, or apart from the other is work
+    /// whatever a plan could or could not say about it, so the buttons are not left unpressable while the table
+    /// beside them says there is something to carry.
     /// </remarks>
     public bool Observed { get; private set; }
 
@@ -197,7 +197,7 @@ internal sealed class SyncWatcher
 
             try
             {
-                plan = Sync.Plan(at);
+                plan = Sync.Plan(at, SyncWay.Both, SyncSettings.Chosen(), force: false);
             }
             catch (Exception error) when (error is not OutOfMemoryException)
             {
@@ -243,7 +243,7 @@ internal sealed class SyncWatcher
     /// strip keeps the reason on hover: the answer is the reader's to find, and a stack of identical cards is
     /// not where they look for it.
     /// </remarks>
-    /// <param name="plan">The answer the command gave.</param>
+    /// <param name="plan">The answer the writer gave.</param>
     private void Told(SyncPlan plan)
     {
         if (plan.Said is not { Length: > 0 } said)
@@ -324,17 +324,14 @@ internal sealed class SyncWatcher
 
         _ = Task.Run(() =>
         {
-            var (done, said) = Sync.Run(
-                directory,
-                way,
-                scope,
-                force,
-                // What the run says is read into the run's own records, and every record says so on the window's
-                // thread: the run is on another one, and a control touched from there is a control touched by two
-                // threads at once.
-                run.Records,
-                _hub.Touch
-            );
+            // The plan is asked for at the press rather than kept from the dock's own preview: the work may have
+            // moved since that answer, and this is the plan the run applies rather than a second one made inside it.
+            var planned = Sync.Plan(directory, way, scope, force);
+
+            // What the run says is read into the run's own records, and every record says so on the window's
+            // thread: the run is on another one, and a control touched from there is a control touched by two
+            // threads at once.
+            var (done, said) = Sync.Run(planned, run.Records, _hub.Touch);
 
             On(() =>
             {

@@ -1,34 +1,48 @@
 using System.Diagnostics;
 using System.Text;
-using System.Text.Json;
+using Avalonia.Threading;
+using RolaSharp;
+using RolaSharp.Write;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using WritePlan = RolaSharp.Write.SyncPlan;
 
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// Whether a sync is worth offering, and what to say when it is not.
+/// Whether a sync is worth offering, what to say when it is not, and the plan a run applies.
 /// </summary>
 /// <param name="Ready">Whether there is work to carry, which is what the buttons are pressable for.</param>
 /// <param name="Said">Why not, when there is not.</param>
-internal sealed record SyncPlan(bool Ready, string? Said);
+internal sealed record SyncPlan(bool Ready, string? Said)
+{
+    /// <summary>Where the plan was made, which is the Workspace root a run works from.</summary>
+    internal string Directory { get; init; } = string.Empty;
+
+    /// <summary>The request the plan is to be carried out with, or nothing when no plan was made.</summary>
+    internal SyncRequest? Request { get; init; }
+
+    /// <summary>The plan the writer answered with, or nothing when it could not be made.</summary>
+    internal WritePlan? Planned { get; init; }
+}
 
 /// <summary>
-/// Running the command line's sync, and asking it what it would do without doing it.
+/// Asking the writer what a sync would do, and running the plan it answered with.
 /// </summary>
 /// <remarks>
-/// The exchange with the Vault is the command line's, and what this plugin owns is which buttons put which
-/// flags to it. Two runs are made of it: a plan, which is asked for whenever the dock is looked at and decides
-/// whether the buttons may be pressed, and the run itself, which reports its progress while it goes.
+/// The exchange with the Vault is the writer's, and what this plugin owns is which request a direction and a
+/// scope come to, and how a run's progress and failure are shown. A plan is made for two uses: one decides
+/// whether the buttons may be pressed, and one is kept for the run that follows, so the plan a run is made with
+/// is the plan it applies rather than one made again inside it.
 /// <para>
-/// Both are asked for a structural renderer, and that is what makes the progress readable: the same flag that
-/// has the command answer in JSON has it write its progress as one JSON record per line, so the two streams of
-/// one run carry the result and the account of how it was reached.
+/// The progress comes from the writer's own handle rather than from a command's streams: what the run says is
+/// polled while it runs and read into the same <see cref="ProgressRecords"/> the panel draws, so the bars
+/// mean the same whether the work is planned or applied.
 /// </para>
 /// </remarks>
 internal static class Sync
 {
-    /// <summary>The theme the output is asked for, which is the one this window reads.</summary>
+    /// <summary>The theme the output of a command still run is asked for, which is the one this window reads.</summary>
     internal const string Theme = "desktop-friendly";
 
     /// <summary>The environment variable naming the program the window was opened by.</summary>
@@ -43,45 +57,12 @@ internal static class Sync
     /// </remarks>
     internal const int FailedToRun = -1;
 
-    /// <summary>
-    /// The flag that has the command answer in JSON and write its progress as one record per line.
-    /// </summary>
+    /// <summary>How long the window waits between two readings of the writer's progress, in milliseconds.</summary>
     /// <remarks>
-    /// The same flag for both, since a run being read by a program is the one thing both answers are for: what
-    /// is drawn here is what a reader of the records would draw, and getting it and the result from one run is
-    /// what makes the bar possible while the run is still going.
+    /// The writer says nothing while nothing changes, so a poll that waited for a change would wait for ever. This
+    /// is short enough that a bar follows the work and long enough that reading the queue is not the work.
     /// </remarks>
-    private const string Json = "--json";
-
-    /// <summary>
-    /// The flags a sync is run with, which is which way it goes and what it leaves out.
-    /// </summary>
-    /// <param name="way">Which way it carries.</param>
-    /// <param name="scope">What it carries.</param>
-    /// <param name="force">Whether history is to be changed rather than refused.</param>
-    /// <returns>The arguments, after the program's name.</returns>
-    public static IReadOnlyList<string> Arguments(SyncWay way, SyncScope scope, bool force)
-    {
-        var arguments = new List<string> { "--theme-choice=" + Theme, Json, "sync" };
-
-        arguments.Add(
-            way switch
-            {
-                SyncWay.Up => "--up-only",
-                SyncWay.Down => "--down-only",
-                _ => "--both",
-            }
-        );
-
-        if (force)
-        {
-            arguments.Add("--force");
-        }
-
-        arguments.AddRange(scope.Flags);
-
-        return arguments;
-    }
+    private const int ProgressPause = 50;
 
     /// <summary>
     /// Asks what a sync would carry, and changes nothing.
@@ -91,197 +72,291 @@ internal static class Sync
     /// in. The answer is whether there is anything to carry: a plan with no entries is a run that would write
     /// nothing, and a button that offered it would be a button that did nothing when pressed.
     /// <para>
-    /// Both ways are asked of the same command as the run itself, without the one direction, so what is offered
-    /// is what there is to carry and not what one direction would carry: a file this side is ahead on is work
-    /// for the up button, and one upstream is ahead on is work for the down button, and the plan says both.
+    /// The dock asks both ways, so what is offered is what there is to carry and not what one direction would
+    /// carry: a file this side is ahead on is work for the up button, and one upstream is ahead on is work for the
+    /// down button, and the plan says both. The plan is always made over the Layout even when the run leaves the
+    /// Vault's Layout alone, since the comparison the plan is made from is the Layout's; a request that leaves it
+    /// out has no plan to make and is refused by the writer.
     /// </para>
     /// </remarks>
-    /// <param name="directory">Where the work is rooted, and where the run is made.</param>
-    /// <returns>Whether there is work to carry, and what to say when there is not.</returns>
-    public static SyncPlan Plan(string directory)
+    /// <param name="directory">Where the work is rooted, and where the run would be made.</param>
+    /// <param name="way">Which way the run the plan is asked for would carry.</param>
+    /// <param name="scope">What the run would carry.</param>
+    /// <param name="force">Whether the run may change history rather than refuse.</param>
+    /// <returns>Whether there is work to carry, what to say when there is not, and the plan a run applies.</returns>
+    public static SyncPlan Plan(string directory, SyncWay way, SyncScope scope, bool force)
     {
         ArgumentNullException.ThrowIfNull(directory);
 
-        var program = Environment.GetEnvironmentVariable(Program);
-
-        if (string.IsNullOrEmpty(program))
-        {
-            return new SyncPlan(false, RolaI18N.Get("rorolala_vcs.sync.no_program"));
-        }
-
-        var scope = SyncSettings.Chosen();
-
-        // Every part left behind is a run that changes nothing, which is nothing to press a button
-        // for. The command would make no plan for it either, so this says the same answer without
-        // asking.
+        // Every part left behind is a run that changes nothing, which is nothing to press a button for. The
+        // writer would refuse a request with every side off, so this says the same answer without asking.
         if (!scope.Index && !scope.Layout && !scope.Storage)
         {
             return new SyncPlan(false, null);
         }
 
-        var (done, said, output) = Asked(program, PlanArguments(scope), directory);
-
-        return done ? Planned(output) : new SyncPlan(false, said);
-    }
-
-    /// <summary>The arguments a plan is asked with.</summary>
-    /// <remarks>
-    /// <c>--no-layout</c> is left out on purpose. A run that leaves the Layout itself behind still
-    /// carries the index and the storage, and the plan is what says whether there is any of that to
-    /// move; the command makes no plan at all when it is told not to carry the Layout, so passing
-    /// the flag here would draw every such run unpressable however much there is to carry.
-    /// </remarks>
-    /// <param name="scope">What a run is told to carry.</param>
-    /// <returns>The arguments, after the program's name.</returns>
-    internal static IReadOnlyList<string> PlanArguments(SyncScope scope)
-    {
-        var arguments = new List<string> { "--theme-choice=" + Theme, Json, "sync", "--dry-run" };
-        arguments.AddRange(scope.Flags.Where(flag => flag != "--no-layout"));
-
-        return arguments;
-    }
-
-    /// <summary>
-    /// What a plan the command line printed comes to, which is whether there is anything to carry.
-    /// </summary>
-    /// <remarks>
-    /// Read from the plan rather than from the work, because what there is to carry is the Vault's answer as much
-    /// as this side's: a file this side has changed is work for an upload, and one the Vault has moved on is work
-    /// for a download, and neither is anything this side can see by looking at the tree. A plan with no entries
-    /// is a run that would write nothing, and the buttons are drawn unpressable for it.
-    /// <para>
-    /// A plan that cannot be read at all is answered the same way, with the words for it: a program that answered
-    /// something else is not a program whose answer may be taken as "there is nothing to do" silently.
-    /// </para>
-    /// </remarks>
-    /// <param name="output">What the command printed, which is one JSON object when it was asked for one.</param>
-    /// <returns>Whether there is work to carry, and what to say when there is not.</returns>
-    internal static SyncPlan Planned(string output)
-    {
-        ArgumentNullException.ThrowIfNull(output);
-
         try
         {
-            using var document = JsonDocument.Parse(output);
+            using var workspace = WorkspaceScope.Open(directory);
+            workspace.Read();
 
-            // What is asked for is only there on an object: a command that answered a list or a number is a
-            // command whose answer is not a plan, and asking a list for a property is a throw rather than a no.
-            if (
-                document.RootElement.ValueKind is JsonValueKind.Object
-                && document.RootElement.TryGetProperty("entries", out var entries)
-                && entries.ValueKind is JsonValueKind.Array
-            )
+            // The account is read after the Workspace, so a directory that holds none is answered without
+            // asking the user's own configuration about work that is not there.
+            var account = UserScope.CurrentAccount;
+            var request = Request(directory, way, scope, force, account);
+            var planned = PlanRequest(directory, way, scope, force, account);
+
+            var writer = new WorkspaceWriter(workspace);
+
+            // No cancellation is handed in: the panel has no stop control, so the writer makes one that
+            // nothing here can set. A handle made here and never set would be a stop that never comes.
+            var answer = writer.PlanSync(planned);
+
+            return new SyncPlan(answer.Entries.Count > 0, null)
             {
-                return new SyncPlan(entries.GetArrayLength() > 0, null);
-            }
+                Directory = workspace.Root.FullName,
+                Request = request,
+                Planned = answer,
+            };
         }
-        catch (JsonException)
+        catch (RolaWriteError error)
         {
-            // Said below, the same as a plan with nothing in it: what went wrong is the command line's to say,
-            // and this is what the buttons are drawn grey for.
+            return new SyncPlan(false, Told(error));
         }
-
-        return new SyncPlan(false, RolaI18N.Get("rorolala_vcs.sync.plan_unreadable"));
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.NoWorkspace or RolaReadErrorKind.Unavailable)
+        {
+            return new SyncPlan(false, RolaI18N.Get("rorolala_vcs.not_a_workspace"));
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            return new SyncPlan(false, error.Message);
+        }
     }
 
     /// <summary>
-    /// Runs a sync, saying what it is doing while it goes.
+    /// The request a run of one direction and scope is made with.
     /// </summary>
     /// <remarks>
-    /// The progress is read off the error stream line by line as the run writes it, which is why the run is not
-    /// waited for before anything is read: a bar drawn from what a run said after it ended would be a bar that
-    /// appeared when there was nothing left to watch. The result, which goes to the output stream as one JSON
-    /// object, is read as it is written too, so that neither stream can fill and hold the run up.
+    /// The account is the one the work acts as, read from the user's own file as the command line reads it. The
+    /// Vault is the tracked one, which is what a sync means when it names none. A run is never offline: this
+    /// window has no offline control, and a sync that could not reach the Vault would be a sync that did nothing.
+    /// The fetching label is this panel's own, since a bar whose words were the writer's English would look
+    /// broken in a window drawn in another language; every other word a sync says is the writer's, as the apply
+    /// reports a direction rather than naming a step.
     /// </remarks>
-    /// <param name="directory">Where the work is rooted, and where the run is made.</param>
-    /// <param name="way">Which way it carries.</param>
-    /// <param name="scope">What it carries.</param>
-    /// <param name="force">Whether history is to be changed rather than refused.</param>
-    /// <param name="records">What the run's records are read into, which the caller keeps and draws.</param>
-    /// <param name="progress">What is told that a record was said, which the caller draws on its own thread.</param>
-    /// <returns>Whether it ended well, and what to say when it did not.</returns>
-    public static (bool Done, string Said) Run(
+    /// <param name="directory">Where the work is rooted.</param>
+    /// <param name="way">Which way content may move.</param>
+    /// <param name="scope">Which sides move.</param>
+    /// <param name="force">Whether a version whose chain moved apart may go up.</param>
+    /// <param name="account">The account the run signs as.</param>
+    /// <returns>The request, whose Workspace the writer replaces with the root it found.</returns>
+    internal static SyncRequest Request(
         string directory,
         SyncWay way,
         SyncScope scope,
         bool force,
+        string account
+    )
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(account);
+
+        return new SyncRequest
+        {
+            Workspace = directory,
+            Account = account,
+            Target = WriteTarget.Tracked,
+            Direction = way switch
+            {
+                SyncWay.Up => SyncDirection.Up,
+                SyncWay.Down => SyncDirection.Down,
+                _ => SyncDirection.Both,
+            },
+            Forced = force,
+            Index = scope.Index,
+            Layout = scope.Layout,
+            Storage = scope.Storage,
+            Labels = new WriteLabels { Fetching = RolaI18N.Get("rorolala_vcs.progress.fetch") },
+        };
+    }
+
+    /// <summary>
+    /// The request a plan is asked with, which always reads the Vault's Layout.
+    /// </summary>
+    /// <remarks>
+    /// A plan is the comparison with the Vault's Layout, so a request that leaves the Layout out has none to
+    /// answer with. The run that follows may still leave the Layout alone, and it applies the plan it was handed
+    /// without reading it in that case; what the plan is asked with and what the run moves are therefore two
+    /// requests, and only the index and the storage follow the scope here.
+    /// </remarks>
+    /// <param name="directory">Where the work is rooted.</param>
+    /// <param name="way">Which way the run the plan is asked for would carry.</param>
+    /// <param name="scope">Which sides the run moves.</param>
+    /// <param name="force">Whether the run may change history rather than refuse.</param>
+    /// <param name="account">The account the run signs as.</param>
+    /// <returns>The request, whose Layout is always read.</returns>
+    internal static SyncRequest PlanRequest(
+        string directory,
+        SyncWay way,
+        SyncScope scope,
+        bool force,
+        string account
+    ) => Request(directory, way, scope, force, account) with { Layout = true };
+
+    /// <summary>
+    /// Runs the plan a panel kept, saying what it is doing while it goes.
+    /// </summary>
+    /// <remarks>
+    /// The plan the writer made is the one applied, so the run carries what the plan named rather than planning
+    /// again inside itself. The progress handle is made here and the window polls it while the writer works on
+    /// this thread; each reading is read into the records on the window's thread, which is where the panel is
+    /// drawn from them. The handle is given back only after the poll has stopped and its last reading is taken,
+    /// so nothing the writer said is lost on the way out.
+    /// </remarks>
+    /// <param name="plan">What the plan was, which must be one <see cref="Plan"/> made.</param>
+    /// <param name="records">What the run's records are read into, which the caller keeps and draws.</param>
+    /// <param name="progress">What is told that a record was said, which the caller draws on its own thread.</param>
+    /// <returns>Whether it ended well, and what to say when it did not.</returns>
+    public static (bool Done, string Said) Run(
+        SyncPlan plan,
         ProgressRecords records,
         Action progress
     )
     {
-        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(progress);
 
-        var program = Environment.GetEnvironmentVariable(Program);
-
-        if (string.IsNullOrEmpty(program))
+        if (
+            plan.Request is not { } request
+            || plan.Planned is not { } wanted
+            || plan.Directory is not { Length: > 0 } directory
+        )
         {
-            return (false, RolaI18N.Get("rorolala_vcs.sync.no_program"));
-        }
-
-        var start = new ProcessStartInfo
-        {
-            FileName = program,
-            WorkingDirectory = directory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-
-            // The words are `rola`'s own, and `rola` writes UTF-8, as every stream this project's programs
-            // write is. Left unstated, a redirected stream is decoded in the machine's codepage, which on a
-            // Chinese Windows is GBK, and every word of the message comes out as mojibake.
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-        };
-
-        foreach (var argument in Arguments(way, scope, force))
-        {
-            start.ArgumentList.Add(argument);
+            // A plan with nothing against it is the run that leaves every side out: it changes nothing, which is
+            // what it did before there was a writer, so it ends well rather than being refused for having no plan.
+            return plan.Said is { Length: > 0 } said ? (false, said) : (true, string.Empty);
         }
 
         try
         {
-            using var process =
-                Process.Start(start) ?? throw new InvalidOperationException("the process was not started");
+            // The plan is the writer's own answer, so the run is made over the same scope rather than over the
+            // directory the panel holds: a directory inside the Workspace names the Workspace by being in it.
+            using var workspace = WorkspaceScope.Open(directory);
+            workspace.Read();
 
-            var said = new StringBuilder();
+            var writer = new WorkspaceWriter(workspace);
 
-            // The output is drained on a task of its own rather than read after the wait: a run that filled
-            // the pipe this side is not reading would wait for a reader that is waiting for it to end.
-            var output = Task.Run(() => process.StandardOutput.ReadToEnd());
+            using var native = Progress.New();
 
-            while (process.StandardError.ReadLine() is { } line)
+            // The timer belongs to the window's dispatcher rather than to the one this worker would make for
+            // itself: a timer on a dispatcher with no loop never ticks, and the bar would stand still.
+            var timer = new DispatcherTimer(
+                TimeSpan.FromMilliseconds(ProgressPause),
+                DispatcherPriority.Background,
+                Dispatcher.UIThread
+            );
+
+            timer.Tick += (_, _) => Drain(native, records, progress);
+
+            OnWindow(timer.Start);
+            try
             {
-                if (!records.Read(line) && line.Length > 0)
+                // No cancellation is handed in: the panel has no stop control, so the writer makes one.
+                writer.Sync(request, wanted, native);
+            }
+            finally
+            {
+                OnWindow(() =>
                 {
-                    said.AppendLine(line);
-                }
-
-                progress();
+                    timer.Stop();
+                    Drain(native, records, progress);
+                });
             }
 
-            process.WaitForExit();
-
-            if (process.ExitCode == 0)
-            {
-                return (true, string.Empty);
-            }
-
-            var told = said.ToString().Trim();
-
-            if (told.Length == 0)
-            {
-                told = output.GetAwaiter().GetResult().Trim();
-            }
-
-            return (false, told.Length == 0 ? $"the command ended with {process.ExitCode}" : told);
+            return (true, string.Empty);
+        }
+        catch (RolaWriteError error)
+        {
+            return (false, Told(error));
+        }
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.NoWorkspace or RolaReadErrorKind.Unavailable)
+        {
+            return (false, RolaI18N.Get("rorolala_vcs.not_a_workspace"));
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
             return (false, error.Message);
         }
+    }
+
+    /// <summary>
+    /// What a write failure is said as in the window.
+    /// </summary>
+    /// <remarks>
+    /// A kind a key already says is translated, and one no key says is the writer's own message once: the
+    /// failure's kind is not spelled beside it, since a reader shown both would read the same thing twice. The
+    /// message is English, which is what the writer says; a key is used only where one says the same state.
+    /// </remarks>
+    /// <param name="error">The failure the writer answered with.</param>
+    /// <returns>What to show.</returns>
+    internal static string Told(RolaWriteError error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+
+        return error.Kind switch
+        {
+            RolaWriteErrorKind.NoWorkspace => RolaI18N.Get("rorolala_vcs.not_a_workspace"),
+            RolaWriteErrorKind.Json => RolaI18N.Get("rorolala_vcs.sync.plan_unreadable"),
+            _ => error.Message,
+        };
+    }
+
+    /// <summary>
+    /// Reads every record the writer has said since the last reading, and tells the panel once.
+    /// </summary>
+    /// <remarks>
+    /// It runs on the window's thread, from the timer and from the last reading the stop makes, so the records
+    /// and the drawing they cause belong to one thread. The queue is drained rather than read one at a time so
+    /// that a burst of records cannot overtake the next reading.
+    /// </remarks>
+    /// <param name="native">The writer's progress handle.</param>
+    /// <param name="records">What the records are read into.</param>
+    /// <param name="progress">What is told that records were read.</param>
+    private static void Drain(Progress native, ProgressRecords records, Action progress)
+    {
+        var said = false;
+
+        while (native.NextJson() is { } json)
+        {
+            records.Read(json);
+            said = true;
+        }
+
+        if (said)
+        {
+            progress();
+        }
+    }
+
+    /// <summary>Runs something on the window's thread, wherever it was called from.</summary>
+    /// <remarks>
+    /// The run itself is on a worker, so this waits for the window to take the work. The window never waits on
+    /// the run in return, which is what keeps the wait from closing on itself.
+    /// </remarks>
+    /// <param name="said">What to do.</param>
+    private static void OnWindow(Action said)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            said();
+
+            return;
+        }
+
+        Dispatcher.UIThread.InvokeAsync(said).GetAwaiter().GetResult();
     }
 
     /// <summary>Runs a command and waits, answering whether it ended well, what it said, and what it wrote.</summary>

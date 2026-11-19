@@ -6,10 +6,10 @@ namespace RorolalaVCSPlugin;
 /// What a sync would do about the file at a path, which is what the Overview's sync rows are made of.
 /// </summary>
 /// <remarks>
-/// It is the plan a sync would make, read one path at a time: <c>rola sync</c> sends a version this side is
-/// further on than, brings down one the Vault is further on than, and sends one whose two chains have each moved
-/// on only when it is forced. The four are the plan's own, and are told apart the way the plan tells
-/// them apart, see <see cref="RolaStatus.SyncOf"/>, so a row of the Overview and the run a reader presses are one
+/// It is the plan a sync would make, read one path at a time: a sync sends a version this side is further on
+/// than, brings down one the Vault is further on than, and sends one whose two chains have each moved on only
+/// when it is forced. The four are the plan's own, and are told apart the way the plan tells them apart, see
+/// <see cref="StatusReading.SyncOf"/>, so a row of the Overview and the run a reader presses are one
 /// answer about one file rather than two that have to agree.
 /// </remarks>
 internal enum SyncMove
@@ -31,7 +31,7 @@ internal enum SyncMove
 /// What a sync would do about the paths of the work, read once each.
 /// </summary>
 /// <remarks>
-/// It is read from the same <see cref="RolaStatus"/> every other answer about the work is read from, and it sits
+/// It is read from the same <see cref="StatusReading"/> every other answer about the work is read from, and it sits
 /// here rather than in the Overview because the comparison is the reading's: what a path's version is beside the
 /// one upstream records is a question about the index, and no view has any business walking a chain.
 /// </remarks>
@@ -41,7 +41,7 @@ internal static class RorolalaSync
     /// <param name="reading">The reading.</param>
     /// <param name="path">The path, as the program names it.</param>
     /// <returns>What a sync would do, which is nothing for a path the reading is not about.</returns>
-    public static SyncMove Of(RolaStatus reading, string path)
+    public static SyncMove Of(StatusReading reading, string path)
     {
         ArgumentNullException.ThrowIfNull(reading);
         ArgumentNullException.ThrowIfNull(path);
@@ -67,7 +67,7 @@ internal static class RorolalaSync
     /// <param name="reading">The reading.</param>
     /// <param name="path">The path, as the program names it.</param>
     /// <returns>How many versions apart they are, or nothing.</returns>
-    public static ulong? Distance(RolaStatus reading, string path)
+    public static ulong? Distance(StatusReading reading, string path)
     {
         ArgumentNullException.ThrowIfNull(reading);
         ArgumentNullException.ThrowIfNull(path);
