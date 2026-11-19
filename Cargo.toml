@@ -129,6 +129,12 @@ arg-picker = "0.4.0"
 # tree, so `**` is what reaches into one.
 globset = "0.4.20"
 
+# Ctrl+C, as a flag a write checks rather than a signal that ends the process: a write that has
+# already put content down stops between its steps and answers where it stopped, instead of leaving
+# the caller with a half-written run and no answer. The handler only sets a flag, so the work is
+# free to finish the step it is in.
+ctrlc = "3.5.2"
+
 # gitignore matching for the managed ignore rules (`modules/ignore`): the syntax is gitignore's
 # whole surface (negation, directory-only, anchoring, `**`) and ripgrep's own matcher is the one
 # already proven against it. Only the matching is taken, not the crate's own directory walking:
@@ -248,6 +254,7 @@ homepage.workspace = true
 authors.workspace = true
 
 [dependencies]
+globset.workspace = true
 rorolala-auth.workspace = true
 rorolala-book-search.workspace = true
 rorolala-chunking.workspace = true
@@ -273,6 +280,7 @@ rola-desktop-pty.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+uuid.workspace = true
 
 [build-dependencies]
 rorolala-dev-bindgen.workspace = true
@@ -289,8 +297,3 @@ serde_json.workspace = true
 # so the report it makes of the dependency above is told to stay quiet.
 [lints.cargo]
 unused_dependencies = "allow"
-
-[dev-dependencies]
-# The tests of the C ABI's own glue make a Workspace and name paths in a Layout, which is done by
-# `Uuid`: what a Layout binds a path to is one, and nothing else here can stand in for it.
-uuid.workspace = true

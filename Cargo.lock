@@ -2300,6 +2300,7 @@ dependencies = [
 name = "librorolala"
 version = "0.4.0"
 dependencies = [
+ "globset",
  "rola-desktop-pty",
  "rorolala-auth",
  "rorolala-book-search",
@@ -3573,6 +3574,7 @@ dependencies = [
  "annotate-snippets",
  "colored",
  "console",
+ "ctrlc",
  "embed-resource",
  "globset",
  "indicatif",
@@ -3807,6 +3809,9 @@ dependencies = [
 [[package]]
 name = "rorolala-dev-rsharp-bindgen"
 version = "0.4.0"
+dependencies = [
+ "rorolala-chunking",
+]
 
 [[package]]
 name = "rorolala-dev-sync-harness"
@@ -3863,12 +3868,10 @@ dependencies = [
 name = "rorolala-layout"
 version = "0.4.0"
 dependencies = [
- "rorolala-errors",
  "rorolala-storage",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
- "rorolala-vcs",
  "tokio",
  "unicode-normalization",
  "uuid",

@@ -16,6 +16,7 @@ rorolala-workspace.workspace = true
 annotate-snippets.workspace = true
 colored.workspace = true
 console.workspace = true
+ctrlc.workspace = true
 globset.workspace = true
 just_fmt.workspace = true
 mingling.workspace = true

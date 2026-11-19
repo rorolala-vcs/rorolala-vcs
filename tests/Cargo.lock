@@ -1324,6 +1324,7 @@ dependencies = [
 name = "librorolala"
 version = "0.4.0"
 dependencies = [
+ "globset",
  "rola-desktop-pty",
  "rorolala-auth",
  "rorolala-book-search",
@@ -1351,6 +1352,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -1956,12 +1958,10 @@ dependencies = [
 name = "rorolala-layout"
 version = "0.4.0"
 dependencies = [
- "rorolala-errors",
  "rorolala-storage",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-location",
- "rorolala-vcs",
  "tokio",
  "unicode-normalization",
  "uuid",
