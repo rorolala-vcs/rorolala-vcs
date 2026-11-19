@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
 using Avalonia.Layout;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RorolalaDesktop;
 using RorolalaDesktop.Contract;
@@ -257,6 +258,65 @@ public sealed class WindowTests
 
         // And the window it was in is gone, since a window of one dock holds that dock and nothing else.
         Assert.Equal(1, services.Windows.Count);
+    }
+
+    /// <summary>
+    /// A strip a dock draws in its own header comes back with it, rather than staying behind in the group it left.
+    /// </summary>
+    /// <remarks>
+    /// The strip is one control of the plugin's, and the area's strip is the only place it may hang from. A dock
+    /// taken out of a group leaves that group empty, the group is pruned, and the region that drew it is thrown
+    /// away while it still holds the strip: the group the dock comes back to cannot add the control, so the
+    /// buttons it carries are gone, and the next time the dock is chosen the add throws.
+    /// <para>
+    /// What is done here is what the user did: the dock is taken out into a window of its own, the dock that
+    /// stayed is chosen, and the dock is brought back and chosen again. The two tabs carry different words so
+    /// that the one to press can be named.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AHeaderStripComesBackWithItsDock()
+    {
+        var (services, _) = Windows();
+        var strip = new StackPanel();
+        var headered = Header("it.dock.header", "it_dock.header", strip);
+        var kept = Header("it.dock.kept", "it_dock.kept", new StackPanel());
+
+        services.Docks.Register(headered);
+        services.Docks.Register(kept);
+
+        var dock = services.Docks.Activate(headered);
+        var beside = services.Docks.Activate(kept);
+
+        Assert.NotNull(dock);
+        Assert.NotNull(beside);
+
+        // The headered dock is alone in its group, so taking it out prunes that group and the region that drew
+        // it. The dock that stayed gets a group of its own, which is where the headered one comes back to.
+        services.Docks.Move(beside, Beside(services.Docks, beside, DockSide.Right));
+        services.Windows.OpenMain();
+
+        var main = (MainWindow)services.Shell.Window!;
+        Pump();
+
+        services.Windows.ToOwnWindow(dock);
+
+        Assert.NotNull(dock.Window);
+        Assert.DoesNotContain(strip, main.GetVisualDescendants());
+
+        services.Windows.MoveToMain(dock);
+
+        Assert.Null(dock.Window);
+
+        Pump();
+
+        // The tab is chosen back and forth, which is where the header is drawn again over the strip the dock
+        // brought back: a press on the other tab takes the strip out, and a press on this one asks for it again.
+        Click(main, Tab(main, "it_dock.kept"));
+        Click(main, Tab(main, "it_dock.header"));
+
+        Assert.Contains(strip, main.GetVisualDescendants());
+        Assert.Contains(DockArea.SelectedClass, Tab(main, "it_dock.header").Classes);
     }
 
     /// <summary>
@@ -1532,6 +1592,87 @@ public sealed class WindowTests
             ?? throw new InvalidOperationException("the dock is not in the main window's tree");
 
         return new DockTarget(group.Id, side, 0);
+    }
+
+    /// <summary>A registration for a dock that draws a strip of its own in its header.</summary>
+    /// <param name="nameId">Its stable name id.</param>
+    /// <param name="titleKey">The key its title is read from, which is what its tab says.</param>
+    /// <param name="strip">The control it puts in the header.</param>
+    /// <returns>The registration.</returns>
+    private static DockRegistration Header(string nameId, string titleKey, Control strip) =>
+        new(
+            Core.Id,
+            nameId,
+            titleKey,
+            DockOpenMode.New,
+            DockSide.Center,
+            () => new HeaderDockView(strip)
+        );
+
+    /// <summary>A dock's view that is drawn as one control and offers a strip in its header.</summary>
+    /// <remarks>
+    /// The strip is kept by the view rather than made again when the header is read, which is what a plugin
+    /// drawing buttons of its own does: the control is one instance for the life of the dock.
+    /// </remarks>
+    private sealed class HeaderDockView : IDockView
+    {
+        /// <summary>The control the dock is drawn as.</summary>
+        private readonly Control _view = new Border();
+
+        /// <summary>The strip its header carries.</summary>
+        private readonly Control _strip;
+
+        /// <summary>Makes the view over the strip it offers.</summary>
+        /// <param name="strip">The strip.</param>
+        public HeaderDockView(Control strip) => _strip = strip;
+
+        /// <inheritdoc />
+        public Control View => _view;
+
+        /// <inheritdoc />
+        public IReadOnlyList<DockHeaderItem> Header => [new DockHeaderView(_strip)];
+    }
+
+    /// <summary>The tab a dock's title is said on, as the main window draws it.</summary>
+    /// <param name="main">The window.</param>
+    /// <param name="title">What the tab says, which a key nothing states is drawn as.</param>
+    /// <returns>The tab.</returns>
+    private static Button Tab(MainWindow main, string title) =>
+        main.GetVisualDescendants()
+            .OfType<Button>()
+            .Single(button =>
+                button.Classes.Contains(DockArea.TitleClass)
+                && button.GetVisualDescendants().OfType<TextBlock>().Any(text => text.Text == title)
+            );
+
+    /// <summary>Presses and lets go of a control where it is drawn, which is what chooses a tab.</summary>
+    /// <param name="main">The window the control is in.</param>
+    /// <param name="control">The control to press.</param>
+    private static void Click(MainWindow main, Control control)
+    {
+        var at = control.TranslatePoint(
+            new Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
+            main
+        );
+
+        Assert.NotNull(at);
+
+        main.MouseDown(at.Value, MouseButton.Left);
+        main.MouseUp(at.Value, MouseButton.Left);
+
+        Pump();
+    }
+
+    /// <summary>Lets the window run a few turns of its loop, which is what lays a dock area out.</summary>
+    private static void Pump()
+    {
+        for (var turn = 0; turn < 30; turn++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        }
+
+        Dispatcher.UIThread.RunJobs();
     }
 
     /// <summary>A registration for a dock that may be made again, as a browser is.</summary>

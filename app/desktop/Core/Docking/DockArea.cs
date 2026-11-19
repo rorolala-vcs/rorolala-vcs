@@ -645,6 +645,20 @@ internal sealed class DockArea : UserControl
         /// <summary>The dock whose commands the strip is showing, which is what <see cref="Commands"/> was built for.</summary>
         public DockInstance? Shown { get; set; }
 
+        /// <summary>
+        /// Gives up the controls the strip was holding, so that the dock that drew them can carry them elsewhere.
+        /// </summary>
+        /// <remarks>
+        /// What a strip holds is a plugin's own control, and one control has one parent. A region that kept it
+        /// after the dock left would hold the only place it can be, and the region the dock went to would be
+        /// refused it: the buttons would be gone with the dock, and asking for them again would throw.
+        /// </remarks>
+        public void Unbind()
+        {
+            Shown = null;
+            Commands.Children.Clear();
+        }
+
         /// <summary>Every dock the region was given, of which one is visible at a time.</summary>
         public Panel Content { get; } = new();
 
@@ -877,6 +891,10 @@ internal sealed class DockArea : UserControl
             {
                 continue;
             }
+
+            // A region that is gone is never bound again, so the strip it is holding has to be given up here or
+            // the control stays parented to a region nothing can reach.
+            region.Unbind();
 
             if (region.Panel.Parent is Panel parent)
             {
@@ -1234,6 +1252,13 @@ internal sealed class DockArea : UserControl
         if (ReferenceEquals(placed.Region.Selected, placed.Instance))
         {
             placed.Region.Selected = null;
+        }
+
+        // The strip is the shown dock's, so it goes with it: the control a plugin draws is one instance, and a
+        // region that kept it would hold the one parent it may have when the dock is placed in another.
+        if (ReferenceEquals(placed.Region.Shown, placed.Instance))
+        {
+            placed.Region.Unbind();
         }
     }
 

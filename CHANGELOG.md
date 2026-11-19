@@ -7,7 +7,8 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 ## Bugfix
 
 1. [`app`] [`rola`] [`retrack`] Answer a retrack with no earlier version instead of panicking. [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-retrack-answer-a-retrack-with-no-earlier-version-instead-of-panicking)
-2. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault. [See details](dev/CHANGELOG-DETAILS.md#2-modules-rola-sharp-locate-accounts-and-members-without-a-vault)
+2. [`app`] [`RorolalaDesktop`] [`docking`] Give a dock's header strip back when the dock leaves its group. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-docking-give-a-docks-header-strip-back-when-the-dock-leaves-its-group)
+3. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault. [See details](dev/CHANGELOG-DETAILS.md#3-modules-rola-sharp-locate-accounts-and-members-without-a-vault)
 
 ## Feature
 
