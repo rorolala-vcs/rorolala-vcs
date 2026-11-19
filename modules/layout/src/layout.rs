@@ -705,6 +705,22 @@ impl Batch<'_> {
         self.push(Record::RemoveEntry { id })
     }
 
+    /// Removes the path, leaving the entry, in this batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::NotFound`] if `path` names nothing.
+    pub fn remove_path(&mut self, path: &LayoutPath) -> Result<(), LayoutError> {
+        let Some(id) = self.index.id_of.get(path).copied() else {
+            return Err(LayoutError::NotFound);
+        };
+
+        self.push(Record::RemovePath {
+            id,
+            path: path.as_str().to_owned(),
+        })
+    }
+
     /// Moves the `Uuid` at `from` to `to`.
     ///
     /// # Errors

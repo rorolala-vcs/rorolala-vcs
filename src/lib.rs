@@ -5,7 +5,7 @@
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use rorolala_utils_constants::WORKSPACE_KEYS_DIR;
 use rorolala_utils_lazyffi::lazyffi;
@@ -19,11 +19,16 @@ pub mod address;
 pub mod chunking_read;
 pub mod config_read;
 pub mod existence;
+pub mod fetch;
 pub mod gc;
+pub mod keys;
 pub mod layout_read;
-mod ownership;
+pub mod ownership_read;
+pub mod read_v2;
+pub mod remote;
 pub mod status;
 pub mod storage_read;
+pub mod write;
 
 pub use address::*;
 pub use chunking_read::*;
@@ -31,9 +36,11 @@ pub use config_read::*;
 pub use existence::*;
 pub use gc::*;
 pub use layout_read::*;
-pub use ownership::*;
+pub use ownership_read::*;
+pub use read_v2::*;
 pub use status::*;
 pub use storage_read::*;
+pub use write::*;
 
 /// Authentication
 pub use rorolala_auth as auth;
@@ -139,6 +146,24 @@ pub fn member_locate(vault: &Vault, rule: &KeyLocateRule) -> Members {
     auth::locate_members(&roots_beside(vault), rule)
 }
 
+/// Every member `rule` finds beside the current Workspace, with no Vault to search beside.
+///
+/// [`member_locate`] takes a Vault because the Vault's own keys are one of the local roots it reads.
+/// A caller that has no Vault used to pass a null pointer there, which the export cannot receive;
+/// this is the same search with that root left out, and the rule's other scopes still answer. The
+/// Workspace is found from the current directory.
+///
+/// # FFI
+///
+/// A `RolaMembers` the caller releases with `free_rola_members`.
+#[must_use]
+#[lazyffi(export = rola_member_locate_local)]
+pub fn member_locate_local(rule: &KeyLocateRule) -> Members {
+    let workspace = current_workspace();
+
+    auth::locate_members(&local_roots(None, workspace.as_ref()), rule)
+}
+
 /// The member named `member_name`, if any scope the rule turns on holds its public key.
 ///
 /// The lazy counterpart of [`member_locate`]: it stops at the first directory that has the
@@ -162,7 +187,47 @@ pub fn account_locate(vault: &Vault, rule: &KeyLocateRule) -> Accounts {
     auth::locate_accounts(&roots_beside(vault), rule)
 }
 
-/// The account named `account_name`, if a local root holds its private key.
+/// Every account `rule` finds beside the current Workspace, with no Vault to search beside.
+///
+/// [`account_locate`] takes a Vault because the Vault's own keys are one of the local roots it reads.
+/// A caller that has no Vault used to pass a null pointer there, which the export cannot receive;
+/// this is the same search with that root left out, and the rule's other scopes still answer. The
+/// Workspace is found from the current directory.
+///
+/// # FFI
+///
+/// A `RolaAccounts` the caller releases with `free_rola_accounts`.
+#[must_use]
+#[lazyffi(export = rola_account_locate_local)]
+pub fn account_locate_local(rule: &KeyLocateRule) -> Accounts {
+    let workspace = current_workspace();
+
+    auth::locate_accounts(&local_roots(None, workspace.as_ref()), rule)
+}
+
+/// Every account whose private key is directly inside `keys`.
+///
+/// It is the user-scoped counterpart of [`account_locate`]: the caller names the directory that
+/// holds the accounts, usually the user's own `rola/keys`, rather than a Workspace or a Vault. The
+/// rule still says which scopes to search, but an account is only ever a private key, so only the
+/// local root named here can answer.
+#[must_use]
+#[lazyffi(export = rola_user_accounts)]
+pub fn user_accounts(keys: &Path, rule: &KeyLocateRule) -> Accounts {
+    auth::locate_accounts(&[keys.to_path_buf()], rule)
+}
+
+/// Every member whose public key is directly inside `keys`.
+///
+/// It is the user-scoped counterpart of [`member_locate`]. The rule's other scopes are still
+/// searched, since a public key is meant to be shared; `keys` is the local root the caller names.
+#[must_use]
+#[lazyffi(export = rola_user_members)]
+pub fn user_members(keys: &Path, rule: &KeyLocateRule) -> Members {
+    auth::locate_members(&[keys.to_path_buf()], rule)
+}
+
+/// The account named `account_name`, if any scope the rule turns on holds its private key.
 ///
 /// The lazy counterpart of [`account_locate`], which also only looks in the local roots.
 /// The Vault and the Workspace are both looked for from the current directory.
