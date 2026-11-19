@@ -17,7 +17,6 @@
 // that a copy would read a state of its own.
 #![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
-use librorolala::storage::Lockable as _;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -276,74 +275,29 @@ pub fn handle_pack(
     // `finish` would keep the channel open and the reader waiting on it forever.
     let reporting = Reporting::start(*progress);
 
-    // The store and the index are asynchronous and a command is not, so the two meet here: the
-    // objects are read and the packs written by each, and a runtime of this run's own is what waits
-    // for them, see `cmd_storage_write_file`.
-    let runtime = match tokio::runtime::Runtime::new() {
-        Ok(runtime) => runtime,
-        Err(error) => {
-            reporting.finish();
-
-            return ErrorPackFailed {
-                cause: error.to_string(),
-            }
-            .into();
-        }
-    };
-
     let mut changed = false;
 
     // Which objects there are and how they are laid out is each side's own to say: this hands over
     // nothing and asks for the whole of it to be laid out afresh, under the lock of that side, so
     // that nothing else is packing it while it happens.
     if let Some(store) = store {
-        let guard = match runtime.block_on(store.lock()) {
-            Ok(guard) => guard,
-            Err(error) => {
-                reporting.finish();
-
-                return ErrorPackLocked {
-                    cause: error.to_string(),
-                }
-                .into();
-            }
-        };
-
-        match runtime.block_on(guard.repack(&reporting.progress())) {
+        match librorolala::write::pack::pack_storage_with(store, &reporting.progress()) {
             Ok(was) => changed |= was,
             Err(error) => {
                 reporting.finish();
 
-                return ErrorPackFailed {
-                    cause: error.to_string(),
-                }
-                .into();
+                return pack_error(error);
             }
         }
     }
 
-    if let Some(store) = vcs_index {
-        let guard = match runtime.block_on(store.lock()) {
-            Ok(guard) => guard,
-            Err(error) => {
-                reporting.finish();
-
-                return ErrorPackLocked {
-                    cause: error.to_string(),
-                }
-                .into();
-            }
-        };
-
-        match runtime.block_on(guard.repack(&reporting.progress())) {
+    if let Some(index) = vcs_index {
+        match librorolala::write::pack::pack_index_with(index, &reporting.progress()) {
             Ok(was) => changed |= was,
             Err(error) => {
                 reporting.finish();
 
-                return ErrorPackFailed {
-                    cause: error.to_string(),
-                }
-                .into();
+                return pack_error(error);
             }
         }
     }
@@ -351,6 +305,17 @@ pub fn handle_pack(
     reporting.finish();
 
     ResultPacked { changed }.into()
+}
+
+/// The failure a pack writes, in the words this command reports it by.
+fn pack_error(error: librorolala::write::WriteError) -> Next {
+    match error {
+        librorolala::write::WriteError::Locked { path } => ErrorPackLocked { cause: path }.into(),
+        other => ErrorPackFailed {
+            cause: other.to_string(),
+        }
+        .into(),
+    }
 }
 
 /// Result: the store was laid out afresh, or already was.
