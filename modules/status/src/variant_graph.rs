@@ -68,7 +68,7 @@ const DEPRECATED_PREFIX: &str = "@/removed/";
 pub fn locate_variant_graph_json(directory: &Path, request: &str) -> Result<String, GraphError> {
     let workspace = Workspace::locate(directory).ok_or(GraphError::NoWorkspace)?;
     let layout = workspace
-        .layout_if_there()
+        .layout_readonly()
         .map_err(|error| GraphError::Read {
             reason: error.to_string(),
         })?

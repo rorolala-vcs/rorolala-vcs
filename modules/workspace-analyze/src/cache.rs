@@ -171,6 +171,11 @@ impl Cache {
         self.entries.insert(path, entry);
     }
 
+    /// Takes the reading of `path` out, answering what was there.
+    pub fn remove(&mut self, path: &LayoutPath) -> Option<Entry> {
+        self.entries.remove(path)
+    }
+
     /// The cache kept at `path`, or an empty one when there is none that reads.
     #[must_use]
     pub fn read(path: &Path) -> Self {

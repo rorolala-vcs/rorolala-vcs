@@ -540,7 +540,7 @@ impl VersionGraph {
 
 /// The Layout the Workspace is working in, when it is working in one.
 fn working_layout(workspace: &Workspace) -> Option<Layout> {
-    workspace.layout_if_there().ok().flatten()
+    workspace.layout_readonly().ok().flatten()
 }
 
 /// The path `target` names in the Layout, read from the Workspace's root.
