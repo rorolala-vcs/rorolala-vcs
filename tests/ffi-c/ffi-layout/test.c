@@ -143,5 +143,23 @@ int main(void) {
          "a directory outside every Vault reads as null");
     free_string(no_config);
 
+    /* The two writes a fetched copy uses exist, and a Layout that is not a copy is refused as an
+       argument rather than answered as one. */
+    RorolalaResult moved = rola_write_layout_move_fetched(workspace, "main", "a.psd", "b.psd");
+    want(moved.tag == RorolalaResult_Err, "a move in a Layout that is not a fetched copy is a failure");
+    if (moved.tag == RorolalaResult_Err) {
+        const RolaWriteError *error = moved.payload;
+        want(error->tag == RolaWriteError_InvalidPath, "it is reported as InvalidPath");
+        free_rola_write_error(moved.payload);
+    }
+
+    RorolalaResult removed = rola_write_layout_remove_fetched_entry(workspace, "truth@studio", "not-a-uuid");
+    want(removed.tag == RorolalaResult_Err, "a removal of a Uuid that does not read is a failure");
+    if (removed.tag == RorolalaResult_Err) {
+        const RolaWriteError *error = removed.payload;
+        want(error->tag == RolaWriteError_InvalidPath, "it is reported as InvalidPath");
+        free_rola_write_error(removed.payload);
+    }
+
     return finish();
 }
