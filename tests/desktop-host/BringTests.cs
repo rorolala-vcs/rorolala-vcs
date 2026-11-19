@@ -1,5 +1,9 @@
+using System.Diagnostics;
+
 using FileSystemPlugin;
+using RolaSharp;
 using RorolalaVCSPlugin;
+using LayoutEntry = RorolalaVCSPlugin.LayoutEntry;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -11,7 +15,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The command line refuses a run whole for the first reference it will not take, so a batch that half fits is a batch
 /// that would do nothing at all. What is checked here is the judgement made before the run, where each entry would
 /// land, and what is already in the way, because that judgement is what the question to the user is built from.
-/// The runs themselves are checked beside this, as the arguments they are given.
+/// The move of a local copy is run here as well, since it is the writer's and needs nothing but a Workspace.
 /// </remarks>
 public sealed class BringTests
 {
@@ -276,23 +280,50 @@ public sealed class BringTests
         );
     }
 
-    /// <summary>A move of a local copy is made in the Layout being worked in unless another one is named.</summary>
+    /// <summary>A move of a local copy is made in the Layout being worked in, through the writer.</summary>
+    /// <remarks>
+    /// The record the local file is kept under is the writer's, so nothing of the command line is run for a move within
+    /// the work: what changes is where the Layout being worked in names the entry, and the content stays where it is.
+    /// </remarks>
     [Fact]
-    public void ALocalMoveNamesNoLayoutAndOneOfTheWorksNamesOne()
+    public void ALocalMoveIsMadeInTheLayoutBeingWorkedIn()
     {
-        var local = LayoutPathMoveCommand.Arguments(null, "imported.fbx", "A/b.fbx");
+        var directory = Scratch.New("bring-move");
 
-        Assert.Contains("move", local);
-        Assert.DoesNotContain("--layout", local);
-        Assert.Equal("imported.fbx", local[^2]);
-        Assert.Equal("A/b.fbx", local[^1]);
+        Given(directory, "init");
 
-        // A Layout the place is a view of is named, which is the same run against a Layout that is not the one on screen.
-        var named = LayoutPathMoveCommand.Arguments("work", "Assets/hero.psd", "Assets/hero-moved.psd");
+        var id = Guid.NewGuid().ToString();
+        Given(directory, "layout", "entry", "create", id, $"blake3:{new string('0', 64)}");
+        Given(directory, "layout", "path", "create", "imported.fbx", id);
 
-        Assert.Contains("--layout", named);
-        Assert.Contains("work", named);
-        Assert.Equal("Assets/hero-moved.psd", named[^1]);
+        var (done, said) = LayoutPathMoveCommand.Move(
+            directory,
+            layout: null,
+            "imported.fbx",
+            "A/b.fbx"
+        );
+
+        Assert.True(done, said);
+
+        // A place of the Workspace's own names the one Layout it works in, which is the same write under the name the
+        // listing gives it.
+        var (named, namedSaid) = LayoutPathMoveCommand.Move(
+            directory,
+            layout: "main",
+            "A/b.fbx",
+            "A/c.fbx"
+        );
+
+        Assert.True(named, namedSaid);
+
+        using var workspace = new WorkspaceScope(directory);
+        workspace.Read();
+        var layout = workspace.Layout;
+        layout.Read();
+
+        Assert.Null(layout.Find("imported.fbx"));
+        Assert.Null(layout.Find("A/b.fbx"));
+        Assert.Equal(id, layout.Find("A/c.fbx")?.Uuid);
     }
 
     /// <summary>An entry as the copy names it, with a path and the `Uuid` it is known by.</summary>
@@ -301,6 +332,36 @@ public sealed class BringTests
     /// <returns>The entry.</returns>
     private static LayoutEntry Entry(string path, string uuid) =>
         new(path, uuid, string.Empty, string.Empty, string.Empty, false);
+
+    /// <summary>Runs one command in a directory, failing the test when it does not end successfully.</summary>
+    /// <param name="directory">Where to run it.</param>
+    /// <param name="arguments">What the command is told.</param>
+    private static void Given(string directory, params string[] arguments)
+    {
+        // What the program says is left on the run's own streams: a run that fails shows why in the
+        // test output, and a pipe nobody drains cannot fill and stop the run.
+        var start = new ProcessStartInfo(Program()) { WorkingDirectory = directory };
+
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var command = Process.Start(start)!;
+
+        command.WaitForExit();
+
+        Assert.Equal(0, command.ExitCode);
+    }
+
+    /// <summary>The built command line, whose directory the suites are told.</summary>
+    /// <returns>The program to run.</returns>
+    private static string Program() =>
+        Path.Combine(
+            Environment.GetEnvironmentVariable("ROLA_BIN_DIR")
+                ?? throw new InvalidOperationException("the suites are run with ROLA_BIN_DIR"),
+            OperatingSystem.IsWindows() ? "rola.exe" : "rola"
+        );
 
     /// <summary>The Vault `origin`'s copy, for these checks to plan drags of.</summary>
     private static UpstreamSource Origin => new(UpstreamPlace.Vaults, "origin");

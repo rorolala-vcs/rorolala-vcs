@@ -3,13 +3,13 @@ using RorolalaVCSPlugin;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// The retrack: what a run of it is told.
+/// The retrack: what a run of it is asked for.
 /// </summary>
 /// <remarks>
-/// The movement itself is the command line's and is not run here, it needs a Workspace and an index, so
+/// The movement itself is the writer's and is not run here, it needs a Workspace and an index, so
 /// what is checked is what this plugin decides: which version the record is moved to, which file it is moved
 /// for, whether the work on disk follows it, and whether unrecorded changes are discarded. Whether the version
-/// is one the work's chain holds is the command line's to judge: a jump is what a retrack does by default, so
+/// is one the work's chain holds is the writer's to judge: a jump is what a retrack does by default, so
 /// the plugin asks for none and refuses none.
 /// </remarks>
 public sealed class RetrackTests
@@ -18,78 +18,70 @@ public sealed class RetrackTests
     [Fact]
     public void ARetrackNamesTheVersionAndWhetherTheWorkFollows()
     {
-        var moved = RetrackCommand.Arguments(
+        var moved = RetrackCommand.Request(
             "/work/logo.psd",
             "abc123",
             onlyIndex: false,
             force: false
         );
 
-        Assert.Contains("retrack", moved);
-        Assert.Contains("/work/logo.psd", moved);
-        Assert.Contains("abc123", moved);
+        Assert.Equal("/work/logo.psd", moved.File);
+        Assert.Equal("abc123", moved.Record);
 
-        // The file and what the path is to record are the command's two words, in that order: the
-        // one it is about, then what it is to record.
-        var words = moved.ToList();
-        Assert.True(
-            words.IndexOf("/work/logo.psd") < words.IndexOf("abc123"),
-            "the file is not named before its target"
-        );
+        // The target is what the path records, not a limit on how far it may move, and the plugin
+        // neither follows a jump rule nor gives one.
+        Assert.False(moved.DenyJump);
+        Assert.False(moved.Fork);
+        Assert.False(moved.OnlyIndex);
+        Assert.False(moved.Force);
 
-        // The target is a word of the command, not a flag's value, and how far it may be from the
-        // version the file records is the command line's own default.
-        Assert.DoesNotContain("--until", moved);
-        Assert.DoesNotContain("--only-index", moved);
-        Assert.DoesNotContain("--deny-jump", moved);
-        Assert.DoesNotContain("--allow-jump", moved);
-        Assert.DoesNotContain("--force", moved);
-
-        // The two items differ in one flag, which is the whole of what tells them apart.
-        var indexOnly = RetrackCommand.Arguments(
+        // The two items differ in one switch, which is the whole of what tells them apart.
+        var indexOnly = RetrackCommand.Request(
             "/work/logo.psd",
             "abc123",
             onlyIndex: true,
             force: false
         );
 
-        Assert.Contains("--only-index", indexOnly);
+        Assert.True(indexOnly.OnlyIndex);
+        Assert.False(indexOnly.Force);
 
         // Unrecorded changes are discarded only where the reader agreed to it.
-        var forced = RetrackCommand.Arguments(
+        var forced = RetrackCommand.Request(
             "/work/logo.psd",
             "abc123",
             onlyIndex: false,
             force: true
         );
 
-        Assert.Contains("--force", forced);
+        Assert.True(forced.Force);
+        Assert.False(forced.OnlyIndex);
 
         // The file following the record and the record moving alone are opposite instructions, so the
-        // two are never given together.
-        var indexOnlyForced = RetrackCommand.Arguments(
+        // two are never asked for together.
+        var indexOnlyForced = RetrackCommand.Request(
             "/work/logo.psd",
             "abc123",
             onlyIndex: true,
             force: true
         );
 
-        Assert.DoesNotContain("--force", indexOnlyForced);
+        Assert.True(indexOnlyForced.OnlyIndex);
+        Assert.False(indexOnlyForced.Force);
     }
 
     /// <summary>A fork names the path and asks for a fresh entry, with no version target.</summary>
     [Fact]
     public void AForkNamesThePathAndNoTarget()
     {
-        var fork = RetrackCommand.ForkArguments("/work/tree");
+        var fork = RetrackCommand.ForkRequest("/work/tree");
 
-        Assert.Contains("retrack", fork);
-        Assert.Contains("/work/tree", fork);
-        Assert.Contains("--fork", fork);
+        Assert.Equal("/work/tree", fork.File);
+        Assert.True(fork.Fork);
 
         // A fork is what the path records now, so there is no second word for a version.
-        Assert.DoesNotContain("~1", fork);
-        Assert.DoesNotContain("--only-index", fork);
-        Assert.DoesNotContain("--force", fork);
+        Assert.Equal(string.Empty, fork.Record);
+        Assert.False(fork.OnlyIndex);
+        Assert.False(fork.Force);
     }
 }

@@ -9,29 +9,34 @@ using Vcs = global::RorolalaVCSPlugin.RorolalaVCSPlugin;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// The track: what a run of it is told, and the field the message is written in.
+/// The track: what a run of it is asked for, and the field the message is written in.
 /// </summary>
 /// <remarks>
-/// The recording itself is the command line's and is not run here. What is checked is the one thing
-/// this plugin decides about a forced run, whether the command line is asked to record what a plain
-/// track would refuse, and the room the field under the graph takes.
+/// The recording itself is the writer's and is not run here. What is checked is the one thing this
+/// plugin decides about a forced run, whether the writer is asked to record what a plain track would
+/// refuse, and the room the field under the graph takes.
 /// </remarks>
 public sealed class TrackTests
 {
-    /// <summary>A forced track carries the force flag, and a plain one does not.</summary>
+    /// <summary>A forced track asks the writer to force it, and a plain one does not.</summary>
     [Fact]
-    public void AForcedTrackAsksTheCommandLineToForceIt()
+    public void AForcedTrackAsksTheWriterToForceIt()
     {
-        var plain = TrackCommand.Arguments(["/work/logo.psd"], "logo", force: false);
+        var plain = TrackCommand.Request(["/work/logo.psd"], force: false);
 
-        Assert.Contains("track", plain);
-        Assert.Contains("--no-editor", plain);
-        Assert.DoesNotContain("--force", plain);
+        Assert.Equal(["/work/logo.psd"], plain.Files);
+        Assert.False(plain.Force);
 
-        var forced = TrackCommand.Arguments(["/work/logo.psd"], "logo", force: true);
+        // What the window does not offer is left out rather than passed as a value: no version is
+        // replaced, no policy is named, and no ignored path is admitted past the rules.
+        Assert.False(plain.Replace);
+        Assert.Null(plain.Policy);
+        Assert.False(plain.IncludeIgnored);
 
-        Assert.Contains("--force", forced);
-        Assert.Contains("/work/logo.psd", forced);
+        var forced = TrackCommand.Request(["/work/logo.psd"], force: true);
+
+        Assert.True(forced.Force);
+        Assert.Equal(["/work/logo.psd"], forced.Files);
     }
 
     /// <summary>

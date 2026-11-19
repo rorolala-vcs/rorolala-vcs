@@ -6,12 +6,13 @@ using RorolalaVCSPlugin;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// Taking an entry out of a Vault's Layout: what the place offers to remove, and what the command is run with.
+/// Taking an entry out of a Vault's Layout: what the place offers to remove.
 /// </summary>
 /// <remarks>
 /// An entry of a Vault's copy is a file the Vault holds, and the account that holds it may let it go, which is the one
 /// row of a place that is a deletion rather than a suggestion about the work. What is checked here is the judgement the
-/// place draws from what it read, and the run it makes: neither the command line nor a Vault is here to be run against.
+/// place draws from what it read. Neither the command line nor a Vault is here to be run against, and the write the
+/// judgement leads to goes through the writer, which <see cref="LayoutWriterCommandTests"/> checks.
 /// </remarks>
 public sealed class UpstreamRemoveTests
 {
@@ -65,32 +66,6 @@ public sealed class UpstreamRemoveTests
         {
             _ = Acting(before);
         }
-    }
-
-    /// <summary>A removal is run against the Layout the place names, not against the one being worked in.</summary>
-    /// <remarks>
-    /// The copy is named so that the run writes the Vault's own Layout: a run without the name would unbind a path of the
-    /// Layout being worked in, which is a different write to a different file.
-    /// </remarks>
-    [Fact]
-    public void ARemovalNamesTheLayoutItIsIn()
-    {
-        var named = LayoutEntryRemoveCommand.Arguments(
-            LayoutPathMoveCommand.Named("origin"),
-            "Assets/hero.psd"
-        );
-
-        Assert.Equal(
-            ["--theme-choice=" + Sync.Theme, "--json", "layout", "path", "remove", "--layout", "truth@origin", "Assets/hero.psd"],
-            named
-        );
-
-        var local = LayoutEntryRemoveCommand.Arguments(null, "Assets/hero.psd");
-
-        Assert.Equal(
-            ["--theme-choice=" + Sync.Theme, "--json", "layout", "path", "remove", "Assets/hero.psd"],
-            local
-        );
     }
 
     /// <summary>Names the account the work acts as, and answers with the one it named before.</summary>

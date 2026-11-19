@@ -266,35 +266,18 @@ public sealed class UpstreamEntriesTests
         Assert.Equal("Assets/hero.psd", BringCommand.Arguments(["Assets/hero.psd"])[^1]);
     }
 
-    /// <summary>A move names the Layout the place is a view of, and nothing else is touched.</summary>
+    /// <summary>A Vault's Layout is named for the writer as <c>truth@VAULT</c>, and one of the Workspace's by its name.</summary>
     /// <remarks>
-    /// The Vault's own Layout is named <c>truth@VAULT</c> and one of the Workspace's by its name alone: the flag is what
-    /// keeps a move from being taken for one in the Layout being worked in, which is a different file.
+    /// The name is what tells the writer a fetched copy from a Layout of the Workspace's own: a copy is
+    /// moved by asking the Vault, and the Layout being worked in is moved in place. Both are writes the
+    /// library makes, so no arguments are built and nothing of the command line is run.
     /// </remarks>
     [Fact]
-    public void AMoveNamesTheLayoutItIsIn()
+    public void ALayoutIsNamedForTheWriter()
     {
-        var moved = LayoutPathMoveCommand.Arguments(
-            LayoutPathMoveCommand.Named("origin"),
-            "@/new/hero.psd",
-            "Assets/hero.psd"
-        );
-
-        Assert.Contains("layout", moved);
-        Assert.Contains("path", moved);
-        Assert.Contains("move", moved);
-        Assert.Contains("--layout", moved);
-        Assert.Contains("truth@origin", moved);
-        Assert.Contains("@/new/hero.psd", moved);
-        Assert.Contains("Assets/hero.psd", moved);
-        Assert.DoesNotContain("--offline", moved);
-
-        // A Layout of the Workspace's own is passed as the name it is known by, which is what makes the same command
-        // write that Layout rather than a Vault's.
-        var own = LayoutPathMoveCommand.Arguments("work", "Drafts/hero.psd", "Assets/hero.psd");
-
-        Assert.Contains("work", own);
-        Assert.DoesNotContain(own, argument => argument.Contains('@'));
+        Assert.Equal("truth", LayoutPathMoveCommand.VaultLayout);
+        Assert.Equal("truth@origin", LayoutPathMoveCommand.Named("origin"));
+        Assert.Throws<ArgumentNullException>(() => LayoutPathMoveCommand.Named(null!));
     }
 
     /// <summary>A Layout of the Workspace's own is listed by the name the place opened it under.</summary>

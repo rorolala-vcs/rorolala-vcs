@@ -33,7 +33,7 @@ public sealed class VariantGraphTests
         Directory.CreateDirectory(Path.Combine(workspace, "art"));
         File.WriteAllText(Path.Combine(workspace, "art", "one.txt"), "one\n");
 
-        using var status = RolaStatus.Locate(workspace);
+        using var status = Read(workspace);
 
         Assert.NotNull(status);
 
@@ -53,7 +53,7 @@ public sealed class VariantGraphTests
         Assert.Equal(tree, RolaTrees.RootOf(tree, workspace));
         Assert.Equal(tree, RolaTrees.RootOf(Path.Combine(tree, "a.txt"), workspace));
 
-        var graph = RolaVariantGraph.Locate(
+        var graph = Graph(
             workspace,
             new VariantGraphRequest
             {
@@ -80,12 +80,12 @@ public sealed class VariantGraphTests
         var workspace = TreeRecorded("tree-staging");
         var tree = Path.Combine(workspace, "tree");
 
-        Assert.True(RolaTreeStatus.Locate(tree)?.Clean);
+        Assert.True(TreeReading(tree)?.Clean);
 
         File.WriteAllText(Path.Combine(tree, "a.txt"), "two\n");
         Given(workspace, "tree", "add", "tree");
 
-        var status = RolaTreeStatus.Locate(tree);
+        var status = TreeReading(tree);
 
         Assert.NotNull(status);
         Assert.False(status.Clean);
@@ -120,8 +120,8 @@ public sealed class VariantGraphTests
         File.WriteAllText(Path.Combine(tree, "a.txt"), "two\n");
         Given(workspace, "tree", "add", "tree");
 
-        var graph = RolaVariantGraph.Locate(workspace);
-        using var status = RolaStatus.Locate(workspace);
+        var graph = Graph(workspace);
+        using var status = Read(workspace);
 
         Assert.NotNull(graph);
         Assert.NotNull(status);
@@ -139,14 +139,14 @@ public sealed class VariantGraphTests
         var workspace = TreeRecorded("tree-clean");
         var tree = Path.Combine(workspace, "tree");
 
-        var graph = RolaVariantGraph.Locate(workspace);
-        using var status = RolaStatus.Locate(workspace);
+        var graph = Graph(workspace);
+        using var status = Read(workspace);
 
         Assert.NotNull(graph);
         Assert.NotNull(status);
 
         var drafts = VersionGraphView.DraftsOf(graph, status, workspace);
-        var treeStatus = RolaTreeStatus.Locate(tree);
+        var treeStatus = TreeReading(tree);
 
         Assert.DoesNotContain(drafts, one => one.Path == "tree");
         Assert.NotNull(treeStatus);
@@ -166,7 +166,7 @@ public sealed class VariantGraphTests
         Given(workspace, "tree", "add", "tree");
 
         var entry = new Entry(sub, EntryKind.Directory);
-        var status = RolaTreeStatus.Locate(tree);
+        var status = TreeReading(tree);
 
         Assert.NotNull(status);
 
@@ -184,7 +184,7 @@ public sealed class VariantGraphTests
 
         File.WriteAllText(Path.Combine(sub, "new.txt"), "two\n");
 
-        status = RolaTreeStatus.Locate(tree);
+        status = TreeReading(tree);
 
         Assert.NotNull(status);
 
@@ -212,14 +212,13 @@ public sealed class VariantGraphTests
         Given(workspace, "tree", "add", "tree");
 
         RolaI18N.SetTranslationDirectory(Scratch.New("i18n"));
-        Environment.SetEnvironmentVariable(Sync.Program, Program());
 
         var (done, said) = TrackCommand.Run(tree, [tree], "second tree");
 
         Assert.True(done, said);
-        Assert.True(RolaTreeStatus.Locate(tree)?.Clean);
+        Assert.True(TreeReading(tree)?.Clean);
 
-        var graph = RolaVariantGraph.Locate(
+        var graph = Graph(
             workspace,
             new VariantGraphRequest
             {
@@ -238,7 +237,7 @@ public sealed class VariantGraphTests
     {
         var workspace = Recorded("graph");
 
-        var graph = RolaVariantGraph.Locate(workspace);
+        var graph = Graph(workspace);
 
         Assert.NotNull(graph);
 
@@ -292,13 +291,13 @@ public sealed class VariantGraphTests
         File.WriteAllText(Path.Combine(workspace, "other.txt"), "other\n");
         Given(workspace, "track", "other.txt", "--message", "other", "--no-editor");
 
-        var whole = RolaVariantGraph.Locate(workspace);
+        var whole = Graph(workspace);
 
         Assert.NotNull(whole);
         Assert.Equal(2, whole.Focus.Count);
         Assert.Equal(2, whole.Entries.Count);
 
-        var graph = RolaVariantGraph.Locate(
+        var graph = Graph(
             workspace,
             new VariantGraphRequest { MaxNodes = 1 }
         );
@@ -310,7 +309,7 @@ public sealed class VariantGraphTests
         Assert.True(node.Frontier.Parents);
 
         // A window that stands on one file carries the entry that file is, and not the other chain's.
-        var one = RolaVariantGraph.Locate(
+        var one = Graph(
             workspace,
             new VariantGraphRequest
             {
@@ -323,7 +322,7 @@ public sealed class VariantGraphTests
 
         // A focus the reading does not hold is answered as an entry recording no version, and the
         // window is empty rather than centred somewhere else.
-        var unknown = RolaVariantGraph.Locate(
+        var unknown = Graph(
             workspace,
             new VariantGraphRequest
             {
@@ -340,7 +339,7 @@ public sealed class VariantGraphTests
 
         // A side this reading does not hold is the same answer: the work may have moved on since the
         // request was written, and it is not answered from somewhere else.
-        var unknownSide = RolaVariantGraph.Locate(
+        var unknownSide = Graph(
             workspace,
             new VariantGraphRequest
             {
@@ -359,7 +358,7 @@ public sealed class VariantGraphTests
     {
         var plain = Scratch.New("plain");
 
-        Assert.Null(RolaVariantGraph.Locate(plain));
+        Assert.Null(Graph(plain));
     }
 
     /// <summary>A reading is laid out as lanes of files and columns of version depths.</summary>
@@ -371,7 +370,7 @@ public sealed class VariantGraphTests
         File.WriteAllText(Path.Combine(workspace, "other.txt"), "other\n");
         Given(workspace, "track", "other.txt", "--message", "other", "--no-editor");
 
-        var graph = RolaVariantGraph.Locate(workspace);
+        var graph = Graph(workspace);
 
         Assert.NotNull(graph);
 
@@ -489,7 +488,7 @@ public sealed class VariantGraphTests
         );
 
         // A reading that stands on no entry has nothing marked.
-        var whole = RolaVariantGraph.Locate(workspace);
+        var whole = Graph(workspace);
 
         Assert.NotNull(whole);
         var unmarked = VariantGraphDrawing.From(whole, [], words, new GraphMeasure(), false);
@@ -501,7 +500,7 @@ public sealed class VariantGraphTests
 
         // Standing on both files marks both of their local pills, so a several-file choice is read
         // as several pills rather than one.
-        var both = RolaVariantGraph.Locate(
+        var both = Graph(
             workspace,
             new VariantGraphRequest
             {
@@ -537,7 +536,7 @@ public sealed class VariantGraphTests
     public void AMergeInProgressIsDrawnAsAPendingCard()
     {
         var workspace = Recorded("pending-merge");
-        var graph = RolaVariantGraph.Locate(workspace);
+        var graph = Graph(workspace);
 
         Assert.NotNull(graph);
 
@@ -549,7 +548,7 @@ public sealed class VariantGraphTests
             $"{recorded.Uuid} {variant}\n"
         );
 
-        var merging = RolaVariantGraph.Locate(workspace);
+        var merging = Graph(workspace);
 
         Assert.NotNull(merging);
         Assert.Single(merging.Merging);
@@ -592,7 +591,7 @@ public sealed class VariantGraphTests
         File.WriteAllText(Path.Combine(workspace, "other.txt"), "other\n");
         Given(workspace, "track", "other.txt", "--message", "other", "--no-editor");
 
-        var graph = RolaVariantGraph.Locate(workspace);
+        var graph = Graph(workspace);
 
         Assert.NotNull(graph);
 
@@ -602,7 +601,6 @@ public sealed class VariantGraphTests
         // entry in the Layout, which is what a switch takes as its target.
         Given(workspace, "layout", "path", "remove", "other.txt");
 
-        Environment.SetEnvironmentVariable(Sync.Program, Program());
         var (done, said) = RetrackCommand.Run(
             workspace,
             Path.Combine(workspace, "art.txt"),
@@ -613,7 +611,7 @@ public sealed class VariantGraphTests
 
         Assert.True(done, said);
 
-        var after = RolaVariantGraph.Locate(workspace);
+        var after = Graph(workspace);
 
         Assert.NotNull(after);
         var switched = after.Entries.Single(entry =>
@@ -629,17 +627,16 @@ public sealed class VariantGraphTests
     {
         var workspace = Recorded("fork-uuid");
 
-        var graph = RolaVariantGraph.Locate(workspace);
+        var graph = Graph(workspace);
 
         Assert.NotNull(graph);
         var art = graph.Entries.Single(entry => entry.Side == "local" && entry.Path == "art.txt");
 
-        Environment.SetEnvironmentVariable(Sync.Program, Program());
         var (done, said) = LayoutPathNewUuidCommand.Run(workspace, "art.txt");
 
         Assert.True(done, said);
 
-        var after = RolaVariantGraph.Locate(workspace);
+        var after = Graph(workspace);
 
         Assert.NotNull(after);
         var forked = after.Entries.Single(entry =>
@@ -661,7 +658,7 @@ public sealed class VariantGraphTests
     public void TheOtherUuidOfTheSameVariantIsFollowedToItsHead()
     {
         var workspace = Recorded("two-branch");
-        var before = RolaVariantGraph.Locate(workspace);
+        var before = Graph(workspace);
 
         Assert.NotNull(before);
         var art = before.Entries.Single(entry => entry.Path == "art.txt");
@@ -686,7 +683,7 @@ public sealed class VariantGraphTests
         File.WriteAllText(Path.Combine(workspace, "art.txt"), "main two\n");
         Given(workspace, "track", "art.txt", "--message", "main second", "--no-editor");
 
-        var graph = RolaVariantGraph.Locate(
+        var graph = Graph(
             workspace,
             new VariantGraphRequest
             {
@@ -700,6 +697,68 @@ public sealed class VariantGraphTests
         // window as well: the fork itself, what was built on it, and that version's own child.
         Assert.Equal(6, graph.Nodes.Count);
         Assert.False(graph.Truncated);
+    }
+
+    /// <summary>Reads a window of the variant graph, or nothing when there is none to draw.</summary>
+    /// <param name="directory">The directory the Workspace is searched upwards from.</param>
+    /// <param name="request">What to read, or nothing for the work's own entries and their chains.</param>
+    /// <returns>The reading, or nothing when there is nothing to draw.</returns>
+    private static VariantGraphReading? Graph(
+        string directory,
+        VariantGraphRequest? request = null
+    )
+    {
+        try
+        {
+            using var scope = new VariantGraphScope(directory, request);
+            scope.Read();
+
+            return scope.Reading;
+        }
+        catch (RolaReadError error)
+            when (
+                error.Kind
+                is RolaReadErrorKind.InvalidArgument or RolaReadErrorKind.Unavailable
+            )
+        {
+            // No Workspace, no Layout, no index, or a directory that is gone is the absence V1's
+            // Locate answered with nothing rather than a failure.
+            return null;
+        }
+    }
+
+    /// <summary>Reads how the work under a directory stands, for the checks that need a reading.</summary>
+    /// <param name="directory">The directory the read is of.</param>
+    /// <returns>The reading, which the caller gives back.</returns>
+    private static StatusReading Read(string directory)
+    {
+        var scope = new StatusScope(directory);
+        scope.Read();
+
+        return scope.Status;
+    }
+
+    /// <summary>Reads how a tree stands, for the checks that need a reading.</summary>
+    /// <param name="tree">The tree's directory.</param>
+    /// <returns>The reading, or nothing when the directory holds no tree.</returns>
+    private static TreeStatus? TreeReading(string tree)
+    {
+        try
+        {
+            var scope = new TreeScope(tree);
+            scope.Read();
+
+            return scope.Status;
+        }
+        catch (RolaReadError error)
+            when (
+                error.Kind
+                is RolaReadErrorKind.InvalidArgument
+                    or RolaReadErrorKind.Unavailable
+            )
+        {
+            return null;
+        }
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using RolaSharp.Write;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Progress;
@@ -9,89 +10,189 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// The sync: what a run is told, what it is warned about, and what is read back from it.
 /// </summary>
 /// <remarks>
-/// The exchange itself is the command line's and is not run here, a run needs a Vault and a network, so what
-/// is checked is everything this plugin decides: which flags a direction and a scope come to, which warning a
-/// scope and a direction are confirmed with, and what the records a run writes about itself come to.
+/// The exchange itself needs a Vault and a network, so what is checked is everything this plugin decides: the
+/// request a direction and a scope come to, which warning a scope and a direction are confirmed with, how a write
+/// failure is said, and what the records a run writes about itself come to. The writer's own plan and apply are
+/// checked by the bindings' suite, against a real Workspace.
 /// </remarks>
 public sealed class SyncTests
 {
-    /// <summary>The three parts are left out by the flag each is named for, and carried by none of them.</summary>
-    [Fact]
-    public void AScopeIsTheFlagsOfWhatItLeavesOut()
-    {
-        Assert.Empty(SyncScope.All.Flags);
-        Assert.True(SyncScope.All.Everything);
-
-        Assert.Equal(["--no-index"], new SyncScope(Index: false, Layout: true, Storage: true).Flags);
-        Assert.Equal(["--no-layout"], new SyncScope(Index: true, Layout: false, Storage: true).Flags);
-        Assert.Equal(["--no-storage"], new SyncScope(Index: true, Layout: true, Storage: false).Flags);
-
-        // One flag per part left out, in the order the three are read in: what a run leaves behind is said once
-        // each and in one order, whichever parts they are.
-        Assert.Equal(
-            ["--no-index", "--no-layout", "--no-storage"],
-            new SyncScope(Index: false, Layout: false, Storage: false).Flags
-        );
-    }
-
-    /// <summary>A direction is the flag the command line takes for it, and a forced run says so.</summary>
+    /// <summary>The request is the panel's scope and direction, and what the panel does not offer stays unset.</summary>
     /// <remarks>
-    /// One direction and no other, since a run told to go both up and down is a run the command refuses: the
-    /// three buttons are three runs, and what tells them apart is the one flag each adds.
+    /// The three sides are three switches of their own, the direction is the one the writer narrows the plan by,
+    /// and a forced run says so. What the panel has no control for is left at what the writer means by saying
+    /// nothing: the tracked Vault, a run that may reach it, and the account the work acts as.
     /// </remarks>
     [Fact]
-    public void ADirectionIsTheFlagTheCommandLineTakes()
-    {
-        Assert.Contains("--up-only", Sync.Arguments(SyncWay.Up, SyncScope.All, force: false));
-        Assert.Contains("--down-only", Sync.Arguments(SyncWay.Down, SyncScope.All, force: false));
-        Assert.Contains("--both", Sync.Arguments(SyncWay.Both, SyncScope.All, force: false));
-
-        foreach (var way in new[] { SyncWay.Up, SyncWay.Down, SyncWay.Both })
-        {
-            var arguments = Sync.Arguments(way, SyncScope.All, force: false);
-
-            Assert.Single(
-                arguments,
-                argument => argument is "--up-only" or "--down-only" or "--both"
-            );
-        }
-
-        // A chain that has moved apart is changed only when the key is held for it.
-        Assert.Contains("--force", Sync.Arguments(SyncWay.Both, SyncScope.All, force: true));
-        Assert.DoesNotContain("--force", Sync.Arguments(SyncWay.Both, SyncScope.All, force: false));
-
-        // And what is left out is asked for as well: a run with everything on asks for nothing.
-        Assert.Contains("--no-storage", Sync.Arguments(SyncWay.Up, new SyncScope(true, true, false), true));
-        Assert.DoesNotContain("--no-storage", Sync.Arguments(SyncWay.Up, SyncScope.All, true));
-    }
-
-    /// <summary>A plan asks whether there is work, not what a run is told to leave behind.</summary>
-    /// <remarks>
-    /// `--no-layout` makes the command print no plan at all, since it is the Layout comparison the plan is
-    /// made from. A run that leaves the Layout itself behind still carries the index and the storage, so the
-    /// plan must leave the flag out or the buttons are drawn unpressable however much there is to move.
-    /// </remarks>
-    [Fact]
-    public void APlanLeavesTheLayoutInEvenWhenARunDoesNot()
+    public void ARequestIsThePanelsScopeAndDirection()
     {
         _ = Host.Services();
 
+        var all = Sync.Request("/work", SyncWay.Both, SyncScope.All, force: false, account: "alice");
+
+        Assert.True(all.Index);
+        Assert.True(all.Layout);
+        Assert.True(all.Storage);
+        Assert.True(SyncScope.All.Everything);
+
+        Assert.False(
+            Sync.Request("/work", SyncWay.Both, new SyncScope(Index: false, Layout: true, Storage: true), false, "alice")
+                .Index
+        );
+        Assert.False(
+            Sync.Request("/work", SyncWay.Both, new SyncScope(Index: true, Layout: false, Storage: true), false, "alice")
+                .Layout
+        );
+        Assert.False(
+            Sync.Request("/work", SyncWay.Both, new SyncScope(Index: true, Layout: true, Storage: false), false, "alice")
+                .Storage
+        );
+
+        // Every side is a switch of its own: one turned off leaves the two others as they were.
+        var none = Sync.Request("/work", SyncWay.Both, new SyncScope(false, false, false), false, "alice");
+
+        Assert.False(none.Index);
+        Assert.False(none.Layout);
+        Assert.False(none.Storage);
+
+        Assert.Equal(
+            SyncDirection.Up,
+            Sync.Request("/work", SyncWay.Up, SyncScope.All, force: false, account: "alice").Direction
+        );
+        Assert.Equal(
+            SyncDirection.Down,
+            Sync.Request("/work", SyncWay.Down, SyncScope.All, force: false, account: "alice").Direction
+        );
+        Assert.Equal(SyncDirection.Both, all.Direction);
+
+        // A chain that has moved apart is changed only when the key is held for it.
+        Assert.False(all.Forced);
+        Assert.True(Sync.Request("/work", SyncWay.Both, SyncScope.All, force: true, account: "alice").Forced);
+
+        Assert.Equal(WriteTargetKind.Tracked, all.Target.Kind);
+        Assert.False(all.Offline);
+        Assert.Equal("alice", all.Account);
+        Assert.Equal("/work", all.Workspace);
+
+        // The fetch is the one step a sync plan says by name, so it is said in the window's language rather than
+        // in the writer's English.
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.progress.fetch"), all.Labels?.Fetching);
+    }
+
+    /// <summary>A plan reads the Layout even when the run leaves it out.</summary>
+    /// <remarks>
+    /// A plan is the comparison with the Vault's Layout, and a request that leaves the Layout out has none to make:
+    /// the writer refuses it. A run that leaves the Layout itself behind still carries the index and the storage,
+    /// so the plan is asked with the Layout read while the run says what it actually leaves out.
+    /// </remarks>
+    [Fact]
+    public void APlanReadsTheLayoutEvenWhenARunLeavesItOut()
+    {
         foreach (var scope in new[] { new SyncScope(true, false, true), new SyncScope(false, true, false), SyncScope.All })
         {
-            Assert.DoesNotContain("--no-layout", Sync.PlanArguments(scope));
-        }
+            var run = Sync.Request("/work", SyncWay.Both, scope, force: false, account: "alice");
+            var planned = Sync.PlanRequest("/work", SyncWay.Both, scope, force: false, account: "alice");
 
-        // The other two omissions do not stop a plan being made, and are passed through as a run is told them.
-        Assert.Contains("--no-storage", Sync.PlanArguments(new SyncScope(true, true, false)));
-        Assert.Contains("--no-index", Sync.PlanArguments(new SyncScope(false, true, true)));
+            Assert.True(planned.Layout);
+
+            // The other two sides are the run's, since a plan is not about them; only the Layout is forced.
+            Assert.Equal(run.Index, planned.Index);
+            Assert.Equal(run.Storage, planned.Storage);
+        }
+    }
+
+    /// <summary>A plan is not asked about a place there is no work in, and not asked at all with every side off.</summary>
+    /// <remarks>
+    /// The plan is a read of the work, and there is no work where no Workspace holds the directory. What is said is
+    /// the same sentence the docks say about the base directory, because it is the same absence. Every side left
+    /// out is a run that changes nothing, which is nothing to plan and nothing to say against it.
+    /// </remarks>
+    [Fact]
+    public void APlanSaysWhenThereIsNothingToAskAbout()
+    {
+        _ = Host.Services();
+
+        var directory = Scratch.New("sync-plan");
+        var outside = Sync.Plan(directory, SyncWay.Both, SyncScope.All, force: false);
+
+        Assert.False(outside.Ready);
+        Assert.Equal(RolaI18N.Get("rorolala_vcs.not_a_workspace"), outside.Said);
+
+        var none = Sync.Plan(
+            "/a/directory/that/is/never/read",
+            SyncWay.Both,
+            new SyncScope(Index: false, Layout: false, Storage: false),
+            force: false
+        );
+
+        Assert.False(none.Ready);
+        Assert.Null(none.Said);
+    }
+
+    /// <summary>A write failure is said once, and a run with no plan says why it cannot go.</summary>
+    /// <remarks>
+    /// The kinds the panel already has words for are said in the reader's language; the others are the writer's own
+    /// message, shown once rather than beside a kind that would say the same thing a second time. A plan that could
+    /// not be made leaves no plan to apply, so the run says why and touches nothing.
+    /// </remarks>
+    [Fact]
+    public void AFailureIsSaidOnceAndARunWithoutAPlanDoesNotStart()
+    {
+        _ = Host.Services();
+
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.not_a_workspace"),
+            Sync.Told(new RolaWriteError(RolaWriteErrorKind.NoWorkspace))
+        );
+        Assert.Equal(
+            RolaI18N.Get("rorolala_vcs.sync.plan_unreadable"),
+            Sync.Told(new RolaWriteError(RolaWriteErrorKind.Json))
+        );
+        Assert.Equal(
+            "the Vault's Layout was never fetched here",
+            Sync.Told(
+                new RolaWriteError(
+                    RolaWriteErrorKind.NotCached,
+                    reason: "the Vault's Layout was never fetched here"
+                )
+            )
+        );
+
+        var records = new ProgressRecords();
+        var touched = 0;
+        var said = RolaI18N.Get("rorolala_vcs.sync.plan_unreadable");
+
+        var (done, told) = Sync.Run(
+            new RorolalaVCSPlugin.SyncPlan(false, said),
+            records,
+            () => touched++
+        );
+
+        Assert.False(done);
+        Assert.Equal(said, told);
+        Assert.Empty(records.Tasks);
+        Assert.Equal(0, touched);
+
+        // A plan with every side left out says nothing against it, and the run that applies it changes nothing
+        // without failing: it is the answer the run gave before the writer took it over.
+        var (nothing, why) = Sync.Run(
+            new RorolalaVCSPlugin.SyncPlan(false, null),
+            records,
+            () => touched++
+        );
+
+        Assert.True(nothing);
+        Assert.Equal(string.Empty, why);
+        Assert.Empty(records.Tasks);
+        Assert.Equal(0, touched);
     }
 
     /// <summary>A reading that names work is enough to press for, whether or not a plan has answered.</summary>
     /// <remarks>
-    /// The table and the buttons read the work two ways: the plan is the command line's whole answer, and the
-    /// reading names where each recorded version stands. They can disagree while one is stale, and the table
-    /// saying "Sync Down" beside three grey buttons is the disagreement a reader must not meet, so what the
-    /// reading names is pressable on its own.
+    /// The table and the buttons read the work two ways: the plan is the writer's whole answer, and the reading
+    /// names where each recorded version stands. They can disagree while one is stale, and the table saying
+    /// "Sync Down" beside three grey buttons is the disagreement a reader must not meet, so what the reading names
+    /// is pressable on its own.
     /// </remarks>
     [Fact]
     public void AReadingThatNamesWorkLeavesTheButtonsPressable()
@@ -187,59 +288,12 @@ public sealed class SyncTests
             new(false, false, false),
         ];
 
-    /// <summary>
-    /// Whether the buttons may be pressed is what a plan says, and a plan is the command line's own answer.
-    /// </summary>
-    /// <remarks>
-    /// The plan is asked for before anything is pressed, and what it comes to decides whether the three are drawn
-    /// pressable: a plan with entries is work to carry, and one with none is a run that would write nothing. What
-    /// is checked is that reading one is reading the entries, an answer that cannot be read is not taken as
-    /// "nothing to do" quietly, but said.
-    /// </remarks>
-    [Fact]
-    public void WhetherThereIsWorkToCarryIsWhatAPlanSays()
-    {
-        _ = Host.Services();
-
-        // A plan with entries: the entries are what a run would move, and their kind is the command's own.
-        Assert.True(
-            Sync.Planned(
-                """
-                {"layout":"a","vault":"v","forced":false,"up_to_date":2,"entries":[
-                  {"uuid":"u","local_path":"a.psd","remote_path":null,"planned_path":null,
-                   "local_version":"1","remote_version":null,"owner":null,"deprecated":false,
-                   "modified":false,"kind":"upload"}]}
-                """
-            ).Ready
-        );
-
-        // And one with none, which is the whole of what "there is nothing to carry" is.
-        var none = Sync.Planned(
-            """{"layout":"a","vault":"v","forced":false,"up_to_date":9,"entries":[]}"""
-        );
-
-        Assert.False(none.Ready);
-
-        // An answer that cannot be read is said rather than swallowed: a reader looking at three grey buttons is
-        // owed the reason.
-        foreach (var unreadable in new[] { "", "not json at all", """{"layout":"a"}""", "[]" })
-        {
-            var plan = Sync.Planned(unreadable);
-
-            Assert.False(plan.Ready);
-            Assert.Equal(RolaI18N.Get("rorolala_vcs.sync.plan_unreadable"), plan.Said);
-        }
-
-        // Nothing to carry is not the same as an unreadable answer: it is the command saying so.
-        Assert.Null(none.Said);
-    }
-
     /// <summary>What a run says about itself is read into the tasks it reports.</summary>
     /// <remarks>
-    /// The records are the command line's, so what is checked is what this reads out of them: every task a
-    /// `begin` opens is kept (a bar of the run's own, and a direction under it) while a task that only names
-    /// what its parent is moving is that parent's line rather than a task of its own. Anything that is not a
-    /// record at all is ignored rather than drawn.
+    /// The records are the writer's, so what is checked is what this reads out of them: every task a `begin` opens
+    /// is kept (a bar of the run's own, and a direction under it) while a task that only names what its parent is
+    /// moving is that parent's line rather than a task of its own. Anything that is not a record at all is ignored
+    /// rather than drawn.
     /// </remarks>
     [Fact]
     public void WhatARunSaysAboutItselfIsReadIntoTheTasks()
@@ -306,9 +360,8 @@ public sealed class SyncTests
 
     /// <summary>A record this does not model is ignored rather than refused.</summary>
     /// <remarks>
-    /// The stream is the command line's to add to, so a reader that stopped at what it did not know would stop
-    /// drawing the day a record was added. What is checked is that the records it does know still arrive around
-    /// it.
+    /// The stream is the writer's to add to, so a reader that stopped at what it did not know would stop drawing
+    /// the day a record was added. What is checked is that the records it does know still arrive around it.
     /// </remarks>
     [Fact]
     public void ARecordThisDoesNotKnowIsIgnored()

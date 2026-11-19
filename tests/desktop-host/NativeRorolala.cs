@@ -13,6 +13,10 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// who holds an entry asks the library for the answer. <c>ROLA_BIN_DIR</c> is what the running suites are
 /// told their programs are in, so the same answer names the library here; a run that never asks is
 /// unaffected, and one that asks without the directory fails the way a broken install would.
+/// <para>
+/// The resolver is registered per assembly, so it is registered on the one the bindings are compiled
+/// into. A suite whose first native read comes through another assembly has its own resolver there.
+/// </para>
 /// </remarks>
 internal static class NativeRorolala
 {
@@ -25,7 +29,7 @@ internal static class NativeRorolala
     /// <summary>Answers the bindings' import from the directory of the built programs.</summary>
     [ModuleInitializer]
     internal static void SetUp() =>
-        NativeLibrary.SetDllImportResolver(typeof(RolaUser).Assembly, Resolve);
+        NativeLibrary.SetDllImportResolver(typeof(Scope).Assembly, Resolve);
 
     /// <summary>Finds the library in the directory the built programs are in.</summary>
     /// <param name="name">The library being asked for.</param>
