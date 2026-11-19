@@ -43,6 +43,18 @@ impl Account {
         }
     }
 
+    /// Names an account by the private key file at `key_path`.
+    ///
+    /// The public key beside it, if there is one, is found when the account is asked for it.
+    #[must_use]
+    pub fn from_key_path(name: impl Into<String>, key_path: impl Into<PathBuf>) -> Self {
+        Self {
+            name: name.into(),
+            key_path: key_path.into(),
+            public_path: None,
+        }
+    }
+
     /// Reads the account's private key from the file it was found at.
     ///
     /// The key is read afresh, so an account names a file rather than holding a copy of
@@ -207,6 +219,22 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
 
         dir.join(name)
+    }
+
+    #[test]
+    fn an_account_named_by_a_key_path_reads_that_key() {
+        let signing = Ed25519SigningKey::from_bytes(&[4; 32]);
+        let file = path("bob.pem");
+        let pem = signing.to_pkcs8_pem(LineEnding::LF).unwrap();
+        fs::write(&file, pem.as_str()).unwrap();
+
+        let account = Account::from_key_path("bob", &file);
+
+        assert_eq!(
+            account.get_key().unwrap().public_key().as_bytes(),
+            signing.verifying_key().to_bytes()
+        );
+        assert_eq!(account.name(), "bob");
     }
 
     #[test]

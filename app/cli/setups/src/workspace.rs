@@ -1,9 +1,10 @@
 use std::{
     env::current_dir,
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use librorolala::protocol::VaultAddress;
+use librorolala::remote;
 use librorolala::workspace::{Config as WorkspaceConfig, Workspace};
 use mingling::{
     LazyInit, ProgramCollect, Wrap, macros::arg, picker::PickerArg, picker::PickerHelper,
@@ -11,6 +12,8 @@ use mingling::{
 };
 use rorolala_utils_configure::Configure as _;
 use rorolala_utils_location::Locate;
+
+pub use librorolala::remote::ErrorRemoteVault;
 
 /// Global argument representing the directory of the current Workspace
 ///
@@ -122,13 +125,7 @@ impl ResCurrentRemoteVault {
     /// Workspace, [`ErrorRemoteVault::Unread`] when its configuration would not read, and
     /// [`ErrorRemoteVault::NotChosen`] when it reaches for no Vault.
     pub fn vault(&self) -> Result<VaultAddress, ErrorRemoteVault> {
-        let config = self.reach()?;
-        let name = config
-            .default_config()
-            .vault()
-            .ok_or(ErrorRemoteVault::NotChosen)?;
-
-        address_of(name, config)
+        remote::address("", self.reach()?)
     }
 
     /// The address to reach for: what `name` names, or the one the Workspace reaches for.
@@ -147,14 +144,7 @@ impl ResCurrentRemoteVault {
         &self,
         name: impl Into<String>,
     ) -> Result<VaultAddress, ErrorRemoteVault> {
-        let name = name.into();
-        if name.is_empty() {
-            return self.vault();
-        }
-
-        let config = self.reach()?;
-
-        address_of(&name, config)
+        remote::address(&name.into(), self.reach()?)
     }
 
     /// The name of the Vault to reach for: what `name` names, or the one the Workspace reaches
@@ -171,26 +161,7 @@ impl ResCurrentRemoteVault {
     /// was given that is not one the Workspace has bound, or one that names a path rather than a
     /// single name and so cannot be kept under.
     pub fn name_or_default(&self, name: impl Into<String>) -> Result<String, ErrorRemoteVault> {
-        let config = self.reach()?;
-        let name = name.into();
-
-        // Naming none chooses the Workspace's own, which is held to the same rules as a name that
-        // was given: a choice is a choice, whoever made it.
-        let name = if name.is_empty() {
-            config
-                .default_config()
-                .vault()
-                .map(str::to_owned)
-                .ok_or(ErrorRemoteVault::NotChosen)?
-        } else {
-            name
-        };
-
-        if config.vaults().get(&name).is_none() || !is_plain_name(&name) {
-            return Err(ErrorRemoteVault::NotBound { name });
-        }
-
-        Ok(name)
+        remote::name(&name.into(), self.reach()?)
     }
 
     /// Each Vault the Workspace knows, under the name it is known by.
@@ -202,7 +173,7 @@ impl ResCurrentRemoteVault {
     ///
     /// Returns what [`vault`](Self::vault) does.
     pub fn names(&self) -> Result<Vec<&str>, ErrorRemoteVault> {
-        Ok(self.reach()?.vaults().names().map(String::as_str).collect())
+        Ok(remote::names(self.reach()?))
     }
 
     /// The Workspace's configuration, or why there is none to read a Vault out of.
@@ -216,107 +187,6 @@ impl ResCurrentRemoteVault {
             }),
         }
     }
-}
-
-/// Error: the Vault a run was to reach for could not be worked out.
-///
-/// The ways there can be none are told apart because what is to be done about them differs:
-/// work inside a Workspace, fix the configuration the Workspace keeps, or choose a Vault for
-/// it to reach for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ErrorRemoteVault {
-    /// This run is not inside a Workspace, so nothing could have named a Vault.
-    ShouldInWorkspace,
-    /// The Workspace's configuration is there, but would not read.
-    Unread {
-        /// The file that could not be read.
-        path: PathBuf,
-        /// Why it could not be read.
-        reason: String,
-    },
-    /// The Workspace is here, and reaches for no Vault.
-    NotChosen,
-    /// The name is neither one the Workspace knows nor an address that reads.
-    NotAddress {
-        /// What was named.
-        name: String,
-    },
-    /// The name is not one the Workspace has bound, and an address is not a name.
-    NotBound {
-        /// What was named.
-        name: String,
-    },
-}
-
-impl rorolala_errors::Failure for ErrorRemoteVault {
-    /// The name of the way no Vault could be reached, as a program reads it.
-    ///
-    /// The ways are told apart because what is to be done about them differs: work inside a
-    /// Workspace, fix the configuration the Workspace keeps, or choose a Vault for it to
-    /// reach for.
-    fn name(&self) -> &'static str {
-        match self {
-            Self::ShouldInWorkspace => "error_remote_vault_should_in_workspace",
-            Self::Unread { .. } => "error_remote_vault_unread",
-            Self::NotChosen => "error_remote_vault_not_chosen",
-            Self::NotAddress { .. } => "error_remote_vault_not_address",
-            Self::NotBound { .. } => "error_remote_vault_not_bound",
-        }
-    }
-
-    /// What went wrong, in the library's own words, with what it went wrong about.
-    ///
-    /// As for [`ErrorShouldInWorkspace`]: what a person is shown is said where the command
-    /// is, in the run's language. What is added here is the file or the name the failure is
-    /// about, which is the same in any language.
-    fn reason(&self) -> String {
-        match self {
-            Self::ShouldInWorkspace => {
-                "this run is not inside a Workspace, so no Vault could have been named".to_owned()
-            }
-            Self::Unread { path, reason } => format!(
-                "the Workspace configuration at {} could not be read: {reason}",
-                path.display()
-            ),
-            Self::NotChosen => {
-                "no Vault was named to reach for, and the Workspace reaches for none".to_owned()
-            }
-            Self::NotAddress { name } => {
-                format!("`{name}` is not a Vault this Workspace knows, nor an address")
-            }
-            Self::NotBound { name } => {
-                format!("`{name}` is not a Vault this Workspace has bound")
-            }
-        }
-    }
-}
-
-rorolala_errors::failure!(ErrorRemoteVault);
-
-/// The address `name` names, read as one.
-///
-/// A name the Workspace knows says where to go, written down as the link it is; one it does not
-/// is taken to be an address already, which is what lets a Vault be reached that was never given
-/// a name. What is neither a name it knows nor a readable address is reported rather than handed
-/// on: a configuration that was edited by hand can hold an address no caller could have written,
-/// and there is nowhere either could be dialled.
-fn address_of(name: &str, config: &WorkspaceConfig) -> Result<VaultAddress, ErrorRemoteVault> {
-    let written = config.vaults().get(name).map_or(name, String::as_str);
-
-    VaultAddress::parse(written).map_err(|_| ErrorRemoteVault::NotAddress {
-        name: written.to_string(),
-    })
-}
-
-/// Whether `name` is one path component and nothing else.
-///
-/// A Vault's name is kept under the Workspace's cache as a directory of its own, so a name that
-/// names a path (or climbs, or is a drive) would be kept outside it, and a name that is not one
-/// name is not one the Workspace could have meant as a Vault's own.
-fn is_plain_name(name: &str) -> bool {
-    let mut components = Path::new(name).components();
-
-    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
 }
 
 /// A [`ProgramSetup`] implementation used to register Workspace-related resources and behaviors
@@ -488,27 +358,5 @@ fn save_workspace_config(resource: ResWorkspaceConfig) {
     } = resource
     {
         let _ = config.write_to(&path);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::is_plain_name;
-
-    /// A Vault's name is kept as a directory under the Workspace's cache, so anything that names
-    /// more than one component (or climbs, or is a drive) is not one.
-    ///
-    /// What is a separator is the platform's, so the spellings that are only separators somewhere
-    /// are not listed here: on Windows `C:` is a prefix and `a\b` is two names, and on Unix both
-    /// are single file names, which is what each platform's own `components` says.
-    #[test]
-    fn a_name_that_names_more_than_a_name_is_refused() {
-        for good in ["origin", "origin-2", "a.b", "..a"] {
-            assert!(is_plain_name(good), "{good}");
-        }
-
-        for bad in ["", ".", "..", "a/b", "/a", "a/../b", "C:/a"] {
-            assert!(!is_plain_name(bad), "{bad}");
-        }
     }
 }

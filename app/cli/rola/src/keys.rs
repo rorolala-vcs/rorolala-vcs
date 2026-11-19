@@ -4,16 +4,13 @@
 //! prints and the names completion offers are the same list, read from the same place, so
 //! the two cannot come to disagree about what exists.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use librorolala::auth::{
-    Account, KeyLocateRule, env_keys_dir, global_keys_dir, locate_accounts, user_keys_dir,
-};
+use librorolala::auth::{Account, KeyLocateRule};
+use librorolala::keys;
 use librorolala::{vault::Vault, workspace::Workspace};
 use mingling::Grouped;
 use rorolala_errors::Failure;
-use rorolala_utils_constants::{VAULT_KEYS_DIR, WORKSPACE_KEYS_DIR};
-use rorolala_utils_location::Locate;
 use rust_i18n::t;
 
 use crate::failure::failure;
@@ -25,31 +22,7 @@ use crate::failure::failure;
 /// in the Vault, and after them the scopes the user keeps for themselves. A scope the
 /// machine does not name is simply not there.
 pub fn roots(workspace: Option<&Workspace>, vault: Option<&Vault>) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-
-    if let Some(held) = workspace {
-        roots.push(plain(&held.get_root().join(WORKSPACE_KEYS_DIR)));
-    }
-    if let Some(held) = vault {
-        roots.push(plain(&held.get_root().join(VAULT_KEYS_DIR)));
-    }
-
-    roots.extend(user_keys_dir());
-    roots.extend(global_keys_dir());
-    roots.extend(env_keys_dir());
-
-    roots
-}
-
-/// A path as it is meant to be read, with the `./` the layout writes taken out of it.
-///
-/// The scopes are named `./keys/` and the like, and joining one onto a root leaves that `./`
-/// in the middle of every path built from it, a listing prints those paths, and a reader is
-/// owed the place rather than the pieces it was joined from. Nothing is resolved by this: the
-/// path is walked back into the components it is made of, which is what a caller would have
-/// written.
-fn plain(path: &Path) -> PathBuf {
-    path.components().collect()
+    keys::roots(workspace, vault)
 }
 
 /// The rule the directories above are searched under.
@@ -59,12 +32,7 @@ fn plain(path: &Path) -> PathBuf {
 /// second time. `find_local` is what stays on, it is the flag for "search the directories
 /// this caller handed in".
 pub const fn scopes() -> KeyLocateRule {
-    KeyLocateRule {
-        find_global: false,
-        find_local: true,
-        find_user: false,
-        find_env: false,
-    }
+    keys::scopes()
 }
 
 /// Every account name any scope holds, deduplicated and in name order.
@@ -73,15 +41,7 @@ pub const fn scopes() -> KeyLocateRule {
 /// more than one scope is listed once, under the name it is known by, and the order does not
 /// depend on which scope it came from.
 pub fn account_names(workspace: Option<&Workspace>, vault: Option<&Vault>) -> Vec<String> {
-    let mut names: Vec<String> = locate_accounts(&roots(workspace, vault), &scopes())
-        .into_iter()
-        .map(|account| account.name())
-        .collect();
-
-    names.sort();
-    names.dedup();
-
-    names
+    keys::account_names(workspace, vault)
 }
 
 /// The account named `name`, from the first scope that holds it.
@@ -98,12 +58,9 @@ pub fn account_named(
     workspace: Option<&Workspace>,
     vault: Option<&Vault>,
 ) -> Result<Account, ErrorAccountUnknown> {
-    locate_accounts(&roots(workspace, vault), &scopes())
-        .into_iter()
-        .find(|account| account.name() == name)
-        .ok_or_else(|| ErrorAccountUnknown {
-            name: name.to_string(),
-        })
+    keys::account_named(name, workspace, vault).ok_or_else(|| ErrorAccountUnknown {
+        name: name.to_string(),
+    })
 }
 
 /// Error: the name given is not an account the work can act as.
