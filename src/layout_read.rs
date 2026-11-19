@@ -120,13 +120,13 @@ pub fn layouts_json(directory: &Path) -> String {
 /// The Layout the place holding `directory` works in, with the label it is listed under.
 fn place(directory: &Path) -> Option<(Layout, &'static str)> {
     if let Some(workspace) = Workspace::locate(directory) {
-        let layout = workspace.layout_if_there().ok().flatten()?;
+        let layout = workspace.layout_readonly().ok().flatten()?;
 
         return Some((layout, DEFAULT_LAYOUT_NAME));
     }
 
     let vault = Vault::locate(directory)?;
-    let layout = vault.layout().ok()?;
+    let layout = vault.layout_if_there().ok().flatten()?;
 
     Some((layout, VAULT_LAYOUT_NAME))
 }
@@ -158,6 +158,8 @@ struct EntryItem {
     owner: String,
     /// What it says about itself.
     description: String,
+    /// The cut it prefers, empty when none.
+    preference: String,
     /// Whether the Vault has deprecated it, by moving it under `@/removed/`.
     deprecated: bool,
 }
@@ -171,9 +173,11 @@ struct EntryItem {
 /// # FFI
 ///
 /// An owned JSON string the caller releases with `free_string`, `{"entries":[{"path","uuid",
-/// "version","owner","description","deprecated"}]}`, in path order and then `Uuid` order. `path` is
+/// "version","owner","description","preference","deprecated"}]}`, in path order and then `Uuid`
+/// order. `path` is
 /// `.` for the root entry, `version` is the hex the version is stored under, `owner` is empty when
-/// no account holds it, and `deprecated` says whether the Vault moved it under `@/removed/`. A
+/// no account holds it, `preference` is empty when the store may choose, and `deprecated` says
+/// whether the Vault moved it under `@/removed/`. A
 /// failure is a `RolaLayoutError *` the caller releases with `free_rola_layout_error`.
 ///
 /// # Errors
@@ -204,6 +208,7 @@ pub fn layout_entries_json(directory: &Path, layout: &str) -> Result<String, Lay
                 version: Key::new(data.version()).hex(),
                 owner: data.owner().unwrap_or_default().to_owned(),
                 description: data.description().to_owned(),
+                preference: data.preference().unwrap_or_default().to_owned(),
                 deprecated,
             }
         })
@@ -241,7 +246,7 @@ fn chosen(directory: &Path, name: &str) -> Result<Layout, LayoutReadError> {
         }
 
         return workspace
-            .layout_if_there()
+            .layout_readonly()
             .map_err(|error| read(&error))?
             .ok_or(LayoutReadError::NoLayout);
     }
@@ -251,7 +256,10 @@ fn chosen(directory: &Path, name: &str) -> Result<Layout, LayoutReadError> {
             return Err(LayoutReadError::Missing);
         }
 
-        return vault.layout().map_err(|error| read(&error));
+        return vault
+            .layout_if_there()
+            .map_err(|error| read(&error))?
+            .ok_or(LayoutReadError::NoLayout);
     }
 
     Err(LayoutReadError::NoWorkspace)
