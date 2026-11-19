@@ -80,8 +80,7 @@ fn on_path(name: &str) -> Option<PathBuf> {
     // A Windows program's file name carries its extension and the shell's lookup does not, so what a
     // command name is looked for under is stated by the machine rather than assumed here.
     let extensions: Vec<String> = std::env::var("PATHEXT")
-        .map(|pathext| pathext.split(';').map(str::to_owned).collect())
-        .unwrap_or_default();
+        .map_or_default(|pathext| pathext.split(';').map(str::to_owned).collect());
 
     for directory in std::env::split_paths(&path) {
         let exact = directory.join(name);

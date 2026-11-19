@@ -361,7 +361,8 @@ jobs:
   # What a person is handed, built on the platform it is for. Windows is given the installer. Linux
   # is given the all-in-one package, the AppImage, and a complete package whose command-line
   # programs are built against musl; the split packages and the meta package stay for repositories.
-  # A tag publishes what all of them collected.
+  # Each job also hands over the `NuGet` packages its own export made, so a release carries the
+  # installers and the packages a .NET consumer restores beside each other.
   package-windows:
     name: Package (windows)
     needs: [fast-check, prewarm-windows]
@@ -424,11 +425,21 @@ jobs:
       - name: Build the Windows installer
         run: cargo dev publish
 
+      - name: Collect the installer and the NuGet packages
+        shell: bash
+        run: |
+          # One directory, so every asset is at the artifact's root: a release attaches `dist/*` and
+          # nothing below it. The installer is built already, so copying the packages here adds
+          # nothing to it.
+          mkdir -p dist
+          cp build/rorolala-*-setup.exe dist/
+          cp build/lib/*.nupkg dist/
+
       - name: Upload the package
         uses: actions/upload-artifact@v7
         with:
           name: rola-windows-package
-          path: build/rorolala-*-setup.exe
+          path: dist/*
           if-no-files-found: error
 
   package-linux:
@@ -503,7 +514,7 @@ jobs:
       - name: Build the Linux packages
         run: cargo dev publish
 
-      - name: Collect the all-in-one package and the AppImage
+      - name: Collect the all-in-one package, the AppImage and the native package
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.value }}
@@ -511,6 +522,9 @@ jobs:
           mkdir -p dist
           cp "build/rorolala-${VERSION}.deb" "build/rorolala-${VERSION}.rpm" "build/rorolala-${VERSION}.pkg.tar.zst" dist/
           cp "build/rola-launcher-${VERSION}.appimage" dist/
+          # Only the platform's own native package: the managed package is the same package
+          # whichever platform packs it, and the Windows job already hands that one over.
+          cp build/lib/RolaSharp.native.*.nupkg dist/
 
       - name: Upload the package
         uses: actions/upload-artifact@v7
@@ -592,6 +606,8 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.value }}
         run: |
+          # No native `NuGet` package is made for a musl build: it has no shared library, see
+          # `dev/build/src/nuget.rs`. The managed package is the Windows job's to hand over.
           mkdir -p dist
           cp "build/rorolala-musl-${VERSION}.deb" "build/rorolala-musl-${VERSION}.rpm" "build/rorolala-musl-${VERSION}.pkg.tar.zst" dist/
 
@@ -655,7 +671,7 @@ jobs:
         with:
           path: dist
           # The collected reports are artifacts of this run as well, and what a release carries is
-          # the packages alone.
+          # the installers and the `NuGet` packages alone.
           pattern: rola-*-package
           merge-multiple: true
 

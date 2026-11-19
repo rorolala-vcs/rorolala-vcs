@@ -479,7 +479,7 @@ pub fn publish_plugins(workspace: &Workspace, into: &Path) -> Result<(), Error> 
 /// Reports the copy's own failure.
 pub fn publish_rsharp(workspace: &Workspace) -> Result<(), Error> {
     let bindings = workspace.cs_target_dir()?.join(RSHARP_DLL);
-    let into = workspace.build_dir()?.join("lib/RolaSharp.dll");
+    let into = workspace.library_dir()?.join("RolaSharp.dll");
 
     copy_file(&bindings, &into)
 }

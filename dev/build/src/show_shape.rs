@@ -76,6 +76,11 @@ fn shape() -> Result<Vec<String>, Error> {
         plugins.push("none".to_owned());
     }
 
+    let native_package = crate::nuget::native_identifier(&workspace).map_or_else(
+        || "none: only win-x64 and linux-x64 are made yet".to_owned(),
+        |identifier| format!("RolaSharp.native.{identifier}"),
+    );
+
     Ok(vec![
         format!("workspace root = {}", workspace.root().display()),
         format!("version = {}", workspace.version()?),
@@ -106,6 +111,7 @@ fn shape() -> Result<Vec<String>, Error> {
         format!("completion dir = {}", workspace.completion_dir()?.display()),
         format!("cs target dir = {}", workspace.cs_target_dir()?.display()),
         format!("build dir = {}", workspace.build_dir()?.display()),
+        format!("library dir = {}", workspace.library_dir()?.display()),
         format!("toolchain dir = {}", workspace.toolchain_dir()?.display()),
         String::new(),
         format!("solution = {}", workspace.solution().display()),
@@ -119,6 +125,7 @@ fn shape() -> Result<Vec<String>, Error> {
         ),
         format!("rsharp project = {}", workspace.rsharp_project().display()),
         format!("nuget offline = {}", workspace.nuget_offline().display()),
+        format!("nuget native package = {native_package}"),
         String::new(),
         format!("programs = {}", paths::PROGRAMS.join(" ")),
         format!(

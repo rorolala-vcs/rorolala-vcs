@@ -17,6 +17,10 @@
 //! built from C by the script beside it after the programs are laid down, Win32 on Windows, GTK 4 on
 //! Linux. Each looks for `rola-daemon` beside itself, so what it is built beside has to be there
 //! first.
+//!
+//! The C ABI and the C# bindings are also handed over as the two `NuGet` packages a .NET consumer
+//! restores, `build/lib/RolaSharp.{version}.nupkg` and
+//! `build/lib/RolaSharp.native.{runtime}.{version}.nupkg`, see [`crate::nuget`].
 
 #[cfg(target_os = "linux")]
 use std::ffi::OsStr;
@@ -69,7 +73,7 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
     let build = workspace.build_dir()?;
     fs::remove(&build)?;
 
-    let library = build.join("lib");
+    let library = workspace.library_dir()?;
     let programs = build.join("bin");
     fs::create_directory(&library)?;
     fs::create_directory(&programs)?;
@@ -144,6 +148,11 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
     // The C# bindings beside the native library they bind, under `lib/` where a consumer of the C
     // ABI looks for both.
     dotnet::publish_rsharp(&workspace)?;
+
+    // And the same two things as packages, since a .NET consumer restores one instead of being told
+    // which file beside which program to reference. A platform without a native package is said out
+    // loud and does not fail the export, since a build for it still has the managed package.
+    crate::nuget::pack_rsharp(&workspace)?;
 
     // And the words that go with it: what the hand-off is, and what it is handed over under. They
     // are the tree's own at its top rather than files written for a layout, because a second copy is

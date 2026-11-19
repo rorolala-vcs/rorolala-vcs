@@ -57,6 +57,10 @@ const SCRIPTS_IN_BUILD: &str = "scripts";
 /// The Desktop program inside an export.
 const DESKTOP_IN_BUILD: &str = "bin/desktop";
 
+/// The C ABI and the bindings inside an export: where the two are laid out, and where the `NuGet`
+/// packages are written.
+const LIB_IN_BUILD: &str = "lib";
+
 /// The Desktop program's project, from the workspace root.
 const DESKTOP_PROJECT: &str = "app/desktop/Core/RorolalaDesktop.csproj";
 
@@ -80,6 +84,9 @@ const SOLUTION: &str = "RorolalaSharp.sln";
 
 /// The C# bindings to the C ABI.
 const RSHARP_PROJECT: &str = "modules/rola-sharp/RolaSharp.csproj";
+
+/// The project a native `NuGet` package is packed from.
+const NUGET_NATIVE_PROJECT: &str = "dev/packaging/nuget/RolaSharp.Native.Pack.csproj";
 
 /// The script that builds the Win32 window over the daemon into an export, on Windows.
 #[cfg(windows)]
@@ -246,6 +253,16 @@ impl Workspace {
     /// As [`Self::build_dir`].
     pub fn desktop_dir(&self) -> Result<PathBuf, Error> {
         Ok(self.build_dir()?.join(DESKTOP_IN_BUILD))
+    }
+
+    /// The C ABI and the bindings inside an export: what a consumer is handed, and where the two
+    /// `NuGet` packages are written.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::build_dir`].
+    pub fn library_dir(&self) -> Result<PathBuf, Error> {
+        Ok(self.build_dir()?.join(LIB_IN_BUILD))
     }
 
     /// The version the whole workspace is at, read from `[workspace.package]`.
@@ -427,6 +444,12 @@ impl Workspace {
     #[must_use]
     pub fn rsharp_project(&self) -> PathBuf {
         self.root.join(RSHARP_PROJECT)
+    }
+
+    /// The project a native `NuGet` package is packed from.
+    #[must_use]
+    pub fn nuget_native_project(&self) -> PathBuf {
+        self.root.join(NUGET_NATIVE_PROJECT)
     }
 
     /// The `NuGet` configuration a restore is tried with first.

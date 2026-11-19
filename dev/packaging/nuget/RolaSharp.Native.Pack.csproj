@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The project a native package is packed from: it compiles nothing, and what the package holds is
+    the one file the arguments name, laid under the runtime identifier they name.
+
+    A project rather than a `.nuspec`, because `dotnet pack` is the toolchain already here and the
+    SDK's own pack writes the OPC parts and the nuspec a client reads. `IncludeBuildOutput` is off
+    so the assembly this project makes is not part of the payload, and
+    `SuppressDependenciesWhenPacking` keeps it from declaring a framework dependency that a consumer
+    of the native library has no use for.
+
+    `NativeLibrary` and `NativeRid` are given by `dev/build/src/nuget.rs`. A run that names neither
+    fails on the empty include rather than writing a package that holds nothing.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(NativeLibrary)" Pack="true" PackagePath="runtimes/$(NativeRid)/native/" />
+  </ItemGroup>
+
+</Project>

@@ -37,6 +37,7 @@ pub mod iscc;
 #[cfg(target_os = "linux")]
 pub mod linux;
 pub mod nfpm;
+pub mod nuget;
 mod ops;
 pub mod paths;
 pub mod platform;
