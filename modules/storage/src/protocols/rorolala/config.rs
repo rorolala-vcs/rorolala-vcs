@@ -66,10 +66,22 @@ impl RorolalaStorage {
     pub fn connected(&self) -> Result<Connected, StorageConfigError> {
         let config = self.read_config()?;
         let root = self.get_root();
+        let workspaces = config.connected_workspaces();
+        let vaults = config.connected_vaults();
+
+        // A file that records nobody is a store standing on its own, and `.` is the one place that
+        // still names it. The default is written once, under workspaces, rather than into both
+        // lists: two entries for one place would be read as two dead bindings.
+        if workspaces.is_empty() && vaults.is_empty() {
+            return Ok(Connected {
+                workspaces: vec![normalize(root).to_string_lossy().into_owned()],
+                vaults: Vec::new(),
+            });
+        }
 
         Ok(Connected {
-            workspaces: resolve(config.connected_workspaces(), root),
-            vaults: resolve(config.connected_vaults(), root),
+            workspaces: resolve(workspaces, root),
+            vaults: resolve(vaults, root),
         })
     }
 
@@ -268,11 +280,9 @@ fn malformed(path: &Path, reason: impl Into<String>) -> StorageConfigError {
 }
 
 /// The places of a list, resolved against `root`, with `.` for a list that says nothing.
+/// The roots a written list names, made absolute. A list that is empty stays empty: the one
+/// default a store records nobody with is decided by [`Connected`] as a whole, not by each list.
 fn resolve(entries: &[String], root: &Path) -> Vec<String> {
-    if entries.is_empty() {
-        return vec![normalize(root).to_string_lossy().into_owned()];
-    }
-
     entries
         .iter()
         .map(|entry| normalize(&root.join(entry)).to_string_lossy().into_owned())
@@ -399,8 +409,9 @@ mod tests {
         assert!(!store.disconnect_workspace(&project).unwrap());
 
         let connected = store.connected().unwrap();
-        // A list that is now empty is the single place the store itself, `.`.
-        assert_eq!(connected.workspaces, [dir.to_string_lossy()]);
+        // A side that records nobody records nobody: the one default is a store standing alone,
+        // not a place added to a list that still has a Vault in it.
+        assert_eq!(connected.workspaces, [] as [String; 0]);
         assert_eq!(connected.vaults, [vault.to_string_lossy()]);
 
         let _ = fs::remove_dir_all(&dir);
@@ -462,7 +473,7 @@ mod tests {
             store.connected().unwrap(),
             Connected {
                 workspaces: vec![dir.to_string_lossy().into_owned()],
-                vaults: vec![dir.to_string_lossy().into_owned()],
+                vaults: Vec::new(),
             }
         );
 
@@ -486,6 +497,22 @@ mod tests {
             store.connected().unwrap().workspaces,
             [project.to_string_lossy()]
         );
+        assert_eq!(store.connected().unwrap().vaults, [] as [String; 0]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_side_that_records_nobody_does_not_gain_the_store_itself() {
+        let dir = scratch("one-side");
+        let store = RorolalaStorage::create(&dir);
+        let vault = dir.join("vault");
+        fs::create_dir_all(&vault).unwrap();
+        store.connect_vault(&vault).unwrap();
+
+        let connected = store.connected().unwrap();
+        assert_eq!(connected.workspaces, [] as [String; 0]);
+        assert_eq!(connected.vaults, [vault.to_string_lossy()]);
 
         let _ = fs::remove_dir_all(&dir);
     }

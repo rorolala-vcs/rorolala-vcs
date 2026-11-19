@@ -327,6 +327,10 @@ pub fn handle_bind_storage(
         }
     }
 
+    if !path.exists() {
+        return ErrorStorageNotExist { path }.into();
+    }
+
     if !path.is_dir() {
         return ErrorStorageNotDirectory { path }.into();
     }
@@ -348,34 +352,43 @@ pub fn handle_bind_storage(
     let mut recorded = false;
     if !read_only {
         if let Some(held) = workspace_held {
-            if let Err(error) = store.connect_workspace(held.get_root()) {
-                return ErrorStorageReverseFailed {
-                    path,
-                    reason: error.to_string(),
+            match store.connect_workspace(held.get_root()) {
+                Ok(changed) => recorded |= changed,
+                Err(error) => {
+                    return ErrorStorageReverseFailed {
+                        path,
+                        reason: error.to_string(),
+                    }
+                    .into();
                 }
-                .into();
             }
-            recorded = true;
         }
 
         if let Some(held) = vault_held {
-            if let Err(error) = store.connect_vault(held.get_root()) {
-                return ErrorStorageReverseFailed {
-                    path,
-                    reason: error.to_string(),
+            match store.connect_vault(held.get_root()) {
+                Ok(changed) => recorded |= changed,
+                Err(error) => {
+                    return ErrorStorageReverseFailed {
+                        path,
+                        reason: error.to_string(),
+                    }
+                    .into();
                 }
-                .into();
             }
-            recorded = true;
         }
     }
 
+    let mut every_side_already = true;
+    let mut any_side = false;
     let written = path.to_string_lossy().into_owned();
     let bound_workspace = if let Some(held) = workspace_held {
         let root = held.get_root().to_path_buf();
         let already = held
             .storage_set()
             .is_ok_and(|set| set.bindings().iter().any(|binding| binding.root() == path));
+
+        any_side = true;
+        every_side_already &= already;
 
         if !already {
             let resource = config.get_mut();
@@ -410,6 +423,9 @@ pub fn handle_bind_storage(
             .storage_set()
             .is_ok_and(|set| set.bindings().iter().any(|binding| binding.root() == path));
 
+        any_side = true;
+        every_side_already &= already;
+
         if !already {
             let resource = vault_config.get_mut();
             let Some(vault_configuration) = resource.config_mut() else {
@@ -443,6 +459,7 @@ pub fn handle_bind_storage(
         vault: bound_vault,
         recorded,
         read_only,
+        already: any_side && every_side_already,
     }
     .into()
 }
@@ -651,6 +668,40 @@ pub fn render_error_storage_inside_vault(error: ErrorStorageInsideVault, ec: &mu
     ec.exit_code = EC_ERR_STORAGE_BIND;
 }
 
+/// Error: the store path does not exist.
+#[derive(Grouped)]
+pub struct ErrorStorageNotExist {
+    /// The path that is not there.
+    path: PathBuf,
+}
+
+impl Failure for ErrorStorageNotExist {
+    fn name(&self) -> &'static str {
+        "error_storage_not_exist"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "bind.err_storage_not_exist",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageNotExist);
+
+#[renderer(buffer)]
+pub fn render_error_storage_not_exist(error: ErrorStorageNotExist, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("bind.err_storage_not_exist_help").trim())
+    );
+    ec.exit_code = EC_NOT_EXIST;
+}
+
 /// Error: the store path is not a directory.
 #[derive(Grouped)]
 pub struct ErrorStorageNotDirectory {
@@ -819,18 +870,31 @@ pub struct ResultStorageBound {
     recorded: bool,
     /// Whether the store can only be read.
     read_only: bool,
+    /// Whether every side that is bound already listed the store.
+    already: bool,
 }
 
 #[renderer(buffer)]
 pub fn render_result_storage_bound(result: ResultStorageBound) {
-    r_println!(
-        "{}",
-        t!(
-            "bind.result_storage_bound",
-            path = result.path.display().to_string()
-        )
-        .trim()
-    );
+    if result.already {
+        r_println!(
+            "{}",
+            t!(
+                "bind.result_storage_already",
+                path = result.path.display().to_string()
+            )
+            .trim()
+        );
+    } else {
+        r_println!(
+            "{}",
+            t!(
+                "bind.result_storage_bound",
+                path = result.path.display().to_string()
+            )
+            .trim()
+        );
+    }
 
     if let Some(workspace) = &result.workspace {
         r_println!(

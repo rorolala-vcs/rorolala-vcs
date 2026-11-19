@@ -5,6 +5,11 @@
 #![deny(clippy::pedantic)]
 #![deny(clippy::nursery)]
 
+// The store warnings this crate prints are keys in the command line's own catalogue, and `t!`
+// resolves through a macro this crate has to generate for itself. Loading the same files keeps one
+// catalogue rather than a second copy of the wording.
+rust_i18n::i18n!("../rola/i18n", fallback = "en");
+
 use mingling::{ProgramCollect, setup::ProgramSetup};
 
 mod colorize;

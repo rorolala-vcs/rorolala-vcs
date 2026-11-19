@@ -1204,6 +1204,11 @@ fn foreign_storage(rola: &Rola, root: &Path, checked: &mut Checked) {
     fs::write(&fallback, "written when the binding is gone\n").expect("a file to fall back with");
     let ran = rola.run(&ws, &["storage", "write-file", "fallback.txt"]);
     checked.exits("a write with the binding gone still ends", &ran, 0);
+    checked.stderr_has(
+        "the missing binding is said rather than silently skipped",
+        &ran,
+        "Skipping store",
+    );
     checked.wants(
         "the write falls back to the Workspace's own store",
         files_under(&ws.join(".rola").join("storage").join("obj")) == 1,
@@ -1213,6 +1218,17 @@ fn foreign_storage(rola: &Rola, root: &Path, checked: &mut Checked) {
 
     let ran = rola.run(&ws, &["bind", &text(&plain)]);
     checked.exits("a directory that is no store is refused", &ran, 11);
+
+    let ran = rola.run(&ws, &["bind", &text(&root.join("missing-store"))]);
+    checked.exits("a store that is not there is refused", &ran, 11);
+
+    let ran = rola.run(&ws, &["bind", &text(&store)]);
+    checked.exits("binding the same store again ends", &ran, 0);
+    checked.stdout_has(
+        "binding it again says it is already in the list",
+        &ran,
+        "already",
+    );
 
     let ran = rola.run(&ws, &["bind", &text(&ws.join(".rola").join("storage"))]);
     checked.exits("binding the Workspace's own store is refused", &ran, 93);
@@ -1411,11 +1427,20 @@ fn collecting_a_store(rola: &Rola, empty: &Path, checked: &mut Checked) {
     checked.exits("the store holds a file nothing references", &ran, 0);
 
     let ran = rola.run(&store, &["pack", "--garbage-collect", "--grace", "0", "--force"]);
-    checked.exits("a store is collected without a Layout", &ran, 0);
-    checked.stdout_has(
-        "the store's collecting says what it took",
+    checked.exits(
+        "a store that records no place is refused, even with --force",
         &ran,
-        "1 store entries",
+        105,
+    );
+    checked.stderr_has(
+        "the refusal says there is no usable root",
+        &ran,
+        "No usable root",
+    );
+    checked.wants(
+        "the store keeps its content",
+        files_under(&store.join("obj")) == 1,
+        "the object is still there",
     );
 }
 

@@ -175,7 +175,7 @@ A Workspace, a Vault or a `git-rola` project can write its content to more than 
 
 A write goes to the first store in the list that is there, and never moves to another one when that write fails. A read tries each store in turn until one answers, because a key names the same content wherever it is kept. A store that is only readable can be bound for reading; a write aimed at it fails and says so.
 
-A store records the places that write to it, under `[workspaces] connected` and `[vaults] connected` in its `rolast.toml`. A collecting run reads those records as its roots, so `rola pack --garbage-collect` keeps what every connected Workspace, Vault or project keeps. A store outside the place running the collection, with no valid record, is refused rather than collected: its own `.` says nothing about the other places that share it.
+A store records the places that write to it, under `[workspaces] connected` and `[vaults] connected` in its `rolast.toml`. A collecting run reads those records as its roots, so `rola pack --garbage-collect` keeps what every connected Workspace, Vault or project keeps. A store with no usable root is refused, even with `--force`: force skips the confirmation and the empty-closure guard, not whether there is a root. A store outside the place running the collection, with no valid record, is refused for the same reason: its own `.` says nothing about the other places that share it. A binding that is gone or read-only is said on standard error and skipped, so a run does not silently write somewhere the configuration never named.
 
 `rola create --storage`, `rola init --storage`, `rola storage create` and `rola bind <DIR>` make and bind a store, and `git rola bind` binds one to a project or names a Vault address.
 

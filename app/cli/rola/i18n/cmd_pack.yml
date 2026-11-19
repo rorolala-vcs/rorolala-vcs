@@ -148,15 +148,19 @@ pack:
     en: "Binding `%{path}` is gone and could not be removed: %{error}"
     zh-CN: "绑定 `%{path}` 已不在，且无法移除：%{error}"
 
+  gc_project_without_lock:
+    en: "`%{path}` has no `rola.lock`, so it is read as keeping nothing"
+    zh-CN: "`%{path}` 没有 `rola.lock`，按不保留任何内容处理"
+
   err_gc_no_roots:
-    en: The roots reach no content, and collecting would take the whole store away
-    zh-CN: 根集合没有到达任何内容，收集会清空整个存储
+    en: No usable root was found, and collecting would take the whole store away
+    zh-CN: 没有找到可用的根，收集会清空整个存储
 
   err_gc_no_roots_help:
     en: |
-        Check the places the store records, or use `--force` if the store really is to be emptied
+        Check the places the store records, then collect again
     zh-CN: |
-        请检查存储记录的位置，或者确实要清空存储时使用 `--force`
+        请检查存储记录的位置，再执行收集
 
   err_gc_read_only:
     en: "`%{path}` is read-only, so nothing can be collected from it"

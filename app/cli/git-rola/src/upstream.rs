@@ -59,6 +59,7 @@ pub fn tree_contents(
     trees: &[(String, ContentHash)],
 ) -> Result<Vec<ContentHash>, String> {
     let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
         .build()
         .map_err(|error| error.to_string())?;
 
@@ -433,7 +434,10 @@ pub fn bring_contents(
     sources: &[VaultSource],
     contents: &[ContentHash],
 ) -> Result<(), String> {
+    // The action connects to the Vault over TCP, so the runtime has to carry IO as well as a
+    // timer: a current-thread runtime with neither panics inside the socket call.
     let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
         .build()
         .map_err(|error| error.to_string())?;
 

@@ -1,8 +1,9 @@
 use std::env::current_dir;
 use std::path::{Path, PathBuf};
 
-use librorolala::storage::StorageSet;
+use librorolala::storage::{StorageNote, StorageSet};
 use mingling::{LazyInit, ProgramCollect, setup::ProgramSetup};
+use rust_i18n::t;
 
 /// A [`ProgramSetup`] implementation used to register Storage-related resources and behaviors
 pub struct RorolalaStorageSetup;
@@ -89,12 +90,43 @@ where
 /// needed is a command's to know, not this one's.
 fn init_storage_set(cwd: &Path) -> ResStorageSet {
     match librorolala::storage_set::for_directory(cwd) {
-        Ok(Some(set)) => ResStorageSet::Read(set),
+        Ok(Some(set)) => {
+            report_notes(&set);
+            ResStorageSet::Read(set)
+        }
         Ok(None) => ResStorageSet::Absent,
         Err(error) => ResStorageSet::Unread {
             path: error.path().to_path_buf(),
             reason: error.to_string(),
         },
+    }
+}
+
+/// Says on standard error what the set left out, once per run.
+///
+/// A binding that is gone or read-only is skipped so the rest of the run still works, and this is
+/// the one place that knows the whole set: a command that met the same note again would say it
+/// twice. `t!` is resolved after the program has chosen its language, which is why this runs from
+/// the lazy initialization rather than from the setup itself.
+fn report_notes(set: &StorageSet) {
+    for note in set.notes() {
+        match note {
+            StorageNote::Unusable { .. } => eprintln!(
+                "{}",
+                t!(
+                    "storage.dead_binding",
+                    path = note.written(),
+                    reason = note.reason().unwrap_or_default()
+                )
+            ),
+            StorageNote::ReadOnly { .. } => eprintln!(
+                "{}",
+                t!(
+                    "storage.readonly_binding",
+                    path = note.root().display().to_string()
+                )
+            ),
+        }
     }
 }
 

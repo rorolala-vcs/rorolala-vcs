@@ -51,7 +51,11 @@ reading, and a write to it fails rather than moving to another store. `RolaSharp
 into `WorkspaceConfig.Storages` and `VaultConfig.Storages`, `StorageScope` reads every store of the
 place it was made from and writes through the first one that can be written, and
 `StorageWriter.Create`, `WorkspaceWriter.BindStorage` and `VaultWriter.BindStorage` are the C ABI
-calls for making and binding a store.
+calls for making and binding a store. A collecting run refuses a store with no usable root even
+with `--force`, a store that records nobody gets its one `.` and not one per list, and a binding that
+is gone or read-only is said on standard error instead of being skipped in silence. `git rola bring`
+and `git rola update` build a runtime that can open a socket again, so fetching content from a Vault
+no longer panics.
 
 ## Refactor
 

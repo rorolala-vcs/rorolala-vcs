@@ -137,36 +137,30 @@ pub fn collect(
     // What the roots keep, worked out before anything is asked: a run that cannot see the whole of
     // what is wanted takes nothing away, so a failure here is the end of the collecting. The
     // `Progress` handed in is a fresh clone per call, dropped when the call returns: a clone held
-    // past `finish` would keep the channel open and the reader waiting on it forever.
-    let live = match &own_layout {
-        Some(layout) => match vcs {
-            Some(index) => match runtime.block_on(librorolala::gc::live_of(
-                layout,
-                index,
-                set,
-                &reporting.progress(),
-            )) {
-                Ok(live) => live,
-                Err(failure) => {
-                    reporting.finish();
-
-                    return ErrorGcFailed {
-                        cause: failure.to_string(),
-                    }
-                    .into();
-                }
-            },
-            None if layout.entries().is_empty() => Live::default(),
-            None => {
-                reporting.finish();
-
-                return ErrorGcFailed {
-                    cause: "the Layout has entries and no index to read them with".to_owned(),
-                }
-                .into();
-            }
+    // past `finish` would keep the channel open and the reader waiting on it forever. Each call is
+    // therefore its own statement, so the clone is gone before `finish` runs below.
+    let own_live: Result<Live, String> = own_layout.as_ref().map_or_else(
+        || Ok(Live::default()),
+        |layout| match vcs {
+            Some(index) => runtime
+                .block_on(librorolala::gc::live_of(
+                    layout,
+                    index,
+                    set,
+                    &reporting.progress(),
+                ))
+                .map_err(|failure| failure.to_string()),
+            None if layout.entries().is_empty() => Ok(Live::default()),
+            None => Err("the Layout has entries and no index to read them with".to_owned()),
         },
-        None => Live::default(),
+    );
+    let mut live = match own_live {
+        Ok(live) => live,
+        Err(cause) => {
+            reporting.finish();
+
+            return ErrorGcFailed { cause }.into();
+        }
     };
 
     // What every place the store records keeps is kept too: a collecting run that only read the
@@ -180,25 +174,9 @@ pub fn collect(
                 .and_then(rorolala_workspace::Workspace::get_current_rola_storage)
         })
         .map(|held| held.get_root().to_path_buf());
-    let live = match connected_live(store, own_root.as_deref(), &runtime, &reporting.progress()) {
-        Ok((more, found)) => {
-            // A store outside the place standing here is collected only when it says who writes to
-            // it: its own `.` says nothing about the places that share it, and collecting against
-            // no root at all would take every one of their content away. A run with no place of
-            // its own is in the store itself, so there is no other place to ask about.
-            let external = own_root
-                .as_deref()
-                .is_some_and(|own| own != store.get_root());
-            if external && !found {
-                reporting.finish();
-
-                return ErrorGcNoLayout.into();
-            }
-
-            let mut live = live;
-            live.absorb(more);
-            live
-        }
+    let connected = connected_live(store, own_root.as_deref(), &runtime, &reporting.progress());
+    let (more, found) = match connected {
+        Ok(pair) => pair,
         Err(ConnectedFailure::Merging(path)) => {
             reporting.finish();
 
@@ -210,6 +188,29 @@ pub fn collect(
             return ErrorGcFailed { cause }.into();
         }
     };
+
+    // A run with no root of its own is in the store itself: it has nothing to collect from unless
+    // the store records a place, and `--force` does not change that. Force skips the confirmation
+    // and the empty-closure guard below, not whether there is a root.
+    if own_layout.is_none() && !found {
+        reporting.finish();
+
+        return ErrorGcNoRoots.into();
+    }
+
+    // A store outside the place standing here is collected only when it says who writes to it: its
+    // own `.` says nothing about the places that share it, and collecting against no root at all
+    // would take every one of their content away.
+    let external = own_root
+        .as_deref()
+        .is_some_and(|own| own != store.get_root());
+    if external && !found {
+        reporting.finish();
+
+        return ErrorGcNoLayout.into();
+    }
+
+    live.absorb(more);
 
     // A closure with nothing in it over a store that holds something is the shape of a root set
     // that names no content at all, and taking everything away is what the confirmation would be
@@ -326,8 +327,10 @@ fn connected_live(
         for written in entries {
             let root = PathBuf::from(written);
 
-            // The run's own store is the place standing here, and it is already read.
-            if own_root.is_some_and(|own| own == root.as_path()) {
+            // The store's own root is not a place: it is where `.` points, and a store is never a
+            // Workspace, a Vault or a project. Skipping it keeps the default from being read as a
+            // binding that has gone.
+            if root == store.get_root() || own_root.is_some_and(|own| own == root.as_path()) {
                 continue;
             }
 
@@ -367,6 +370,12 @@ fn connected_live(
 
             if root.join("rola.toml").is_file() {
                 found = true;
+                if !root.join("rola.lock").is_file() {
+                    eprintln!(
+                        "{}",
+                        t!("pack.gc_project_without_lock", path = written.as_str())
+                    );
+                }
                 let set = librorolala::storage::StorageSet::sole(store.clone());
                 let more = runtime
                     .block_on(librorolala::gc::live_of_project(&root, &set, progress))

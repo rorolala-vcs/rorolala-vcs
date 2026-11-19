@@ -5,6 +5,13 @@
 //! and a directory carrying `rolast.toml` is bound as a store. A bare word is an address, as it is
 //! everywhere else in this program.
 
+// mingling's `#[command]` expands the entry type and the dispatch function beside the command, and
+// the expansion is not documented; the items this module writes carry their own docs.
+#![allow(missing_docs)]
+// A command's words arrive as the value the framework's entry converts to, so the parameter is the
+// framework's shape rather than this module's choice.
+#![allow(clippy::needless_pass_by_value)]
+
 use std::path::{Path, PathBuf};
 
 use just_fmt::fmt_case_style::CaseFormatter;
@@ -194,20 +201,23 @@ pub fn handle_bind_store(state: StateBindStore) -> Next {
     // The reverse record goes first: a store that records nobody is one a collecting run cannot
     // keep this project's content for, and a project bound to it anyway would be the unsafe order.
     let read_only = !store.is_writable();
-    let mut recorded = false;
-    if !read_only {
-        if let Err(error) = store.connect_workspace(project.root()) {
-            return fatal(
-                t!(
-                    "bind.err_storage_reverse",
-                    path = path.display().to_string(),
-                    error = error.to_string()
-                )
-                .to_string(),
-            );
+    let recorded = if read_only {
+        false
+    } else {
+        match store.connect_workspace(project.root()) {
+            Ok(changed) => changed,
+            Err(error) => {
+                return fatal(
+                    t!(
+                        "bind.err_storage_reverse",
+                        path = path.display().to_string(),
+                        error = error.to_string()
+                    )
+                    .to_string(),
+                );
+            }
         }
-        recorded = true;
-    }
+    };
 
     let already = match upstream::project_stores(&project) {
         Ok(stores) => stores

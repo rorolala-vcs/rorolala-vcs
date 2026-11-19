@@ -72,6 +72,16 @@ bind:
     en: "`%{path}` is not a directory"
     zh-CN: "`%{path}` 不是目录"
 
+  err_storage_not_exist:
+    en: "`%{path}` is not there"
+    zh-CN: "`%{path}` 不存在"
+
+  err_storage_not_exist_help:
+    en: |
+        Please check the path, or make the store with `rola storage create <DIR>`
+    zh-CN: |
+        请检查路径，或用 `rola storage create <DIR>` 创建存储
+
   err_storage_not_a_store:
     en: "`%{path}` carries no `rolast.toml`, so it is not a store"
     zh-CN: "`%{path}` 没有 `rolast.toml`，不是存储"
@@ -94,6 +104,10 @@ bind:
   result_storage_bound:
     en: "Bound `%{path}`"
     zh-CN: "已绑定 `%{path}`"
+
+  result_storage_already:
+    en: "The store is in the list already: %{path}"
+    zh-CN: "存储已在列表里：%{path}"
 
   result_storage_workspace:
     en: The store is bound to the Workspace at %{path}
