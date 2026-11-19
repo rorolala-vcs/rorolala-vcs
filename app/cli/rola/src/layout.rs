@@ -5,6 +5,8 @@
 //! subcommands, each in a file of its own: listing it, tracking the Vault it goes to, fetching
 //! that Vault's own Layout, and reading and changing what a Layout names.
 
+pub use librorolala::write::layout::cached_copy;
+
 pub mod cmd_layout;
 pub mod cmd_layout_entries;
 pub mod cmd_layout_entry;
@@ -35,8 +37,9 @@ use rorolala_workspace::Workspace;
 use rust_i18n::t;
 use uuid::Uuid;
 
-use librorolala::layout::{Batch, Layout, LayoutError, LayoutPath, MutableData};
+use librorolala::layout::{Batch, Layout, LayoutError, LayoutPath};
 use librorolala::storage::Key;
+use librorolala::write::WriteError;
 
 use crate::Next;
 use crate::exit_codes::{
@@ -532,6 +535,21 @@ pub fn failed(error: &LayoutError) -> Next {
     }
 }
 
+/// Renders a write the library refused, in the Layout command's own words.
+///
+/// The library names the category; the command names the missing path, the refused argument and the
+/// failure the same way it does for its own `LayoutError`s.
+pub fn failed_write(error: WriteError) -> Next {
+    match error {
+        WriteError::NotFound { .. } => ErrorLayoutMissing.into(),
+        WriteError::Layout { reason } => ErrorLayoutFailed { cause: reason }.into(),
+        other => ErrorLayoutFailed {
+            cause: other.to_string(),
+        }
+        .into(),
+    }
+}
+
 /// The `LayoutPath` `text` names, or the argument failure.
 ///
 /// # Errors
@@ -550,49 +568,6 @@ pub fn uuid_of(text: &str) -> Result<Uuid, Next> {
     use std::str::FromStr as _;
 
     Uuid::from_str(text).map_err(|_| ErrorLayoutArgument.into())
-}
-
-/// Makes `path` name `id`, holding `data`, in place of the entry it names.
-///
-/// A `Uuid` is at one path and a path names one `Uuid`, so changing what a path names is dropping
-/// the entry that was there and making another in its place. Both changes go in one batch: a path
-/// that names nothing, or a `Uuid` that no path names, is a state a Layout allows, but not one a
-/// reader should be shown while the change is being made.
-///
-/// The entry `id` is reused rather than made again when the Layout already holds it, an entry no
-/// path names yet, since what an entry is is a `Uuid` that holds data.
-///
-/// Switching a path to the entry it already names does nothing: a caller refuses it before it gets
-/// here, and writing it down would be a removal the batch makes again.
-///
-/// # Errors
-///
-/// Returns [`LayoutError::NotFound`] when `path` names no entry, and whatever making the changes
-/// fails with.
-pub fn switch_entry(
-    layout: &Layout,
-    path: &LayoutPath,
-    id: Uuid,
-    data: MutableData,
-) -> Result<(), LayoutError> {
-    let Some(old) = layout.id_of(path) else {
-        return Err(LayoutError::NotFound);
-    };
-    if old == id {
-        return Ok(());
-    }
-
-    let mut batch = layout.batch();
-    batch.remove_entry(old)?;
-
-    if batch.entry(id).is_some() {
-        batch.update_entry(id, data)?;
-        batch.create_path(path, id)?;
-    } else {
-        batch.create_file(id, data, path)?;
-    }
-
-    batch.commit()
 }
 
 /// The `--layout` of a command that works on one Layout.
@@ -834,19 +809,6 @@ pub fn set_cached_removed(
 /// # Errors
 ///
 /// Returns [`LayoutError`] if a copy that is there cannot be read back.
-pub fn cached_copy(workspace: &Workspace, vault: &str) -> Result<Option<Layout>, LayoutError> {
-    let Some(dir) = readonly_layout_copy(workspace, vault, VAULT_LAYOUT_NAME) else {
-        return Ok(None);
-    };
-
-    // A directory the Layout's own files are not in is not a copy, and reading it must not make one.
-    match Layout::open_existing(&dir) {
-        Ok(copy) => Ok(Some(copy)),
-        Err(error) if error.is_not_found() => Ok(None),
-        Err(error) => Err(error),
-    }
-}
-
 /// Adds the entry `id` to the fetched copy, at `path` and `version`, held by `owner`.
 ///
 /// It is what a run that has just made an entry in the Vault writes down here, so that a reading
@@ -857,40 +819,14 @@ pub fn cached_copy(workspace: &Workspace, vault: &str) -> Result<Option<Layout>,
 /// # Errors
 ///
 /// Returns [`LayoutError`] if the change cannot be made in `copy`.
-pub fn add_cached_entry(
-    copy: &mut Batch<'_>,
-    id: Uuid,
-    path: &LayoutPath,
-    version: [u8; 32],
-    owner: Option<String>,
-) -> Result<(), LayoutError> {
-    if copy.entry(id).is_some() || copy.names(path) {
-        return Ok(());
-    }
-
-    copy.create_file(id, MutableData::new(owner, version, String::new()), path)
-}
-
 /// Moves the entry `id` of the fetched copy to `version`, leaving its path and holder alone.
 ///
 /// It is what a run that has just set a version in the Vault writes down here, for the same reason
-/// [`add_cached_entry`] does.
+/// [`add_cached_entry`](librorolala::write::layout::add_cached_entry) does.
 ///
 /// # Errors
 ///
 /// Returns [`LayoutError`] if the change cannot be made in `copy`.
-pub fn set_cached_version(
-    copy: &mut Batch<'_>,
-    id: Uuid,
-    version: [u8; 32],
-) -> Result<(), LayoutError> {
-    let Some(data) = copy.entry(id) else {
-        return Ok(());
-    };
-
-    copy.update_entry(id, data.renewed(data.owner().map(str::to_owned), version))
-}
-
 /// Error: the Vault's Layout has not been fetched, so there is no copy to read.
 #[derive(Grouped)]
 pub struct ErrorLayoutNotCached {
@@ -1159,82 +1095,9 @@ pub fn render_error_layout_held(error: ErrorLayoutHeld, ec: &mut ResExitCode) {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
     use uuid::Uuid;
 
-    use super::{remote_spec, switch_entry, vault_and_uuid};
-    use librorolala::layout::{Layout, LayoutError, LayoutPath, MutableData};
-
-    /// A directory of its own, emptied first so a rerun starts clean.
-    fn scratch(label: &str) -> PathBuf {
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-        let dir = std::env::temp_dir().join(format!(
-            "rorolala-switch-entry-{}-{label}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-
-        let _ = std::fs::remove_dir_all(&dir);
-        dir
-    }
-
-    /// A path, from text a test can read.
-    fn path(text: &str) -> LayoutPath {
-        LayoutPath::new(text).unwrap()
-    }
-
-    /// Data an entry is made with.
-    fn data(seed: u8) -> MutableData {
-        MutableData::new(Some("alice".to_owned()), [seed; 32], "first".to_owned())
-    }
-
-    /// A path is made to name the entry that is already there, rather than another being made.
-    #[test]
-    fn switching_to_an_entry_with_no_path_reuses_it() {
-        let layout = Layout::open(scratch("reuse")).unwrap();
-        let old = Uuid::from_u128(1);
-        let kept = Uuid::from_u128(2);
-        layout.create_entry(old, data(1)).unwrap();
-        layout.create_path(&path("a.txt"), old).unwrap();
-        layout.create_entry(kept, data(2)).unwrap();
-
-        switch_entry(&layout, &path("a.txt"), kept, data(3)).unwrap();
-
-        assert_eq!(layout.id_of(&path("a.txt")), Some(kept));
-        assert_eq!(layout.entry(kept), Some(data(3)));
-        assert!(layout.entry(old).is_none());
-        assert_eq!(layout.orphans().without_path, Vec::<Uuid>::new());
-    }
-
-    /// A `Uuid` the Layout holds nothing for is made at the path it is to name.
-    #[test]
-    fn switching_to_an_unknown_uuid_makes_it() {
-        let layout = Layout::open(scratch("make")).unwrap();
-        let old = Uuid::from_u128(3);
-        let made = Uuid::from_u128(4);
-        layout.create_entry(old, data(3)).unwrap();
-        layout.create_path(&path("a.txt"), old).unwrap();
-
-        switch_entry(&layout, &path("a.txt"), made, data(4)).unwrap();
-
-        assert_eq!(layout.id_of(&path("a.txt")), Some(made));
-        assert_eq!(layout.entry(made), Some(data(4)));
-        assert!(layout.entry(old).is_none());
-    }
-
-    /// A path the Layout does not name is not a path that can be given another entry.
-    #[test]
-    fn switching_a_path_that_is_not_there_is_refused() {
-        let layout = Layout::open(scratch("missing")).unwrap();
-
-        assert!(matches!(
-            switch_entry(&layout, &path("none.txt"), Uuid::from_u128(5), data(5)),
-            Err(LayoutError::NotFound)
-        ));
-    }
+    use super::{remote_spec, vault_and_uuid};
 
     /// A name written `NAME@VAULT` names a Vault's Layout; one that is not written that way is a
     /// name of the Workspace's own, and `@` is what tells them apart.

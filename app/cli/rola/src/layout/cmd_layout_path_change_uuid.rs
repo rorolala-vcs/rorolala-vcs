@@ -31,7 +31,7 @@ use crate::exit_codes::{EC_ALREADY_EXIST, EC_ERR_LAYOUT_ARGUMENT, EC_NOT_EXIST};
 use crate::failure::failure;
 use crate::layout::{
     ErrorLayoutArgument, ErrorLayoutMissing, LayoutDid, ResultLayoutContent, chosen_writable,
-    failed, path_of, switch_entry, uuid_of,
+    failed_write, path_of, uuid_of,
 };
 
 /// Error: the `Uuid` given is the one the path already names.
@@ -268,8 +268,8 @@ pub fn handle_layout_path_change_uuid(
         .into();
     };
 
-    if let Err(error) = switch_entry(&layout, &path, id, data) {
-        return failed(&error);
+    if let Err(error) = librorolala::write::layout::switch_entry(&layout, &path, id, data) {
+        return failed_write(error);
     }
 
     ResultLayoutContent {

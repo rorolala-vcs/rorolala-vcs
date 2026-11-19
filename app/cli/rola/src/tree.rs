@@ -10,4 +10,3 @@ pub mod cmd_tree_reset;
 pub mod cmd_tree_rm;
 pub mod cmd_tree_status;
 pub mod cmd_tree_write_desc;
-pub mod worktree;

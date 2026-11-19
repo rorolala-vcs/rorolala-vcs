@@ -122,6 +122,13 @@ pub struct ErrorTreeNotATree {
     path: String,
 }
 
+impl ErrorTreeNotATree {
+    /// The failure of a path no tree holds, for `path`.
+    pub(crate) fn new(path: String) -> Self {
+        Self { path }
+    }
+}
+
 impl Failure for ErrorTreeNotATree {
     fn name(&self) -> &'static str {
         "error_tree_not_a_tree"

@@ -8,7 +8,6 @@
 
 use std::str::FromStr as _;
 
-use librorolala::layout::MutableData;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -30,7 +29,7 @@ use crate::complete::{
 use crate::exit_codes::EC_HELP;
 use crate::keys::account_names;
 use crate::layout::{
-    ErrorLayoutArgument, LayoutDid, ResultLayoutContent, chosen_writable, failed, hash_of,
+    ErrorLayoutArgument, LayoutDid, ResultLayoutContent, chosen_writable, failed_write, hash_of,
 };
 
 /// The account the entry is held by; none when it is left out.
@@ -364,8 +363,8 @@ pub fn handle_layout_entry(
     let what = id.to_string();
 
     if remove {
-        if let Err(error) = layout.remove_entry(id) {
-            return failed(&error);
+        if let Err(error) = librorolala::write::layout::remove_entry(&layout, id) {
+            return failed_write(error);
         }
 
         return ResultLayoutContent {
@@ -383,22 +382,16 @@ pub fn handle_layout_entry(
         Ok(version) => version,
         Err(error) => return error.into(),
     };
-    // A run that sets an entry's holder, version or words is not saying anything about how its
-    // content is cut, so a preference the entry already had is kept: nothing here was asked about
-    // it, and clearing it would quietly change what the next write does.
-    let data = MutableData::new(owner, *version.digest(), description.unwrap_or_default());
-    let data = match layout.entry(id) {
-        Some(existing) => data.with_preference(existing.preference().map(str::to_owned)),
-        None => data,
-    };
 
-    let written = if update {
-        layout.update_entry(id, data)
-    } else {
-        layout.create_entry(id, data)
-    };
-    if let Err(error) = written {
-        return failed(&error);
+    if let Err(error) = librorolala::write::layout::write_entry(
+        &layout,
+        id,
+        *version.digest(),
+        owner,
+        description.unwrap_or_default(),
+        update,
+    ) {
+        return failed_write(error);
     }
 
     ResultLayoutContent {
