@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using Key = Avalonia.Input.Key;
 
 namespace TerminalPlugin;
 
@@ -17,7 +18,7 @@ namespace TerminalPlugin;
 /// <remarks>
 /// What is drawn is the cell grid <see cref="TerminalScreen"/> keeps, grouped into runs of one style so that
 /// a line of text is one drawing rather than one per character. The bytes come from a pseudo-terminal, see
-/// <see cref="RolaDesktopPty"/>, and are polled on the window's own timer: reading is a question with an
+/// <see cref="RolaSharp.Pty"/>, and are polled on the window's own timer: reading is a question with an
 /// answer that is already there, so there is no thread and no lock between the two halves.
 /// <para>
 /// The font is monospaced and every cell is one advance wide, which is what makes a run drawable at its
@@ -42,7 +43,7 @@ internal sealed class TerminalView : Control, IDisposable
     private readonly TerminalScreen _screen = new(80, 24);
 
     /// <summary>The terminal the shell is in, or nothing when it could not be started.</summary>
-    private RolaDesktopPty? _pty;
+    private Pty? _pty;
 
     /// <summary>Where the shell was started, said when it could not be.</summary>
     private readonly string _why;
@@ -170,7 +171,13 @@ internal sealed class TerminalView : Control, IDisposable
 
         try
         {
-            _pty = RolaDesktopPty.Open(_program, _arguments, _directory, columns, rows);
+            _pty = Pty.Open(
+                _program,
+                Listed(_arguments),
+                _directory,
+                Extent(columns),
+                Extent(rows)
+            );
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
@@ -180,6 +187,23 @@ internal sealed class TerminalView : Control, IDisposable
             _log.Error($"the terminal `{_program}` could not be started: {error.Message}");
         }
     }
+
+    /// <summary>
+    /// The arguments as the NUL-separated list the terminal reads, ended by an empty one.
+    /// </summary>
+    /// <remarks>
+    /// The native side reads the list to its empty entry rather than to a count, which is what lets
+    /// an argument hold a space or a quote without either side agreeing about quoting.
+    /// </remarks>
+    /// <param name="arguments">The arguments, in order.</param>
+    /// <returns>The list the terminal is opened with.</returns>
+    private static string Listed(IReadOnlyList<string> arguments) =>
+        string.Join('\0', arguments) + (arguments.Count > 0 ? "\0\0" : "\0");
+
+    /// <summary>A column or row count as the terminal takes it, which is one at the fewest.</summary>
+    /// <param name="count">How many the view is.</param>
+    /// <returns>The count, inside the range a terminal's size holds.</returns>
+    private static ushort Extent(int count) => (ushort)Math.Max(1, Math.Min(count, ushort.MaxValue));
 
     /// <summary>Takes the dock's own state, which is what a shell that ended closes it through.</summary>
     /// <param name="state">Where the dock is closed from.</param>
@@ -244,7 +268,7 @@ internal sealed class TerminalView : Control, IDisposable
         if (columns != _screen.Columns || rows != _screen.Rows)
         {
             _screen.Resize(columns, rows);
-            _pty?.Resize(columns, rows);
+            _pty?.Resize(Extent(columns), Extent(rows));
             InvalidateVisual();
         }
 

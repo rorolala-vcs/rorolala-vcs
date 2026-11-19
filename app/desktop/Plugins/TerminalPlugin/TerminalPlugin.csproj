@@ -19,8 +19,8 @@
 
   <ItemGroup>
     <!-- The File System plugin for where the tree is rooted, which is where a shell starts; the contract
-         and the translations, as every plugin; and the C ABI's bindings, since the pseudo-terminal is the
-         Rust side's and this is the half that draws it. -->
+         and the translations, as every plugin; and the C ABI's bindings, since the pseudo-terminal is
+         the Rust side's and this is the half that draws it. -->
     <ProjectReference Include="../../Contract/RorolalaDesktop.Contract.csproj" />
     <ProjectReference Include="../../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
     <ProjectReference Include="../../../../modules/rola-sharp/RolaSharp.csproj" />
