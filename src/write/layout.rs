@@ -797,10 +797,11 @@ pub fn switch_entry(
 /// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`,
 /// [`WriteError::NoLayout`] when it has no Layout, [`WriteError::InvalidPath`] when a path, a `Uuid`
 /// or a version does not read, and [`WriteError::Layout`] when the batch does not apply.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the export is the ABI's own shape, and folding these arguments into a struct would only move them across one more boundary"
+)]
 #[lazyffi(export = rola_write_layout_switch_entry)]
-// The export is the ABI's own shape: a caller writing one entry by hand names each of these, and
-// folding them into a struct would only move the same arguments across one more boundary.
-#[allow(clippy::too_many_arguments)]
 pub fn switch_entry_at(
     directory: &Path,
     layout: &str,
