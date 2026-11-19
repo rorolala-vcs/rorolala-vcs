@@ -2216,9 +2216,10 @@ fn ignore_rules(rola: &Rola, dir: &Path, checked: &mut Checked) {
     );
     checked.exits("the entry is named at a path", &ran, 0);
 
-    // A first reading writes down what the file holds, so the move is told by the content next time.
-    let ran = rola.run(dir, &["layout", "tree-diff"]);
-    checked.exits("the tree is read before the move", &ran, 0);
+    // A write records what the file holds, so the move is told by the content next time. A read no
+    // longer writes the cache: the strict reading only answers with what is already recorded.
+    let ran = rola.run(dir, &["track", "hero.psd", "--message", "first", "--no-editor"]);
+    checked.exits("the tree is recorded before the move", &ran, 0);
 
     fs::rename(dir.join("hero.psd"), dir.join("hero.mb")).expect("a move the rules match");
 

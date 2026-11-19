@@ -14,8 +14,9 @@ use std::process::Command;
 use std::time::Duration;
 
 use librorolala::layout::{Layout, LayoutPath, MutableData};
-use librorolala::storage::Key;
-use librorolala::vault::{KEYS_DIR, LAYOUT_DIR, Vault};
+use librorolala::storage::{Key, store_file};
+use librorolala::vault::{INDEX_DIR, KEYS_DIR, LAYOUT_DIR, Vault};
+use librorolala::vcs::{ComputeBlake3 as _, Creator, Message, VCSIndex, Version};
 use librorolala::workspace::{Workspace, locate_workspace};
 use rorolala_utils_sandbox::{Guard, Serving, command, run, serve};
 use uuid::Uuid;
@@ -36,6 +37,13 @@ const VAULT_NAME: &str = "origin";
 /// The entry the Vault's Layout holds, and one it does not.
 const ENTRY: Uuid = Uuid::from_u128(0x42);
 const GONE: Uuid = Uuid::from_u128(0x99);
+
+/// The entry the Vault holds with content behind it, and the path a bring lands it at.
+const BROUGHT: Uuid = Uuid::from_u128(0x43);
+const BROUGHT_PATH: &str = "bring.psd";
+
+/// What the Vault keeps for [`BROUGHT`], which what a bring writes has to be.
+const BROUGHT_CONTENT: &[u8] = b"the content the Vault kept for the bring";
 
 /// How long the Vault is waited for before it is given up on.
 const STARTUP: Duration = Duration::from_secs(10);
@@ -59,7 +67,7 @@ async fn main() {
         publish(&auth, &root, name);
     }
 
-    // The Vault's Layout holds one entry, held by nobody. It is written before the Vault is served,
+    // The Vault's Layout holds an entry, held by nobody. It is written before the Vault is served,
     // so what a fetch brings is what was put there and not a Layout that happened to be empty.
     let vault_layout = Layout::open(root.join(LAYOUT_DIR)).expect("the Vault's Layout");
     vault_layout
@@ -68,6 +76,47 @@ async fn main() {
     vault_layout
         .create_path(&LayoutPath::new("a.psd").unwrap(), ENTRY)
         .expect("a path");
+
+    // A fetch moves a version and its index objects, and a bring writes a file only when the
+    // content the version points at is in the Vault's store. This entry is made the way a
+    // recording makes one: the content goes into the Vault's store, the creator, the message, the
+    // variant and the version that name it go into the Vault's index, and only then does the
+    // Layout name the version. It is written before the Vault is served, so what a fetch and a
+    // bring read is what was put there.
+    fs::write(root.join(BROUGHT_PATH), BROUGHT_CONTENT).expect("the content to bring");
+
+    let vault = Vault::at(root.as_path());
+    let store = vault.get_current_rola_storage().expect("the Vault's store");
+    let stored = store_file(&store, root.join(BROUGHT_PATH))
+        .await
+        .expect("the content in the Vault's store");
+
+    let creator = Creator::try_from(ALICE).expect("a creator");
+    let message = Message::try_from("the entry a bring carries").expect("a message");
+    let variant = Version::root().new_variant(
+        *stored.digest(),
+        creator.compute_blake3(),
+        message.compute_blake3(),
+    );
+    let version = variant.new_version();
+
+    let index = VCSIndex::create(root.join(INDEX_DIR));
+    index.write(creator).await.expect("the creator");
+    index.write(message).await.expect("the message");
+    index.write(variant).await.expect("the variant");
+
+    let version_hash = version.compute_blake3();
+    index.write(version).await.expect("the version");
+
+    vault_layout
+        .create_entry(
+            BROUGHT,
+            MutableData::new(None, version_hash, "a file with content".to_owned()),
+        )
+        .expect("an entry with content");
+    vault_layout
+        .create_path(&LayoutPath::new(BROUGHT_PATH).unwrap(), BROUGHT)
+        .expect("a path to bring");
 
     run(&mut client(&workspace, &data, &["account", ALICE])).expect_success();
     run(&mut client(
@@ -383,6 +432,138 @@ async fn main() {
         "reading an entry the copy does not name is refused",
         said.code == Some(192) && clean(&said.stderr).contains("names no entry"),
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // The section above takes `ENTRY` and lets it go, and every check below reads the entry state
+    // it left; a bring fetches the Vault's Layout again and would put this section between a claim
+    // and what that claim was checked against. It runs here, after those checks and before `ENTRY`
+    // is taken again, and it moves the ownership of an entry of its own, so what it changes is
+    // `bring.psd` alone. The whole-tree `status` below is clean because nothing else has been
+    // recorded in the tree yet, which is true here and nowhere later, since the sections after this
+    // one give the tree work.
+    //
+    // A bring reads the Vault its Layout tracks, and the section above only bound the Vault and
+    // fetched it: tracking is what a sync and a bring read rather than what a fetch sets, so it is
+    // named here. The later section names it again, which is the same state set twice.
+    run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "set-track", VAULT_NAME],
+    ))
+    .expect_success();
+
+    let brought = BROUGHT.to_string();
+    let said = run(&mut client(&workspace, &data, &["bring", BROUGHT_PATH]));
+    checked.wants(
+        "a bring carries the content the Vault holds into the work",
+        said.success()
+            && fs::read(workspace.join(BROUGHT_PATH))
+                .is_ok_and(|content| content == BROUGHT_CONTENT)
+            && said.stdout.contains(&brought)
+            && clean(&said.stdout).contains(BROUGHT_PATH),
+        &format!(
+            "it ended with {:?}, said {:?} on stdout and {:?} on stderr, and the tree holds {:?}",
+            said.code,
+            said.stdout.trim(),
+            said.stderr.trim(),
+            fs::read(workspace.join(BROUGHT_PATH))
+        ),
+    );
+
+    checked.wants(
+        "the Layout names what the bring put here",
+        Layout::open(workspace.join(".rola/layout"))
+            .expect("the Layout being worked in")
+            .id_of(&LayoutPath::new(BROUGHT_PATH).unwrap())
+            == Some(BROUGHT),
+        "the Layout does not name what came in",
+    );
+
+    let said = run(&mut client(&workspace, &data, &["status"]));
+    checked.wants(
+        "a file just brought in is clean",
+        said.success() && clean(&said.stdout).contains("nothing unrecorded"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            clean(&said.stdout)
+        ),
+    );
+
+    // The Vault names nobody as the holder and the bring has put this side at the version the Vault
+    // names, which is what `hold` reads before it writes.
+    let said = run(&mut client(&workspace, &data, &["hold", BROUGHT_PATH]));
+    checked.wants(
+        "a brought file nobody holds is claimed",
+        said.success() && vault_owner_of(&root, BROUGHT).as_deref() == Some(ALICE),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, BROUGHT)
+        ),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "read-ownership", VAULT_NAME, &brought],
+    ));
+    checked.wants(
+        "reading the brought file names the account that holds it",
+        said.success() && clean(&said.stdout).contains(ALICE),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    checked.wants(
+        "the copy names the account that holds the brought file",
+        Layout::open(fetched_copy(&workspace, VAULT_NAME))
+            .expect("the fetched copy")
+            .entry(BROUGHT)
+            .and_then(|data| data.owner().map(str::to_owned))
+            == Some(ALICE.to_owned()),
+        "the copy did not follow the Vault",
+    );
+
+    let said = run(&mut client(&workspace, &data, &["giveup", BROUGHT_PATH]));
+    checked.wants(
+        "the account that holds a brought file lets it go",
+        said.success() && vault_owner_of(&root, BROUGHT).is_none(),
+        &format!(
+            "it ended with {:?}, said {:?}, and the Vault holds {:?}",
+            said.code,
+            said.stderr.trim(),
+            vault_owner_of(&root, BROUGHT)
+        ),
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["layout", "read-ownership", VAULT_NAME, &brought],
+    ));
+    checked.wants(
+        "the brought file is held by nobody after a give-up",
+        said.success() && clean(&said.stdout).contains("held by nobody"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    checked.wants(
+        "the copy names nobody after the brought file is let go",
+        Layout::open(fetched_copy(&workspace, VAULT_NAME))
+            .expect("the fetched copy")
+            .entry(BROUGHT)
+            .and_then(|data| data.owner().map(str::to_owned))
+            .is_none(),
+        "the copy still named a holder",
     );
 
     // Locating and deprecating are a move of the path in the Vault's Layout: take the entry again,
@@ -2131,7 +2312,14 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["layout", "path", "remove", "delete/theirs.psd", "--layout", "truth@origin"],
+        &[
+            "layout",
+            "path",
+            "remove",
+            "delete/theirs.psd",
+            "--layout",
+            "truth@origin",
+        ],
     ));
     checked.wants(
         "an entry another account holds is refused, naming the holder",
@@ -2147,7 +2335,14 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["layout", "path", "remove", "delete/unheld.psd", "--layout", "truth@origin"],
+        &[
+            "layout",
+            "path",
+            "remove",
+            "delete/unheld.psd",
+            "--layout",
+            "truth@origin",
+        ],
     ));
     checked.wants(
         "an entry nobody holds is refused without an administrator",
@@ -2177,7 +2372,14 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["layout", "path", "remove", "delete/mine.psd", "--layout", "truth@origin"],
+        &[
+            "layout",
+            "path",
+            "remove",
+            "delete/mine.psd",
+            "--layout",
+            "truth@origin",
+        ],
     ));
     checked.wants(
         "the holder removes the entry, path and all",
@@ -2202,13 +2404,24 @@ async fn main() {
     checked.wants(
         "the fetched copy follows the removal",
         said.success() && !said.stdout.contains(&mine.to_string()),
-        &format!("it ended with {:?} and said {:?}", said.code, said.stdout.trim()),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
     );
 
     let said = run(&mut client(
         &workspace,
         &data,
-        &["layout", "path", "remove", "delete/nothere.psd", "--layout", "truth@origin"],
+        &[
+            "layout",
+            "path",
+            "remove",
+            "delete/nothere.psd",
+            "--layout",
+            "truth@origin",
+        ],
     ));
     checked.wants(
         "a path the Vault does not name is refused as missing",
@@ -2219,7 +2432,14 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["layout", "path", "remove", "@/archive/a.psd", "--layout", "truth@origin"],
+        &[
+            "layout",
+            "path",
+            "remove",
+            "@/archive/a.psd",
+            "--layout",
+            "truth@origin",
+        ],
     ));
     checked.wants(
         "a path a remote Layout may not name is refused as an argument",
@@ -2233,7 +2453,14 @@ async fn main() {
     let said = run(&mut client(
         &workspace,
         &data,
-        &["layout", "path", "remove", "delete/theirs.psd", "--layout", "truth@origin"],
+        &[
+            "layout",
+            "path",
+            "remove",
+            "delete/theirs.psd",
+            "--layout",
+            "truth@origin",
+        ],
     ));
     checked.wants(
         "the account that holds it removes it",
