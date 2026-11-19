@@ -345,7 +345,7 @@ impl AnswerTarget {
 pub fn search_source_json(directory: &Path, request: &str) -> Result<String, ExistenceError> {
     let workspace = Workspace::locate(directory).ok_or(ExistenceError::NoWorkspace)?;
     let layout = workspace
-        .layout_if_there()
+        .layout_readonly()
         .map_err(|error| ExistenceError::Read {
             reason: error.to_string(),
         })?

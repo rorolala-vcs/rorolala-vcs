@@ -67,7 +67,7 @@ pub fn locate_status(directory: &Path) -> Option<Status> {
 
 /// The Layout a Workspace is working in, when it is working in one.
 fn working_layout(workspace: &Workspace) -> Option<Layout> {
-    workspace.layout_if_there().ok().flatten()
+    workspace.layout_readonly().ok().flatten()
 }
 
 /// Whether a tree's own Layout entry is a change that must not be recorded.

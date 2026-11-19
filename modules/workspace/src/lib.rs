@@ -162,6 +162,24 @@ impl Workspace {
         }
     }
 
+    /// The Layout this Workspace works in, when there is one to read, without changing anything.
+    ///
+    /// It differs from [`layout_if_there`](Self::layout_if_there) in one thing: it does not take
+    /// over the Layout a version before this one kept among several. A reader may not move a
+    /// Workspace's directories while answering what it holds; the adoption is a write, and a write
+    /// command is what calls `layout_if_there`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError`] when a Layout that is there cannot be read.
+    pub fn layout_readonly(&self) -> Result<Option<Layout>, LayoutError> {
+        match Layout::open_existing(self.layout_dir()) {
+            Ok(layout) => Ok(Some(layout)),
+            Err(error) if error.is_not_found() => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
     /// The Vault the Layout being worked in tracks, when it tracks one.
     ///
     /// A Layout tracks nothing when the file naming its Vault is not there, and a Workspace with no
