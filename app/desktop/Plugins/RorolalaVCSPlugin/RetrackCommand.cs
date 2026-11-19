@@ -1,76 +1,65 @@
+using RolaSharp;
+using RolaSharp.Write;
 using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// Running the command line's retrack: setting what a file's Layout entry records.
+/// Setting what a file's Layout entry records, through the writer the command line uses.
 /// </summary>
 /// <remarks>
-/// What is recorded is the command line's, the Layout pointer, the content written back over the file, and the
-/// Vault consulted when the content is not here, so this owns only the words that ask for it: the file, what
-/// the path is to record, and whether the work on disk is to follow it.
-/// <para>
-/// The program is the one the window was opened by, named by the environment the run handed over, because the
-/// two are exported together: a <c>rola</c> found on the <c>PATH</c> could be another one entirely, of another
-/// version, against another Vault.
-/// </para>
+/// The move is the writer's: the Layout pointer, the content written back over the file, and the
+/// Vault consulted when the content is not here. What this owns is the words that ask for it: the
+/// file, what the path is to record, and whether the work on disk is to follow it.
 /// </remarks>
 internal static class RetrackCommand
 {
-    /// <summary>The arguments a retrack is run with, after the program's name.</summary>
+    /// <summary>The request a retrack is made with.</summary>
+    /// <remarks>
+    /// A record-only run and a forced one say opposite things about the file on disk, so force is
+    /// left out when the record moves alone. The command line refuses the pair rather than choosing
+    /// between them; this window never asks for both, and saying the same here keeps a caller that
+    /// did from turning a record-only run into a refusal.
+    /// </remarks>
     /// <param name="file">The one file to set the record of.</param>
-    /// <param name="target">What the path is to record: the version, as the index names it.</param>
-    /// <param name="onlyIndex">
-    /// Whether the record moves and the file on disk is left alone, which is
-    /// <c>--only-index</c>.
-    /// </param>
-    /// <param name="force">
-    /// Whether changes that were never recorded are to be discarded, which is <c>--force</c>. It is
-    /// given only where the reader has been asked and has agreed, since the content written back is
-    /// what replaces them.
-    /// </param>
-    /// <returns>The arguments.</returns>
-    public static IReadOnlyList<string> Arguments(
+    /// <param name="target">What the path is to record, as the index names it.</param>
+    /// <param name="onlyIndex">Whether the record moves and the file on disk is left alone.</param>
+    /// <param name="force">Whether unrecorded changes are to be discarded.</param>
+    /// <returns>The request.</returns>
+    public static RetrackRequest Request(
         string file,
         string target,
         bool onlyIndex,
         bool force
     )
     {
-        // The file and what the path is to record are the command's two words, in that order: the
-        // first is the path the Layout names and the second is what it is to record.
-        var arguments = new List<string>
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(target);
+
+        return new RetrackRequest
         {
-            "--theme-choice=" + Sync.Theme,
-            "--json",
-            "retrack",
-            file,
-            target,
+            File = file,
+            Record = target,
+            OnlyIndex = onlyIndex,
+            Force = force && !onlyIndex,
+            Account = UserScope.CurrentAccount,
         };
-
-        if (onlyIndex)
-        {
-            arguments.Add("--only-index");
-        }
-
-        // `--force` and `--only-index` say opposite things about the file on disk, so the two are
-        // never given together.
-        if (force && !onlyIndex)
-        {
-            arguments.Add("--force");
-        }
-
-        return arguments;
     }
 
-    /// <summary>The arguments a fork of a path's entry is run with.</summary>
+    /// <summary>The request a fork of a path's entry is made with.</summary>
     /// <param name="file">The path whose entry is to be given a fresh `Uuid`.</param>
-    /// <returns>The arguments.</returns>
-    public static IReadOnlyList<string> ForkArguments(string file)
+    /// <returns>The request, which records what the path holds now and names no target.</returns>
+    public static RetrackRequest ForkRequest(string file)
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        return ["--theme-choice=" + Sync.Theme, "--json", "retrack", file, "--fork"];
+        return new RetrackRequest
+        {
+            File = file,
+            Record = string.Empty,
+            Fork = true,
+            Account = UserScope.CurrentAccount,
+        };
     }
 
     /// <summary>Runs a fork, answering whether it ended well and what it said.</summary>
@@ -82,16 +71,7 @@ internal static class RetrackCommand
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(file);
 
-        var program = Environment.GetEnvironmentVariable(Sync.Program);
-
-        if (string.IsNullOrEmpty(program))
-        {
-            return (false, RolaI18N.Get("rorolala_vcs.sync.no_program"));
-        }
-
-        var (done, said, _) = Sync.Asked(program, ForkArguments(file), directory);
-
-        return (done, said);
+        return Run(directory, ForkRequest(file));
     }
 
     /// <summary>Runs a retrack, answering whether it ended well and what it said.</summary>
@@ -117,19 +97,38 @@ internal static class RetrackCommand
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(target);
 
-        var program = Environment.GetEnvironmentVariable(Sync.Program);
+        return Run(directory, Request(file, target, onlyIndex, force));
+    }
 
-        if (string.IsNullOrEmpty(program))
+    /// <summary>Runs one retrack request, answering whether it ended well and what it said.</summary>
+    /// <param name="directory">Where the work is rooted, and where the run is made.</param>
+    /// <param name="request">What the run is to do.</param>
+    /// <returns>Whether it ended well, and what to say when it did not.</returns>
+    private static (bool Done, string Said) Run(string directory, RetrackRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        try
         {
-            return (false, RolaI18N.Get("rorolala_vcs.sync.no_program"));
+            using var workspace = WorkspaceScope.Open(directory);
+            workspace.Read();
+
+            new WorkspaceWriter(workspace).Retrack(request);
+
+            return (true, string.Empty);
         }
-
-        var (done, said, _) = Sync.Asked(
-            program,
-            Arguments(file, target, onlyIndex, force),
-            directory
-        );
-
-        return (done, said);
+        catch (RolaWriteError error)
+        {
+            return (false, Sync.Told(error));
+        }
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.NoWorkspace or RolaReadErrorKind.Unavailable)
+        {
+            return (false, RolaI18N.Get("rorolala_vcs.not_a_workspace"));
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            return (false, error.Message);
+        }
     }
 }
