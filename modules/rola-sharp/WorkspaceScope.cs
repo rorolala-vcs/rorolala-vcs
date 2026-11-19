@@ -1,0 +1,292 @@
+using System.Runtime.InteropServices;
+using System.Text.Json;
+
+namespace RolaSharp;
+
+/// <summary>A Workspace: the directory a run works in, and everything under it.</summary>
+public sealed class WorkspaceScope
+    : Scope,
+        IDisposable,
+        IVCSIndexAccessable,
+        IStorageAccessable,
+        ILayoutAccessable
+{
+    private readonly string _root;
+    private nint _handle;
+
+    /// <summary>Makes a scope over the Workspace holding a directory.</summary>
+    /// <param name="path">Any directory inside the Workspace.</param>
+    public WorkspaceScope(string path) => _root = Path.GetFullPath(path);
+
+    /// <summary>Makes a scope over the Workspace holding a directory.</summary>
+    /// <param name="directory">Any directory inside the Workspace.</param>
+    public WorkspaceScope(DirectoryInfo directory)
+        : this(directory?.FullName ?? throw new ArgumentNullException(nameof(directory))) { }
+
+    /// <summary>Finds the Workspace a path is in and makes a scope over its root.</summary>
+    /// <param name="start">Any path inside the Workspace.</param>
+    /// <returns>The scope over the Workspace.</returns>
+    public static WorkspaceScope Open(string start)
+    {
+        var at = new DirectoryInfo(Path.GetFullPath(start));
+        while (at is not null)
+        {
+            if (Directory.Exists(RolaPaths.WorkspaceData(at.FullName)))
+            {
+                return new WorkspaceScope(at.FullName);
+            }
+
+            at = at.Parent;
+        }
+
+        throw new RolaReadError(RolaReadErrorKind.Unavailable, start, "no Workspace is there");
+    }
+
+    /// <summary>Finds the Workspace a path is in and makes a scope over its root.</summary>
+    /// <param name="start">Any directory inside the Workspace.</param>
+    /// <returns>The scope over the Workspace.</returns>
+    public static WorkspaceScope Open(DirectoryInfo start) =>
+        Open(start?.FullName ?? throw new ArgumentNullException(nameof(start)));
+
+    /// <summary>The Workspace's root.</summary>
+    public DirectoryInfo Root => new(_root);
+
+    /// <summary>Where the Workspace keeps the data that makes it one.</summary>
+    public DirectoryInfo Data => new(RolaPaths.WorkspaceData(_root));
+
+    /// <summary>The Workspace configuration file.</summary>
+    public FileInfo ConfigFile => new(RolaPaths.WorkspaceConfig(_root));
+
+    /// <summary>Where the Workspace keeps its Layouts.</summary>
+    public DirectoryInfo LayoutDirectory => new(RolaPaths.WorkspaceLayout(_root));
+
+    /// <summary>Where the Workspace keeps its store.</summary>
+    public DirectoryInfo StorageDirectory => new(RolaPaths.WorkspaceStorage(_root));
+
+    /// <summary>Where the Workspace keeps its VCS index.</summary>
+    public DirectoryInfo IndexDirectory => new(RolaPaths.WorkspaceIndex(_root));
+
+    /// <summary>Where the Workspace keeps the accounts it knows.</summary>
+    public DirectoryInfo KeysDirectory => new(RolaPaths.WorkspaceKeys(_root));
+
+    /// <summary>Where the Workspace keeps its reading cache.</summary>
+    public DirectoryInfo CacheDirectory => new(RolaPaths.WorkspaceCache(_root));
+
+    /// <summary>Where the Workspace keeps fetched Layout copies.</summary>
+    public DirectoryInfo ReadonlyLayoutsDirectory => new(RolaPaths.WorkspaceReadonlyLayouts(_root));
+
+    /// <summary>The file a run edits to write the next message.</summary>
+    public FileInfo EditingFile => new(RolaPaths.WorkspaceEditing(_root));
+
+    /// <summary>The native Workspace, for the writes that hold it.</summary>
+    internal nint Handle
+    {
+        get
+        {
+            if (_handle == 0)
+            {
+                throw new InvalidOperationException("call Read first");
+            }
+
+            return _handle;
+        }
+    }
+
+    /// <summary>Whether the Workspace is locked.</summary>
+    public bool Locked
+    {
+        get
+        {
+            if (_handle == 0)
+            {
+                throw new InvalidOperationException("call Read first");
+            }
+
+            return RorolalaBinding.RolaWorkspace_is_locking(_handle);
+        }
+    }
+
+    /// <summary>What the Workspace's configuration says, once it is read.</summary>
+    public WorkspaceConfig? Config { get; private set; }
+
+    /// <summary>The Layout the Workspace works in.</summary>
+    public LocalLayoutScope LocalLayout => new(_root);
+
+    /// <summary>The Layout the Workspace works in.</summary>
+    public LayoutScope Layout => LocalLayout;
+
+    /// <summary>The copy of a Vault's truth Layout a fetch left here.</summary>
+    /// <param name="vault">The Vault whose copy is read.</param>
+    /// <returns>The scope over the copy.</returns>
+    public TruthLayoutScope TruthLayout(string vault)
+    {
+        ArgumentNullException.ThrowIfNull(vault);
+        if (
+            vault.Length == 0
+            || vault is "." or ".."
+            || vault.Trim() != vault
+            || vault.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+        )
+        {
+            throw new RolaReadError(RolaReadErrorKind.InvalidArgument, vault, "the Vault name is not one path component");
+        }
+
+        return new TruthLayoutScope(_root, vault);
+    }
+
+    /// <summary>The store the Workspace keeps.</summary>
+    public StorageScope Storage => new(RolaPaths.WorkspaceStorage(_root));
+
+    /// <summary>The VCS index the Workspace keeps.</summary>
+    public VCSIndexScope VCSIndex => new(_root);
+
+    /// <summary>The inverse index the Workspace keeps.</summary>
+    public InverseIndexScope InverseIndex => new(_root);
+
+    /// <summary>The ignore rules the Workspace is managed by.</summary>
+    public IgnoreScope Ignore =>
+        new(RolaPaths.WorkspaceIgnoreRules(_root), _root);
+
+    /// <summary>The tree the Workspace holds.</summary>
+    public TreeScope Tree => new(_root);
+
+    /// <summary>A tree at a path under the Workspace.</summary>
+    /// <param name="path">The tree's path, relative to the Workspace root.</param>
+    /// <returns>The scope over the tree.</returns>
+    public TreeScope TreeAt(string path) => new(Subtree(path));
+
+    /// <summary>A path under the Workspace, refusing one that leaves it.</summary>
+    private string Subtree(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var root = Path.GetFullPath(_root);
+        var at = Path.GetFullPath(Path.Combine(root, path));
+        var relative = Path.GetRelativePath(root, at);
+        if (relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            throw new RolaReadError(RolaReadErrorKind.InvalidArgument, path, "the path leaves the Workspace");
+        }
+
+        return at;
+    }
+
+    /// <summary>The built-in book, looked for from the Workspace.</summary>
+    public BookScope Book => new(_root);
+
+    /// <summary>What holds each entry of the tracked Vault, from the fetched copy.</summary>
+    public OwnershipScope Ownership => new(_root);
+
+    /// <summary>The graph around one version.</summary>
+    /// <param name="target">The version to draw around.</param>
+    /// <returns>The scope over the graph.</returns>
+    public VersionGraphScope VersionGraph(string target) => new(_root, target);
+
+    /// <summary>The variant graph the Workspace's entries draw.</summary>
+    /// <param name="request">The window to draw, or nothing for the default one.</param>
+    /// <returns>The scope over the graph.</returns>
+    public VariantGraphScope VariantGraph(VariantGraphRequest? request = null) =>
+        new(_root, request);
+
+    /// <summary>How the Workspace's tree stands beside its Layout.</summary>
+    public StatusScope Status => new(_root);
+
+    /// <inheritdoc/>
+    protected override void IsValid()
+    {
+        if (!Directory.Exists(_root) || !Directory.Exists(Path.Combine(_root, ".rola")))
+        {
+            throw new RolaReadError(
+                RolaReadErrorKind.NoWorkspace,
+                _root,
+                "no Workspace holds the directory"
+            );
+        }
+    }
+
+    /// <inheritdoc/>
+    protected override void Load(CancellationToken cancellationToken)
+    {
+        Dispose();
+
+        var path = Utf8(_root);
+        var handle = RorolalaBinding.locate_rola_workspace(path);
+        if (handle == 0)
+        {
+            Marshal.FreeCoTaskMem(path);
+            throw new RolaReadError(
+                RolaReadErrorKind.NoWorkspace,
+                _root,
+                "no Workspace holds the directory"
+            );
+        }
+
+        _handle = handle;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var json = NativeText.Taken(RorolalaBinding.rola_workspace_config_json(path));
+            Config = ParseConfig(json);
+        }
+        catch
+        {
+            Dispose();
+            throw;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(path);
+        }
+    }
+
+    /// <summary>Gives the native Workspace back.</summary>
+    public void Dispose()
+    {
+        if (_handle != 0)
+        {
+            RorolalaBinding.free_rola_workspace(_handle);
+            _handle = 0;
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
+    private static WorkspaceConfig? ParseConfig(string json)
+    {
+        if (string.IsNullOrEmpty(json) || json == "null")
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        var vaults = RolaJson
+            .Items(root, "vaults")
+            ?.EnumerateArray()
+            .Select(item => new VaultBinding(
+                RolaJson.Text(item, "name") ?? string.Empty,
+                RolaJson.Text(item, "address") ?? string.Empty,
+                RolaJson.Flag(item, "is_default")
+            ))
+            .ToArray()
+            ?? [];
+        var defaultVault = RolaJson.Text(root, "default");
+        ulong? grace = null;
+        if (
+            root.ValueKind is JsonValueKind.Object
+            && root.TryGetProperty("gc", out var gc)
+            && gc.ValueKind is JsonValueKind.Object
+        )
+        {
+            grace = RolaJson.Number(gc, "grace");
+        }
+
+        return new WorkspaceConfig(
+            vaults,
+            defaultVault,
+            grace is null ? null : new GcConfig(grace)
+        );
+    }
+
+    private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);
+}

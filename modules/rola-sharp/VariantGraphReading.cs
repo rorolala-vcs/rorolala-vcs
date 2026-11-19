@@ -158,7 +158,7 @@ public sealed record VariantGraphTexts(
 /// back, and every list and text is in managed memory by the time <see cref="Locate"/> returns.
 /// </para>
 /// </remarks>
-public sealed class RolaVariantGraph
+public sealed class VariantGraphReading
 {
     /// <summary>How requests and answers are named: the native side spells its fields in snake case.</summary>
     private static readonly JsonSerializerOptions Format = new()
@@ -169,7 +169,7 @@ public sealed class RolaVariantGraph
 
     /// <summary>Makes a reading from the answer the native side gave.</summary>
     /// <param name="payload">The answer, which must not be null.</param>
-    private RolaVariantGraph(Payload payload)
+    private VariantGraphReading(Payload payload)
     {
         Focus = payload.Focus;
         Nodes = payload.Nodes;
@@ -225,7 +225,7 @@ public sealed class RolaVariantGraph
     /// <exception cref="InvalidOperationException">
     /// The native side could not read the request, the index, or the records beside it.
     /// </exception>
-    public static RolaVariantGraph? Locate(string directory, VariantGraphRequest? request = null)
+    public static VariantGraphReading? Locate(string directory, VariantGraphRequest? request = null)
     {
         ArgumentNullException.ThrowIfNull(directory);
 
@@ -247,7 +247,7 @@ public sealed class RolaVariantGraph
 
             var json = NativeText.Taken(answer.payload);
 
-            return new RolaVariantGraph(
+            return new VariantGraphReading(
                 JsonSerializer.Deserialize<Payload>(json, Format)
                     ?? throw new InvalidOperationException("the variant graph read as nothing")
             );

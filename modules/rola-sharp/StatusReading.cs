@@ -163,7 +163,7 @@ public sealed record Standing(StandingRelation Relation, ulong? Distance);
 /// Whether one path's version stands ahead of, behind, or apart from the one upstream records.
 /// </summary>
 /// <remarks>
-/// What <see cref="RolaStatus.StandingOf"/> answers, less the count: the count is what a column says, and this is
+/// What <see cref="StatusReading.StandingOf"/> answers, less the count: the count is what a column says, and this is
 /// what a plan would do about the path, a sync sends one that is ahead and brings one that is behind, and
 /// <c>--force</c> is what sends one that is apart. The three are the relations a plan acts on; a version in step
 /// and a chain that cannot be read are <see cref="SyncStanding.None"/>.
@@ -188,7 +188,7 @@ public enum SyncStanding
 /// </summary>
 /// <remarks>
 /// The same reading `rola status` makes with nothing named, and the same shape as
-/// <see cref="RolaOwnership"/>: absence, no Workspace holds the directory, or the Workspace works
+/// <see cref="OwnershipScope"/>: absence, no Workspace holds the directory, or the Workspace works
 /// in no Layout, is <see langword="null"/> rather than a handle to remember to check, and the handle
 /// is given back on <see cref="Dispose"/>.
 /// <para>
@@ -199,7 +199,7 @@ public enum SyncStanding
 /// than a copy of its lists can.
 /// </para>
 /// </remarks>
-public sealed class RolaStatus : IDisposable
+public sealed class StatusReading : IDisposable
 {
     /// <summary>The native reading, until it is given back.</summary>
     private nint _handle;
@@ -218,7 +218,7 @@ public sealed class RolaStatus : IDisposable
 
     /// <summary>Makes a reading from a native status, which is read out and kept.</summary>
     /// <param name="handle">The native status, which must not be null.</param>
-    private RolaStatus(nint handle)
+    private StatusReading(nint handle)
     {
         _handle = handle;
 
@@ -424,7 +424,7 @@ public sealed class RolaStatus : IDisposable
     /// </summary>
     /// <param name="directory">The directory to search upwards from.</param>
     /// <returns>The reading, or nothing when there is nothing to read.</returns>
-    public static RolaStatus? Locate(string directory)
+    public static StatusReading? Locate(string directory)
     {
         ArgumentNullException.ThrowIfNull(directory);
 
@@ -437,7 +437,7 @@ public sealed class RolaStatus : IDisposable
         {
             var handle = RorolalaBinding.locate_rola_status(path);
 
-            return handle == 0 ? null : new RolaStatus(handle);
+            return handle == 0 ? null : new StatusReading(handle);
         }
         finally
         {

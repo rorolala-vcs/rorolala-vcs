@@ -13,7 +13,7 @@ namespace RolaSharp;
 internal static class NativeText
 {
     /// <summary>Reads a C string and releases the buffer it arrived in.</summary>
-    /// <param name="text">The buffer, or null when there is no string.</param>
+    /// <param name="text">The buffer, or zero when there is no string.</param>
     /// <returns>What it said, or an empty string.</returns>
     public static string Taken(nint text)
     {
@@ -37,7 +37,7 @@ internal static class NativeText
     /// A string a failure carries is part of the failure: it goes when the failure is given back, and
     /// releasing it here would be releasing it twice. It is copied out, and the owner releases it.
     /// </remarks>
-    /// <param name="text">The buffer, or null when there is no string.</param>
+    /// <param name="text">The buffer, or zero when there is no string.</param>
     /// <returns>What it said, or an empty string.</returns>
     public static string Copied(nint text) =>
         text == 0 ? string.Empty : Marshal.PtrToStringUTF8(text) ?? string.Empty;

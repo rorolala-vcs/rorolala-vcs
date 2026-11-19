@@ -21,6 +21,7 @@ use crate::natural::natural;
 /// Opaque: C takes a pointer from `load_rola_ignore_rules` and gives it back with
 /// `free_rola_ignore_rules`.
 #[lazyffi(export = RolaIgnoreRules)]
+#[derive(Clone)]
 pub struct IgnoreRuleSet {
     /// The matcher the rules were built into.
     inner: Gitignore,
