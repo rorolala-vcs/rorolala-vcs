@@ -2,12 +2,8 @@
 
 use std::path::Path;
 
-use rorolala_storage::{
-    Chunking, Codec, Key, RorolalaStorage, StorageBackend as _, policy as chunking_policy,
-    store_file,
-};
+use rorolala_storage::{Chunking, Codec, Key, StorageSet, policy as chunking_policy};
 use rorolala_utils_lazyffi::lazyffi;
-use rorolala_utils_location::Locate as _;
 use serde::Serialize;
 
 use crate::write::WriteError;
@@ -21,55 +17,47 @@ pub struct Stored {
     pub chunked: bool,
 }
 
-/// Puts a file's content into the store, cutting it by `policy` when one is named.
+/// Puts a file's content into the store a set writes to, cutting it by `policy` when one is named.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::Precondition`] when `policy` names no cut this build carries, and
-/// [`WriteError::Storage`] when the store refuses the content.
+/// [`WriteError::Storage`] or [`WriteError::ReadOnly`] when the store refuses the content.
 pub async fn put_file(
-    store: &RorolalaStorage,
+    set: &StorageSet,
     file: &Path,
     policy: Option<&str>,
 ) -> Result<Stored, WriteError> {
-    let told = match policy {
+    let cut = match policy {
         Some(name) => {
             let found = chunking_policy(name).ok_or_else(|| WriteError::Precondition {
                 what: format!("chunking policy `{name}`"),
                 reason: "this build carries no such policy".to_owned(),
             })?;
-            store.clone().with_forced_cut(Chunking::Policy(found.name))
+            Some(Chunking::Policy(found.name))
         }
-        None => store.clone(),
+        None => None,
     };
 
-    let key = store_file(&told, file)
+    let key = set
+        .put_file(file, cut, None)
         .await
-        .map_err(|error| WriteError::Storage {
-            reason: error.to_string(),
-        })?;
-    let chunked = store
-        .holds_manifest(&key)
-        .await
-        .map_err(|error| WriteError::Storage {
-            reason: error.to_string(),
-        })?;
+        .map_err(storage_failure)?;
+    let chunked = set.holds_manifest(&key).await.map_err(storage_failure)?;
 
     Ok(Stored { key, chunked })
 }
 
-/// Puts content in memory into the store, keeping it as one object.
+/// Puts content in memory into the store a set writes to, keeping it as one object.
 ///
 /// # Errors
 ///
-/// Returns [`WriteError::Storage`] when the store refuses the content.
-pub async fn put_bytes(store: &RorolalaStorage, bytes: &[u8]) -> Result<Stored, WriteError> {
-    let key = store
+/// Returns [`WriteError::Storage`] or [`WriteError::ReadOnly`] when the store refuses the content.
+pub async fn put_bytes(set: &StorageSet, bytes: &[u8]) -> Result<Stored, WriteError> {
+    let key = set
         .write_object(bytes, Codec::Raw)
         .await
-        .map_err(|error| WriteError::Storage {
-            reason: error.to_string(),
-        })?;
+        .map_err(storage_failure)?;
 
     Ok(Stored {
         key,
@@ -77,25 +65,22 @@ pub async fn put_bytes(store: &RorolalaStorage, bytes: &[u8]) -> Result<Stored, 
     })
 }
 
-/// Takes the content stored under `key` out to `destination`.
+/// Takes the content stored under `key` out to `destination`, from whichever store holds it.
 ///
 /// # Errors
 ///
-/// Returns [`WriteError::Storage`] when the store does not hold the key or cannot write it.
+/// Returns [`WriteError::Storage`] when no store holds the key or cannot write it.
 pub async fn extract_file(
-    store: &RorolalaStorage,
+    set: &StorageSet,
     key: &Key,
     destination: &Path,
 ) -> Result<(), WriteError> {
-    store
-        .extract_file(key, destination)
+    set.extract_file(key, destination)
         .await
-        .map_err(|error| WriteError::Storage {
-            reason: error.to_string(),
-        })
+        .map_err(storage_failure)
 }
 
-/// Puts a file's content into the store a directory is in.
+/// Puts a file's content into the store a directory works on.
 ///
 /// # FFI
 ///
@@ -110,13 +95,17 @@ pub async fn extract_file(
 /// content cannot be stored.
 #[lazyffi(export = rola_write_storage_put_file)]
 pub fn put_file_to(directory: &Path, file: &Path, policy: &str) -> Result<String, WriteError> {
-    let store = RorolalaStorage::locate(directory).ok_or(WriteError::NoStore)?;
+    let set = crate::storage_set::for_directory(directory)
+        .map_err(|error| WriteError::Storage {
+            reason: error.to_string(),
+        })?
+        .ok_or(WriteError::NoStore)?;
     let runtime = tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
         reason: error.to_string(),
     })?;
     let policy = (!policy.is_empty()).then_some(policy);
     let stored = runtime
-        .block_on(put_file(&store, file, policy))
+        .block_on(put_file(&set, file, policy))
         .map_err(|error| match error {
             WriteError::Precondition { what, reason } => WriteError::Precondition { what, reason },
             other => other,
@@ -127,25 +116,58 @@ pub fn put_file_to(directory: &Path, file: &Path, policy: &str) -> Result<String
     })
 }
 
+/// A storage failure as the write error a caller branches on.
+fn storage_failure(error: rorolala_storage::Error) -> WriteError {
+    match error {
+        rorolala_storage::Error::ReadOnly { path } => WriteError::ReadOnly {
+            path: path.display().to_string(),
+        },
+        other => WriteError::Storage {
+            reason: other.to_string(),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
 
+    use rorolala_storage::StorageSet;
+
     use super::{put_file, put_file_to};
     use crate::write::WriteError;
 
-    #[test]
-    fn a_file_is_stored_under_its_content_key() {
-        let dir = std::env::temp_dir().join(format!("rola-write-storage-{}", std::process::id()));
+    /// A directory of its own, emptied first so a rerun starts clean.
+    fn scratch(label: &str) -> std::path::PathBuf {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+        let dir = std::env::temp_dir().join(format!(
+            "rola-write-storage-{}-{label}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        let store = rorolala_storage::RorolalaStorage::create(&dir);
+
+        dir
+    }
+
+    /// The set a directory that is a store works on.
+    fn set_at(root: &std::path::Path) -> StorageSet {
+        StorageSet::sole(rorolala_storage::RorolalaStorage::create(root))
+    }
+
+    #[test]
+    fn a_file_is_stored_under_its_content_key() {
+        let dir = scratch("stored");
+        let set = set_at(&dir);
         let file = dir.join("content.bin");
         fs::write(&file, b"stored content").unwrap();
 
         let stored = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(put_file(&store, &file, None))
+            .block_on(put_file(&set, &file, None))
             .unwrap();
 
         assert!(!stored.chunked);
@@ -156,16 +178,14 @@ mod tests {
 
     #[test]
     fn an_unknown_policy_is_refused() {
-        let dir = std::env::temp_dir().join(format!("rola-write-policy-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        let store = rorolala_storage::RorolalaStorage::create(&dir);
+        let dir = scratch("policy");
+        let set = set_at(&dir);
         let file = dir.join("content.bin");
         fs::write(&file, b"content").unwrap();
 
         let error = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(put_file(&store, &file, Some("no-such-policy")))
+            .block_on(put_file(&set, &file, Some("no-such-policy")))
             .unwrap_err();
 
         assert!(matches!(error, WriteError::Precondition { .. }));
@@ -175,9 +195,7 @@ mod tests {
 
     #[test]
     fn the_export_names_the_stored_key() {
-        let dir = std::env::temp_dir().join(format!("rola-write-export-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
+        let dir = scratch("export");
         let _ = rorolala_storage::RorolalaStorage::create(&dir);
         let file = dir.join("content.bin");
         fs::write(&file, b"content").unwrap();

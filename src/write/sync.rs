@@ -1,4 +1,4 @@
-﻿//! The plan `rola sync` makes: what the Layout being worked in and the Vault it tracks each hold,
+//! The plan `rola sync` makes: what the Layout being worked in and the Vault it tracks each hold,
 //! and what is to move between them.
 //!
 //! The plan is read off three things: the Layout being worked in, the copy of the Vault's Layout a
@@ -15,7 +15,7 @@ use crate::daemon::action_fetch_layout;
 use crate::ignore::IgnoreRuleSet;
 use crate::layout::{EntryKind, Layout, LayoutPath};
 use crate::protocol::VaultAddress;
-use crate::storage::{Blake3Hash, Key, RorolalaStorage};
+use crate::storage::{Blake3Hash, Key, StorageSet};
 use crate::vcs::{VCSIndex, VCSIndexObject, VCSIndexReadingError, Version};
 use crate::workspace::Workspace;
 use crate::workspace_analyze::tree_diff;
@@ -670,7 +670,7 @@ pub async fn store_of(index: &VCSIndex, digest: &[u8; 32]) -> Result<Option<Key>
 pub async fn chain_store_keys(
     index: &VCSIndex,
     head: &[u8; 32],
-    store: Option<&crate::storage::RorolalaStorage>,
+    store: Option<&crate::storage::StorageSet>,
     expand_all: bool,
 ) -> Result<Vec<Key>, String> {
     let mut keys = Vec::new();
@@ -718,7 +718,7 @@ pub async fn chain_store_keys(
 /// Returns a message when the version's chain cannot be read.
 pub async fn tree_internal_keys(
     index: &VCSIndex,
-    store: &crate::storage::RorolalaStorage,
+    store: &crate::storage::StorageSet,
     version: &[u8; 32],
 ) -> Result<Vec<Key>, String> {
     let Some(structure_key) = store_of(index, version).await? else {
@@ -859,7 +859,7 @@ pub(crate) struct Prepared {
     /// The index below both sides.
     pub(crate) index: VCSIndex,
     /// The store the content is written from, when the Workspace keeps one.
-    pub(crate) store: Option<RorolalaStorage>,
+    pub(crate) store: Option<StorageSet>,
     /// The runtime the asynchronous exchanges are waited on.
     pub(crate) runtime: tokio::runtime::Runtime,
     /// The plan, or nothing when the request leaves the Vault's Layout alone.
@@ -1076,7 +1076,7 @@ mod tests {
     use std::str::FromStr as _;
 
     use crate::layout::LayoutPath;
-    use crate::storage::{Codec, Key, RorolalaStorage};
+    use crate::storage::{Codec, Key, RorolalaStorage, StorageSet};
     use crate::tree::{FileMode, TreeEntry, TreeStructure};
     use crate::vcs::{VCSIndex, Variant, Version};
     use crate::write::WriteError;
@@ -1192,7 +1192,7 @@ mod tests {
             .block_on(chain_store_keys(
                 &index,
                 &digest(&three),
-                Some(&store),
+                Some(&StorageSet::sole(store)),
                 true,
             ))
             .expect("the index reads");

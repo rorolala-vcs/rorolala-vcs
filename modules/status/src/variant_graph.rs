@@ -104,8 +104,10 @@ pub fn locate_variant_graph_json(directory: &Path, request: &str) -> Result<Stri
         .iter()
         .map(|node| Target::Storage(node.storage))
         .collect();
-    let store = workspace.get_current_rola_storage();
-    let held = runtime.block_on(local(&sides.local, &index, store.as_ref(), &targets));
+    let set = workspace.storage_set().map_err(|error| GraphError::Read {
+        reason: error.to_string(),
+    })?;
+    let held = runtime.block_on(local(&sides.local, &index, Some(&set), &targets));
 
     // Only the entries the window can name are carried: a workspace may hold thousands, and the ones
     // the window does not draw are the listing's business rather than the graph's.

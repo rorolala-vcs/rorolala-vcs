@@ -1,40 +1,66 @@
 use std::env::current_dir;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use librorolala::storage::RorolalaStorage;
-use librorolala::vault::Vault;
-use librorolala::workspace::Workspace;
-use mingling::{LazyInit, ProgramCollect, Wrap, setup::ProgramSetup};
-use rorolala_utils_location::Locate;
+use librorolala::storage::StorageSet;
+use mingling::{LazyInit, ProgramCollect, setup::ProgramSetup};
 
 /// A [`ProgramSetup`] implementation used to register Storage-related resources and behaviors
 pub struct RorolalaStorageSetup;
 
-/// Storage resource, representing the store the current program context points to
+/// The stores the current program context works on.
 ///
-/// A store is where the objects behind a run's content are kept, so a command that reaches for
-/// content reaches for one here. If no store is currently found, the internal Option value may
-/// be None.
-#[derive(Default, Clone, Wrap)]
-pub struct ResRorolalaStorage {
-    /// The internal Storage type
-    storage: Option<RorolalaStorage>,
+/// A run may work on a store of its own, on the stores a Vault or a Workspace binds, or on none at
+/// all. A configuration that is there and does not read is its own answer rather than "no store":
+/// the two lead a command to different failures, and a run that treated one as the other would
+/// write where the configuration never said.
+#[derive(Default, Clone)]
+pub enum ResStorageSet {
+    /// No store was found anywhere.
+    #[default]
+    Absent,
+    /// The stores this run works on, in the order it reaches for them.
+    Read(StorageSet),
+    /// A Workspace or a Vault was found, but its configuration does not read.
+    Unread {
+        /// The file that does not read.
+        path: PathBuf,
+        /// Why it does not.
+        reason: String,
+    },
 }
 
-impl ResRorolalaStorage {
-    /// Returns `true` if a storage is present (i.e. the internal value is not None)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rorolala_cli_setups::ResRorolalaStorage;
-    ///
-    /// let res_storage = ResRorolalaStorage::default();
-    /// assert!(!res_storage.exist());
-    /// ```
+impl ResStorageSet {
+    /// Returns the stores, when there are any to work on.
+    #[must_use]
+    pub const fn storage(&self) -> Option<&StorageSet> {
+        match self {
+            Self::Read(set) => Some(set),
+            Self::Absent | Self::Unread { .. } => None,
+        }
+    }
+
+    /// Returns `true` if a store is present, so a command that needs one has one.
     #[must_use]
     pub const fn exist(&self) -> bool {
-        self.storage.is_some()
+        self.storage().is_some()
+    }
+
+    /// Why the configuration could not be read, when it could not.
+    #[must_use]
+    pub fn reason(&self) -> Option<&str> {
+        match self {
+            Self::Unread { reason, .. } => Some(reason),
+            Self::Absent | Self::Read(_) => None,
+        }
+    }
+
+    /// The file a configuration could not be read from, when it could not.
+    #[must_use]
+    pub fn path(&self) -> Option<&Path> {
+        match self {
+            Self::Unread { path, .. } => Some(path),
+            Self::Absent | Self::Read(_) => None,
+        }
     }
 }
 
@@ -43,33 +69,33 @@ where
     ThisProgram: ProgramCollect<Enum = ThisProgram>,
 {
     fn setup(self, program: &mut mingling::Program<ThisProgram>) {
-        program.with_resource(ResRorolalaStorage::lazy_init(|| {
+        program.with_resource(ResStorageSet::lazy_init(|| {
             // UNWRAP: the working directory is this process's own; a run that cannot read it has
             // no place to look for a store, so there is no degraded answer to give.
             // `ProgramSetup::setup` returns `()`, so this setup cannot report a failure even if it
             // wanted to.
-            init_storage(&current_dir().unwrap())
+            init_storage_set(&current_dir().unwrap())
         }));
     }
 }
 
-/// The store a run works on, looked for the way a run finds one.
+/// The stores a run works on, looked for the way a run finds one.
 ///
 /// A store is looked for on its own first: a directory carrying a configuration is a store, and
 /// the nearest one upwards is the one the caller is *in*, whatever else the directories above it
 /// hold. A run that is not *in* a store may still be inside a Vault or a Workspace, and each of
-/// those keeps a store of its own under its root, so one of those is found next, and the store
-/// it keeps is the one the run works on. Nothing found anywhere is no store at all, which is a
-/// resource whose internal value is None rather than a failure: whether a store is needed is a
-/// command's to know, not this one's.
-fn init_storage(cwd: &Path) -> ResRorolalaStorage {
-    let storage = RorolalaStorage::locate(cwd)
-        .or_else(|| Vault::locate(cwd).and_then(|vault| vault.get_current_rola_storage()))
-        .or_else(|| {
-            Workspace::locate(cwd).and_then(|workspace| workspace.get_current_rola_storage())
-        });
-
-    ResRorolalaStorage { storage }
+/// those names the stores it binds; the deeper one answers. Nothing found anywhere is no store at
+/// all, which is a resource whose internal value is None rather than a failure: whether a store is
+/// needed is a command's to know, not this one's.
+fn init_storage_set(cwd: &Path) -> ResStorageSet {
+    match librorolala::storage_set::for_directory(cwd) {
+        Ok(Some(set)) => ResStorageSet::Read(set),
+        Ok(None) => ResStorageSet::Absent,
+        Err(error) => ResStorageSet::Unread {
+            path: error.path().to_path_buf(),
+            reason: error.to_string(),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -78,8 +104,12 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use super::{RorolalaStorage, init_storage};
+    use librorolala::storage::RorolalaStorage;
+    use librorolala::workspace::{Config, Workspace};
+    use rorolala_utils_configure::Configure as _;
     use rorolala_utils_location::Locate as _;
+
+    use super::{ResStorageSet, init_storage_set};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -103,11 +133,14 @@ mod tests {
         let root = parent.join("store");
         let _ = RorolalaStorage::create(&root);
 
-        let found = init_storage(&root);
+        let found = init_storage_set(&root);
 
         assert!(found.exist());
         // What is found is the store the run is in, not some other one up the tree.
-        assert_eq!(found.as_ref().unwrap().get_root(), root.as_path());
+        assert_eq!(
+            found.storage().unwrap().write_target().get_root(),
+            root.as_path()
+        );
 
         let _ = fs::remove_dir_all(&parent);
     }
@@ -116,8 +149,46 @@ mod tests {
     fn a_run_with_no_store_works_on_none() {
         let parent = scratch("nowhere");
 
-        assert!(!init_storage(&parent).exist());
+        assert!(!init_storage_set(&parent).exist());
 
         let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn a_workspace_still_answers_with_the_stores_it_binds() {
+        let dir = scratch("workspace");
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let shared = dir.join("shared");
+        let _ = RorolalaStorage::create(&shared);
+
+        let mut config = Config::read_from(&workspace.config_path()).unwrap();
+        config
+            .default_config_mut()
+            .add_storage(shared.to_string_lossy());
+        config.write_to(&workspace.config_path()).unwrap();
+
+        let found = init_storage_set(&dir);
+
+        assert_eq!(
+            found.storage().unwrap().write_target().get_root(),
+            shared.as_path()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_configuration_that_does_not_read_is_not_answered_as_no_store() {
+        let dir = scratch("unread");
+        Workspace::create(&dir).unwrap();
+        fs::write(dir.join(".rola").join("workspace.toml"), "not toml").unwrap();
+
+        assert!(matches!(
+            init_storage_set(&dir),
+            ResStorageSet::Unread { .. }
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

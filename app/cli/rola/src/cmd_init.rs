@@ -2,12 +2,15 @@ use mingling::{
     Suggest,
     macros::{buffer, command, completion, help, metadata, r_eprintln, suggest},
     metadata::Description,
+    picker::EntryPicker,
+    picker::value::Flag,
     res::{ResCurrentDir, ResExitCode},
 };
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
-use crate::cmd_create::StateCreatePath;
+use crate::Next;
+use crate::cmd_create::{ARG_STORAGE, StateCreatePath};
 use crate::exit_codes::EC_HELP;
 
 #[help(buffer)]
@@ -30,9 +33,14 @@ pub fn complete_init() -> Suggest {
     suggest!()
 }
 
-#[command(node = "init")]
-pub fn init(cwd: &ResCurrentDir) -> StateCreatePath {
+#[command(node = "init", entry = EntryInit)]
+pub fn init(args: EntryInit, cwd: &ResCurrentDir) -> Next {
     // Forward the current working path to the branch `rola create <current path>` would take,
-    // so a creation is described in one place and reached from two.
-    StateCreatePath::from(cwd.to_path_buf())
+    // so a creation is described in one place and reached from two. `--storage` makes the same
+    // path a store rather than a Workspace.
+    StateCreatePath::new(
+        cwd.to_path_buf(),
+        args.pick(ARG_STORAGE).to_result().ok() == Some(Flag::Active),
+    )
+    .into()
 }

@@ -6,7 +6,7 @@ use std::str::FromStr as _;
 use rorolala_errors::Failure as _;
 use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{EntryKind, Layout, LayoutPath};
-use rorolala_storage::{Key, RorolalaStorage};
+use rorolala_storage::{Key, StorageSet};
 use rorolala_utils_location::normalize;
 use rorolala_vcs::VCSIndex;
 use uuid::Uuid;
@@ -171,7 +171,7 @@ impl Tree {
         &self,
         layout: &Layout,
         index: &VCSIndex,
-        store: &RorolalaStorage,
+        store: &StorageSet,
     ) -> Result<Option<Recorded>, TreeError> {
         let path = self.layout_path()?;
         let Some(id) = layout.id_of(&path) else {
@@ -191,7 +191,7 @@ impl Tree {
         layout: &Layout,
         id: Uuid,
         index: &VCSIndex,
-        store: &RorolalaStorage,
+        store: &StorageSet,
     ) -> Result<Option<Recorded>, TreeError> {
         let Some(data) = layout.entry(id) else {
             return Ok(None);
@@ -232,7 +232,7 @@ impl Tree {
         &self,
         layout: &Layout,
         index: &VCSIndex,
-        store: &RorolalaStorage,
+        store: &StorageSet,
     ) -> Result<TreeStructure, TreeError> {
         let recorded = self.recorded(layout, index, store).await?;
 
@@ -328,7 +328,7 @@ impl Tree {
         &self,
         layout: &Layout,
         index: &VCSIndex,
-        store: &RorolalaStorage,
+        store: &StorageSet,
         workspace: IgnoreRuleSet,
         include_ignored: bool,
     ) -> Result<TreeStatus, TreeError> {
@@ -383,7 +383,7 @@ impl Tree {
 /// when that content is not a structure.
 pub async fn read_structure(
     index: &VCSIndex,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     version: &[u8; 32],
 ) -> Result<TreeStructure, TreeError> {
     let object = index
@@ -446,7 +446,7 @@ pub async fn read_storage(index: &VCSIndex, version: &[u8; 32]) -> Result<Key, T
 /// Returns [`TreeError::Store`] when the description content cannot be read, and
 /// [`TreeError::Malformed`] when it is not UTF-8.
 pub async fn read_description(
-    store: &RorolalaStorage,
+    store: &StorageSet,
     structure: &TreeStructure,
 ) -> Result<Option<String>, TreeError> {
     let Some(key) = structure.description() else {

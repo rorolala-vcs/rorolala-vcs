@@ -5,7 +5,7 @@
 //! one key per line. What is printed is exactly what those two speak in, so a line read here is a
 //! hash to hand to `storage extract-file`.
 
-use librorolala::storage::{Key, StorageBackend as _};
+use librorolala::storage::Key;
 use mingling::{
     Grouped, LazyRes, StructuralData, Suggest,
     macros::{
@@ -15,7 +15,7 @@ use mingling::{
     metadata::Description,
     res::ResExitCode,
 };
-use rorolala_cli_setups::ResRorolalaStorage;
+use rorolala_cli_setups::ResStorageSet;
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
@@ -88,10 +88,10 @@ pub struct StateStorageLsStoraged;
 #[chain(routeify)]
 pub fn handle_storage_ls_storaged(
     _state: StateStorageLsStoraged,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     format: &mut ResFormat,
 ) -> Next {
-    let Some(store) = storage.get_ref().as_ref() else {
+    let Some(store) = storage.get_ref().storage() else {
         return ErrorLsNoStorage.into();
     };
 

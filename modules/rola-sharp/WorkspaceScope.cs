@@ -134,8 +134,13 @@ public sealed class WorkspaceScope
         return new TruthLayoutScope(_root, vault);
     }
 
-    /// <summary>The store the Workspace keeps.</summary>
-    public StorageScope Storage => new(RolaPaths.WorkspaceStorage(_root));
+    /// <summary>The stores the Workspace works on.</summary>
+    public StorageScope Storage => new(StorageTarget, _root);
+
+    /// <summary>The store a write goes to: the first binding that is there and can be written.</summary>
+    private string StorageTarget =>
+        Config?.Storages.FirstOrDefault(binding => binding.Present && binding.Writable)?.Root
+        ?? RolaPaths.WorkspaceStorage(_root);
 
     /// <summary>The VCS index the Workspace keeps.</summary>
     public VCSIndexScope VCSIndex => new(_root);
@@ -284,7 +289,8 @@ public sealed class WorkspaceScope
         return new WorkspaceConfig(
             vaults,
             defaultVault,
-            grace is null ? null : new GcConfig(grace)
+            grace is null ? null : new GcConfig(grace),
+            RolaJson.StorageBindings(root)
         );
     }
 

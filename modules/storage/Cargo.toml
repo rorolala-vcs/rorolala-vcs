@@ -16,4 +16,5 @@ serde.workspace = true
 size.workspace = true
 tokio = { workspace = true, features = ["io-util"] }
 toml.workspace = true
+toml_edit.workspace = true
 zstd.workspace = true

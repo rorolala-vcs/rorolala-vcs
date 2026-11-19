@@ -20,7 +20,7 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResStorageSet, ResVCSIndex, ResVault, ResWorkspace};
 use rorolala_utils_cli_theme::{err_line, trd};
 use rust_i18n::t;
 use serde::Serialize;
@@ -125,7 +125,7 @@ pub fn handle_vcs_index_can_retrack_offline(
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
     index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     format: &mut ResFormat,
 ) -> Next {
     let StateVcsIndexCanRetrackOffline { words } = state;
@@ -145,7 +145,7 @@ pub fn handle_vcs_index_can_retrack_offline(
 
     // UNWRAP: the store resource is an `Option` a run without a store holds as `None`, which the
     // reading answers as nothing being held rather than as a failure.
-    let store = storage.get_ref().as_ref();
+    let store = storage.get_ref().storage();
     let answers = runtime.block_on(local(&layout, index, store, &targets));
 
     let targets: Vec<Answered> = words

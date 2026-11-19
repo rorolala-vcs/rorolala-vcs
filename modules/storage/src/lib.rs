@@ -49,6 +49,9 @@ pub mod internals;
 mod presence;
 pub use presence::*;
 
+mod set;
+pub use set::*;
+
 pub mod protocols;
 
 pub mod transfer;

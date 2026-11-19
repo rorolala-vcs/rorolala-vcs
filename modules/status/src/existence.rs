@@ -20,7 +20,7 @@ use std::path::Path;
 use std::str::FromStr as _;
 
 use rorolala_layout::{EntryKind, Layout, LayoutPath};
-use rorolala_storage::{Key, RorolalaStorage, StorageBackend as _, TransferableBackend as _};
+use rorolala_storage::{Key, StorageSet};
 use rorolala_tree::TreeStructure;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
@@ -112,7 +112,7 @@ impl Resolved {
 pub async fn local(
     layout: &Layout,
     index: &VCSIndex,
-    store: Option<&RorolalaStorage>,
+    store: Option<&StorageSet>,
     targets: &[Target],
 ) -> Vec<Existence> {
     let mut resolved = Vec::with_capacity(targets.len());
@@ -178,7 +178,7 @@ pub async fn local(
 
 /// Expands a target whose content turned out to be a tree, and folds what its files came to into
 /// `answer`.
-async fn expand(store: &RorolalaStorage, resolved: &Resolved, answer: &mut Existence) {
+async fn expand(store: &StorageSet, resolved: &Resolved, answer: &mut Existence) {
     if !answer.held {
         return;
     }
@@ -337,7 +337,7 @@ async fn resolved_entry(layout: &Layout, index: &VCSIndex, path: &LayoutPath) ->
 }
 
 /// The structure stored under `key`.
-async fn read_structure(store: &RorolalaStorage, key: Key) -> Option<TreeStructure> {
+async fn read_structure(store: &StorageSet, key: Key) -> Option<TreeStructure> {
     let bytes = store.content(&key).await.ok().flatten()?;
 
     TreeStructure::decode(&bytes).ok()
@@ -349,7 +349,7 @@ async fn read_structure(store: &RorolalaStorage, key: Key) -> Option<TreeStructu
 /// opening in its first chunk. Reading that much and stopping is what keeps a file of any size from
 /// being read whole only to learn it is not a structure; a content that begins one is read whole,
 /// since its entries are what the answer needs.
-async fn sniff_structure(store: &RorolalaStorage, key: Key) -> Option<TreeStructure> {
+async fn sniff_structure(store: &StorageSet, key: Key) -> Option<TreeStructure> {
     let manifest = store.manifest_of(&key).await.ok().flatten();
 
     // Two or more chunks: the structure's bytes begin in the first of them. One chunk is the whole
@@ -559,8 +559,12 @@ pub fn can_retrack_offline_json(directory: &Path, request: &str) -> Result<Strin
     let runtime = tokio::runtime::Runtime::new().map_err(|error| ExistenceError::Read {
         reason: error.to_string(),
     })?;
-    let store = workspace.get_current_rola_storage();
-    let answers = runtime.block_on(local(&layout, &index, store.as_ref(), &targets));
+    let set = workspace
+        .storage_set()
+        .map_err(|error| ExistenceError::Read {
+            reason: error.to_string(),
+        })?;
+    let answers = runtime.block_on(local(&layout, &index, Some(&set), &targets));
 
     serde_json::to_string(&Answer {
         targets: request
@@ -636,7 +640,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use rorolala_layout::{EntryKind, Layout, LayoutPath, MutableData};
-    use rorolala_storage::{Codec, Key, RorolalaStorage, StorageBackend as _};
+    use rorolala_storage::{Codec, Key, StorageBackend as _, StorageSet};
     use rorolala_tree::{FileMode, TreeEntry, TreeStructure};
     use rorolala_utils_location::Locate as _;
     use rorolala_vcs::{
@@ -669,8 +673,8 @@ mod tests {
         layout: Layout,
         /// The version control index.
         index: VCSIndex,
-        /// The store content is kept in.
-        store: RorolalaStorage,
+        /// The stores content is kept in.
+        store: StorageSet,
         /// The runtime the asynchronous readings are waited on.
         runtime: tokio::runtime::Runtime,
     }
@@ -683,7 +687,7 @@ mod tests {
             let workspace = Workspace::locate(&dir).unwrap();
             let layout = workspace.layout().unwrap();
             let index = VCSIndex::create(dir.join(".rola/index"));
-            let store = workspace.get_or_create_rola_storage();
+            let store = StorageSet::sole(workspace.get_or_create_rola_storage());
             let runtime = tokio::runtime::Runtime::new().unwrap();
 
             runtime.block_on(index.write(Version::root())).unwrap();
@@ -783,7 +787,9 @@ mod tests {
         assert_eq!(answers[1].version, Some(version.hash()));
         assert_eq!(answers[1].variant, Some(variant.hash()));
 
-        held.runtime.block_on(held.store.remove(&content)).unwrap();
+        held.runtime
+            .block_on(held.store.write_target().remove(&content))
+            .unwrap();
 
         let answers = held.local(&[Target::Variant(variant.hash())]);
         assert!(!answers[0].held);
@@ -802,7 +808,9 @@ mod tests {
         assert!(answers[0].held, "{:?}", answers[0]);
         assert_eq!(answers[0].version, Some(version.hash()));
 
-        held.runtime.block_on(held.store.remove(&content)).unwrap();
+        held.runtime
+            .block_on(held.store.write_target().remove(&content))
+            .unwrap();
 
         let answers = held.local(&[Target::Entry(path)]);
         assert!(!answers[0].held);
@@ -827,7 +835,9 @@ mod tests {
         assert!(answers[0].tree);
         assert_eq!(answers[0].contents, Some(vec![file]));
 
-        held.runtime.block_on(held.store.remove(&file)).unwrap();
+        held.runtime
+            .block_on(held.store.write_target().remove(&file))
+            .unwrap();
 
         let answers = held.local(&[Target::Entry(path)]);
         assert!(!answers[0].held);

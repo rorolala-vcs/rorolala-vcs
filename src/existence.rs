@@ -82,8 +82,8 @@ pub fn search(
     candidates: &[(String, VaultAddress)],
     targets: &[Target],
 ) -> Vec<Sourced> {
-    let store = workspace.get_current_rola_storage();
-    let existence = runtime.block_on(local(layout, index, store.as_ref(), targets));
+    let set = workspace.storage_set().ok();
+    let existence = runtime.block_on(local(layout, index, set.as_ref(), targets));
 
     let mut sourced: Vec<Sourced> = existence
         .into_iter()

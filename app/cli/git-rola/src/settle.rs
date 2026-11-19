@@ -54,7 +54,7 @@ pub fn apply(session: &Session) -> Result<ResultSettled, String> {
     let lock = session
         .lock()
         .map_err(|error| t!("git_rola.err_lock", error = error.to_string()).to_string())?;
-    let source = crate::source::of(session.project());
+    let source = crate::source::of(session.project())?;
     let failures = session
         .settle(&lock, &source)
         .map_err(|error| error.to_string())?;

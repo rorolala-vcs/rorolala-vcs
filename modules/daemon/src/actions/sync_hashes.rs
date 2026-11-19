@@ -10,7 +10,7 @@ use std::str::FromStr as _;
 use rorolala_protocol::{Action, ActionContext, ActionError, Both, OnlyVault, OnlyWorkspace};
 use rorolala_storage::Key;
 
-use super::sync_all::local_store;
+use super::sync_all::local_stores;
 use super::sync_storage::{DEFAULT_WINDOW, Side, Unit, UnitKind, carry_blob, sync_units};
 
 /// An Action that makes the two stores hold the units it is given, and answers how many reads it was
@@ -49,7 +49,7 @@ impl Action for ActionSyncHashes {
         input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
     ) -> Result<Self::Output, ActionError> {
-        let local = local_store(&ctx)?;
+        let local = local_stores(&ctx)?;
 
         // The list is the caller's, so it belongs to the Workspace and crosses to the Vault first:
         // both sides must name the same units, or the carrying that follows would say two different

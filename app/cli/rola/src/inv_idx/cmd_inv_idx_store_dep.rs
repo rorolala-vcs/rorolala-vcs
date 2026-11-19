@@ -22,7 +22,7 @@ use crate::inv_idx::{
     DEFAULT_FORMAT_HASHES, ErrorInvIdxArgument, ErrorInvIdxNoIndex, ResultInvIdxHashes, hash_of,
     reading_error, runtime,
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex};
+use rorolala_cli_setups::{ResStorageSet, ResVCSIndex};
 
 #[help(buffer)]
 pub fn help_inv_idx_store_dep(_: EntryInvIdxStoreDep, ec: &mut ResExitCode) {
@@ -72,14 +72,14 @@ pub struct StateInvIdxStoreDep {
 pub fn handle_inv_idx_store_dep(
     state: StateInvIdxStoreDep,
     index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     format: &mut ResFormat,
 ) -> Next {
     let StateInvIdxStoreDep { hash } = state;
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorInvIdxNoIndex.into();
     };
-    let store = store_key_set(storage.get_ref().as_ref());
+    let store = store_key_set(storage.get_ref().storage());
     let key = match hash_of(&hash, || store) {
         Ok(key) => key,
         Err(error) => return error.into(),
@@ -109,11 +109,11 @@ pub fn handle_inv_idx_store_dep(
 #[completion(EntryInvIdxStoreDep)]
 pub fn complete_inv_idx_store_dep(
     ctx: ShellContext,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
 ) -> Suggest {
     if typing_flag(&ctx) || positional(&ctx, "store-dep") != 0 {
         return suggest!();
     }
 
-    offer(&ctx, store_keys(storage.get_ref().as_ref()))
+    offer(&ctx, store_keys(storage.get_ref().storage()))
 }

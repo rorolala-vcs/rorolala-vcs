@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use rorolala_auth::Account;
 use rorolala_layout::Layout;
 use rorolala_protocol::VaultAddress;
-use rorolala_storage::RorolalaStorage;
+use rorolala_storage::StorageSet;
 use rorolala_utils_configure::Configure as _;
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
@@ -235,15 +235,14 @@ impl Common {
         Ok(found)
     }
 
-    /// The store the Workspace keeps.
+    /// The stores the Workspace works on.
     ///
     /// # Errors
     ///
-    /// Returns [`WriteError::NoStore`] when the Workspace keeps none.
-    pub fn store(&self, workspace: &Workspace) -> Result<RorolalaStorage, WriteError> {
-        workspace
-            .get_current_rola_storage()
-            .ok_or(WriteError::NoStore)
+    /// Returns [`WriteError::Storage`] when the Workspace's configuration is there and does not
+    /// read.
+    pub fn store(&self, workspace: &Workspace) -> Result<StorageSet, WriteError> {
+        Ok(workspace.storage_set()?)
     }
 
     /// The index the Workspace keeps.

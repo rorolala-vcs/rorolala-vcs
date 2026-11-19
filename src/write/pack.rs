@@ -102,10 +102,8 @@ pub fn pack_workspace(
     let mut changed = false;
 
     if storage {
-        let store = workspace
-            .get_current_rola_storage()
-            .ok_or(WriteError::NoStore)?;
-        changed |= pack_storage(&store)?;
+        let set = workspace.storage_set()?;
+        changed |= pack_storage(set.write_target())?;
     }
     if index {
         let index = VCSIndex::locate(workspace.get_root()).ok_or(WriteError::NoIndex)?;
@@ -125,10 +123,8 @@ pub fn pack_vault(vault: &Vault, storage: bool, index: bool) -> Result<Packed, W
     let mut changed = false;
 
     if storage {
-        let store = vault
-            .get_current_rola_storage()
-            .ok_or(WriteError::NoStore)?;
-        changed |= pack_storage(&store)?;
+        let set = vault.storage_set()?;
+        changed |= pack_storage(set.write_target())?;
     }
     if index {
         let index = VCSIndex::locate(vault.get_root()).ok_or(WriteError::NoIndex)?;
@@ -150,8 +146,10 @@ pub fn pack_vault(vault: &Vault, storage: bool, index: bool) -> Result<Packed, W
 /// Returns [`WriteError::NoStore`] when no store is there, and the failures [`pack_storage`] names.
 #[lazyffi(export = rola_write_pack_storage)]
 pub fn pack_storage_at(directory: &Path) -> Result<String, WriteError> {
-    let store = RorolalaStorage::locate(directory).ok_or(WriteError::NoStore)?;
-    let changed = pack_storage(&store)?;
+    let set = crate::storage_set::for_directory(directory)
+        .map_err(WriteError::from)?
+        .ok_or(WriteError::NoStore)?;
+    let changed = pack_storage(set.write_target())?;
 
     serde_json::to_string(&Packed { changed }).map_err(|error| WriteError::Json {
         reason: error.to_string(),

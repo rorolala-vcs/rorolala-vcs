@@ -4,7 +4,7 @@ use std::str::FromStr as _;
 
 use rorolala_layout::{Batch, Layout, LayoutPath};
 use rorolala_protocol::VaultAddress;
-use rorolala_storage::{Key, RorolalaStorage, StorageBackend as _};
+use rorolala_storage::{Key, StorageSet};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_progress::{Direction as MoveDirection, Progress};
@@ -97,7 +97,7 @@ pub struct Carry<'a> {
     /// The index below both sides.
     pub index: &'a VCSIndex,
     /// The store content is written from, when the run has one.
-    pub store: Option<&'a RorolalaStorage>,
+    pub store: Option<&'a StorageSet>,
     /// The Vaults the run may reach, for content that is not here.
     pub candidates: &'a [(String, VaultAddress)],
     /// The words a failure is said in.
@@ -557,7 +557,7 @@ fn count(entries: &[&Entry], down: bool) -> u64 {
 fn bring_tree_inside(
     entries: &[&Entry],
     carry: &Carry<'_>,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     sources: &Sources<'_>,
 ) {
     let mut inside: Vec<Key> = Vec::new();
@@ -960,7 +960,7 @@ pub fn sync_at(
         reason: error.to_string(),
     })?;
     let vcs = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
-    let store = workspace.get_current_rola_storage();
+    let store = workspace.storage_set().ok();
     let target = VaultAddress::from_str(address).map_err(|error| WriteError::InvalidPath {
         path: address.to_owned(),
         reason: error.to_string(),

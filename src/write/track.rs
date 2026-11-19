@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 
 use rorolala_layout::{EntryKind, Layout, LayoutPath};
-use rorolala_storage::{Key, RorolalaStorage};
+use rorolala_storage::{Key, StorageSet};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_vault::Vault;
@@ -64,7 +64,7 @@ pub mod batch {
     use rorolala_ignore::IgnoreRuleSet;
     use rorolala_layout::{Batch, EntryKind, Layout, LayoutPath, MutableData};
     use rorolala_storage::{
-        Chunking, Key, Lockable as _, RorolalaStorage, StorageBackend as _, key_of_file, store_file,
+        Chunking, Key, Lockable as _, StorageBackend as _, StorageSet, key_of_file,
     };
     use rorolala_tree::{Staging, Tree};
     use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
@@ -151,8 +151,8 @@ pub mod batch {
         pub workspace: &'a Workspace,
         /// The Layout being worked in.
         pub layout: &'a Layout,
-        /// The store a file's content is written to.
-        pub store: &'a RorolalaStorage,
+        /// The stores a file's content is written to.
+        pub store: &'a StorageSet,
         /// The index the versions are written to.
         pub index: &'a VCSIndex,
         /// The account the versions are made as.
@@ -1056,7 +1056,7 @@ pub mod batch {
     /// Returns [`WriteError::Storage`] when the store refuses to write a file, and
     /// [`WriteError::Cancelled`] when the caller asked the run to stop.
     fn write(
-        store: &RorolalaStorage,
+        store: &StorageSet,
         runtime: &tokio::runtime::Runtime,
         progress: &Progress,
         messages: &Messages,
@@ -1076,15 +1076,12 @@ pub mod batch {
 
             let size = size_of(&file.disk);
 
-            // What a file is cut with is settled per file, so the store handed to the write is the store
-            // told which cut to make. A file nothing settled is written by the store's own choosing.
-            let told = file.policy.map_or_else(
-                || store.clone(),
-                |name| store.clone().with_forced_cut(Chunking::Policy(name)),
-            );
+            // What a file is cut with is settled per file, so the write is told which cut to
+            // make. A file nothing settled is written by the store's own choosing.
+            let cut = file.policy.map(Chunking::Policy);
 
             let storage = runtime
-                .block_on(store_file(&told, &file.disk))
+                .block_on(store.put_file(&file.disk, cut, None))
                 .map_err(|error| WriteError::Storage {
                     reason: error.to_string(),
                 })?;
@@ -1815,7 +1812,7 @@ pub mod batch {
         tree: &Tree,
         layout: &Layout,
         index: &VCSIndex,
-        store: &RorolalaStorage,
+        store: &StorageSet,
         runtime: &tokio::runtime::Runtime,
     ) -> Result<bool, Stop> {
         let recorded = runtime
@@ -1863,7 +1860,7 @@ pub mod batch {
     fn commit_tree(
         layout: &Layout,
         index: &VCSIndex,
-        store: &RorolalaStorage,
+        store: &StorageSet,
         runtime: &tokio::runtime::Runtime,
         creator_name: &str,
         tree: &Tree,
@@ -1971,7 +1968,7 @@ pub mod batch {
                     reason: error.to_string(),
                 })?;
             runtime
-                .block_on(store.publish_from(&staged_content, &keys))
+                .block_on(store.write_target().publish_from(&staged_content, &keys))
                 .map_err(|error| WriteError::Tree {
                     reason: error.to_string(),
                 })?;
@@ -2442,8 +2439,8 @@ pub mod batch {
         workspace: Workspace,
         /// The Layout being worked in.
         layout: Layout,
-        /// The store a file's content is written to.
-        store: RorolalaStorage,
+        /// The stores a file's content is written to.
+        store: StorageSet,
         /// The index the versions are written to.
         index: VCSIndex,
         /// The ignore rules the tree is read with.
@@ -2660,7 +2657,7 @@ pub mod batch {
 /// The parts a tracked file is written through.
 struct Place<'a> {
     layout: &'a Layout,
-    store: &'a RorolalaStorage,
+    store: &'a StorageSet,
     index: &'a VCSIndex,
 }
 
@@ -2776,9 +2773,7 @@ pub fn track_file(
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })?;
-    let store = workspace
-        .get_current_rola_storage()
-        .ok_or(WriteError::NoStore)?;
+    let store = workspace.storage_set()?;
     let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
     let root = normalize(workspace.get_root());
     let (resolved, relative) = locate_file(&root, cwd, path)?;
@@ -2818,9 +2813,7 @@ pub fn track_vault_file(
     let layout = vault.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })?;
-    let store = vault
-        .get_current_rola_storage()
-        .ok_or(WriteError::NoStore)?;
+    let store = vault.storage_set()?;
     let index = VCSIndex::locate(vault.get_root()).ok_or(WriteError::NoIndex)?;
     let root = normalize(vault.get_root());
     let (resolved, relative) = locate_file(&root, cwd, path)?;
@@ -3177,7 +3170,7 @@ mod tests {
         fs::write(dir.join("a.txt"), b"one").unwrap();
 
         let layout = workspace.layout().unwrap();
-        let store = workspace.get_current_rola_storage().unwrap();
+        let store = workspace.storage_set().unwrap();
         let index = VCSIndex::locate(&dir).unwrap();
         let rules = rorolala_ignore::IgnoreRuleSet::empty();
         let messages = Messages::default();
@@ -3264,7 +3257,7 @@ mod tests {
             fs::write(dir.join("a.txt"), content).unwrap();
 
             let layout = workspace.layout().unwrap();
-            let store = workspace.get_current_rola_storage().unwrap();
+            let store = workspace.storage_set().unwrap();
             let index = VCSIndex::locate(&dir).unwrap();
             let carry = Carry {
                 workspace: &workspace,
@@ -3326,7 +3319,7 @@ mod tests {
         fs::write(dir.join("a.txt"), b"one").unwrap();
 
         let layout = workspace.layout().unwrap();
-        let store = workspace.get_current_rola_storage().unwrap();
+        let store = workspace.storage_set().unwrap();
         let index = VCSIndex::locate(&dir).unwrap();
         let rules = rorolala_ignore::IgnoreRuleSet::empty();
         let messages = Messages::default();

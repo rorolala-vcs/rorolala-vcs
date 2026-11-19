@@ -35,7 +35,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResConcurrency, ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResRorolalaStorage,
+    ResConcurrency, ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResStorageSet,
     ResVCSIndex, ResVault, ResWorkspace,
 };
 use rorolala_errors::Failure;
@@ -283,7 +283,7 @@ pub fn handle_align(
     state: StateAlign,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     index: &mut LazyRes<ResVCSIndex>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
@@ -344,7 +344,7 @@ pub fn handle_align(
             layout: &layout,
             cwd: &cwd,
             rules: &rules,
-            storage: storage.get_ref().as_ref(),
+            storage: storage.get_ref().storage(),
             index: index.get_ref().as_ref(),
             account: account.as_ref(),
             candidates: &candidates,

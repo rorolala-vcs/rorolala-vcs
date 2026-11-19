@@ -16,7 +16,7 @@ use mingling::{
     picker::{EntryPicker, PickerArg},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex};
+use rorolala_cli_setups::{ResStorageSet, ResVCSIndex};
 use rorolala_errors::Failure as _;
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
@@ -55,7 +55,7 @@ pub fn desc_vcs_index_write_variant() -> Description {
 pub fn complete_vcs_index_write_variant(
     ctx: ShellContext,
     index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
 ) -> Suggest {
     if filling_flag(&ctx, &ARG_JOIN) {
         return offer(
@@ -76,7 +76,7 @@ pub fn complete_vcs_index_write_variant(
     let held = index.get_ref().as_ref();
     match positional(&ctx, "write-variant") {
         0 => offer(&ctx, index_hashes(held, IndexObject::Version)),
-        1 => offer(&ctx, store_keys(storage.get_ref().as_ref())),
+        1 => offer(&ctx, store_keys(storage.get_ref().storage())),
         2 => offer(&ctx, index_hashes(held, IndexObject::Creator)),
         3 => offer(&ctx, index_hashes(held, IndexObject::Message)),
         _ => suggest!(),
@@ -161,7 +161,7 @@ pub struct StateVcsIndexWriteVariant {
 pub fn handle_vcs_index_write_variant(
     state: StateVcsIndexWriteVariant,
     index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     rebuild: &ResRebuildInverseIndex,
 ) -> Next {
     let Some(index) = index.get_ref().as_ref() else {
@@ -182,7 +182,7 @@ pub fn handle_vcs_index_write_variant(
         Ok(key) => key,
         Err(error) => return error.into(),
     };
-    let store = store_key_set(storage.get_ref().as_ref());
+    let store = store_key_set(storage.get_ref().storage());
     let storage = match hash_of(&state.storage, || store) {
         Ok(key) => key,
         Err(error) => return error.into(),

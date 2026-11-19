@@ -1,4 +1,5 @@
 use rorolala_auth::{Account, Member};
+use rorolala_storage::StorageSet;
 use rorolala_utils_progress::Progress;
 use rorolala_vault::{Config as VaultConfig, RootVault, Vault};
 use rorolala_workspace::{Config as WorkspaceConfig, Workspace};
@@ -87,6 +88,14 @@ pub struct ActionContext<'a> {
 
     /// The encrypted channel values are exchanged over, once one has been attached.
     channel: Option<Channel>,
+
+    /// The stores the run works on, when its caller knows them.
+    ///
+    /// A `git-rola` project is a borrowed Workspace whose own configuration is not the project's,
+    /// so the stores it binds are in `rola.toml` rather than in a `workspace.toml`. The caller that
+    /// reads them hands them in here, and an action that needs stores reads them from the context
+    /// rather than working them out from the Workspace again.
+    local_stores: Option<&'a StorageSet>,
 
     /// Where the action says what it is doing while it does it.
     ///
@@ -179,6 +188,7 @@ impl<'a> ActionContext<'a> {
             current_vault_config: OnlyVault::empty(),
             current_root_vault_config: OnlyVault::empty(),
             channel: None,
+            local_stores: None,
             progress: Progress::silent(),
         }
     }
@@ -207,6 +217,7 @@ impl<'a> ActionContext<'a> {
             current_vault_config: OnlyVault::empty(),
             current_root_vault_config: OnlyVault::empty(),
             channel: None,
+            local_stores: None,
             progress: Progress::silent(),
         }
     }
@@ -229,6 +240,23 @@ impl<'a> ActionContext<'a> {
     pub const fn with_current_vault(mut self, vault: &'a Vault) -> Self {
         self.current_vault = OnlyVault::holding(vault);
         self
+    }
+
+    /// Attaches the stores the run works on, when a caller knows them apart from a Workspace.
+    ///
+    /// A `git-rola` project works through a borrowed Workspace whose configuration is not the
+    /// project's, so the stores it binds are read from `rola.toml` and handed in here. A run that
+    /// does not attach any has its stores worked out from the Workspace or the Vault it runs on.
+    #[must_use]
+    pub const fn with_local_stores(mut self, stores: &'a StorageSet) -> Self {
+        self.local_stores = Some(stores);
+        self
+    }
+
+    /// The stores a caller attached, when it attached any.
+    #[must_use]
+    pub const fn local_stores(&self) -> Option<&'a StorageSet> {
+        self.local_stores
     }
 
     /// Attaches the root of the Vault this action is being taken against.

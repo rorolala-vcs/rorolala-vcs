@@ -7,7 +7,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use librorolala::storage::{Error as StorageError, StorageBackend as _};
+use librorolala::storage::Error as StorageError;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -19,7 +19,7 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::ResRorolalaStorage;
+use rorolala_cli_setups::ResStorageSet;
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
@@ -54,14 +54,14 @@ pub fn desc_storage_extract_file() -> Description {
 #[completion(EntryStorageExtractFile)]
 pub fn complete_storage_extract_file(
     ctx: ShellContext,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
 ) -> Suggest {
     if typing_flag(&ctx) {
         return suggest!();
     }
 
     match positional(&ctx, "extract-file") {
-        0 => offer(&ctx, store_keys(storage.get_ref().as_ref())),
+        0 => offer(&ctx, store_keys(storage.get_ref().storage())),
         1 => Suggest::file_comp(),
         _ => suggest!(),
     }
@@ -118,11 +118,11 @@ pub struct StateStorageExtractFile {
 #[chain(routeify)]
 pub fn handle_storage_extract_file(
     state: StateStorageExtractFile,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
 ) -> Next {
     let StateStorageExtractFile { hash, dir } = state;
 
-    let Some(store) = storage.get_ref().as_ref() else {
+    let Some(store) = storage.get_ref().storage() else {
         return ErrorExtractNoStorage.into();
     };
 

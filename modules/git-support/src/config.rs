@@ -33,6 +33,22 @@ pub struct ProjectConfig {
     /// The materials the project places.
     #[serde(default, rename = "mapping")]
     pub mapping: Vec<Mapping>,
+    /// The stores the project's content is written to and read from, in the order it tries them.
+    #[serde(default, rename = "storages")]
+    pub storages: Vec<StorageBinding>,
+}
+
+/// One store a project binds.
+///
+/// It is written as a `[[storages]]` entry with a `path`; the path is relative to the project root
+/// when it is not absolute, and the order the entries are written in is the order they are tried.
+/// A project's own `.rola/storage` is not one of them: it is always the last store a project reads,
+/// and nothing writes it here.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StorageBinding {
+    /// Where the store is, as the file writes it.
+    pub path: String,
 }
 
 impl ProjectConfig {
@@ -74,6 +90,11 @@ impl ProjectConfig {
             .or_else(|| self.vaults.keys().next().map(String::as_str))
     }
 
+    /// The stores the project binds, in the order it tries them.
+    pub fn storage_paths(&self) -> impl Iterator<Item = &str> {
+        self.storages.iter().map(|binding| binding.path.as_str())
+    }
+
     /// Refuses a project that names one material twice or one place twice.
     fn validate(&self) -> Result<(), Error> {
         let mut identifiers: BTreeSet<Uuid> = BTreeSet::new();
@@ -92,6 +113,15 @@ impl ProjectConfig {
                 return Err(Error::ConfigValue(format!(
                     "`{}` is the place of more than one material",
                     path.as_str()
+                )));
+            }
+        }
+
+        let mut stores: BTreeSet<&str> = BTreeSet::new();
+        for path in self.storage_paths() {
+            if !stores.insert(path) {
+                return Err(Error::ConfigValue(format!(
+                    "`{path}` is bound as a store more than once"
                 )));
             }
         }
@@ -393,6 +423,62 @@ to = "/../hero.psd"
 from = "3f2b1c00-9d4e-4a7b-8c11-0e2f4a6b8c9d"
 to = "/Assets/hero.psd"
 pin = -1
+"#,
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, Error::Config(_)), "{error}");
+    }
+
+    #[test]
+    fn a_project_file_names_the_stores_it_tries_in_order() {
+        let config = read(
+            r#"
+[[storages]]
+path = "/srv/rola/shared"
+
+[[storages]]
+path = "../another-store"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.storage_paths().collect::<Vec<_>>(),
+            ["/srv/rola/shared", "../another-store"]
+        );
+    }
+
+    #[test]
+    fn a_project_with_no_stores_binds_none() {
+        let config = read("").unwrap();
+
+        assert_eq!(config.storage_paths().count(), 0);
+    }
+
+    #[test]
+    fn one_store_bound_twice_is_refused() {
+        let error = read(
+            r#"
+[[storages]]
+path = "/srv/rola/shared"
+
+[[storages]]
+path = "/srv/rola/shared"
+"#,
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, Error::ConfigValue(_)), "{error}");
+    }
+
+    #[test]
+    fn a_store_entry_this_build_does_not_know_is_refused() {
+        let error = read(
+            r#"
+[[storages]]
+path = "/srv/rola/shared"
+priority = 1
 "#,
         )
         .unwrap_err();

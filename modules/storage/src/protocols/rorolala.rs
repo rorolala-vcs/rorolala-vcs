@@ -41,6 +41,10 @@ pub use pack::{CollectPlan, CollectReport};
 // names the batch it holds, so the type is reachable from outside the crate.
 pub use content::{ObjectBatch, PublishReport};
 
+// The places a store records as writing to it, as `connected` answers them: a caller that keeps
+// one names the type, so it is reachable here for the same reason the batches are.
+pub use config::Connected;
+
 #[cfg(test)]
 mod tests;
 
@@ -50,7 +54,7 @@ use std::path::{Path, PathBuf};
 use rorolala_utils_constants::{LOCK_FILE, STORAGE_CONFIG_PATH};
 use rorolala_utils_location::{Locate, LocateHelper};
 
-use crate::{Chunking, Codec, LockError, Lockable, LockingGuard};
+use crate::{Chunking, Codec, Error, LockError, Lockable, LockingGuard};
 use consts::{DEFAULT_CODEC, MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR};
 
 /// Rorolala's store of objects, kept under the content addresses they are named by.
@@ -173,19 +177,36 @@ impl RorolalaStorage {
     pub fn create(root: impl Into<PathBuf>) -> Self {
         let root = root.into();
 
+        if let Ok(store) = Self::try_create(root.clone()) {
+            return store;
+        }
+
+        Self::rooted(root)
+    }
+
+    /// Makes the store rooted at `root`, reporting what could not be made.
+    ///
+    /// It is [`create`](Self::create) with the failure kept: a command that made a store for a
+    /// person says what failed rather than handing back a directory that is not one.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Io`] when a directory or the configuration cannot be made, which is a
+    /// directory that is not there and cannot be made, or one the run may not write.
+    pub fn try_create(root: impl Into<PathBuf>) -> Result<Self, Error> {
+        let root = root.into();
+
         // The root itself is named by an empty component, so the four are walked as one.
         for directory in ["", OBJECTS_DIR, MANIFEST_DIR, PACKED_DIR] {
-            if fs::create_dir_all(root.join(directory)).is_err() {
-                return Self::rooted(root);
-            }
+            fs::create_dir_all(root.join(directory))?;
         }
 
         let config = root.join(STORAGE_CONFIG_PATH);
         if !config.is_file() {
-            let _ = fs::write(config, "");
+            fs::write(config, "")?;
         }
 
-        Self::rooted(root)
+        Ok(Self::rooted(root))
     }
 
     /// The cut this store was told to write with, if it was told.

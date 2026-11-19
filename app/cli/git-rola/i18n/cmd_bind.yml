@@ -1,0 +1,68 @@
+_version: 2
+
+bind:
+  usage:
+    en: |
+      bind <LINK|DIR> [NAME]
+    zh-CN: |
+      bind <链接|目录> [名字]
+
+  result_vault:
+    en: "`%{name}` is bound to %{address}"
+    zh-CN: "`%{name}` 已绑定到 %{address}"
+
+  result_default:
+    en: "The default Vault is `%{name}`"
+    zh-CN: "默认保险库是 `%{name}`"
+
+  result_storage:
+    en: Bound %{path} to this project
+    zh-CN: 已把 %{path} 绑定到本项目
+
+  result_recorded:
+    en: The store now records this project
+    zh-CN: 存储已记录本项目
+
+  result_readonly:
+    en: "The store is read-only, so it is used for reading only: %{path}"
+    zh-CN: "存储是只读的，只用于读取：%{path}"
+
+  err_no_name:
+    en: "bind: a store takes no name"
+    zh-CN: "bind：存储不接受名字"
+
+  err_operands:
+    en: "bind: too many operands"
+    zh-CN: "bind：操作数过多"
+
+  err_no_project:
+    en: this is not a rola project
+    zh-CN: 这不是一个 rola 项目
+
+  err_name:
+    en: "`%{name}` is not a name a Vault may be bound under"
+    zh-CN: "`%{name}` 不是保险库可以使用的绑定名"
+
+  err_address:
+    en: "`%{address}` does not read as a Vault address: %{error}"
+    zh-CN: "`%{address}` 无法读作保险库地址：%{error}"
+
+  err_config:
+    en: "`rola.toml` could not be read or written: %{error}"
+    zh-CN: "无法读写 `rola.toml`：%{error}"
+
+  err_storage_inside_data:
+    en: "`%{path}` is inside the project's `.rola` directory"
+    zh-CN: "`%{path}` 在项目的 `.rola` 目录内"
+
+  err_storage_not_directory:
+    en: "`%{path}` is not a directory"
+    zh-CN: "`%{path}` 不是目录"
+
+  err_storage_not_a_store:
+    en: "`%{path}` carries no `rolast.toml`, so it is not a store"
+    zh-CN: "`%{path}` 没有 `rolast.toml`，不是存储"
+
+  err_storage_reverse:
+    en: "`%{path}` could not record this project: %{error}"
+    zh-CN: "`%{path}` 无法记录本项目：%{error}"

@@ -26,7 +26,7 @@ use std::str::FromStr as _;
 use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{Broken, Relation, Status, compare};
-use librorolala::storage::{Blake3Hash, Key, RorolalaStorage};
+use librorolala::storage::{Blake3Hash, Key, StorageSet};
 use librorolala::tree::{Tree, TreeStatus};
 use librorolala::vcs::{LookbackError, VCSIndex, read_chain};
 use librorolala::workspace::{Merging, Pending, Workspace};
@@ -42,7 +42,7 @@ use mingling::{
     picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResStorageSet, ResVCSIndex, ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
@@ -208,7 +208,7 @@ pub fn handle_status(
     vault: &mut LazyRes<ResVault>,
     account: &mut LazyRes<ResCurrentAccount>,
     index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
 ) -> Next {
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
@@ -287,7 +287,7 @@ pub fn handle_status(
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorLayoutFailed::new(t!("status.err_no_index").trim().to_string()).into();
     };
-    let Some(store) = storage.get_ref().as_ref() else {
+    let Some(store) = storage.get_ref().storage() else {
         return ErrorLayoutFailed::new(t!("status.err_no_store").trim().to_string()).into();
     };
 
@@ -1001,13 +1001,13 @@ fn status_in_tree(
     layout: &Layout,
     account: &mut LazyRes<ResCurrentAccount>,
     index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     include_ignored: bool,
 ) -> Option<Next> {
     let cwd = std::env::current_dir().ok()?;
     let tree = Tree::locate(held.get_root(), &cwd).ok()?;
 
-    let Some(store): Option<&RorolalaStorage> = storage.get_ref().as_ref() else {
+    let Some(store): Option<&StorageSet> = storage.get_ref().storage() else {
         return Some(ErrorLayoutFailed::new(t!("status.err_no_store").trim().to_string()).into());
     };
     let Some(index) = index.get_ref().as_ref() else {
@@ -1048,7 +1048,7 @@ fn tree_reading(
     layout: &Layout,
     status: &Status,
     index: Option<&VCSIndex>,
-    store: Option<&RorolalaStorage>,
+    store: Option<&StorageSet>,
     include_ignored: bool,
 ) -> Result<(Vec<TreeStructuralLine>, Vec<TreeContentLine>), String> {
     let Some(index) = index else {

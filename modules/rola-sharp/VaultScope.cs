@@ -106,8 +106,13 @@ public sealed class VaultScope
     /// <summary>The Layout the Vault works from.</summary>
     public LayoutScope Layout => TruthLayout;
 
-    /// <summary>The store the Vault keeps.</summary>
-    public StorageScope Storage => new(RolaPaths.VaultStorage(_root));
+    /// <summary>The stores the Vault works on.</summary>
+    public StorageScope Storage => new(StorageTarget, _root);
+
+    /// <summary>The store a write goes to: the first binding that is there and can be written.</summary>
+    private string StorageTarget =>
+        Config?.Storages.FirstOrDefault(binding => binding.Present && binding.Writable)?.Root
+        ?? RolaPaths.VaultStorage(_root);
 
     /// <summary>The VCS index the Vault keeps.</summary>
     public VCSIndexScope VCSIndex => new(_root);
@@ -219,7 +224,8 @@ public sealed class VaultScope
             RolaJson.Text(root, "name") ?? string.Empty,
             RolaJson.Text(root, "description") ?? string.Empty,
             admins,
-            (ushort)(RolaJson.Number(root, "max_concurrency") ?? 0)
+            (ushort)(RolaJson.Number(root, "max_concurrency") ?? 0),
+            RolaJson.StorageBindings(root)
         );
     }
 

@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use librorolala::storage::{Key, store_file};
+use librorolala::storage::Key;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest, Wrap,
     consts::UNMATCHED,
@@ -19,7 +19,7 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::ResRorolalaStorage;
+use rorolala_cli_setups::ResStorageSet;
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
@@ -114,11 +114,11 @@ pub struct StateStorageWriteFile {
 #[chain(routeify)]
 pub fn handle_storage_write_file(
     state: StateStorageWriteFile,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
 ) -> Next {
     let file = state.path;
 
-    let Some(store) = storage.get_ref().as_ref() else {
+    let Some(store) = storage.get_ref().storage() else {
         return ErrorWriteNoStorage.into();
     };
 
@@ -143,7 +143,7 @@ pub fn handle_storage_write_file(
         }
     };
 
-    let hash = match runtime.block_on(store_file(store, &file)) {
+    let hash = match runtime.block_on(store.put_file(&file, None, None)) {
         Ok(hash) => hash,
         Err(error) => {
             return ErrorWriteFailed {

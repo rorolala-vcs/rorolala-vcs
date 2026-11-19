@@ -6,7 +6,7 @@
 
 use librorolala::layout::Layout;
 use librorolala::status::tree_is_wrong;
-use librorolala::storage::RorolalaStorage;
+use librorolala::storage::StorageSet;
 use librorolala::tree::{ChangeKind, Tree, TreeStatus};
 use librorolala::vcs::VCSIndex;
 use librorolala::workspace::Workspace;
@@ -21,7 +21,7 @@ use mingling::{
     picker::{EntryPicker, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResStorageSet, ResVCSIndex, ResVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
@@ -116,7 +116,7 @@ pub fn handle_tree_status(
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
     account: &mut LazyRes<ResCurrentAccount>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     index: &mut LazyRes<ResVCSIndex>,
 ) -> Next {
     let StateTreeStatus {
@@ -152,12 +152,12 @@ fn status_of(
     held: &Workspace,
     tree: &Tree,
     layout: &Layout,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     index: &mut LazyRes<ResVCSIndex>,
     include_ignored: bool,
     me: Option<&str>,
 ) -> Result<TreeStatus, Next> {
-    let Some(store): Option<&RorolalaStorage> = storage.get_ref().as_ref() else {
+    let Some(store): Option<&StorageSet> = storage.get_ref().storage() else {
         return Err(ErrorTreeFailed::new(t!("tree.err_no_store").trim().to_string()).to_chain());
     };
     let Some(index): Option<&VCSIndex> = index.get_ref().as_ref() else {

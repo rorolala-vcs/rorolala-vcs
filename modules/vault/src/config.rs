@@ -34,6 +34,9 @@ pub struct Config {
     vault: MetaConfig,
     /// Who may act as an administrator of the Vault.
     auth: AuthConfig,
+    /// The stores the Vault binds, in the order it tries them.
+    #[serde(default, skip_serializing_if = "StorageSection::is_empty")]
+    storage: StorageSection,
     /// What a collecting run in this Vault is told about what was written recently.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     gc: Option<GcConfig>,
@@ -82,10 +85,78 @@ impl Config {
         &mut self.auth
     }
 
+    /// The stores this Vault binds, in the order it tries them.
+    #[must_use]
+    pub const fn storage_config(&self) -> &StorageSection {
+        &self.storage
+    }
+
+    /// The stores this Vault binds, to be changed.
+    ///
+    /// A change made through here reaches the file the configuration came from, the way a
+    /// change to any other part of it does.
+    pub const fn storage_config_mut(&mut self) -> &mut StorageSection {
+        &mut self.storage
+    }
+
     /// What a collecting run in this Vault is told, when the configuration says.
     #[must_use]
     pub const fn gc_config(&self) -> Option<&GcConfig> {
         self.gc.as_ref()
+    }
+}
+
+/// The stores a Vault binds.
+///
+/// It is written under `[storage]`, and it means the places outside the Vault's own `storage/`
+/// that its content is written to and read from, in the order they are tried. `.` among them means
+/// the Vault's own store, and one that is not there is added last.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Configure, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StorageSection {
+    /// The stores the Vault binds, as they were written.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    storages: Vec<String>,
+}
+
+impl StorageSection {
+    /// The stores the Vault binds, in the order it tries them.
+    #[must_use]
+    pub fn storages(&self) -> &[String] {
+        &self.storages
+    }
+
+    /// Replaces the stores the Vault binds, in one order.
+    pub fn set_storages(&mut self, storages: impl IntoIterator<Item = String>) {
+        self.storages = storages.into_iter().collect();
+    }
+
+    /// Binds `path` last, answering whether it was added.
+    ///
+    /// A path that is already bound is not added again and the order is left as it was.
+    pub fn add_storage(&mut self, path: impl Into<String>) -> bool {
+        let path = path.into();
+        if self.storages.contains(&path) {
+            return false;
+        }
+
+        self.storages.push(path);
+
+        true
+    }
+
+    /// Unbinds `path`, answering whether it was bound.
+    pub fn remove_storage(&mut self, path: &str) -> bool {
+        let before = self.storages.len();
+        self.storages.retain(|storage| storage != path);
+
+        before != self.storages.len()
+    }
+
+    /// Whether no store is bound.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.storages.is_empty()
     }
 }
 
@@ -666,5 +737,52 @@ mod tests {
         assert!(config.auth_config_mut().remove_admin("alice"));
         assert!(!config.auth_config_mut().remove_admin("alice"));
         assert_eq!(config.auth_config().admins(), ["bob"]);
+    }
+
+    #[test]
+    fn the_stores_a_vault_binds_survive_the_format_they_are_written_in() {
+        let mut config = Config::default();
+        config
+            .storage_config_mut()
+            .set_storages(["/srv/rola/shared".to_owned(), "../shared".to_owned()]);
+
+        let written = toml::to_string(&config).unwrap();
+        assert!(written.contains("[storage]"), "{written}");
+        assert!(written.contains("storages"), "{written}");
+
+        let read: Config = toml::from_str(&written).unwrap();
+        assert_eq!(
+            read.storage_config().storages(),
+            ["/srv/rola/shared", "../shared"]
+        );
+    }
+
+    #[test]
+    fn a_vault_that_binds_no_store_writes_no_storage_table() {
+        // A file written before the Vault could bind stores reads as one that binds none, and a
+        // Vault that binds none writes no table of them.
+        let read: Config = toml::from_str("").unwrap();
+        assert!(read.storage_config().is_empty());
+
+        let written = toml::to_string(&Config::default()).unwrap();
+        assert!(!written.contains("[storage]"), "{written}");
+    }
+
+    #[test]
+    fn a_store_is_bound_once_and_keeps_the_order_it_was_bound_in() {
+        let mut config = Config::default();
+
+        assert!(config.storage_config_mut().add_storage("/srv/shared"));
+        assert!(config.storage_config_mut().add_storage("../other"));
+        assert!(!config.storage_config_mut().add_storage("/srv/shared"));
+
+        assert_eq!(
+            config.storage_config().storages(),
+            ["/srv/shared", "../other"]
+        );
+
+        assert!(config.storage_config_mut().remove_storage("/srv/shared"));
+        assert!(!config.storage_config_mut().remove_storage("/srv/shared"));
+        assert_eq!(config.storage_config().storages(), ["../other"]);
     }
 }

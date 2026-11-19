@@ -6,6 +6,7 @@ storage:
         # Read and write the content a store holds, by hand
         **Usage**: rola [[GREEN]]__storage__[[/]] <COMMAND>
         **Commands**:
+            create <DIR>                     Make the given directory a store
             write-file <FILE>                Store the file's content, and print the hash it is kept under
             extract-file <HASH> [DIR]        Write the stored content out by its hash
             ls-storaged                      List every object the store holds
@@ -21,6 +22,7 @@ storage:
         # 手工读写仓库持有的内容
         **用法**：rola [[GREEN]]__storage__[[/]] <子命令>
         **命令**：
+            create <目录>                     把给定目录变成存储
             write-file <文件>                 存储文件内容，并打印它所用的哈希
             extract-file <哈希> [目录]        按哈希将存储的内容写出
             ls-storaged                       列出仓库持有的全部对象

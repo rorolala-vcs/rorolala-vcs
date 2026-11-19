@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use rorolala_layout::Layout;
-use rorolala_storage::{Lockable as _, RorolalaStorage};
+use rorolala_storage::{Lockable as _, StorageSet};
 use rorolala_tree::{EntryKind, Staging, Tree, TreeEntry, TreeStructure, conflict_copy};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
@@ -38,9 +38,7 @@ pub fn reset(
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })?;
-    let store = workspace
-        .get_current_rola_storage()
-        .ok_or(WriteError::NoStore)?;
+    let set = workspace.storage_set()?;
     let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
     let at = if target.is_empty() {
         cwd.to_path_buf()
@@ -61,14 +59,14 @@ pub fn reset(
         },
     })?;
 
-    reset_tree(&tree, &layout, &store, &index, cwd, paths)
+    reset_tree(&tree, &layout, &set, &index, cwd, paths)
 }
 
 /// The reset once the tree and its parts are known.
 fn reset_tree(
     tree: &Tree,
     layout: &Layout,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     index: &VCSIndex,
     cwd: &Path,
     paths: &[String],

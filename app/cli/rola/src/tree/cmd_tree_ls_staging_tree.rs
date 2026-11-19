@@ -5,7 +5,7 @@
 #![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
 use librorolala::layout::Layout;
-use librorolala::storage::RorolalaStorage;
+use librorolala::storage::StorageSet;
 use librorolala::tree::{Tree, TreeStructure};
 use librorolala::vcs::VCSIndex;
 use mingling::{
@@ -19,7 +19,7 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResStorageSet, ResVCSIndex, ResVault, ResWorkspace};
 use rorolala_utils_cli_theme::trd;
 use rust_i18n::t;
 
@@ -92,7 +92,7 @@ pub fn handle_tree_ls_staging_tree(
     state: StateTreeLsStagingTree,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     index: &mut LazyRes<ResVCSIndex>,
 ) -> Next {
     let StateTreeLsStagingTree { target } = state;
@@ -111,7 +111,7 @@ pub fn handle_tree_ls_staging_tree(
         Err(next) => return next,
     };
 
-    let Some(store) = storage.get_ref().as_ref() else {
+    let Some(store) = storage.get_ref().storage() else {
         return ErrorTreeFailed::new(t!("tree.err_no_store").trim().to_string()).into();
     };
     let Some(index) = index.get_ref().as_ref() else {
@@ -135,7 +135,7 @@ pub fn handle_tree_ls_staging_tree(
 fn staged_of(
     tree: &Tree,
     layout: &Layout,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
 ) -> Result<(TreeStructure, bool), Next> {

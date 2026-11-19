@@ -60,6 +60,7 @@ fn main() {
 
     refusals(&run, &repo, &plain, &elsewhere, &mut checked);
     initialise(&run, &repo, &mut checked);
+    binding(&run, sandbox.dir(), &mut checked);
     checking(&run, &repo, &mut checked);
     restoring(&run, &repo, &mut checked);
     bringing(&run, &repo, &elsewhere, &mut checked);
@@ -77,6 +78,65 @@ fn main() {
     nested(&run, &outer, &mut checked);
 
     checked.report();
+}
+
+/// Binding a Vault address and a store to a project of its own.
+///
+/// The project is made apart from the one the rest of the suite works in, since binding writes
+/// `rola.toml` and the store records the project: neither is state another check should meet.
+fn binding(run: &Run, root: &Path, checked: &mut Checked) {
+    let project = root.join("bind-project");
+    let store = root.join("bind-store");
+    fs::create_dir_all(&project).expect("a project directory");
+
+    let ran = run.git(&project, &["init", "-q"]);
+    checked.exits("a project to bind to is made", &ran, 0);
+    let ran = run.rola(&project, &["init"]);
+    checked.exits("git support is set up in it", &ran, 0);
+
+    let ran = run.rola_cli(root, &["storage", "create", &text(&store)]);
+    checked.exits("a store to bind is made", &ran, 0);
+
+    let ran = run.rola(&project, &["bind", &text(&store)]);
+    checked.exits("the store is bound to the project", &ran, 0);
+    let config = fs::read_to_string(project.join("rola.toml")).unwrap_or_default();
+    checked.wants(
+        "`rola.toml` names the store",
+        config.contains(&text(&store)),
+        &config,
+    );
+    let record = fs::read_to_string(store.join("rolast.toml")).unwrap_or_default();
+    checked.wants(
+        "the store records the project",
+        record.contains(&text(&project)),
+        &record,
+    );
+
+    let ran = run.rola(&project, &["bind", &text(&store)]);
+    checked.exits("binding the same store again ends", &ran, 0);
+    let config = fs::read_to_string(project.join("rola.toml")).unwrap_or_default();
+    checked.wants(
+        "the store is named once",
+        config.matches("[[storages]]").count() == 1,
+        &config,
+    );
+
+    let ran = run.rola(&project, &["bind", "rola://127.0.0.1/", "upstream"]);
+    checked.exits("a Vault address is bound", &ran, 0);
+    let config = fs::read_to_string(project.join("rola.toml")).unwrap_or_default();
+    checked.wants(
+        "the Vault is named under its binding",
+        config.contains("upstream = \"rola://127.0.0.1/\""),
+        &config,
+    );
+    checked.wants(
+        "the Vault is made the default",
+        config.contains("[defaults]") && config.contains("vault = \"upstream\""),
+        &config,
+    );
+
+    let ran = run.rola(&project, &["bind", &text(&project.join(".rola"))]);
+    checked.exits("binding the project's own data directory is refused", &ran, 128);
 }
 
 /// What the program says about itself: the version, the usage, and the language both are said in.

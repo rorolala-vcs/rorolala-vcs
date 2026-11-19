@@ -1774,6 +1774,88 @@ public sealed class WriteTests
         }
     }
 
+    [Fact]
+    public void A_workspace_binds_a_store_and_writes_into_it()
+    {
+        var directory = Scratch();
+        var store = Path.Combine(Scratch(), "shared");
+        try
+        {
+            RunRola(directory, "init");
+            RunRola(directory, $"storage create \"{store}\"");
+            RunRola(directory, $"bind \"{store}\"");
+
+            var workspace = new WorkspaceScope(directory);
+            workspace.Read();
+
+            var storages = workspace.Config!.Storages;
+            Assert.Equal(2, storages.Count);
+            Assert.False(storages[0].IsOwn);
+            Assert.True(storages[0].Present);
+            Assert.True(storages[0].Writable);
+            Assert.True(storages[1].IsOwn);
+
+            var source = Path.Combine(directory, "bound.bin");
+            File.WriteAllText(source, "written into the bound store");
+
+            var storage = workspace.Storage;
+            storage.Read();
+            var writer = new StorageWriter(storage);
+            var stored = writer.Write(new FileInfo(source));
+
+            Assert.NotEmpty(
+                Directory.GetFiles(store, "*", SearchOption.AllDirectories)
+            );
+
+            var workspaceStore = Path.Combine(directory, ".rola", "storage", "obj");
+            Assert.Empty(
+                Directory.Exists(workspaceStore)
+                    ? Directory.GetFiles(workspaceStore, "*", SearchOption.AllDirectories)
+                    : Array.Empty<string>()
+            );
+
+            var destination = new FileInfo(Path.Combine(directory, "bound-out.bin"));
+            writer.Extract(stored.Key, destination);
+            Assert.Equal("written into the bound store", File.ReadAllText(destination.FullName));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
+    public void A_store_is_made_and_bound_through_the_writer()
+    {
+        var directory = Scratch();
+        var store = Path.Combine(Scratch(), "shared");
+        try
+        {
+            RunRola(directory, "init");
+            StorageWriter.Create(new DirectoryInfo(store));
+            Assert.True(File.Exists(Path.Combine(store, "rolast.toml")));
+
+            var workspace = new WorkspaceScope(directory);
+            workspace.Read();
+            var bound = new WorkspaceWriter(workspace).BindStorage(new DirectoryInfo(store));
+
+            Assert.True(bound.BoundWorkspace);
+            Assert.False(bound.BoundVault);
+            Assert.True(bound.ReverseRecorded);
+
+            var reread = new WorkspaceScope(directory);
+            reread.Read();
+            Assert.Contains(
+                reread.Config!.Storages,
+                item => !item.IsOwn && item.Present && item.Writable
+            );
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
     private static string Scratch() =>
         Directory.CreateTempSubdirectory("rola-sharp-write-").FullName;
 
@@ -1793,8 +1875,7 @@ public sealed class WriteTests
         throw new InvalidOperationException("the repository root was not found");
     }
 
-    private static void CopyDirectory(string source, string destination)
-    {
+    private static void CopyDirectory(string source, string destination)    {
         Directory.CreateDirectory(destination);
         foreach (var file in Directory.GetFiles(source))
         {

@@ -15,6 +15,7 @@ git_rola:
         restore    Put named materials back from rola.lock
         refresh    Put the working tree back in step with rola.lock
         update     Resolve rola.toml through the Vaults and rewrite rola.lock
+        bind       Bind a Vault address, or a store, to this project
         help       Print this list, or the usage of one command
         version    Print the version of this program
 
@@ -32,6 +33,7 @@ git_rola:
         restore    从 `rola.lock` 把指名的素材放回去
         refresh    按 `rola.lock` 让工作区回到正轨
         update     通过保险库解析 `rola.toml` 并重写 `rola.lock`
+        bind       把保险库地址或存储绑定到本项目
         help       打印这份列表，或某个命令的用法
         version    打印这个程序的版本
 

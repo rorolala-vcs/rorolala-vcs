@@ -41,6 +41,10 @@ exit_codes:
     en: "A `rola create` command was given arguments it cannot use"
     zh-CN: "`rola create` 收到了无法使用的参数"
 
+  creation_storage:
+    en: The store could not be created
+    zh-CN: 无法创建存储
+
   keygen_no_openssl:
     en: "`openssl` could not be run"
     zh-CN: 无法运行 `openssl`
@@ -184,6 +188,10 @@ exit_codes:
   storage_ls_manifests_failed:
     en: "The store's manifests could not be listed"
     zh-CN: 无法列出仓库中的 manifest
+
+  storage_bind:
+    en: The store cannot be used as a binding here
+    zh-CN: 无法在这里把该存储作为绑定使用
 
   config_unreadable:
     en: The configuration the run works from could not be read

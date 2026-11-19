@@ -50,6 +50,7 @@ fn main() {
     let gcws = sandbox.join("gcws");
     let gcvault = sandbox.join("gcvault");
     let gcchain = sandbox.join("gcchain");
+    let foreign = sandbox.join("foreign");
 
     for dir in [
         &home,
@@ -70,6 +71,7 @@ fn main() {
         &gcws,
         &gcvault,
         &gcchain,
+        &foreign,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -113,6 +115,7 @@ fn main() {
     ownership(&rola, &claimed, &mut checked);
     empty_cache(&rola, &cached, &mut checked);
     uuid_switch(&rola, &switching, &mut checked);
+    foreign_storage(&rola, &foreign, &mut checked);
 
     // Collecting is last, since the tracked work it makes acts as an account and installs a key,
     // which is machine state the scenarios about accounts read: what runs after it would meet a
@@ -1138,6 +1141,115 @@ fn movement(rola: &Rola, plain: &Path, files: &Path, checked: &mut Checked) {
     checked.exits("a copy without its paths is refused", &ran, 110);
 }
 
+/// Separate stores: making one, binding it, and writing through it.
+///
+/// A Workspace binds a store beside it, writes into that store, and falls back to its own when the
+/// bound one is moved away. The refusals are the ones a person meets: a store that is already one,
+/// a path that is no store, a place that is a Workspace, and a store that is the place's own.
+fn foreign_storage(rola: &Rola, root: &Path, checked: &mut Checked) {
+    let store = root.join("shared");
+    let ws = root.join("ws");
+    let plain = root.join("plain");
+    let init = root.join("init");
+    fs::create_dir_all(&plain).expect("a plain directory");
+    fs::create_dir_all(&init).expect("a directory to make a store in");
+
+    let ran = rola.run(root, &["storage", "create", &text(&store)]);
+    checked.exits("a store is made where none was", &ran, 0);
+    checked.wants(
+        "the store carries its configuration",
+        store.join("rolast.toml").is_file(),
+        &said(&ran),
+    );
+
+    let ran = rola.run(root, &["storage", "create", &text(&store)]);
+    checked.exits("a directory that is a store already is refused", &ran, 10);
+
+    let ran = rola.run(root, &["create", &text(&ws)]);
+    checked.exits("a Workspace to bind the store to is made", &ran, 0);
+
+    let ran = rola.run(&ws, &["bind", &text(&store)]);
+    checked.exits("a store is bound to the Workspace", &ran, 0);
+    let config = fs::read_to_string(ws.join(".rola").join("workspace.toml")).unwrap_or_default();
+    checked.wants(
+        "the Workspace configuration names the store",
+        config.contains(&text(&store)),
+        &config,
+    );
+    let record = fs::read_to_string(store.join("rolast.toml")).unwrap_or_default();
+    checked.wants(
+        "the store records the Workspace",
+        record.contains(&text(&ws)),
+        &record,
+    );
+
+    let source = ws.join("through.txt");
+    fs::write(&source, "written through the binding\n").expect("a file to write");
+    let ran = rola.run(&ws, &["storage", "write-file", "through.txt"]);
+    checked.exits("a file is written", &ran, 0);
+    checked.wants(
+        "the content lands in the bound store",
+        files_under(&store.join("obj")) == 1,
+        &said(&ran),
+    );
+    checked.wants(
+        "the Workspace's own store is left empty",
+        files_under(&ws.join(".rola").join("storage").join("obj")) == 0,
+        &said(&ran),
+    );
+
+    let moved = root.join("shared-moved");
+    fs::rename(&store, &moved).expect("the store is moved away");
+    let fallback = ws.join("fallback.txt");
+    fs::write(&fallback, "written when the binding is gone\n").expect("a file to fall back with");
+    let ran = rola.run(&ws, &["storage", "write-file", "fallback.txt"]);
+    checked.exits("a write with the binding gone still ends", &ran, 0);
+    checked.wants(
+        "the write falls back to the Workspace's own store",
+        files_under(&ws.join(".rola").join("storage").join("obj")) == 1,
+        &said(&ran),
+    );
+    fs::rename(&moved, &store).expect("the store is put back");
+
+    let ran = rola.run(&ws, &["bind", &text(&plain)]);
+    checked.exits("a directory that is no store is refused", &ran, 11);
+
+    let ran = rola.run(&ws, &["bind", &text(&ws.join(".rola").join("storage"))]);
+    checked.exits("binding the Workspace's own store is refused", &ran, 93);
+
+    let ran = rola.run(root, &["create", &text(&root.join("both")), "--storage", "--vault"]);
+    checked.exits("a store and a Vault at once is refused", &ran, 22);
+
+    let ran = rola.run(&init, &["init", "--storage"]);
+    checked.exits("a store is made in the current directory", &ran, 0);
+    checked.wants(
+        "the store is made without making a Workspace",
+        init.join("rolast.toml").is_file() && !init.join(".rola").is_dir(),
+        &said(&ran),
+    );
+
+    let ran = rola.run(root, &["create", &text(&ws), "--storage"]);
+    checked.exits("a Workspace cannot be made a store", &ran, 93);
+}
+
+/// How many files a store directory holds, or none when it is absent.
+fn files_under(root: &Path) -> usize {
+    let Ok(entries) = fs::read_dir(root) else {
+        return 0;
+    };
+
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| {
+            if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+                files_under(&entry.path())
+            } else {
+                1
+            }
+        })
+        .sum()
+}
+
 /// Collecting what the Layout does not reference, what `rola pack --garbage-collect` does.
 ///
 /// Three shapes of run, one each: a Workspace whose Layout names nothing, so everything its store
@@ -1160,6 +1272,15 @@ fn collecting(
     let ran = rola.run(ws, &["storage", "write-file", &text(&source)]);
     checked.exits("a file nothing references is stored", &ran, 0);
     let key = ran.stdout.trim().to_owned();
+
+    // The Layout names nothing and the store holds something: without `--force` the run refuses,
+    // since agreeing to it would be agreeing to empty the store without having seen that it would.
+    let ran = rola.run(ws, &["pack", "--garbage-collect"]);
+    checked.exits(
+        "a collecting that would take the whole store is refused",
+        &ran,
+        105,
+    );
 
     // What the run names with `--grace` is what the collecting holds it by: a day keeps what was
     // written a moment ago, and says so.
@@ -1275,6 +1396,27 @@ fn collecting(
 
     collecting_in_vault(rola, empty, vault, checked);
     collecting_beside_work(rola, chain, checked);
+    collecting_a_store(rola, empty, checked);
+}
+
+/// Collecting a store a run stands in, which has no Layout and no index of its own.
+fn collecting_a_store(rola: &Rola, empty: &Path, checked: &mut Checked) {
+    let store = empty.join("bare-store");
+    let ran = rola.run(empty, &["storage", "create", &text(&store)]);
+    checked.exits("a store to collect in is made", &ran, 0);
+
+    let source = store.join("nothing-names-this.txt");
+    fs::write(&source, "nothing names this either\n").expect("a file nothing references");
+    let ran = rola.run(&store, &["storage", "write-file", &text(&source)]);
+    checked.exits("the store holds a file nothing references", &ran, 0);
+
+    let ran = rola.run(&store, &["pack", "--garbage-collect", "--grace", "0", "--force"]);
+    checked.exits("a store is collected without a Layout", &ran, 0);
+    checked.stdout_has(
+        "the store's collecting says what it took",
+        &ran,
+        "1 store entries",
+    );
 }
 
 /// Collecting inside a Vault, whose truth Layout is the roots the same way a Workspace's is.

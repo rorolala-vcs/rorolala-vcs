@@ -67,7 +67,7 @@ pub fn run() -> Result<Outcome, String> {
     // What was placed before is taken out first, so a failure here leaves the lock, and so the
     // command, as it was rather than half applied. A tree is checked against the structure it was
     // placed from, which is the store's, so the source is made before the taking out.
-    let source = crate::source::of(project);
+    let source = crate::source::of(project)?;
 
     session.detach(&source).map_err(|error| error.to_string())?;
 
@@ -162,7 +162,7 @@ fn resolve(project: &Project, config: &ProjectConfig) -> Result<Lock, String> {
     // here is one every command after it can act on. A tree's structure is the content its version
     // names, and what the structure names is a second ask: the structure is what says which keys
     // the inside is made of, so it crosses before they can be named.
-    let store = upstream::project_store(project);
+    let store = upstream::project_stores(project)?;
     let contents: Vec<ContentHash> = resolved.iter().map(|entry| entry.content).collect();
     upstream::bring_contents(&store, &workspace.value, &account, &vaults, &contents)?;
 

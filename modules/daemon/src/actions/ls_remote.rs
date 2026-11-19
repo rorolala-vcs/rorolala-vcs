@@ -6,9 +6,9 @@
 //! it can be told to give, the objects it holds, and the contents it keeps cut.
 
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
-use rorolala_storage::{Key, RorolalaStorage, StorageBackend as _};
+use rorolala_storage::{Key, StorageSet};
 
-use super::sync_all::local_store;
+use super::sync_all::local_stores;
 use super::sync_storage::{Side, carry_blob};
 
 /// An Action that lists what the store on the other end holds.
@@ -45,7 +45,7 @@ impl Action for ActionListRemote {
         input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
     ) -> Result<Self::Output, ActionError> {
-        let local = local_store(&ctx)?;
+        let local = local_stores(&ctx)?;
 
         // What listing is wanted is the caller's word, so it belongs to the Workspace and crosses to
         // the Vault first, the Vault is the side with a store of its own to answer with.
@@ -71,7 +71,7 @@ impl Action for ActionListRemote {
 }
 
 /// The keys `which` names, from `local`, written as the hex a listing prints.
-async fn listed(local: &RorolalaStorage, which: &str) -> Result<String, ActionError> {
+async fn listed(local: &StorageSet, which: &str) -> Result<String, ActionError> {
     let listed = if which.trim() == "manifests" {
         local.list_manifest_keys().await
     } else {

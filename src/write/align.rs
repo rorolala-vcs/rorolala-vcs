@@ -21,7 +21,7 @@ use rorolala_errors::Failure as _;
 use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{EntryKind, Layout, LayoutError, LayoutPath};
 use rorolala_protocol::VaultAddress;
-use rorolala_storage::{Blake3Hash, Key, RorolalaStorage};
+use rorolala_storage::{Blake3Hash, Key, StorageSet};
 use rorolala_tree::{EntryKind as TreeEntryKind, Staging, Tree, TreeStructure, read_structure};
 use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
 use rorolala_utils_lazyffi::lazyffi;
@@ -489,7 +489,7 @@ pub struct Carry<'a> {
     /// The rules the run selects with, the empty set when the run includes the ignored.
     pub rules: &'a IgnoreRuleSet,
     /// The store content is read out of, when the run has one.
-    pub storage: Option<&'a RorolalaStorage>,
+    pub storage: Option<&'a StorageSet>,
     /// The index that says which version names which object, when the run has one.
     pub index: Option<&'a VCSIndex>,
     /// The account a variant file is brought in as, when the run knows one.
@@ -1006,7 +1006,7 @@ enum Selector {
 /// them and cannot be made to share its lifetime.
 struct Content<'s, 'b> {
     /// The store the content is read out of, when the run has one.
-    storage: Option<&'s RorolalaStorage>,
+    storage: Option<&'s StorageSet>,
     /// The index that says which version names which object, when the run has one.
     index: Option<&'s VCSIndex>,
     /// Where an object the store does not hold may be brought from.
@@ -1387,7 +1387,7 @@ fn restore_tree_file(
                 tree_root,
                 target,
                 &structure,
-                &staged,
+                &StorageSet::sole(staged),
                 &runtime,
                 carry.messages,
             )?;
@@ -1403,7 +1403,7 @@ fn write_tree_entry(
     tree_root: &Path,
     target: &Path,
     structure: &TreeStructure,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     runtime: &tokio::runtime::Runtime,
     messages: &Messages,
 ) -> Result<(), Stop> {
@@ -2513,7 +2513,7 @@ mod tests {
         let messages = Messages::default();
         let progress = Progress::silent();
         let index = VCSIndex::locate(dir);
-        let storage = workspace.get_current_rola_storage();
+        let storage = workspace.storage_set().ok();
         let carry = Carry {
             workspace: &workspace,
             layout: &layout,

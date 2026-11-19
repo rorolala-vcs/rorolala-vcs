@@ -29,7 +29,7 @@ use mingling::{
     res::{ResConfirm, ResExitCode},
 };
 use rorolala_cli_setups::{
-    ResForce, ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResVault, ResVaultConfig,
+    ResForce, ResProgressSetting, ResStorageSet, ResVCSIndex, ResVault, ResVaultConfig,
     ResWorkspace, ResWorkspaceConfig,
 };
 use rorolala_errors::Failure;
@@ -219,7 +219,7 @@ pub struct StatePack {
 #[chain(routeify)]
 pub fn handle_pack(
     state: StatePack,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     index: &mut LazyRes<ResVCSIndex>,
     vault: &mut LazyRes<ResVault>,
     workspace: &mut LazyRes<ResWorkspace>,
@@ -253,7 +253,7 @@ pub fn handle_pack(
     }
 
     let store = if state.storage {
-        storage.get_ref().as_ref()
+        storage.get_ref().storage()
     } else {
         None
     };
@@ -281,7 +281,10 @@ pub fn handle_pack(
     // nothing and asks for the whole of it to be laid out afresh, under the lock of that side, so
     // that nothing else is packing it while it happens.
     if let Some(store) = store {
-        match librorolala::write::pack::pack_storage_with(store, &reporting.progress()) {
+        match librorolala::write::pack::pack_storage_with(
+            store.write_target(),
+            &reporting.progress(),
+        ) {
             Ok(was) => changed |= was,
             Err(error) => {
                 reporting.finish();

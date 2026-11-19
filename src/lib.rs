@@ -28,6 +28,7 @@ pub mod read_v2;
 pub mod remote;
 pub mod status;
 pub mod storage_read;
+pub mod storage_set;
 pub mod write;
 
 pub use address::*;
@@ -40,6 +41,7 @@ pub use ownership_read::*;
 pub use read_v2::*;
 pub use status::*;
 pub use storage_read::*;
+pub use storage_set::*;
 pub use write::*;
 
 /// Authentication

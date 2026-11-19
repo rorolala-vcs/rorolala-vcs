@@ -24,6 +24,12 @@ pub struct StorageConfig {
     /// What the store says about keeping packs.
     #[serde(default)]
     storage: StorageSection,
+    /// The Workspaces that write to this store.
+    #[serde(default)]
+    workspaces: ConnectedSection,
+    /// The Vaults that write to this store.
+    #[serde(default)]
+    vaults: ConnectedSection,
 }
 
 /// What the configuration says about packing.
@@ -31,6 +37,26 @@ pub struct StorageConfig {
 struct StorageSection {
     /// The largest a pack may grow before another is started, written as a size, `"2GiB"`.
     max_pack_size: Option<String>,
+}
+
+/// The places a store records as writing to it, under one kind.
+///
+/// A store that does not say who writes to it is read as one used by a single place, `.`, which is
+/// the store the run itself is in. That default is put on where the paths are resolved, not here,
+/// because `.` means the directory the configuration sits in and this text does not know it.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ConnectedSection {
+    /// The roots of the places that write here, as the file writes them.
+    #[serde(default)]
+    connected: Vec<String>,
+}
+
+impl ConnectedSection {
+    /// The roots that write to this store, as the file writes them.
+    #[must_use]
+    pub fn connected(&self) -> &[String] {
+        &self.connected
+    }
 }
 
 impl StorageConfig {
@@ -57,6 +83,18 @@ impl StorageConfig {
             .and_then(|size| u64::try_from(size.bytes()).ok())
             .filter(|bytes| *bytes > 0)
             .unwrap_or(DEFAULT_MAX_PACK_SIZE)
+    }
+
+    /// The Workspaces that write to this store, as the file writes them.
+    #[must_use]
+    pub fn connected_workspaces(&self) -> &[String] {
+        self.workspaces.connected()
+    }
+
+    /// The Vaults that write to this store, as the file writes them.
+    #[must_use]
+    pub fn connected_vaults(&self) -> &[String] {
+        self.vaults.connected()
     }
 }
 
@@ -98,5 +136,37 @@ mod tests {
                 "{text:?}"
             );
         }
+    }
+
+    #[test]
+    fn the_places_a_store_records_as_writing_to_it_are_read() {
+        let config = StorageConfig::parse(
+            "[workspaces]\nconnected = [\"/home/alice/project\"]\n\
+             [vaults]\nconnected = [\"/srv/rola/vault\", \"../other\"]\n",
+        );
+
+        assert_eq!(config.connected_workspaces(), ["/home/alice/project"]);
+        assert_eq!(config.connected_vaults(), ["/srv/rola/vault", "../other"]);
+    }
+
+    #[test]
+    fn a_store_that_records_nobody_records_nothing_here() {
+        // The `["."]` a missing list means is put on where the paths are resolved, so the parser
+        // answers the empty slice it read rather than a path it cannot resolve.
+        let config = StorageConfig::parse("[storage]\nmax_pack_size = \"1MiB\"");
+
+        assert_eq!(config.connected_workspaces(), [] as [String; 0]);
+        assert_eq!(config.connected_vaults(), [] as [String; 0]);
+    }
+
+    #[test]
+    fn one_place_can_be_recorded_for_workspaces_and_vaults_at_once() {
+        let config = StorageConfig::parse(
+            "[workspaces]\nconnected = [\"/srv/project\"]\n\
+             [vaults]\nconnected = [\"/srv/vault\"]\n",
+        );
+
+        assert_eq!(config.connected_workspaces(), ["/srv/project"]);
+        assert_eq!(config.connected_vaults(), ["/srv/vault"]);
     }
 }

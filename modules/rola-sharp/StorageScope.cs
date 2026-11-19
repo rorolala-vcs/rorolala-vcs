@@ -7,15 +7,29 @@ namespace RolaSharp;
 public sealed class StorageScope : Scope
 {
     private readonly string _root;
+    private readonly string _scope_root;
     private IReadOnlyList<string> _keys = [];
     private IReadOnlyList<string> _manifests = [];
 
     /// <summary>Makes a scope over the store rooted at a Workspace or a Vault.</summary>
     /// <param name="root">The directory the store is rooted in.</param>
-    public StorageScope(string root) => _root = Path.GetFullPath(root);
+    public StorageScope(string root)
+        : this(root, root) { }
 
-    /// <summary>The directory the store is rooted in.</summary>
+    /// <summary>Makes a scope over the stores a place works on.</summary>
+    /// <param name="root">The store a write goes to.</param>
+    /// <param name="scopeRoot">The Workspace or Vault root the stores are read from.</param>
+    public StorageScope(string root, string scopeRoot)
+    {
+        _root = Path.GetFullPath(root);
+        _scope_root = Path.GetFullPath(scopeRoot);
+    }
+
+    /// <summary>The directory the store a write goes to is rooted in.</summary>
     public DirectoryInfo Root => new(_root);
+
+    /// <summary>The place whose stores this scope reads.</summary>
+    public DirectoryInfo ScopeRoot => new(_scope_root);
 
     /// <summary>Every object key the store holds.</summary>
     public IReadOnlyList<string> Keys
@@ -44,7 +58,7 @@ public sealed class StorageScope : Scope
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        var directory = Utf8(_root);
+        var directory = Utf8(_scope_root);
         var hash = Utf8(key);
         try
         {
@@ -83,11 +97,11 @@ public sealed class StorageScope : Scope
     /// <inheritdoc/>
     protected override void IsValid()
     {
-        if (!Directory.Exists(_root))
+        if (!Directory.Exists(_scope_root))
         {
             throw new RolaReadError(
                 RolaReadErrorKind.NoWorkspace,
-                _root,
+                _scope_root,
                 "the store's root is not there"
             );
         }
@@ -107,7 +121,7 @@ public sealed class StorageScope : Scope
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var directory = Utf8(_root);
+        var directory = Utf8(_scope_root);
         try
         {
             var answer = read(directory);

@@ -12,11 +12,13 @@
 //! anything away, which is why a failure here stops the collecting rather than narrowing it.
 
 use std::collections::{BTreeSet, HashSet};
+use std::path::PathBuf;
 use std::time::Duration;
 
+use rola_define_format::{Lock, MaterialKind};
 use rorolala_errors::Failure as _;
 use rorolala_layout::{EntryKind, Layout};
-use rorolala_storage::{Blake3Hash, Key, RorolalaStorage};
+use rorolala_storage::{Blake3Hash, Key, StorageSet};
 use rorolala_tree::TreeStructure;
 use rorolala_utils_progress::Progress;
 use rorolala_vcs::{Hash, VCSIndex, VCSIndexObject};
@@ -50,6 +52,13 @@ impl Live {
     #[must_use]
     pub const fn index(&self) -> &BTreeSet<Hash> {
         &self.index
+    }
+
+    /// Everything `other` reaches, added to what this one does.
+    pub fn absorb(&mut self, other: Self) {
+        self.index.extend(other.index);
+        self.objects.extend(other.objects);
+        self.manifests.extend(other.manifests);
     }
 
     /// The content keys the roots reach, as object entries.
@@ -88,6 +97,16 @@ pub enum CollectFailure {
         /// Why the structure could not be read or decoded.
         reason: String,
     },
+    /// A `git-rola` project's lock could not be read.
+    ///
+    /// A project has no Layout and no index: what it keeps is the materials `rola.lock` names, and
+    /// a lock this build cannot read is a closure that cannot be finished.
+    Project {
+        /// The project whose lock could not be read.
+        path: PathBuf,
+        /// Why it could not be read.
+        reason: String,
+    },
     /// The content store could not be read for a key the roots reach.
     Content {
         /// The key the store could not answer for.
@@ -122,6 +141,13 @@ impl std::fmt::Display for CollectFailure {
                     key.hex()
                 )
             }
+            Self::Project { path, reason } => {
+                write!(
+                    f,
+                    "`{}` could not be read as a project lock: {reason}",
+                    path.display()
+                )
+            }
         }
     }
 }
@@ -150,7 +176,7 @@ impl std::fmt::Display for CollectFailure {
 pub async fn live_of(
     layout: &Layout,
     index: &VCSIndex,
-    store: &RorolalaStorage,
+    stores: &StorageSet,
     progress: &Progress,
 ) -> Result<Live, CollectFailure> {
     // The listing is asked for once so an index that is failing is said before the walk starts:
@@ -202,7 +228,7 @@ pub async fn live_of(
 
                 // The content the variant stores is kept for the entry the chain belongs to: a
                 // file and a tree are told apart by the entry, whose kind does not change.
-                expand(store, *variant.storage_hash(), kind, &mut live).await?;
+                expand(stores, *variant.storage_hash(), kind, &mut live).await?;
 
                 queue.push((Key::new(*variant.base_version()), kind));
                 if let Some(join) = variant.join() {
@@ -236,7 +262,7 @@ pub async fn live_of(
 /// key would be a manifest for content nobody references here, which stays dead unless one of the
 /// roots names that key itself.
 async fn expand(
-    store: &RorolalaStorage,
+    stores: &StorageSet,
     hash: Blake3Hash,
     kind: EntryKind,
     live: &mut Live,
@@ -247,7 +273,7 @@ async fn expand(
     match kind {
         EntryKind::Tree => {
             let bytes =
-                store
+                stores
                     .read_object(&key)
                     .await
                     .map_err(|error| CollectFailure::TreeStructure {
@@ -263,12 +289,12 @@ async fn expand(
             for inside in structure.content_keys() {
                 // A tree structure is flat, its entries name files and nothing deeper, so the walk
                 // here is one level; the pin is what a recursive async function is written with.
-                Box::pin(expand(store, *inside.digest(), EntryKind::File, live)).await?;
+                Box::pin(expand(stores, *inside.digest(), EntryKind::File, live)).await?;
             }
         }
         EntryKind::File => {
             let manifest =
-                store
+                stores
                     .manifest_of(&key)
                     .await
                     .map_err(|error| CollectFailure::Content {
@@ -288,6 +314,55 @@ async fn expand(
     Ok(())
 }
 
+/// Marks the content a `git-rola` project's lock names live.
+///
+/// A project has no Layout and no version control index: what it keeps is the materials its
+/// `rola.lock` names, each a content and whether it is a file or a tree. A project that has never
+/// had content brought into it has no lock, which keeps nothing and is not a failure.
+///
+/// # Errors
+///
+/// Returns [`CollectFailure::Project`] when the lock is there and does not read, and a
+/// [`CollectFailure::Content`] or [`CollectFailure::TreeStructure`] when a material's content
+/// cannot be read.
+pub async fn live_of_project(
+    project: &std::path::Path,
+    stores: &StorageSet,
+    progress: &Progress,
+) -> Result<Live, CollectFailure> {
+    let path = project.join("rola.lock");
+    let text = match tokio::fs::read_to_string(&path).await {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Live::default()),
+        Err(error) => {
+            return Err(CollectFailure::Project {
+                path,
+                reason: error.to_string(),
+            });
+        }
+    };
+    let lock = Lock::decode(&text).map_err(|error| CollectFailure::Project {
+        path: path.clone(),
+        reason: error.to_string(),
+    })?;
+
+    let mut live = Live::default();
+    let mut task = progress.begin("", None);
+
+    for material in lock.materials() {
+        let kind = match material.kind() {
+            MaterialKind::File => EntryKind::File,
+            MaterialKind::Tree => EntryKind::Tree,
+        };
+
+        expand(stores, *material.content().digest(), kind, &mut live).await?;
+        task.advance_by(1);
+    }
+    task.finish();
+
+    Ok(live)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
@@ -296,7 +371,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use rorolala_layout::{Layout, MutableData};
-    use rorolala_storage::{Chunk, Codec, Manifest, RorolalaStorage};
+    use rorolala_storage::{Chunk, Codec, Manifest, RorolalaStorage, StorageSet};
     use rorolala_tree::{FileMode, TreeEntry, TreeStructure};
     use rorolala_vcs::{Creator, Message, VCSIndex, VCSWrite as _, Variant, Version};
     use uuid::Uuid;
@@ -402,9 +477,14 @@ mod tests {
         index.write(unjoined.clone()).await.unwrap();
         lay_entry(&layout, &v2, EntryKind::File);
 
-        let live = live_of(&layout, &index, &store, &Progress::silent())
-            .await
-            .unwrap();
+        let live = live_of(
+            &layout,
+            &index,
+            &StorageSet::sole(store.clone()),
+            &Progress::silent(),
+        )
+        .await
+        .unwrap();
 
         // The chain from the entry back to the root, the words it carries, and nothing else: the
         // unjoined variant is not on the chain, so nothing keeps it.
@@ -455,9 +535,14 @@ mod tests {
         index.write(v2.clone()).await.unwrap();
         lay_entry(&layout, &v2, EntryKind::File);
 
-        let live = live_of(&layout, &index, &store, &Progress::silent())
-            .await
-            .unwrap();
+        let live = live_of(
+            &layout,
+            &index,
+            &StorageSet::sole(store.clone()),
+            &Progress::silent(),
+        )
+        .await
+        .unwrap();
 
         assert!(live.index().contains(&joined.hash()));
         assert!(live.index().contains(&merge.hash()));
@@ -500,9 +585,14 @@ mod tests {
         index.write(v1.clone()).await.unwrap();
         lay_entry(&layout, &v1, EntryKind::Tree);
 
-        let live = live_of(&layout, &index, &store, &Progress::silent())
-            .await
-            .unwrap();
+        let live = live_of(
+            &layout,
+            &index,
+            &StorageSet::sole(store.clone()),
+            &Progress::silent(),
+        )
+        .await
+        .unwrap();
 
         // The structure is the entry's content, and what it names inside, the description and
         // every file's content, is kept with it; a directory names no content.
@@ -546,9 +636,14 @@ mod tests {
         index.write(v1.clone()).await.unwrap();
         lay_entry(&layout, &v1, EntryKind::File);
 
-        let live = live_of(&layout, &index, &store, &Progress::silent())
-            .await
-            .unwrap();
+        let live = live_of(
+            &layout,
+            &index,
+            &StorageSet::sole(store.clone()),
+            &Progress::silent(),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(
             *live.objects(),
@@ -573,9 +668,14 @@ mod tests {
         // keeps what is unanswered, and nothing may be taken away.
         lay_entry(&layout, &v1, EntryKind::File);
 
-        let failure = live_of(&layout, &index, &store, &Progress::silent())
-            .await
-            .unwrap_err();
+        let failure = live_of(
+            &layout,
+            &index,
+            &StorageSet::sole(store.clone()),
+            &Progress::silent(),
+        )
+        .await
+        .unwrap_err();
 
         assert!(matches!(failure, CollectFailure::IndexObject { .. }));
         assert!(failure.to_string().contains(&v1.hash().hex()));

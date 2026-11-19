@@ -333,33 +333,37 @@ internal enum RolaWriteErrorTag : int
     /// </summary>
     RolaWriteError_Storage = 16,
     /// <summary>
+    /// The store a write goes to cannot be written: it is a read-only mount, or one the run may
+    /// </summary>
+    RolaWriteError_ReadOnly = 17,
+    /// <summary>
     /// An index could not be read or written.
     /// </summary>
-    RolaWriteError_Index = 17,
+    RolaWriteError_Index = 18,
     /// <summary>
     /// A file or a directory failed.
     /// </summary>
-    RolaWriteError_Io = 18,
+    RolaWriteError_Io = 19,
     /// <summary>
     /// A JSON document did not read as the shape a request or a plan has.
     /// </summary>
-    RolaWriteError_Json = 19,
+    RolaWriteError_Json = 20,
     /// <summary>
     /// The write stopped for a reason this build does not name.
     /// </summary>
-    RolaWriteError_Internal = 20,
+    RolaWriteError_Internal = 21,
     /// <summary>
     /// A tree could not be read or written.
     /// </summary>
-    RolaWriteError_Tree = 21,
+    RolaWriteError_Tree = 22,
     /// <summary>
     /// No tree holds the path.
     /// </summary>
-    RolaWriteError_NotAtree = 22,
+    RolaWriteError_NotAtree = 23,
     /// <summary>
     /// No Vault holds the directory.
     /// </summary>
-    RolaWriteError_NoVault = 23,
+    RolaWriteError_NoVault = 24,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -448,6 +452,15 @@ internal struct RolaWriteErrorStorage
     /// Why it failed.
     /// </summary>
     public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorReadOnly
+{
+    /// <summary>
+    /// The store that cannot be written.
+    /// </summary>
+    public nint path;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -551,6 +564,11 @@ internal struct RolaWriteErrorPayload
     /// </summary>
     [FieldOffset(0)]
     public RolaWriteErrorStorage Storage;
+    /// <summary>
+    /// The store a write goes to cannot be written: it is a read-only mount, or one the run may
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorReadOnly ReadOnly;
     /// <summary>
     /// An index could not be read or written.
     /// </summary>
@@ -2688,6 +2706,58 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_tree_structure_json(nint directory, nint hash);
 
     /// <summary>
+    /// Makes the directory at `root` a store.
+    ///
+    /// Nothing on success, or a `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_storage_create(nint root);
+
+    /// <summary>
+    /// Binds a store to the Workspace rooted at `workspace_root`.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"bound_workspace":true,"bound_vault":false,"reverse_recorded":true,"read_only":false,"warnings":[]}`,
+    /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_workspace_bind_storage(nint workspace_root, nint store_root);
+
+    /// <summary>
+    /// Binds a store to the Vault rooted at `vault_root`.
+    ///
+    /// The same JSON as [`workspace_bind_storage`], with `bound_vault` set instead.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_vault_bind_storage(nint vault_root, nint store_root);
+
+    /// <summary>
+    /// The places the store rooted at `store_root` records as writing to it.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"workspaces":["..."],"vaults":["..."]}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_storage_connected_json(nint store_root);
+
+    /// <summary>
     /// Puts a path under a Workspace on one version and writes what the record says about it.
     ///
     /// An owned JSON string the caller releases with `free_string`,
@@ -3270,7 +3340,7 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_retrack(nint request, nint progress, nint cancellation);
 
     /// <summary>
-    /// Puts a file's content into the store a directory is in.
+    /// Puts a file's content into the store a directory works on.
     ///
     /// An owned JSON string the caller releases with `free_string`, `{"key":"blake3:...","chunked":false}`,
     /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is the empty

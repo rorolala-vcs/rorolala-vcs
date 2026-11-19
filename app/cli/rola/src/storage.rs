@@ -1,4 +1,5 @@
 pub mod cmd_storage;
+pub mod cmd_storage_create;
 pub mod cmd_storage_extract_file;
 pub mod cmd_storage_ls_manifests;
 pub mod cmd_storage_ls_remote_manifests;

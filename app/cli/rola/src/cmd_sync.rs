@@ -24,7 +24,7 @@
 
 use librorolala::daemon::action_fetch_layout;
 use librorolala::layout::Layout;
-use librorolala::storage::RorolalaStorage;
+use librorolala::storage::StorageSet;
 use librorolala::vcs::VCSIndex;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
@@ -38,8 +38,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResConcurrency, ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting,
-    ResRorolalaStorage, ResVCSIndex, ResWorkspace,
+    ResConcurrency, ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting, ResStorageSet,
+    ResVCSIndex, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd, warn_line};
@@ -242,7 +242,7 @@ pub fn handle_sync(
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     progress: &ResProgressSetting,
 ) -> Next {
     workspace.get_ref().check()?;
@@ -288,7 +288,7 @@ pub fn handle_sync(
         target: &target,
         layout: &layout,
         index,
-        store: storage.get_ref().as_ref(),
+        store: storage.get_ref().storage(),
         remote: remote.get_ref(),
         runtime: &runtime,
     };
@@ -485,8 +485,8 @@ struct Carry<'a> {
     layout: &'a Layout,
     /// The index below both sides.
     index: &'a VCSIndex,
-    /// The store content is written from, when the run has one.
-    store: Option<&'a RorolalaStorage>,
+    /// The stores content is written from, when the run has them.
+    store: Option<&'a StorageSet>,
     /// The Vaults the run may reach, for content that is not here.
     remote: &'a ResCurrentRemoteVault,
     /// The runtime the asynchronous exchanges are waited on.

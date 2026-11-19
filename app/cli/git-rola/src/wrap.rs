@@ -58,7 +58,14 @@ pub fn run(verb: &str, arguments: &[String]) -> i32 {
 
     // A tree is taken out only once the structure it was placed from is read, so the source is
     // made before the taking out rather than after git has run.
-    let source = crate::source::of(session.project());
+    let source = match crate::source::of(session.project()) {
+        Ok(source) => source,
+        Err(error) => {
+            eprintln!("{}{error}", t!("message.fatal"));
+
+            return EC_ERR;
+        }
+    };
 
     if let Err(error) = session.detach(&source) {
         eprintln!("{}{error}", t!("message.fatal"));

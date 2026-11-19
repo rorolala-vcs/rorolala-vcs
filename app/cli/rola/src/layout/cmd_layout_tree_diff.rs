@@ -18,7 +18,7 @@ use mingling::{
     picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResWorkspace};
+use rorolala_cli_setups::{ResStorageSet, ResVCSIndex, ResWorkspace};
 use rorolala_utils_cli_theme::{err_line, trd};
 use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
@@ -141,7 +141,7 @@ pub fn handle_layout_tree_diff(
     workspace: &mut LazyRes<ResWorkspace>,
     account: &mut LazyRes<ResCurrentAccount>,
     index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     format: &mut ResFormat,
 ) -> Next {
     let StateLayoutTreeDiff {
@@ -272,10 +272,10 @@ fn tree_changes(
     layout: &librorolala::layout::Layout,
     account: &mut LazyRes<ResCurrentAccount>,
     index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     include_ignored: bool,
 ) -> (Vec<String>, Vec<String>) {
-    let (Some(index), Some(store)) = (index.get_ref().as_ref(), storage.get_ref().as_ref()) else {
+    let (Some(index), Some(store)) = (index.get_ref().as_ref(), storage.get_ref().storage()) else {
         return (Vec::new(), Vec::new());
     };
     let Ok(runtime) = tokio::runtime::Runtime::new() else {

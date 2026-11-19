@@ -8,7 +8,10 @@
 use std::path::{Path, PathBuf};
 
 use rorolala_layout::Layout;
-use rorolala_storage::{LockError, Lockable, LockingGuard, RorolalaStorage};
+use rorolala_storage::{
+    LockError, Lockable, LockingGuard, RorolalaStorage, StorageConfigError, StorageSet,
+};
+use rorolala_utils_configure::{Configure as _, Error as ConfigureError, Reason};
 use rorolala_utils_constants::LOCK_FILE;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
@@ -164,6 +167,30 @@ impl Vault {
             .unwrap_or_else(|| RorolalaStorage::create(self.storage_root()))
     }
 
+    /// The stores this Vault works on, in the order it reaches for them.
+    ///
+    /// The list is the configuration's `[storage] storages`, resolved against the Vault's own
+    /// store; the own store is last when `.` is not one of them. A configuration that is not there
+    /// is a Vault with only its own store, while one that is there and does not read is refused
+    /// rather than silently ignored.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StorageConfigError`] when the configuration is there and does not read.
+    pub fn storage_set(&self) -> Result<StorageSet, StorageConfigError> {
+        let config = read_vault_config(&self.config_path())?;
+        let own = self.get_current_rola_storage();
+        let own_root = self.storage_root();
+
+        Ok(StorageSet::with_bindings(
+            own,
+            own_root.clone(),
+            &own_root,
+            config.storage_config().storages().iter().cloned(),
+            Some(&self.current_dir),
+        ))
+    }
+
     /// Where the Vault's store is rooted, with the layout's spelling walked back out of it.
     ///
     /// The directory is written `./storage/`, and joining that onto the Vault's root leaves
@@ -173,15 +200,35 @@ impl Vault {
     }
 }
 
+/// Reads the Vault's configuration, treating a file that is not there as the empty one.
+///
+/// A file that is there and does not read is returned as the failure it is: a binding this build
+/// cannot read is not a Vault with no binding.
+fn read_vault_config(path: &Path) -> Result<Config, StorageConfigError> {
+    match Config::read_from(path) {
+        Ok(config) => Ok(config),
+        Err(ConfigureError::Read {
+            reason: Reason::Missing,
+            ..
+        }) => Ok(Config::default()),
+        Err(error) => Err(StorageConfigError::Malformed {
+            path: path.to_path_buf(),
+            reason: error.to_string(),
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use rorolala_storage::{RorolalaStorage, StorageNote};
+    use rorolala_utils_configure::Configure as _;
     use rorolala_utils_location::Locate;
 
-    use crate::{CONFIG_PATH, Vault};
+    use crate::{CONFIG_PATH, Config, Vault};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -210,5 +257,62 @@ mod tests {
         assert!(vault.config_path().is_file(), "{:?}", vault.config_path());
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_vault_works_on_the_stores_its_configuration_names() {
+        let parent = scratch("stores");
+        let root = parent.join("vault");
+        Vault::create(&root).unwrap();
+        let vault = Vault::locate(&root).unwrap();
+        let shared = parent.join("shared");
+        let _ = RorolalaStorage::create(&shared);
+
+        let mut config = Config::read_from(&vault.config_path()).unwrap();
+        config
+            .storage_config_mut()
+            .add_storage(shared.to_string_lossy());
+        config.write_to(&vault.config_path()).unwrap();
+
+        let set = vault.storage_set().unwrap();
+
+        assert_eq!(set.write_target().get_root(), shared.as_path());
+        let roots: Vec<PathBuf> = set
+            .stores()
+            .map(|store| store.get_root().to_path_buf())
+            .collect();
+        assert_eq!(roots, [shared, vault.get_root().join("storage")]);
+
+        let _ = fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn a_vault_refuses_a_store_inside_its_own_root() {
+        let parent = scratch("stores-forbidden");
+        let root = parent.join("vault");
+        Vault::create(&root).unwrap();
+        let vault = Vault::locate(&root).unwrap();
+        let inside = root.join("inside");
+        let _ = RorolalaStorage::create(&inside);
+
+        let mut config = Config::read_from(&vault.config_path()).unwrap();
+        config
+            .storage_config_mut()
+            .add_storage(inside.to_string_lossy());
+        config.write_to(&vault.config_path()).unwrap();
+
+        let set = vault.storage_set().unwrap();
+
+        assert!(
+            set.notes()
+                .iter()
+                .any(|note| matches!(note, StorageNote::Unusable { .. }))
+        );
+        assert_eq!(
+            set.write_target().get_root(),
+            vault.get_root().join("storage")
+        );
+
+        let _ = fs::remove_dir_all(&parent);
     }
 }

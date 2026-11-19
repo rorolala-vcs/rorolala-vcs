@@ -23,6 +23,33 @@ public sealed partial class WorkspaceWriter : Writer
     /// <summary>The store the Workspace keeps.</summary>
     public StorageScope Storage => _workspace.Storage;
 
+    /// <summary>Binds a store to the Workspace.</summary>
+    /// <param name="storage">The directory carrying the store's `rolast.toml`.</param>
+    /// <returns>What the binding came to.</returns>
+    public StorageBound BindStorage(DirectoryInfo storage)
+    {
+        ArgumentNullException.ThrowIfNull(storage);
+
+        var workspace = Utf8(_workspace.Root.FullName);
+        var at = Utf8(storage.FullName);
+        try
+        {
+            var answer = RorolalaBinding.rola_workspace_bind_storage(workspace, at);
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+            return StorageBound.From(document.RootElement);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(workspace);
+            Marshal.FreeCoTaskMem(at);
+        }
+    }
+
     /// <summary>Reads the whole tree and writes down what each path holds.</summary>
     /// <returns>What the rebuild found.</returns>
     public CacheReport RebuildTreeCache()

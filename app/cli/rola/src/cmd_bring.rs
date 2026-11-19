@@ -45,8 +45,8 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResConcurrency, ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting,
-    ResRorolalaStorage, ResVCSIndex, ResWorkspace,
+    ResConcurrency, ResCurrentRemoteVault, ResForce, ResOffline, ResProgressSetting, ResStorageSet,
+    ResVCSIndex, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd, warn_line};
@@ -230,7 +230,7 @@ pub fn handle_bring(
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     progress: &ResProgressSetting,
     offline: &ResOffline,
     force: &ResForce,
@@ -309,7 +309,7 @@ pub fn handle_bring(
     let Some(index) = index.get_ref().as_ref() else {
         return ErrorVcsIndexNoIndex.into();
     };
-    let store = storage.get_ref().as_ref();
+    let store = storage.get_ref().storage();
 
     let wanted = match resolve(
         &remote_layout,

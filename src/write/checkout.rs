@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use rorolala_layout::{Layout, LayoutPath};
-use rorolala_storage::{Key, RorolalaStorage};
+use rorolala_storage::{Key, StorageSet};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_vault::Vault;
@@ -157,9 +157,7 @@ pub fn restore(
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })?;
-    let store = workspace
-        .get_current_rola_storage()
-        .ok_or(WriteError::NoStore)?;
+    let store = workspace.storage_set()?;
     let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
     let root = normalize(workspace.get_root());
     let (restored, relative) = restore_into(&layout, &store, &index, &root, cwd, path, version)?;
@@ -186,9 +184,7 @@ pub fn restore_vault(
     let layout = vault.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })?;
-    let store = vault
-        .get_current_rola_storage()
-        .ok_or(WriteError::NoStore)?;
+    let store = vault.storage_set()?;
     let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
     let root = normalize(vault.get_root());
     let (restored, _) = restore_into(&layout, &store, &index, &root, cwd, path, version)?;
@@ -199,7 +195,7 @@ pub fn restore_vault(
 /// Puts a version's content at a path, answering what the Layout now names and where it is.
 fn restore_into(
     layout: &Layout,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     index: &VCSIndex,
     root: &Path,
     cwd: &Path,

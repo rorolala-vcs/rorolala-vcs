@@ -18,10 +18,12 @@ use librorolala::auth::{
     Account, KeyLocateRule, current_account, env_keys_dir, find_account, global_keys_dir,
     user_keys_dir,
 };
-use librorolala::daemon::{action_fetch_layout, action_read_remote_index, action_sync_hashes};
+use librorolala::daemon::{
+    action_fetch_layout, action_read_remote_index, action_sync_hashes_with_stores_async,
+};
 use librorolala::layout::Layout;
 use librorolala::protocol::VaultAddress;
-use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
+use librorolala::storage::{Key, RorolalaStorage, StorageSet};
 use librorolala::tree::{TreeError, TreeStructure};
 use librorolala::vcs::{VCSIndexObject, Variant, Version};
 use librorolala::workspace::{Workspace, locate_workspace};
@@ -53,7 +55,7 @@ const SEARCH: KeyLocateRule = KeyLocateRule {
 /// Returns a message naming the material whose structure cannot be read, and what reading it failed
 /// with.
 pub fn tree_contents(
-    store: &RorolalaStorage,
+    store: &StorageSet,
     trees: &[(String, ContentHash)],
 ) -> Result<Vec<ContentHash>, String> {
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -389,17 +391,32 @@ pub fn content_of(
     Ok(ContentHash::from_digest(*variant.storage_hash()))
 }
 
-/// The project's store, made where it is not there yet.
+/// The stores a project works on.
 ///
-/// A project that has never had content brought into it keeps none, and a run that resolves
-/// mappings makes one: the content the lock names has to sit somewhere before the lock says so.
-pub fn project_store(project: &Project) -> RorolalaStorage {
-    let root = project.root().join(".rola").join("storage");
+/// The project's own `.rola/storage` is the last store it reads; the ones `rola.toml` names under
+/// `[[storages]]` come first, in the order it writes them. The set answers with none when the
+/// project has neither, which is a project whose materials can only be put back from the staging
+/// area; a write through it makes the own store.
+///
+/// # Errors
+///
+/// Returns a message when `rola.toml` cannot be read.
+pub fn project_stores(project: &Project) -> Result<StorageSet, String> {
+    let own_root = project.root().join(".rola").join("storage");
+    let own = RorolalaStorage::at(own_root.clone());
+    let config = project.config().map_err(|error| error.to_string())?;
+    let paths: Vec<String> = config.storage_paths().map(str::to_owned).collect();
 
-    RorolalaStorage::at(root.clone()).unwrap_or_else(|| RorolalaStorage::create(root))
+    Ok(StorageSet::with_bindings(
+        own,
+        own_root,
+        project.root(),
+        paths,
+        Some(project.root()),
+    ))
 }
 
-/// Brings the content the resolved materials name into the project's store.
+/// Brings the content the resolved materials name into the project's stores.
 ///
 /// A key is the hash of its content, so any Vault that holds it hands back the same object: the
 /// content is asked of every Vault the run resolves through, and what none of them holds is a
@@ -410,7 +427,7 @@ pub fn project_store(project: &Project) -> RorolalaStorage {
 /// Returns a message naming the Vault when one cannot be reached, and the content when it cannot be
 /// had at all.
 pub fn bring_contents(
-    store: &RorolalaStorage,
+    store: &StorageSet,
     workspace: &Workspace,
     account: &Account,
     sources: &[VaultSource],
@@ -436,14 +453,23 @@ pub fn bring_contents(
     for source in sources {
         let units = missing.iter().map(Key::hex).collect::<Vec<_>>().join(" ");
 
-        action_sync_hashes(workspace, account, source.target.clone(), units).map_err(|error| {
-            t!(
-                "update.err_content",
-                vault = source.name.as_str(),
-                error = error.to_string()
-            )
-            .to_string()
-        })?;
+        runtime
+            .block_on(action_sync_hashes_with_stores_async(
+                workspace,
+                account,
+                source.target.clone(),
+                units,
+                store,
+                rorolala_utils_progress::Progress::silent(),
+            ))
+            .map_err(|error| {
+                t!(
+                    "update.err_content",
+                    vault = source.name.as_str(),
+                    error = error.to_string()
+                )
+                .to_string()
+            })?;
 
         missing = absent(&runtime, store, &missing)?;
 
@@ -463,7 +489,7 @@ pub fn bring_contents(
 /// Returns a message when the store cannot be asked.
 fn absent(
     runtime: &tokio::runtime::Runtime,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     keys: &[Key],
 ) -> Result<Vec<Key>, String> {
     let presence = runtime

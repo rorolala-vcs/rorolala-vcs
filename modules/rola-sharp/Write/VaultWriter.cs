@@ -13,6 +13,33 @@ public sealed class VaultWriter : Writer
     public VaultWriter(VaultScope vault) =>
         _vault = vault ?? throw new ArgumentNullException(nameof(vault));
 
+    /// <summary>Binds a store to the Vault.</summary>
+    /// <param name="storage">The directory carrying the store's `rolast.toml`.</param>
+    /// <returns>What the binding came to.</returns>
+    public StorageBound BindStorage(DirectoryInfo storage)
+    {
+        ArgumentNullException.ThrowIfNull(storage);
+
+        var vault = Marshal.StringToCoTaskMemUTF8(_vault.Root.FullName);
+        var at = Marshal.StringToCoTaskMemUTF8(storage.FullName);
+        try
+        {
+            var answer = RorolalaBinding.rola_vault_bind_storage(vault, at);
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+
+            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
+            return StorageBound.From(document.RootElement);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(vault);
+            Marshal.FreeCoTaskMem(at);
+        }
+    }
+
     /// <summary>Removes a Layout entry and the path that names it.</summary>
     /// <param name="id">The entry's id.</param>
     public void RemoveEntry(Guid id)

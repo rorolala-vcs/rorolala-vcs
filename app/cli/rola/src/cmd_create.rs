@@ -2,6 +2,7 @@ use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 
 use librorolala::{
+    storage::RorolalaStorage,
     vault::{CONFIG_PATH, VAULTS_DIR, Vault},
     workspace::{DATA_DIR, Workspace},
 };
@@ -12,21 +13,28 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::EntryPicker,
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResUsingVault, ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
-use rorolala_utils_location::Locate;
+use rorolala_utils_constants::STORAGE_CONFIG_PATH;
+use rorolala_utils_location::{Locate, normalize};
 use rust_i18n::t;
 
 use crate::{
     Next,
     complete::positional,
-    exit_codes::{EC_ALREADY_EXIST, EC_ERR_CREATION_ARGUMENT, EC_HELP, EC_NOT_EXIST},
+    exit_codes::{
+        EC_ALREADY_EXIST, EC_ERR_CREATION_ARGUMENT, EC_ERR_CREATION_STORAGE, EC_ERR_STORAGE_BIND,
+        EC_HELP, EC_NOT_EXIST,
+    },
     failure::failure,
 };
+
+/// Create a store instead of a Workspace.
+pub const ARG_STORAGE: PickerArg<'static, Flag> = arg![storage: Flag];
 
 #[help(buffer)]
 pub fn help_create(_: EntryCreate, ec: &mut ResExitCode) {
@@ -54,33 +62,102 @@ pub fn complete_create(ctx: ShellContext) -> Suggest {
 
 #[command(entry = EntryCreate, routeify)]
 pub fn create(args: EntryCreate) -> Next {
-    let path: PathBuf = args
+    let (storage, path) = args
+        .pick(ARG_STORAGE)
         .pick_or_route(arg![PathBuf], || ErrorCreatePathNotProvided.to_chain())
         .to_result()?;
 
-    StateCreatePath::from(path).into()
+    StateCreatePath {
+        path,
+        storage: matches!(storage, Flag::Active),
+    }
+    .into()
 }
 
 /// Represents the state data naming where a creation is asked for.
 ///
-/// A path is the whole of what a creation is given: whether a Vault or a Workspace is what is
-/// made is asked for beside it, so this is the state every creation starts in, and the one a
+/// A path is the whole of what a creation is given: whether a Vault, a Workspace or a store is what
+/// is made is asked for beside it, so this is the state every creation starts in, and the one a
 /// name for the current directory, `rola init`, reaches with as well.
-#[derive(Grouped, Wrap)]
+#[derive(Grouped)]
 pub struct StateCreatePath {
     /// The directory expected to be created.
     path: PathBuf,
+    /// Whether the directory is a store rather than a Workspace.
+    storage: bool,
+}
+
+impl StateCreatePath {
+    /// The state a creation starts in: a path and what is to be made there.
+    pub(crate) const fn new(path: PathBuf, storage: bool) -> Self {
+        Self { path, storage }
+    }
 }
 
 #[chain(routeify)]
 pub fn handle_create(state: StateCreatePath, using_vault: &ResUsingVault) -> Next {
-    let path = state.path;
+    let StateCreatePath { path, storage } = state;
+
+    if storage {
+        if **using_vault {
+            return ErrorCreateStorageAndVault.into();
+        }
+
+        return StateCreateStoragePath { path }.into();
+    }
 
     if **using_vault {
         StateCreateVault::from(path).into()
     } else {
         StateCreateWorkspace::from(path).into()
     }
+}
+
+/// Represents the state data used to create a store.
+#[derive(Grouped, Wrap)]
+pub struct StateCreateStoragePath {
+    /// The directory the store is rooted at.
+    path: PathBuf,
+}
+
+#[chain(routeify)]
+pub fn handle_create_storage(state: StateCreateStoragePath) -> Next {
+    let StateCreateStoragePath { path } = state;
+    let path = absolute(&path);
+
+    // A directory that carries a store's configuration is a store already, and one at a Workspace
+    // or a Vault root would be found before the place's own store by every search that walks up.
+    if path.join(STORAGE_CONFIG_PATH).is_file() {
+        return ErrorStorageAlreadyExist { path }.into();
+    }
+
+    if path.join(DATA_DIR).is_dir() || path.join(CONFIG_PATH).is_file() {
+        return ErrorStorageTargetIsPlace { path }.into();
+    }
+
+    if path.exists() && !path.is_dir() {
+        return ErrorStorageTargetNotDirectory { path }.into();
+    }
+
+    match RorolalaStorage::try_create(&path) {
+        Ok(_) => ResultStorageCreated { path }.into(),
+        Err(error) => ErrorStorageCreationFailed {
+            path,
+            cause: error.to_string(),
+        }
+        .into(),
+    }
+}
+
+/// `path` made absolute against the run's current directory, then normalised.
+pub fn absolute(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        return normalize(path);
+    }
+
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    normalize(&cwd.join(path))
 }
 
 /// Represents the state data used to create a Vault.
@@ -349,6 +426,194 @@ pub fn render_error_workspace_not_exist(error: ErrorWorkspaceNotExist, ec: &mut 
         help_line!(t!("common.err_workspace_not_exist_help").trim())
     );
     ec.exit_code = EC_NOT_EXIST;
+}
+
+/// Error: a store and a Vault were asked for at once.
+#[derive(Grouped)]
+pub struct ErrorCreateStorageAndVault;
+
+impl Failure for ErrorCreateStorageAndVault {
+    fn name(&self) -> &'static str {
+        "error_create_storage_and_vault"
+    }
+
+    fn reason(&self) -> String {
+        t!("create.err_storage_and_vault").trim().to_string()
+    }
+}
+
+failure!(ErrorCreateStorageAndVault);
+
+#[renderer(buffer)]
+pub fn render_error_create_storage_and_vault(
+    error: ErrorCreateStorageAndVault,
+    ec: &mut ResExitCode,
+) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("create.err_storage_and_vault_help").trim())
+    );
+    ec.exit_code = EC_ERR_CREATION_ARGUMENT;
+}
+
+/// Error: the target is a store already.
+#[derive(Grouped)]
+pub struct ErrorStorageAlreadyExist {
+    /// The directory that is a store.
+    path: PathBuf,
+}
+
+impl Failure for ErrorStorageAlreadyExist {
+    fn name(&self) -> &'static str {
+        "error_storage_already_exist"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "create.err_storage_exists",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageAlreadyExist);
+
+#[renderer(buffer)]
+pub fn render_error_storage_already_exist(error: ErrorStorageAlreadyExist, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("create.err_storage_exists_help").trim())
+    );
+    ec.exit_code = EC_ALREADY_EXIST;
+}
+
+/// Error: the target is a Workspace or a Vault, so it cannot be a store.
+#[derive(Grouped)]
+pub struct ErrorStorageTargetIsPlace {
+    /// The directory that is a place.
+    path: PathBuf,
+}
+
+impl Failure for ErrorStorageTargetIsPlace {
+    fn name(&self) -> &'static str {
+        "error_storage_target_is_place"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "create.err_storage_target_is_place",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageTargetIsPlace);
+
+#[renderer(buffer)]
+pub fn render_error_storage_target_is_place(
+    error: ErrorStorageTargetIsPlace,
+    ec: &mut ResExitCode,
+) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("create.err_storage_target_is_place_help").trim())
+    );
+    ec.exit_code = EC_ERR_STORAGE_BIND;
+}
+
+/// Error: the target is not a directory, so no store can be made there.
+#[derive(Grouped)]
+pub struct ErrorStorageTargetNotDirectory {
+    /// The path that is not a directory.
+    path: PathBuf,
+}
+
+impl Failure for ErrorStorageTargetNotDirectory {
+    fn name(&self) -> &'static str {
+        "error_storage_target_not_directory"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "create.err_storage_target_not_directory",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageTargetNotDirectory);
+
+#[renderer(buffer)]
+pub fn render_error_storage_target_not_directory(
+    error: ErrorStorageTargetNotDirectory,
+    ec: &mut ResExitCode,
+) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    ec.exit_code = EC_ERR_STORAGE_BIND;
+}
+
+/// Error: the store could not be made, and the reason is the filesystem's.
+#[derive(Grouped)]
+pub struct ErrorStorageCreationFailed {
+    /// The directory the store was to be made at.
+    path: PathBuf,
+    /// Why it could not be.
+    cause: String,
+}
+
+impl Failure for ErrorStorageCreationFailed {
+    fn name(&self) -> &'static str {
+        "error_storage_creation_failed"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "create.err_storage_failed",
+            path = self.path.display().to_string(),
+            reason = self.cause
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageCreationFailed);
+
+#[renderer(buffer)]
+pub fn render_error_storage_creation_failed(
+    error: ErrorStorageCreationFailed,
+    ec: &mut ResExitCode,
+) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    ec.exit_code = EC_ERR_CREATION_STORAGE;
+}
+
+/// Result: a store was created.
+#[derive(Grouped, Wrap)]
+pub struct ResultStorageCreated {
+    /// The directory that was created.
+    path: PathBuf,
+}
+
+#[renderer(buffer)]
+pub fn render_result_storage_created(result: ResultStorageCreated) {
+    r_println!(
+        "{}",
+        t!(
+            "create.result_storage_created",
+            path = result.path.display().to_string()
+        )
+        .trim()
+    );
 }
 
 /// Result: the workspace was created.

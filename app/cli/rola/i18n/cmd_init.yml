@@ -3,16 +3,18 @@ _version: 2
 init:
   help:
     en: |
-        # Create a Workspace or Vault in the current directory
+        # Create a Workspace, a Vault or a store in the current directory
         **Usage**: rola [[GREEN]]__init__[[/]]
         **Flags**:
              __--vault__ __-v__    Create a Vault instead of a Workspace
+             __--storage__     Create a store instead of a Workspace
     zh-CN: |
-        # 将当前目录创建为工作区或保险库
+        # 将当前目录创建为工作区、保险库或存储
         **用法**：rola [[GREEN]]__init__[[/]]
         **标识**：
              __--vault__ __-v__    创建保险库而不是工作区
+             __--storage__     创建存储而不是工作区
 
   cmd_init_description:
-    en: Create a Workspace or Vault in the current directory
-    zh-CN: 在当前目录创建工作区或保险库
+    en: Create a Workspace, a Vault or a store in the current directory
+    zh-CN: 在当前目录创建工作区、保险库或存储

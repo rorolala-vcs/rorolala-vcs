@@ -10,7 +10,10 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use rorolala_layout::{Layout, LayoutError};
-use rorolala_storage::{LockError, Lockable, LockingGuard, RorolalaStorage};
+use rorolala_storage::{
+    LockError, Lockable, LockingGuard, RorolalaStorage, StorageConfigError, StorageSet,
+};
+use rorolala_utils_configure::{Configure as _, Error as ConfigureError, Reason};
 use rorolala_utils_constants::{LAYOUT_TRACK_FILE, WORKSPACE_READONLY_LAYOUTS_DIR};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate, LocateHelper};
@@ -117,6 +120,32 @@ impl Workspace {
     pub fn get_or_create_rola_storage(&self) -> RorolalaStorage {
         self.get_current_rola_storage()
             .unwrap_or_else(|| RorolalaStorage::create(self.storage_root()))
+    }
+
+    /// The stores this Workspace works on, in the order it reaches for them.
+    ///
+    /// The list is the configuration's `[default] storages`, resolved against the Workspace's own
+    /// store; the own store is last when `.` is not one of them. A configuration that is not there
+    /// is a Workspace with only its own store, while one that is there and does not read is
+    /// refused rather than silently ignored: a binding a reader cannot see is one a writer would
+    /// not use either.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StorageConfigError`] when the configuration is there and does not read.
+    pub fn storage_set(&self) -> Result<StorageSet, StorageConfigError> {
+        let config = read_workspace_config(&self.config_path())?;
+        let own = self.get_current_rola_storage();
+        let own_root = self.storage_root();
+        let data_dir: PathBuf = self.current_dir.join(DATA_DIR).components().collect();
+
+        Ok(StorageSet::with_bindings(
+            own,
+            own_root.clone(),
+            &own_root,
+            config.default_config().storages().iter().cloned(),
+            Some(&data_dir),
+        ))
     }
 
     /// The Layout this Workspace works in, made where it is not there yet.
@@ -391,6 +420,25 @@ fn legacy_names(legacy: &Path) -> Result<Vec<String>, LayoutError> {
     Ok(names)
 }
 
+/// Reads the Workspace's configuration, treating a file that is not there as the empty one.
+///
+/// A file that is there and does not read is returned as the failure it is: a binding this build
+/// cannot read is not a Workspace with no binding, and treating it as one would write the work
+/// somewhere the configuration never named.
+fn read_workspace_config(path: &Path) -> Result<Config, StorageConfigError> {
+    match Config::read_from(path) {
+        Ok(config) => Ok(config),
+        Err(ConfigureError::Read {
+            reason: Reason::Missing,
+            ..
+        }) => Ok(Config::default()),
+        Err(error) => Err(StorageConfigError::Malformed {
+            path: path.to_path_buf(),
+            reason: error.to_string(),
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::ffi::CString;
@@ -398,9 +446,11 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use rorolala_storage::{RorolalaStorage, StorageNote};
+    use rorolala_utils_configure::Configure as _;
     use rorolala_utils_location::Locate;
 
-    use crate::{CONFIG_PATH, Workspace, free_rola_workspace, locate_rola_workspace};
+    use crate::{CONFIG_PATH, Config, Workspace, free_rola_workspace, locate_rola_workspace};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -460,6 +510,59 @@ mod tests {
             workspace.config_path().is_file(),
             "{:?}",
             workspace.config_path()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_workspace_works_on_the_stores_its_configuration_names() {
+        let dir = scratch("stores");
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+        let shared = dir.join("shared");
+        let _ = RorolalaStorage::create(&shared);
+
+        let mut config = Config::read_from(&workspace.config_path()).unwrap();
+        config
+            .default_config_mut()
+            .add_storage(shared.to_string_lossy());
+        config.write_to(&workspace.config_path()).unwrap();
+
+        let set = workspace.storage_set().unwrap();
+
+        // What is bound is where a write goes, and the own store comes last.
+        assert_eq!(set.write_target().get_root(), shared.as_path());
+        let roots: Vec<PathBuf> = set
+            .stores()
+            .map(|store| store.get_root().to_path_buf())
+            .collect();
+        assert_eq!(roots, [shared, workspace.get_root().join(".rola/storage")]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_workspace_refuses_a_store_inside_its_own_data_directory() {
+        let dir = scratch("stores-forbidden");
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+
+        let mut config = Config::read_from(&workspace.config_path()).unwrap();
+        // `..` from `.rola/storage` is `.rola`, which is the Workspace's own data directory.
+        config.default_config_mut().add_storage("..");
+        config.write_to(&workspace.config_path()).unwrap();
+
+        let set = workspace.storage_set().unwrap();
+
+        assert!(
+            set.notes()
+                .iter()
+                .any(|note| matches!(note, StorageNote::Unusable { .. }))
+        );
+        assert_eq!(
+            set.write_target().get_root(),
+            workspace.get_root().join(".rola/storage")
         );
 
         let _ = fs::remove_dir_all(&dir);

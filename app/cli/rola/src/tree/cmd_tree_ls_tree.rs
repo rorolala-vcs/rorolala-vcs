@@ -5,7 +5,7 @@
 #![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
 use librorolala::layout::Layout;
-use librorolala::storage::RorolalaStorage;
+use librorolala::storage::StorageSet;
 use librorolala::tree::{EntryKind, TreeStructure, read_structure, version_of};
 use librorolala::vcs::VCSIndex;
 use librorolala::workspace::Workspace;
@@ -20,7 +20,7 @@ use mingling::{
     picker::EntryPicker,
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace};
+use rorolala_cli_setups::{ResStorageSet, ResVCSIndex, ResVault, ResWorkspace};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
@@ -103,7 +103,7 @@ pub fn handle_tree_ls_tree(
     state: StateTreeLsTree,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     index: &mut LazyRes<ResVCSIndex>,
     format: &mut ResFormat,
 ) -> Next {
@@ -118,7 +118,7 @@ pub fn handle_tree_ls_tree(
         return ErrorTreeShouldInWorkspace.into();
     };
 
-    let Some(store) = storage.get_ref().as_ref() else {
+    let Some(store) = storage.get_ref().storage() else {
         return ErrorTreeFailed::new(t!("tree.err_no_store").trim().to_string()).into();
     };
     let Some(index) = index.get_ref().as_ref() else {
@@ -145,7 +145,7 @@ pub fn handle_tree_ls_tree(
 pub fn resolve_structure(
     held: &Workspace,
     layout: &Layout,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     index: &VCSIndex,
     target: Option<&str>,
     runtime: &tokio::runtime::Runtime,

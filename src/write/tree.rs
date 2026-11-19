@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use rorolala_ignore::IgnoreRuleSet;
-use rorolala_storage::{Batch, Lockable as _, RorolalaStorage};
+use rorolala_storage::{Batch, Lockable as _, RorolalaStorage, StorageSet};
 use rorolala_tree::{EntryKind, Staging, Tree, TreeEntry, TreeRules, TreeStructure, conflict_copy};
 use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
 use rorolala_utils_lazyffi::lazyffi;
@@ -120,9 +120,7 @@ pub fn stage_paths(
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })?;
-    let store = workspace
-        .get_current_rola_storage()
-        .ok_or(WriteError::NoStore)?;
+    let set = workspace.storage_set()?;
     let index = VCSIndex::locate(cwd).ok_or(WriteError::NoIndex)?;
     let at = if target.is_empty() {
         cwd.to_path_buf()
@@ -143,14 +141,14 @@ pub fn stage_paths(
         },
     })?;
 
-    stage(&tree, &layout, &store, &index, cwd, paths, include_ignored)
+    stage(&tree, &layout, &set, &index, cwd, paths, include_ignored)
 }
 
 /// Stages the paths, and answers what the staged structure changed.
 fn stage(
     tree: &Tree,
     layout: &rorolala_layout::Layout,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     index: &VCSIndex,
     cwd: &Path,
     paths: &[String],

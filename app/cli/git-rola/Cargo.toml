@@ -37,6 +37,14 @@ uuid.workspace = true
 # The run's directory, its destination and the project's root are joined into one normalized path
 # before a landing is decided.
 rorolala-utils-location.workspace = true
+rorolala-utils-progress.workspace = true
+# `rola.toml` is a hand-written file, so `bind` edits it where it lies rather than rewriting it:
+# the comments and the shape a person gave it stay as they are.
+toml_edit.workspace = true
+# What `toml_edit` wrote is read back as a project before it replaces the file.
+toml.workspace = true
+# A name bound under `--vault` is normalized the way `rola bind` normalizes one.
+just_fmt.workspace = true
 
 # A pager and a wrapped git die by signal on Unix, and this program has to arrange for both: the
 # `SIGPIPE` disposition is restored at start, and a signal that killed a wrapped command is raised

@@ -43,4 +43,19 @@ internal static class RolaJson
         && value.TryGetUInt64(out var number)
             ? number
             : null;
+
+    /// <summary>The stores a place's configuration names, in the order it reaches for them.</summary>
+    public static IReadOnlyList<StorageBinding> StorageBindings(JsonElement root) =>
+        Items(root, "storages")
+            ?.EnumerateArray()
+            .Select(item => new StorageBinding(
+                Text(item, "path") ?? string.Empty,
+                Text(item, "root") ?? string.Empty,
+                Flag(item, "own"),
+                Flag(item, "present"),
+                Flag(item, "writable"),
+                Text(item, "reason")
+            ))
+            .ToArray()
+        ?? [];
 }

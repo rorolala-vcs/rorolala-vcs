@@ -107,6 +107,50 @@ int main(void) {
         released(nowhere);
     }
 
+    /* A store is made, bound to the Workspace, and records the Workspace back. */
+    char store[512];
+    snprintf(store, sizeof store, "%s/foreign-store", scratch);
+
+    RorolalaResult created = rola_storage_create(store);
+    want(created.tag == RorolalaResult_Ok, "a store is made across the ABI");
+    if (created.tag == RorolalaResult_Err) {
+        free_rola_write_error(created.payload);
+    }
+
+    RorolalaResult twice = rola_storage_create(store);
+    want(twice.tag == RorolalaResult_Err, "a directory that is a store already is refused");
+    if (twice.tag == RorolalaResult_Err) {
+        const RolaWriteError *error = twice.payload;
+        want(error->tag == RolaWriteError_Precondition, "it is reported as Precondition");
+        free_rola_write_error(twice.payload);
+    }
+
+    RorolalaResult bound = rola_workspace_bind_storage(workspace, store);
+    want(bound.tag == RorolalaResult_Ok, "a store is bound to the Workspace");
+    if (bound.tag == RorolalaResult_Ok) {
+        const char *json = bound.payload;
+        want(json != NULL && strstr(json, "\"bound_workspace\":true") != NULL,
+             "the answer says the Workspace was bound");
+        want(json != NULL && strstr(json, "\"reverse_recorded\":true") != NULL,
+             "the answer says the store recorded the Workspace");
+        free_string(bound.payload);
+    } else {
+        free_rola_write_error(bound.payload);
+    }
+
+    RorolalaResult connected = rola_storage_connected_json(store);
+    want(connected.tag == RorolalaResult_Ok, "the store says who writes to it");
+    if (connected.tag == RorolalaResult_Ok) {
+        const char *json = connected.payload;
+        want(json != NULL && strstr(json, "\"workspaces\"") != NULL,
+             "the record names workspaces");
+        want(json != NULL && strstr(json, workspace) != NULL,
+             "the record names the Workspace that was bound");
+        free_string(connected.payload);
+    } else {
+        free_rola_write_error(connected.payload);
+    }
+
     remove(target);
 
     return finish();

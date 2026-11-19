@@ -1325,6 +1325,7 @@ name = "librorolala"
 version = "0.4.0"
 dependencies = [
  "globset",
+ "rola-define-format",
  "rola-desktop-pty",
  "rorolala-auth",
  "rorolala-book-search",
@@ -1842,6 +1843,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rola-define-format"
+version = "0.4.0"
+dependencies = [
+ "unicode-normalization",
+]
+
+[[package]]
 name = "rola-desktop-pty"
 version = "0.4.0"
 dependencies = [
@@ -1976,6 +1984,7 @@ dependencies = [
  "rorolala-auth",
  "rorolala-errors",
  "rorolala-protocol-macros",
+ "rorolala-storage",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-progress",
@@ -2025,6 +2034,7 @@ dependencies = [
  "size",
  "tokio",
  "toml 0.8.23",
+ "toml_edit",
  "zstd",
 ]
 

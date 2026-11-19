@@ -798,6 +798,9 @@ pub fn switch_entry(
 /// [`WriteError::NoLayout`] when it has no Layout, [`WriteError::InvalidPath`] when a path, a `Uuid`
 /// or a version does not read, and [`WriteError::Layout`] when the batch does not apply.
 #[lazyffi(export = rola_write_layout_switch_entry)]
+// The export is the ABI's own shape: a caller writing one entry by hand names each of these, and
+// folding them into a struct would only move the same arguments across one more boundary.
+#[allow(clippy::too_many_arguments)]
 pub fn switch_entry_at(
     directory: &Path,
     layout: &str,

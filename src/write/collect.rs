@@ -11,7 +11,7 @@ use std::time::Duration;
 use rorolala_storage::CollectPlan as StoragePlan;
 use rorolala_storage::CollectReport as StorageReport;
 use rorolala_storage::Lockable as _;
-use rorolala_storage::RorolalaStorage;
+use rorolala_storage::{RorolalaStorage, StorageSet};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_progress::Progress;
@@ -60,21 +60,21 @@ pub struct Taken {
 /// Returns a message when a plan cannot be read.
 pub fn plans(
     runtime: &tokio::runtime::Runtime,
-    index: &VCSIndex,
+    index: Option<&VCSIndex>,
     store: &RorolalaStorage,
     live: &Live,
     sweep_index: bool,
     sweep_storage: bool,
     grace: Duration,
 ) -> Result<Plans, String> {
-    let index = if sweep_index {
-        Some(
+    let index = match (sweep_index, index) {
+        (true, Some(index)) => Some(
             runtime
                 .block_on(index.collect_plan(live.index(), grace))
                 .map_err(|error| error.to_string())?,
-        )
-    } else {
-        None
+        ),
+        (true, None) => return Err("there is no index to collect".to_owned()),
+        (false, _) => None,
     };
 
     let storage = if sweep_storage {
@@ -98,7 +98,7 @@ pub fn plans(
 /// [`SweepError::Failed`] when a sweep cannot be carried out.
 pub fn sweep(
     runtime: &tokio::runtime::Runtime,
-    index: &VCSIndex,
+    index: Option<&VCSIndex>,
     store: &RorolalaStorage,
     plans: &Plans,
     progress: &Progress,
@@ -106,6 +106,9 @@ pub fn sweep(
     let mut taken = Taken::default();
 
     if let Some(plan) = &plans.index {
+        let index = index.ok_or_else(|| {
+            SweepError::Failed("an index plan was made with no index to carry it out".to_owned())
+        })?;
         let guard = runtime
             .block_on(index.lock())
             .map_err(|error| SweepError::Locked(error.to_string()))?;
@@ -154,25 +157,21 @@ struct Summary {
     storage: Option<Side>,
 }
 
-/// The Layout a collecting run stands in: a Vault's truth Layout first, a Workspace's after.
-fn roots(directory: &Path) -> Result<(crate::layout::Layout, RorolalaStorage), WriteError> {
+/// The Layout a collecting run stands in, and the stores it works on.
+fn roots(directory: &Path) -> Result<(crate::layout::Layout, StorageSet), WriteError> {
     if let Some(vault) = Vault::locate(directory) {
         let layout = vault.layout().map_err(|error| WriteError::Layout {
             reason: error.to_string(),
         })?;
-        let store = vault
-            .get_current_rola_storage()
-            .ok_or(WriteError::NoStore)?;
-        return Ok((layout, store));
+        let set = vault.storage_set()?;
+        return Ok((layout, set));
     }
     if let Some(workspace) = Workspace::locate(directory) {
         let layout = workspace.layout().map_err(|error| WriteError::Layout {
             reason: error.to_string(),
         })?;
-        let store = workspace
-            .get_current_rola_storage()
-            .ok_or(WriteError::NoStore)?;
-        return Ok((layout, store));
+        let set = workspace.storage_set()?;
+        return Ok((layout, set));
     }
 
     Err(WriteError::NoLayout)
@@ -206,19 +205,19 @@ pub fn plan_at(
     index: bool,
     grace: u64,
 ) -> Result<String, WriteError> {
-    let (layout, store) = roots(directory)?;
+    let (layout, set) = roots(directory)?;
     let vcs = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
     let runtime = runtime()?;
     let progress = Progress::silent();
     let live = runtime
-        .block_on(crate::gc::live_of(&layout, &vcs, &store, &progress))
+        .block_on(crate::gc::live_of(&layout, &vcs, &set, &progress))
         .map_err(|error| WriteError::Internal {
             reason: format!("{error:?}"),
         })?;
     let plans = self::plans(
         &runtime,
-        &vcs,
-        &store,
+        Some(&vcs),
+        set.write_target(),
         &live,
         index,
         storage,
@@ -262,19 +261,19 @@ pub fn collect_at(
     index: bool,
     grace: u64,
 ) -> Result<String, WriteError> {
-    let (layout, store) = roots(directory)?;
+    let (layout, set) = roots(directory)?;
     let vcs = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
     let runtime = runtime()?;
     let progress = Progress::silent();
     let live = runtime
-        .block_on(crate::gc::live_of(&layout, &vcs, &store, &progress))
+        .block_on(crate::gc::live_of(&layout, &vcs, &set, &progress))
         .map_err(|error| WriteError::Internal {
             reason: format!("{error:?}"),
         })?;
     let plans = self::plans(
         &runtime,
-        &vcs,
-        &store,
+        Some(&vcs),
+        set.write_target(),
         &live,
         index,
         storage,
@@ -282,10 +281,12 @@ pub fn collect_at(
     )
     .map_err(|reason| WriteError::Internal { reason })?;
     let taken =
-        sweep(&runtime, &vcs, &store, &plans, &progress).map_err(|error| WriteError::Internal {
-            reason: match error {
-                SweepError::Locked(reason) | SweepError::Failed(reason) => reason,
-            },
+        sweep(&runtime, Some(&vcs), set.write_target(), &plans, &progress).map_err(|error| {
+            WriteError::Internal {
+                reason: match error {
+                    SweepError::Locked(reason) | SweepError::Failed(reason) => reason,
+                },
+            }
         })?;
 
     let summary = Summary {

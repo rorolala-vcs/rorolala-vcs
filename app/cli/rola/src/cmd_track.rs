@@ -52,7 +52,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResForce, ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
+    ResForce, ResProgressSetting, ResStorageSet, ResVCSIndex, ResVault, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -289,7 +289,7 @@ pub fn handle_track(
     state: StateTrack,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     index: &mut LazyRes<ResVCSIndex>,
     account: &mut LazyRes<ResCurrentAccount>,
     editor: &ResEditor,
@@ -319,7 +319,7 @@ fn record(
     state: StateTrack,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     index: &mut LazyRes<ResVCSIndex>,
     account: &mut LazyRes<ResCurrentAccount>,
     editor: &ResEditor,
@@ -345,7 +345,7 @@ fn record(
         return ErrorLayoutShouldInWorkspace.into();
     };
 
-    let Some(store) = storage.get_ref().as_ref() else {
+    let Some(store) = storage.get_ref().storage() else {
         return fail(t!("track.err_no_store").trim());
     };
 

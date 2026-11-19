@@ -3,20 +3,27 @@ _version: 2
 bind:
   help:
     en: |
-      # Bind a Vault link quickly
+      # Bind a Vault link or a store
 
-      **Usage**: rola [[GREEN]]__bind__[[/]] <LINK> [NAME]
+      **Usage**: rola [[GREEN]]__bind__[[/]] <LINK|DIR> [NAME]
       **Flags**:
            __--no-set-default-vault__    Do not set the default Vault
+
+      `LINK` binds a Vault address under a name. `DIR` binds a store to the current
+      Workspace and the current Vault. A store is a directory carrying `rolast.toml`.
+      `--no-set-default-vault` belongs to the `LINK` form.
     zh-CN: |
-      # 快捷绑定保险库链接
-      **用法**：rola [[GREEN]]__bind__[[/]] <链接> [名字]
+      # 绑定保险库链接或存储
+      **用法**：rola [[GREEN]]__bind__[[/]] <链接|目录> [名字]
       **标识**：
            __--no-set-default-vault__    不设置默认保险库
 
+      `链接` 按名字绑定保险库地址。`目录` 把存储绑定到当前工作区和当前保险库。
+      存储是带有 `rolast.toml` 的目录。`--no-set-default-vault` 只属于 `链接` 形式。
+
   description:
-    en: Bind a Vault link quickly
-    zh-CN: 快捷绑定保险库链接
+    en: Bind a Vault link or a store
+    zh-CN: 绑定保险库链接或存储
 
   complete:
     no_set_default_vault:
@@ -38,3 +45,68 @@ bind:
   result_tracking:
     en: "The Layout now tracks `%{name}`"
     zh-CN: "布局现在跟踪 `%{name}`"
+
+  err_storage_takes_no_name:
+    en: A store takes no name
+    zh-CN: 存储不接受名字
+  err_flag_not_for_storage:
+    en: "`--no-set-default-vault` belongs to a Vault link, and a store has no default"
+    zh-CN: "`--no-set-default-vault` 只用于保险库链接，存储没有默认项"
+
+  err_storage_is_own:
+    en: "`%{path}` is the place's own store"
+    zh-CN: "`%{path}` 是该位置自身的存储"
+  err_storage_is_own_help:
+    en: A place's own store is always the last in its order, and it is not bound as another one
+    zh-CN: 位置自身的存储总是排在最后，不需要再作为另一个存储绑定
+
+  err_storage_inside_data:
+    en: "`%{path}` is inside the Workspace's `.rola` directory"
+    zh-CN: "`%{path}` 在工作区的 `.rola` 目录内"
+
+  err_storage_inside_vault:
+    en: "`%{path}` is inside the Vault's root, and only its `storage` directory may be a store"
+    zh-CN: "`%{path}` 在保险库根内，只有它的 `storage` 目录可以作为存储"
+
+  err_storage_not_directory:
+    en: "`%{path}` is not a directory"
+    zh-CN: "`%{path}` 不是目录"
+
+  err_storage_not_a_store:
+    en: "`%{path}` carries no `rolast.toml`, so it is not a store"
+    zh-CN: "`%{path}` 没有 `rolast.toml`，不是存储"
+  err_storage_not_a_store_help:
+    en: Make the directory a store with `rola storage create`
+    zh-CN: 用 `rola storage create` 把这个目录变成存储
+
+  err_storage_nowhere_to_bind:
+    en: This run is in no Workspace or Vault, so there is nothing to bind the store to
+    zh-CN: 本次运行不在工作区或保险库内，没有可以绑定该存储的位置
+
+  err_storage_reverse_failed:
+    en: "`%{path}` could not record the binding: %{reason}"
+    zh-CN: "`%{path}` 无法记录这次绑定：%{reason}"
+
+  err_storage_write_failed:
+    en: "The binding could not be written for `%{path}`: %{reason}"
+    zh-CN: "无法为 `%{path}` 写入绑定：%{reason}"
+
+  result_storage_bound:
+    en: "Bound `%{path}`"
+    zh-CN: "已绑定 `%{path}`"
+
+  result_storage_workspace:
+    en: The store is bound to the Workspace at %{path}
+    zh-CN: 存储已绑定到工作区 %{path}
+
+  result_storage_vault:
+    en: The store is bound to the Vault at %{path}
+    zh-CN: 存储已绑定到保险库 %{path}
+
+  result_storage_recorded:
+    en: The store now records the binding
+    zh-CN: 存储已记录这次绑定
+
+  result_storage_readonly:
+    en: "The store is read-only, so it is used for reading only: %{path}"
+    zh-CN: "存储是只读的，只用于读取：%{path}"

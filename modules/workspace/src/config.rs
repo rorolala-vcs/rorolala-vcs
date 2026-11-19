@@ -88,10 +88,18 @@ impl GcConfig {
 /// It is the same kind of thing a binding is, a name, but a choice among them rather than
 /// one of them: the name is meant to be one the Workspace knows, which is the caller's to
 /// check, and nothing else is kept here.
+///
+/// The stores are the places outside the Workspace's own `.rola/storage` that its content is
+/// written to and read from, in the order they are tried. `.` among them means the Workspace's own
+/// store, and one that is not there is added last, so a list without it means "the shared ones
+/// first, then mine".
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DefaultConfig {
     /// The name the Workspace reaches for, if one has been chosen.
     vault: Option<String>,
+    /// The stores the Workspace binds, as they were written.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    storages: Vec<String>,
 }
 
 impl DefaultConfig {
@@ -111,10 +119,44 @@ impl DefaultConfig {
         self.vault.take()
     }
 
+    /// The stores the Workspace binds, in the order it tries them.
+    #[must_use]
+    pub fn storages(&self) -> &[String] {
+        &self.storages
+    }
+
+    /// Replaces the stores the Workspace binds, in one order.
+    pub fn set_storages(&mut self, storages: impl IntoIterator<Item = String>) {
+        self.storages = storages.into_iter().collect();
+    }
+
+    /// Binds `path` last, answering whether it was added.
+    ///
+    /// A path that is already bound is not added again and the order is left as it was: binding a
+    /// store twice says nothing the first binding did not.
+    pub fn add_storage(&mut self, path: impl Into<String>) -> bool {
+        let path = path.into();
+        if self.storages.contains(&path) {
+            return false;
+        }
+
+        self.storages.push(path);
+
+        true
+    }
+
+    /// Unbinds `path`, answering whether it was bound.
+    pub fn remove_storage(&mut self, path: &str) -> bool {
+        let before = self.storages.len();
+        self.storages.retain(|storage| storage != path);
+
+        before != self.storages.len()
+    }
+
     /// Whether nothing has been chosen.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.vault.is_none()
+        self.vault.is_none() && self.storages.is_empty()
     }
 }
 
@@ -377,5 +419,62 @@ mod tests {
         assert_eq!(vaults.get("origin"), Some(&address("127.0.0.1:7000")));
         assert_eq!(vaults.get("upstream"), Some(&address("[::1]:7001")));
         assert_eq!(vaults.len(), 2);
+    }
+
+    #[test]
+    fn the_stores_a_workspace_binds_survive_the_format_they_are_written_in() {
+        let mut config = Config::default();
+        config
+            .default_config_mut()
+            .set_storages(["/srv/rola/shared".to_owned(), "../shared".to_owned()]);
+
+        let toml = toml::to_string(&config).unwrap();
+        assert!(toml.contains("storages"), "{toml}");
+
+        let read: Config = toml::from_str(&toml).unwrap();
+        assert_eq!(
+            read.default_config().storages(),
+            ["/srv/rola/shared", "../shared"]
+        );
+    }
+
+    #[test]
+    fn a_store_is_bound_once_and_keeps_the_order_it_was_bound_in() {
+        let mut config = Config::default();
+
+        assert!(config.default_config_mut().add_storage("/srv/shared"));
+        assert!(config.default_config_mut().add_storage("../other"));
+        assert!(!config.default_config_mut().add_storage("/srv/shared"));
+
+        assert_eq!(
+            config.default_config().storages(),
+            ["/srv/shared", "../other"]
+        );
+
+        assert!(config.default_config_mut().remove_storage("/srv/shared"));
+        assert!(!config.default_config_mut().remove_storage("/srv/shared"));
+        assert_eq!(config.default_config().storages(), ["../other"]);
+    }
+
+    #[test]
+    fn a_default_table_holding_only_stores_is_still_written() {
+        let mut config = Config::default();
+        config.default_config_mut().add_storage("/srv/shared");
+
+        let toml = toml::to_string(&config).unwrap();
+
+        assert!(toml.contains("[default]"), "{toml}");
+        assert!(toml.contains("storages"), "{toml}");
+        assert!(!config.default_config().is_empty());
+    }
+
+    #[test]
+    fn a_table_that_keeps_only_a_vault_writes_no_empty_store_list() {
+        let mut config = Config::default();
+        config.default_config_mut().set_vault("origin");
+
+        let toml = toml::to_string(&config).unwrap();
+
+        assert!(!toml.contains("storages"), "{toml}");
     }
 }

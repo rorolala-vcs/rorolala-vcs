@@ -31,6 +31,7 @@ use mingling::{
 };
 use rust_i18n::t;
 
+mod bind;
 mod bring;
 mod check;
 mod commands;

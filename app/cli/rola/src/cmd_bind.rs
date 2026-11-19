@@ -4,9 +4,25 @@
 //! choosing the Vault the Layout tracks, and the two share one name. This is that one name said
 //! once: the Vault is bound under it, and the Layout being worked in tracks it when the Layout
 //! tracks nothing yet.
+//!
+//! The same word binds a store: a directory carrying `rolast.toml` is recorded in the store, and
+//! then in the Workspace's and the Vault's own configurations, in that order.
+
+// Binding a store reads both places it is bound to, checks the path against each, records the
+// binding in the store, and writes each configuration: one ordered pass that cannot be cut without
+// leaving a place bound to a store that does not record it.
+#![allow(
+    clippy::too_many_lines,
+    reason = "the store form is one ordered pass over both places and the store"
+)]
+
+use std::path::{Path, PathBuf};
 
 use just_fmt::fmt_case_style::CaseFormatter;
 use librorolala::protocol::VaultAddress;
+use librorolala::storage::RorolalaStorage;
+use librorolala::vault::STORAGE_DIR as VAULT_STORAGE_DIR;
+use librorolala::workspace::{DATA_DIR, STORAGE_DIR as WORKSPACE_STORAGE_DIR};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -18,17 +34,21 @@ use mingling::{
     picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
-use rorolala_cli_setups::{ResWorkspace, ResWorkspaceConfig};
+use rorolala_cli_setups::{ResVault, ResVaultConfig, ResWorkspace, ResWorkspaceConfig};
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
+use rorolala_utils_location::{Locate as _, normalize};
 use rust_i18n::t;
 
 use crate::Next;
 use crate::address::ResAddressHistory;
-use crate::cmd_create::ErrorWorkspaceNotExist;
+use crate::cmd_create::{ErrorWorkspaceNotExist, absolute};
 use crate::complete::{offer, positional, strip_written, typing_flag};
 use crate::error::ErrorConfigUnreadable;
-use crate::exit_codes::{EC_ERR_LAYOUT, EC_HELP};
+use crate::exit_codes::{
+    EC_ERR_CONFIG_UNREADABLE, EC_ERR_CREATION_ARGUMENT, EC_ERR_LAYOUT, EC_ERR_STORAGE_BIND,
+    EC_HELP, EC_NOT_EXIST,
+};
 use crate::failure::failure;
 use crate::layout::failed;
 use crate::vault::cmd_vault_bind::{ErrorVaultAddressInvalid, ErrorVaultAddressMissing};
@@ -100,7 +120,7 @@ pub fn bind(args: EntryBind) -> Next {
         .pick(arg![Option<String>])
         .pick(&UNMATCHED)
         .to_result();
-    let (no_set_default_vault, address, name, unmatched) = match picked {
+    let (no_set_default_vault, target, name, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -109,12 +129,55 @@ pub fn bind(args: EntryBind) -> Next {
         return next;
     }
 
+    // What the first word is: a Vault address is a name, a store is a place on this machine.
+    if is_store_path(&target) {
+        if name.is_some() {
+            return ErrorStorageTakesNoName.into();
+        }
+        if matches!(no_set_default_vault, Flag::Active) {
+            return ErrorFlagNotForStorage.into();
+        }
+
+        return StateBindStorage { path: target }.into();
+    }
+
     StateBind {
-        address,
+        address: target,
         name: name.unwrap_or_else(|| DEFAULT_NAME.to_owned()),
         set_default_vault: matches!(no_set_default_vault, Flag::Inactive),
     }
     .into()
+}
+
+/// Whether what `rola bind` was given names a store rather than a Vault address.
+///
+/// The shape decides, not whether anything is there: a path that does not exist still has to get
+/// "there is no such store" rather than "this address does not read". A bare word is an address,
+/// which is what `rola bind origin` has always meant, so a relative directory is written `./name`.
+fn is_store_path(word: &str) -> bool {
+    if word.starts_with("rola://") {
+        return false;
+    }
+
+    // An address with a user part, `user@host:path`, is read as an address.
+    let at = word.find('@');
+    let colon = word.find(':');
+    if at.is_some() && (colon.is_none() || at < colon) {
+        return false;
+    }
+
+    if word.starts_with(['/', '\\', '.']) {
+        return true;
+    }
+
+    // A Windows drive, `C:\...`.
+    let mut symbols = word.chars();
+    if matches!((symbols.next(), symbols.next()), (Some(letter), Some(':')) if letter.is_ascii_alphabetic())
+    {
+        return true;
+    }
+
+    word.contains(['/', '\\'])
 }
 
 /// The state of binding a Vault address under a name.
@@ -210,6 +273,180 @@ pub fn handle_bind(
     .into()
 }
 
+/// The state of binding a store to the place the run is in.
+#[derive(Grouped)]
+pub struct StateBindStorage {
+    /// The store, as it was written.
+    path: String,
+}
+
+#[chain]
+pub fn handle_bind_storage(
+    state: StateBindStorage,
+    workspace: &mut LazyRes<ResWorkspace>,
+    config: &mut LazyRes<ResWorkspaceConfig>,
+    vault: &mut LazyRes<ResVault>,
+    vault_config: &mut LazyRes<ResVaultConfig>,
+) -> Next {
+    let StateBindStorage { path } = state;
+    let path = absolute(Path::new(&path));
+
+    // A `git-rola` project has `.rola/` but no `workspace.toml`: it is bound by `git rola bind`,
+    // and treating it as a Workspace here would write a configuration the project does not use.
+    let workspace_held = workspace
+        .get_ref()
+        .as_ref()
+        .filter(|held| held.config_path().is_file());
+    let vault_held = vault.get_ref().as_ref();
+
+    if workspace_held.is_none() && vault_held.is_none() {
+        return ErrorStorageNowhereToBind.into();
+    }
+
+    if let Some(held) = workspace_held {
+        let data = normalize(&held.get_root().join(DATA_DIR));
+        let own = normalize(&held.get_root().join(WORKSPACE_STORAGE_DIR));
+
+        if path == own {
+            return ErrorStorageIsOwn { path }.into();
+        }
+        if path.starts_with(&data) {
+            return ErrorStorageInsideData { path }.into();
+        }
+    }
+
+    if let Some(held) = vault_held {
+        let root = normalize(held.get_root());
+        let own = normalize(&held.get_root().join(VAULT_STORAGE_DIR));
+
+        if path == own {
+            return ErrorStorageIsOwn { path }.into();
+        }
+        if path.starts_with(&root) {
+            return ErrorStorageInsideVault { path }.into();
+        }
+    }
+
+    if !path.is_dir() {
+        return ErrorStorageNotDirectory { path }.into();
+    }
+
+    let Some(store) = RorolalaStorage::at(&path) else {
+        return ErrorStorageNotAStore { path }.into();
+    };
+
+    if let ResWorkspaceConfig::Unread { path, reason } = config.get_ref() {
+        return ErrorConfigUnreadable::new(path.clone(), reason.clone()).into();
+    }
+    if let ResVaultConfig::Unread { path, reason } = vault_config.get_ref() {
+        return ErrorConfigUnreadable::new(path.clone(), reason.clone()).into();
+    }
+
+    // The reverse record goes first, so a store that records nobody does not leave a place bound to
+    // it and unrecorded, which is what a collecting run would take the place's content for.
+    let read_only = !store.is_writable();
+    let mut recorded = false;
+    if !read_only {
+        if let Some(held) = workspace_held {
+            if let Err(error) = store.connect_workspace(held.get_root()) {
+                return ErrorStorageReverseFailed {
+                    path,
+                    reason: error.to_string(),
+                }
+                .into();
+            }
+            recorded = true;
+        }
+
+        if let Some(held) = vault_held {
+            if let Err(error) = store.connect_vault(held.get_root()) {
+                return ErrorStorageReverseFailed {
+                    path,
+                    reason: error.to_string(),
+                }
+                .into();
+            }
+            recorded = true;
+        }
+    }
+
+    let written = path.to_string_lossy().into_owned();
+    let bound_workspace = if let Some(held) = workspace_held {
+        let root = held.get_root().to_path_buf();
+        let already = held
+            .storage_set()
+            .is_ok_and(|set| set.bindings().iter().any(|binding| binding.root() == path));
+
+        if !already {
+            let resource = config.get_mut();
+            let Some(workspace_config) = resource.config_mut() else {
+                return ErrorStorageWriteFailed {
+                    path,
+                    reason: "the Workspace's configuration was not read".to_owned(),
+                }
+                .into();
+            };
+            workspace_config
+                .default_config_mut()
+                .add_storage(written.clone());
+
+            if let Err(error) = resource.save() {
+                return ErrorStorageWriteFailed {
+                    path,
+                    reason: error.to_string(),
+                }
+                .into();
+            }
+        }
+
+        Some(root)
+    } else {
+        None
+    };
+
+    let bound_vault = if let Some(held) = vault_held {
+        let root = held.get_root().to_path_buf();
+        let already = held
+            .storage_set()
+            .is_ok_and(|set| set.bindings().iter().any(|binding| binding.root() == path));
+
+        if !already {
+            let resource = vault_config.get_mut();
+            let Some(vault_configuration) = resource.config_mut() else {
+                return ErrorStorageWriteFailed {
+                    path,
+                    reason: "the Vault's configuration was not read".to_owned(),
+                }
+                .into();
+            };
+            vault_configuration
+                .storage_config_mut()
+                .add_storage(written);
+
+            if let Err(error) = resource.save() {
+                return ErrorStorageWriteFailed {
+                    path,
+                    reason: error.to_string(),
+                }
+                .into();
+            }
+        }
+
+        Some(root)
+    } else {
+        None
+    };
+
+    ResultStorageBound {
+        path,
+        workspace: bound_workspace,
+        vault: bound_vault,
+        recorded,
+        read_only,
+    }
+    .into()
+}
+
 /// The name a binding may be given, worked out from what a caller wrote.
 ///
 /// A name is a directory name for what is fetched from the Vault, so it is the kebab-case form of
@@ -276,5 +513,359 @@ pub fn render_result_bound(result: ResultBound) {
 
     if result.tracking {
         r_println!("{}", t!("bind.result_tracking", name = result.name).trim());
+    }
+}
+
+/// Error: the store form was given a name.
+#[derive(Grouped)]
+pub struct ErrorStorageTakesNoName;
+
+impl Failure for ErrorStorageTakesNoName {
+    fn name(&self) -> &'static str {
+        "error_storage_takes_no_name"
+    }
+
+    fn reason(&self) -> String {
+        t!("bind.err_storage_takes_no_name").trim().to_string()
+    }
+}
+
+failure!(ErrorStorageTakesNoName);
+
+#[renderer(buffer)]
+pub fn render_error_storage_takes_no_name(error: ErrorStorageTakesNoName, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    ec.exit_code = EC_ERR_CREATION_ARGUMENT;
+}
+
+/// Error: `--no-set-default-vault` was given with a store.
+#[derive(Grouped)]
+pub struct ErrorFlagNotForStorage;
+
+impl Failure for ErrorFlagNotForStorage {
+    fn name(&self) -> &'static str {
+        "error_flag_not_for_storage"
+    }
+
+    fn reason(&self) -> String {
+        t!("bind.err_flag_not_for_storage").trim().to_string()
+    }
+}
+
+failure!(ErrorFlagNotForStorage);
+
+#[renderer(buffer)]
+pub fn render_error_flag_not_for_storage(error: ErrorFlagNotForStorage, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    ec.exit_code = EC_ERR_CREATION_ARGUMENT;
+}
+
+/// Error: the store named is the place's own store.
+#[derive(Grouped)]
+pub struct ErrorStorageIsOwn {
+    /// The path that is the own store.
+    path: PathBuf,
+}
+
+impl Failure for ErrorStorageIsOwn {
+    fn name(&self) -> &'static str {
+        "error_storage_is_own"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "bind.err_storage_is_own",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageIsOwn);
+
+#[renderer(buffer)]
+pub fn render_error_storage_is_own(error: ErrorStorageIsOwn, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!("{}", help_line!(t!("bind.err_storage_is_own_help").trim()));
+    ec.exit_code = EC_ERR_STORAGE_BIND;
+}
+
+/// Error: the store is inside the Workspace's own data directory.
+#[derive(Grouped)]
+pub struct ErrorStorageInsideData {
+    /// The path that is inside it.
+    path: PathBuf,
+}
+
+impl Failure for ErrorStorageInsideData {
+    fn name(&self) -> &'static str {
+        "error_storage_inside_data"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "bind.err_storage_inside_data",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageInsideData);
+
+#[renderer(buffer)]
+pub fn render_error_storage_inside_data(error: ErrorStorageInsideData, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    ec.exit_code = EC_ERR_STORAGE_BIND;
+}
+
+/// Error: the store is inside the Vault's own root.
+#[derive(Grouped)]
+pub struct ErrorStorageInsideVault {
+    /// The path that is inside it.
+    path: PathBuf,
+}
+
+impl Failure for ErrorStorageInsideVault {
+    fn name(&self) -> &'static str {
+        "error_storage_inside_vault"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "bind.err_storage_inside_vault",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageInsideVault);
+
+#[renderer(buffer)]
+pub fn render_error_storage_inside_vault(error: ErrorStorageInsideVault, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    ec.exit_code = EC_ERR_STORAGE_BIND;
+}
+
+/// Error: the store path is not a directory.
+#[derive(Grouped)]
+pub struct ErrorStorageNotDirectory {
+    /// The path that is not a directory.
+    path: PathBuf,
+}
+
+impl Failure for ErrorStorageNotDirectory {
+    fn name(&self) -> &'static str {
+        "error_storage_not_directory"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "bind.err_storage_not_directory",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageNotDirectory);
+
+#[renderer(buffer)]
+pub fn render_error_storage_not_directory(error: ErrorStorageNotDirectory, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    ec.exit_code = EC_ERR_STORAGE_BIND;
+}
+
+/// Error: the directory is not a store.
+#[derive(Grouped)]
+pub struct ErrorStorageNotAStore {
+    /// The directory that carries no `rolast.toml`.
+    path: PathBuf,
+}
+
+impl Failure for ErrorStorageNotAStore {
+    fn name(&self) -> &'static str {
+        "error_storage_not_a_store"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "bind.err_storage_not_a_store",
+            path = self.path.display().to_string()
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageNotAStore);
+
+#[renderer(buffer)]
+pub fn render_error_storage_not_a_store(error: ErrorStorageNotAStore, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("bind.err_storage_not_a_store_help").trim())
+    );
+    ec.exit_code = EC_NOT_EXIST;
+}
+
+/// Error: the run is in no place a store can be bound to.
+#[derive(Grouped)]
+pub struct ErrorStorageNowhereToBind;
+
+impl Failure for ErrorStorageNowhereToBind {
+    fn name(&self) -> &'static str {
+        "error_storage_nowhere_to_bind"
+    }
+
+    fn reason(&self) -> String {
+        t!("bind.err_storage_nowhere_to_bind").trim().to_string()
+    }
+}
+
+failure!(ErrorStorageNowhereToBind);
+
+#[renderer(buffer)]
+pub fn render_error_storage_nowhere_to_bind(
+    error: ErrorStorageNowhereToBind,
+    ec: &mut ResExitCode,
+) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    ec.exit_code = EC_ERR_STORAGE_BIND;
+}
+
+/// Error: the store could not record the place that binds it.
+#[derive(Grouped)]
+pub struct ErrorStorageReverseFailed {
+    /// The store that could not record it.
+    path: PathBuf,
+    /// Why not.
+    reason: String,
+}
+
+impl Failure for ErrorStorageReverseFailed {
+    fn name(&self) -> &'static str {
+        "error_storage_reverse_failed"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "bind.err_storage_reverse_failed",
+            path = self.path.display().to_string(),
+            reason = self.reason
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageReverseFailed);
+
+#[renderer(buffer)]
+pub fn render_error_storage_reverse_failed(error: ErrorStorageReverseFailed, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    ec.exit_code = EC_ERR_STORAGE_BIND;
+}
+
+/// Error: the place's configuration could not be written.
+#[derive(Grouped)]
+pub struct ErrorStorageWriteFailed {
+    /// The store the binding names.
+    path: PathBuf,
+    /// Why the configuration could not be written.
+    reason: String,
+}
+
+impl Failure for ErrorStorageWriteFailed {
+    fn name(&self) -> &'static str {
+        "error_storage_write_failed"
+    }
+
+    fn reason(&self) -> String {
+        t!(
+            "bind.err_storage_write_failed",
+            path = self.path.display().to_string(),
+            reason = self.reason
+        )
+        .trim()
+        .to_string()
+    }
+}
+
+failure!(ErrorStorageWriteFailed);
+
+#[renderer(buffer)]
+pub fn render_error_storage_write_failed(error: ErrorStorageWriteFailed, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    ec.exit_code = EC_ERR_CONFIG_UNREADABLE;
+}
+
+/// Result: a store was bound to the place the run is in.
+#[derive(Grouped)]
+pub struct ResultStorageBound {
+    /// The store that was bound.
+    path: PathBuf,
+    /// The Workspace it is bound to, when one is.
+    workspace: Option<PathBuf>,
+    /// The Vault it is bound to, when one is.
+    vault: Option<PathBuf>,
+    /// Whether the store recorded the binding back.
+    recorded: bool,
+    /// Whether the store can only be read.
+    read_only: bool,
+}
+
+#[renderer(buffer)]
+pub fn render_result_storage_bound(result: ResultStorageBound) {
+    r_println!(
+        "{}",
+        t!(
+            "bind.result_storage_bound",
+            path = result.path.display().to_string()
+        )
+        .trim()
+    );
+
+    if let Some(workspace) = &result.workspace {
+        r_println!(
+            "{}",
+            t!(
+                "bind.result_storage_workspace",
+                path = workspace.display().to_string()
+            )
+            .trim()
+        );
+    }
+
+    if let Some(vault) = &result.vault {
+        r_println!(
+            "{}",
+            t!(
+                "bind.result_storage_vault",
+                path = vault.display().to_string()
+            )
+            .trim()
+        );
+    }
+
+    if result.recorded {
+        r_println!("{}", t!("bind.result_storage_recorded").trim());
+    }
+
+    if result.read_only {
+        r_eprintln!(
+            "{}",
+            t!(
+                "bind.result_storage_readonly",
+                path = result.path.display().to_string()
+            )
+            .trim()
+        );
     }
 }

@@ -39,9 +39,7 @@ use rorolala_errors::Failure as _;
 use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{EntryKind as LayoutEntryKind, Layout, LayoutPath, MutableData};
 use rorolala_protocol::{ActionError, VaultAddress};
-use rorolala_storage::{
-    Blake3Hash, Key, Resolved, RorolalaStorage, ShortHash, StorageBackend as _, key_of_file,
-};
+use rorolala_storage::{Blake3Hash, Key, Resolved, ShortHash, StorageSet, key_of_file};
 use rorolala_utils_constants::{VAULT_LAYOUT_NAME, WORKSPACE_IGNORE_RULES_DIR};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
@@ -840,7 +838,7 @@ pub struct Request<'a> {
     /// The index the versions are read from.
     pub index: Option<&'a VCSIndex>,
     /// The store the content is read from.
-    pub store: Option<&'a RorolalaStorage>,
+    pub store: Option<&'a StorageSet>,
     /// The account the run acts as, when it has one.
     pub account: Option<&'a Account>,
     /// The Vault the Layout tracks, as the Layout names it.
@@ -1171,7 +1169,7 @@ struct Run<'a> {
     /// The index the versions are read from.
     index: &'a VCSIndex,
     /// The store the content is read from.
-    store: Option<&'a RorolalaStorage>,
+    store: Option<&'a StorageSet>,
     /// The account the run acts as, when it has one.
     account: Option<&'a Account>,
     /// The Vault the Layout tracks, as the Layout names it.
@@ -2181,7 +2179,7 @@ fn internal(reason: impl Into<String>) -> RetrackRefusal {
 /// tree never recorded is left where it is, so a retrack does not reach beyond the version unit.
 fn retrack_tree(
     run: &Run<'_>,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     path: &LayoutPath,
     id: Uuid,
     data: &MutableData,
@@ -2304,7 +2302,7 @@ fn retrack_tree(
 /// Writes `target` over the work at `root`, and takes out what `old` recorded and `target` does not.
 fn put_back(
     run: &Run<'_>,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     root: &Path,
     target: &TreeStructure,
     old: &TreeStructure,
@@ -2435,7 +2433,7 @@ fn retrack_tree_fork(
 )]
 fn retrack_tree_entry(
     run: &Run<'_>,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     path: &LayoutPath,
     id: Uuid,
     data: &MutableData,
@@ -2582,7 +2580,7 @@ fn retrack_tree_entry(
 /// the store already holds.
 fn bring_tree_content(
     run: &Run<'_>,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     structure: &TreeStructure,
     old: &TreeStructure,
     changed_only: bool,
@@ -2610,7 +2608,7 @@ fn bring_tree_content(
 }
 
 /// Whether the tree holds work a move of its record would write over.
-fn tree_has_work(run: &Run<'_>, store: &RorolalaStorage, tree: &Tree) -> bool {
+fn tree_has_work(run: &Run<'_>, store: &StorageSet, tree: &Tree) -> bool {
     run.runtime
         .block_on(tree.status(run.layout, run.index, store, run.rules.clone(), false))
         .map_or(true, |status| {

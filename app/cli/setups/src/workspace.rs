@@ -82,6 +82,32 @@ impl ResWorkspaceConfig {
             Self::Absent | Self::Read { .. } => None,
         }
     }
+
+    /// Writes the configuration back now, reporting what a drop could not.
+    ///
+    /// A command that has to know a change reached the file uses this; the write on drop stays as
+    /// the fallback for every command that does not.
+    ///
+    /// # Errors
+    ///
+    /// Returns what writing the file failed with.
+    pub fn save(&mut self) -> Result<(), rorolala_utils_configure::Error> {
+        let Self::Read {
+            path,
+            changed,
+            config,
+        } = self
+        else {
+            return Ok(());
+        };
+
+        if *changed {
+            config.write_to(path)?;
+            *changed = false;
+        }
+
+        Ok(())
+    }
 }
 
 /// The Vault a run reaches for, as the Workspace beside it names it.

@@ -104,6 +104,31 @@ impl<T> LockingGuard<T> {
         }
     }
 
+    /// Locks `lock` without a runtime, for a caller that is not asynchronous.
+    ///
+    /// It is the same lock as [`acquire`](Self::acquire), on the same file, so a run changing a
+    /// store's configuration by hand and one changing its packs hold each other out. A caller that
+    /// already has a runtime wants `acquire`; this is for the commands whose work is a short
+    /// read-modify-write and nothing else.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LockError::Locked`] when the place is locked already, and [`LockError::Io`] when
+    /// the lock file cannot be made, a directory that is not there, or one that is not writable.
+    pub fn try_acquire(held: T, lock: impl Into<PathBuf>) -> Result<Self, LockError> {
+        let lock = lock.into();
+
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock)
+        {
+            Ok(_) => Ok(Self { held, lock }),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Err(LockError::Locked),
+            Err(error) => Err(LockError::Io(error)),
+        }
+    }
+
     /// The file whose presence is the lock.
     #[must_use]
     pub fn lock_path(&self) -> &Path {

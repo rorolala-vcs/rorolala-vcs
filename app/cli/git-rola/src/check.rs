@@ -89,7 +89,7 @@ fn inspect() -> Result<ResultCheck, String> {
         .lock()
         .map_err(|error| t!("git_rola.err_lock", error = error.to_string()).to_string())?;
     let prefix = session.name().map_err(|error| error.to_string())?;
-    let source = crate::source::of(session.project());
+    let source = crate::source::of(session.project())?;
 
     let mut lines = Vec::new();
 

@@ -12,6 +12,7 @@
 use std::path::Path;
 
 use rorolala_daemon::{Namespaces, registry_path};
+use rorolala_storage::StorageSet;
 use rorolala_utils_configure::Configure as _;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
@@ -37,6 +38,23 @@ struct GcItem {
     grace: Option<u64>,
 }
 
+/// One store a place binds, as the configuration lists it.
+#[derive(Debug, Serialize)]
+struct StorageItem {
+    /// The path as the configuration wrote it.
+    path: String,
+    /// The resolved, absolute path.
+    root: String,
+    /// Whether this is the place's own store.
+    own: bool,
+    /// Whether the directory is a store this build can open.
+    present: bool,
+    /// Whether the store would accept a write.
+    writable: bool,
+    /// Why it cannot be used, when it cannot.
+    reason: Option<String>,
+}
+
 /// A Workspace's configuration, as the C ABI writes it.
 #[derive(Debug, Serialize)]
 struct WorkspaceAnswer {
@@ -46,6 +64,8 @@ struct WorkspaceAnswer {
     default: Option<String>,
     /// What a collecting run in this Workspace is told, when the configuration says.
     gc: Option<GcItem>,
+    /// The stores this Workspace works on, in the order it reaches for them.
+    storages: Vec<StorageItem>,
 }
 
 /// The Vaults the Workspace holding `directory` knows, as `rola vault ls --json` writes them.
@@ -88,6 +108,9 @@ pub fn workspace_config_json(directory: &Path) -> String {
         vaults,
         default,
         gc: config.gc_config().map(|gc| GcItem { grace: gc.grace() }),
+        storages: workspace
+            .storage_set()
+            .map_or_else(|_| Vec::new(), |set| storage_items(&set)),
     };
 
     serde_json::to_string(&answer).unwrap_or_else(|_| "null".to_owned())
@@ -104,6 +127,8 @@ struct VaultAnswer {
     admins: Vec<String>,
     /// The most transfers its daemon carries at once.
     max_concurrency: u16,
+    /// The stores this Vault works on, in the order it reaches for them.
+    storages: Vec<StorageItem>,
 }
 
 /// What the Vault holding `directory` says about itself, as one JSON document.
@@ -133,9 +158,50 @@ pub fn vault_config_json(directory: &Path) -> String {
         description: meta.description().to_owned(),
         admins: config.auth_config().admins().to_vec(),
         max_concurrency: config.daemon_config().max_concurrency(),
+        storages: vault
+            .storage_set()
+            .map_or_else(|_| Vec::new(), |set| storage_items(&set)),
     };
 
     serde_json::to_string(&answer).unwrap_or_else(|_| "null".to_owned())
+}
+
+/// The stores a place works on, as the answer lists them.
+fn storage_items(set: &StorageSet) -> Vec<StorageItem> {
+    let mut items: Vec<StorageItem> = set
+        .bindings()
+        .iter()
+        .map(|binding| StorageItem {
+            path: binding.written().to_owned(),
+            root: binding.root().display().to_string(),
+            own: binding.is_own(),
+            present: if binding.is_own() {
+                set.own_present()
+            } else {
+                binding.is_present()
+            },
+            writable: if binding.is_own() {
+                set.own_writable()
+            } else {
+                binding.is_writable()
+            },
+            reason: binding.reason().map(str::to_owned),
+        })
+        .collect();
+
+    // A place that does not write `.` among its bindings still reads its own store last.
+    if !set.own_bound() {
+        items.push(StorageItem {
+            path: ".".to_owned(),
+            root: set.own_root().display().to_string(),
+            own: true,
+            present: set.own_present(),
+            writable: set.own_writable(),
+            reason: None,
+        });
+    }
+
+    items
 }
 
 /// The Vaults the machine's daemon serves, by namespace.

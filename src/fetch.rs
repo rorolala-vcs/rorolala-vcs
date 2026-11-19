@@ -31,7 +31,7 @@ use std::collections::HashSet;
 use crate::auth::Account;
 use crate::daemon::{action_list_remote_async, action_sync_hashes_async};
 use crate::protocol::VaultAddress;
-use crate::storage::{Key, RorolalaStorage, StorageBackend as _};
+use crate::storage::{Key, StorageSet};
 use crate::workspace::Workspace;
 use rorolala_utils_progress::Progress;
 
@@ -149,7 +149,7 @@ impl<'a> Sources<'a> {
     /// What is answered is the keys that were wanted and are still not here, so that a caller which
     /// needs them, a bring handing over a version, says so rather than leaving a version behind
     /// that nothing can produce.
-    pub fn bring(&self, store: &RorolalaStorage, keys: &[Key]) -> Vec<Key> {
+    pub fn bring(&self, store: &StorageSet, keys: &[Key]) -> Vec<Key> {
         if self.offline || self.candidates.is_empty() || keys.is_empty() {
             return keys.to_vec();
         }
@@ -212,7 +212,7 @@ impl<'a> Sources<'a> {
     /// # Errors
     ///
     /// Returns the exchange's own failure as a message.
-    pub fn send(&self, store: Option<&RorolalaStorage>, keys: &[Key]) -> Result<usize, String> {
+    pub fn send(&self, store: Option<&StorageSet>, keys: &[Key]) -> Result<usize, String> {
         let Some(primary) = self.candidates.first() else {
             return Ok(0);
         };
@@ -235,7 +235,7 @@ impl<'a> Sources<'a> {
     ///
     /// This is what the run says moved, so it is counted from what is here rather than from what
     /// crossed: the exchange answers how many reads it was granted, not what it carried.
-    fn unit_count(&self, store: Option<&RorolalaStorage>, keys: &[Key]) -> usize {
+    fn unit_count(&self, store: Option<&StorageSet>, keys: &[Key]) -> usize {
         let Some(store) = store else {
             return keys.len();
         };
@@ -280,7 +280,7 @@ impl<'a> Sources<'a> {
     /// A store that cannot answer is read as holding none of them: what is asked of a Vault and
     /// turns out to be here anyway costs a look-up and nothing else, while the other way round would
     /// leave content that is needed behind.
-    fn missing(&self, store: &RorolalaStorage, keys: &[Key]) -> Vec<Key> {
+    fn missing(&self, store: &StorageSet, keys: &[Key]) -> Vec<Key> {
         let Ok(presence) = self.runtime.block_on(store.contains_keys(keys)) else {
             return keys.to_vec();
         };
@@ -521,7 +521,7 @@ mod tests {
 
         let store = workspace.get_current_rola_storage().unwrap();
         let key = key(9);
-        assert_eq!(sources.bring(&store, &[key]), vec![key]);
+        assert_eq!(sources.bring(&StorageSet::sole(store), &[key]), vec![key]);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

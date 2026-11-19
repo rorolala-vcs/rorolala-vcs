@@ -137,7 +137,7 @@ fn tree_status(directory: &Path) -> Option<TreeStatus> {
     let workspace = Workspace::locate(directory)?;
     let layout = working_layout(&workspace)?;
     let index = VCSIndex::locate(directory)?;
-    let store = workspace.get_current_rola_storage()?;
+    let set = workspace.storage_set().ok()?;
     let rules = IgnoreRuleSet::load(
         &workspace.get_root().join(WORKSPACE_IGNORE_RULES_DIR),
         workspace.get_root(),
@@ -155,7 +155,7 @@ fn tree_status(directory: &Path) -> Option<TreeStatus> {
     );
 
     let mut status = runtime
-        .block_on(tree.status(&layout, &index, &store, rules, false))
+        .block_on(tree.status(&layout, &index, &set, rules, false))
         .ok()?;
     status.wrong = wrong;
 

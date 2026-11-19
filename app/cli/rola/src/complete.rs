@@ -12,7 +12,7 @@
 
 use librorolala::layout::Layout;
 use librorolala::status::tracked_vault;
-use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
+use librorolala::storage::{Key, StorageSet};
 use librorolala::vcs::{VCSIndex, VCSIndexObject};
 use mingling::{
     ShellContext, Suggest,
@@ -460,7 +460,7 @@ pub fn index_hashes(index: Option<&VCSIndex>, kind: IndexObject) -> Vec<String> 
 /// It is the listing [`storage ls-storaged`](crate::storage::cmd_storage_ls_storaged) prints, so
 /// a key that can be completed is one the store would answer for.
 #[must_use]
-pub fn store_key_set(store: Option<&RorolalaStorage>) -> Vec<Key> {
+pub fn store_key_set(store: Option<&StorageSet>) -> Vec<Key> {
     let Some(store) = store else {
         return Vec::new();
     };
@@ -477,6 +477,6 @@ pub fn store_key_set(store: Option<&RorolalaStorage>) -> Vec<Key> {
 
 /// The keys the store holds, as hex.
 #[must_use]
-pub fn store_keys(store: Option<&RorolalaStorage>) -> Vec<String> {
+pub fn store_keys(store: Option<&StorageSet>) -> Vec<String> {
     store_key_set(store).iter().map(Key::hex).collect()
 }

@@ -53,7 +53,7 @@ use rorolala_auth::{Account, Member};
 use rorolala_daemon::sync_storage;
 use rorolala_protocol::{ActionContext, Both, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{
-    Key, Lockable as _, RorolalaStorage, StorageBackend as _, TransferableBackend as _,
+    Key, Lockable as _, RorolalaStorage, StorageBackend as _, StorageSet, TransferableBackend as _,
 };
 
 /// What a run was asked for.
@@ -260,14 +260,14 @@ async fn rounds(source: &RorolalaStorage, keys: &[Key], setting: &Setting) -> La
 
         let here = source.clone();
         let there = target.clone();
-        let workspace_local = OnlyWorkspace::new(&workspace, || here);
+        let workspace_local = OnlyWorkspace::new(&workspace, || StorageSet::sole(here));
         // PANIC: `vault` is a Vault context, so `OnlyWorkspace::new` takes its `empty()` branch and
         // the closure is never called.
         let vault_other = OnlyWorkspace::new(&vault, || unreachable!("the Vault holds nothing"));
         // PANIC: `workspace` is a Workspace context, so `OnlyVault::new` takes its `empty()` branch
         // and the closure is never called.
         let workspace_other = OnlyVault::new(&workspace, || unreachable!("nothing to take yet"));
-        let vault_local = OnlyVault::new(&vault, || there);
+        let vault_local = OnlyVault::new(&vault, || StorageSet::sole(there));
 
         let asked = keys.to_vec();
         let also_asked = keys.to_vec();
@@ -347,14 +347,14 @@ async fn again(
     let before = last.up.load(Ordering::Relaxed) + last.down.load(Ordering::Relaxed);
     let phase = Phase::start();
 
-    let workspace_local = OnlyWorkspace::new(&last.workspace, || from.0.clone());
+    let workspace_local = OnlyWorkspace::new(&last.workspace, || StorageSet::sole(from.0.clone()));
     // PANIC: the Vault's context is a Vault context, so `OnlyWorkspace::new` takes its `empty()`
     // branch and the closure is never called.
     let vault_other = OnlyWorkspace::new(&last.vault, || unreachable!("the Vault holds nothing"));
     // PANIC: the Workspace's context is a Workspace context, so `OnlyVault::new` takes its `empty()`
     // branch and the closure is never called.
     let workspace_other = OnlyVault::new(&last.workspace, || unreachable!("nothing to take yet"));
-    let vault_local = OnlyVault::new(&last.vault, || last.target.clone());
+    let vault_local = OnlyVault::new(&last.vault, || StorageSet::sole(last.target.clone()));
 
     let (from_workspace, from_vault) = tokio::join!(
         sync_storage(

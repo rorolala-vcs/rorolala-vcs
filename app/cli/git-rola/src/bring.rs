@@ -674,7 +674,7 @@ fn signed_in(state: StateBring) -> Result<ResultBrought, BringFailure> {
         ));
     }
 
-    let store = upstream::project_store(project);
+    let store = upstream::project_stores(project).map_err(BringFailure::Fatal)?;
     upstream::bring_contents(
         &store,
         &workspace.value,
@@ -734,7 +734,7 @@ fn signed_in(state: StateBring) -> Result<ResultBrought, BringFailure> {
 
     // And last the work tree: only what this run brought is placed, so a material that was already
     // there is not taken out and put back for this.
-    let placed = crate::source::of(project);
+    let placed = crate::source::of(project).map_err(BringFailure::Fatal)?;
     let paths: Vec<LockPath> = planned.iter().map(|entry| entry.path.clone()).collect();
     let failures = session
         .restore(&merged, &paths, &placed)
@@ -883,6 +883,7 @@ mod tests {
             vaults: BTreeMap::new(),
             features: Features { git_support: true },
             defaults: Defaults::default(),
+            storages: Vec::new(),
             mapping: mappings
                 .iter()
                 .map(|(from, to)| Mapping {

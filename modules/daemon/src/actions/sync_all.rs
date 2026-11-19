@@ -5,7 +5,7 @@
 //! what one side has and the other does not is on both by the time it returns.
 
 use rorolala_protocol::{Action, ActionContext, ActionError, Both, OnlyVault, OnlyWorkspace};
-use rorolala_storage::{Blake3Hash, Key, RorolalaStorage, StorageBackend as _};
+use rorolala_storage::{Blake3Hash, Key, StorageSet};
 
 use super::sync_storage::{Side, carry_blob, sync_storage};
 
@@ -50,7 +50,7 @@ impl Action for ActionSyncAll {
         mut ctx: ActionContext<'_>,
     ) -> Result<Self::Output, ActionError> {
         // The store this side has: the Workspace's on the Workspace, the Vault's on the Vault.
-        let local = local_store(&ctx)?;
+        let local = local_stores(&ctx)?;
 
         // What this side holds, as one run of digests: what crosses is that run, said to the other
         // side and read back, so that both ends know what the two of them hold between them. The run
@@ -105,18 +105,28 @@ impl Action for ActionSyncAll {
     }
 }
 
-/// The store this side works on, made if it is not there yet.
+/// The stores this side works on.
 ///
-/// Which store that is follows from where this runs: an action taken from a Workspace works on the
-/// Workspace's store, and one served by a Vault works on the Vault's. A side that has neither is
-/// not a side an action can run on.
-pub(crate) fn local_store(ctx: &ActionContext<'_>) -> Result<RorolalaStorage, ActionError> {
+/// A caller that handed its stores in has them used as they are; that is how a `git-rola` project
+/// works through a borrowed Workspace whose own configuration is not the project's. Otherwise the
+/// stores follow from where this runs: an action taken from a Workspace works on the stores the
+/// Workspace binds, and one served by a Vault on the Vault's. A side that has neither is not a side
+/// an action can run on.
+pub(crate) fn local_stores(ctx: &ActionContext<'_>) -> Result<StorageSet, ActionError> {
+    if let Some(stores) = ctx.local_stores() {
+        return Ok(stores.clone());
+    }
+
     if let Some(workspace) = ctx.current_workspace().into_inner() {
-        return Ok(workspace.get_or_create_rola_storage());
+        return workspace
+            .storage_set()
+            .map_err(|error| ActionError::Store(error.to_string()));
     }
 
     if let Some(vault) = ctx.current_vault().into_inner() {
-        return Ok(vault.get_or_create_rola_storage());
+        return vault
+            .storage_set()
+            .map_err(|error| ActionError::Store(error.to_string()));
     }
 
     Err(ActionError::MissingValue)

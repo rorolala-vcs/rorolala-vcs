@@ -15,11 +15,32 @@ public sealed class StorageWriter : Writer
     public StorageWriter(StorageScope storage) =>
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));
 
+    /// <summary>Makes a directory a store.</summary>
+    /// <param name="storage">The directory to make a store of.</param>
+    public static void Create(DirectoryInfo storage)
+    {
+        ArgumentNullException.ThrowIfNull(storage);
+
+        var root = Utf8(storage.FullName);
+        try
+        {
+            var answer = RorolalaBinding.rola_storage_create(root);
+            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            {
+                throw WriteResults.From(answer.payload);
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(root);
+        }
+    }
+
     /// <summary>Lays the store out afresh.</summary>
     /// <returns>What changed.</returns>
     public Packed Pack()
     {
-        var directory = Utf8(_storage.Root.FullName);
+        var directory = Utf8(_storage.ScopeRoot.FullName);
         try
         {
             var answer = RorolalaBinding.rola_write_pack_storage(directory);
@@ -51,7 +72,7 @@ public sealed class StorageWriter : Writer
             throw new RolaWriteError(RolaWriteErrorKind.InvalidPath, file.FullName, "the file is not there");
         }
 
-        var directory = Utf8(_storage.Root.FullName);
+        var directory = Utf8(_storage.ScopeRoot.FullName);
         var path = Utf8(file.FullName);
         var cut = Utf8(policy is null ? string.Empty : ChunkingPolicies.WireName(policy.Value));
         try
@@ -117,7 +138,7 @@ public sealed class StorageWriter : Writer
             );
         }
 
-        var directory = Utf8(_storage.Root.FullName);
+        var directory = Utf8(_storage.ScopeRoot.FullName);
         var hash = Utf8(key);
         var path = Utf8(destination.FullName);
         try

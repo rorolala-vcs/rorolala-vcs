@@ -1530,6 +1530,7 @@ name = "git-rola"
 version = "0.4.0"
 dependencies = [
  "globset",
+ "just_fmt 0.2.1",
  "libc",
  "librorolala",
  "mingling",
@@ -1537,9 +1538,12 @@ dependencies = [
  "rola-git-support",
  "rorolala-utils-constants",
  "rorolala-utils-location",
+ "rorolala-utils-progress",
  "rust-i18n",
  "serde",
  "tokio",
+ "toml 0.8.23",
+ "toml_edit 0.22.27",
  "uuid",
 ]
 
@@ -2301,6 +2305,7 @@ name = "librorolala"
 version = "0.4.0"
 dependencies = [
  "globset",
+ "rola-define-format",
  "rola-desktop-pty",
  "rorolala-auth",
  "rorolala-book-search",
@@ -3886,6 +3891,7 @@ dependencies = [
  "rorolala-auth",
  "rorolala-errors",
  "rorolala-protocol-macros",
+ "rorolala-storage",
  "rorolala-utils-constants",
  "rorolala-utils-lazyffi",
  "rorolala-utils-progress",
@@ -3935,6 +3941,7 @@ dependencies = [
  "size",
  "tokio",
  "toml 0.8.23",
+ "toml_edit 0.22.27",
  "zstd",
 ]
 

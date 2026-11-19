@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use rorolala_layout::Layout;
-use rorolala_storage::{Lockable as _, RorolalaStorage, key_of_file};
+use rorolala_storage::{Lockable as _, StorageSet, key_of_file};
 use rorolala_tree::{EntryKind, Tree, TreeEntry, TreeStructure, conflict_copy};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
@@ -43,7 +43,7 @@ pub struct RemoveOptions {
 pub fn remove_paths(
     tree: &Tree,
     layout: &Layout,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     index: &VCSIndex,
     cwd: &Path,
     paths: &[String],
@@ -232,9 +232,7 @@ pub fn remove_paths_for_workspace(
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })?;
-    let store = workspace
-        .get_current_rola_storage()
-        .ok_or(WriteError::NoStore)?;
+    let set = workspace.storage_set()?;
     let index = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
     let at = if target.is_empty() {
         directory.to_path_buf()
@@ -250,7 +248,7 @@ pub fn remove_paths_for_workspace(
         reason: error.to_string(),
     })?;
 
-    remove_paths(&tree, &layout, &store, &index, directory, paths, options)
+    remove_paths(&tree, &layout, &set, &index, directory, paths, options)
 }
 
 /// Stages the removal of paths from the tree a directory is in.
@@ -396,7 +394,7 @@ mod tests {
     use std::fs;
 
     use rorolala_layout::Layout;
-    use rorolala_storage::RorolalaStorage;
+    use rorolala_storage::{RorolalaStorage, StorageSet};
     use rorolala_tree::{Tree, TreeEntry, TreeStructure};
     use rorolala_utils_location::Locate as _;
     use rorolala_vcs::VCSIndex;
@@ -437,7 +435,7 @@ mod tests {
         let removal = remove_paths(
             &tree,
             &layout,
-            &store,
+            &StorageSet::sole(store),
             &index,
             &dir.join("tree"),
             &["one.txt".to_owned()],

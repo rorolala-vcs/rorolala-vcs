@@ -2,6 +2,7 @@
 
 use std::fmt;
 
+use rorolala_storage::StorageConfigError;
 use rorolala_utils_lazyffi::lazyffi;
 
 /// Why a write did not finish.
@@ -78,6 +79,12 @@ pub enum WriteError {
         /// Why it failed.
         reason: String,
     },
+    /// The store a write goes to cannot be written: it is a read-only mount, or one the run may
+    /// not write.
+    ReadOnly {
+        /// The store that cannot be written.
+        path: String,
+    },
     /// An index could not be read or written.
     Index {
         /// Why it failed.
@@ -140,6 +147,7 @@ impl fmt::Display for WriteError {
                 }
             }
             Self::Cancelled => formatter.write_str("the write was cancelled"),
+            Self::ReadOnly { path } => write!(formatter, "{path} is read-only"),
             Self::Action { reason }
             | Self::Layout { reason }
             | Self::Storage { reason }
@@ -153,3 +161,11 @@ impl fmt::Display for WriteError {
 }
 
 impl std::error::Error for WriteError {}
+
+impl From<StorageConfigError> for WriteError {
+    fn from(error: StorageConfigError) -> Self {
+        Self::Storage {
+            reason: error.to_string(),
+        }
+    }
+}

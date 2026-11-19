@@ -1,0 +1,20 @@
+_version: 2
+
+storage_create:
+  help:
+    en: |
+        # Make a directory a store
+        **Usage**: rola [[GREEN]]__storage__ [[GREEN]]__create__[[/]] <DIR>
+
+        The directory is made a store if it is not one. A Workspace or a Vault
+        may not be one. A store is what another place binds with `rola bind`.
+    zh-CN: |
+        # 把一个目录变成存储
+        **用法**：rola [[GREEN]]__storage__ [[GREEN]]__create__[[/]] <目录>
+
+        如果该目录还不是存储，就把它变成存储；工作区或保险库不能变成存储。
+        其他位置用 `rola bind` 绑定这个存储。
+
+  description:
+    en: Make a directory a store
+    zh-CN: 把一个目录变成存储

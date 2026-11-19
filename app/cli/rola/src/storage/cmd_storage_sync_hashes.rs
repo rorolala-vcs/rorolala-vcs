@@ -24,7 +24,7 @@ use mingling::{
     res::ResExitCode,
 };
 use rorolala_cli_setups::{
-    ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResRorolalaStorage, ResWorkspace,
+    ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResStorageSet, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
@@ -58,14 +58,14 @@ pub fn desc_storage_sync_hashes() -> Description {
 #[completion(EntryStorageSyncHashes)]
 pub fn complete_storage_sync_hashes(
     ctx: ShellContext,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
 ) -> Suggest {
     if typing_flag(&ctx) {
         return suggest!();
     }
 
-    let mut names = store_keys(storage.get_ref().as_ref());
+    let mut names = store_keys(storage.get_ref().storage());
     names.extend(vault_names(remote.get_ref()));
 
     offer(&ctx, names)
@@ -137,7 +137,7 @@ pub struct StateStorageSyncHashes {
 pub fn handle_storage_sync_hashes(
     state: StateStorageSyncHashes,
     workspace: &mut LazyRes<ResWorkspace>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     progress: &ResProgressSetting,
@@ -158,7 +158,7 @@ pub fn handle_storage_sync_hashes(
     // The hashes are read here, so a word that is not one is told apart from a hash before anything
     // crosses. A head is resolved against what this side's store holds, the far side's own keys
     // are not listed for it, and what the action is handed is the hex it reads the same way.
-    let stored = store_key_set(storage.get_ref().as_ref());
+    let stored = store_key_set(storage.get_ref().storage());
     let mut hashes = Vec::with_capacity(state.hashes.len());
     for hash in &state.hashes {
         match resolve_among(hash, &stored) {

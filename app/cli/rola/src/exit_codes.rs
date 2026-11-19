@@ -56,6 +56,9 @@ pub const EC_ERR_CREATION_VAULT: i32 = 21;
 /// `exit_codes.creation_argument`
 pub const EC_ERR_CREATION_ARGUMENT: i32 = 22;
 
+/// `exit_codes.creation_storage`
+pub const EC_ERR_CREATION_STORAGE: i32 = 23;
+
 // Placement, where a run has to be
 
 /// `exit_codes.should_in_workspace`
@@ -151,6 +154,9 @@ pub const EC_ERR_STORAGE_LS_MANIFESTS_NO_STORAGE: i32 = 91;
 
 /// `exit_codes.storage_ls_manifests_failed`
 pub const EC_ERR_STORAGE_LS_MANIFESTS_FAILED: i32 = 92;
+
+/// `exit_codes.storage_bind`
+pub const EC_ERR_STORAGE_BIND: i32 = 93;
 
 // Trees
 

@@ -46,8 +46,7 @@ use rorolala_auth::MAX_PLAINTEXT;
 use rorolala_errors::BincodeError;
 use rorolala_protocol::{ActionContext, ActionError, Both, MAX_FRAME, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{
-    BLAKE3_HASH_LEN, Blake3Hash, Chunk, Error as StoreError, Key, Manifest, ObjectBatch, Presence,
-    RorolalaStorage, StorageBackend as _,
+    BLAKE3_HASH_LEN, Blake3Hash, Error as StoreError, Key, Manifest, Presence, StorageSet,
 };
 use rorolala_utils_progress::{Direction, Task};
 
@@ -182,8 +181,8 @@ impl Unit {
 /// [`ActionError::Store`] for what a store failed with otherwise.
 pub async fn sync_storage(
     ctx: &mut ActionContext<'_>,
-    workspace: OnlyWorkspace<RorolalaStorage>,
-    vault: OnlyVault<RorolalaStorage>,
+    workspace: OnlyWorkspace<StorageSet>,
+    vault: OnlyVault<StorageSet>,
     required_keys: Both<Vec<Key>>,
 ) -> Result<(), ActionError> {
     let units = required_keys
@@ -213,10 +212,10 @@ pub async fn sync_storage(
 /// Returns what [`sync_storage`] does.
 pub(crate) async fn sync_units(
     ctx: &mut ActionContext<'_>,
-    workspace: OnlyWorkspace<RorolalaStorage>,
-    vault: OnlyVault<RorolalaStorage>,
+    workspace: OnlyWorkspace<StorageSet>,
+    vault: OnlyVault<StorageSet>,
     required: Both<Vec<Unit>>,
-    window: usize,
+    _window: usize,
 ) -> Result<(), ActionError> {
     // Whichever side this is, it named the store it has; the other wrapper is empty.
     let local = workspace
@@ -280,21 +279,12 @@ pub(crate) async fn sync_units(
     // The Workspace's keys go first, then the Vault's. The order is the same on both ends, and it is
     // what keeps the two in step: a key crosses in one direction only, and both know which.
     if !up.is_empty() {
-        carry_direction(ctx, &local, &up, Side::Vault, &mut everything, 0, window).await?;
+        carry_direction(ctx, &local, &up, Side::Vault, &mut everything, 0).await?;
     }
 
     if !down.is_empty() {
         let done = u64::try_from(up.len()).unwrap_or(u64::MAX);
-        carry_direction(
-            ctx,
-            &local,
-            &down,
-            Side::Workspace,
-            &mut everything,
-            done,
-            window,
-        )
-        .await?;
+        carry_direction(ctx, &local, &down, Side::Workspace, &mut everything, done).await?;
     }
 
     // Both ends have carried everything they had to, and this is the point they reach once they
@@ -317,7 +307,7 @@ pub(crate) async fn sync_units(
 /// and there are as many of them as the caller named manifest tokens.
 ///
 /// [`contains_keys`]: StorageBackend::contains_keys
-async fn presence(local: &RorolalaStorage, units: &[Unit]) -> Result<Presence, ActionError> {
+async fn presence(local: &StorageSet, units: &[Unit]) -> Result<Presence, ActionError> {
     let mut presence = Presence::all_missing(units.len());
 
     let content: Vec<usize> = units
@@ -361,12 +351,11 @@ async fn presence(local: &RorolalaStorage, units: &[Unit]) -> Result<Presence, A
 /// Returns what a store read, a store write and the exchange fail with, see [`ActionError`].
 async fn carry_direction(
     ctx: &mut ActionContext<'_>,
-    local: &RorolalaStorage,
+    local: &StorageSet,
     units: &[&Unit],
     to: Side,
     everything: &mut Task,
     base: u64,
-    window: usize,
 ) -> Result<(), ActionError> {
     let sender = sending(ctx, to);
 
@@ -376,7 +365,7 @@ async fn carry_direction(
     // could not produce what it took, the digests of the units it could not.
     let (carried, taken) = if sender {
         (
-            send_direction(ctx, local, units, to, everything, base, window).await,
+            send_direction(ctx, local, units, to, everything, base).await,
             None,
         )
     } else {
@@ -516,12 +505,11 @@ pub(crate) const fn direction(to: Side) -> Direction {
 /// as it is full rather than after the whole direction has been read.
 async fn send_direction(
     ctx: &mut ActionContext<'_>,
-    local: &RorolalaStorage,
+    local: &StorageSet,
     units: &[&Unit],
     to: Side,
     everything: &mut Task,
     base: u64,
-    window: usize,
 ) -> Result<(), ActionError> {
     let mut task = everything.spawn(direction(to), "", None);
     let mut outgoing = Outgoing::default();
@@ -533,7 +521,7 @@ async fn send_direction(
         // What is being carried is named as it is carried: a unit of a cut content is a chunk, and a
         // reader watching one content move wants to see which one is in hand.
         let working = task.doing(unit.key.hex());
-        let added = add_unit(ctx, local, unit, to, &mut outgoing, &mut task, window).await;
+        let added = add_unit(ctx, local, unit, to, &mut outgoing, &mut task).await;
         drop(working);
 
         if let Err(error) = added {
@@ -579,7 +567,7 @@ async fn send_direction(
 /// rather than from a second reading of the store, see [`holds`].
 async fn take_direction(
     ctx: &mut ActionContext<'_>,
-    local: &RorolalaStorage,
+    local: &StorageSet,
     units: &[&Unit],
     to: Side,
     everything: &mut Task,
@@ -589,7 +577,7 @@ async fn take_direction(
     // each packet moves it by the bytes it holds and the run's own bar is counted in units.
     let mut task = everything.spawn(direction(to), "", None);
 
-    let mut batch = local.begin_batch().await;
+    let mut batch = local.write_target().begin_batch().await;
     // What this side wrote, which is what it will answer for. Objects and manifests are kept apart
     // because a key can be either: a content kept as chunks is a manifest under its own key and its
     // chunks are objects of their own, and "the object arrived" and "the manifest arrived" are two
@@ -752,106 +740,14 @@ pub(crate) fn packet_unread() -> ActionError {
     ActionError::Codec(BincodeError::new("a packet does not read".to_owned()))
 }
 
-/// Reads a content's chunks with its window always full.
-///
-/// A packet is sent when it is full, which is a wait nothing about the disk asks for: the reads for
-/// the packet after it can already be in flight. A window filled once per content and taken in order
-/// does exactly that, one read is taken as each one is handed over, so the number in flight is the
-/// window rather than the window on average.
-/// One chunk being read: the key it is for, and the read itself.
-type Reading = (Key, tokio::task::JoinHandle<Result<Vec<u8>, StoreError>>);
-
-/// Reads a content's chunks with its window always full, out of one opened batch.
-///
-/// A packet is sent when it is full, which is a wait nothing about the disk asks for: the reads for
-/// the packet after it can already be in flight. A window filled as each read is handed over does
-/// exactly that, so the number of reads in flight is the window rather than the window on average.
-///
-/// The batch is what makes each of those reads cheap: the packs are opened once for the whole
-/// content, rather than opened, seeked into and read once per chunk, see
-/// [`RorolalaStorage::open_objects`].
-struct Prefetch {
-    /// The content's chunks, in the order the manifest names them, already planned and opened.
-    batch: std::sync::Arc<ObjectBatch>,
-    /// The keys in the order the manifest names them.
-    keys: Vec<Key>,
-    /// How many of them have been begun.
-    begun: usize,
-    /// The reads in flight, in the order they were begun.
-    reads: std::collections::VecDeque<Reading>,
-    /// How many reads are kept in flight at once.
-    window: usize,
-}
-
-impl Prefetch {
-    /// Opens a batch of `keys`, with `window` reads in flight.
-    async fn open(
-        store: RorolalaStorage,
-        keys: Vec<Key>,
-        window: usize,
-    ) -> Result<Self, ActionError> {
-        let batch = store.open_objects(&keys).await.map_err(store_failed)?;
-
-        Ok(Self {
-            batch: std::sync::Arc::new(batch),
-            keys,
-            begun: 0,
-            reads: std::collections::VecDeque::new(),
-            window: window.max(1),
-        })
-    }
-
-    /// Keeps the window full.
-    fn fill(&mut self) {
-        while self.reads.len() < self.window {
-            let Some(key) = self.keys.get(self.begun).copied() else {
-                return;
-            };
-            self.begun += 1;
-
-            let batch = std::sync::Arc::clone(&self.batch);
-
-            // The side taking what this sends checks every entry against the key it arrived under,
-            // so hashing it here as well is a second pass over the content for a check the other
-            // side is about to make.
-            self.reads.push_back((
-                key,
-                tokio::spawn(async move { batch.read_unchecked(&key).await }),
-            ));
-        }
-    }
-
-    /// The next chunk that has been read, in the order the manifest names them.
-    async fn next(&mut self) -> Result<Option<(Key, Vec<u8>)>, ActionError> {
-        self.fill();
-
-        let Some((key, read)) = self.reads.pop_front() else {
-            return Ok(None);
-        };
-        let bytes = read
-            .await
-            .map_err(|error| ActionError::Store(error.to_string()))?
-            .map_err(store_failed)?;
-
-        // Filled before this one is handed over, so the wait it takes is a wait the next read is
-        // already spending on the disk.
-        self.fill();
-
-        Ok(Some((key, bytes)))
-    }
-}
-
 /// Adds the entries of one unit to the packet being built, sending it when it is full.
-///
-/// `window` is how many of a cut content's chunks are read at once, see [`DEFAULT_WINDOW`].
 async fn add_unit(
     ctx: &mut ActionContext<'_>,
-    local: &RorolalaStorage,
+    local: &StorageSet,
     unit: &Unit,
     to: Side,
     outgoing: &mut Outgoing,
     task: &mut Task,
-    window: usize,
 ) -> Result<(), ActionError> {
     // What a unit is expanded into is decided by what this side holds: a content kept as chunks is
     // its manifest and the chunks it names, and one kept whole is the object. Which of the two it is
@@ -873,36 +769,30 @@ async fn add_unit(
         // crosses.
         UnitKind::Whole => match manifest {
             None => {
-                let bytes = local
-                    .read_object_unchecked(&unit.key)
-                    .await
-                    .map_err(store_failed)?;
+                let bytes = local.read_object(&unit.key).await.map_err(store_failed)?;
 
                 push(ctx, outgoing, task, to, &unit.key, false, bytes).await
             }
             Some(manifest) => {
                 push(ctx, outgoing, task, to, &unit.key, true, manifest.encode()).await?;
 
-                // The chunks are read with the window always full, and each read outlives the one
-                // in hand: a store read is a hand-over to a thread that blocks, and waiting for the
-                // whole of one window before beginning the next is a sync that spends the sending of
-                // a packet with the disk idle. What is sent is still in the manifest's order, the
-                // reads are taken in the order they were begun, not the order they finish.
-                let keys: Vec<Key> = manifest.chunks().iter().map(Chunk::key).collect();
-                let mut prefetch = Prefetch::open(local.clone(), keys, window).await?;
+                // The chunks are read one at a time and sent in the manifest's order. A set of
+                // stores may hold them apart, so the reads cannot be planned as one batch on one
+                // store the way they were when a run saw one store only.
+                for chunk in manifest.chunks() {
+                    let bytes = local
+                        .read_object(&chunk.key())
+                        .await
+                        .map_err(store_failed)?;
 
-                while let Some((key, bytes)) = prefetch.next().await? {
-                    push(ctx, outgoing, task, to, &key, false, bytes).await?;
+                    push(ctx, outgoing, task, to, &chunk.key(), false, bytes).await?;
                 }
 
                 Ok(())
             }
         },
         UnitKind::Object => {
-            let bytes = local
-                .read_object_unchecked(&unit.key)
-                .await
-                .map_err(store_failed)?;
+            let bytes = local.read_object(&unit.key).await.map_err(store_failed)?;
 
             push(ctx, outgoing, task, to, &unit.key, false, bytes).await
         }
@@ -913,10 +803,7 @@ async fn add_unit(
             if let Some(manifest) = manifest {
                 push(ctx, outgoing, task, to, &unit.key, true, manifest.encode()).await
             } else {
-                let bytes = local
-                    .read_object_unchecked(&unit.key)
-                    .await
-                    .map_err(store_failed)?;
+                let bytes = local.read_object(&unit.key).await.map_err(store_failed)?;
 
                 push(ctx, outgoing, task, to, &unit.key, false, bytes).await
             }

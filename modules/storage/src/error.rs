@@ -1,5 +1,6 @@
 use std::fmt;
 use std::io;
+use std::path::PathBuf;
 
 use crate::Key;
 
@@ -18,6 +19,13 @@ pub enum Error {
     /// What is stored does not read as the format it says it is in: a frame that will not
     /// parse, an encoding that will not decode, a chunk list that will not read.
     Malformed,
+    /// The store is there but not writable: a read-only mount, or permissions that do not allow
+    /// a write. A set of stores reports this before writing rather than after, so a write aimed at
+    /// a read-only copy is refused instead of being quietly moved to another one.
+    ReadOnly {
+        /// The store that cannot be written.
+        path: PathBuf,
+    },
     /// The storage itself failed.
     Io(io::Error),
 }
@@ -30,6 +38,9 @@ impl fmt::Display for Error {
                 write!(formatter, "what is stored under {key} does not hash to it")
             }
             Self::Malformed => formatter.write_str("what is stored does not read as its format"),
+            Self::ReadOnly { path } => {
+                write!(formatter, "`{}` is read-only", path.display())
+            }
             Self::Io(source) => write!(formatter, "the storage failed: {source}"),
         }
     }

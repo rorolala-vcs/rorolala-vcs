@@ -1,4 +1,4 @@
-﻿//! The `rola retrack` command: set what a file's Layout entry records.
+//! The `rola retrack` command: set what a file's Layout entry records.
 //!
 //! A Layout names one version for each path, and the content behind a version stays in the index
 //! whether or not anything points at it. What a run names after the file is what the path is to
@@ -50,7 +50,7 @@ use mingling::{
 };
 use rorolala_cli_setups::{
     ErrorRemoteVault, ResConcurrency, ResCurrentRemoteVault, ResForce, ResOffline,
-    ResProgressSetting, ResRorolalaStorage, ResVCSIndex, ResVault, ResWorkspace,
+    ResProgressSetting, ResStorageSet, ResVCSIndex, ResVault, ResWorkspace,
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd, warn_line};
@@ -305,7 +305,7 @@ pub fn handle_retrack(
     state: StateRetrack,
     workspace: &mut LazyRes<ResWorkspace>,
     vault: &mut LazyRes<ResVault>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
+    storage: &mut LazyRes<ResStorageSet>,
     index: &mut LazyRes<ResVCSIndex>,
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
@@ -370,7 +370,7 @@ pub fn handle_retrack(
         workspace: held,
         layout: &layout,
         index: index.get_ref().as_ref(),
-        store: storage.get_ref().as_ref(),
+        store: storage.get_ref().storage(),
         account: account.as_ref(),
         vault: tracked.as_deref(),
         reach: reach.as_ref(),

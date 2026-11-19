@@ -133,8 +133,34 @@ pack:
         请在保险库或工作区内运行 `rola pack --garbage-collect`
 
   err_gc_merging:
-    en: This Workspace has merges waiting
-    zh-CN: 工作区有等待中的合并
+    en: "`%{path}` has merges waiting"
+    zh-CN: "`%{path}` 有等待中的合并"
+
+  gc_lost_binding:
+    en: "Binding `%{path}` is gone, so its Layout is not used for this collection"
+    zh-CN: "绑定 `%{path}` 已不在，本次收集不使用它的布局"
+
+  gc_binding_readonly:
+    en: "Binding `%{path}` is gone, and the store is read-only, so the record is left as it is"
+    zh-CN: "绑定 `%{path}` 已不在，而存储是只读的，记录保持原样"
+
+  gc_binding_not_removed:
+    en: "Binding `%{path}` is gone and could not be removed: %{error}"
+    zh-CN: "绑定 `%{path}` 已不在，且无法移除：%{error}"
+
+  err_gc_no_roots:
+    en: The roots reach no content, and collecting would take the whole store away
+    zh-CN: 根集合没有到达任何内容，收集会清空整个存储
+
+  err_gc_no_roots_help:
+    en: |
+        Check the places the store records, or use `--force` if the store really is to be emptied
+    zh-CN: |
+        请检查存储记录的位置，或者确实要清空存储时使用 `--force`
+
+  err_gc_read_only:
+    en: "`%{path}` is read-only, so nothing can be collected from it"
+    zh-CN: "`%{path}` 是只读的，无法从它回收内容"
 
   err_gc_merging_help:
     en: |

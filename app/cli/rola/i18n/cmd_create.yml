@@ -3,23 +3,27 @@ _version: 2
 create:
   help:
     en: |
-        # Create a Workspace or a Vault
+        # Create a Workspace, a Vault or a store
         **Usage**: rola [[GREEN]]__create__[[/]] <PATH>
         **Flags**:
              __--vault__ __-v__    Create a Vault instead of a Workspace
+             __--storage__     Create a store instead of a Workspace
 
-        Create a Workspace at the given path, or use `--vault` to create a Vault
+        Create a Workspace at the given path, use `--vault` to create a Vault, or use
+        `--storage` to make the path a store that other places bind.
     zh-CN: |
-        # 创建工作区或保险库
+        # 创建工作区、保险库或存储
         **用法**：rola [[GREEN]]__create__[[/]] <路径>
         **标识**：
              __--vault__ __-v__    创建保险库而不是工作区
+             __--storage__     创建存储而不是工作区
 
-        在给定路径创建工作区，或使用 `--vault` 指定创建保险库
+        在给定路径创建工作区，使用 `--vault` 创建保险库，或使用 `--storage` 把该路径
+        变成可供其他位置绑定的存储。
 
   cmd_create_description:
-    en: Create a Workspace or a Vault
-    zh-CN: 创建工作区或保险库
+    en: Create a Workspace, a Vault or a store
+    zh-CN: 创建工作区、保险库或存储
 
   path_not_provided:
     en: Path not provided, `rola create` cannot create the target
@@ -31,15 +35,50 @@ create:
 
         **Example**: `rola create my-workspace`
                  `rola create our-vault --vault`
+                 `rola create /srv/rola/shared --storage`
     zh-CN: |
         请提供一个路径以完成创建
 
         **例如**：`rola create my-workspace`
               `rola create our-vault --vault`
+              `rola create /srv/rola/shared --storage`
 
   result_workspace_created:
     en: Workspace created at %{path}
     zh-CN: 工作区已创建于 %{path}
+
+  result_storage_created:
+    en: Store created at %{path}
+    zh-CN: 存储已创建于 %{path}
+
+  err_storage_and_vault:
+    en: "`--storage` and `--vault` name two different creations"
+    zh-CN: "`--storage` 与 `--vault` 指定了两种不同的创建"
+  err_storage_and_vault_help:
+    en: Give one of the two, or give neither to create a Workspace
+    zh-CN: 只给出两者之一，或者都不给出以创建工作区
+
+  err_storage_exists:
+    en: "`%{path}` is already a store"
+    zh-CN: "`%{path}` 已经是一个存储"
+  err_storage_exists_help:
+    en: A store is a directory carrying `rolast.toml`, so give another path
+    zh-CN: 存储是带有 `rolast.toml` 的目录，请换一个路径
+
+  err_storage_target_is_place:
+    en: "`%{path}` is a Workspace or a Vault, so it cannot be a store"
+    zh-CN: "`%{path}` 是工作区或保险库，不能同时作为存储"
+  err_storage_target_is_place_help:
+    en: A store sits beside the places that use it, not at one of them
+    zh-CN: 存储应位于使用它的位置旁边，不应与它重合
+
+  err_storage_target_not_directory:
+    en: "`%{path}` is not a directory, so no store can be made there"
+    zh-CN: "`%{path}` 不是目录，无法在这里创建存储"
+
+  err_storage_failed:
+    en: "The store at `%{path}` could not be made: %{reason}"
+    zh-CN: "无法在 `%{path}` 创建存储：%{reason}"
 
   sub_vault_name_is_path:
     en: "A vault inside a vault is named, not pathed: `%{name}` is a path"

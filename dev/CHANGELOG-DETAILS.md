@@ -36,6 +36,23 @@ The five whole workflows are there as well: `write::ownership` plans and applies
 
 The writers over the whole workflows are there too: `Bring`, `BringVariant`, `Retrack`, `Align`, `PlanOwnership`, `ApplyOwnership`, `PlanTrack` and `Track`. Each takes a request record and answers a result record, the plan a track asks for is the exact text the native side answered with, and the single-entry alignment is now `AlignEntry`. The sync writer takes a `SyncRequest`, the plan it was handed and a `Progress`, so what a panel previewed is what it applies. An ownership plan can be handed back to `ApplyOwnership`, and every write failure has its own kind, tree and missing Vault included.
 
+### 5. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores
+
+The store a Workspace, a Vault or a `git-rola` project writes content to is a set of stores rather
+than one directory. `workspace.toml` takes `[default] storages`, `vault.toml` takes
+`[storage] storages` and `rola.toml` takes `[[storages]]`; each is an order, and the place's own
+store is last when `.` is not written among them. A write goes to the first store that is there, and
+a read tries each in turn until one answers. `rolast.toml` records the Workspaces and Vaults that
+write to it under `[workspaces] connected` and `[vaults] connected`, and
+`rola pack --garbage-collect` keeps what every recorded place keeps. `rola create --storage`,
+`rola init --storage`, `rola storage create`, `rola bind <DIR>` and `git rola bind` make and bind a
+store; the last also binds a Vault address under a name. A store that is read-only can be bound for
+reading, and a write to it fails rather than moving to another store. `RolaSharp` reads the bindings
+into `WorkspaceConfig.Storages` and `VaultConfig.Storages`, `StorageScope` reads every store of the
+place it was made from and writes through the first one that can be written, and
+`StorageWriter.Create`, `WorkspaceWriter.BindStorage` and `VaultWriter.BindStorage` are the C ABI
+calls for making and binding a store.
+
 ## Refactor
 
 ### 1. **\[BREAKING!\]** [`modules`] [`rola-sharp`] Remove the first-generation C# bindings and keep RolaSharp as the one assembly

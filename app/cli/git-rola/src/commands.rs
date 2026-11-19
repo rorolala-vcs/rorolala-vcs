@@ -138,7 +138,7 @@ fn initialise() -> Result<ResultInit, String> {
 
     if session.project().lock_path().is_file() {
         let lock = session.lock().map_err(|error| error.to_string())?;
-        let source = crate::source::of(session.project());
+        let source = crate::source::of(session.project())?;
         let failures = session
             .attach(&lock, &source)
             .map_err(|error| error.to_string())?;
@@ -372,7 +372,7 @@ fn restore_materials(names: &[String]) -> Result<ResultRestore, RestoreFailure> 
     let only = crate::pathspec::select(&lock, &base, &prefix, &names.names)
         .map_err(RestoreFailure::Pathspec)?;
 
-    let source = crate::source::of(session.project());
+    let source = crate::source::of(session.project()).map_err(RestoreFailure::Fatal)?;
 
     // What a name inside a tree restores is put back here, not by session.restore: an empty list
     // of materials there means every material, and a run of names that all point inside a tree has

@@ -256,6 +256,7 @@ authors.workspace = true
 [dependencies]
 globset.workspace = true
 rorolala-auth.workspace = true
+rola-define-format.workspace = true
 rorolala-book-search.workspace = true
 rorolala-chunking.workspace = true
 rorolala-daemon.workspace = true

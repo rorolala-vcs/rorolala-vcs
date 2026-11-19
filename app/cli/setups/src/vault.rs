@@ -78,6 +78,29 @@ impl ResVaultConfig {
             Self::Absent | Self::Read { .. } => None,
         }
     }
+
+    /// Writes the configuration back now, reporting what a drop could not.
+    ///
+    /// # Errors
+    ///
+    /// Returns what writing the file failed with.
+    pub fn save(&mut self) -> Result<(), rorolala_utils_configure::Error> {
+        let Self::Read {
+            path,
+            changed,
+            config,
+        } = self
+        else {
+            return Ok(());
+        };
+
+        if *changed {
+            config.write_to(path)?;
+            *changed = false;
+        }
+
+        Ok(())
+    }
 }
 
 /// A [`ProgramSetup`] implementation used to register Vault-related resources and behaviors

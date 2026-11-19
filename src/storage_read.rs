@@ -12,13 +12,9 @@ use std::fmt;
 use std::path::Path;
 use std::str::FromStr as _;
 
-use rorolala_storage::internals::Internals as _;
-use rorolala_storage::{
-    Error as StorageError, Key, RorolalaStorage, StorageBackend as _, TransferableBackend as _,
-};
+use rorolala_storage::{Error as StorageError, Key, StorageSet};
 use rorolala_tree::TreeStructure;
 use rorolala_utils_lazyffi::lazyffi;
-use rorolala_utils_location::Locate as _;
 use serde::Serialize;
 
 /// What reading a store failed with.
@@ -86,10 +82,10 @@ struct KeysAnswer {
 /// [`StorageReadError::Read`] when the store cannot be listed.
 #[lazyffi(export = rola_storage_objects_json)]
 pub fn objects_json(directory: &Path) -> Result<String, StorageReadError> {
-    let store = RorolalaStorage::locate(directory).ok_or(StorageReadError::NoStore)?;
+    let set = stores_of(directory)?;
     let runtime = runtime()?;
     let keys = runtime
-        .block_on(store.list_exist_keys())
+        .block_on(set.list_exist_keys())
         .map_err(storage_error)?;
 
     serde_json::to_string(&KeysAnswer { keys }).map_err(|error| StorageReadError::Read {
@@ -112,10 +108,10 @@ pub fn objects_json(directory: &Path) -> Result<String, StorageReadError> {
 /// [`StorageReadError::Read`] when the manifests cannot be listed.
 #[lazyffi(export = rola_storage_manifests_json)]
 pub fn manifests_json(directory: &Path) -> Result<String, StorageReadError> {
-    let store = RorolalaStorage::locate(directory).ok_or(StorageReadError::NoStore)?;
+    let set = stores_of(directory)?;
     let runtime = runtime()?;
     let keys = runtime
-        .block_on(store.list_manifest_keys())
+        .block_on(set.list_manifest_keys())
         .map_err(storage_error)?;
 
     serde_json::to_string(&KeysAnswer { keys }).map_err(|error| StorageReadError::Read {
@@ -142,7 +138,7 @@ pub fn manifests_json(directory: &Path) -> Result<String, StorageReadError> {
 /// [`StorageReadError::Read`] when the write fails.
 #[lazyffi(export = rola_storage_extract)]
 pub fn extract(directory: &Path, hash: &str, destination: &Path) -> Result<(), StorageReadError> {
-    let store = RorolalaStorage::locate(directory).ok_or(StorageReadError::NoStore)?;
+    let set = stores_of(directory)?;
     let key = Key::from_str(hash).map_err(|_| StorageReadError::Malformed)?;
 
     if destination.exists() {
@@ -153,7 +149,7 @@ pub fn extract(directory: &Path, hash: &str, destination: &Path) -> Result<(), S
 
     let runtime = runtime()?;
     runtime
-        .block_on(store.extract_file(&key, destination))
+        .block_on(set.extract_file(&key, destination))
         .map_err(storage_error)
 }
 
@@ -177,12 +173,12 @@ pub fn extract(directory: &Path, hash: &str, destination: &Path) -> Result<(), S
 /// [`StorageReadError::Read`] when the manifest cannot be read.
 #[lazyffi(export = rola_storage_manifest_json)]
 pub fn manifest_json(directory: &Path, hash: &str) -> Result<String, StorageReadError> {
-    let store = RorolalaStorage::locate(directory).ok_or(StorageReadError::NoStore)?;
+    let set = stores_of(directory)?;
     let key = Key::from_str(hash).map_err(|_| StorageReadError::Malformed)?;
     let runtime = runtime()?;
 
     let manifest = runtime
-        .block_on(store.read_manifest(&key))
+        .block_on(set.manifest_of(&key))
         .map_err(storage_error)?;
 
     let Some(manifest) = manifest else {
@@ -225,14 +221,11 @@ pub fn manifest_json(directory: &Path, hash: &str) -> Result<String, StorageRead
 /// [`StorageReadError::Read`] when the content cannot be read.
 #[lazyffi(export = rola_tree_structure_json)]
 pub fn tree_structure_json(directory: &Path, hash: &str) -> Result<String, StorageReadError> {
-    let store = RorolalaStorage::locate(directory).ok_or(StorageReadError::NoStore)?;
+    let set = stores_of(directory)?;
     let key = Key::from_str(hash).map_err(|_| StorageReadError::Malformed)?;
     let runtime = runtime()?;
 
-    let Some(bytes) = runtime
-        .block_on(store.content(&key))
-        .map_err(storage_error)?
-    else {
+    let Some(bytes) = runtime.block_on(set.content(&key)).map_err(storage_error)? else {
         return Err(StorageReadError::NotFound {
             key: key.to_string(),
         });
@@ -268,6 +261,15 @@ fn runtime() -> Result<tokio::runtime::Runtime, StorageReadError> {
     tokio::runtime::Runtime::new().map_err(|error| StorageReadError::Read {
         reason: error.to_string(),
     })
+}
+
+/// The stores `directory` works on, as a reader meets them.
+fn stores_of(directory: &Path) -> Result<StorageSet, StorageReadError> {
+    crate::storage_set::for_directory(directory)
+        .map_err(|error| StorageReadError::Read {
+            reason: error.to_string(),
+        })?
+        .ok_or(StorageReadError::NoStore)
 }
 
 /// What a store's failure is reported as.

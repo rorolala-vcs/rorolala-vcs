@@ -15,7 +15,7 @@ use std::str::FromStr as _;
 use globset::GlobBuilder;
 use rorolala_errors::Failure as _;
 use rorolala_layout::{EntryKind, Layout, LayoutPath, MutableData};
-use rorolala_storage::{Key, Resolved, RorolalaStorage, ShortHash};
+use rorolala_storage::{Key, Resolved, ShortHash, StorageSet};
 use rorolala_tree::{
     EntryKind as TreeKind, Staging, Tree, TreeStructure, conflict_copy, merge, read_structure,
 };
@@ -1036,7 +1036,7 @@ fn merge_tree(
     workspace: &Workspace,
     layout: &Layout,
     index: &VCSIndex,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     runtime: &tokio::runtime::Runtime,
     id: Uuid,
     data: &MutableData,
@@ -1585,7 +1585,7 @@ pub fn bring_in(
     layout: &Layout,
     remote: &Layout,
     index: &VCSIndex,
-    store: Option<&RorolalaStorage>,
+    store: Option<&StorageSet>,
     runtime: &tokio::runtime::Runtime,
     wanted: Vec<Wanted>,
     sources: &Sources<'_>,
@@ -1795,7 +1795,7 @@ fn item(remote: &Layout, id: Uuid, path: &LayoutPath) -> Item {
 fn write_worktree(
     root: &Path,
     structure: &TreeStructure,
-    store: &RorolalaStorage,
+    store: &StorageSet,
     runtime: &tokio::runtime::Runtime,
 ) -> Result<(), String> {
     std::fs::create_dir_all(root).map_err(|error| error.to_string())?;
