@@ -846,6 +846,12 @@ rorolala_vcs:
     not_workspace:
       en: This directory is not inside a Rorolala Workspace
       zh-CN: 此目录不在 Rorolala 工作区内
+    no_track:
+      en: The current Layout tracks no Vault
+      zh-CN: 当前布局没有追踪任何保险库
+    no_account:
+      en: No account is bound
+      zh-CN: 未绑定任何账户
     not_fetched:
       en: The Layout of `%{vault}` has not been fetched here yet
       zh-CN: 尚未在此取回 `%{vault}` 的布局
@@ -1237,6 +1243,18 @@ rorolala_vcs:
     held_by:
       en: "%{holder} holds this file, so you cannot edit it"
       zh-CN: 该文件由 %{holder} 持有，无法编辑
+    no_track:
+      en: The current Layout tracks no Vault
+      zh-CN: 当前布局没有追踪任何保险库
+    no_account:
+      en: No account is bound
+      zh-CN: 未绑定任何账户
+    holding:
+      en: Holding ownership
+      zh-CN: 正在持有所有权
+    giving:
+      en: Giving up ownership
+      zh-CN: 放弃所有权中
 
   # What a single file asks before the Desktop opens it. A tracked file whose owner is another account is
   # opened with the warning that a change would be recorded as an error; one nobody holds is offered the

@@ -1,6 +1,7 @@
 using Avalonia.Threading;
 using FileSystemPlugin;
 using RolaSharp;
+using RolaSharp.Write;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
@@ -331,13 +332,14 @@ internal static class BringPlanning
 /// One bring, from what a drag carried to what the user was told about it.
 /// </summary>
 /// <remarks>
-/// The command line brings in what it is given, or nothing: the first reference it refuses is the run refused, so
+/// The writer brings in what it is given, or nothing: the first reference it refuses is the run refused, so
 /// "bring in what fits and leave the rest" is a plan made here and then run, see <see cref="BringPlanning"/>. What
 /// the user is asked when the plan does not fit is the one question this class puts: move the files that are already
 /// here under another name, leave them out, or let the bring go.
 /// <para>
-/// Nothing here is done on the window's thread: the plan is two reads of the work, the runs are programs, and the
-/// question is the only thing the window answers.
+/// Nothing here is done on the window's thread: the plan is two reads of the work, the bring and the local move are
+/// two writes, and the question is the only thing the window answers. The move is the writer's, the same one the bring
+/// uses, see <see cref="LayoutPathMoveCommand.Move"/>.
 /// </para>
 /// </remarks>
 internal sealed class BringFlow
@@ -396,10 +398,7 @@ internal sealed class BringFlow
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(carrying);
 
-        if (
-            Program() is not { } program
-            || BaseDirectory.Current is not { Length: > 0 } directory
-        )
+        if (Program() is null || BaseDirectory.Current is not { Length: > 0 } directory)
         {
             RefuseNoProgram();
 
@@ -410,7 +409,7 @@ internal sealed class BringFlow
         // reads it against the Workspace's root, and the run is handed the same words.
         var to = destination is { Length: > 0 } at ? Path.GetFullPath(at) : null;
 
-        _ = Task.Run(() => Plan(source, carrying, to, program, directory));
+        _ = Task.Run(() => Plan(source, carrying, to, directory));
     }
 
     /// <summary>Brings in the entries of what the Vault holds, as a right-click asks for one.</summary>
@@ -428,13 +427,11 @@ internal sealed class BringFlow
     /// <param name="source">The Layout the entries are of.</param>
     /// <param name="carrying">What the drag carried.</param>
     /// <param name="destination">The directory they are to land under, or nothing.</param>
-    /// <param name="program">The program the window was opened by.</param>
     /// <param name="directory">Where the work is rooted, and where the runs are made.</param>
     private void Plan(
         UpstreamSource source,
         IReadOnlyList<UpstreamCarry> carrying,
         string? destination,
-        string program,
         string directory
     )
     {
@@ -476,7 +473,7 @@ internal sealed class BringFlow
             carrying
         );
 
-        Post(() => Confirm(plan, program, directory));
+        Post(() => Confirm(plan, directory));
     }
 
     /// <summary>
@@ -488,9 +485,8 @@ internal sealed class BringFlow
     /// is asked as "leave them out or let it go" rather than with an answer that would fail.
     /// </remarks>
     /// <param name="plan">What the bring comes to.</param>
-    /// <param name="program">The program the window was opened by.</param>
     /// <param name="directory">Where the work is rooted, and where the runs are made.</param>
-    private void Confirm(BringPlan plan, string program, string directory)
+    private void Confirm(BringPlan plan, string directory)
     {
         if (plan.Steps.Count == 0)
         {
@@ -502,7 +498,7 @@ internal sealed class BringFlow
         // and a run that half did something is not one to start without saying so.
         if (!plan.Blocks && plan.Here == 0)
         {
-            Bring(plan, program, directory);
+            Bring(plan, directory);
 
             return;
         }
@@ -517,7 +513,7 @@ internal sealed class BringFlow
             choices.Add(
                 new DialogChoice(
                     RolaI18N.Get("rorolala_vcs.place.bring_move", plan.Elsewhere.Count),
-                    () => Move(plan, program, directory)
+                    () => Move(plan, directory)
                 )
             );
         }
@@ -527,7 +523,7 @@ internal sealed class BringFlow
                 RolaI18N.Get("rorolala_vcs.place.bring_partial", plan.Left),
                 () =>
                 {
-                    Bring(plan, program, directory);
+                    Bring(plan, directory);
                     Notify(
                         NotificationLevel.Warning,
                         "rorolala_vcs.place.bring_abandoned_title",
@@ -590,11 +586,14 @@ internal sealed class BringFlow
     /// The file is moved before the record that names it, and put back where it was if the record cannot follow: a path
     /// that moved to a file that is not there is worse than a file beside the name it already had. What actually moved is
     /// said, a run that moved files and said nothing is a run the user cannot tell from one that did not.
+    /// <para>
+    /// The record is the writer's: the same write the bring uses, made in the Layout being worked in. It needs nothing of
+    /// the command line and nothing of the program the window was opened by.
+    /// </para>
     /// </remarks>
     /// <param name="plan">What the bring comes to.</param>
-    /// <param name="program">The program the window was opened by.</param>
     /// <param name="directory">Where the work is rooted, and where the runs are made.</param>
-    private void Move(BringPlan plan, string program, string directory)
+    private void Move(BringPlan plan, string directory)
     {
         var run = _hub.Begin("rorolala_vcs.progress.path_move");
 
@@ -637,14 +636,11 @@ internal sealed class BringFlow
                     continue;
                 }
 
-                var (done, said) = LayoutPathMoveCommand.Run(
-                    program,
+                var (done, said) = LayoutPathMoveCommand.Move(
                     directory,
                     layout: null,
                     from,
-                    step.Landing,
-                    run.Records,
-                    _hub.Touch
+                    step.Landing
                 );
 
                 if (done)
@@ -688,22 +684,26 @@ internal sealed class BringFlow
                 // Whatever could not be moved is still here, and is what the report above is about; an entry whose record
                 // moved is one the work now names where the Vault does, so it is not left out of anything. The ones the
                 // run leaves out are counted by the plan, so nothing is said twice.
-                Bring(plan, program, directory);
+                Bring(plan, directory);
             });
         });
     }
 
     /// <summary>Runs the bring of everything the plan can bring in.</summary>
+    /// <remarks>
+    /// The request is the plan's own: the references it worked out, the destination it was dropped on, and the
+    /// tracked Vault, which is the only one a bring reads. The writer opens the Workspace itself, so this needs
+    /// nothing of the command line and nothing of the program the window was opened by.
+    /// </remarks>
     /// <param name="plan">What the bring comes to.</param>
-    /// <param name="program">The program the window was opened by.</param>
-    /// <param name="directory">Where the work is rooted, and where the runs are made.</param>
-    private void Bring(BringPlan plan, string program, string directory)
+    /// <param name="directory">Where the work is rooted, and where the run is made.</param>
+    private void Bring(BringPlan plan, string directory)
     {
         var references = plan.References();
 
         if (references.Count == 0)
         {
-            // Nothing to hand the command line: what changed is already in the work, or was never going to be, and the
+            // Nothing to hand the writer: what changed is already in the work, or was never going to be, and the
             // place is drawn from the files, so it is told they may have moved.
             _host.Files.Touch();
 
@@ -714,26 +714,54 @@ internal sealed class BringFlow
 
         _ = Task.Run(() =>
         {
-            var answer = BringCommand.Run(
-                program,
-                directory,
-                references,
-                run.Records,
-                _hub.Touch,
-                plan.Destination
-            );
+            List<string> failed = [];
+            string? said = null;
+
+            try
+            {
+                using var workspace = WorkspaceScope.Open(directory);
+                workspace.Read();
+
+                var request = new BringRequest
+                {
+                    Workspace = directory,
+                    Account = UserScope.CurrentAccount,
+                    Target = WriteTarget.Tracked,
+                    Refs = references,
+                    To = plan.Destination,
+                    ByName = plan.Destination is { Length: > 0 },
+                };
+
+                using var native = Progress.New();
+                using var watching = new Watching(native, run.Records, _hub.Touch);
+
+                failed = [.. new WorkspaceWriter(workspace).Bring(request, native).Failed];
+            }
+            catch (RolaWriteError error)
+            {
+                said = Told(error);
+            }
+            catch (RolaReadError error)
+                when (error.Kind is RolaReadErrorKind.NoWorkspace or RolaReadErrorKind.Unavailable)
+            {
+                said = RolaI18N.Get("rorolala_vcs.place.not_workspace");
+            }
+            catch (Exception error) when (error is not OutOfMemoryException)
+            {
+                said = error.Message;
+            }
 
             Dispatcher.UIThread.Post(() =>
             {
                 _hub.End(run);
 
-                if (!answer.Done || answer.Failed.Count > 0)
+                if (said is { Length: > 0 } || failed.Count > 0)
                 {
                     FailureNotice.Show(
                         _host.Dialogs,
                         _host.Icons,
                         RolaI18N.Get("rorolala_vcs.place.bring_failed", plan.Vault),
-                        answer.Done ? string.Join((char)10, answer.Failed) : answer.Said
+                        failed.Count > 0 ? string.Join((char)10, failed) : said!
                     );
                 }
 
@@ -787,15 +815,126 @@ internal sealed class BringFlow
     {
         try
         {
-            using var status = RolaStatus.Locate(directory);
+            using var workspace = WorkspaceScope.Open(directory);
+            workspace.Read();
 
-            return status?.Root;
+            return workspace.Root.FullName;
+        }
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.NoWorkspace or RolaReadErrorKind.Unavailable)
+        {
+            return null;
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
             _log.Warn($"the Workspace holding `{directory}` could not be read: {error.Message}");
 
             return null;
+        }
+    }
+
+    /// <summary>What a write failure is said as in the window.</summary>
+    /// <remarks>
+    /// A kind a key already says is translated, and one no key says is the writer's own message once. A write
+    /// failure that carries no message at all still says something: the states a bring reaches most often, no
+    /// Workspace, no Vault and no account, have a key here, and a kind left over is named rather than shown as
+    /// nothing.
+    /// </remarks>
+    /// <param name="error">The failure the writer answered with.</param>
+    /// <returns>What to show.</returns>
+    private static string Told(RolaWriteError error) =>
+        error.Kind switch
+        {
+            RolaWriteErrorKind.NoWorkspace => RolaI18N.Get("rorolala_vcs.place.not_workspace"),
+            RolaWriteErrorKind.NoTrack => RolaI18N.Get("rorolala_vcs.place.no_track"),
+            RolaWriteErrorKind.NoAccount => RolaI18N.Get("rorolala_vcs.place.no_account"),
+            _ => error.Message is { Length: > 0 } message ? message : error.Kind.ToString(),
+        };
+
+    /// <summary>
+    /// Reads the writer's progress while the writer works, and stops before the handle is given back.
+    /// </summary>
+    /// <remarks>
+    /// The writer pushes what it says onto a handle rather than writing it to a stream, so something has to poll
+    /// it while the run goes on. The poll runs on a worker of its own and the records are kept under the lock
+    /// they already have, which is the same shape the sync's panel uses; stopping it before the handle is
+    /// disposed is what keeps a reading from touching a handle that is gone.
+    /// </remarks>
+    private sealed class Watching : IDisposable
+    {
+        /// <summary>How long the window waits between two readings, in milliseconds.</summary>
+        private const int Pause = 50;
+
+        /// <summary>What the records are read from.</summary>
+        private readonly Progress _native;
+
+        /// <summary>What the readings are kept in.</summary>
+        private readonly ProgressRecords _records;
+
+        /// <summary>What is told that a record was read.</summary>
+        private readonly Action _progress;
+
+        /// <summary>What stops the poll.</summary>
+        private readonly CancellationTokenSource _stop = new();
+
+        /// <summary>The poll, which is waited for before the handle is given back.</summary>
+        private readonly Task _polling;
+
+        /// <summary>Starts reading what the writer says.</summary>
+        /// <param name="native">The writer's progress handle.</param>
+        /// <param name="records">What the readings are kept in.</param>
+        /// <param name="progress">What is told that records were read.</param>
+        public Watching(Progress native, ProgressRecords records, Action progress)
+        {
+            _native = native;
+            _records = records;
+            _progress = progress;
+            _polling = Task.Run(PollAsync);
+        }
+
+        /// <summary>Stops the poll, takes its last reading, and lets the handle go.</summary>
+        public void Dispose()
+        {
+            _stop.Cancel();
+            _polling.GetAwaiter().GetResult();
+            Drain();
+            _stop.Dispose();
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>Reads the handle until the stop is asked for.</summary>
+        /// <returns>The poll.</returns>
+        private async Task PollAsync()
+        {
+            try
+            {
+                while (!_stop.IsCancellationRequested)
+                {
+                    Drain();
+                    await Task.Delay(Pause, _stop.Token).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // The stop is the only way out of the loop, so a cancelled wait is the poll ending.
+            }
+        }
+
+        /// <summary>Reads every record said since the last reading, and tells the window once.</summary>
+        private void Drain()
+        {
+            var said = false;
+
+            while (_native.NextJson() is { } json)
+            {
+                _records.Read(json);
+                said = true;
+            }
+
+            if (said)
+            {
+                _progress();
+            }
         }
     }
 

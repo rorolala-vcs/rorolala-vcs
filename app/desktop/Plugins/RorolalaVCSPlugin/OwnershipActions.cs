@@ -1,54 +1,27 @@
-using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
 using FileSystemPlugin;
 using RolaSharp;
+using RolaSharp.Write;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// Taking ownership and letting it go, by running the command line that does it.
+/// Taking ownership and letting it go, through the writer the command line uses.
 /// </summary>
 /// <remarks>
-/// The exchange with the Vault is the command line's, fetching its Layout, reading the gates, writing the
-/// claim, and doing it here would be a second answer to the same question, kept in step by hand. So an entry's
-/// menu runs <c>rola hold</c> or <c>rola giveup</c> and reports what came of it: what this plugin owns is which
-/// words are put to the user, not how ownership moves.
+/// The exchange with the Vault is the writer's: fetching its Layout, reading the gates, writing the claim, and
+/// doing it here would be a second answer to the same question, kept in step by hand. A plan is made before
+/// anything moves, and the plan that was made is the one applied, so what the gates allowed is what the run
+/// carries. What this plugin owns is which words are put to the user, not how ownership moves.
 /// <para>
-/// The program is the one this window was opened by, named by the environment the run handed over, because the
-/// two are exported together: a <c>rola</c> found on the <c>PATH</c> could be another one entirely, of another
-/// version, against another Vault.
+/// The run may be partly done, which is what <c>--allow-partial</c> asks for: every entry that passes its gates
+/// moves, the ones that do not are reported, and the report is the run's own answer rather than the first
+/// refusal that stopped it. A plan made without that answer is refused whole, as the command line refuses it.
 /// </para>
 /// </remarks>
 internal static class OwnershipActions
 {
-    /// <summary>The theme the output is asked for, which is the one this window reads.</summary>
-    /// <remarks>
-    /// Stated on every run rather than left to the command line's own choice, because what is being read is not a
-    /// terminal: the level of every reported line is a word at the head of it, and what it says follows as it was
-    /// written, so that this window draws the marks rather than the escapes a terminal would have been given.
-    /// </remarks>
-    private const string Theme = "desktop-friendly";
-
-    /// <summary>The environment variable naming the program the window was opened by.</summary>
-    /// <remarks>
-    /// The same name <c>rola desktop</c> hands over, which is where it is set: see the command line's own
-    /// <c>cmd_desktop</c>.
-    /// </remarks>
-    private const string Program = "ROLA_EXE";
-
-    /// <summary>
-    /// The flag that has the command write its progress as one JSON record per line on its error stream.
-    /// </summary>
-    /// <remarks>
-    /// The same flag the sync is run with: what is read here is the records the command writes about itself, and
-    /// they are written only when the run is being read by a program rather than watched by a person. The result
-    /// crosses as JSON too, which is no loss, nothing here reads it on the way through.
-    /// </remarks>
-    private const string Json = "--json";
-
     /// <summary>
     /// Registers what an entry's menu offers about who holds it.
     /// </summary>
@@ -147,18 +120,20 @@ internal static class OwnershipActions
             )
         );
 
-    /// <summary>Runs one ownership command over the whole choice, and reports what it came to.</summary>
+    /// <summary>Runs one ownership action over the whole choice, and reports what it came to.</summary>
     /// <remarks>
-    /// One run for the whole choice rather than one per entry: the command line takes several paths at once, and
-    /// a claim that is one claim is one exchange with the Vault rather than three.
+    /// One run for the whole choice rather than one per entry: the writer takes several paths at once, and a
+    /// claim that is one claim is one exchange with the Vault rather than three. A path is made absolute before
+    /// it is named, because a request reads a relative name from the Workspace's root rather than from the
+    /// directory the menu was opened in.
     /// <para>
-    /// Run off the window's thread and not waited for: the command talks to a Vault, which takes as long as a
+    /// Run off the window's thread and not waited for: the run talks to a Vault, which takes as long as a
     /// network takes, and a window that stopped drawing until it answered would be a window that stopped. What
     /// the files may have become is said once it is done either way, because a run that ends unhappily may have
     /// claimed some of what it was given, which is what it was asked to do.
     /// </para>
     /// </remarks>
-    /// <param name="verb">Which command it is.</param>
+    /// <param name="verb">Which action it is.</param>
     /// <param name="target">What the menu was opened on, the entry right-clicked first.</param>
     /// <param name="force">Whether the checks are to be gone past.</param>
     /// <param name="host">The host, for the report and for saying the files may have changed.</param>
@@ -171,136 +146,153 @@ internal static class OwnershipActions
         IProgressHub hub
     )
     {
-        var program = Environment.GetEnvironmentVariable(Program);
-
-        if (string.IsNullOrEmpty(program) || target.Entries.Count == 0)
+        if (target.Entries.Count == 0)
         {
             host.Dialogs.Report(
-                new Report(RolaI18N.Get("rorolala_vcs.ownership_failed"), RolaI18N.Get("rorolala_vcs.ownership_unknown"))
+                new Report(
+                    RolaI18N.Get("rorolala_vcs.ownership_failed"),
+                    RolaI18N.Get("rorolala_vcs.ownership_unknown")
+                )
             );
 
             return;
         }
 
-        var arguments = new List<string> { "--theme-choice=" + Theme, Json, verb };
-
-        if (force)
-        {
-            arguments.Add("--force");
-        }
-
-        // A batch that cannot be done whole is not half done, and a user who chose three files wants the two
-        // that can be claimed rather than none of them: what was refused is said, and the run ends unhappily.
-        arguments.Add("--allow-partial");
-
-        foreach (var entry in target.Entries)
-        {
-            // A name inside the directory the menu was opened in, because that is where the run is made: the
-            // command line reads a path as a place in the Workspace being worked in, so the run has to be inside
-            // that Workspace for it to be found, and a name is what it is given there.
-            arguments.Add(Path.GetRelativePath(target.Directory, entry.Path));
-        }
+        var request = Request(
+            verb,
+            [.. target.Entries.Select(entry => Absolute(target.Directory, entry.Path))],
+            force,
+            allowPartial: true
+        );
 
         // The run's card is opened before the work is handed off. The method starts on this thread and
-        // reaches the hub before its first await, so the card is there from the moment the command
-        // begins; see the hub for why the runs are gathered rather than kept where they were begun.
-        _ = ReportAsync(host, hub, program, arguments, target.Directory, verb);
+        // reaches the hub before its first await, so the card is there from the moment the run begins;
+        // see the hub for why the runs are gathered rather than kept where they were begun.
+        _ = ReportAsync(host, hub, request, target.Directory, verb);
     }
 
-    /// <summary>Runs one ownership command and shows what it came to when it did not end cleanly.</summary>
+    /// <summary>The request one ownership action is made with.</summary>
+    /// <remarks>
+    /// The Workspace is not here: the writer fills it with the root it found and reads a relative path from
+    /// there. The account is the one the work acts as, which is what an ownership move is signed by, and the
+    /// Vault is the tracked one, which is the only one the Layout being worked in names ownership against.
+    /// </remarks>
+    /// <param name="verb">Which action it is.</param>
+    /// <param name="paths">The files and directories to move the ownership of, as the program names them.</param>
+    /// <param name="force">Whether the checks are to be gone past.</param>
+    /// <param name="allowPartial">Whether what can be moved is moved when not everything can be.</param>
+    /// <returns>The request.</returns>
+    internal static OwnershipPlanRequest Request(
+        string verb,
+        IReadOnlyList<string> paths,
+        bool force,
+        bool allowPartial
+    )
+    {
+        ArgumentNullException.ThrowIfNull(verb);
+        ArgumentNullException.ThrowIfNull(paths);
+
+        return new OwnershipPlanRequest
+        {
+            Kind = verb == "hold" ? OwnershipKind.Hold : OwnershipKind.Giveup,
+            Paths = paths,
+            AllowPartial = allowPartial,
+            Force = force,
+            Account = UserScope.CurrentAccount,
+            Target = WriteTarget.Tracked,
+            Labels = new WriteLabels
+            {
+                Fetching = RolaI18N.Get("rorolala_vcs.progress.fetch"),
+                Applying = RolaI18N.Get(
+                    verb == "hold"
+                        ? "rorolala_vcs.ownership.holding"
+                        : "rorolala_vcs.ownership.giving"
+                ),
+            },
+        };
+    }
+
+    /// <summary>Runs one ownership action and shows what it came to when it did not end cleanly.</summary>
     /// <param name="host">The host, for the report and for saying the files may have changed.</param>
     /// <param name="hub">What the run's card is begun in.</param>
-    /// <param name="program">The program the window was opened by.</param>
-    /// <param name="arguments">What to run it with.</param>
-    /// <param name="directory">Where to run it.</param>
-    /// <param name="verb">Which command it is.</param>
+    /// <param name="request">What the run is to move.</param>
+    /// <param name="directory">Where the work is rooted, and where the run is made.</param>
+    /// <param name="verb">Which action it is.</param>
     private static async Task ReportAsync(
         IPluginHost host,
         IProgressHub hub,
-        string program,
-        IReadOnlyList<string> arguments,
+        OwnershipPlanRequest request,
         string directory,
         string verb
     )
     {
-        var outcome = await RunAsync(host, hub, verb, program, arguments, directory);
+        var outcome = await RunAsync(host, hub, request, directory, verb);
 
-        // A run given --json has its result serialized rather than drawn, so the renderer that would set a
-        // non-zero code for a refused entry never runs. What was refused is therefore read from the result's
-        // `failed` list: --allow-partial makes a batch with refusals a successful run, and the exit code alone
-        // would call that success.
-        IReadOnlyList<string> failed = outcome.Done ? Failures(outcome.Output) : [];
-
-        if (!outcome.Done || failed.Count > 0)
+        // A run allowed to be partly done ends well even when it refused something, so the refusals are read
+        // from the result rather than from the failure: the status alone would call that run a success.
+        if (!outcome.Done || outcome.Failed.Count > 0)
         {
             FailureNotice.Show(
                 host.Dialogs,
                 host.Icons,
                 RolaI18N.Get("rorolala_vcs.ownership_failed"),
-                outcome.Done ? string.Join('\n', failed) : outcome.Said
+                outcome.Done ? string.Join('\n', outcome.Failed) : outcome.Said
             );
         }
     }
 
     /// <summary>
-    /// Runs one ownership command, drawing its progress and saying the files may have changed.
+    /// Runs one ownership action, drawing its progress and saying the files may have changed.
     /// </summary>
     /// <remarks>
-    /// One run for the whole choice rather than one per entry: the command line takes several paths at once, and
-    /// a claim that is one claim is one exchange with the Vault rather than three.
+    /// One run for the whole choice rather than one per entry: the writer takes several paths at once, and a
+    /// claim that is one claim is one exchange with the Vault rather than three.
     /// <para>
     /// The card is begun where the caller is, which is the window's thread for a menu and a worker for the open
     /// check. The hub is written safely from either, and it is the hub that moves the drawing to the window's
-    /// thread. The command itself is run on a thread of its own: it talks to a Vault, which takes as long as a
-    /// network takes, and a window that stopped drawing until it answered would be a window that stopped.
+    /// thread. The run itself is on a thread of its own: it talks to a Vault, which takes as long as a network
+    /// takes, and a window that stopped drawing until it answered would be a window that stopped.
     /// </para>
     /// </remarks>
     /// <param name="host">The host, for saying the files may have changed.</param>
     /// <param name="hub">What the run's card is begun in.</param>
-    /// <param name="verb">Which command it is.</param>
-    /// <param name="program">The program the window was opened by.</param>
-    /// <param name="arguments">What to run it with.</param>
-    /// <param name="directory">Where to run it, which is where the names it was given are read from.</param>
-    /// <returns>Whether it ended well, what to say when it did not, and what it wrote.</returns>
+    /// <param name="request">What the run is to move.</param>
+    /// <param name="directory">Where the work is rooted, and where the run is made.</param>
+    /// <param name="verb">Which action it is.</param>
+    /// <returns>Whether it ended well, what to say when it did not, and what it refused.</returns>
     internal static async Task<Outcome> RunAsync(
         IPluginHost host,
         IProgressHub hub,
-        string verb,
-        string program,
-        IReadOnlyList<string> arguments,
-        string directory
+        OwnershipPlanRequest request,
+        string directory,
+        string verb
     )
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(hub);
-        ArgumentException.ThrowIfNullOrEmpty(program);
-        ArgumentNullException.ThrowIfNull(arguments);
+        ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrEmpty(directory);
 
         var run = hub.Begin(TitleKey(verb));
 
-        var (done, said, output) = await Task.Run(
-            () => Ask(program, arguments, directory, run.Records, hub.Touch)
-        );
+        var outcome = await Task.Run(() => Change(request, directory, run));
 
-        // The card is let go of here rather than when the command is over, because the panel keeps it for a
-        // few seconds after: what ended is drawn as ended before it is taken away.
+        // The card is let go of here rather than when the run is over, because the panel keeps it for a few
+        // seconds after: what ended is drawn as ended before it is taken away.
         hub.End(run);
 
         // Either way the files may have moved, which is what the listing reads again for.
         host.Files.Touch();
 
-        return new Outcome(done, said, output);
+        return outcome;
     }
 
-    /// <summary>
-    /// Takes ownership of one file, with the command line's own run and progress.
-    /// </summary>
+    /// <summary>Takes ownership of one file, through the same plan and apply the menu runs.</summary>
     /// <remarks>
-    /// This is the same command the menu runs, with the same flags, and the same reading of a result:
-    /// a run asked for `--json` serializes a refusal into its `failed` list rather than failing, so the
-    /// list is what says whether the file was taken. The file is named by its whole path and the run is
-    /// made beside it, so a name that starts with a dash is still a path rather than a flag.
+    /// This is the same request the menu makes, with one path and the partial answer the open check wants: a
+    /// file that cannot be taken is reported to the check rather than shown here, because the check is what
+    /// asks the question. The file is named by its whole path, so a name that starts with a dash is still a
+    /// path rather than a flag, and no directory the run was made in has to be guessed at.
     /// </remarks>
     /// <param name="host">The host, for saying the files may have changed.</param>
     /// <param name="hub">What the run's card is begun in.</param>
@@ -316,184 +308,208 @@ internal static class OwnershipActions
         ArgumentNullException.ThrowIfNull(hub);
         ArgumentNullException.ThrowIfNull(file);
 
-        var program = Environment.GetEnvironmentVariable(Program);
-
-        if (string.IsNullOrEmpty(program))
-        {
-            return (false, RolaI18N.Get("rorolala_vcs.ownership_unknown"));
-        }
-
         if (Path.GetDirectoryName(file) is not { Length: > 0 } directory)
         {
             return (false, RolaI18N.Get("rorolala_vcs.open.failed_message"));
         }
 
-        var arguments = new List<string>
+        var outcome = await RunAsync(
+            host,
+            hub,
+            Request("hold", [file], force: false, allowPartial: true),
+            directory,
+            "hold"
+        );
+
+        if (!outcome.Done || outcome.Failed.Count > 0)
         {
-            "--theme-choice=" + Theme,
-            Json,
-            "hold",
-            "--allow-partial",
-            file,
-        };
-
-        var outcome = await RunAsync(host, hub, "hold", program, arguments, directory);
-
-        IReadOnlyList<string> failed = outcome.Done ? Failures(outcome.Output) : [];
-
-        if (!outcome.Done || failed.Count > 0)
-        {
-            return (false, outcome.Done ? string.Join('\n', failed) : outcome.Said);
+            return (false, outcome.Done ? string.Join('\n', outcome.Failed) : outcome.Said);
         }
 
         return (true, string.Empty);
     }
 
-    /// <summary>Reads the entries a successful result says were not moved.</summary>
+    /// <summary>Runs a plan and the apply that carries it out, and says what did not move.</summary>
     /// <remarks>
-    /// The successful result of `hold` or `giveup` carries what it refused as plainly as what it did. Its exit
-    /// code cannot: with `--json` the structural renderer is what answers, and the buffer renderer that would
-    /// turn a refusal into a failure is not reached. What this reads is only that list, because what moved is
-    /// not a question the notification asks.
+    /// The plan is made before anything moves, and the same plan is applied, so the run a caller sees is the
+    /// run the gates allowed. A plan with a refusal is not applied at all unless the request allows a partial
+    /// run, which is the command line's own rule and the reason the answer carries both lists.
     /// </remarks>
-    /// <param name="output">What the command wrote, which is one JSON object when it was asked for one.</param>
-    /// <returns>What was not moved, one line each, or nothing when there was none.</returns>
-    private static IReadOnlyList<string> Failures(string output)
+    /// <param name="request">What the run is to move.</param>
+    /// <param name="directory">Where the work is rooted, and where the run is made.</param>
+    /// <param name="run">What the run says itself to.</param>
+    /// <returns>Whether it ended well, what to say when it did not, and what it refused.</returns>
+    private static Outcome Change(
+        OwnershipPlanRequest request,
+        string directory,
+        IProgressRun run
+    )
     {
-        if (string.IsNullOrWhiteSpace(output))
-        {
-            return [];
-        }
-
         try
         {
-            using var document = JsonDocument.Parse(output);
+            using var workspace = WorkspaceScope.Open(directory);
+            workspace.Read();
 
-            if (
-                document.RootElement.ValueKind is not JsonValueKind.Object
-                || !document.RootElement.TryGetProperty("failed", out var failed)
-                || failed.ValueKind is not JsonValueKind.Array
-            )
+            var writer = new WorkspaceWriter(workspace);
+
+            using var native = Progress.New();
+            using var watching = new Watching(native, run.Records, run.Touch);
+
+            var plan = writer.PlanOwnership(request, native);
+
+            if (plan.Refused.Count > 0 && !request.AllowPartial)
             {
-                return [];
+                return new Outcome(false, string.Join('\n', plan.Refused), plan.Refused);
             }
 
-            return
-            [
-                .. failed
-                    .EnumerateArray()
-                    .Where(item => item.ValueKind is JsonValueKind.String)
-                    .Select(item => item.GetString())
-                    .Where(line => line is { Length: > 0 })
-                    .Select(line => line!),
-            ];
+            // The plan itself is not handed back: its wanted entries cross as `Path` and `Uuid`, which the native
+            // plan reader does not read, so a plan given to the apply is refused as JSON. The apply re-makes the
+            // plan and re-reads every gate, which is what the command line does, so nothing stale is applied.
+            var result = writer.ApplyOwnership(request, plan: null, progress: native);
+
+            return new Outcome(true, string.Empty, result.Failed);
         }
-        catch (JsonException)
+        catch (RolaWriteError error)
         {
-            // A run that answered something else is not one whose refusals can be read. The exit code said it
-            // ended well, so there is nothing here to report rather than a second guess at its words.
-            return [];
+            return new Outcome(false, Told(error), []);
+        }
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.NoWorkspace or RolaReadErrorKind.Unavailable)
+        {
+            return new Outcome(false, RolaI18N.Get("rorolala_vcs.not_a_workspace"), []);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            return new Outcome(false, error.Message, []);
         }
     }
 
-    /// <summary>What a run of one of the two commands is called in the Overview's panel.</summary>
-    /// <param name="verb">Which command it is.</param>
+    /// <summary>What a path is, made absolute against the directory the run is made in.</summary>
+    /// <remarks>
+    /// A request reads a relative name from the Workspace's root, while the menu's entries are names beside the
+    /// directory it was opened on; making the name absolute is what keeps the two ways of reading it from
+    /// disagreeing.
+    /// </remarks>
+    /// <param name="directory">The directory the menu was opened on.</param>
+    /// <param name="path">The path as the listing names it.</param>
+    /// <returns>The path, absolute.</returns>
+    private static string Absolute(string directory, string path) =>
+        Path.IsPathRooted(path) ? path : Path.GetFullPath(Path.Combine(directory, path));
+
+    /// <summary>What a write failure is said as in the window.</summary>
+    /// <remarks>
+    /// A kind a key already says is translated, and one no key says is the writer's own message once. A write
+    /// failure that carries no message at all still says something: the states an ownership run reaches most
+    /// often, no Workspace, no Vault and no account, have a key here, and a kind left over is named rather than
+    /// shown as nothing.
+    /// </remarks>
+    /// <param name="error">The failure the writer answered with.</param>
+    /// <returns>What to show.</returns>
+    private static string Told(RolaWriteError error) =>
+        error.Kind switch
+        {
+            RolaWriteErrorKind.NoWorkspace => RolaI18N.Get("rorolala_vcs.not_a_workspace"),
+            RolaWriteErrorKind.NoTrack => RolaI18N.Get("rorolala_vcs.ownership.no_track"),
+            RolaWriteErrorKind.NoAccount => RolaI18N.Get("rorolala_vcs.ownership.no_account"),
+            _ => error.Message is { Length: > 0 } message ? message : error.Kind.ToString(),
+        };
+
+    /// <summary>What a run of one of the two actions is called in the Overview's panel.</summary>
+    /// <param name="verb">Which action it is.</param>
     /// <returns>The i18n key of its name.</returns>
     private static string TitleKey(string verb) =>
         verb == "hold" ? "rorolala_vcs.progress.hold" : "rorolala_vcs.progress.giveup";
 
-    /// <summary>Runs it and waits, answering whether it ended well and what it said.</summary>
+    /// <summary>
+    /// Reads the writer's progress while the writer works, and stops before the handle is given back.
+    /// </summary>
     /// <remarks>
-    /// Both streams are drained while it runs, so that a command that fills one pipe while this waits on the
-    /// other cannot block against itself. What it said on its error stream is what is reported, unphrased:
-    /// the words are the command's own, and it is the one that knows what went wrong.
-    /// <para>
-    /// The error stream carries the command's progress as well as its words: a line that reads as a record is
-    /// what the run is drawn from, and what is left is what it said. The records are read line by line as they
-    /// are written, rather than the whole stream at once, so that the card moves while the command works.
-    /// </para>
+    /// The writer pushes what it says onto a handle rather than writing it to a stream, so something has to poll
+    /// it while the run goes on. The poll runs on a worker of its own and the records are kept under the lock
+    /// they already have; stopping it before the handle is disposed is what keeps a reading from touching a
+    /// handle that is gone.
     /// </remarks>
-    /// <param name="program">The program to run.</param>
-    /// <param name="arguments">What to run it with.</param>
-    /// <param name="directory">Where to run it, which is where the names it was given are read from.</param>
-    /// <param name="records">What the run's records are read into, which the panel draws.</param>
-    /// <param name="progress">What is told that a record was said, which redraws on the window's thread.</param>
-    /// <returns>Whether it ended well, what to say when it did not, and what it wrote.</returns>
-    private static (bool Done, string Said, string Output) Ask(
-        string program,
-        IReadOnlyList<string> arguments,
-        string directory,
-        ProgressRecords records,
-        Action progress
-    )
+    private sealed class Watching : IDisposable
     {
-        var start = new ProcessStartInfo
-        {
-            FileName = program,
-            WorkingDirectory = directory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-            // The words are `rola`'s own, and `rola` writes UTF-8, as every stream this project's
-            // programs write is. Left unstated, a redirected stream is decoded in the machine's codepage,
-            // which on a Chinese Windows is GBK, and every word of the message comes out as mojibake.
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-        };
+        /// <summary>How long the window waits between two readings, in milliseconds.</summary>
+        private const int Pause = 50;
 
-        foreach (var argument in arguments)
+        /// <summary>What the records are read from.</summary>
+        private readonly Progress _native;
+
+        /// <summary>What the readings are kept in.</summary>
+        private readonly ProgressRecords _records;
+
+        /// <summary>What is told that a record was read.</summary>
+        private readonly Action _progress;
+
+        /// <summary>What stops the poll.</summary>
+        private readonly CancellationTokenSource _stop = new();
+
+        /// <summary>The poll, which is waited for before the handle is given back.</summary>
+        private readonly Task _polling;
+
+        /// <summary>Starts reading what the writer says.</summary>
+        /// <param name="native">The writer's progress handle.</param>
+        /// <param name="records">What the readings are kept in.</param>
+        /// <param name="progress">What is told that records were read.</param>
+        public Watching(Progress native, ProgressRecords records, Action progress)
         {
-            start.ArgumentList.Add(argument);
+            _native = native;
+            _records = records;
+            _progress = progress;
+            _polling = Task.Run(PollAsync);
         }
 
-        try
+        /// <summary>Stops the poll, takes its last reading, and lets the handle go.</summary>
+        public void Dispose()
         {
-            using var process =
-                Process.Start(start) ?? throw new InvalidOperationException("the process was not started");
+            _stop.Cancel();
+            _polling.GetAwaiter().GetResult();
+            Drain();
+            _stop.Dispose();
+            GC.SuppressFinalize(this);
+        }
 
-            // The output is drained on a task of its own rather than read after the wait: a run that filled
-            // the pipe this side is not reading would wait for a reader that is waiting for it to end.
-            var output = Task.Run(() => process.StandardOutput.ReadToEnd());
-            var said = new StringBuilder();
-
-            while (process.StandardError.ReadLine() is { } line)
+        /// <summary>Reads the handle until the stop is asked for.</summary>
+        /// <returns>The poll.</returns>
+        private async Task PollAsync()
+        {
+            try
             {
-                if (!records.Read(line) && line.Length > 0)
+                while (!_stop.IsCancellationRequested)
                 {
-                    said.AppendLine(line);
+                    Drain();
+                    await Task.Delay(Pause, _stop.Token).ConfigureAwait(false);
                 }
-
-                progress();
             }
-
-            process.WaitForExit();
-
-            var written = output.GetAwaiter().GetResult().Trim();
-
-            if (process.ExitCode == 0)
+            catch (OperationCanceledException)
             {
-                return (true, string.Empty, written);
+                // The stop is the only way out of the loop, so a cancelled wait is the poll ending.
             }
-
-            var told = said.ToString().Trim();
-
-            if (told.Length == 0)
-            {
-                told = written;
-            }
-
-            return (false, told.Length == 0 ? $"the command ended with {process.ExitCode}" : told, written);
         }
-        catch (Exception error) when (error is not OutOfMemoryException)
+
+        /// <summary>Reads every record said since the last reading, and tells the window once.</summary>
+        private void Drain()
         {
-            return (false, error.Message, string.Empty);
+            var said = false;
+
+            while (_native.NextJson() is { } json)
+            {
+                _records.Read(json);
+                said = true;
+            }
+
+            if (said)
+            {
+                _progress();
+            }
         }
     }
 
-    /// <summary>What a command run left for its caller to read.</summary>
+    /// <summary>What an ownership run left for its caller to read.</summary>
     /// <param name="Done">Whether it ended well.</param>
     /// <param name="Said">What it said when it did not.</param>
-    /// <param name="Output">What it wrote on its output stream.</param>
-    internal sealed record Outcome(bool Done, string Said, string Output);
+    /// <param name="Failed">What it refused, one raw refusal each.</param>
+    internal sealed record Outcome(bool Done, string Said, IReadOnlyList<string> Failed);
 }

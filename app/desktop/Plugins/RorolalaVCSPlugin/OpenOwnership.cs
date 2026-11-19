@@ -7,7 +7,7 @@ namespace RorolalaVCSPlugin;
 /// <summary>What the open check reads about a file's ownership.</summary>
 /// <remarks>
 /// The check is a read of the local copy the Workspace has fetched, so what answers it is
-/// <see cref="RolaOwnership"/> in the program and a script in a test. Nothing else about an open is
+/// <see cref="OwnershipScope"/> in the program and a script in a test. Nothing else about an open is
 /// asked here, which keeps the decision testable without a Vault.
 /// </remarks>
 internal interface IOwnershipLookup
