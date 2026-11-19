@@ -295,7 +295,8 @@ internal sealed class WorkspaceNotice : UserControl
     /// <remarks>
     /// The judgement is RolaSharp's and not this plugin's: whether a directory is inside a Workspace is
     /// a question about the C ABI's own notion of one, and asking it here would be a second answer to
-    /// keep in step with the first (see <see cref="RolaWorkspace.IsWorkspace"/>). What is this plugin's
+    /// keep in step with the first (see <see cref="WorkspaceScope.Open(string)"/> and
+    /// <see cref="Scope.Read()"/>). What is this plugin's
     /// is what to do when the question cannot be asked at all.
     /// <para>
     /// It is asked by the Overview as well, which is why it is not private to this view: a reading that
@@ -316,7 +317,17 @@ internal sealed class WorkspaceNotice : UserControl
 
         try
         {
-            return RolaWorkspace.IsWorkspace(at);
+            using var workspace = WorkspaceScope.Open(at);
+            workspace.Read();
+
+            return true;
+        }
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.Unavailable or RolaReadErrorKind.NoWorkspace)
+        {
+            // No Workspace holding the directory is the absence the V1 call answered with false
+            // rather than a failure, and nothing is said about it here for the same reason.
+            return false;
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {

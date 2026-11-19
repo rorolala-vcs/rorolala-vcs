@@ -37,7 +37,7 @@
     <ProjectReference Include="../FileSystemPlugin/FileSystemPlugin.csproj" />
     <!-- The hand-written layer over the C ABI, which is how who holds an entry crosses: this plugin is
          the one program that asks, so the bindings are its own dependency rather than the host's, and
-         what it reaches for is a `RolaOwnership` rather than a pointer. -->
+         what it reaches for is an `OwnershipScope` rather than a pointer. -->
     <ProjectReference Include="../../../../modules/rola-sharp/RolaSharp.csproj" />
   </ItemGroup>
 

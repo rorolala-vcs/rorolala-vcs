@@ -9,7 +9,7 @@ namespace RorolalaVCSPlugin;
 /// What the Vault copy says about the directories being listed, read once each.
 /// </summary>
 /// <remarks>
-/// What is read is the copy the Workspace has fetched, through <see cref="RolaOwnership"/>, nothing is
+/// What is read is the copy the Workspace has fetched, through <see cref="OwnershipScope"/>, nothing is
 /// reached for, so a listing says what the Vault held when it was last fetched. One reading answers for
 /// everything this plugin shows about an entry: who holds it, and where upstream names it. Two
 /// contributions asking separately would open the same two Layouts twice per directory.
@@ -30,7 +30,7 @@ internal sealed class OwnershipReadings
     /// <remarks>
     /// Guarded because a read lands from the thread it was made on, and the answers are asked for on the window's.
     /// </remarks>
-    private readonly Dictionary<string, RolaOwnership?> _known = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, OwnershipScope?> _known = new(StringComparer.Ordinal);
 
     /// <summary>The directories a read is going for, so that one directory is read once at a time.</summary>
     private readonly HashSet<string> _asking = new(StringComparer.Ordinal);
@@ -89,7 +89,7 @@ internal sealed class OwnershipReadings
     /// Lets go of what was read, so the next answer is read from the tree as it is now.
     /// </summary>
     /// <remarks>
-    /// What was read is a `RolaOwnership`, two Layouts opened once, and a Layout is a snapshot: what
+    /// What was read is an `OwnershipScope`, two Layouts opened once, and a Layout is a snapshot: what
     /// another run writes after it was opened is not in it. A move or a removal renames a path in the
     /// Layout the Workspace works in, so the answers kept here are about a tree that no longer exists, and
     /// the handles are given back rather than only forgotten.
@@ -100,7 +100,7 @@ internal sealed class OwnershipReadings
     /// </remarks>
     public void Forget()
     {
-        RolaOwnership?[] ownerships;
+        OwnershipScope?[] ownerships;
 
         lock (_gate)
         {
@@ -129,7 +129,7 @@ internal sealed class OwnershipReadings
     /// <param name="ask">How the answer is read from the copy.</param>
     /// <param name="nothing">What is answered when there is nothing to read it from.</param>
     /// <returns>The answer.</returns>
-    private T Answer<T>(Entry entry, Func<RolaOwnership, string, T> ask, T nothing)
+    private T Answer<T>(Entry entry, Func<OwnershipScope, string, T> ask, T nothing)
     {
         if (
             Path.GetDirectoryName(entry.Path) is not { Length: > 0 } directory
@@ -154,7 +154,7 @@ internal sealed class OwnershipReadings
     /// <summary>The answers for a directory, read once and kept, asking for them in the background when they are not here.</summary>
     /// <param name="directory">The directory being listed.</param>
     /// <returns>The answers, or nothing when the directory is not inside a Workspace that tracks one.</returns>
-    private RolaOwnership? Of(string directory)
+    private OwnershipScope? Of(string directory)
     {
         int version;
 
@@ -181,11 +181,23 @@ internal sealed class OwnershipReadings
     /// <summary>Opens the two Layouts a directory's answers are read from, saying so if they could not be opened.</summary>
     /// <param name="directory">The directory the answers are for.</param>
     /// <returns>The answers, or nothing when there are none to read.</returns>
-    private RolaOwnership? Locate(string directory)
+    private OwnershipScope? Locate(string directory)
     {
         try
         {
-            return RolaOwnership.Locate(directory);
+            // The scope is kept because it owns both Layouts: what is asked of it later is asked of the
+            // same snapshot rather than of Layouts opened again per entry.
+            var scope = new OwnershipScope(directory);
+            scope.Read();
+
+            return scope;
+        }
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.Unavailable or RolaReadErrorKind.NoWorkspace)
+        {
+            // No Workspace, or a Workspace tracking no Vault, is the absence the V1 call answered with
+            // nothing rather than a failure, and nothing is said about it here for the same reason.
+            return null;
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
@@ -199,7 +211,7 @@ internal sealed class OwnershipReadings
     /// <param name="directory">The directory it was read for.</param>
     /// <param name="version">Which reading of the work it was asked for in.</param>
     /// <param name="ownership">What it came to.</param>
-    private void Land(string directory, int version, RolaOwnership? ownership)
+    private void Land(string directory, int version, OwnershipScope? ownership)
     {
         Dispatcher.UIThread.Post(() =>
         {

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -27,7 +28,7 @@ namespace RorolalaVCSPlugin;
 /// <para>
 /// The words are this dock's own rather than the command line's, because the two are read differently: a
 /// command's report is read once and acted on by typing, while a panel is looked at. What the two share
-/// is the finding, which comes from the C ABI through <see cref="RolaStatus"/> and is read nowhere else.
+/// is the finding, which comes from the C ABI through <see cref="StatusReading"/> and is read nowhere else.
 /// </para>
 /// </remarks>
 internal sealed class OverviewDock : IDockView
@@ -90,14 +91,14 @@ internal sealed class OverviewDock : IDockView
 /// The reading itself, which what a sync would move is read out of, or nothing. It is the owner's to give
 /// back: the view keeps it for as long as its rows are on screen.
 /// </param>
-internal sealed record OverviewReading(StatusFacts? Facts, string? Said, RolaStatus? Status = null);
+internal sealed record OverviewReading(StatusFacts? Facts, string? Said, StatusReading? Status = null);
 
 /// <summary>
 /// A reading as the table reads it: what to show, without the reading itself.
 /// </summary>
 /// <remarks>
 /// It is what the table is built from, and it is a type of this plugin's own rather than
-/// <see cref="RolaStatus"/> so that what a reading is turned into can be read, and checked, without a
+/// <see cref="StatusReading"/> so that what a reading is turned into can be read, and checked, without a
 /// Workspace to read one from: the native side is a handle that can only be made by looking at a tree.
 /// </remarks>
 /// <param name="Lost">Paths the Layout names that the tree does not hold.</param>
@@ -130,7 +131,7 @@ internal sealed record StatusFacts(
     /// <summary>Takes the facts out of a reading.</summary>
     /// <param name="status">The reading.</param>
     /// <returns>What the table is built from.</returns>
-    public static StatusFacts Of(RolaStatus status)
+    public static StatusFacts Of(StatusReading status)
     {
         ArgumentNullException.ThrowIfNull(status);
 
@@ -457,7 +458,7 @@ internal sealed class OverviewView : UserControl
     ///, is given back rather than left to the native side.
     /// </para>
     /// </remarks>
-    private RolaStatus? _reading;
+    private StatusReading? _reading;
 
     /// <summary>Whether a reading is already waiting to be made, so a burst of asks is one reading.</summary>
     private bool _drawAsked;
@@ -749,6 +750,13 @@ internal sealed class OverviewView : UserControl
     /// <param name="directory">The directory the tree is rooted at.</param>
     /// <param name="log">Where a read that failed is said.</param>
     /// <returns>The reading, or the words to show instead of one.</returns>
+    // The scope holds only the reading, and the view keeps the reading for as long as its rows are on screen:
+    // disposing the scope here would give back what Show answers for, so the reading is the one owner.
+    [SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "the scope holds only the reading, which the view keeps and gives back in Show"
+    )]
     public static OverviewReading Of(string? directory, ILog log)
     {
         ArgumentNullException.ThrowIfNull(log);
@@ -758,20 +766,28 @@ internal sealed class OverviewView : UserControl
             return new OverviewReading(null, RolaI18N.Get("rorolala_vcs.not_a_workspace"));
         }
 
-        RolaStatus? status = null;
+        StatusReading? status = null;
 
         try
         {
             // What is read is handed back to the caller rather than given back here: a row's count is asked of
             // the reading as it is drawn, so the reading has to live as long as the rows do. It is given back
             // when the reading is replaced or discarded, see <see cref="Show"/> and <see cref="Drawn"/>.
-            status = RolaStatus.Locate(at);
+            //
+            // The scope is not kept: disposing it would give the same reading back, and what this view lets go
+            // of when it is done with a reading is the reading itself.
+            var scope = new StatusScope(at);
+            scope.Read();
+            status = scope.Status;
 
-            if (status is not null)
-            {
-                return new OverviewReading(StatusFacts.Of(status), null, status);
-            }
-
+            return new OverviewReading(StatusFacts.Of(status), null, status);
+        }
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.Unavailable or RolaReadErrorKind.NoWorkspace)
+        {
+            // No Workspace, or a Workspace working in no Layout, is the absence the V1 call answered with
+            // nothing rather than a read that failed: whether a Workspace holds the base is what tells the
+            // two lines apart, and nothing is said in the log for either.
             return new OverviewReading(
                 null,
                 WorkspaceNotice.Holds(at, log)
@@ -1072,7 +1088,7 @@ internal sealed class OverviewView : UserControl
     /// <param name="at">Where the reading was made, whose paths are relative to it.</param>
     /// <param name="reading">The reading, or nothing when it could not be made.</param>
     /// <returns>The words for the pointer resting on it.</returns>
-    internal static string SyncSaid(State state, string path, string? at, RolaStatus? reading)
+    internal static string SyncSaid(State state, string path, string? at, StatusReading? reading)
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -1746,7 +1762,7 @@ internal sealed class OverviewView : UserControl
     /// <param name="said">What is said in the middle, or nothing when the table is what is shown.</param>
     /// <param name="rows">The rows to show.</param>
     /// <param name="reading">The reading the rows were made from, which a sync row's count is read from.</param>
-    private void Show(string? said, IReadOnlyList<TableRow> rows, RolaStatus? reading)
+    private void Show(string? said, IReadOnlyList<TableRow> rows, StatusReading? reading)
     {
         var previous = _reading;
 

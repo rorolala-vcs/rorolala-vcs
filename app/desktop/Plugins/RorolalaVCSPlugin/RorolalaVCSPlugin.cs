@@ -116,12 +116,12 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
 
         // And what a single file asks before the Desktop opens it: whether another account holds it, or
         // whether nobody does, and the hold that would make it the reader's to edit. The question is put
-        // through the host's dialogs and the hold through the command line, so this registers the one
-        // check that knows when to ask, not a second answer to what holding means.
+        // through the host's dialogs and the hold through the writer, so this registers the one check that
+        // knows when to ask, not a second answer to what holding means.
         host.OpenHooks.Add(
             new OwnershipOpenHook(
                 new RolaOwnershipLookup(host.Log),
-                new CommandOwnershipHold(host, hub),
+                new WriterOwnershipHold(host, hub),
                 host.Dialogs,
                 host.Log
             )

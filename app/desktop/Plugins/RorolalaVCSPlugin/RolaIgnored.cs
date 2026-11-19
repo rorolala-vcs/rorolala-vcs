@@ -110,7 +110,7 @@ internal static class RolaIgnores
     /// thread while the window's thread asks about a row. One of them loads and the other waits for that
     /// load rather than starting a second of its own.
     /// </remarks>
-    private static readonly Dictionary<string, Lazy<RolaIgnoreRules?>> Rules = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, Lazy<IgnoreScope?>> Rules = new(StringComparer.Ordinal);
 
     /// <summary>What both dictionaries are guarded by, and nothing else.</summary>
     private static readonly object Gate = new();
@@ -136,7 +136,7 @@ internal static class RolaIgnores
     /// </remarks>
     public static void Forget()
     {
-        RolaIgnoreRules?[] sets;
+        IgnoreScope?[] sets;
 
         lock (Gate)
         {
@@ -224,9 +224,9 @@ internal static class RolaIgnores
     /// </summary>
     /// <param name="root">The directory the view reading the entries is rooted at.</param>
     /// <returns>The rules, or nothing when the root is inside no Workspace or its rules cannot be read.</returns>
-    private static RolaIgnoreRules? Answer(string root)
+    private static IgnoreScope? Answer(string root)
     {
-        Lazy<RolaIgnoreRules?> loading;
+        Lazy<IgnoreScope?> loading;
 
         lock (Gate)
         {
@@ -237,7 +237,7 @@ internal static class RolaIgnores
 
             if (!Rules.TryGetValue(workspace, out var kept))
             {
-                kept = new Lazy<RolaIgnoreRules?>(
+                kept = new Lazy<IgnoreScope?>(
                     () => Load(workspace),
                     LazyThreadSafetyMode.ExecutionAndPublication
                 );
@@ -255,19 +255,26 @@ internal static class RolaIgnores
     /// <summary>Loads the rules of a Workspace.</summary>
     /// <param name="workspace">The Workspace's own directory, which is what the rules are written from.</param>
     /// <returns>The rules, or nothing when they cannot be read.</returns>
-    private static RolaIgnoreRules? Load(string workspace)
+    private static IgnoreScope? Load(string workspace)
     {
         var rules = Path.Combine([workspace, ".rola", .. RulesTail]);
+        IgnoreScope? scope = null;
 
         try
         {
-            return RolaIgnoreRules.Load(rules, workspace);
+            scope = new IgnoreScope(rules, workspace);
+            scope.Read();
+
+            return scope;
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
             // A rules directory that cannot be read is a listing that hides by nothing, which is the
             // same answer as no rules at all: hiding by a half-read set would hide by rules nobody
-            // stated.
+            // stated. The scope is given back before that answer, since a read that failed may still
+            // have taken a native handle.
+            scope?.Dispose();
+
             return null;
         }
     }

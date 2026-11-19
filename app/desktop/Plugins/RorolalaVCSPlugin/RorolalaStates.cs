@@ -11,7 +11,7 @@ namespace RorolalaVCSPlugin;
 /// badge a tile's icon wears.
 /// </summary>
 /// <remarks>
-/// What it reads is a reading of the work, through <see cref="RolaStatus"/>, nothing is reached for, and a
+/// What it reads is a reading of the work, through <see cref="StatusReading"/>, nothing is reached for, and a
 /// reading is what the tree held when it was made. One reading answers for the whole directory being
 /// listed, and one path is asked of it rather than answered from a copy of its lists: which state a path is
 /// in is a judgement about the reading, and it is the library's to make.
@@ -274,7 +274,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// <param name="reading">The reading.</param>
     /// <param name="path">The path of the entry, as the program names it.</param>
     /// <returns>What to say.</returns>
-    private static string Merging(RolaStatus reading, string path) =>
+    private static string Merging(StatusReading reading, string path) =>
         reading.Merging.FirstOrDefault(
             merge => StatusReadings.Names(reading.Root, merge.Target, path)
         ) is { } merge
@@ -294,7 +294,7 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     /// <param name="reading">The reading.</param>
     /// <param name="path">The path of the entry, as the program names it.</param>
     /// <returns>What to say.</returns>
-    internal static string Wrong(RolaStatus reading, string path)
+    internal static string Wrong(StatusReading reading, string path)
     {
         if (reading.Unowned.Any(named => StatusReadings.Names(reading.Root, named, path)))
         {

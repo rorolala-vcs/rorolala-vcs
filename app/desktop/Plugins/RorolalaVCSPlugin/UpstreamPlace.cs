@@ -714,7 +714,7 @@ internal sealed class UpstreamPlace
             return false;
         }
 
-        var account = RolaUser.CurrentAccount();
+        var account = UserScope.CurrentAccount;
 
         return account.Length > 0 && string.Equals(entry.Owner, account, StringComparison.Ordinal);
     }
@@ -2388,12 +2388,12 @@ internal sealed class UpstreamPlace
         _accountTried = false;
     }
 
-    /// <summary>Moves paths within one Layout, one run each.</summary>
+    /// <summary>Moves paths within one Layout, one write each.</summary>
     /// <remarks>
-    /// The words a refusal is shown with are the command's own, and the entry it is about is named beside them: a reader who
-    /// is told only that something failed has nothing to act on. What the command agreed to is written into the copy, so a
-    /// move the copy still names at its old path is read as a refusal whatever the run said about itself, a status of zero
-    /// is not the whole of the answer, and a drop that moved nothing cannot be left to say nothing.
+    /// The words a refusal is shown with are the writer's own, and the entry it is about is named beside them: a reader who
+    /// is told only that something failed has nothing to act on. What the writer agreed to is written into the copy, so a
+    /// move the copy still names at its old path is read as a refusal whatever the write said about itself, a zero answer
+    /// is not the whole of it, and a drop that moved nothing cannot be left to say nothing.
     /// </remarks>
     /// <param name="source">The Layout they are moved in.</param>
     /// <param name="moves">Every move, in the order the drop made them.</param>
@@ -2402,7 +2402,7 @@ internal sealed class UpstreamPlace
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(moves);
 
-        if (Program() is not { } program || BaseDirectory.Current is not { Length: > 0 } directory)
+        if (BaseDirectory.Current is not { Length: > 0 } directory)
         {
             // Nothing was run, and a drag that did nothing and said nothing is the one thing a reader cannot tell from a
             // drag that has not landed yet.
@@ -2422,26 +2422,23 @@ internal sealed class UpstreamPlace
         {
             List<(string From, string To, string Said, bool Done)> outcomes = [];
 
-            // One run each, and not one for the lot: the command moves one Layout path at a time, and an entry the Vault
+            // One write each, and not one for the lot: the writer moves one Layout path at a time, and an entry the Vault
             // refuses (a locked one, say) must not take the rest of the drop down with it.
             foreach (var (from, to) in moves)
             {
-                var (done, said) = LayoutPathMoveCommand.Run(
-                    program,
+                var (done, said) = LayoutPathMoveCommand.Move(
                     directory,
                     source.Layout,
                     from,
-                    to,
-                    run.Records,
-                    _hub.Touch
+                    to
                 );
 
                 outcomes.Add((from, to, said, done));
             }
 
-            // What the command agreed to is written into the copy as well, so the copy is what says whether a move
-            // happened: asking it costs one run, and not asking it would be a refusal that left a zero status behind it
-            // and so looked like a success. Only when every run said it ended well is there anything to ask about.
+            // What the writer agreed to is written into the copy as well, so the copy is what says whether a move
+            // happened: asking it costs one read, and not asking it would be a refusal that left a zero answer behind it
+            // and so looked like a success. Only when every write said it ended well is there anything to ask about.
             var after = outcomes.TrueForAll(outcome => outcome.Done) ? Reads(source, directory) : null;
 
             var refused = outcomes
@@ -2474,7 +2471,7 @@ internal sealed class UpstreamPlace
                     );
                 }
 
-                // The command writes what the Vault agreed to into the copy as well, so the place is read again from what
+                // The writer writes what the Vault agreed to into the copy as well, so the place is read again from what
                 // is here rather than from the Vault.
                 _host.Files.Touch();
             });
@@ -2483,17 +2480,17 @@ internal sealed class UpstreamPlace
 
     /// <summary>Takes an entry of a Vault's copy away, by asking the Vault to let it go.</summary>
     /// <remarks>
-    /// The place cannot write the Vault's Layout itself, so what it does is run the command that can, and then read the
-    /// copy the run wrote: the copy is what says whether the entry is gone, and a run that ended well without the copy
-    /// following it is a removal that did not happen. The rows are drawn again from the copy as the run left it, and what
-    /// was read of the ownership is forgotten, since the tree it was read from no longer holds what it did.
+    /// The place cannot write the Vault's Layout itself, so what it does is ask the writer that can, and then read the
+    /// copy the write left: the copy is what says whether the entry is gone, and a write that ended well without the
+    /// copy following it is a removal that did not happen. The rows are drawn again from the copy as the write left it,
+    /// and what was read of the ownership is forgotten, since the tree it was read from no longer holds what it did.
     /// </remarks>
     /// <param name="carry">The row, which names the Layout, the path, and the entry.</param>
     private void Take(UpstreamCarry carry)
     {
         ArgumentNullException.ThrowIfNull(carry);
 
-        if (Program() is not { } program || BaseDirectory.Current is not { Length: > 0 } directory)
+        if (BaseDirectory.Current is not { Length: > 0 } directory || carry.Entry is not { } entry)
         {
             // Nothing was run, and a removal that did nothing and said nothing is the one thing a reader cannot tell
             // from a removal that has not landed yet.
@@ -2514,16 +2511,13 @@ internal sealed class UpstreamPlace
         _ = Task.Run(() =>
         {
             var (done, said) = LayoutEntryRemoveCommand.Run(
-                program,
                 directory,
                 source.Layout,
-                path,
-                run.Records,
-                _hub.Touch
+                entry.Uuid
             );
 
-            // What the command agreed to is written into the copy as well, so the copy is what says whether the entry
-            // is gone: asking it costs one run, and not asking it would leave a copy that still names the entry looking
+            // What the writer agreed to is written into the copy as well, so the copy is what says whether the entry
+            // is gone: asking it costs one read, and not asking it would leave a copy that still names the entry looking
             // like a removal that happened.
             var after = done ? Reads(source, directory) : null;
             var refused =
@@ -2590,9 +2584,4 @@ internal sealed class UpstreamPlace
     /// <param name="said">What it says.</param>
     private void Report(string title, string said) =>
         _host.Dialogs.Report(new Report(RolaI18N.Get(title), said));
-
-    /// <summary>The program the window was opened by, or nothing when it was opened on its own.</summary>
-    /// <returns>The program, or nothing.</returns>
-    private static string? Program() =>
-        Environment.GetEnvironmentVariable(Sync.Program) is { Length: > 0 } program ? program : null;
 }

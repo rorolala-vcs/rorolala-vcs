@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Avalonia.Threading;
 using RolaSharp;
 using RorolalaDesktop.Contract;
@@ -36,7 +37,7 @@ internal sealed class StatusReadings
     /// outside the lock, since reading the work is the expensive part and two asks racing for one directory
     /// may both read rather than one wait for the other.
     /// </remarks>
-    private readonly Dictionary<string, RolaStatus?> _readings = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, StatusReading?> _readings = new(StringComparer.Ordinal);
 
     /// <summary>The directories a read is going for, so that one directory is read once at a time.</summary>
     private readonly HashSet<string> _asking = new(StringComparer.Ordinal);
@@ -75,7 +76,7 @@ internal sealed class StatusReadings
     /// </remarks>
     /// <param name="directory">The directory being listed.</param>
     /// <returns>The reading, or nothing when the directory is not inside a Workspace that works in a Layout.</returns>
-    public RolaStatus? Reading(string directory)
+    public StatusReading? Reading(string directory)
     {
         ArgumentNullException.ThrowIfNull(directory);
 
@@ -140,7 +141,7 @@ internal sealed class StatusReadings
     /// </remarks>
     public void Forget()
     {
-        RolaStatus?[] statuses;
+        StatusReading?[] statuses;
 
         lock (_gate)
         {
@@ -158,11 +159,30 @@ internal sealed class StatusReadings
     /// <summary>Reads how the work under a directory stands, saying so if it could not be read at all.</summary>
     /// <param name="directory">The directory the read is of.</param>
     /// <returns>The reading, or nothing when there is nothing to read.</returns>
-    private RolaStatus? Locate(string directory)
+    // The scope holds only the reading, and the reading is what is kept: disposing the scope here would give
+    // back the very reading the cache goes on to answer with, so the two are one owner and not two.
+    [SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "the scope holds only the reading, which the cache keeps and gives back on Forget"
+    )]
+    private StatusReading? Locate(string directory)
     {
         try
         {
-            return RolaStatus.Locate(directory);
+            // The reading is kept rather than the scope: a disposed scope gives its reading back, and the
+            // one kept here is let go of by Forget or by the replacement that lands after it.
+            var scope = new StatusScope(directory);
+            scope.Read();
+
+            return scope.Status;
+        }
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.Unavailable or RolaReadErrorKind.NoWorkspace)
+        {
+            // No Workspace or no Layout is the absence the V1 call answered with nothing rather than a
+            // failure, and nothing is said about it here for the same reason.
+            return null;
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
@@ -176,7 +196,7 @@ internal sealed class StatusReadings
     /// <param name="directory">The directory it was read for.</param>
     /// <param name="version">Which reading of the work it was asked for in.</param>
     /// <param name="status">What it came to.</param>
-    private void Land(string directory, int version, RolaStatus? status)
+    private void Land(string directory, int version, StatusReading? status)
     {
         Dispatcher.UIThread.Post(() =>
         {
