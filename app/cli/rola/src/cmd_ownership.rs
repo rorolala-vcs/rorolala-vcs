@@ -20,22 +20,22 @@
 
 // The handlers' parameters are the resources the framework injects, so how many of them there are is
 // what the commands need of the run rather than a signature this program shaped. The progress setting
-// is one of those resources and is taken by reference, which is what the injection gives it.
-#![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
+// is one of those resources and is taken by reference, which is what the injection gives it. The run
+// itself is one reading of every gate followed by one exchange, and splitting it would pass the same
+// six values through a second signature rather than make any part of it clearer.
+#![allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::trivially_copy_pass_by_ref
+)]
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-
-use librorolala::auth::Account;
-use librorolala::daemon::{
-    Ownership, action_fetch_layout, action_giveup_ownership_async, action_request_ownership_async,
-};
+use librorolala::daemon::action_fetch_layout;
 use librorolala::ignore::IgnoreRuleSet;
-use librorolala::layout::{EntryKind, Layout, LayoutPath, MutableData};
-use librorolala::protocol::VaultAddress;
-use librorolala::tree::Tree;
+use librorolala::layout::Layout;
 use librorolala::workspace::Workspace;
-use librorolala::workspace_analyze::{TreeDiff, tree_diff, walk};
+use librorolala::workspace_analyze::{TreeDiff, tree_diff};
+use librorolala::write::ownership::{Kind as Own, Options, Refusal, apply, expand, plan};
+use librorolala::write::{Cancellation, WriteError};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -52,12 +52,9 @@ use rorolala_cli_setups::{
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd};
-use rorolala_utils_location::Locate as _;
-use rorolala_utils_location::normalize;
 use rorolala_utils_progress::Progress;
 use rust_i18n::t;
 use serde::Serialize;
-use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
@@ -66,21 +63,11 @@ use crate::error::ErrorOffline;
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_ERR_LAYOUT_OWNERSHIP, EC_HELP};
 use crate::failure::failure;
 use crate::keys::account_named;
-use crate::layout::{ErrorLayoutFailed, cached_vault_copy, set_cached_owners};
+use crate::layout::{ErrorLayoutFailed, cached_vault_copy};
 use crate::progress::Reporting;
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const ALIKE: f32 = 0.6;
-
-/// Which way one entry's ownership is moved.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Own {
-    /// Claimed for this account.
-    Hold,
-    /// Let go of.
-    Giveup,
-}
 
 /// The word the command that moves ownership this way is known by.
 const fn own_name(kind: Own) -> &'static str {
@@ -377,6 +364,7 @@ fn run(
     progress: &ResProgressSetting,
 ) -> Next {
     let reporting = Reporting::start(*progress);
+    let cancellation = crate::cancel::on_ctrl_c();
 
     // The handle is let go of before the reader is waited for: the last handle dropping is what tells
     // the reader there is nothing more to come.
@@ -391,6 +379,7 @@ fn run(
             remote,
             current,
             &progress,
+            cancellation,
         )
     };
 
@@ -414,6 +403,7 @@ fn change(
     remote: &mut LazyRes<ResCurrentRemoteVault>,
     current: &mut LazyRes<ResCurrentAccount>,
     progress: &Progress,
+    cancellation: &Cancellation,
 ) -> Next {
     workspace.get_ref().check()?;
 
@@ -464,33 +454,38 @@ fn change(
     action_fetch_layout(held, &account, target.to_string(), vault_name.clone())?;
     step.advance_by(1);
 
-    let copy = cached_vault_copy(held, &vault_name)?;
+    let copy = match cached_vault_copy(held, &vault_name) {
+        Ok(copy) => copy,
+        Err(next) => return next,
+    };
 
-    let selected = match expanded(held, &cwd, names) {
+    let selected = match expand(held, &cwd, names) {
         Ok(selected) => selected,
-        Err(error) => return error.into(),
+        Err(name) => return ErrorOwnershipName { name }.into(),
     };
-    let diff = if force {
-        None
-    } else {
-        // Ownership is asked about entries the Layout names, which the ignore rules have no
-        // jurisdiction over, so the reading is taken unfiltered.
-        match tree_diff(&layout, held, ALIKE, &IgnoreRuleSet::empty()) {
-            Ok(diff) => Some(diff),
-            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-        }
+    let diff = match settling(held, &layout, force) {
+        Ok(diff) => diff,
+        Err(next) => return next,
     };
 
-    let (wanted, mut failed, skipped) = plan(
+    // What a tree with unrecorded work is judged by is the rules it is read with, which the command
+    // loads once: the library only asks whether the reading agrees with the recorded baseline.
+    let rules = crate::ignore::rules(held, false);
+    let (wanted, mut failed, skipped) = match plan(
         kind,
-        force,
+        Options { force },
         held,
         &layout,
         &copy,
         &account_name,
         &selected,
         diff.as_ref(),
-    );
+        &rules,
+        cancellation,
+    ) {
+        Ok(planned) => planned,
+        Err(error) => return ownership_write_error(&error),
+    };
     step.advance_by(1);
 
     // The fetch is over before the ownership begins, so its bar is let go of here rather than left standing
@@ -511,387 +506,68 @@ fn change(
         .into();
     }
 
-    let (entries, refused) = act(kind, wanted, held, &copy, &account, &target, progress);
-    failed.extend(refused);
+    // What the bar is called belongs to whoever watches the run: the exchange runs on both ends, and
+    // the Vault's end has no words of its own.
+    let name = match kind {
+        Own::Hold => t!("ownership.holding").trim().to_string(),
+        Own::Giveup => t!("ownership.giving").trim().to_string(),
+    };
+    let outcome = match apply(
+        kind,
+        wanted,
+        held,
+        &copy,
+        &account,
+        &target,
+        &name,
+        progress,
+        cancellation,
+    ) {
+        Ok(outcome) => outcome,
+        Err(error) => return ownership_write_error(&error),
+    };
+    failed.extend(outcome.failed);
 
     ResultOwnership {
         kind,
-        entries,
+        entries: outcome
+            .entries
+            .into_iter()
+            .map(|item| OwnershipItem {
+                path: item.path,
+                uuid: item.uuid,
+                owner: item.owner,
+            })
+            .collect(),
         skipped,
         failed: failed.iter().map(describe).collect(),
     }
     .into()
 }
 
-/// One path a run named, and whether it was named outright or brought in by a directory.
-struct Named {
-    /// Where it sits in the Layout.
-    path: LayoutPath,
-    /// Whether the run named this path itself rather than a directory over it.
-    direct: bool,
-}
-
-/// One entry a run is about to move.
-struct Wanted {
-    /// Where it sits in the Layout.
-    path: LayoutPath,
-    /// The `Uuid` ownership is about.
-    id: Uuid,
-}
-
-/// The paths the names stand for.
+/// The failure a write the ownership workflow returned is told as.
 ///
-/// A name that is a file is that file; one that is a directory is every file under it, read the way
-/// the tree reading reads the tree, so what the Workspace keeps for itself is left out. A name
-/// that is both (one spelled twice, or a file under a directory named as well) is one path.
-fn expanded(
-    held: &Workspace,
-    cwd: &Path,
-    names: &[String],
-) -> Result<Vec<Named>, ErrorOwnershipName> {
-    let root = normalize(held.get_root());
-    let mut paths: BTreeMap<LayoutPath, bool> = BTreeMap::new();
-    let mut walked = None;
-
-    for given in names {
-        let disk = normalize(&resolve(cwd, given));
-
-        let relative = disk.strip_prefix(&root).map_err(|_| ErrorOwnershipName {
-            name: given.clone(),
-        })?;
-
-        // A tree is one entry of its own, and a path inside one is that tree as well: ownership is
-        // the tree's, so naming the tree or anything under it names the same entry.
-        if let Some(tree) = tree_under(&root, &disk) {
-            paths.insert(tree, true);
-            continue;
-        }
-
-        if disk.is_file() {
-            let path = LayoutPath::from_relative(relative).map_err(|_| ErrorOwnershipName {
-                name: given.clone(),
-            })?;
-
-            paths.insert(path, true);
-            continue;
-        }
-
-        if !disk.is_dir() {
-            return Err(ErrorOwnershipName {
-                name: given.clone(),
-            });
-        }
-
-        // The walk is the whole of what a directory may bring in, so it is read once however many
-        // directories are named, and only when one is.
-        let found = walked.get_or_insert_with(|| walk(&root).0);
-        let prefix = if relative.as_os_str().is_empty() {
-            String::new()
-        } else {
-            LayoutPath::from_relative(relative)
-                .map_err(|_| ErrorOwnershipName {
-                    name: given.clone(),
-                })?
-                .as_str()
-                .to_owned()
-        };
-
-        for file in found.iter() {
-            // A directory brings in the files under it and the trees under it as one entry each; the
-            // walk does not descend into a tree, so its own entry is the whole of what it brings.
-            if !matches!(file.kind, EntryKind::File | EntryKind::Tree) {
-                continue;
-            }
-
-            if under(&prefix, &file.path) {
-                paths.entry(file.path.clone()).or_insert(false);
-            }
-        }
+/// Every gate has a failure of its own and is mapped by [`refusal_state`]; what reaches here is a
+/// write that stopped before the gates were read, which today is only cancellation.
+fn ownership_write_error(error: &WriteError) -> Next {
+    ErrorOwnershipFailed {
+        cause: error.to_string(),
     }
-
-    Ok(paths
-        .into_iter()
-        .map(|(path, direct)| Named { path, direct })
-        .collect())
+    .into()
 }
 
-/// The tree a path is in, when it is in one; a path outside every tree answers nothing.
+/// The reading a giveup's gates judge a tree by, or nothing when `--force` moves past it.
 ///
-/// It is what makes a run naming a file under a tree the same run as one naming the tree: the Layout
-/// holds the tree as one entry, so ownership is about that entry.
-fn tree_under(root: &Path, disk: &Path) -> Option<LayoutPath> {
-    let tree = Tree::locate(root, disk).ok()?;
-
-    tree.layout_path().ok()
-}
-
-/// Why an entry's ownership may not be moved.
-enum Refusal {
-    /// The Layout names nothing at the path.
-    Path(String),
-    /// The Vault's Layout names nothing for the `Uuid` the path is named by.
-    Upstream(String),
-    /// What is here is not the version the Vault names.
-    Version(String),
-    /// What is here has changes the Layout does not name.
-    Changed(String),
-    /// The entry is held by another account.
-    Taken { path: String, owner: String },
-    /// The entry is not this account's to let go of.
-    NotHeld { path: String, owner: Option<String> },
-    /// The exchange could not be made.
-    Failed(String),
-}
-
-/// Reads every gate for every path, and says what may be moved and what may not.
-///
-/// Nothing is moved here: a batch is judged whole before any of it is done.
-fn plan(
-    kind: Own,
-    force: bool,
-    held: &Workspace,
-    layout: &Layout,
-    copy: &Layout,
-    me: &str,
-    named: &[Named],
-    diff: Option<&TreeDiff>,
-) -> (Vec<Wanted>, Vec<Refusal>, usize) {
-    let mut wanted = Vec::new();
-    let mut failed = Vec::new();
-    let mut skipped = 0;
-
-    for Named { path, direct } in named {
-        // A file a directory brought in that the Layout does not name is not something to hold or
-        // let go of; one named outright is a mistake worth being told about.
-        let Some(id) = layout.id_of(path) else {
-            if *direct {
-                failed.push(Refusal::Path(path.as_str().to_owned()));
-            } else {
-                skipped += 1;
-            }
-
-            continue;
-        };
-
-        let Some(upstream) = copy.entry(id) else {
-            failed.push(Refusal::Upstream(path.as_str().to_owned()));
-
-            continue;
-        };
-
-        let settled = if force {
-            Ok(())
-        } else {
-            diff.map_or(Ok(()), |diff| {
-                settled(kind, held, path, layout, id, &upstream, diff)
-            })
-        };
-
-        match settled.and_then(|()| free(kind, path, &upstream, me)) {
-            Ok(()) => wanted.push(Wanted {
-                path: path.clone(),
-                id,
-            }),
-            Err(refusal) => failed.push(refusal),
-        }
+/// Ownership is asked about entries the Layout names, which the ignore rules have no jurisdiction
+/// over, so the reading is taken unfiltered.
+fn settling(held: &Workspace, layout: &Layout, force: bool) -> Result<Option<TreeDiff>, Next> {
+    if force {
+        return Ok(None);
     }
 
-    (wanted, failed, skipped)
-}
-
-/// Reads the version and the tree: what is here has to be what the Vault names.
-///
-/// A claim stops there, since a version that matches is one nobody else has moved however much has
-/// been written on top of it: work written before it was claimed is still claimed safely. Letting go
-/// asks for the tree as well, since what is being handed over is then this side's version rather
-/// than one with unreckoned work over it.
-fn settled(
-    kind: Own,
-    held: &Workspace,
-    path: &LayoutPath,
-    layout: &Layout,
-    id: Uuid,
-    upstream: &MutableData,
-    diff: &TreeDiff,
-) -> Result<(), Refusal> {
-    if layout.entry(id).map(|data| data.version()) != Some(upstream.version()) {
-        return Err(Refusal::Version(path.as_str().to_owned()));
-    }
-
-    if kind == Own::Hold {
-        return Ok(());
-    }
-
-    if diff.modified.contains(path) || tree_changed(held, layout, path) {
-        return Err(Refusal::Changed(path.as_str().to_owned()));
-    }
-
-    Ok(())
-}
-
-/// Whether a tree's work is not what the Layout records, so letting go of it would hand over work
-/// nobody has recorded.
-///
-/// It is the tree's own reading, the same one `tree status` gives: staged work, a description, a
-/// conflict, or a work tree the baseline does not hold. A tree that cannot be read at all is taken as
-/// changed, since what it holds is not known.
-fn tree_changed(held: &Workspace, layout: &Layout, path: &LayoutPath) -> bool {
-    if !layout
-        .id_of(path)
-        .and_then(|id| layout.entry(id))
-        .is_some_and(|data| data.kind() == EntryKind::Tree)
-    {
-        return false;
-    }
-
-    let root = held.get_root();
-    let disk = root.join(path.to_path_buf());
-    let Ok(tree) = Tree::open(root, &disk) else {
-        return true;
-    };
-
-    if tree.pending().unwrap_or(true) {
-        return true;
-    }
-
-    let Ok(Some(recorded)) = tree.baseline().tree() else {
-        return false;
-    };
-    let Ok(rules) = tree.rules(crate::ignore::rules(held, false)) else {
-        return true;
-    };
-    let Ok(scanned) = tree.scan(&rules, false) else {
-        return true;
-    };
-
-    !librorolala::tree::diff(&recorded, &scanned.structure).is_empty()
-}
-
-/// Reads who holds it, which is the gate `--force` does not move.
-fn free(kind: Own, path: &LayoutPath, upstream: &MutableData, me: &str) -> Result<(), Refusal> {
-    let named = path.as_str().to_owned();
-
-    match (kind, upstream.owner()) {
-        (Own::Hold, None) => Ok(()),
-        (Own::Hold, Some(owner)) => Err(Refusal::Taken {
-            path: named,
-            owner: owner.to_owned(),
-        }),
-        (Own::Giveup, Some(owner)) if owner == me => Ok(()),
-        (Own::Giveup, owner) => Err(Refusal::NotHeld {
-            path: named,
-            owner: owner.map(str::to_owned),
-        }),
-    }
-}
-
-/// Moves the ownership of everything the gates allowed, and says what the Vault refused anyway.
-///
-/// The whole batch is one exchange, over one connection: the `Uuid`s cross together and the outcomes
-/// come back together, one per entry in the order they were asked for. That is what a run naming a
-/// directory wants, one handshake rather than one per file, and the bar is drawn over the entries
-/// as they are done, so a reader is shown which one the Vault is on now.
-///
-/// What the Vault agreed to is written into `copy`, the copy this run opened once, as one batch
-/// after the whole exchange: what a run of a thousand entries costs the copy is one open and one
-/// flush per shard, rather than an open and a flush for each of them.
-fn act(
-    kind: Own,
-    wanted: Vec<Wanted>,
-    held: &Workspace,
-    copy: &Layout,
-    account: &Account,
-    target: &VaultAddress,
-    progress: &Progress,
-) -> (Vec<OwnershipItem>, Vec<Refusal>) {
-    if wanted.is_empty() {
-        return (Vec::new(), Vec::new());
-    }
-
-    // What the bar is called belongs to whoever watches the run, so it is said here and crosses with
-    // the entries, as JSON, since a list is not a thing the C ABI can hand over and the action's
-    // input is one string: this crate has the words and the action, run on both ends, has none.
-    let name = match kind {
-        Own::Hold => t!("ownership.holding").trim().to_string(),
-        Own::Giveup => t!("ownership.giving").trim().to_string(),
-    };
-    let ids: Vec<String> = wanted.iter().map(|item| item.id.to_string()).collect();
-    let input = match ownership_input(name, ids) {
-        Ok(input) => input,
-        Err(error) => return (Vec::new(), vec![Refusal::Failed(error.to_string())]),
-    };
-    let target = target.to_string();
-
-    let runtime = match tokio::runtime::Runtime::new() {
-        Ok(runtime) => runtime,
-        Err(error) => return (Vec::new(), vec![Refusal::Failed(error.to_string())]),
-    };
-
-    let answer = runtime.block_on(async {
-        match kind {
-            Own::Hold => {
-                action_request_ownership_async(
-                    held,
-                    account,
-                    target.clone(),
-                    input.clone(),
-                    progress.clone(),
-                )
-                .await
-            }
-            Own::Giveup => {
-                action_giveup_ownership_async(
-                    held,
-                    account,
-                    target.clone(),
-                    input.clone(),
-                    progress.clone(),
-                )
-                .await
-            }
-        }
-    });
-
-    let outcomes: Vec<Ownership> = match answer
-        .map_err(|error| Refusal::Failed(error.to_string()))
-        .and_then(|said| {
-            serde_json::from_str(&said).map_err(|error| Refusal::Failed(error.to_string()))
-        }) {
-        Ok(outcomes) => outcomes,
-        Err(refusal) => return (Vec::new(), vec![refusal]),
-    };
-
-    let mut entries = Vec::with_capacity(wanted.len());
-    let mut failed = Vec::new();
-    let mut changes = Vec::with_capacity(wanted.len());
-
-    for (item, outcome) in wanted.into_iter().zip(outcomes) {
-        match outcome {
-            Ownership::Owner(owner) => {
-                changes.push((item.id, owner.clone()));
-                entries.push(OwnershipItem {
-                    path: item.path.as_str().to_owned(),
-                    uuid: item.id.to_string(),
-                    owner,
-                });
-            }
-            Ownership::Missing => failed.push(Refusal::Upstream(item.path.as_str().to_owned())),
-            Ownership::HeldBy(owner) => failed.push(Refusal::Taken {
-                path: item.path.as_str().to_owned(),
-                owner,
-            }),
-        }
-    }
-
-    // A copy that cannot be written is the one failure here that is not the Vault's: the change it
-    // follows is already made, so what is said is that the copy did not follow it, a fetch, which
-    // every one of these runs begins with, is what brings a copy back.
-    let mut batch = copy.batch();
-    if let Err(error) = set_cached_owners(&mut batch, &changes).and_then(|()| batch.commit()) {
-        failed.push(Refusal::Failed(error.to_string()));
-    }
-
-    (entries, failed)
+    tree_diff(layout, held, ALIKE, &IgnoreRuleSet::empty())
+        .map(Some)
+        .map_err(|error| ErrorLayoutFailed::new(error.to_string()).into())
 }
 
 /// The JSON an ownership action takes as its input: the words a bar is drawn under, and the entries.
@@ -946,26 +622,6 @@ fn refusal_state(refusal: Refusal) -> Next {
         Refusal::NotHeld { path, owner } => ErrorOwnershipNotHeld { path, owner }.into(),
         Refusal::Failed(cause) => ErrorOwnershipFailed { cause }.into(),
     }
-}
-
-/// The path `name` names, made absolute against the directory the run was made in.
-fn resolve(cwd: &Path, name: &str) -> PathBuf {
-    if Path::new(name).is_absolute() {
-        PathBuf::from(name)
-    } else {
-        cwd.join(name)
-    }
-}
-
-/// Whether `path` sits under the directory whose prefix is `prefix`.
-fn under(prefix: &str, path: &LayoutPath) -> bool {
-    if prefix.is_empty() {
-        return true;
-    }
-
-    path.as_str()
-        .strip_prefix(prefix)
-        .is_some_and(|rest| rest.starts_with('/'))
 }
 
 /// Error: `rola hold` or `rola giveup` was given arguments it cannot use.
@@ -1340,51 +996,5 @@ pub fn render_result_ownership(result: ResultOwnership, ec: &mut ResExitCode) {
 
     if !result.failed.is_empty() {
         ec.exit_code = EC_ERR_LAYOUT_OWNERSHIP;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    use librorolala::tree::Staging;
-
-    use super::tree_under;
-
-    static NEXT: AtomicUsize = AtomicUsize::new(0);
-
-    fn scratch(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "rola-ownership-{label}-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).expect("a scratch directory");
-
-        dir
-    }
-
-    /// Naming a tree or anything under it names the tree's one Layout entry.
-    #[test]
-    fn a_tree_and_everything_under_it_names_the_tree() {
-        let root = scratch("tree");
-        let tree = root.join("main");
-        fs::create_dir_all(tree.join("sub")).expect("a tree's directory");
-        Staging::new(&tree).ensure_store().expect("a tree's mark");
-
-        assert_eq!(
-            tree_under(&root, &tree).map(|path| path.as_str().to_owned()),
-            Some("main".to_owned())
-        );
-        assert_eq!(
-            tree_under(&root, &tree.join("sub").join("a.psd")).map(|path| path.as_str().to_owned()),
-            Some("main".to_owned())
-        );
-        assert!(tree_under(&root, &root.join("beside.psd")).is_none());
-
-        let _ = fs::remove_dir_all(&root);
     }
 }

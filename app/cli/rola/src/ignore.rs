@@ -41,21 +41,3 @@ pub fn rules(held: &Workspace, include_ignored: bool) -> IgnoreRuleSet {
         IgnoreRuleSet::empty()
     })
 }
-
-/// Whether `path` may be selected by a run reading with `rules`: not ignored, or a move's
-/// destination, which a rule is not written against.
-///
-/// The destinations are the tree reading's own: a file that turned out to be where a tracked path
-/// went is already the work's, however the rules read its new place.
-#[must_use]
-pub fn selectable(
-    rules: &IgnoreRuleSet,
-    path: &librorolala::layout::LayoutPath,
-    renames: &[librorolala::workspace_analyze::PathRename],
-) -> bool {
-    if renames.iter().any(|rename| rename.to == *path) {
-        return true;
-    }
-
-    !rules.is_ignore(std::path::Path::new(path.as_str()), false)
-}

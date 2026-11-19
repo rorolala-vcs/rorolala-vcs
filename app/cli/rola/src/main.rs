@@ -25,7 +25,7 @@ use rust_i18n::t;
 
 mod account;
 mod address;
-mod checkout;
+mod cancel;
 mod cmd_account;
 mod cmd_align;
 mod cmd_bind;

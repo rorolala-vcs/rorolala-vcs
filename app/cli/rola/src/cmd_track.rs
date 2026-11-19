@@ -1,4 +1,4 @@
-//! The `rola track` command: put a file's content into the store and record it in the Layout.
+//! The `rola track` command: put files' content into the store and record it in the Layout.
 //!
 //! It is the whole of a piece of work rather than a step of it: a file is named, its content goes
 //! into the store, a version is made of it, and the Layout being worked in is made to name that
@@ -10,11 +10,12 @@
 //! and, when a file wants its own words, one per file. A run is not always able to say them on the
 //! command line, so what it does not say is asked for in an editor. See [`crate::editor`].
 //!
-//! The order is read, ask, then write: every file that is to be recorded is read first, to find which
-//! of them changed, and the message is asked for those; only then is the content written and the
-//! versions made. So a run whose editor is left empty has written nothing, and the editor lists the
-//! files that will actually be recorded rather than a guess at them. What the run is doing while it
-//! does it is said through [`crate::progress`], on a bar or as one record per line.
+//! The order is read, ask, then write, and the library owns the reading and the writing: the plan
+//! reads every file and tree that is to be recorded, the command asks for a message for the subjects
+//! the plan found, and only then does the apply write the content and make the versions. So a run
+//! whose editor is left empty has written nothing, and the editor lists the files that will actually
+//! be recorded rather than a guess at them. What the run is doing while it does it is said through
+//! [`crate::progress`], on a bar or as one record per line.
 
 // The handler that records a file is one pass over everything the run is handed: the source, the
 // store, the index and the report about them are moved through together, and the borrows `#[chain]`
@@ -29,23 +30,16 @@
 // injection gives it and what every other handler that watches a run does.
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
-use std::time::Duration;
+use std::path::Path;
 
-use librorolala::ignore::IgnoreRuleSet;
-use librorolala::layout::{Batch, EntryKind, Layout, LayoutPath, MutableData};
-use librorolala::status::{tracked_vault, unowned};
-use librorolala::storage::{
-    Chunking, Codec, Key, Lockable as _, RorolalaStorage, StorageBackend as _, key_of_file,
-    store_file,
+use librorolala::write::WriteError;
+use librorolala::write::track::batch::{
+    Action as TrackedAction, Carry, FileKind, Messages, Options, Refusal, Subject,
 };
-use librorolala::tree::{Staging, Tree};
-use librorolala::vcs::{Creator, Message, VCSIndex, VCSIndexBatch, Variant, Version};
-use librorolala::workspace::{DATA_DIR, Merging, Pending, Workspace};
-use librorolala::workspace_analyze::{Cache, PathRename, cache_path, entry_of, tree_diff, walk};
+use librorolala::write::track::batch::{apply, plan};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -66,7 +60,6 @@ use rorolala_utils_constants::WORKSPACE_EDITING_PATH;
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_progress::Progress;
 use rust_i18n::t;
-use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
@@ -76,19 +69,16 @@ use crate::exit_codes::{
     EC_ABORT, EC_ERR_TRACK, EC_ERR_TRACK_ARGUMENT, EC_ERR_TRACK_OWNERSHIP, EC_HELP,
 };
 use crate::failure::failure;
-use crate::layout::{ErrorLayoutShouldInWorkspace, chosen, failed};
+use crate::layout::{
+    ErrorLayoutExists, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutShouldInWorkspace, chosen,
+};
 use crate::progress::Reporting;
 
 /// The longest a message may be, in bytes.
 ///
-/// It is the limit a [`Message`] object carries, kept here so that what a run is told before
+/// It is the limit a `Message` object carries, kept here so that what a run is told before
 /// anything is written is the same limit the object enforces.
 const LONGEST_MESSAGE: usize = 256;
-
-/// How alike two text files have to be to count as the same file moved.
-///
-/// It is the same default the reading uses, since what `track` acts on is what the reading found.
-const DEFAULT_ALIKE: f32 = 0.6;
 
 /// How many times the editor is opened again while what it holds is still too long.
 ///
@@ -102,21 +92,7 @@ const EDIT_ATTEMPTS: usize = 10;
 /// Shorter than the ordinary wait, see [`crate::progress`], because a recording opens with the part a
 /// reader most wants to watch: the whole of every file it is to record is read before anything is
 /// written, and a bar that appeared only once that reading was over would be a bar for nothing.
-const WATCH_AFTER: Duration = Duration::from_secs(1);
-
-/// How many loose objects a recording leaves before it packs the index.
-///
-/// What a pack costs is a rewrite of every object the index holds, so packing after every run is a run
-/// whose cost grows with the index for a saving that does not. A few hundred loose objects is when one
-/// pack is worth the rewrite; until then they are valid loose objects a later run settles.
-const LOOSE_BEFORE_PACK: usize = 256;
-
-/// How many packs the index may hold before a recording gathers them into one.
-///
-/// A run writes what it makes as one pack, so a run that never gathered would leave a pack per run
-/// behind, and every lookup walks every pack. A handful is what a run of them is worth; past that the
-/// walk is the reading rather than the lookup, and one rewrite is cheaper than it.
-const PACKS_BEFORE_REPACK: usize = 8;
+const WATCH_AFTER: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// What the whole group did; the message every file carries unless it is given its own.
 const ARG_MESSAGE: PickerArg<'static, Option<String>> = arg![message: Option<String>];
@@ -360,10 +336,6 @@ fn record(
         include_ignored,
     } = state;
 
-    // What the run named, before it is read into files: a path that is a tree is recorded as that
-    // tree, and the named paths are what tells the two apart later.
-    let named = files.clone();
-
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
         Err(next) => return next,
@@ -372,36 +344,6 @@ fn record(
     let Some(held) = workspace.get_ref().as_ref() else {
         return ErrorLayoutShouldInWorkspace.into();
     };
-
-    let root = held.get_root().to_path_buf();
-
-    // A variant file is content waiting to be joined rather than work to record, so where it lies is
-    // left out of every reading here, and a file waiting for one is recorded as the merge it is.
-    let mut merging = Merging::read(&root);
-    let ignored = merging.ignored(&layout);
-
-    // The rules the Workspace ignores by govern what the tree gained: what a rule covers is not
-    // this run's to record unless the run was told to include it.
-    let rules = crate::ignore::rules(held, include_ignored);
-
-    // Recording works on a tree that is settled: a path the Layout names and the tree does not hold
-    // is something to settle first, with `rola align`, rather than something to record around. A
-    // move is not one of these, naming a path where it is now is how a move is confirmed.
-    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE, &rules) {
-        Ok(diff) => diff,
-        Err(error) => return fail(error.to_string()),
-    };
-
-    if !diff.lost.is_empty() {
-        return ErrorTrackLost {
-            paths: diff
-                .lost
-                .iter()
-                .map(|path| path.as_str().to_owned())
-                .collect(),
-        }
-        .into();
-    }
 
     let Some(store) = storage.get_ref().as_ref() else {
         return fail(t!("track.err_no_store").trim());
@@ -421,765 +363,156 @@ fn record(
         Err(error) => return fail(error.to_string()),
     };
 
-    // A path that is a tree, or inside one, is recorded as that tree rather than as the files under
-    // it; what is left is what prepares as files.
-    let file_names: Vec<(usize, String)> = files
-        .iter()
-        .enumerate()
-        .filter(|(_, given)| !names_tree(&root, given))
-        .map(|(at, given)| (at, given.clone()))
-        .collect();
+    let root = held.get_root().to_path_buf();
 
-    let prepared = match prepare(
-        &layout,
-        &root,
-        &cwd,
-        &file_names,
-        &diff.renamed,
-        &ignored,
-        &rules,
+    // The rules the Workspace ignores by govern what the tree gained: what a rule covers is not
+    // this run's to record unless the run was told to include it.
+    let rules = crate::ignore::rules(held, include_ignored);
+
+    // An amend with no new words keeps the words the replaced version had, so the plan reads them
+    // only when the run gave none of its own.
+    let keeps_words = replace && message.is_none() && file_messages.is_empty();
+    let options = Options {
+        force,
+        replace,
         include_ignored,
+        keep_words: keeps_words,
         policy,
-    ) {
-        Ok(prepared) => prepared,
-        Err(next) => return next,
+    };
+    let messages = Messages {
+        enumerating: t!("track.enumerating").to_string(),
+        writing: t!("track.writing").to_string(),
+        recording: t!("track.recording").to_string(),
+    };
+    let carry = Carry {
+        workspace: held,
+        layout: &layout,
+        store,
+        index: vcs,
+        creator: &creator_name,
+        rules: &rules,
+        messages: &messages,
+    };
+    let cancellation = crate::cancel::on_ctrl_c();
+
+    // Nothing is written before the plan is read: the editor is opened for the subjects the plan
+    // found, and the apply records exactly those.
+    let plan = match plan(&carry, &cwd, &files, options, progress, cancellation) {
+        Ok(plan) => plan,
+        Err(error) => return track_write_error(error),
     };
 
-    // A file the Vault's fetched copy says another account holds is not one to record: the version
-    // made here is one this side cannot push, so recording it makes the conflict rather than
-    // avoiding it. Only what the tree says changed is asked about, a file that did not change
-    // records nothing, and a Vault that tracks nothing, a copy that is not there, and a file the
-    // copy does not name are all answered with nothing to refuse.
-    if !force {
-        let tracked = tracked_vault(held);
-        let unowned = match unowned(
-            held,
-            &layout,
-            tracked.as_deref(),
-            Some(&creator_name),
-            &diff,
-        ) {
-            Ok(unowned) => unowned,
-            Err(error) => return fail(error.to_string()),
-        };
-        let named: BTreeSet<&str> = prepared.iter().map(|file| file.path.as_str()).collect();
-        let blocked: Vec<String> = unowned
-            .into_iter()
-            .filter(|path| named.contains(path.as_str()))
-            .collect();
-
-        if !blocked.is_empty() {
-            return ErrorTrackUnowned { paths: blocked }.into();
-        }
+    if let Some(refusal) = plan.refused() {
+        return refusal_state(refusal.clone());
     }
 
-    let runtime = match tokio::runtime::Runtime::new() {
-        Ok(runtime) => runtime,
-        Err(error) => return fail(error.to_string()),
-    };
-
-    // What is worth reading is what the tree says changed, plus what `--replace` names and what the
-    // reading could not look at: a file the Layout agrees with holds content the store already has, so
-    // it is not read at all. The reading happens before the message is asked and before anything is
-    // written, see `enumerate`, so a file the reading agrees with is neither asked about nor
-    // written, and a move that changed nothing under it is left to `rola align` as it always was.
-    let recordable: BTreeSet<LayoutPath> = diff
-        .modified
-        .iter()
-        .chain(diff.untagged.iter())
-        .cloned()
-        .collect();
-
-    // A file the reading could not look at is not one it can say did not change, so it is read
-    // again here rather than skipped: what it then finds is either its content recorded or the
-    // failure the reading met.
-    let unreadable: BTreeSet<&str> = diff
-        .failed
-        .iter()
-        .map(|failed| failed.path.as_str())
-        .collect();
-
-    // The files worth reading are the ones the reading found changed, the ones `--replace` names
-    // whatever the reading found, and the ones the reading could not look at. Everything else holds
-    // content the store already has, so it is neither read nor written.
-    let candidates: Vec<Prepared> = prepared
-        .into_iter()
-        .filter(|file| {
-            replace || recordable.contains(&file.path) || unreadable.contains(file.path.as_str())
-        })
-        .collect();
-
-    // What each file now holds, and whether that is a change, is worked out before anything is asked
-    // or written: the content is read here so that the message is asked for the files that will be
-    // recorded and no others, and a run whose editor is left empty has then written nothing at all.
-    let mut enumerated = match enumerate(vcs, &runtime, progress, candidates, replace) {
-        Ok(enumerated) => enumerated,
-        Err(next) => return next,
-    };
-
-    // The files in the list are the ones that changed; one that did not is not recorded, so it is
-    // not something a message stands for either, including when it was named on the command line.
-    enumerated.retain(|file| file.changed);
-    let changing = enumerated;
-    // A tree named, or standing under a directory named, is one subject of the recording, taken as
-    // one file: a file's own message and the group's cover it the same way. One with nothing a
-    // commit would record is not a subject at all, the way a file that did not change is not.
-    let pending_trees = match trees_named(&named, held, &layout) {
-        Ok(trees) => {
-            let mut pending = Vec::new();
-            for (at, tree) in trees {
-                match tree_needs_commit(&tree, &layout, vcs, store, &runtime) {
-                    Ok(true) => pending.push((at, tree)),
-                    Ok(false) => {}
-                    Err(next) => return next,
-                }
-            }
-
-            pending
-        }
-        Err(next) => return next,
-    };
-
-    // A tree has no content to cut and no version to amend, so the flags that act on those are not
-    // a tree's to carry: a run naming one is told so before anything is asked or written.
-    if (replace || policy.is_some()) && !pending_trees.is_empty() {
-        return ErrorTrackTreeUnsupported.into();
-    }
-
-    let subjects = subjects_for(&changing, &pending_trees, named.len());
-
-    if !file_messages.is_empty() && file_messages.len() != subjects.len() {
+    if !file_messages.is_empty() && file_messages.len() != plan.subjects().len() {
         return message_error(MessageError::Mismatch);
     }
 
-    // An amend with no new words keeps the ones the replaced version said, so they are what the
-    // editor opens on and what `--no-editor` records as they stand. They are read from the index
-    // only in that case, so a run that says what it wants never pays for them.
-    let keeps_words = replace && message.is_none() && file_messages.is_empty();
-
-    let own: Vec<String> = if !file_messages.is_empty() {
-        file_messages
-    } else if keeps_words {
-        match replaced_messages(vcs, &runtime, &changing) {
-            Ok(messages) => messages,
-            Err(next) => return next,
-        }
+    let own = if file_messages.is_empty() {
+        plan.prefill().to_vec()
     } else {
-        vec![String::new(); subjects.len()]
+        file_messages
     };
 
     // Nothing changing is nothing to say: a run that found every file and tree already recorded
     // records nothing, and is not asked to explain a change it did not make.
-    let messages = if subjects.is_empty() {
+    let texts = if plan.subjects().is_empty() {
         Vec::new()
     } else {
-        match decide(&subjects, &own, message, no_editor, editor, &root) {
-            Ok(messages) => messages,
+        match decide(plan.subjects(), &own, message, no_editor, editor, &root) {
+            Ok(texts) => texts,
             Err(next) => return next,
         }
     };
 
-    // The messages split back to what each makes: a version of a file's content, or a version of a
-    // tree's structure. The positions are kept so the run reports what it did in the order it was
-    // asked, whatever order the writes then take.
-    let mut file_texts = Vec::new();
-    let mut file_slots = Vec::new();
-    let mut tree_texts = Vec::new();
-    let mut tree_slots = Vec::new();
-
-    let mut item_slots: Vec<Option<TrackItem>> = Vec::with_capacity(subjects.len());
-
-    for (at, message) in messages.iter().enumerate() {
-        item_slots.push(None);
-
-        match &subjects[at] {
-            Subject::File(_) => {
-                file_texts.push(message.as_str());
-                file_slots.push(at);
-            }
-            Subject::Tree(_) => {
-                tree_texts.push(message.as_str());
-                tree_slots.push(at);
-            }
-        }
-    }
-
-    // The content of every file that is to be recorded goes into the store, read again as it goes, the
-    // price of having asked for the message first (see `enumerate`).
-    let staged = match write(store, &runtime, progress, changing) {
-        Ok(staged) => staged,
-        Err(next) => return next,
+    let outcome = match apply(&carry, plan, &texts, options, progress, cancellation) {
+        Ok(outcome) => outcome,
+        Err(error) => return track_write_error(error),
     };
 
-    let mut committed = Vec::with_capacity(staged.len());
+    if let Some(refusal) = outcome.refused.first() {
+        return refusal_state(refusal.clone());
+    }
 
-    // A version is one thing made per file, so the bar for making them counts files rather than the
-    // bytes the content above was measured in.
-    let mut placing = (!staged.is_empty())
-        .then(|| progress.begin(t!("track.recording").to_string(), Some(staged.len() as u64)));
+    ResultTrack {
+        items: outcome
+            .items
+            .into_iter()
+            .map(|item| TrackItem {
+                path: item.path,
+                action: match item.action {
+                    TrackedAction::Added => TrackAction::Added,
+                    TrackedAction::Updated => TrackAction::Updated,
+                    TrackedAction::Replaced => TrackAction::Replaced,
+                },
+            })
+            .collect(),
+    }
+    .into()
+}
 
-    // What the run does to the Layout is gathered up and written when it is done, so a run that
-    // records many files pays one read of what others wrote and one flushed write per shard rather
-    // than the same for each file.
-    let mut batch = layout.batch();
+/// The failure a write the library refused is told as.
+///
+/// What a plan or an apply returns as a [`Refusal`] is mapped by [`refusal_state`]; what reaches here
+/// is a write that could not be made, and a tree failure keeps the tree's own failure so a run that
+/// named a tree is told about the tree.
+fn track_write_error(error: WriteError) -> Next {
+    match error {
+        WriteError::NoStore => fail(t!("track.err_no_store").trim()),
+        WriteError::NoIndex => fail(t!("track.err_no_index").trim()),
+        WriteError::Tree { reason } => ErrorTrackTreeFailed::new(reason).into(),
+        other => fail(other.to_string()),
+    }
+}
 
-    // What the run makes in the index is gathered up the same way: a run writes its objects as one
-    // pack rather than a file per object, which is what a file creation each was.
-    let mut writes = vcs.batch();
-
-    for (at, file) in staged.iter().enumerate() {
-        let text = file_texts[at];
-
-        // A file a variant is waiting for is recorded as the merge it is, and the waiting is over
-        // once it is: what the merge was is read here, where the version is made.
-        let pending = merging.at(file.file.id);
-
-        if let Err(next) = commit(
-            &layout,
-            vcs,
-            &runtime,
-            &creator_name,
-            &mut writes,
-            &mut batch,
-            file,
-            text,
-            replace,
-            pending,
-            &merging,
-            &root,
-        ) {
-            return next;
-        }
-
-        if let Some(pending) = pending {
-            if let Some(path) = merging.variant_path(&layout, pending) {
-                let disk = root.join(path.to_path_buf());
-
-                // A variant file that is already gone is one the merge can still be recorded from:
-                // the content that was brought in is what the version names, and the file was only
-                // how it was shown.
-                if disk.is_file()
-                    && let Err(error) = fs::remove_file(&disk)
-                {
-                    return fail(error.to_string());
-                }
-            }
-
-            merging.remove(file.file.id);
-        }
-
-        committed.push((file.file.path.clone(), file.file.disk.clone()));
-        item_slots[file_slots[at]] = Some(TrackItem {
-            path: file.file.path.as_str().to_owned(),
-            action: if replace {
-                TrackAction::Replaced
-            } else {
-                TrackAction::if_updated(&file.file)
+/// Turns one refusal into what the run is told.
+fn refusal_state(refusal: Refusal) -> Next {
+    match refusal {
+        Refusal::File { path, kind } => ErrorTrackFile::new(
+            &path,
+            match kind {
+                FileKind::NotAFile => TrackFileError::NotAFile,
+                FileKind::OutsideWorkspace => TrackFileError::OutsideWorkspace,
+                FileKind::InsideData => TrackFileError::InsideData,
             },
-        });
-
-        if let Some(task) = &mut placing {
-            task.advance_by(1);
-        }
-    }
-
-    // What the run made in the index is written before the Layout that names it: a Layout naming a
-    // version the index does not hold is a version nothing reads, so the objects are made first and
-    // the Layout follows them. One pack for the whole run, and nothing the run wrote is left loose.
-    if let Err(error) = runtime.block_on(writes.publish()) {
-        return fail(error.to_string());
-    }
-
-    // What was recorded is what the tree and the Layout now agree on, so the reading remembers it,
-    // only for the paths recorded, since remembering the whole tree would take every other change
-    // with it and a later `rola status` would have nothing to say about them.
-    if let Err(error) = batch.commit() {
-        return failed(&error);
-    }
-
-    drop(placing);
-
-    if let Err(next) = remember(&layout, &root, &committed) {
-        return next;
-    }
-
-    if let Err(error) = merging.write(&root) {
-        return fail(error.to_string());
-    }
-
-    // What the run wrote into the index is laid out with it, so a Workspace does not gather a loose
-    // object per version it records. A run that recorded nothing has nothing to lay out.
-    if !committed.is_empty() {
-        pack_index(vcs, &runtime);
-    }
-
-    // A tree is one unit of work: it is recorded after the files, since recording it writes a version
-    // of its own rather than a version per file. What it records is the message its own section in
-    // the same editor was asked for.
-    for ((slot, (_, tree)), text) in tree_slots.iter().zip(pending_trees).zip(tree_texts.iter()) {
-        match commit_tree(
-            &layout,
-            vcs,
-            store,
-            &runtime,
-            &creator_name,
-            held,
-            &tree,
-            text,
-            include_ignored,
-        ) {
-            Ok((path, added)) => {
-                item_slots[*slot] = Some(TrackItem {
-                    path,
-                    action: if added {
-                        TrackAction::Added
-                    } else {
-                        TrackAction::Updated
-                    },
-                });
-            }
-            Err(next) => return next,
-        }
-    }
-
-    let items: Vec<TrackItem> = item_slots.into_iter().flatten().collect();
-
-    ResultTrack { items }.into()
-}
-
-/// Lays the index's objects out as one pack, when this run has left enough of them to gather.
-///
-/// A run writes what it makes as a pack already, so what gathers between packings is a pack per run
-/// rather than a loose file per object. What a gathering costs is a rewrite of every object the index
-/// holds, though, which grows with the index while what it saves does not, so a run gathers only when
-/// the loose objects it left number [`LOOSE_BEFORE_PACK`], or when the packs it left number more than
-/// [`PACKS_BEFORE_REPACK`], and until then they are valid where they are: a later run or `rola pack`
-/// settles them. It is best effort, a pack that cannot be made because another run holds the lock
-/// leaves an index that is correct and merely ungathered, and a failure here does not fail a recording
-/// that is already durable.
-fn pack_index(index: &VCSIndex, runtime: &tokio::runtime::Runtime) {
-    let Ok(guard) = runtime.block_on(index.lock()) else {
-        return;
-    };
-
-    let _ = runtime.block_on(guard.repack_when_due(LOOSE_BEFORE_PACK, PACKS_BEFORE_REPACK));
-}
-
-/// Writes down what a recording left the tree and the Layout agreeing on.
-fn remember(layout: &Layout, root: &Path, committed: &[(LayoutPath, PathBuf)]) -> Result<(), Next> {
-    if committed.is_empty() {
-        return Ok(());
-    }
-
-    let path = cache_path(root, layout);
-    let mut cache = Cache::read(&path);
-
-    for (layout_path, disk) in committed {
-        // The reading of the tree already wrote down what the file holds, and nothing in this run
-        // has touched the file since, so what it found is taken rather than the file read a third
-        // time, and the Layout is held to agree with the digest it wrote down.
-        let entry = match cache.get(layout_path) {
-            Some(read) => read.clone().with_agreed(Some(read.digest())),
-            None => entry_of(disk).map_err(|error| fail(error.to_string()))?,
-        };
-        cache.insert(layout_path.clone(), entry);
-    }
-
-    cache.write(&path).map_err(|error| fail(error.to_string()))
-}
-
-/// One file, resolved against the Layout and the tree.
-struct Prepared {
-    /// Which of the run's names brought this file in, so messages can be asked in the order the run
-    /// named its paths.
-    named_at: usize,
-    /// Where it sits in the Layout.
-    path: LayoutPath,
-    /// Where it sits on disk.
-    disk: PathBuf,
-    /// The `Uuid` it is known by: the one it holds, or the one it is about to be given.
-    id: Uuid,
-    /// What the Layout holds for it, when it holds anything.
-    data: Option<MutableData>,
-    /// The cut it is to be written with, by its registered name, when one was settled.
-    ///
-    /// It is both what the write is made with and what the version goes on to prefer: a run that
-    /// says how a file is to be cut is saying it for next time as much as for this one.
-    policy: Option<&'static str>,
-    /// Where the reading found it, when naming it confirmed a move.
-    ///
-    /// A path that moved is recorded only when what it holds changed: a move by itself is not
-    /// something a recording is about, so a file that was moved and not edited is left for
-    /// `rola align` to confirm. One that was edited as well is recorded, the change is the
-    /// recording, and the move is carried in with it, since the Layout has to name where the file
-    /// now is for the change to be recorded at all.
-    moved_from: Option<LayoutPath>,
-}
-
-/// One file whose content has been put into the store, and what was found about it.
-struct Staged {
-    /// The file itself.
-    file: Prepared,
-    /// The key its content is stored under.
-    storage: Key,
-    /// The version it is at now, when it was recorded before.
-    recorded: Option<Recorded>,
-}
-
-/// One candidate file, read and weighed before anything is asked or written.
-struct Enumerated {
-    /// The file itself.
-    file: Prepared,
-    /// Whether what it holds is a change from what the Layout names: what decides whether a message is
-    /// asked for it and whether a version is made of it.
-    changed: bool,
-    /// The version it is at now, when it was recorded before.
-    recorded: Option<Recorded>,
-}
-
-/// One thing a recording asks a message for: a file, or a tree taken as one file.
-///
-/// A tree is named, read and described the way a file is, so the editor asks about it in the same
-/// list. What differs is only what a message goes on to make: a version of the file's content, or a
-/// version of the tree's structure.
-enum Subject<'a> {
-    /// One file.
-    File(&'a Prepared),
-    /// One tree.
-    Tree(&'a Tree),
-}
-
-impl Subject<'_> {
-    /// The section key this subject is asked under in the editing file.
-    fn key(&self) -> String {
-        match self {
-            Self::File(file) => file.id.to_string(),
-            Self::Tree(tree) => tree.layout_path().map_or_else(
-                |_| "tree".to_owned(),
-                |path| format!("tree:{}", path.as_str()),
-            ),
-        }
-    }
-
-    /// The path as a person knows it.
-    fn path(&self) -> String {
-        match self {
-            Self::File(file) => file.path.as_str().to_owned(),
-            Self::Tree(tree) => tree
-                .layout_path()
-                .map_or_else(|_| ".".to_owned(), |path| path.as_str().to_owned()),
-        }
-    }
-}
-
-/// A file's recorded version, and what its variant holds.
-///
-/// The variant is kept whole rather than only the base hash because amending reads the base from it
-/// and writes a variant of its own without needing the version object it was made from.
-struct Recorded {
-    /// The version the Layout names now.
-    version: Version,
-    /// The variant that version points at.
-    variant: Variant,
-    /// The key the version's content is stored under.
-    storage: [u8; 32],
-}
-
-/// Resolves each name against the Layout and the tree, or refuses.
-///
-/// A name is written the way a shell writes one (relative to where the run was made, or absolute)
-/// and what a Layout names is a path relative to the Workspace root, so one becomes the other here.
-/// A directory is taken recursively: every file under it is recorded, read the way the tree reading
-/// reads them, so what a Workspace keeps for itself and what another Workspace holds are left out.
-/// What is neither a file nor a directory, is not inside the Workspace, or is part of the
-/// Workspace's own data is refused rather than recorded.
-///
-/// Each file's cut is settled here as well: `policy` if the run named one, else the preference the
-/// entry already has, else nothing. Settling it before anything is asked or written is what lets a
-/// preference this build cannot honour stop the run with the workspace untouched, and it settles
-/// every file, not only the ones that turn out to have changed, because a file's preference is not
-/// something a change is needed to discover.
-fn prepare(
-    layout: &Layout,
-    root: &Path,
-    cwd: &Path,
-    names: &[(usize, String)],
-    renames: &[PathRename],
-    ignored: &BTreeSet<LayoutPath>,
-    rules: &IgnoreRuleSet,
-    include_ignored: bool,
-    policy: Option<&'static str>,
-) -> Result<Vec<Prepared>, Next> {
-    let root = normalize(root);
-
-    // What each name stands for: a file, or a directory whose files are taken in its place.
-    let mut standing = Vec::with_capacity(names.len());
-
-    // What a name was refused for being the ignore rules' business, named as it was written.
-    let mut refused = Vec::new();
-
-    for &(at, ref given) in names {
-        let disk = normalize(&resolve(cwd, given));
-
-        if !disk.exists() {
-            return Err(ErrorTrackFile::new(given, TrackFileError::NotAFile).into());
-        }
-
-        let Ok(relative) = disk.strip_prefix(&root) else {
-            return Err(ErrorTrackFile::new(given, TrackFileError::OutsideWorkspace).into());
-        };
-
-        if disk.is_dir() {
-            // A directory the rules ignore is not this run's to record either, what it holds is
-            // reached by the same walk the tree reading uses, and the rules govern what that gains.
-            if !include_ignored && rules.is_ignore(relative, true) {
-                refused.push(given.clone());
-                continue;
-            }
-
-            // A directory is read where it is rather than by walking the whole Workspace and
-            // filtering, so naming `src/` reads `src/` alone. What the walk leaves out is left out
-            // just the same, since it is the same walk, see `reachable` for the one thing a walk
-            // started inside the tree does not see for itself.
-            check_directory(relative, given)?;
-            standing.push(Named::Directory(disk, at));
-        } else if disk.is_file() {
-            // A variant file is content waiting to be joined rather than work to record, so a run
-            // that names one is asking for nothing and is answered with nothing.
-            let path = file_path(relative, given)?;
-            if ignored.contains(&path) {
-                continue;
-            }
-
-            // An ignored file cannot be selected, but a move's destination is the work's own file
-            // wearing a new place, and a rule is not written against that.
-            if !include_ignored && !crate::ignore::selectable(rules, &path, renames) {
-                refused.push(given.clone());
-                continue;
-            }
-
-            standing.push(Named::File(path, disk, at));
-        } else {
-            return Err(ErrorTrackFile::new(given, TrackFileError::NotAFile).into());
-        }
-    }
-
-    if !refused.is_empty() {
-        return Err(ErrorTrackIgnored { paths: refused }.into());
-    }
-
-    // A directory is read through the same walk the tree reading uses, so what it leaves out, the
-    // Workspace's own `.rola`, a Workspace nested inside it, a symbolic link, is left out here too,
-    // and so is every variant file among what it found. The walk starts at the directory named
-    // rather than at the Workspace root, so naming a directory reads that directory alone.
-    let mut files: Vec<(usize, LayoutPath, PathBuf)> = Vec::new();
-    for name in standing {
-        match name {
-            Named::File(path, disk, at) => files.push((at, path, disk)),
-            Named::Directory(disk, at) => {
-                // A walk started inside the tree does not see the directories above it, so whether
-                // the whole-tree walk would have descended into this one is told here; a directory
-                // it would not have reached holds work that is not this Workspace's.
-                if !reachable(&root, &disk) {
-                    continue;
-                }
-
-                let mut under: Vec<(usize, LayoutPath, PathBuf)> = walk(&disk)
-                    .0
-                    .into_iter()
-                    // A directory that is a tree is one unit of work, not a directory of files, so
-                    // expanding a directory over it turns it into one entry elsewhere. It is left
-                    // out here rather than read as the files it holds.
-                    .filter(|found| found.kind == EntryKind::File)
-                    .filter_map(|found| {
-                        let relative = found.disk.strip_prefix(&root).ok()?;
-                        let path = LayoutPath::from_relative(relative).ok()?;
-
-                        if ignored.contains(&path) {
-                            return None;
-                        }
-
-                        // What the rules ignore is not selected by a directory's expansion either:
-                        // it was never named, so there is nothing to refuse, it is simply left out.
-                        if !include_ignored && !crate::ignore::selectable(rules, &path, renames) {
-                            return None;
-                        }
-
-                        Some((at, path, found.disk))
-                    })
-                    .collect();
-                under.sort_by(|left, right| left.1.cmp(&right.1));
-                files.extend(under);
-            }
-        }
-    }
-
-    // A file named twice (under a directory that was named as well, or as itself) is one file, so
-    // it is recorded once.
-    let mut seen = BTreeSet::new();
-    files.retain(|(_, path, _)| seen.insert(path.clone()));
-
-    let mut prepared = Vec::with_capacity(files.len());
-
-    for (named_at, path, disk) in files {
-        // A path the tree moved still has its entry under where it was, so the entry is read there.
-        // The move itself is made only as the file is recorded, a move the file did not change
-        // under is not recorded at all, and is left to `rola align`, so a run that is refused
-        // before then, for a message it could not be given, has changed nothing.
-        let moved_from = renames
-            .iter()
-            .find(|rename| rename.to == path)
-            .map(|rename| rename.from.clone());
-        let source = moved_from.as_ref().unwrap_or(&path);
-
-        let (id, data) = match layout
-            .id_of(source)
-            .and_then(|id| layout.entry(id).map(|data| (id, data)))
-        {
-            Some((id, data)) => (id, Some(data)),
-            None => (Uuid::new_v4(), None),
-        };
-
-        let chosen = settle(policy, data.as_ref(), path.as_str())?;
-
-        prepared.push(Prepared {
-            named_at,
+        )
+        .into(),
+        Refusal::Ignored { paths } => ErrorTrackIgnored { paths }.into(),
+        Refusal::Preference { path, name } => ErrorTrackPreference { path, name }.into(),
+        Refusal::Lost { paths } => ErrorTrackLost { paths }.into(),
+        Refusal::Unowned { paths } => ErrorTrackUnowned { paths }.into(),
+        Refusal::Unrecorded { path } => ErrorTrackReplace {
             path,
-            disk,
-            id,
-            data,
-            policy: chosen,
-            moved_from,
-        });
-    }
-
-    Ok(prepared)
-}
-
-/// The cut one file is to be written with: the run's, else the entry's preference, else none.
-///
-/// A preference this build cannot honour is a refusal rather than a fall back. Falling back would
-/// write the file cut by something other than what it asks for, which is not a smaller failure than
-/// stopping: it is a write that does not deduplicate against what is already stored for the file,
-/// made silently, and discovered only when someone measures the store months later.
-fn settle(
-    policy: Option<&'static str>,
-    data: Option<&MutableData>,
-    path: &str,
-) -> Result<Option<&'static str>, Next> {
-    if let Some(name) = policy {
-        return Ok(Some(name));
-    }
-
-    let Some(name) = data.and_then(MutableData::preference) else {
-        return Ok(None);
-    };
-
-    librorolala::storage::policy(name).map_or_else(
-        || {
-            Err(ErrorTrackPreference {
-                path: path.to_owned(),
-                name: name.to_owned(),
-            }
-            .into())
-        },
-        |found| Ok(Some(found.name)),
-    )
-}
-
-/// What one name on the command line stands for.
-enum Named {
-    /// A file, where it sits on disk, and which name brought it in.
-    File(LayoutPath, PathBuf, usize),
-    /// A directory, where it sits on disk, and which name brought it in.
-    Directory(PathBuf, usize),
-}
-
-/// The path `given` names, made absolute against the directory the run was made in.
-fn resolve(cwd: &Path, given: &str) -> PathBuf {
-    if Path::new(given).is_absolute() {
-        PathBuf::from(given)
-    } else {
-        cwd.join(given)
-    }
-}
-
-/// `path` with its `.` dropped and its `..` climbed, worked out lexically rather than on disk.
-///
-/// A name is written against where the run was made, so `.` names the directory it was made in and
-/// `..` its parent, and a path that spells one place two ways is one place. Working it out here,
-/// before the disk is asked anything, is what lets `.` name the Workspace root rather than a path
-/// with no components in it.
-fn normalize(path: &Path) -> PathBuf {
-    let mut components: Vec<Component<'_>> = Vec::new();
-
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir if matches!(components.last(), Some(Component::Normal(_))) => {
-                components.pop();
-            }
-            other => components.push(other),
+            kind: ReplaceError::Unrecorded,
         }
-    }
-
-    components.into_iter().collect()
-}
-
-/// Refuses a directory that cannot be named in the Layout: one outside the Workspace, or one that is
-/// part of the Workspace's own data. The Workspace root itself names nothing and is always allowed.
-fn check_directory(relative: &Path, given: &str) -> Result<(), Next> {
-    if relative.as_os_str().is_empty() {
-        return Ok(());
-    }
-
-    file_path(relative, given)?;
-
-    Ok(())
-}
-
-/// The path `relative` names, or the failure for why it cannot be named in the Layout.
-fn file_path(relative: &Path, given: &str) -> Result<LayoutPath, Next> {
-    let Ok(path) = LayoutPath::from_relative(relative) else {
-        return Err(ErrorTrackFile::new(given, TrackFileError::OutsideWorkspace).into());
-    };
-
-    if path.as_str().split('/').any(|part| part == DATA_DIR) {
-        return Err(ErrorTrackFile::new(given, TrackFileError::InsideData).into());
-    }
-
-    Ok(path)
-}
-
-/// Whether the whole-tree walk would have descended into `dir`.
-///
-/// The walk never descends into a directory that keeps a data directory of its own, that directory
-/// is a Workspace of its own, and a walk started inside the tree does not see the directories above
-/// it. So whether any of them is such a Workspace is asked here; a directory under one holds work
-/// that is not this Workspace's to record.
-fn reachable(root: &Path, dir: &Path) -> bool {
-    let mut at = Some(dir);
-
-    while let Some(current) = at {
-        if current == root {
-            return true;
+        .into(),
+        Refusal::Merge { path } => ErrorTrackReplace {
+            path,
+            kind: ReplaceError::Merge,
         }
-        if current.join(DATA_DIR).is_dir() {
-            return false;
+        .into(),
+        Refusal::Merging { path } => ErrorTrackReplace {
+            path,
+            kind: ReplaceError::Merging,
         }
-
-        at = current.parent();
+        .into(),
+        Refusal::MergeChanged { path } => ErrorTrackMergeChanged { path }.into(),
+        Refusal::TreeUnsupported => ErrorTrackTreeUnsupported.into(),
+        Refusal::TreeConflict { path } => ErrorTrackTreeConflict { path }.into(),
+        Refusal::LayoutExists => ErrorLayoutExists.into(),
+        Refusal::LayoutMissing => ErrorLayoutMissing.into(),
+        Refusal::LayoutFailed { cause } => ErrorLayoutFailed::new(cause).into(),
     }
-
-    false
 }
 
-/// Works out what each changing file's message is, asking an editor when it was not said.
+/// Works out what each subject's message is, asking an editor when it was not said.
 ///
-/// A file whose own message was given is paired with it here; one that was not carries the group's
-/// alone. What none of that answers is asked of the editor, which is the only way left.
+/// A subject whose own message was given is paired with it here; one that was not carries the
+/// group's alone. What none of that answers is asked of the editor, which is the only way left.
 fn decide(
-    subjects: &[Subject<'_>],
+    subjects: &[Subject],
     own: &[String],
     message: Option<String>,
     no_editor: bool,
@@ -1197,24 +530,20 @@ fn decide(
     edit_messages(subjects, own, editor, root)
 }
 
-/// Splices a group message and each file's own message into the message that file carries.
-fn assemble_all(
-    subjects: &[Subject<'_>],
-    global: &str,
-    own: &[String],
-) -> Result<Vec<String>, Next> {
+/// Splices a group message and each subject's own message into the message that subject carries.
+fn assemble_all(subjects: &[Subject], global: &str, own: &[String]) -> Result<Vec<String>, Next> {
     let mut messages = Vec::with_capacity(subjects.len());
 
     for (subject, own) in subjects.iter().zip(own) {
         let Some(spliced) = assemble(global, own) else {
             return Err(message_error(MessageError::Missing {
-                path: subject.path(),
+                path: subject.path.clone(),
             }));
         };
 
         if spliced.len() > LONGEST_MESSAGE {
             return Err(message_error(MessageError::TooLong {
-                path: subject.path(),
+                path: subject.path.clone(),
                 length: spliced.len(),
             }));
         }
@@ -1256,7 +585,7 @@ fn assemble(global: &str, own: &str) -> Option<String> {
 // not one the chain's error type is built from, so it is turned into the answer by hand.
 #[allow(clippy::question_mark)]
 fn edit_messages(
-    subjects: &[Subject<'_>],
+    subjects: &[Subject],
     prefill: &[String],
     editor: &ResEditor,
     root: &Path,
@@ -1291,7 +620,7 @@ fn edit_messages(
         // message to be had, so it stops here rather than opening the editor on the same nothing.
         let wrote_nothing = global.trim().is_empty()
             && subjects.iter().all(|subject| {
-                per.get(&subject.key())
+                per.get(&subject.key)
                     .is_none_or(|own| own.trim().is_empty())
             });
         if wrote_nothing {
@@ -1302,11 +631,11 @@ fn edit_messages(
         let mut refused = Vec::new();
 
         for subject in subjects {
-            let own = per.get(&subject.key()).map_or("", String::as_str);
+            let own = per.get(&subject.key).map_or("", String::as_str);
 
             let Some(spliced) = assemble(&global, own) else {
                 refused.push(
-                    t!("track.editing_missing", path = subject.path())
+                    t!("track.editing_missing", path = subject.path)
                         .trim()
                         .to_string(),
                 );
@@ -1317,7 +646,7 @@ fn edit_messages(
                 refused.push(
                     t!(
                         "track.editing_warning",
-                        path = subject.path(),
+                        path = subject.path,
                         length = spliced.len()
                     )
                     .trim()
@@ -1338,15 +667,15 @@ fn edit_messages(
         // between one attempt and the next.
         prefill = subjects
             .iter()
-            .map(|subject| per.get(&subject.key()).cloned().unwrap_or_default())
+            .map(|subject| per.get(&subject.key).cloned().unwrap_or_default())
             .collect();
     }
 
     Err(message_error(MessageError::Unresolved))
 }
 
-/// The content an editor is opened on: the group's section and one per file.
-fn template(subjects: &[Subject<'_>], prefill: &[String], warnings: &[String]) -> String {
+/// The content an editor is opened on: the group's section and one per subject.
+fn template(subjects: &[Subject], prefill: &[String], warnings: &[String]) -> String {
     let mut text = String::new();
 
     for warning in warnings {
@@ -1365,9 +694,9 @@ fn template(subjects: &[Subject<'_>], prefill: &[String], warnings: &[String]) -
         let _ = writeln!(
             text,
             ":: {} ::\n# {}: `{}`\n{own}\n",
-            subject.key(),
+            subject.key,
             t!("track.editing_file").trim(),
-            subject.path()
+            subject.path
         );
     }
 
@@ -1437,351 +766,6 @@ fn section_name(line: &str) -> Option<String> {
     (!name.is_empty()).then(|| name.to_owned())
 }
 
-/// Reads every candidate file and says which of them changed, before anything is asked or written.
-///
-/// The content is read here, the whole of every candidate, because whether a file is worth a message
-/// and a version is whether what is on disk differs from what the Layout names, and that is only known by
-/// hashing it. The bar is drawn over that reading, since it is the part a reader has to wait through.
-///
-/// What this is for is the order of the run: the message is asked for *after* this and *before* anything
-/// is written, so the editor lists exactly the files that will be recorded and a run whose editor is left
-/// empty has written nothing. Asking after the content was written would leave the store holding content
-/// no version names.
-///
-/// # Errors
-///
-/// Renders [`ErrorTrackReplace`] when `--replace` names a file the Layout records no version for or one
-/// whose version is a merge, and [`ErrorTrackFailed`] when a file cannot be read.
-fn enumerate(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    progress: &Progress,
-    candidates: Vec<Prepared>,
-    replace: bool,
-) -> Result<Vec<Enumerated>, Next> {
-    let bytes: u64 = candidates.iter().map(|file| size_of(&file.disk)).sum();
-    let mut task = (!candidates.is_empty())
-        .then(|| progress.begin(t!("track.enumerating").to_string(), Some(bytes)));
-
-    let mut enumerated = Vec::with_capacity(candidates.len());
-
-    for file in candidates {
-        let size = size_of(&file.disk);
-
-        let recorded = match &file.data {
-            Some(data) => Some(read_recorded(index, runtime, data.version())?),
-            None => None,
-        };
-
-        if replace {
-            let Some(recorded) = &recorded else {
-                return Err(ErrorTrackReplace {
-                    path: file.path.as_str().to_owned(),
-                    kind: ReplaceError::Unrecorded,
-                }
-                .into());
-            };
-
-            // Replacing a merge would drop what was joined in: a version has one base, and a merge is
-            // the record of there being two.
-            if recorded.variant.join().is_some() {
-                return Err(ErrorTrackReplace {
-                    path: file.path.as_str().to_owned(),
-                    kind: ReplaceError::Merge,
-                }
-                .into());
-            }
-        }
-
-        let key = key_of_file(&file.disk).map_err(|error| fail(error.to_string()))?;
-        let changed = replace
-            || recorded
-                .as_ref()
-                .is_none_or(|recorded| recorded.storage != *key.digest());
-
-        if let Some(task) = &mut task {
-            task.advance_by(size);
-        }
-
-        enumerated.push(Enumerated {
-            file,
-            changed,
-            recorded,
-        });
-    }
-
-    Ok(enumerated)
-}
-
-/// Puts the content of every file that is to be recorded into the store.
-///
-/// These are the files [`enumerate`] found changed, so nothing else is written: a file whose content the
-/// store already has has nothing to put there. Each is read again, which is what makes this a pass of its
-/// own and what its bar is drawn over, the price of having asked for the message before writing.
-///
-/// # Errors
-///
-/// Renders [`ErrorTrackFailed`] when the store refuses to write a file.
-fn write(
-    store: &RorolalaStorage,
-    runtime: &tokio::runtime::Runtime,
-    progress: &Progress,
-    changing: Vec<Enumerated>,
-) -> Result<Vec<Staged>, Next> {
-    let bytes: u64 = changing.iter().map(|file| size_of(&file.file.disk)).sum();
-    let mut task = (!changing.is_empty())
-        .then(|| progress.begin(t!("track.writing").to_string(), Some(bytes)));
-
-    let mut staged = Vec::with_capacity(changing.len());
-
-    for Enumerated { file, recorded, .. } in changing {
-        let size = size_of(&file.disk);
-
-        // What a file is cut with is settled per file, so the store handed to the write is the store
-        // told which cut to make. A file nothing settled is written by the store's own choosing.
-        let told = file.policy.map_or_else(
-            || store.clone(),
-            |name| store.clone().with_forced_cut(Chunking::Policy(name)),
-        );
-
-        let storage = runtime
-            .block_on(store_file(&told, &file.disk))
-            .map_err(|error| fail(error.to_string()))?;
-
-        if let Some(task) = &mut task {
-            task.advance_by(size);
-        }
-
-        staged.push(Staged {
-            file,
-            storage,
-            recorded,
-        });
-    }
-
-    Ok(staged)
-}
-
-/// How large a file is, or nothing when it cannot be looked at.
-///
-/// Used for the bars alone, which are measured in bytes: a size that cannot be read is nothing to draw
-/// rather than a failure, since the write that follows reports the failure in its own words.
-fn size_of(path: &Path) -> u64 {
-    fs::metadata(path).map_or(0, |data| data.len())
-}
-
-/// Makes a version of the staged content and makes the Layout name it.
-///
-/// `replace` builds the new version on what the version being replaced was built on, rather than on
-/// that version: the one that was there stands as if it had never been made, which is what an amend
-/// is. That base is carried by the replaced variant as the hash it is, so the version object it
-/// names is never read back to make the new one.
-fn commit(
-    layout: &Layout,
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    creator_name: &str,
-    writes: &mut VCSIndexBatch,
-    batch: &mut Batch<'_>,
-    file: &Staged,
-    text: &str,
-    replace: bool,
-    pending: Option<&Pending>,
-    merging: &Merging,
-    root: &Path,
-) -> Result<(), Next> {
-    if replace && pending.is_some() {
-        return Err(ErrorTrackReplace {
-            path: file.file.path.as_str().to_owned(),
-            kind: ReplaceError::Merging,
-        }
-        .into());
-    }
-
-    let creator =
-        Creator::try_from(creator_name.to_owned()).map_err(|error| fail(error.to_string()))?;
-    let message = Message::try_from(text.to_owned()).map_err(|error| fail(error.to_string()))?;
-
-    let creator_key = writes.add(&creator);
-    let message_key = writes.add(&message);
-
-    let variant = match (&file.recorded, replace) {
-        (Some(recorded), true) => Variant::new_bare_variant(
-            *file.storage.digest(),
-            *recorded.variant.base_version(),
-            None,
-            *creator_key.digest(),
-            *message_key.digest(),
-            recorded.variant.base_version_num(),
-        ),
-        (Some(recorded), false) => {
-            let base = recorded.version.new_variant(
-                *file.storage.digest(),
-                *creator_key.digest(),
-                *message_key.digest(),
-            );
-
-            match pending {
-                None => base,
-                Some(pending) => {
-                    let joined = runtime
-                        .block_on(index.read(Key::new(*pending.variant())))
-                        .map_err(|error| fail(error.reason()))?
-                        .expect_variant()
-                        .map_err(|error| fail(error.to_string()))?;
-
-                    verify_variant_file(layout, merging, root, pending, &joined)?;
-
-                    // Content that is exactly the variant's own is no merge but a replacement: the
-                    // file now holds what was brought in, and what is recorded is that, on the chain
-                    // the file was already on. Only content of its own is joined.
-                    if *joined.storage_hash() == *file.storage.digest() {
-                        base
-                    } else {
-                        base.new_merge_variant(*file.storage.digest(), &joined)
-                    }
-                }
-            }
-        }
-        (None, _) => {
-            let root = Version::root();
-            writes.add(&root);
-            root.new_variant(
-                *file.storage.digest(),
-                *creator_key.digest(),
-                *message_key.digest(),
-            )
-        }
-    };
-    let version = variant.new_version();
-
-    writes.add(&variant);
-    let version_key = writes.add(&version);
-
-    // What the version goes on to prefer, whatever this write did: the preference is what the *next*
-    // write is cut by, so it is recorded from what was settled rather than from what the store did.
-    // A file nothing was settled for keeps saying nothing, and the next write chooses again.
-    let data = MutableData::new(
-        Some(creator_name.to_owned()),
-        *version_key.digest(),
-        String::new(),
-    )
-    .with_preference(file.file.policy.map(str::to_owned));
-
-    // A moved file is brought to where it is now: the move is the last thing done, so that a
-    // failure before it, writing the version the change is, leaves the Layout as it was. The
-    // variant file waiting for it, if there is one, moves with it.
-    if let Some(from) = &file.file.moved_from {
-        if let Err(error) = batch.move_path(from, &file.file.path) {
-            return Err(failed(&error));
-        }
-
-        if let Err(error) = merging.follow(root, file.file.id, from, &file.file.path) {
-            return Err(fail(error.to_string()));
-        }
-    }
-
-    if file.file.data.is_some() {
-        if let Err(error) = batch.update_entry(file.file.id, data) {
-            return Err(failed(&error));
-        }
-
-        return Ok(());
-    }
-
-    if let Err(error) = batch.create_file(file.file.id, data, &file.file.path) {
-        return Err(failed(&error));
-    }
-
-    Ok(())
-}
-
-/// Reads the variant file waiting for a file, refusing when it no longer holds the variant's content.
-///
-/// What a recording says is that this variant was joined; a file that no longer holds what the
-/// variant names would record a merge of something else, which is worse than recording nothing.
-fn verify_variant_file(
-    layout: &Layout,
-    merging: &Merging,
-    root: &Path,
-    pending: &Pending,
-    joined: &Variant,
-) -> Result<(), Next> {
-    let Some(path) = merging.variant_path(layout, pending) else {
-        return Ok(());
-    };
-    let disk = root.join(path.to_path_buf());
-
-    // A variant file that is already gone is one the merge can still be recorded from: what was
-    // brought in is what the version names, and the file was only how it was shown.
-    if !disk.is_file() {
-        return Ok(());
-    }
-
-    let entry = entry_of(&disk).map_err(|error| fail(error.to_string()))?;
-    if entry.digest() != *joined.storage_hash() {
-        return Err(ErrorTrackMergeChanged {
-            path: path.as_str().to_owned(),
-        }
-        .into());
-    }
-
-    Ok(())
-}
-
-/// What each changing file's version being replaced says, read from the index.
-///
-/// It is read only for a run that amends without writing new words, since that is the only run the
-/// words are read for.
-fn replaced_messages(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    files: &[Enumerated],
-) -> Result<Vec<String>, Next> {
-    let mut messages = Vec::with_capacity(files.len());
-
-    for file in files {
-        // UNWRAP: `enumerate` refuses a file the Layout records nothing for when `--replace` was asked
-        // for, so every changing file here has a version whose words can be read.
-        let recorded = file.recorded.as_ref().unwrap();
-
-        let message = runtime
-            .block_on(index.read(Key::new(*recorded.variant.message())))
-            .map_err(|error| fail(error.reason()))?
-            .expect_message()
-            .map_err(|error| fail(error.to_string()))?;
-
-        messages.push(message.read_to_string().to_owned());
-    }
-
-    Ok(messages)
-}
-
-/// The `Version` stored under `hash`, with the variant it points at and the content key that names.
-fn read_recorded(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    hash: [u8; 32],
-) -> Result<Recorded, Next> {
-    let version = runtime
-        .block_on(index.read(Key::new(hash)))
-        .map_err(|error| fail(error.reason()))?
-        .expect_version()
-        .map_err(|error| fail(error.to_string()))?;
-
-    let variant = runtime
-        .block_on(index.read(Key::new(*version.variant())))
-        .map_err(|error| fail(error.reason()))?
-        .expect_variant()
-        .map_err(|error| fail(error.to_string()))?;
-
-    Ok(Recorded {
-        version,
-        storage: *variant.storage_hash(),
-        variant,
-    })
-}
-
 /// The answer a store, an index or a Layout refusing is given.
 fn fail(cause: impl Into<String>) -> Next {
     ErrorTrackFailed::cause(cause.into()).into()
@@ -1796,17 +780,6 @@ enum TrackAction {
     Updated,
     /// The version it was at was replaced by a new one.
     Replaced,
-}
-
-impl TrackAction {
-    /// Whether a committed file was new or an update, from what the Layout held for it.
-    fn if_updated(file: &Prepared) -> Self {
-        if file.data.is_some() {
-            Self::Updated
-        } else {
-            Self::Added
-        }
-    }
 }
 
 /// One file, as `track` reports it.
@@ -2374,351 +1347,6 @@ fn known_policies() -> String {
     }
 
     names.join(", ")
-}
-
-/// Whether the path `given` names is a tree, or is inside one.
-fn names_tree(root: &Path, given: &str) -> bool {
-    let Ok(cwd) = std::env::current_dir() else {
-        return false;
-    };
-    let resolved = crate::tree::cmd_tree::resolve(&cwd, given);
-
-    Tree::locate(root, &resolved).is_ok()
-}
-
-/// The trees the run named, directly or under a directory it named.
-///
-/// A tree named as a path is that tree. A directory brings every tree the Layout records under it,
-/// and every directory holding a tree mark that the workspace reading finds under it; what is under
-/// a tree is that tree's own work, so a nested tree is recorded by naming it or its tree.
-fn trees_named(
-    named: &[String],
-    held: &Workspace,
-    layout: &Layout,
-) -> Result<Vec<(usize, Tree)>, Next> {
-    let root = held.get_root();
-    let Ok(cwd) = std::env::current_dir() else {
-        return Err(
-            ErrorTrackTreeFailed::new(t!("track.err_tree_no_cwd").trim().to_string()).to_chain(),
-        );
-    };
-
-    let mut trees: BTreeMap<PathBuf, (usize, Tree)> = BTreeMap::new();
-
-    for (at, given) in named.iter().enumerate() {
-        let resolved = crate::tree::cmd_tree::resolve(&cwd, given);
-
-        if let Ok(tree) = Tree::locate(root, &resolved) {
-            trees
-                .entry(tree.root().to_path_buf())
-                .or_insert_with(|| (at, tree));
-            continue;
-        }
-
-        if !resolved.is_dir() {
-            continue;
-        }
-
-        let scope = resolved
-            .strip_prefix(root)
-            .ok()
-            .and_then(|relative| LayoutPath::from_relative(relative).ok());
-
-        for (id, data) in layout.entries() {
-            if data.kind() != EntryKind::Tree {
-                continue;
-            }
-            let Some(path) = layout.path_of(id) else {
-                continue;
-            };
-            if !under_scope(scope.as_ref(), &path) {
-                continue;
-            }
-
-            let disk = root.join(path.to_path_buf());
-            if let Ok(tree) = Tree::open(root, &disk) {
-                trees
-                    .entry(tree.root().to_path_buf())
-                    .or_insert_with(|| (at, tree));
-            }
-        }
-
-        for found in walk(&resolved).0 {
-            if found.kind != EntryKind::Tree {
-                continue;
-            }
-            if let Ok(tree) = Tree::open(root, &found.disk) {
-                trees
-                    .entry(tree.root().to_path_buf())
-                    .or_insert_with(|| (at, tree));
-            }
-        }
-    }
-
-    Ok(trees.into_values().collect())
-}
-
-/// The message subjects of a run, in the order the run named its paths.
-///
-/// A tree is one subject, the way a file is: the run names it in the same list, and the editor asks
-/// about it in the same sections. Which name brought each file in is carried from `prepare`, so a
-/// tree named between two files is asked about between them.
-fn subjects_for<'a>(
-    changing: &'a [Enumerated],
-    trees: &'a [(usize, Tree)],
-    names: usize,
-) -> Vec<Subject<'a>> {
-    let mut subjects = Vec::with_capacity(changing.len() + trees.len());
-
-    for at in 0..names {
-        for file in changing {
-            if file.file.named_at == at {
-                subjects.push(Subject::File(&file.file));
-            }
-        }
-
-        for (index, tree) in trees {
-            if *index == at {
-                subjects.push(Subject::Tree(tree));
-            }
-        }
-    }
-
-    subjects
-}
-
-/// Whether `path` is `scope` itself or under it; no scope is the whole of the work.
-fn under_scope(scope: Option<&LayoutPath>, path: &LayoutPath) -> bool {
-    let Some(scope) = scope else {
-        return true;
-    };
-
-    path == scope
-        || path
-            .as_str()
-            .strip_prefix(scope.as_str())
-            .is_some_and(|rest| rest.starts_with('/'))
-}
-
-/// Whether the tree has anything a commit would record.
-fn tree_needs_commit(
-    tree: &Tree,
-    layout: &Layout,
-    index: &VCSIndex,
-    store: &RorolalaStorage,
-    runtime: &tokio::runtime::Runtime,
-) -> Result<bool, Next> {
-    let recorded = runtime
-        .block_on(tree.recorded(layout, index, store))
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-
-    // A tree the Layout records nothing for is one whose first version is its work as it stands.
-    if recorded.is_none() {
-        return Ok(true);
-    }
-
-    let staging = tree.staging();
-    let staged = staging
-        .structure()
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-    let description = staging
-        .description()
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-    let conflicts = staging
-        .conflicts()
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-
-    Ok(staged.is_some() || description.is_some() || !conflicts.is_empty())
-}
-
-/// Records one tree's staged structure as a version, and makes the Layout name it.
-///
-/// It answers the tree's path and whether the version is the first one.
-// The commit is one sequence of writes that has to stay in its order: reading what is staged, taking
-// the content into the work's store, making the objects, naming the version in the Layout, and only
-// then letting the staging area go.
-#[allow(clippy::too_many_arguments)]
-fn commit_tree(
-    layout: &Layout,
-    index: &VCSIndex,
-    store: &RorolalaStorage,
-    runtime: &tokio::runtime::Runtime,
-    creator_name: &str,
-    held: &Workspace,
-    tree: &Tree,
-    text: &str,
-    include_ignored: bool,
-) -> Result<(String, bool), Next> {
-    let path = tree
-        .layout_path()
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-    let shown = crate::tree::cmd_tree::shown(tree)?;
-
-    // The id the tree keeps locally is the Layout entry's, so a reading that finds the entry lost
-    // and a directory holding a tree mark elsewhere can tell they are one tree moved. An entry the
-    // Layout already names has one to write before anything else, including a run that finds nothing
-    // to record.
-    let entry_id = layout.id_of(&path);
-    if let Some(id) = entry_id
-        && let Err(error) = tree.write_local_id(id)
-    {
-        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
-    }
-
-    let recorded = runtime
-        .block_on(tree.recorded(layout, index, store))
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-
-    let staging = Staging::new(tree.root());
-    let staged = staging
-        .structure()
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-    let description = staging
-        .description()
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-    let conflicts = staging
-        .conflicts()
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-
-    if !conflicts.is_empty() {
-        return Err(ErrorTrackTreeConflict { path: shown }.into());
-    }
-
-    let rules = tree
-        .rules(crate::ignore::rules(held, include_ignored))
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-    let scanned = tree
-        .scan(&rules, include_ignored)
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-
-    // What the version holds: what was staged, or the tree as it stands when this is its first
-    // version. A tree with nothing staged and a version already keeps that version.
-    let structure = match staged {
-        Some(staged) => staged,
-        None => match &recorded {
-            Some(recorded) if description.is_none() => {
-                staging
-                    .clear()
-                    .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-
-                return Ok((shown, false));
-            }
-            Some(recorded) => recorded.structure.clone(),
-            None => scanned.structure.clone(),
-        },
-    };
-
-    let description_key = match description {
-        Some(text) => Some(
-            runtime
-                .block_on(store.write_object(text.as_bytes(), Codec::Raw))
-                .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?,
-        ),
-        None => None,
-    };
-    let structure = structure.with_description(description_key);
-
-    if let Some(recorded) = &recorded
-        && recorded.structure == structure
-    {
-        staging
-            .clear()
-            .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-
-        return Ok((shown, false));
-    }
-
-    // The staging store's content is the work's now: it is carried into the Workpace's store before
-    // anything names it, so a failure leaves content nothing refers to rather than a version whose
-    // content is not here.
-    if let Some(staged_content) = staging.store() {
-        let keys = runtime
-            .block_on(staged_content.list_exist_keys())
-            .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-        runtime
-            .block_on(store.publish_from(&staged_content, &keys))
-            .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-    }
-
-    let structure_key = runtime
-        .block_on(store.write_object(&structure.encode(), Codec::Raw))
-        .map_err(|error| ErrorTrackTreeFailed::new(error.to_string()).to_chain())?;
-
-    let creator =
-        Creator::try_from(creator_name.to_owned()).map_err(|error| fail(error.to_string()))?;
-    let message = Message::try_from(text.to_owned()).map_err(|error| fail(error.to_string()))?;
-
-    let mut writes = index.batch();
-    let creator_key = writes.add(&creator);
-    let message_key = writes.add(&message);
-
-    let variant = if let Some(recorded) = &recorded {
-        {
-            let version = runtime
-                .block_on(index.read(Key::new(recorded.version)))
-                .map_err(|error| fail(error.reason()))?
-                .expect_version()
-                .map_err(|error| fail(error.to_string()))?;
-
-            version.new_variant(
-                *structure_key.digest(),
-                *creator_key.digest(),
-                *message_key.digest(),
-            )
-        }
-    } else {
-        let root = Version::root();
-        writes.add(&root);
-        root.new_variant(
-            *structure_key.digest(),
-            *creator_key.digest(),
-            *message_key.digest(),
-        )
-    };
-    let version = variant.new_version();
-    writes.add(&variant);
-    let version_key = writes.add(&version);
-
-    if let Err(error) = runtime.block_on(writes.publish()) {
-        return Err(fail(error.to_string()));
-    }
-
-    let data = MutableData::new(
-        Some(creator_name.to_owned()),
-        *version_key.digest(),
-        String::new(),
-    )
-    .with_kind(EntryKind::Tree);
-
-    let mut batch = layout.batch();
-    let entry_id = entry_id.unwrap_or_else(Uuid::new_v4);
-    let created = match layout.id_of(&path) {
-        Some(id) => batch.update_entry(id, data).map(|()| false),
-        None => batch.create_file(entry_id, data, &path).map(|()| true),
-    };
-    if let Err(error) = created {
-        return Err(failed(&error));
-    }
-    if let Err(error) = batch.commit() {
-        return Err(failed(&error));
-    }
-
-    let baseline = tree.baseline();
-    if let Err(error) = baseline.write(&structure, version_key.digest()) {
-        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
-    }
-    if let Err(error) = baseline.write_entries(&scanned.cache) {
-        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
-    }
-    if let Err(error) = tree.write_local_id(entry_id) {
-        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
-    }
-
-    if let Err(error) = staging.clear() {
-        return Err(ErrorTrackTreeFailed::new(error.to_string()).into());
-    }
-
-    Ok((shown, recorded.is_none()))
 }
 
 #[cfg(test)]

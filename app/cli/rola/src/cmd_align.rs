@@ -8,32 +8,20 @@
 //! `rola track` refuses to run while the Layout names a path the tree does not hold, since recording
 //! works on a tree that is settled; this is what settles it. A move, on the other hand, `track`
 //! confirms on its own, naming a path that moved records it where it is now.
+//!
+//! The order the settling is done in is the library's, see [`librorolala::write::align`]: what
+//! stays here is choosing the mode the flags name, reading the run's resources, and saying the
+//! result in the command's own words.
 
-// `#[chain]` copies the attributes of the function it is given onto the struct it generates, so a
-// lint allowed on the handler below is reported as defined twice. The allow lives here, where it
-// covers the one signature that needs it.
-//
 // The handler's parameters are the resources the framework injects, so how many of them there are is
-// what the command needs of the run rather than a signature this program shaped.
-#![allow(
-    clippy::too_many_lines,
-    clippy::too_many_arguments,
-    clippy::trivially_copy_pass_by_ref
-)]
+// what the command needs of the run rather than a signature this program shaped. The progress
+// setting is one of those resources and is taken by reference, which is what the injection gives it.
+#![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
-use std::fs;
-use std::path::{Path, PathBuf};
-
-use librorolala::ignore::IgnoreRuleSet;
-use librorolala::layout::{EntryKind, Layout, LayoutPath};
-use librorolala::status::{VariantMove, tracked_vault, variant_moves};
-use librorolala::storage::RorolalaStorage;
-use librorolala::storage::{Blake3Hash, Key, StorageBackend as _};
-use librorolala::tree::{EntryKind as TreeEntryKind, Staging, Tree, TreeStructure, read_structure};
-use librorolala::vcs::VCSIndex;
-use librorolala::workspace::{Merging, Pending, Workspace};
-use librorolala::workspace_analyze::{
-    Cache, PathRename, TreeDiff, cache_path, entry_of, tree_diff,
+use librorolala::status::tracked_vault;
+use librorolala::write::WriteError;
+use librorolala::write::align::{
+    Carry, Did, Item, Messages, Mode, MoveKind, Options, Outcome, Refusal, settle,
 };
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
@@ -51,43 +39,20 @@ use rorolala_cli_setups::{
     ResVCSIndex, ResVault, ResWorkspace,
 };
 use rorolala_errors::Failure;
-use rorolala_utils_cli_theme::{err_line, help_line, trd};
-use rorolala_utils_location::Locate as _;
-use rorolala_utils_location::normalize;
+use rorolala_utils_cli_theme::{err_line, help_line, trd, warn_line};
 use rust_i18n::t;
-use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
 use crate::complete::{filling_flag, positional, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_ALIGN, EC_ERR_ALIGN_ARGUMENT, EC_HELP};
 use crate::failure::failure;
-use crate::fetch::{self, Sources};
+use crate::fetch;
 use crate::keys::account_named;
-use crate::layout::{ErrorLayoutShouldInWorkspace, chosen, failed};
+use crate::layout::{
+    ErrorLayoutExists, ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutShouldInWorkspace, chosen,
+};
 use crate::progress::Reporting;
-
-/// Where content a restore writes comes from: the store it is read out of, the index that names it,
-/// and the Vaults it may be asked of when the store does not hold it.
-///
-/// The three travel together because a restore never wants one without the others, and passing them
-/// as one value is what keeps the signatures below about the paths they act on.
-#[derive(Clone, Copy)]
-struct Content<'a, 'b> {
-    /// The store the content is read out of.
-    storage: &'a ResRorolalaStorage,
-    /// The index that says which version names which object.
-    index: &'a ResVCSIndex,
-    /// Where an object the store does not hold may be brought from, when the run has anywhere to
-    /// ask at all.
-    sources: Option<&'a Sources<'b>>,
-}
-
-/// How alike two text files have to be to count as the same file moved, when nothing is said.
-///
-/// It is the same default `rola layout tree-diff` reads the tree with, since a move this acts on is
-/// one that reading found.
-const DEFAULT_ALIKE: f32 = 0.6;
 
 /// Confirm that a path the Layout names but the tree does not hold is gone.
 const ARG_DELETE: PickerArg<'static, Flag> = arg![delete: Flag];
@@ -119,28 +84,6 @@ const ARG_RESTORE: PickerArg<'static, Flag> = arg![restore: Flag];
 /// Put a move's file back where the Layout names it and as the Layout names it, undoing the
 /// content as well as the place.
 const ARG_COMPLETELY: PickerArg<'static, Flag> = arg![completely: Flag];
-
-/// What is to be done with the named path.
-enum Mode {
-    /// It is confirmed gone.
-    Delete,
-    /// The move it is part of is confirmed.
-    Rename,
-    /// The move it is part of is taken back.
-    Break,
-    /// It is asserted to have moved to the named path.
-    Move(String),
-    /// A moved file is put back where the Layout names it.
-    RestoreMove,
-    /// A changed file is put back to the version the Layout names.
-    RestoreModify,
-    /// A file inside a tree is put back to what the tree has staged for it.
-    RestoreStaged,
-    /// A deleted file is put back, taken out of the store.
-    RestoreDelete,
-    /// Whichever of the three the path needs is done.
-    Restore,
-}
 
 #[help(buffer)]
 pub fn help_align(_: EntryAlign, ec: &mut ResExitCode) {
@@ -365,92 +308,11 @@ pub fn handle_align(
     let Some(held) = workspace.get_ref().as_ref() else {
         return ErrorLayoutShouldInWorkspace.into();
     };
-    let root = normalize(held.get_root());
 
-    // A tree is one unit of work: `--restore` and `--restore-delete` put the whole of it back to
-    // what the Layout records, rather than a file's content at a path. A move is settled as one
-    // entry like a file's, so the modes that act on an entry go on to the reading below.
-    //
-    // Which paths are trees is read from the Layout rather than from the mark on disk: a tree whose
-    // directory was deleted has no mark to find, and what a restore writes then is the whole tree
-    // again, mark and baseline included, rather than the structure's bytes in a file at its path.
     let cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,
-        Err(error) => return align_failed(error.to_string()),
+        Err(error) => return align_failed(error),
     };
-    let target_path = crate::tree::cmd_tree::resolve(&cwd, &path);
-    let relative = target_path
-        .strip_prefix(&root)
-        .ok()
-        .and_then(|relative| find_tracked_tree(&layout, relative));
-    if let Some(tree_layout_path) = relative {
-        if matches!(mode, Mode::Restore | Mode::RestoreDelete) {
-            let tree_root = root.join(tree_layout_path.to_path_buf());
-            let tree = match Tree::locate(&root, &tree_root) {
-                Ok(tree) if tree_root.is_dir() => tree,
-                _ => match prepare_tree(&root, &tree_layout_path) {
-                    Ok(tree) => tree,
-                    Err(next) => return next,
-                },
-            };
-
-            return match restore_tree(
-                held,
-                &layout,
-                &tree,
-                index.get_ref().as_ref(),
-                storage.get_ref().as_ref(),
-                completely,
-            ) {
-                Ok(()) => ResultAlignTree {
-                    path: tree_layout_path.as_str().to_owned(),
-                }
-                .into(),
-                Err(next) => next,
-            };
-        }
-
-        // A file inside a tree is one path of the tree's structure, not the tree's entry: the two
-        // content modes write what the tree records or what it has staged back over that file.
-        if matches!(mode, Mode::RestoreModify | Mode::RestoreStaged) {
-            let tree_root = root.join(tree_layout_path.to_path_buf());
-
-            if target_path == tree_root {
-                return ErrorAlignTreeUnsupported.into();
-            }
-
-            let tree = match Tree::locate(&root, &tree_root) {
-                Ok(tree) if tree_root.is_dir() => tree,
-                _ => return ErrorAlignTreeUnsupported.into(),
-            };
-
-            return match restore_tree_file(
-                &layout,
-                &tree,
-                &tree_root,
-                &target_path,
-                &mode,
-                index.get_ref().as_ref(),
-                storage.get_ref().as_ref(),
-            ) {
-                Ok(()) => ResultAlignTreeFile {
-                    path: target_path.display().to_string(),
-                    staged: matches!(mode, Mode::RestoreStaged),
-                }
-                .into(),
-                Err(next) => next,
-            };
-        }
-
-        // A per-file content mode has nothing to settle for a tree, and a move the reading found is
-        // a move of the entry rather than of a file inside it.
-        if !matches!(
-            mode,
-            Mode::Rename | Mode::Delete | Mode::Move(_) | Mode::RestoreMove
-        ) {
-            return ErrorAlignTreeUnsupported.into();
-        }
-    }
 
     // Content a restore writes comes out of the store, and the store may not hold it: what is
     // missing is asked of the Vaults the Workspace has bound. A run that cannot say which account it
@@ -460,1145 +322,203 @@ pub fn handle_align(
         .must_bind()
         .ok()
         .and_then(|name| account_named(&name, Some(held), None).ok());
-    // What a restore writes comes out of the store, and a store short of it is brought from the
-    // Vaults the Workspace has bound: those are blocks moving, and the watcher is started before
-    // the first of them is asked for.
+    let tracked = tracked_vault(held);
+    let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
+    let candidates = fetch::candidates(remote.get_ref(), primary);
+    let rules = crate::ignore::rules(held, include_ignored);
+    let messages = messages();
+
+    // The watcher is started before the first piece a restore may ask the Vaults for: a run that
+    // asks for nothing is over before it draws anything, and a run that asks is watched from the
+    // first connection rather than from the moment the asking is over.
+    //
+    // The way to say anything is scoped to the run itself: the reader stops when the last of them is
+    // gone, so a clone that outlived the run would have the run waiting on a reader that is waiting
+    // on the run. A sync holds its progress the same way.
     let reporting = Reporting::start(*progress);
-    let sources = match &account {
-        Some(account) => {
-            let tracked = tracked_vault(held);
-            let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
-            let sources = match Sources::new(held, account, remote.get_ref(), primary, **offline) {
-                Ok(sources) => sources
-                    .reporting(reporting.progress())
-                    .with_concurrency(**concurrency),
-                Err(cause) => return align_failed(cause),
-            };
-
-            Some(sources)
-        }
-        None => None,
-    };
-    let content = Content {
-        storage: storage.get_ref(),
-        index: index.get_ref(),
-        sources: sources.as_ref(),
-    };
-
-    // The reading is taken unfiltered: a variant file the tree holds somewhere unexpected is found
-    // among the untagged, and the ignore rules filtering them would hide exactly the files a merge
-    // is waiting for. The rules' say over the run is made at the selection instead, below.
-    let diff = match tree_diff(&layout, held, DEFAULT_ALIKE, &IgnoreRuleSet::empty()) {
-        Ok(diff) => diff,
-        Err(error) => {
-            return ErrorAlignFailed {
-                cause: error.to_string(),
-            }
-            .into();
-        }
-    };
-
-    let selected = match select(&root, &path, &diff) {
-        Ok(selected) => selected,
-        Err(next) => return next,
-    };
-
-    // What the ignore rules govern cannot be selected for settling: an entry the rules cover is
-    // refused, unless the Layout already names it, since the rules have no jurisdiction over what
-    // is tracked, or the reading found it to be where a tracked file moved, which is the work's own
-    // and no rule's. `--include-ignored` is the run saying it means it.
-    if !include_ignored {
-        let rules = crate::ignore::rules(held, include_ignored);
-        let governed = match &selected {
-            Selector::One(path) => {
-                layout.id_of(path).is_none()
-                    && !crate::ignore::selectable(&rules, path, &diff.renamed)
-            }
-            Selector::Under(prefix) => {
-                !prefix.is_empty() && rules.is_ignore(Path::new(prefix), true)
-            }
+    let cancellation = crate::cancel::on_ctrl_c();
+    let settled = {
+        let watching = reporting.progress();
+        let carry = Carry {
+            workspace: held,
+            layout: &layout,
+            cwd: &cwd,
+            rules: &rules,
+            storage: storage.get_ref().as_ref(),
+            index: index.get_ref().as_ref(),
+            account: account.as_ref(),
+            candidates: &candidates,
+            offline: **offline,
+            concurrency: **concurrency,
+            progress: &watching,
+            messages: &messages,
         };
 
-        if governed {
-            let path = match &selected {
-                Selector::One(path) => path.as_str().to_owned(),
-                Selector::Under(prefix) => prefix.clone(),
-            };
-
-            return ErrorAlignIgnored { path }.into();
-        }
-    }
-
-    // A variant file is not a path the Layout names, so the ways a Layout path is settled do not
-    // apply to it. It may be where the record says or somewhere a move put it, and what settles it
-    // is ending the merge, putting its file back, or writing down where it moved to.
-    let mut merging = Merging::read(&root);
-    let moves = moved_variants(&merging, &layout, &root, content, &diff);
-
-    if let Selector::One(path) = &selected {
-        let at = merging.variant_of(&layout, path);
-        let found = moves
-            .iter()
-            .find(|pair| &pair.from == path || &pair.to == path);
-
-        if let Some(target) = at
-            .map(Pending::target)
-            .or_else(|| found.map(|pair| pair.target))
-        {
-            let variant = at
-                .map(|pending| *pending.variant())
-                .or_else(|| found.map(|pair| pair.variant));
-
-            return match mode {
-                Mode::Delete => unmerge(&mut merging, &root, target, path),
-                Mode::Rename => found.map_or_else(
-                    || ErrorAlignArgument.into(),
-                    |pair| {
-                        relocate_variant(&mut merging, &layout, &root, target, &pair.from, &pair.to)
-                    },
-                ),
-                Mode::Move(to) => {
-                    assert_variant_move(&mut merging, &layout, &root, target, path, &to)
-                }
-                Mode::Restore | Mode::RestoreModify | Mode::RestoreDelete => variant.map_or_else(
-                    || ErrorAlignArgument.into(),
-                    |variant| single(restore_variant(path, &root, content, variant)),
-                ),
-                _ => ErrorAlignArgument.into(),
-            };
-        }
-    }
-
-    let next = match (mode, selected) {
-        (Mode::Delete, Selector::One(path)) => delete(&layout, &diff, &mut merging, &root, &path),
-        (Mode::Rename, Selector::One(path)) => rename(&layout, &diff, &merging, &path, &root),
-        (Mode::Break, Selector::One(path)) => take_back(&layout, &diff, &path, &root),
-        (Mode::Move(target), Selector::One(path)) => {
-            assert_move(&layout, &diff, &path, &root, &target)
-        }
-        (Mode::RestoreMove, Selector::One(path)) => single(restore_move(
-            held, &layout, &diff, &path, &root, content, completely,
-        )),
-        (Mode::RestoreModify, Selector::One(path)) => {
-            single(restore_modify(&layout, &diff, &path, &root, content))
-        }
-        (Mode::RestoreStaged, Selector::One(path)) => ErrorAlignNotStaged {
-            path: path.as_str().to_owned(),
-        }
-        .into(),
-        (Mode::RestoreDelete, Selector::One(path)) => {
-            single(restore_delete(&layout, &diff, &path, &root, content))
-        }
-        (Mode::Restore, Selector::One(path)) => single(restore_whichever(
-            held, &layout, &diff, &path, &root, content, completely,
-        )),
-        (Mode::Restore, Selector::Under(prefix)) => {
-            restore_all(held, &layout, &diff, &prefix, &root, content, completely)
-        }
-        // A directory or `.` names many files, and only putting them back acts on many at once.
-        (_, Selector::Under(_)) => ErrorAlignArgument.into(),
+        settle(
+            &carry,
+            &path,
+            &mode,
+            Options {
+                completely,
+                include_ignored,
+            },
+            cancellation,
+        )
     };
 
-    if let Some(sources) = &sources {
-        sources.report();
-    }
-
-    // The watcher is told the run has stopped saying before it is waited for: the sources hold the
-    // last way to say anything, so they go first and the reader then sees the channel close.
-    drop(sources);
+    // What came from the Vaults is said before the watcher is let go: a reader told nothing while
+    // the run was asking would be told after the bars it was watching had gone. A run that brought
+    // nothing says nothing.
+    report_brought(&settled.took);
     reporting.finish();
 
-    next
+    align_next(settled.outcome)
 }
 
-/// What a mode acts on: the one path named, or every path under a directory the run was made in.
-enum Selector {
-    /// One path, named by what was written.
-    One(LayoutPath),
-    /// Every path under the directory whose prefix this is, `""` naming the whole tree.
-    Under(String),
-}
-
-/// Reads what was written into what the run is to act on.
-///
-/// What is written is a path where the run was made, as a shell would read it: `.` is the directory
-/// the run is in and everything under it, and `..` climbs from there. A name that lands on a
-/// directory selects everything under it, except a directory the reading found to be a side of a
-/// move: a tree is a directory, and a move of one is settled as the one entry it is, not as every
-/// path under it.
-///
-/// # Errors
-///
-/// Answers with [`ErrorAlignArgument`] when the path reaches out of the Workspace, or names nothing
-/// a Layout could.
-fn select(root: &Path, given: &str, diff: &TreeDiff) -> Result<Selector, Next> {
-    let cwd = match std::env::current_dir() {
-        Ok(cwd) => cwd,
-        Err(error) => {
-            return Err(ErrorAlignFailed {
-                cause: error.to_string(),
-            }
-            .into());
-        }
-    };
-
-    let absolute = normalize(&resolve(&cwd, given));
-
-    let Ok(relative) = absolute.strip_prefix(root) else {
-        return Err(ErrorAlignArgument.into());
-    };
-
-    if absolute.is_dir() {
-        if let Ok(path) = LayoutPath::from_relative(relative)
-            && diff
-                .renamed
-                .iter()
-                .any(|pair| pair.from == path || pair.to == path)
-        {
-            return Ok(Selector::One(path));
-        }
-
-        return Ok(Selector::Under(prefix(relative)));
-    }
-
-    LayoutPath::from_relative(relative)
-        .map(Selector::One)
-        .map_err(|_| ErrorAlignArgument.into())
-}
-
-/// Whether `path` is `prefix`'s directory or under it, with `""` naming the whole tree.
-fn under(prefix: &str, path: &LayoutPath) -> bool {
-    if prefix.is_empty() {
-        return true;
-    }
-
-    path.as_str()
-        .strip_prefix(prefix)
-        .is_some_and(|rest| rest.starts_with('/'))
-}
-
-/// The prefix the paths under `relative` share, or `""` for the Workspace root itself, which is the
-/// one directory with no name of its own.
-fn prefix(relative: &Path) -> String {
-    LayoutPath::from_relative(relative)
-        .map_or_else(|_| String::new(), |path| path.as_str().to_owned())
-}
-
-/// The path `given` names, made absolute against the directory the run was made in.
-///
-/// It mirrors `rola track`'s reading of a name, since a name is written the same way wherever it is
-/// written, and the two commands act on the same paths.
-fn resolve(cwd: &Path, given: &str) -> PathBuf {
-    if Path::new(given).is_absolute() {
-        PathBuf::from(given)
-    } else {
-        cwd.join(given)
+/// The words the library says a failure in, which have no category of its own.
+fn messages() -> Messages {
+    Messages {
+        not_recorded: t!("align.err_not_recorded").trim().to_owned(),
+        unsupported: t!("align.err_tree_unsupported").trim().to_owned(),
     }
 }
 
-/// Answers one path put back as the only item of a result.
-fn single(outcome: Result<(AlignDid, String), Next>) -> Next {
+/// Says what the Vaults handed over while the run worked, in one line.
+///
+/// It is the line a sync says about the content it brought, in the same words: the exchange that
+/// brought it is the library's, but what a reader is told is the command's to say.
+fn report_brought(took: &[(String, usize)]) {
+    if took.is_empty() {
+        return;
+    }
+
+    let count: usize = took.iter().map(|(_, count)| *count).sum();
+    let vaults: Vec<&str> = took.iter().map(|(name, _)| name.as_str()).collect();
+
+    eprintln!(
+        "{}",
+        warn_line!(t!("fetch.brought", count = count, vaults = vaults.join(", ")).trim())
+    );
+}
+
+/// What the run came to, as the command draws it.
+fn align_next(outcome: Result<Outcome, WriteError>) -> Next {
     match outcome {
-        Ok((did, what)) => ResultAlign::one(did, what).into(),
-        Err(next) => next,
+        Ok(Outcome::Paths(items)) => ResultAlign { items }.into(),
+        Ok(Outcome::Tree { path }) => ResultAlignTree { path }.into(),
+        Ok(Outcome::TreeFile { path, staged }) => ResultAlignTreeFile { path, staged }.into(),
+        Ok(Outcome::Refused(refusal)) => refusal_state(refusal),
+        Err(error) => align_write_error(error),
     }
 }
 
-/// Confirms that a path the Layout names and the tree does not hold is gone.
-fn delete(
-    layout: &Layout,
-    diff: &TreeDiff,
-    merging: &mut Merging,
-    root: &Path,
-    path: &LayoutPath,
-) -> Next {
-    if !diff.lost.contains(path) {
-        return ErrorAlignNotLost {
-            path: path.as_str().to_owned(),
-        }
-        .into();
+/// Turns one refusal into what the run is told.
+fn refusal_state(refusal: Refusal) -> Next {
+    match refusal {
+        Refusal::Argument => ErrorAlignArgument.into(),
+        Refusal::Ignored { path } => ErrorAlignIgnored { path }.into(),
+        Refusal::NotLost { path } => ErrorAlignNotLost { path }.into(),
+        Refusal::NotModified { path } => ErrorAlignNotModified { path }.into(),
+        Refusal::NotStaged { path } => ErrorAlignNotStaged { path }.into(),
+        Refusal::NotRestorable { path } => ErrorAlignNotRestorable { path }.into(),
+        Refusal::RestoreExists { path } => ErrorAlignRestoreExists { path }.into(),
+        Refusal::NoRename { path } => ErrorAlignNoRename { path }.into(),
+        Refusal::RealMove { from, to } => ErrorAlignRealMove { from, to }.into(),
+        Refusal::Move { path, kind } => ErrorAlignMove { path, kind }.into(),
+        Refusal::TreeUnsupported => ErrorAlignTreeUnsupported.into(),
+        // A change to the Layout is not this command's failure to word: it is rendered the way every
+        // other command renders it, with the exit code a caller branching on a missing or taken name
+        // is given.
+        Refusal::LayoutExists => ErrorLayoutExists.into(),
+        Refusal::LayoutMissing => ErrorLayoutMissing.into(),
+        Refusal::LayoutFailed { cause } => ErrorLayoutFailed::new(cause).into(),
+        Refusal::Failed { cause } => ErrorAlignFailed { cause }.into(),
     }
-
-    let Some(id) = layout.id_of(path) else {
-        return ErrorAlignNotLost {
-            path: path.as_str().to_owned(),
-        }
-        .into();
-    };
-
-    if let Err(error) = layout.remove_entry(id) {
-        return failed(&error);
-    }
-
-    // A file the Layout no longer names has no merge waiting for it: its variant file, if there is
-    // one, is left where it lies as a file of its own.
-    if merging.remove(id)
-        && let Err(error) = merging.write(root)
-    {
-        return align_failed(error.to_string());
-    }
-
-    ResultAlign::one(AlignDid::Deleted, path.as_str().to_owned()).into()
 }
 
-/// Ends the merge a variant file was brought in for, taking its record away.
+/// The failure a write the run stopped on is told as.
 ///
-/// The variant file itself is not touched: the run that ends a merge has already taken it away, and
-/// one that is still there is a file the reading will report in its own words.
-fn unmerge(merging: &mut Merging, root: &Path, target: Uuid, path: &LayoutPath) -> Next {
-    // The file being gone is what ends the merge, as a path being gone is what confirms a loss: one
-    // still there is a merge still waiting, and a run that wants it gone takes it away first.
-    if root.join(path.to_path_buf()).is_file() {
-        return ErrorAlignNotLost {
-            path: path.as_str().to_owned(),
-        }
-        .into();
-    }
-
-    merging.remove(target);
-
-    if let Err(error) = merging.write(root) {
-        return align_failed(error.to_string());
-    }
-
-    ResultAlign::one(AlignDid::Unmerged, path.as_str().to_owned()).into()
-}
-
-/// The variant files the tree holds somewhere other than where the merge records put them.
-///
-/// It is the finding `rola status` makes, so what a reading reports and what an alignment settles
-/// are one move seen twice: an untagged file whose content is the variant's own is the file that
-/// moved, and nothing else can be.
-fn moved_variants(
-    merging: &Merging,
-    layout: &Layout,
-    root: &Path,
-    content: Content<'_, '_>,
-    diff: &TreeDiff,
-) -> Vec<VariantMove> {
-    let Ok(runtime) = tokio::runtime::Runtime::new() else {
-        return Vec::new();
+/// A store or an index the run does not have is said in the command's own words, as it always was;
+/// everything else is the library's description of what failed, which is what the failure carries.
+fn align_write_error(error: WriteError) -> Next {
+    let cause = match error {
+        WriteError::NoStore => t!("align.err_no_store").trim().to_owned(),
+        WriteError::NoIndex => t!("align.err_no_index").trim().to_owned(),
+        other => other.to_string(),
     };
 
-    variant_moves(
-        merging,
-        layout,
-        root,
-        content.index.as_ref(),
-        &runtime,
-        &diff.untagged,
-    )
-}
-
-/// Writes down that the variant file waiting for `target` now lies at `to`.
-fn relocate_variant(
-    merging: &mut Merging,
-    layout: &Layout,
-    root: &Path,
-    target: Uuid,
-    from: &LayoutPath,
-    to: &LayoutPath,
-) -> Next {
-    let Some(target_path) = layout.path_of(target) else {
-        return ErrorAlignNotLost {
-            path: from.as_str().to_owned(),
-        }
-        .into();
-    };
-
-    let place = Merging::place_of(&target_path, to);
-
-    if !merging.relocate(target, Some(place)) {
-        return ErrorAlignNotLost {
-            path: from.as_str().to_owned(),
-        }
-        .into();
-    }
-
-    if let Err(error) = merging.write(root) {
-        return align_failed(error.to_string());
-    }
-
-    ResultAlign::one(
-        AlignDid::Moved,
-        format!("{} -> {}", from.as_str(), to.as_str()),
-    )
-    .into()
-}
-
-/// Asserts that the variant file waiting for `target` moved to `to`, for a reading that found no
-/// move of its own.
-fn assert_variant_move(
-    merging: &mut Merging,
-    layout: &Layout,
-    root: &Path,
-    target: Uuid,
-    from: &LayoutPath,
-    to: &str,
-) -> Next {
-    let Ok(to) = LayoutPath::new(to) else {
-        return ErrorAlignMove {
-            path: to.to_owned(),
-            kind: MoveError::Missing,
-        }
-        .into();
-    };
-
-    // A move asserted to somewhere nothing is, is a move to nowhere: the file has to be where the
-    // run says, as a path asserted for a Layout entry does.
-    if !root.join(to.to_path_buf()).is_file() {
-        return ErrorAlignMove {
-            path: to.as_str().to_owned(),
-            kind: MoveError::Missing,
-        }
-        .into();
-    }
-
-    relocate_variant(merging, layout, root, target, from, &to)
-}
-
-/// Puts a variant file back, taking the content the variant was brought in with out of the store.
-///
-/// It is the other half of ending a merge: a variant file taken away can be brought back as long as
-/// the record waits, and the content it is written from is the variant's own rather than a version's.
-fn restore_variant(
-    path: &LayoutPath,
-    root: &Path,
-    content: Content<'_, '_>,
-    variant: Blake3Hash,
-) -> Result<(AlignDid, String), Next> {
-    let disk = root.join(path.to_path_buf());
-
-    if disk.exists() {
-        return Err(ErrorAlignRestoreExists {
-            path: path.as_str().to_owned(),
-        }
-        .into());
-    }
-
-    let Some(vcs) = content.index.as_ref() else {
-        return Err(align_failed(t!("align.err_no_index").trim()));
-    };
-    let runtime =
-        tokio::runtime::Runtime::new().map_err(|error| align_failed(error.to_string()))?;
-    let stored = variant_storage(vcs, &runtime, variant).map_err(align_failed)?;
-
-    write_stored(content, &runtime, stored, &disk)?;
-
-    Ok((AlignDid::RestoredMerge, path.as_str().to_owned()))
-}
-
-/// Confirms a move the reading found.
-///
-/// The path the file is now at is one the Layout names, and what the Layout names there is the
-/// version the file held before it moved. A move that was edited is therefore left changed, and
-/// what the reading wrote down says the two agree, so the disagreement is written down here rather
-/// than left for a reading that would never find it.
-fn rename(
-    layout: &Layout,
-    diff: &TreeDiff,
-    merging: &Merging,
-    path: &LayoutPath,
-    root: &Path,
-) -> Next {
-    let Some(pair) = rename_of(diff, path) else {
-        return ErrorAlignNoRename {
-            path: path.as_str().to_owned(),
-        }
-        .into();
-    };
-
-    if let Err(error) = layout.move_path(&pair.from, &pair.to) {
-        return failed(&error);
-    }
-
-    // A file a variant is waiting for takes that variant file with it.
-    if let Some(target) = layout.id_of(&pair.to)
-        && let Err(error) = merging.follow(root, target, &pair.from, &pair.to)
-    {
-        return align_failed(error.to_string());
-    }
-
-    if let Err(next) = remember_rename(layout, root, &pair.to, diff.modified.contains(&pair.to)) {
-        return next;
-    }
-
-    ResultAlign::one(
-        AlignDid::Moved,
-        format!("{} -> {}", pair.from.as_str(), pair.to.as_str()),
-    )
-    .into()
-}
-
-/// Writes down where a confirmed move left the file: what the Layout now names, and whether the
-/// tree still holds it.
-fn remember_rename(
-    layout: &Layout,
-    root: &Path,
-    to: &LayoutPath,
-    modified: bool,
-) -> Result<(), Next> {
-    let disk = root.join(to.to_path_buf());
-    if !disk.is_file() {
-        return Ok(());
-    }
-
-    let path = cache_path(root, layout);
-    let mut cache = Cache::read(&path);
-
-    let entry = match cache.get(to).cloned() {
-        Some(entry) => entry,
-        None => entry_of(&disk).map_err(|error| align_failed(error.to_string()))?,
-    };
-
-    cache.insert(to.clone(), if modified { entry.disagreed() } else { entry });
-    cache
-        .write(&path)
-        .map_err(|error| align_failed(error.to_string()))
-}
-
-/// Takes back a move the reading guessed at, leaving the two paths a loss and a gain.
-///
-/// The reading pairs two text files by how alike they are, and keeps that likeness in what it
-/// wrote down about the lost path; forgetting it leaves the digest, which is what the path is
-/// remembered by, and stops the two being paired. A move of two files that hold the same bytes is
-/// one the reading found by digest, not by likeness, and is a fact rather than a guess.
-fn take_back(layout: &Layout, diff: &TreeDiff, path: &LayoutPath, root: &Path) -> Next {
-    let Some(pair) = rename_of(diff, path) else {
-        return ErrorAlignNoRename {
-            path: path.as_str().to_owned(),
-        }
-        .into();
-    };
-
-    // A strong move is one the two being the same bytes makes: taking it back would be denying what
-    // is there, so it is refused. Only a move the likeness only suggests is a guess to be undone.
-    if pair.strong {
-        return ErrorAlignRealMove {
-            from: pair.from.as_str().to_owned(),
-            to: pair.to.as_str().to_owned(),
-        }
-        .into();
-    }
-
-    let cache_file = cache_path(root, layout);
-    let mut cache = Cache::read(&cache_file);
-
-    let Some(was) = cache.get(&pair.from).cloned() else {
-        return ErrorAlignNoRename {
-            path: path.as_str().to_owned(),
-        }
-        .into();
-    };
-
-    cache.insert(pair.from.clone(), was.without_spans());
-    if let Err(error) = cache.write(&cache_file) {
-        return ErrorAlignFailed {
-            cause: error.to_string(),
-        }
-        .into();
-    }
-
-    ResultAlign::one(
-        AlignDid::Broke,
-        format!("{} / {}", pair.from.as_str(), pair.to.as_str()),
-    )
-    .into()
-}
-
-/// Asserts that a lost path moved to `target`, so the next reading pairs them.
-///
-/// The reading knows a path moved by what it wrote down about the path that is gone; what is
-/// written down here is what `target` holds now, so the two are the same to the next reading. What
-/// changes is the memory, not the Layout: `--rename` is still what moves the path. A tree has no
-/// content to write down, so what is written is the id of the lost entry taken into the tree's
-/// mark, which is the whole of what a tree moving takes with it.
-fn assert_move(
-    layout: &Layout,
-    diff: &TreeDiff,
-    path: &LayoutPath,
-    root: &Path,
-    target: &str,
-) -> Next {
-    if !diff.lost.contains(path) {
-        return ErrorAlignNotLost {
-            path: path.as_str().to_owned(),
-        }
-        .into();
-    }
-
-    let Some(id) = layout.id_of(path) else {
-        return ErrorAlignNotLost {
-            path: path.as_str().to_owned(),
-        }
-        .into();
-    };
-
-    let Ok(target) = LayoutPath::new(target) else {
-        return ErrorAlignMove {
-            path: target.to_owned(),
-            kind: MoveError::Missing,
-        }
-        .into();
-    };
-
-    if layout.id_of(&target).is_some() {
-        return ErrorAlignMove {
-            path: target.as_str().to_owned(),
-            kind: MoveError::Tracked,
-        }
-        .into();
-    }
-
-    let disk = root.join(target.to_path_buf());
-
-    // A tree is a directory, and what it moved with is the id in its mark: writing the lost entry's
-    // id there is what makes the next reading pair the two. A file is instead what it holds, which
-    // is what the reading remembers until it can pair the paths itself.
-    if layout
-        .entry(id)
-        .is_some_and(|data| data.kind() == EntryKind::Tree)
-    {
-        let Ok(tree) = Tree::open(root, &disk) else {
-            return ErrorAlignMove {
-                path: target.as_str().to_owned(),
-                kind: MoveError::NotATree,
-            }
-            .into();
-        };
-
-        if let Err(error) = tree.write_local_id(id) {
-            return ErrorAlignFailed {
-                cause: error.to_string(),
-            }
-            .into();
-        }
-
-        return ResultAlign::one(
-            AlignDid::Asserted,
-            format!("{} -> {}", path.as_str(), target.as_str()),
-        )
-        .into();
-    }
-
-    if !disk.is_file() {
-        return ErrorAlignMove {
-            path: target.as_str().to_owned(),
-            kind: MoveError::Missing,
-        }
-        .into();
-    }
-
-    let entry = match entry_of(&disk) {
-        Ok(entry) => entry,
-        Err(error) => {
-            return ErrorAlignFailed {
-                cause: error.to_string(),
-            }
-            .into();
-        }
-    };
-
-    let cache_file = cache_path(root, layout);
-    let mut cache = Cache::read(&cache_file);
-    cache.insert(path.clone(), entry);
-    if let Err(error) = cache.write(&cache_file) {
-        return ErrorAlignFailed {
-            cause: error.to_string(),
-        }
-        .into();
-    }
-
-    ResultAlign::one(
-        AlignDid::Asserted,
-        format!("{} -> {}", path.as_str(), target.as_str()),
-    )
-    .into()
-}
-
-/// Puts a moved file back where the Layout names it.
-///
-/// The Layout still names the path the file was at, since the move was never confirmed, so putting
-/// the file back there undoes the move on disk. What the file holds is not touched, one that was
-/// edited as well as moved is left changed at its old path, which is then `--restore-modify`'s to
-/// settle, unless `completely`, which puts the version the Layout names back over it too, so the
-/// move is undone in content as well as in place.
-fn restore_move(
-    held: &Workspace,
-    layout: &Layout,
-    diff: &TreeDiff,
-    path: &LayoutPath,
-    root: &Path,
-    content: Content<'_, '_>,
-    completely: bool,
-) -> Result<(AlignDid, String), Next> {
-    let Some(pair) = rename_of(diff, path) else {
-        return Err(ErrorAlignNoRename {
-            path: path.as_str().to_owned(),
-        }
-        .into());
-    };
-
-    let from_disk = root.join(pair.from.to_path_buf());
-    let to_disk = root.join(pair.to.to_path_buf());
-
-    // What the Layout names is where the file goes; a file already there is one the restore would
-    // have to take away, and a restore does not take anything away.
-    if from_disk.exists() {
-        return Err(ErrorAlignRestoreExists {
-            path: pair.from.as_str().to_owned(),
-        }
-        .into());
-    }
-
-    if let Some(parent) = from_disk.parent()
-        && let Err(error) = fs::create_dir_all(parent)
-    {
-        return Err(ErrorAlignFailed {
-            cause: error.to_string(),
-        }
-        .into());
-    }
-
-    if let Err(error) = fs::rename(&to_disk, &from_disk) {
-        return Err(ErrorAlignFailed {
-            cause: error.to_string(),
-        }
-        .into());
-    }
-
-    let what = format!("{} <- {}", pair.from.as_str(), pair.to.as_str());
-
-    if completely {
-        // A tree moved whole, so what is at the old path is the tree again. Putting the version
-        // back over it is the tree's own restore, rather than a file's bytes at the path.
-        let tree = layout
-            .id_of(&pair.from)
-            .and_then(|id| layout.entry(id))
-            .is_some_and(|data| data.kind() == EntryKind::Tree);
-        if tree {
-            let tree = match Tree::open(root, &from_disk) {
-                Ok(tree) => tree,
-                Err(error) => {
-                    return Err(ErrorAlignFailed {
-                        cause: error.to_string(),
-                    }
-                    .into());
-                }
-            };
-            restore_tree(
-                held,
-                layout,
-                &tree,
-                content.index.as_ref(),
-                content.storage.as_ref(),
-                true,
-            )?;
-        } else {
-            put_version(layout, &pair.from, root, content)?;
-        }
-
-        return Ok((AlignDid::RestoredCompletely, what));
-    }
-
-    Ok((AlignDid::RestoredMove, what))
-}
-
-/// Puts a changed file back to the version the Layout names, writing over what it holds.
-fn restore_modify(
-    layout: &Layout,
-    diff: &TreeDiff,
-    path: &LayoutPath,
-    root: &Path,
-    content: Content<'_, '_>,
-) -> Result<(AlignDid, String), Next> {
-    // A path the Layout does not name has no version to go back to: a move's destination is one of
-    // these, which is why a move is put back first and only then has its content settled.
-    if !diff.modified.contains(path) || layout.id_of(path).is_none() {
-        return Err(ErrorAlignNotModified {
-            path: path.as_str().to_owned(),
-        }
-        .into());
-    }
-
-    put_version(layout, path, root, content)?;
-    Ok((AlignDid::RestoredModify, path.as_str().to_owned()))
-}
-
-/// Puts a deleted file back, taking the version the Layout names out of the store.
-fn restore_delete(
-    layout: &Layout,
-    diff: &TreeDiff,
-    path: &LayoutPath,
-    root: &Path,
-    content: Content<'_, '_>,
-) -> Result<(AlignDid, String), Next> {
-    if !diff.lost.contains(path) || layout.id_of(path).is_none() {
-        return Err(ErrorAlignNotLost {
-            path: path.as_str().to_owned(),
-        }
-        .into());
-    }
-
-    // A lost path is one the tree does not hold, so putting it back has nothing to land on: a file
-    // already there is something to be told about rather than written over.
-    if root.join(path.to_path_buf()).exists() {
-        return Err(ErrorAlignRestoreExists {
-            path: path.as_str().to_owned(),
-        }
-        .into());
-    }
-
-    put_version(layout, path, root, content)?;
-    Ok((AlignDid::RestoredDelete, path.as_str().to_owned()))
-}
-
-/// Puts a lost tree back whole, whether its directory is still there or was deleted.
-///
-/// It is the same work naming the tree does: the directory and its mark are made where nothing is,
-/// and the structure the Layout records is written over the paths it names.
-fn restore_lost_tree(
-    held: &Workspace,
-    layout: &Layout,
-    path: &LayoutPath,
-    root: &Path,
-    content: Content<'_, '_>,
-    completely: bool,
-) -> Result<(AlignDid, String), Next> {
-    let at = root.join(path.to_path_buf());
-    let tree = match Tree::locate(root, &at) {
-        Ok(tree) if at.is_dir() => tree,
-        _ => prepare_tree(root, path)?,
-    };
-
-    restore_tree(
-        held,
-        layout,
-        &tree,
-        content.index.as_ref(),
-        content.storage.as_ref(),
-        completely,
-    )?;
-
-    Ok((AlignDid::RestoredDelete, path.as_str().to_owned()))
-}
-
-/// Writes the version stored under `version` out to `disk`, making the way to it.
-///
-/// It is what putting a file back is made of, whether the file is one that changed or one that is
-/// gone: the Layout names a version, the store holds the content it was made of, and the two are put
-/// back together at the path. Content the store does not hold is brought from a Vault first, when
-/// the run has one to ask.
-fn write_recorded(content: Content<'_, '_>, version: [u8; 32], disk: &Path) -> Result<(), Next> {
-    let Some(vcs) = content.index.as_ref() else {
-        return Err(align_failed(t!("align.err_no_index").trim()));
-    };
-
-    let runtime =
-        tokio::runtime::Runtime::new().map_err(|error| align_failed(error.to_string()))?;
-    let recorded = recorded_hash(vcs, &runtime, version).map_err(align_failed)?;
-
-    write_stored(content, &runtime, recorded, disk)
-}
-
-/// Writes the content stored under `stored` out to `disk`, making the way to it.
-///
-/// A version names its content through the variant it points at, while a variant file is written
-/// from what the variant holds directly; both end here, where the content is brought when the store
-/// does not have it and then put at the path.
-fn write_stored(
-    content: Content<'_, '_>,
-    runtime: &tokio::runtime::Runtime,
-    stored: [u8; 32],
-    disk: &Path,
-) -> Result<(), Next> {
-    let Some(store) = content.storage.as_ref() else {
-        return Err(align_failed(t!("align.err_no_store").trim()));
-    };
-
-    if let Some(parent) = disk.parent()
-        && let Err(error) = fs::create_dir_all(parent)
-    {
-        return Err(align_failed(error.to_string()));
-    }
-
-    if let Some(sources) = content.sources {
-        sources.bring(store, &[Key::new(stored)]);
-    }
-
-    runtime
-        .block_on(store.extract_file(&Key::new(stored), disk))
-        .map_err(|error| align_failed(error.to_string()))
-}
-
-/// The content the variant `hash` was brought in with.
-fn variant_storage(
-    vcs: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    hash: Blake3Hash,
-) -> Result<Blake3Hash, String> {
-    let variant = runtime
-        .block_on(vcs.read(Key::new(hash)))
-        .map_err(|error| error.reason())?
-        .expect_variant()
-        .map_err(|error| error.to_string())?;
-
-    Ok(*variant.storage_hash())
-}
-
-/// Writes down that a path put back holds what the Layout names again.
-///
-/// Putting a file back is what makes the two agree, so what the reading remembers of the path has to
-/// say so: a path left marked as disagreed, by a move that was edited and confirmed, would go on
-/// being reported as changed after its content was put back.
-fn remember_restored(layout: &Layout, root: &Path, path: &LayoutPath) -> Result<(), Next> {
-    let disk = root.join(path.to_path_buf());
-    if !disk.is_file() {
-        return Ok(());
-    }
-
-    let cache_path = cache_path(root, layout);
-    let mut cache = Cache::read(&cache_path);
-    let entry = entry_of(&disk).map_err(|error| align_failed(error.to_string()))?;
-
-    cache.insert(path.clone(), entry);
-    cache
-        .write(&cache_path)
-        .map_err(|error| align_failed(error.to_string()))
-}
-
-/// Writes the version the Layout names for `path` over what is there, and remembers that it does.
-///
-/// A file's content is put back by naming what the Layout holds for it and letting the store hand
-/// that version out at the path, whether the file is one that changed or one that is gone, since
-/// both want the same thing written, and remembering it is what stops the path being reported as
-/// changed once it agrees again.
-fn put_version(
-    layout: &Layout,
-    path: &LayoutPath,
-    root: &Path,
-    content: Content<'_, '_>,
-) -> Result<(), Next> {
-    let not_restorable = || ErrorAlignNotRestorable {
-        path: path.as_str().to_owned(),
-    };
-
-    let Some(id) = layout.id_of(path) else {
-        return Err(not_restorable().into());
-    };
-    let Some(data) = layout.entry(id) else {
-        return Err(not_restorable().into());
-    };
-
-    write_recorded(content, data.version(), &root.join(path.to_path_buf()))?;
-
-    remember_restored(layout, root, path)
+    ErrorAlignFailed { cause }.into()
 }
 
 /// The failure an alignment that could not be made is answered with.
-fn align_failed(cause: impl Into<String>) -> Next {
+fn align_failed(cause: impl std::fmt::Display) -> Next {
     ErrorAlignFailed {
-        cause: cause.into(),
+        cause: cause.to_string(),
     }
     .into()
-}
-
-/// Puts the path back to what the Layout names, whichever of the three it needs.
-fn restore_whichever(
-    held: &Workspace,
-    layout: &Layout,
-    diff: &TreeDiff,
-    path: &LayoutPath,
-    root: &Path,
-    content: Content<'_, '_>,
-    completely: bool,
-) -> Result<(AlignDid, String), Next> {
-    if rename_of(diff, path).is_some() {
-        return restore_move(held, layout, diff, path, root, content, completely);
-    }
-
-    if diff.lost.contains(path) && layout.id_of(path).is_some() {
-        return restore_delete(layout, diff, path, root, content);
-    }
-
-    if diff.modified.contains(path) && layout.id_of(path).is_some() {
-        return restore_modify(layout, diff, path, root, content);
-    }
-
-    Err(ErrorAlignNotRestorable {
-        path: path.as_str().to_owned(),
-    }
-    .into())
-}
-
-/// Puts every path under a directory back to what the Layout names, each by what it needs.
-///
-/// A move is settled first: its destination is not a path the Layout names, so content can only be
-/// put back once the file is where the Layout names it. What is left, a path the tree no longer
-/// holds, and one that changed where it is, is put back after. A path the tree holds and no Layout
-/// names (`untagged`) is left where it lies, since there is nothing it is to be put back to.
-fn restore_all(
-    held: &Workspace,
-    layout: &Layout,
-    diff: &TreeDiff,
-    prefix: &str,
-    root: &Path,
-    content: Content<'_, '_>,
-    completely: bool,
-) -> Next {
-    let mut items = Vec::new();
-
-    for pair in &diff.renamed {
-        if !(under(prefix, &pair.from) || under(prefix, &pair.to)) {
-            continue;
-        }
-
-        match restore_move(held, layout, diff, &pair.from, root, content, completely) {
-            Ok((did, what)) => items.push(AlignItem { did, what }),
-            Err(next) => return next,
-        }
-    }
-
-    for path in &diff.lost {
-        let Some(id) = layout.id_of(path) else {
-            continue;
-        };
-        if !under(prefix, path) {
-            continue;
-        }
-
-        // A lost tree is put back whole, as it is when the tree itself is named: what the version
-        // holds is a structure rather than a file's bytes, and writing it at the path would leave a
-        // structure object where a directory belongs.
-        if layout
-            .entry(id)
-            .is_some_and(|data| data.kind() == EntryKind::Tree)
-        {
-            match restore_lost_tree(held, layout, path, root, content, completely) {
-                Ok((did, what)) => items.push(AlignItem { did, what }),
-                Err(next) => return next,
-            }
-
-            continue;
-        }
-
-        match restore_delete(layout, diff, path, root, content) {
-            Ok((did, what)) => items.push(AlignItem { did, what }),
-            Err(next) => return next,
-        }
-    }
-
-    for path in &diff.modified {
-        if !under(prefix, path) || layout.id_of(path).is_none() {
-            continue;
-        }
-
-        match restore_modify(layout, diff, path, root, content) {
-            Ok((did, what)) => items.push(AlignItem { did, what }),
-            Err(next) => return next,
-        }
-    }
-
-    ResultAlign { items }.into()
-}
-
-/// The stored hash the version `hash` names, as the Layout records it.
-fn recorded_hash(
-    vcs: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    hash: [u8; 32],
-) -> Result<[u8; 32], String> {
-    let version = runtime
-        .block_on(vcs.read(Key::new(hash)))
-        .map_err(|error| error.reason())?
-        .expect_version()
-        .map_err(|error| error.to_string())?;
-
-    let variant = runtime
-        .block_on(vcs.read(Key::new(*version.variant())))
-        .map_err(|error| error.reason())?
-        .expect_variant()
-        .map_err(|error| error.to_string())?;
-
-    Ok(*variant.storage_hash())
-}
-
-/// The move `path` is a side of, when the reading found one.
-fn rename_of<'a>(diff: &'a TreeDiff, path: &LayoutPath) -> Option<&'a PathRename> {
-    diff.renamed
-        .iter()
-        .find(|pair| &pair.from == path || &pair.to == path)
-}
-
-/// What was done with the path.
-#[derive(Clone, Copy)]
-enum AlignDid {
-    /// A lost path was confirmed gone.
-    Deleted,
-    /// A move was confirmed.
-    Moved,
-    /// A move was taken back.
-    Broke,
-    /// A move was asserted for the next reading.
-    Asserted,
-    /// A moved file was put back where the Layout names it.
-    RestoredMove,
-    /// A moved file was put back where and as the Layout names it.
-    RestoredCompletely,
-    /// A changed file was put back to the version the Layout names.
-    RestoredModify,
-    /// A deleted file was put back, taken out of the store.
-    RestoredDelete,
-    /// A variant file was put back, ending the wait to be joined.
-    RestoredMerge,
-    /// A merge waiting on a variant file was ended, and its record taken away.
-    Unmerged,
-}
-
-/// One path, as `align` reports it.
-struct AlignItem {
-    /// What was done with it.
-    did: AlignDid,
-    /// What it was done to.
-    what: String,
 }
 
 /// Result: the tree and the Layout were brought back into agreement about paths.
 #[derive(Grouped)]
 pub struct ResultAlign {
     /// What was done, in the order it was done.
-    items: Vec<AlignItem>,
-}
-
-impl ResultAlign {
-    /// The result of one path brought back into agreement.
-    fn one(did: AlignDid, what: String) -> Self {
-        Self {
-            items: vec![AlignItem { did, what }],
-        }
-    }
+    items: Vec<Item>,
 }
 
 #[renderer(buffer)]
 pub fn render_result_align(result: ResultAlign) {
     for item in &result.items {
         let said = match item.did {
-            AlignDid::Deleted => t!("align.result_deleted", what = item.what),
-            AlignDid::Moved => t!("align.result_moved", what = item.what),
-            AlignDid::Broke => t!("align.result_broke", what = item.what),
-            AlignDid::Asserted => t!("align.result_asserted", what = item.what),
-            AlignDid::RestoredMove => t!("align.result_restored_move", what = item.what),
-            AlignDid::RestoredCompletely => {
+            Did::Deleted => t!("align.result_deleted", what = item.what),
+            Did::Moved => t!("align.result_moved", what = item.what),
+            Did::Broke => t!("align.result_broke", what = item.what),
+            Did::Asserted => t!("align.result_asserted", what = item.what),
+            Did::RestoredMove => t!("align.result_restored_move", what = item.what),
+            Did::RestoredCompletely => {
                 t!("align.result_restored_completely", what = item.what)
             }
-            AlignDid::RestoredModify => t!("align.result_restored_modify", what = item.what),
-            AlignDid::RestoredDelete => t!("align.result_restored_delete", what = item.what),
-            AlignDid::RestoredMerge => t!("align.result_restored_merge", what = item.what),
-            AlignDid::Unmerged => t!("align.result_unmerged", what = item.what),
+            Did::RestoredModify => t!("align.result_restored_modify", what = item.what),
+            Did::RestoredDelete => t!("align.result_restored_delete", what = item.what),
+            Did::RestoredMerge => t!("align.result_restored_merge", what = item.what),
+            Did::Unmerged => t!("align.result_unmerged", what = item.what),
         };
 
         r_println!("{}", said.trim());
     }
+}
+
+/// Result: one file inside a tree was put back.
+#[derive(Grouped)]
+pub struct ResultAlignTreeFile {
+    /// The file as a person knows it.
+    path: String,
+    /// Whether it was put back to the staging area rather than the recorded version.
+    staged: bool,
+}
+
+#[renderer(buffer)]
+pub fn render_result_align_tree_file(result: ResultAlignTreeFile, ec: &mut ResExitCode) {
+    let key = if result.staged {
+        "align.result_tree_file_staged"
+    } else {
+        "align.result_tree_file"
+    };
+
+    r_println!("{}", t!(key, path = result.path).trim());
+    let _ = ec;
+}
+
+/// Result: the work of a tree was put back.
+#[derive(Grouped)]
+pub struct ResultAlignTree {
+    /// The tree as a person knows it.
+    path: String,
+}
+
+#[renderer(buffer)]
+pub fn render_result_align_tree(result: ResultAlignTree, ec: &mut ResExitCode) {
+    r_println!("{}", t!("align.result_tree", path = result.path).trim());
+    let _ = ec;
 }
 
 /// Error: `rola align` was given no path, or not exactly one mode.
@@ -1877,17 +797,7 @@ pub struct ErrorAlignMove {
     /// What was named.
     path: String,
     /// What is wrong with it.
-    kind: MoveError,
-}
-
-/// The ways what `--move` named cannot be moved onto.
-pub enum MoveError {
-    /// It is not a file inside the Workspace.
-    Missing,
-    /// It is not a tree inside the Workspace.
-    NotATree,
-    /// The Layout already names it.
-    Tracked,
+    kind: MoveKind,
 }
 
 impl Failure for ErrorAlignMove {
@@ -1897,9 +807,9 @@ impl Failure for ErrorAlignMove {
 
     fn reason(&self) -> String {
         let said = match self.kind {
-            MoveError::Missing => t!("align.err_move_missing", path = self.path),
-            MoveError::NotATree => t!("align.err_move_not_a_tree", path = self.path),
-            MoveError::Tracked => t!("align.err_move_tracked", path = self.path),
+            MoveKind::Missing => t!("align.err_move_missing", path = self.path),
+            MoveKind::NotATree => t!("align.err_move_not_a_tree", path = self.path),
+            MoveKind::Tracked => t!("align.err_move_tracked", path = self.path),
         };
 
         said.trim().to_string()
@@ -1912,6 +822,32 @@ failure!(ErrorAlignMove);
 pub fn render_error_align_move(error: ErrorAlignMove, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("align.err_move_help").trim()));
+    ec.exit_code = EC_ERR_ALIGN_ARGUMENT;
+}
+
+/// Error: a per-file mode was asked of a tree.
+#[derive(Grouped)]
+pub struct ErrorAlignTreeUnsupported;
+
+impl Failure for ErrorAlignTreeUnsupported {
+    fn name(&self) -> &'static str {
+        "error_align_tree_unsupported"
+    }
+
+    fn reason(&self) -> String {
+        t!("align.err_tree_unsupported").trim().to_string()
+    }
+}
+
+failure!(ErrorAlignTreeUnsupported);
+
+#[renderer(buffer)]
+pub fn render_error_align_tree_unsupported(_: ErrorAlignTreeUnsupported, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(t!("align.err_tree_unsupported").trim()));
+    r_eprintln!(
+        "{}",
+        help_line!(t!("align.err_tree_unsupported_help").trim())
+    );
     ec.exit_code = EC_ERR_ALIGN_ARGUMENT;
 }
 
@@ -1941,374 +877,4 @@ pub fn render_error_align_failed(error: ErrorAlignFailed, ec: &mut ResExitCode) 
     r_eprintln!("{}", err_line!(error.reason()));
     r_eprintln!("{}", help_line!(t!("align.err_failed_help").trim()));
     ec.exit_code = EC_ERR_ALIGN;
-}
-
-/// The tree a Layout path sits in, when the Layout records one above it.
-///
-/// The path itself is looked at first, then its parents: a run that names a file inside a tree is
-/// naming the tree, and a run that names a tree whose directory is gone is still naming a tree. The
-/// Layout is the reading because the mark on disk is what a deleted tree no longer has.
-fn find_tracked_tree(layout: &Layout, relative: &Path) -> Option<LayoutPath> {
-    let mut components: Vec<&str> = relative
-        .components()
-        .map(|component| component.as_os_str().to_str())
-        .collect::<Option<Vec<_>>>()?;
-    if components.is_empty() {
-        return None;
-    }
-
-    while !components.is_empty() {
-        let path = LayoutPath::from_relative(Path::new(&components.join("/"))).ok()?;
-        if let Some(id) = layout.id_of(&path)
-            && layout
-                .entry(id)
-                .is_some_and(|data| data.kind() == EntryKind::Tree)
-        {
-            return Some(path);
-        }
-
-        components.pop();
-    }
-
-    None
-}
-
-/// Makes a tree's directory and its skeleton where nothing is, so a deleted tree can be put back.
-///
-/// A path where a file sits and a tree now belongs is taken out of the way: the restore is written
-/// over the work, and what the Layout records is a directory there.
-fn prepare_tree(root: &Path, path: &LayoutPath) -> Result<Tree, Next> {
-    let tree_root = root.join(path.to_path_buf());
-
-    if tree_root.exists() && !tree_root.is_dir() {
-        fs::remove_file(&tree_root).map_err(|error| align_failed(error.to_string()))?;
-    }
-    fs::create_dir_all(&tree_root).map_err(|error| align_failed(error.to_string()))?;
-
-    Staging::new(&tree_root)
-        .ensure_store()
-        .map_err(|error| align_failed(error.to_string()))?;
-
-    Tree::open(root, &tree_root).map_err(|error| align_failed(error.to_string()))
-}
-
-/// Puts one file inside a tree back to what the tree records or what it has staged.
-///
-/// A tree is one Layout entry, but a file inside it has two structures of its own to come from: the
-/// version the Layout names, and the staging area that version is being changed into. `--restore`
-/// names the whole tree, so this is the per-file answer, and a path the chosen structure does not
-/// name is taken out of the work rather than left as a change against it.
-fn restore_tree_file(
-    layout: &Layout,
-    tree: &Tree,
-    tree_root: &Path,
-    target: &Path,
-    mode: &Mode,
-    index: Option<&VCSIndex>,
-    storage: Option<&RorolalaStorage>,
-) -> Result<(), Next> {
-    let Some(store) = storage else {
-        return Err(align_failed(t!("align.err_no_store").trim()));
-    };
-    let Some(index) = index else {
-        return Err(align_failed(t!("align.err_no_index").trim()));
-    };
-    let runtime =
-        tokio::runtime::Runtime::new().map_err(|error| align_failed(error.to_string()))?;
-
-    match mode {
-        Mode::RestoreModify => {
-            let Some(recorded) = runtime
-                .block_on(tree.recorded(layout, index, store))
-                .map_err(|error| align_failed(error.to_string()))?
-            else {
-                return Err(align_failed(t!("align.err_not_recorded").trim()));
-            };
-
-            write_tree_entry(tree_root, target, &recorded.structure, store, &runtime)?;
-        }
-        Mode::RestoreStaged => {
-            let staging = tree.staging();
-            let Some(structure) = staging
-                .structure()
-                .map_err(|error| align_failed(error.to_string()))?
-            else {
-                return Err(ErrorAlignNotStaged {
-                    path: target.display().to_string(),
-                }
-                .into());
-            };
-            let Some(staged) = staging.store() else {
-                return Err(ErrorAlignNotStaged {
-                    path: target.display().to_string(),
-                }
-                .into());
-            };
-
-            write_tree_entry(tree_root, target, &structure, &staged, &runtime)?;
-        }
-        _ => return Err(ErrorAlignTreeUnsupported.into()),
-    }
-
-    Ok(())
-}
-
-/// Writes the entry `structure` holds for `target`, or takes `target` away when it holds none.
-fn write_tree_entry(
-    tree_root: &Path,
-    target: &Path,
-    structure: &TreeStructure,
-    store: &RorolalaStorage,
-    runtime: &tokio::runtime::Runtime,
-) -> Result<(), Next> {
-    let relative = target
-        .strip_prefix(tree_root)
-        .ok()
-        .and_then(Path::to_str)
-        .map(|path| path.replace('\\', "/"))
-        .ok_or_else(|| align_failed(t!("align.err_tree_unsupported").trim()))?;
-
-    let Some(entry) = structure.entry(&relative) else {
-        if target.is_file() || target.is_symlink() {
-            fs::remove_file(target).map_err(|error| align_failed(error.to_string()))?;
-        }
-
-        return Ok(());
-    };
-
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).map_err(|error| align_failed(error.to_string()))?;
-    }
-
-    match entry.kind() {
-        TreeEntryKind::File => {
-            let Some(key) = entry.storage() else {
-                return Err(align_failed(t!("align.err_tree_unsupported").trim()));
-            };
-            if target.is_dir() {
-                return Err(align_failed(t!("align.err_tree_unsupported").trim()));
-            }
-            runtime
-                .block_on(store.extract_file(key, target))
-                .map_err(|error| align_failed(error.to_string()))?;
-        }
-        TreeEntryKind::Symlink => {
-            let Some(link) = entry.target() else {
-                return Err(align_failed(t!("align.err_tree_unsupported").trim()));
-            };
-            if target.exists() {
-                let _ = fs::remove_file(target);
-            }
-
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(link, target)
-                .map_err(|error| align_failed(error.to_string()))?;
-            #[cfg(windows)]
-            std::os::windows::fs::symlink_file(link, target)
-                .map_err(|error| align_failed(error.to_string()))?;
-        }
-        TreeEntryKind::Directory => {
-            return Err(ErrorAlignTreeUnsupported.into());
-        }
-    }
-
-    Ok(())
-}
-
-/// Puts the work of a tree back to the structure the Layout records.
-///
-/// What the version holds is written over the paths it names; `--completely` also takes out what the
-/// tree never recorded.
-fn restore_tree(
-    held: &Workspace,
-    layout: &Layout,
-    tree: &Tree,
-    index: Option<&VCSIndex>,
-    storage: Option<&RorolalaStorage>,
-    completely: bool,
-) -> Result<(), Next> {
-    let Some(store) = storage else {
-        return Err(align_failed(t!("align.err_no_store").trim()));
-    };
-    let Some(index) = index else {
-        return Err(align_failed(t!("align.err_no_index").trim()));
-    };
-
-    let runtime =
-        tokio::runtime::Runtime::new().map_err(|error| align_failed(error.to_string()))?;
-
-    let Ok(path) = tree.layout_path() else {
-        return Err(align_failed(t!("align.err_not_recorded").trim()));
-    };
-    let Some(id) = layout.id_of(&path) else {
-        return Err(align_failed(t!("align.err_not_recorded").trim()));
-    };
-    let Some(data) = layout.entry(id) else {
-        return Err(align_failed(t!("align.err_not_recorded").trim()));
-    };
-
-    if data.version() == [0; 32] {
-        return Err(align_failed(t!("align.err_not_recorded").trim()));
-    }
-
-    let target = runtime
-        .block_on(read_structure(index, store, &data.version()))
-        .map_err(|error| align_failed(error.to_string()))?;
-
-    let root = tree.root();
-    if let Err(error) = fs::create_dir_all(root) {
-        return Err(align_failed(error.to_string()));
-    }
-
-    for entry in target.entries() {
-        let disk = root.join(entry.path());
-
-        match entry.kind() {
-            TreeEntryKind::Directory => {
-                if let Err(error) = fs::create_dir_all(&disk) {
-                    return Err(align_failed(error.to_string()));
-                }
-            }
-            TreeEntryKind::File => {
-                let Some(storage_key) = entry.storage() else {
-                    continue;
-                };
-                if let Some(parent) = disk.parent()
-                    && let Err(error) = fs::create_dir_all(parent)
-                {
-                    return Err(align_failed(error.to_string()));
-                }
-                if let Err(error) = runtime.block_on(store.extract_file(storage_key, &disk)) {
-                    return Err(align_failed(error.to_string()));
-                }
-            }
-            TreeEntryKind::Symlink => {
-                let Some(link) = entry.target() else {
-                    continue;
-                };
-                if disk.exists() {
-                    let _ = fs::remove_file(&disk);
-                }
-                if let Some(parent) = disk.parent()
-                    && let Err(error) = fs::create_dir_all(parent)
-                {
-                    return Err(align_failed(error.to_string()));
-                }
-                #[cfg(unix)]
-                {
-                    if let Err(error) = std::os::unix::fs::symlink(link, &disk) {
-                        return Err(align_failed(error.to_string()));
-                    }
-                }
-                #[cfg(windows)]
-                {
-                    if let Err(error) = std::os::windows::fs::symlink_file(link, &disk) {
-                        return Err(align_failed(error.to_string()));
-                    }
-                }
-            }
-        }
-    }
-
-    let rules = tree
-        .rules(crate::ignore::rules(held, false))
-        .map_err(|error| align_failed(error.to_string()))?;
-    let scanned = tree
-        .scan(&rules, false)
-        .map_err(|error| align_failed(error.to_string()))?;
-
-    if completely {
-        for entry in scanned.structure.entries() {
-            if target.entry(entry.path()).is_some() {
-                continue;
-            }
-
-            let disk = root.join(entry.path());
-            match entry.kind() {
-                TreeEntryKind::Directory => {
-                    let _ = fs::remove_dir(&disk);
-                }
-                TreeEntryKind::File | TreeEntryKind::Symlink => {
-                    let _ = fs::remove_file(&disk);
-                }
-            }
-        }
-    }
-
-    // The work is the version again, so the baseline says the version is what the tree records. A
-    // tree put back from a deleted directory has no baseline left otherwise, and the next reading
-    // would have to rebuild one before it could tell that the work agrees.
-    let baseline = tree.baseline();
-    if let Err(error) = baseline.write(&target, &data.version()) {
-        return Err(align_failed(error.to_string()));
-    }
-    if let Err(error) = baseline.write_entries(&scanned.cache) {
-        return Err(align_failed(error.to_string()));
-    }
-    // A tree put back is one the Layout still names, so the id it keeps locally is the entry's.
-    if let Err(error) = tree.write_local_id(id) {
-        return Err(align_failed(error.to_string()));
-    }
-
-    Ok(())
-}
-
-/// Result: one file inside a tree was put back.
-#[derive(Grouped)]
-pub struct ResultAlignTreeFile {
-    /// The file as a person knows it.
-    path: String,
-    /// Whether it was put back to the staging area rather than the recorded version.
-    staged: bool,
-}
-
-#[renderer(buffer)]
-pub fn render_result_align_tree_file(result: ResultAlignTreeFile, ec: &mut ResExitCode) {
-    let key = if result.staged {
-        "align.result_tree_file_staged"
-    } else {
-        "align.result_tree_file"
-    };
-
-    r_println!("{}", t!(key, path = result.path).trim());
-    let _ = ec;
-}
-
-/// Result: the work of a tree was put back.
-#[derive(Grouped)]
-pub struct ResultAlignTree {
-    /// The tree as a person knows it.
-    path: String,
-}
-
-#[renderer(buffer)]
-pub fn render_result_align_tree(result: ResultAlignTree, ec: &mut ResExitCode) {
-    r_println!("{}", t!("align.result_tree", path = result.path).trim());
-    let _ = ec;
-}
-
-/// Error: a per-file mode was asked of a tree.
-#[derive(Grouped)]
-pub struct ErrorAlignTreeUnsupported;
-
-impl Failure for ErrorAlignTreeUnsupported {
-    fn name(&self) -> &'static str {
-        "error_align_tree_unsupported"
-    }
-
-    fn reason(&self) -> String {
-        t!("align.err_tree_unsupported").trim().to_string()
-    }
-}
-
-failure!(ErrorAlignTreeUnsupported);
-
-#[renderer(buffer)]
-pub fn render_error_align_tree_unsupported(_: ErrorAlignTreeUnsupported, ec: &mut ResExitCode) {
-    r_eprintln!("{}", err_line!(t!("align.err_tree_unsupported").trim()));
-    r_eprintln!(
-        "{}",
-        help_line!(t!("align.err_tree_unsupported_help").trim())
-    );
-    ec.exit_code = EC_ERR_ALIGN_ARGUMENT;
 }

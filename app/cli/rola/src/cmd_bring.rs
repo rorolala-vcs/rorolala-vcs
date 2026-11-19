@@ -6,6 +6,9 @@
 //! name: the operands read the way `mv`'s do (what is to come in first, where it is to land last)
 //! so a reference the Vault's Layout names is put at a path here, under a directory here, or at the
 //! path the Vault itself names it by when no destination was written.
+//!
+//! The variant merge `--join` asks for is the library's, see [`BringVariantRequest::variant`]: what
+//! stays here is the operands, the run's resources and the words the answer is said in.
 
 // `#[chain]` copies the attributes of the function it is given onto the struct it generates,
 // so a lint allowed on the handler below is reported as defined twice. The allow lives here,
@@ -20,19 +23,16 @@
     clippy::too_many_lines
 )]
 
-use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
-use std::str::FromStr as _;
-
-use globset::GlobBuilder;
 use librorolala::daemon::{action_fetch_layout, action_sync_index_all_async};
-use librorolala::layout::{EntryKind, Layout, LayoutPath, MutableData};
+use librorolala::fetch::Sources;
 use librorolala::protocol::ActionError;
-use librorolala::status::tracked_vault;
-use librorolala::storage::{Key, RorolalaStorage, StorageBackend as _};
-use librorolala::tree::{Staging, Tree, TreeStructure};
-use librorolala::vcs::{VCSIndex, VCSIndexObject, Variant};
-use librorolala::workspace::{Merging, Pending};
+use librorolala::workspace::Workspace;
+use librorolala::write::bring::{
+    BringVariantRequest, HashMiss as VariantHashMiss, Messages, Refusal, VariantRefusal, bring_in,
+    resolve,
+};
+use librorolala::write::request::{Common, Target};
+use librorolala::write::{Labels, WriteError};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -49,29 +49,25 @@ use rorolala_cli_setups::{
     ResRorolalaStorage, ResVCSIndex, ResWorkspace,
 };
 use rorolala_errors::Failure;
-use rorolala_utils_cli_theme::{err_line, help_line, trd};
+use rorolala_utils_cli_theme::{err_line, help_line, trd, warn_line};
 use rorolala_utils_constants::DEFAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
-use rorolala_utils_location::normalize;
 use rust_i18n::t;
 use serde::Serialize;
-use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
-use crate::checkout::Checkout;
 use crate::complete::{
-    IndexObject, filling_flag, flag_value, index_hashes, index_keys, offer, positional,
-    strip_written, typing_flag,
+    IndexObject, filling_flag, flag_value, index_hashes, offer, positional, strip_written,
+    typing_flag,
 };
 use crate::exit_codes::{EC_ERR_BRING, EC_ERR_BRING_ARGUMENT, EC_HELP};
 use crate::failure::failure;
-use crate::fetch::{self, Sources};
-use crate::hash::resolve as resolve_hash;
+use crate::fetch;
+use crate::hash::HashMiss;
 use crate::keys::account_named;
 use crate::layout::{ErrorLayoutNoCurrent, cached_vault_copy, failed};
 use crate::progress::Reporting;
-use crate::sync;
 use crate::vcs_index::{ErrorVcsIndexNoIndex, runtime as index_runtime};
 
 /// The file a variant is to be joined into, for the mode that brings a variant in rather than
@@ -89,14 +85,6 @@ const ARG_BY_NAME: PickerArg<'static, Flag> = arg![by_name: Flag];
 
 /// Merge a tree variant into its tree rather than putting it beside the work.
 const ARG_TREE_MERGE: PickerArg<'static, Flag> = arg![tree_merge: Flag];
-
-/// The mark the Vault puts in front of a path that is not placed: `@/new/a.fbx` is an entry the
-/// Vault holds no path for yet, and `@/removed/a.fbx` one that was taken out of the work.
-///
-/// It is the Vault's own arrangement, so nothing is written under it here: what comes in lands by
-/// the name below the mark, and a run that kept the mark would make a directory of it that says
-/// something about the Vault's bookkeeping rather than about the work.
-const UNPLACED: &str = "@/";
 
 #[help(buffer)]
 pub fn help_bring(_: EntryBring, ec: &mut ResExitCode) {
@@ -279,15 +267,11 @@ pub fn handle_bring(
             variant,
             to.as_deref(),
             held,
-            &layout,
-            index,
-            storage,
-            remote,
-            current,
-            progress,
+            current.get_ref(),
             offline,
             **force,
             tree_merge,
+            progress,
             concurrency,
         );
     }
@@ -366,7 +350,15 @@ pub fn handle_bring(
         .into();
     }
 
-    let sources = match Sources::new(held, &account, remote.get_ref(), primary, **offline) {
+    // The candidates are the Vaults this run may ask, the one the Layout tracks first. The library
+    // asks them for the content a bring needs; what it fetched is reported here, in this side's
+    // words, because a count and a Vault name are things only the caller can say.
+    let sources = match Sources::new(
+        held,
+        &account,
+        fetch::candidates(remote.get_ref(), primary),
+        **offline,
+    ) {
         Ok(sources) => sources
             .reporting(reporting.progress())
             .with_concurrency(**concurrency),
@@ -377,7 +369,13 @@ pub fn handle_bring(
         }
     };
 
-    let (entries, failed) = bring_in(
+    let messages = Messages {
+        no_content: t!("bring.no_content").trim().to_owned(),
+        tree_mark: t!("bring.err_tree_mark").trim().to_owned(),
+    };
+    let cancellation = crate::cancel::on_ctrl_c();
+
+    let brought = match bring_in(
         held,
         &layout,
         &remote_layout,
@@ -386,17 +384,37 @@ pub fn handle_bring(
         &runtime,
         wanted,
         &sources,
-    );
+        &messages,
+        cancellation,
+    ) {
+        Ok(brought) => brought,
+        Err(error) => {
+            reporting.finish();
 
-    sources.report();
+            return ErrorBringFailed {
+                cause: error.to_string(),
+            }
+            .into();
+        }
+    };
+
+    report_fetched(&sources);
     drop(sources);
     reporting.finish();
 
     ResultBroughtIn {
         layout: DEFAULT_LAYOUT_NAME.to_owned(),
         vault: vault_name,
-        entries,
-        failed,
+        entries: brought
+            .entries
+            .into_iter()
+            .map(|item| BringItem {
+                uuid: item.uuid,
+                remote_path: item.remote_path,
+                local_path: item.local_path,
+            })
+            .collect(),
+        failed: brought.failed,
     }
     .into()
 }
@@ -406,465 +424,104 @@ pub fn handle_bring(
 /// What comes in is not a path of the Vault's Layout but a variant the index holds, content that
 /// already happened elsewhere and is to be joined into a file here without either side giving up.
 /// The content is written to a **variant file** beside its target, under a name of the convention or
-/// of the run's own, and what is waiting for what is written into [`Merging`] rather than into the
-/// Layout: a merge is work in this tree alone, and the Layout is what the work is.
+/// of the run's own, and what is waiting for what is written into the Workspace's merge records
+/// rather than into the Layout: a merge is work in this tree alone, and the Layout is what the work
+/// is.
 ///
-/// The variant and its content are asked of the Vault the Layout tracks only when they are not here;
-/// a merge of something already synced is local work, so a run that has both does not need a Vault,
-/// an account, or a reachable one.
+/// The order the merge is made in is the library's, see [`BringVariantRequest::variant`]: what
+/// stays here is reading the run's operands and its resources, and saying the answer in this
+/// command's words.
 fn bring_variant(
     target: &str,
     variant: &str,
     at: Option<&str>,
-    held: &librorolala::workspace::Workspace,
-    layout: &Layout,
-    index: &mut LazyRes<ResVCSIndex>,
-    storage: &mut LazyRes<ResRorolalaStorage>,
-    remote: &mut LazyRes<ResCurrentRemoteVault>,
-    current: &mut LazyRes<ResCurrentAccount>,
-    progress: &ResProgressSetting,
+    held: &Workspace,
+    current: &ResCurrentAccount,
     offline: &ResOffline,
     force: bool,
     tree_merge: bool,
+    progress: &ResProgressSetting,
     concurrency: &ResConcurrency,
 ) -> Next {
-    let Some(index) = index.get_ref().as_ref() else {
-        return ErrorVcsIndexNoIndex.into();
-    };
-    let variant_key = match resolve_hash(variant, || index_keys(Some(index), IndexObject::Variant))
-    {
-        Ok(key) => key,
-        Err(miss) => {
-            let said = miss.reason(variant, || t!("bring.err_join_hash").trim().to_string());
-
-            return join_failed(target, said);
-        }
-    };
-
-    let root = held.get_root();
-    let cwd = std::env::current_dir().ok();
-    let Some(id) = target_id(layout, root, cwd.as_deref(), target) else {
-        return join_failed(target, t!("bring.err_join_target").trim());
-    };
-    let Some(data) = layout.entry(id) else {
-        return join_failed(target, t!("bring.err_join_target").trim());
-    };
-
-    let mut merging = Merging::read(root);
-
-    // One variant joins one file once: a second waiting on the same file would leave the first with
-    // nowhere to go, and the same variant brought in twice would be two names for one thing.
-    if merging.at(id).is_some() {
-        return join_failed(target, t!("bring.err_join_merging").trim());
-    }
-    if merging.holds_variant(variant_key.digest()) {
-        return join_failed(target, t!("bring.err_join_brought_in").trim());
-    }
-
-    let runtime = match index_runtime() {
-        Ok(runtime) => runtime,
-        Err(error) => return error.into(),
-    };
-
-    let mut found = read_variant(index, &runtime, &variant_key);
-
-    // What is not here is asked of the Vault, unless the run was made offline: an offline run reads
-    // what is here and says so where the read wants what is not.
-    if found.is_none() && !**offline {
-        match index_from_vault(held, remote, current, progress, &runtime, **offline) {
-            Ok(()) => found = read_variant(index, &runtime, &variant_key),
-            Err(cause) => return join_failed(target, cause),
-        }
-    }
-
-    let Some(variant_object) = found else {
-        return join_failed(target, t!("bring.err_join_unknown").trim());
-    };
-
-    // A variant is joined into a file whose history it shares: the two chains have to meet at some
-    // version below the root, or they are histories that never met and the drawing has no place to
-    // put it. `--force` is how a run says it knows that and means to join it anyway.
-    if !force {
-        match shares_history(
-            index,
-            &runtime,
-            data.version(),
-            variant_object.base_version(),
-        ) {
-            Ok(true) => {}
-            Ok(false) => return join_failed(target, t!("bring.err_join_off_chain").trim()),
-            Err(cause) => return join_failed(target, cause),
-        }
-    }
-
-    let Some(store) = storage.get_ref().as_ref() else {
-        return join_failed(target, t!("bring.err_join_no_store").trim());
-    };
-    let content = Key::new(*variant_object.storage_hash());
-
-    // The content itself is brought the way any other bring carries it: asked of whichever Vault
-    // holds it, when there is an account to ask as and a run that may reach one at all.
-    let account = current
-        .get_ref()
-        .must_bind()
-        .ok()
-        .and_then(|name| account_named(&name, Some(held), None).ok());
-    let reporting = Reporting::start(*progress);
-    let brought = account.as_ref().and_then(|account| {
-        let tracked = tracked_vault(held);
-        let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
-
-        Sources::new(held, account, remote.get_ref(), primary, **offline)
-            .map(|sources| {
-                sources
-                    .reporting(reporting.progress())
-                    .with_concurrency(**concurrency)
-            })
-            .ok()
-            .map(|sources| {
-                let missing = sources.bring(store, &[content]);
-                sources.report();
-
-                (missing, sources.can_ask())
-            })
-    });
-
-    reporting.finish();
-
-    // A version is only a meaning once what it stored is here. A run that could have asked for it
-    // and did not get it fails now, rather than handing over a name whose content is nowhere and
-    // leaving the next run to discover it. A run with no Vault to ask never had a way to bring it,
-    // which is a bring of what is here rather than a fetch that failed.
-    if let Some((missing, can_ask)) = brought
-        && can_ask
-        && !missing.is_empty()
-    {
-        return join_failed(target, t!("bring.err_join_no_content").trim());
-    }
-
-    // A tree variant's content is a structure rather than a file's bytes: what is put beside the
-    // work is the whole directory the structure names, so the two sides can be compared as trees.
-    let tree_structure = runtime
-        .block_on(store.read_object(&content))
-        .ok()
-        .and_then(|bytes| TreeStructure::decode(&bytes).ok());
-
-    // A tree variant merged into its tree is decided by structure: the version the variant names as
-    // its base is the shared ancestor, this tree's recorded structure is this side, and the variant's
-    // structure is the other. What both sides changed differently becomes a conflict copy beside the
-    // work and a path the tree's staging names, which `tree add` settles.
-    if tree_merge
-        && data.kind() == EntryKind::Tree
-        && let Some(structure) = &tree_structure
-    {
-        let Some(tree_path) = layout.path_of(id) else {
-            return join_failed(target, t!("bring.err_join_target").trim());
-        };
-        let tree_dir = root.join(tree_path.to_path_buf());
-
-        let ours = match runtime.block_on(librorolala::tree::read_structure(
-            index,
-            store,
-            &data.version(),
-        )) {
-            Ok(ours) => ours,
-            Err(error) => return join_failed(target, error.to_string()),
-        };
-        let base = match runtime.block_on(librorolala::tree::read_structure(
-            index,
-            store,
-            variant_object.base_version(),
-        )) {
-            Ok(base) => base,
-            Err(error) => return join_failed(target, error.to_string()),
-        };
-
-        let merged = librorolala::tree::merge(&base, &ours, structure);
-
-        // What the variant's structure names is brought in a second ask, since the structure is what
-        // says what the inside is made of.
-        let account = current
-            .get_ref()
-            .must_bind()
-            .ok()
-            .and_then(|name| account_named(&name, Some(held), None).ok());
-        let reporting = Reporting::start(*progress);
-        if let Some(account) = &account {
-            let tracked = tracked_vault(held);
-            let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
-            if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline) {
-                let sources = sources
-                    .reporting(reporting.progress())
-                    .with_concurrency(**concurrency);
-                sources.bring(store, &structure.content_keys());
-                sources.report();
-            }
-        }
-        reporting.finish();
-
-        if let Err(error) =
-            crate::tree::worktree::write(&tree_dir, &merged.structure, store, &runtime)
-        {
-            return join_failed(target, error);
-        }
-
-        for path in &merged.conflicts {
-            let Some(entry) = structure.entry(path) else {
-                continue;
-            };
-            let theirs = tree_dir.join(librorolala::tree::conflict_copy(path));
-
-            if entry.kind() == librorolala::tree::EntryKind::Directory {
-                let inside = structure.subtree(path);
-                let _ = crate::tree::worktree::write(&theirs, &inside, store, &runtime);
-            } else if let Some(storage) = entry.storage() {
-                let _ = runtime.block_on(store.extract_file(storage, &theirs));
-            }
-        }
-
-        let staging = Staging::new(&tree_dir);
-        if let Err(error) = staging.write_conflicts(&merged.conflicts) {
-            return join_failed(target, error.to_string());
-        }
-
-        return ResultBringJoin {
-            target: target.to_owned(),
-            variant: variant.to_owned(),
-            path: tree_path.as_str().to_owned(),
-        }
-        .into();
-    }
-
-    // A place the run names is checked as it is given: one that climbs out of the Workspace is
-    // refused rather than held at the root, since there is no target that has moved yet to excuse
-    // it. A place that comes to climb out later, by the target moving shallower, is held instead.
-    if let Some(at) = at
-        && let Some(target_path) = layout.path_of(id)
-        && !Merging::place_holds(&target_path, Path::new(at))
-    {
-        return join_failed(target, t!("bring.err_join_place").trim());
-    }
-
-    let pending = Pending::new(id, *variant_key.digest(), at.map(PathBuf::from));
-    let Some(path) = merging.variant_path(layout, &pending) else {
-        return join_failed(target, t!("bring.err_join_place").trim());
-    };
-    let disk = root.join(path.to_path_buf());
-
-    // Nothing is written over: a file already at the place is something to be told about rather than
-    // replaced, which is how `bring` reads a landing everywhere else. A tree may take an empty
-    // directory, the same way a bring lands one.
-    let taken = if tree_structure.is_some() {
-        disk.exists()
-            && !(disk.is_dir()
-                && std::fs::read_dir(&disk).map_or(true, |mut entries| entries.next().is_none()))
-    } else {
-        disk.exists()
-    };
-    if taken {
-        return join_failed(
-            target,
-            t!("bring.err_join_taken", path = path.as_str()).trim(),
-        );
-    }
-
-    if let Some(parent) = disk.parent()
-        && let Err(error) = std::fs::create_dir_all(parent)
-    {
-        return join_failed(target, error.to_string());
-    }
-
-    if let Some(structure) = &tree_structure {
-        // What the structure names is brought in a second ask, since the structure is what says what
-        // the inside is made of.
-        let account = current
-            .get_ref()
-            .must_bind()
-            .ok()
-            .and_then(|name| account_named(&name, Some(held), None).ok());
-        let reporting = Reporting::start(*progress);
-
-        if let Some(account) = &account {
-            let tracked = tracked_vault(held);
-            let primary = fetch::primary(remote.get_ref(), tracked.as_deref());
-
-            if let Ok(sources) = Sources::new(held, account, remote.get_ref(), primary, **offline) {
-                let sources = sources
-                    .reporting(reporting.progress())
-                    .with_concurrency(**concurrency);
-                sources.bring(store, &structure.content_keys());
-                sources.report();
-            }
-        }
-
-        reporting.finish();
-
-        if let Err(error) = crate::tree::worktree::write(&disk, structure, store, &runtime) {
-            return join_failed(target, error);
-        }
-    } else if let Err(error) = runtime.block_on(store.extract_file(&content, &disk)) {
-        return join_failed(target, error.to_string());
-    }
-
-    merging.push(pending);
-    if let Err(error) = merging.write(root) {
-        return join_failed(target, error.to_string());
-    }
-
-    ResultBringJoin {
-        target: target.to_owned(),
-        variant: variant.to_owned(),
-        path: path.as_str().to_owned(),
-    }
-    .into()
-}
-
-/// Brings the index over from the Vault the Layout tracks, so what the run names can be read here.
-///
-/// What cannot be done is a cause rather than a failure of its own: the run that wanted the variant
-/// is the one that reports it, and it is that run's name the reader needs beside it.
-fn index_from_vault(
-    held: &librorolala::workspace::Workspace,
-    remote: &mut LazyRes<ResCurrentRemoteVault>,
-    current: &mut LazyRes<ResCurrentAccount>,
-    progress: &ResProgressSetting,
-    runtime: &tokio::runtime::Runtime,
-    offline: bool,
-) -> Result<(), String> {
-    let Some(vault_name) = tracked_vault(held) else {
-        return Err(t!("bring.err_join_no_track").trim().to_owned());
-    };
-    let Some(account_name) = current.get_ref().must_bind().ok() else {
-        return Err(t!("bring.err_join_no_account").trim().to_owned());
-    };
-    let Some(account) = account_named(&account_name, Some(held), None).ok() else {
-        return Err(t!("bring.err_join_no_account").trim().to_owned());
-    };
-    let Ok(target) = remote.get_ref().vault_or_default(vault_name) else {
-        return Err(t!("bring.err_join_no_vault").trim().to_owned());
-    };
-
-    let reporting = Reporting::start(*progress);
-    let pulled = pull(
-        held,
-        &account,
-        &target.to_string(),
-        runtime,
-        &reporting,
-        offline,
+    let request = BringVariantRequest::new(
+        Common {
+            workspace: held.get_root().to_path_buf(),
+            account: current.name().unwrap_or_default().to_owned(),
+            target: Target::Tracked,
+            offline: **offline,
+            force,
+            concurrency: **concurrency,
+            labels: Labels::default(),
+        },
+        variant.to_owned(),
+        target.to_owned(),
+        at.map(str::to_owned),
+        tree_merge,
     );
+
+    // The watcher is started before the merge, since what the merge may ask the Vaults for is
+    // watched from the first connection rather than from the moment the asking is over.
+    let reporting = Reporting::start(*progress);
+    let brought = request.variant(&reporting.progress(), crate::cancel::on_ctrl_c());
     reporting.finish();
 
-    pulled.map_err(|error| error.to_string())
-}
-
-/// The `Uuid` of the file `target` names, read from where the run was made and then as it stands.
-///
-/// It is the same reading `rola track` and `rola align` give a name, since a person writes one the
-/// same way wherever it is written.
-fn target_id(layout: &Layout, root: &Path, cwd: Option<&Path>, target: &str) -> Option<Uuid> {
-    if let Some(cwd) = cwd {
-        let rooted = normalize(root);
-        let absolute = normalize(&resolve_against(cwd, target));
-
-        if let Ok(relative) = absolute.strip_prefix(&rooted)
-            && let Ok(path) = LayoutPath::from_relative(relative)
-            && let Some(id) = layout.id_of(&path)
-        {
-            return Some(id);
+    match brought {
+        Ok(report) => ResultBringJoin {
+            target: report.target,
+            variant: report.variant,
+            path: report.path,
         }
-    }
-
-    LayoutPath::new(target)
-        .ok()
-        .and_then(|path| layout.id_of(&path))
-}
-
-/// The variant the index holds under `key`, when it holds one.
-fn read_variant(index: &VCSIndex, runtime: &tokio::runtime::Runtime, key: &Key) -> Option<Variant> {
-    match runtime.block_on(index.read(*key)) {
-        Ok(VCSIndexObject::Variant(variant)) => Some(variant),
-        _ => None,
+        .into(),
+        Err(refusal) => join_refused(target, refusal),
     }
 }
 
-/// Whether two histories meet at a version below the root.
+/// The library's answer to a variant word that named no one variant, in the words this command has
+/// for a hash.
 ///
-/// The file's own chain is read from the version it records back to the root; the variant's chain is
-/// read from the version it is based on in the same way. Meeting anywhere on the two lines is a
-/// shared history: two chains that forked from one version and advanced separately are still one
-/// history, and the merge belongs in it. A variant based on the root is a new history's first
-/// variant, which joins as it always has; the root alone is not a shared base between two deeper
-/// chains, since every file's first variant is based on it.
+/// The merge's own sentence is kept for a word that is no hash at all, and a head that names
+/// nothing or several things is the same advice wherever it was typed, so it is said the shared
+/// way.
+impl From<VariantHashMiss> for HashMiss {
+    fn from(miss: VariantHashMiss) -> Self {
+        match miss {
+            VariantHashMiss::Malformed => Self::Malformed,
+            VariantHashMiss::Unknown => Self::Unknown,
+            VariantHashMiss::Ambiguous(candidates) => Self::Ambiguous(candidates),
+        }
+    }
+}
+
+/// The failure a variant that could not be brought in is answered with.
 ///
-/// A chain that cannot be read to a version the index holds proves nothing, and is answered as no
-/// shared history rather than as a failure of the index: what a run can act on is whether the merge
-/// has a place, not why one could not be found.
-fn shares_history(
-    index: &VCSIndex,
-    runtime: &tokio::runtime::Runtime,
-    head: [u8; 32],
-    base: &[u8; 32],
-) -> Result<bool, String> {
-    let mut chain = BTreeSet::new();
-    let mut current = head;
-    let mut seen = BTreeSet::new();
-
-    while seen.insert(current) {
-        let version = match runtime.block_on(index.read(Key::new(current))) {
-            Ok(VCSIndexObject::Version(version)) => version,
-            Ok(_) => return Err(t!("bring.err_join_chain").trim().to_owned()),
-            Err(error) => return Err(error.reason()),
-        };
-
-        if version.is_root() {
-            break;
+/// Each refusal is said in the words this command has always used for it. An index the run does not
+/// have keeps the failure and the exit code it has everywhere else in this command: the run stopped
+/// before it read a variant at all, so there is no merge to word it as.
+fn join_refused(target: &str, refusal: VariantRefusal) -> Next {
+    let said = match refusal {
+        VariantRefusal::NotAVariantHash { hash, miss } => {
+            HashMiss::from(miss).reason(&hash, || t!("bring.err_join_hash").trim().to_string())
         }
-
-        chain.insert(current);
-
-        let variant = match runtime.block_on(index.read(Key::new(*version.variant()))) {
-            Ok(VCSIndexObject::Variant(variant)) => variant,
-            Ok(_) => return Err(t!("bring.err_join_chain").trim().to_owned()),
-            Err(error) => return Err(error.reason()),
-        };
-
-        current = *variant.base_version();
-    }
-
-    match runtime.block_on(index.read(Key::new(*base))) {
-        Ok(VCSIndexObject::Version(version)) if version.is_root() => return Ok(true),
-        Ok(VCSIndexObject::Version(_)) => {}
-        Ok(_) | Err(_) => return Ok(false),
-    }
-
-    let mut current = *base;
-    let mut seen = BTreeSet::new();
-
-    while seen.insert(current) {
-        if chain.contains(&current) {
-            return Ok(true);
+        VariantRefusal::NotATarget => t!("bring.err_join_target").trim().to_string(),
+        VariantRefusal::AlreadyMerging => t!("bring.err_join_merging").trim().to_string(),
+        VariantRefusal::AlreadyBroughtIn => t!("bring.err_join_brought_in").trim().to_string(),
+        VariantRefusal::UnknownVariant => t!("bring.err_join_unknown").trim().to_string(),
+        VariantRefusal::OffChain => t!("bring.err_join_off_chain").trim().to_string(),
+        VariantRefusal::NoStore => t!("bring.err_join_no_store").trim().to_string(),
+        VariantRefusal::NoContent => t!("bring.err_join_no_content").trim().to_string(),
+        VariantRefusal::PlaceOutside => t!("bring.err_join_place").trim().to_string(),
+        VariantRefusal::PlaceTaken { path } => {
+            t!("bring.err_join_taken", path = path).trim().to_string()
         }
+        VariantRefusal::Chain => t!("bring.err_join_chain").trim().to_string(),
+        VariantRefusal::NoTrack => t!("bring.err_join_no_track").trim().to_string(),
+        VariantRefusal::NoAccount => t!("bring.err_join_no_account").trim().to_string(),
+        VariantRefusal::NoVault => t!("bring.err_join_no_vault").trim().to_string(),
+        VariantRefusal::Failed(WriteError::NoIndex) => return ErrorVcsIndexNoIndex.into(),
+        VariantRefusal::Failed(error) => error.to_string(),
+    };
 
-        let Ok(VCSIndexObject::Version(version)) = runtime.block_on(index.read(Key::new(current)))
-        else {
-            return Ok(false);
-        };
-
-        if version.is_root() {
-            return Ok(false);
-        }
-
-        let Ok(VCSIndexObject::Variant(variant)) =
-            runtime.block_on(index.read(Key::new(*version.variant())))
-        else {
-            return Ok(false);
-        };
-
-        current = *variant.base_version();
-    }
-
-    Ok(false)
+    join_failed(target, said)
 }
 
 /// The failure a variant that could not be brought in is answered with.
@@ -906,304 +563,23 @@ fn pull(
     Ok(())
 }
 
-/// What stopped a reference from being read.
-#[derive(Debug)]
-enum Refusal {
-    /// The operands name nothing to bring in, or a destination several references cannot share.
-    Argument,
-    /// The Vault's Layout names nothing by the reference.
-    Unknown(String),
-    /// The Vault's Layout gives the `Uuid` no path, and a name is needed where it is to land.
-    Unnamed(Uuid),
-    /// Something is already at the path the reference was to land at.
-    Taken(String),
-    /// This Layout already holds the `Uuid` the reference names.
-    Known(String),
-}
-
-/// The failure a refused reference is answered with.
-fn refused(refusal: Refusal) -> Next {
-    match refusal {
-        Refusal::Argument => ErrorBringArgument.into(),
-        Refusal::Unknown(reference) => ErrorBringUnknown { reference }.into(),
-        Refusal::Unnamed(uuid) => ErrorBringUnnamed {
-            uuid: uuid.to_string(),
-        }
-        .into(),
-        Refusal::Taken(path) => ErrorBringTaken { path }.into(),
-        Refusal::Known(uuid) => ErrorBringKnown { uuid }.into(),
-    }
-}
-
-/// Where the references are to land here, read from the operands the way `mv` reads its target.
-enum Destination {
-    /// No destination was written: each reference lands at the path the Vault names it by.
-    Named,
-    /// One reference lands at exactly this path.
-    Exact(LayoutPath),
-    /// Every reference lands under this directory, joined with the name the Vault gives it; `""`
-    /// names the Workspace root, the one directory with no name of its own.
-    Under(String),
-}
-
-/// One reference read: the `Uuid`, what the Vault says about it, and where it lands here.
-struct Wanted {
-    /// The `Uuid` it is known by.
-    id: Uuid,
-    /// What the Vault's Layout says about it.
-    data: MutableData,
-    /// The path this Layout is to name it by.
-    path: LayoutPath,
-}
-
-/// Whether where an entry lands is already taken.
+/// Says what the Vaults handed over, in one line, once the run is done with them.
 ///
-/// A tree may land on a directory that is there and empty: a folder made for it, with nothing in it,
-/// is the same as nothing being there for a thing that is a directory. A file is only ever a landing
-/// where nothing is.
-fn landing_taken(root: &Path, path: &LayoutPath, data: &MutableData) -> bool {
-    let disk = root.join(path.to_path_buf());
-    if !disk.exists() {
-        return false;
-    }
-    if data.kind() != EntryKind::Tree || !disk.is_dir() {
-        return true;
+/// The words are the command's: what a fetch came to is a count and the names of the Vaults it came
+/// from, and the library keeps neither a language nor a place to print them.
+fn report_fetched(sources: &Sources<'_>) {
+    let took = sources.took();
+    if took.is_empty() {
+        return;
     }
 
-    std::fs::read_dir(&disk).map_or(true, |mut entries| entries.next().is_some())
-}
+    let count: usize = took.iter().map(|(_, count)| count).sum();
+    let vaults: Vec<&str> = took.iter().map(|(name, _)| name.as_str()).collect();
 
-/// Reads every reference before anything is written, so one that names nothing leaves nothing half
-/// done.
-fn resolve(
-    remote: &Layout,
-    layout: &Layout,
-    root: &Path,
-    refs: &[String],
-    to: Option<&str>,
-    by_name: bool,
-) -> Result<Vec<Wanted>, Refusal> {
-    let destination = destination(root, to)?;
-
-    // A destination that is not a directory names one landing. More than one operand is already
-    // more than it can take, the way `mv` reads them; one operand naming several, a glob, is
-    // found out once the references are read below.
-    if matches!(destination, Destination::Exact(_)) && refs.len() > 1 {
-        return Err(Refusal::Argument);
-    }
-
-    let matched = expand(remote, refs, &destination, by_name)?;
-
-    // A destination that is not a directory names one landing, so it can take only one entry.
-    if matches!(destination, Destination::Exact(_)) && matched.len() > 1 {
-        return Err(Refusal::Argument);
-    }
-
-    let mut wanted = Vec::with_capacity(matched.len());
-    let mut landings = BTreeSet::new();
-
-    for Wanted { id, data, path } in matched {
-        // What is to come in is something this Layout does not hold.
-        if layout.entry(id).is_some() {
-            return Err(Refusal::Known(id.to_string()));
-        }
-
-        // Where it lands is somewhere nothing is: not a name this Layout gives, not a file already
-        // there, and not where an earlier reference of this run is to land.
-        if !landings.insert(path.as_str().to_owned())
-            || layout.id_of(&path).is_some()
-            || landing_taken(root, &path, &data)
-        {
-            return Err(Refusal::Taken(path.as_str().to_owned()));
-        }
-
-        wanted.push(Wanted { id, data, path });
-    }
-
-    Ok(wanted)
-}
-
-/// Everything the references name, each entry once and in the order the references name them, with
-/// where each of them lands.
-///
-/// A reference that names a folder of the copy brings what stands under it as well: bringing a
-/// folder in is bringing in the tree it is, and a path that names only the directory, no entry
-/// stands there, names what is under it rather than nothing. An entry several references name, a
-/// glob and a path that reaches into what it matched, is one request rather than a clash, so it is
-/// brought in once.
-fn expand(
-    remote: &Layout,
-    refs: &[String],
-    destination: &Destination,
-    by_name: bool,
-) -> Result<Vec<Wanted>, Refusal> {
-    let mut paths: Vec<LayoutPath> = remote.paths().into_iter().map(|(path, _)| path).collect();
-    paths.sort_unstable();
-
-    let mut wanted = Vec::new();
-    let mut seen = BTreeSet::new();
-
-    for reference in refs {
-        let (base, seeds) = seeds(remote, &paths, reference, by_name)?;
-
-        for seed in seeds {
-            let mut candidates = vec![seed.clone()];
-            candidates.extend(
-                paths
-                    .iter()
-                    .filter(|path| under(path.as_str(), seed.as_str()))
-                    .cloned(),
-            );
-
-            for path in candidates {
-                let Some(id) = remote.id_of(&path) else {
-                    continue;
-                };
-
-                if !seen.insert(id) {
-                    continue;
-                }
-
-                let Some(data) = remote.entry(id) else {
-                    continue;
-                };
-
-                let Some(landing) = landing(destination, &path, &base) else {
-                    return Err(Refusal::Unnamed(id));
-                };
-
-                wanted.push(Wanted {
-                    id,
-                    data,
-                    path: landing,
-                });
-            }
-        }
-    }
-
-    Ok(wanted)
-}
-
-/// What one reference names: the directory a glob selects from, and the paths it names.
-///
-/// It is what the entries are walked from, so a path that names only a folder, no entry stands
-/// there, names what is under it rather than nothing, and a glob that matches a folder brings the
-/// folder's tree in with it.
-///
-/// # Errors
-///
-/// Returns [`Refusal::Argument`] when a reference reads as a pattern but not as a usable one, and
-/// [`Refusal::Unknown`] when it names nothing, a glob that matches nothing included, since a run
-/// that quietly did part of what was asked is worse than one that stops.
-fn seeds(
-    remote: &Layout,
-    paths: &[LayoutPath],
-    reference: &str,
-    by_name: bool,
-) -> Result<(String, Vec<LayoutPath>), Refusal> {
-    if let Ok(id) = Uuid::from_str(reference) {
-        return remote.path_of(id).map_or_else(
-            || Err(Refusal::Unknown(reference.to_owned())),
-            |path| {
-                let base = if by_name {
-                    parent(path.as_str())
-                } else {
-                    String::new()
-                };
-                Ok((base, vec![path]))
-            },
-        );
-    }
-
-    if is_pattern(reference) {
-        let matched = matching(reference, paths)?;
-
-        if matched.is_empty() {
-            return Err(Refusal::Unknown(reference.to_owned()));
-        }
-
-        return Ok((pattern_base(reference), matched));
-    }
-
-    let Ok(path) = LayoutPath::new(reference) else {
-        return Err(Refusal::Unknown(reference.to_owned()));
-    };
-
-    if remote.id_of(&path).is_none()
-        && !paths
-            .iter()
-            .any(|candidate| under(candidate.as_str(), path.as_str()))
-    {
-        return Err(Refusal::Unknown(reference.to_owned()));
-    }
-
-    let base = if by_name {
-        parent(path.as_str())
-    } else {
-        String::new()
-    };
-    Ok((base, vec![path]))
-}
-
-/// The directory a path stands in, which is what a name is read against.
-///
-/// It is the whole path before its last separator, and nothing when it has none: an entry at the
-/// top of the Workspace stands in the root, which is the directory with no name of its own.
-fn parent(path: &str) -> String {
-    path.rsplit_once('/')
-        .map_or_else(String::new, |(directory, _)| directory.to_owned())
-}
-/// The directory a glob selects from, which what it matches is rebased on.
-///
-/// It is what stands before the first pattern character, cut back to the directory that holds it:
-/// `Assets/*` and `Assets/**` both select from `Assets`, and a pattern with no separator at all
-/// selects from the root.
-fn pattern_base(reference: &str) -> String {
-    let cut = reference
-        .find(['*', '?', '[', '{'])
-        .unwrap_or(reference.len());
-    let head = &reference[..cut];
-
-    head.rfind('/')
-        .map_or_else(String::new, |at| head[..at].to_owned())
-}
-
-/// Whether `path` names something below `of`, and not `of` itself.
-fn under(path: &str, of: &str) -> bool {
-    path.len() > of.len() && path.starts_with(of) && path.as_bytes()[of.len()] == b'/'
-}
-
-/// Whether a reference is to be read as a glob over the Vault's Layout paths.
-///
-/// A reference with none of the pattern characters names one path exactly, so a path holding a `[`
-/// or `{` is still nameable; one with them is a pattern, and a literal occurrence has to be written
-/// as a class the way [`globset`] spells one.
-fn is_pattern(reference: &str) -> bool {
-    reference
-        .chars()
-        .any(|character| matches!(character, '*' | '?' | '[' | '{'))
-}
-
-/// The paths among `paths` that the glob `reference` names, keeping the order they came in.
-///
-/// Separators are literal, the way a shell reads a pattern: `*` names what is directly under a
-/// directory and `**` what is anywhere below it, rather than `*` swallowing a whole tree.
-///
-/// # Errors
-///
-/// Returns [`Refusal::Argument`] when the reference does not read as a pattern.
-fn matching(reference: &str, paths: &[LayoutPath]) -> Result<Vec<LayoutPath>, Refusal> {
-    let glob = GlobBuilder::new(reference)
-        .literal_separator(true)
-        .build()
-        .map_err(|_| Refusal::Argument)?;
-    let matcher = glob.compile_matcher();
-
-    Ok(paths
-        .iter()
-        .filter(|path| matcher.is_match(path.as_str()))
-        .cloned()
-        .collect())
+    eprintln!(
+        "{}",
+        warn_line!(t!("fetch.brought", count = count, vaults = vaults.join(", ")).trim())
+    );
 }
 
 /// Splits the operands the way `mv` reads its own: everything but the last word is what is to come
@@ -1212,7 +588,9 @@ fn matching(reference: &str, paths: &[LayoutPath]) -> Result<Vec<LayoutPath>, Re
 /// The variant mode reads the same words differently: the first is the variant to bring in and, when
 /// a second is written, it is where that variant's file is to lie rather than another reference.
 ///
-/// `None` is a run that named nothing at all, or one that named more than a mode can hold.
+/// `None` is a run that named nothing at all, or one that named more than a mode can hold. It reads
+/// the command's own words rather than a Layout, so it stays here: what a word means once it has
+/// been split is the library's.
 fn split(join: Option<&str>, mut words: Vec<String>) -> Option<(Vec<String>, Option<String>)> {
     if words.is_empty() {
         return None;
@@ -1237,286 +615,18 @@ fn split(join: Option<&str>, mut words: Vec<String>) -> Option<(Vec<String>, Opt
     Some((words, to))
 }
 
-/// Where the operands say the references are to land.
-///
-/// A destination is read where the run was made, the way `rola track` and `rola align` read a name:
-/// `.` is the directory the run is in and `..` climbs from there. It has to be somewhere the
-/// Workspace holds, since a Layout names nothing outside its own root.
-fn destination(root: &Path, to: Option<&str>) -> Result<Destination, Refusal> {
-    let Some(to) = to else {
-        return Ok(Destination::Named);
-    };
-
-    let Ok(cwd) = std::env::current_dir() else {
-        return Err(Refusal::Argument);
-    };
-
-    let absolute = normalize(&resolve_against(&cwd, to));
-
-    let Ok(relative) = absolute.strip_prefix(root) else {
-        return Err(Refusal::Argument);
-    };
-
-    if absolute.is_dir() {
-        return Ok(Destination::Under(prefix(relative)));
-    }
-
-    LayoutPath::from_relative(relative)
-        .map(Destination::Exact)
-        .map_err(|_| Refusal::Argument)
-}
-
-/// The path one reference lands at: the path the Vault gives it, joined into the destination when
-/// that is a directory, or the destination itself when that is the whole name.
-///
-/// A path keeps all of itself under a directory, and a glob match keeps what it has below the
-/// directory the glob selects from: that is what makes bringing a folder in bring the folder, the
-/// tree it is, remade where it is put, while `Assets/*` brings what is in `Assets` rather than
-/// `Assets` again.
-///
-/// What a path names under the Vault's unplaced mark, `@/new/a.fbx`, lands without that mark.
-/// The `@` is the Vault's way of saying the entry has no path yet, not a directory anything here
-/// has: a Layout here that named `@/new/a.fbx` would make an `@` directory that names a decision
-/// the Vault has not made, and every reader of it would take it for a folder of the work.
-fn landing(destination: &Destination, named: &LayoutPath, base: &str) -> Option<LayoutPath> {
-    match destination {
-        Destination::Named => {
-            placeable(named.as_str()).and_then(|placed| LayoutPath::new(placed).ok())
+/// The failure a refused reference is answered with.
+fn refused(refusal: Refusal) -> Next {
+    match refusal {
+        Refusal::Argument => ErrorBringArgument.into(),
+        Refusal::Unknown(reference) => ErrorBringUnknown { reference }.into(),
+        Refusal::Unnamed(uuid) => ErrorBringUnnamed {
+            uuid: uuid.to_string(),
         }
-        Destination::Exact(path) => Some(path.clone()),
-        Destination::Under(directory) => {
-            let rest = if base.is_empty() {
-                named.as_str()
-            } else {
-                named
-                    .as_str()
-                    .strip_prefix(base)
-                    .and_then(|rest| rest.strip_prefix('/'))
-                    .unwrap_or(named.as_str())
-            };
-            let rest = placeable(rest)?;
-            let joined = if directory.is_empty() {
-                rest.to_owned()
-            } else {
-                format!("{directory}/{rest}")
-            };
-
-            // Both halves are names a `LayoutPath` already accepted, so joining them cannot name
-            // something one would not.
-            LayoutPath::new(&joined).ok()
-        }
+        .into(),
+        Refusal::Taken(path) => ErrorBringTaken { path }.into(),
+        Refusal::Known(uuid) => ErrorBringKnown { uuid }.into(),
     }
-}
-
-/// A path as it is to be written here, with the Vault's unplaced mark taken off the front.
-///
-/// `None` is a path that is nothing but the mark: there is no name in it to place.
-fn placeable(path: &str) -> Option<&str> {
-    match path.strip_prefix(UNPLACED) {
-        Some("") => None,
-        Some(rest) => Some(rest),
-        None => Some(path),
-    }
-}
-
-/// The path `given` names, made absolute against the directory the run was made in.
-/// The path `given` names, made absolute against the directory the run was made in.
-fn resolve_against(cwd: &Path, given: &str) -> PathBuf {
-    if Path::new(given).is_absolute() {
-        PathBuf::from(given)
-    } else {
-        cwd.join(given)
-    }
-}
-
-/// The prefix the paths under `relative` share, or `""` for the Workspace root itself.
-fn prefix(relative: &Path) -> String {
-    LayoutPath::from_relative(relative)
-        .map_or_else(|_| String::new(), |path| path.as_str().to_owned())
-}
-
-/// Puts each version's content at its path, and makes the Layout name it.
-///
-/// What could not be done is named rather than stopping the run: a bring is not one write but
-/// several, and what went in is worth reporting beside what did not.
-fn bring_in(
-    held: &librorolala::workspace::Workspace,
-    layout: &Layout,
-    remote: &Layout,
-    index: &VCSIndex,
-    store: Option<&RorolalaStorage>,
-    runtime: &tokio::runtime::Runtime,
-    wanted: Vec<Wanted>,
-    sources: &Sources<'_>,
-) -> (Vec<BringItem>, Vec<String>) {
-    let mut entries = Vec::new();
-    let mut failed = Vec::new();
-
-    // The readings are gathered in one cache and the Layout changes in one batch, so a bring of
-    // many files reads what others wrote once, writes the Layout once per shard, and writes the
-    // cache once, rather than doing each of those for every file.
-    let mut checkout = Checkout::open(layout, held.get_root());
-    let mut batch = layout.batch();
-
-    // Every version's content is named before anything is written, so what is missing is asked of
-    // the Vaults in one go rather than one file at a time.
-    let mut resolved = Vec::new();
-    for wanted in wanted {
-        match runtime.block_on(sync::store_of(index, &wanted.data.version())) {
-            Ok(stored) => resolved.push((wanted, stored)),
-            Err(cause) => failed.push(format!("{}: {cause}", wanted.id)),
-        }
-    }
-
-    if let Some(store) = store {
-        let mut keys: Vec<Key> = Vec::new();
-
-        for (wanted, stored) in &resolved {
-            keys.extend(*stored);
-
-            // A tree's version names a structure, and a structure is one version's inside. An older
-            // version is a structure too, and a later retrack reads it before it asks for what it
-            // names: bringing the chain here is what leaves the pointer able to move back.
-            if wanted.data.kind() == EntryKind::Tree
-                && let Ok(chain) = runtime.block_on(sync::chain_store_keys(
-                    index,
-                    &wanted.data.version(),
-                    Some(store),
-                    false,
-                ))
-            {
-                keys.extend(chain);
-            }
-        }
-
-        keys.sort_unstable();
-        keys.dedup();
-
-        sources.bring(store, &keys);
-    }
-
-    for (wanted, stored) in resolved {
-        let Wanted { id, data, path } = wanted;
-
-        let (Some(stored), Some(store)) = (stored, store) else {
-            failed.push(format!("{id}: {}", t!("bring.no_content").trim()));
-
-            continue;
-        };
-
-        let disk = held.get_root().join(path.to_path_buf());
-        if let Some(parent) = disk.parent()
-            && let Err(error) = std::fs::create_dir_all(parent)
-        {
-            failed.push(format!("{id}: {error}"));
-
-            continue;
-        }
-
-        // A tree lands as a directory rather than a file: its structure says what the work is, its
-        // file content is brought in a second ask, and its baseline records the version the Vault
-        // holds so the tree is clean as soon as it is here.
-        if data.kind() == EntryKind::Tree {
-            let bytes = match runtime.block_on(store.read_object(&stored)) {
-                Ok(bytes) => bytes,
-                Err(error) => {
-                    failed.push(format!("{id}: {error}"));
-
-                    continue;
-                }
-            };
-            let structure = match TreeStructure::decode(&bytes) {
-                Ok(structure) => structure,
-                Err(error) => {
-                    failed.push(format!("{id}: {error}"));
-
-                    continue;
-                }
-            };
-
-            sources.bring(store, &structure.content_keys());
-
-            if let Err(error) = crate::tree::worktree::write(&disk, &structure, store, runtime) {
-                failed.push(format!("{id}: {error}"));
-
-                continue;
-            }
-
-            let staging = Staging::new(&disk);
-            if let Err(error) = staging.ensure_store() {
-                failed.push(format!("{id}: {error}"));
-
-                continue;
-            }
-            let Ok(tree) = Tree::open(held.get_root(), &disk) else {
-                failed.push(format!("{id}: {}", t!("bring.err_tree_mark").trim()));
-
-                continue;
-            };
-            if let Err(error) = tree.baseline().write(&structure, &data.version()) {
-                failed.push(format!("{id}: {error}"));
-
-                continue;
-            }
-            // The id is what a later reading knows the tree by, wherever the directory is moved to.
-            if let Err(error) = tree.write_local_id(id) {
-                failed.push(format!("{id}: {error}"));
-
-                continue;
-            }
-            if let Err(error) = batch.create_file(id, data, &path) {
-                failed.push(format!("{id}: {error}"));
-
-                continue;
-            }
-
-            entries.push(BringItem {
-                uuid: id.to_string(),
-                remote_path: remote.path_of(id).map(|path| path.as_str().to_owned()),
-                local_path: path.as_str().to_owned(),
-            });
-
-            continue;
-        }
-
-        if let Err(error) = runtime.block_on(store.extract_file(&stored, &disk)) {
-            failed.push(format!("{id}: {error}"));
-
-            continue;
-        }
-        if let Err(cause) = checkout.remember(path.as_str()) {
-            failed.push(format!("{id}: {cause}"));
-
-            continue;
-        }
-
-        // What the Layout says is the version the Vault holds, the holder it names and the cut it
-        // prefers; the path is this side's own, which is what the run was asked for. Nothing is
-        // rebuilt from its parts: rebuilding is how a preference would be dropped, and a dropped
-        // preference is reported nowhere, the entry would go on being written, cut another way
-        // than the one it asked for.
-        if let Err(error) = batch.create_file(id, data, &path) {
-            failed.push(format!("{id}: {error}"));
-
-            continue;
-        }
-
-        entries.push(BringItem {
-            uuid: id.to_string(),
-            remote_path: remote.path_of(id).map(|path| path.as_str().to_owned()),
-            local_path: path.as_str().to_owned(),
-        });
-    }
-
-    if let Err(cause) = checkout.finish() {
-        failed.push(cause);
-    }
-
-    if let Err(error) = batch.commit() {
-        failed.push(error.to_string());
-    }
-
-    (entries, failed)
 }
 
 /// Error: the Layout being worked in tracks no Vault.
@@ -1817,11 +927,6 @@ mod tests {
         texts.iter().map(|text| (*text).to_owned()).collect()
     }
 
-    /// A path a Layout would name.
-    fn path(text: &str) -> LayoutPath {
-        LayoutPath::new(text).expect("a path a Layout could name")
-    }
-
     #[test]
     fn the_last_word_is_the_destination_unless_it_is_the_only_one() {
         assert_eq!(split(None, words(&["a"])), Some((words(&["a"]), None)));
@@ -1848,159 +953,5 @@ mod tests {
         );
         assert_eq!(split(Some("target"), words(&["a", "b", "c"])), None);
         assert_eq!(split(Some("target"), words(&[])), None);
-    }
-
-    #[test]
-    fn a_missing_destination_lands_at_the_name_the_vault_gives() {
-        assert_eq!(
-            landing(&Destination::Named, &path("a/b.psd"), ""),
-            Some(path("a/b.psd"))
-        );
-    }
-
-    #[test]
-    fn a_whole_name_destination_is_the_path_itself() {
-        assert_eq!(
-            landing(&Destination::Exact(path("here.psd")), &path("a/b.psd"), ""),
-            Some(path("here.psd"))
-        );
-    }
-
-    #[test]
-    fn a_directory_destination_keeps_the_path_and_rebases_what_a_glob_selected() {
-        let named = path("a/b.psd");
-
-        // A path keeps all of itself under the destination, so the folder it is in is remade there.
-        assert_eq!(
-            landing(&Destination::Under("dir".to_owned()), &named, ""),
-            Some(path("dir/a/b.psd"))
-        );
-
-        // A glob match keeps only what it has below the directory the glob selected from.
-        assert_eq!(
-            landing(&Destination::Under("dir".to_owned()), &named, "a"),
-            Some(path("dir/b.psd"))
-        );
-
-        // The root as a destination adds no segment.
-        assert_eq!(
-            landing(&Destination::Under(String::new()), &named, ""),
-            Some(path("a/b.psd"))
-        );
-    }
-
-    #[test]
-    fn a_name_is_read_against_the_directory_it_stands_in() {
-        assert_eq!(parent("Assets/Tex/wood.png"), "Assets/Tex");
-        assert_eq!(parent("Assets/Tex"), "Assets");
-        // A name at the top of the Workspace stands in the root, which has no name of its own.
-        assert_eq!(parent("Tex"), "");
-    }
-
-    #[test]
-    fn a_by_name_destination_lands_a_reference_by_its_own_name() {
-        // What `--by-name` makes of a path reference: the base is the directory it stands in, so
-        // the entry keeps its own name and, under a folder, the tree the folder is.
-        let folder = "Assets/Tex";
-
-        assert_eq!(parent(folder), "Assets");
-
-        for (named, expected) in [
-            ("Assets/Tex/wood.png", "dir/Tex/wood.png"),
-            ("Assets/Tex", "dir/Tex"),
-        ] {
-            let base = parent(folder);
-
-            assert_eq!(
-                landing(&Destination::Under("dir".to_owned()), &path(named), &base),
-                Some(path(expected))
-            );
-        }
-    }
-
-    #[test]
-    fn an_unplaced_path_lands_by_the_name_below_the_mark() {
-        assert_eq!(placeable("@/new/a.fbx"), Some("new/a.fbx"));
-        assert_eq!(placeable("@/removed/a.fbx"), Some("removed/a.fbx"));
-        assert_eq!(placeable("a/b.fbx"), Some("a/b.fbx"));
-        assert_eq!(placeable("@/"), None);
-
-        // Both ways of landing drop the mark: the name the Vault gives, and the same name under a directory.
-        assert_eq!(
-            landing(&Destination::Named, &path("@/new/a.fbx"), ""),
-            Some(path("new/a.fbx"))
-        );
-        assert_eq!(
-            landing(
-                &Destination::Under("art".to_owned()),
-                &path("@/new/a.fbx"),
-                ""
-            ),
-            Some(path("art/new/a.fbx"))
-        );
-
-        // A glob over the unplaced area selects from it, so its matches have no mark left to drop.
-        assert_eq!(
-            landing(
-                &Destination::Under(String::new()),
-                &path("@/new/a.fbx"),
-                "@/new"
-            ),
-            Some(path("a.fbx"))
-        );
-    }
-
-    #[test]
-    fn a_glob_selects_from_the_directory_before_it() {
-        assert_eq!(pattern_base("Installers/*"), "Installers");
-        assert_eq!(pattern_base("Installers/**"), "Installers");
-        assert_eq!(pattern_base("Installers/sub/*.psd"), "Installers/sub");
-        assert_eq!(pattern_base("*.psd"), "");
-        assert_eq!(pattern_base("a?b"), "");
-    }
-
-    #[test]
-    fn something_below_a_path_is_not_the_path_itself() {
-        assert!(under("a/b.psd", "a"));
-        assert!(!under("a", "a"));
-        assert!(!under("ab/b.psd", "a"));
-    }
-
-    #[test]
-    fn a_path_without_a_pattern_character_is_named_exactly() {
-        assert!(!is_pattern("Installers/0dCloud.pkg.tar.zst"));
-        assert!(is_pattern("Installers/*"));
-        assert!(is_pattern("a?b"));
-        assert!(is_pattern("a[0-9]"));
-        assert!(is_pattern("a{b,c}"));
-    }
-
-    #[test]
-    fn a_glob_names_the_paths_it_matches_and_nothing_else() {
-        let paths = [
-            path("Installers/0dCloud.pkg.tar.zst"),
-            path("Installers/sub/extra.pkg"),
-            path("README.md"),
-        ];
-
-        assert_eq!(
-            matching("Installers/*", &paths).unwrap(),
-            vec![path("Installers/0dCloud.pkg.tar.zst")]
-        );
-        assert_eq!(
-            matching("Installers/**", &paths).unwrap(),
-            vec![
-                path("Installers/0dCloud.pkg.tar.zst"),
-                path("Installers/sub/extra.pkg")
-            ]
-        );
-        assert_eq!(
-            matching("Missing/*", &paths).unwrap(),
-            Vec::<LayoutPath>::new()
-        );
-        assert!(matches!(
-            matching("Installers/[", &paths),
-            Err(Refusal::Argument)
-        ));
     }
 }
