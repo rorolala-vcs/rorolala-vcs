@@ -1,8 +1,11 @@
-using RorolalaDesktop.Contract;
+using RolaSharp;
+using RolaSharp.Write;
+using RorolalaDesktop.I18n;
+
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// Running <c>rola layout path move</c> against one Layout: what a move within a place is.
+/// Moving a path within one Layout: what a move within a place is, through the writer the command line uses.
 /// </summary>
 /// <remarks>
 /// What a move here changes is the Layout's own record of where its entries are, and nothing else: the content stays
@@ -12,6 +15,11 @@ namespace RorolalaVCSPlugin;
 /// The Layout is named rather than left to be resolved, because what the place shows is the one the address names: a run
 /// without the name would move a path of the Layout being worked in, which is a different write to a different file. A
 /// Vault's own Layout is named <c>truth@VAULT</c>; one of the Workspace's by its name alone.
+/// </para>
+/// <para>
+/// A Layout of the Workspace's own is moved by <see cref="LayoutWriter.MovePath"/>, over the Workspace and the Layout
+/// the caller names. A fetched copy of a Vault's Layout is not a place to work: the Vault itself makes the move, and the
+/// copy follows what it agreed to, which is <see cref="LayoutWriter.MoveFetched"/>.
 /// </para>
 /// </remarks>
 internal static class LayoutPathMoveCommand
@@ -33,75 +41,66 @@ internal static class LayoutPathMoveCommand
         return VaultLayout + "@" + vault;
     }
 
-    /// <summary>The arguments a move is run with, after the program's name.</summary>
-    /// <param name="layout">
-    /// The Layout to move in, as the command line names it, or nothing for the one being worked in.
-    /// </param>
-    /// <param name="from">The path it is at.</param>
-    /// <param name="to">The path it is to be at.</param>
-    /// <returns>The arguments.</returns>
-    public static IReadOnlyList<string> Arguments(string? layout, string from, string to)
-    {
-        ArgumentNullException.ThrowIfNull(from);
-        ArgumentNullException.ThrowIfNull(to);
-
-        List<string> arguments =
-        [
-            "--theme-choice=" + Sync.Theme,
-            "--json",
-            "layout",
-            "path",
-            "move",
-        ];
-
-        // The Layout being worked in is what a run moves in when it names none: a bring that moves a local copy over
-        // is about the work as it stands, and naming a Layout would move one that is not the one on screen.
-        if (layout is { Length: > 0 })
-        {
-            arguments.Add("--layout");
-            arguments.Add(layout);
-        }
-
-        arguments.Add(from);
-        arguments.Add(to);
-
-        return arguments;
-    }
-
-    /// <summary>Runs the move, saying what it is doing while it goes.</summary>
-    /// <param name="program">The program the window was opened by.</param>
+    /// <summary>Moves a path through the writer, answering whether it ended well and what it said.</summary>
+    /// <remarks>
+    /// The writer opens the Workspace itself, so a move of the Layout being worked in needs nothing of the command line
+    /// and nothing of the program the window was opened by. Run off the window's thread: the Layout is read and written,
+    /// which is disk work.
+    /// </remarks>
     /// <param name="directory">Where the work is rooted, and where the run is made.</param>
     /// <param name="layout">
     /// The Layout to move in, as the command line names it, or nothing for the one being worked in.
     /// </param>
     /// <param name="from">The path it is at.</param>
     /// <param name="to">The path it is to be at.</param>
-    /// <param name="records">What the run's records are read into, which the panel draws.</param>
-    /// <param name="progress">What is told that a record was said, which redraws on the window's thread.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
-    public static (bool Done, string Said) Run(
-        string program,
+    public static (bool Done, string Said) Move(
         string directory,
         string? layout,
         string from,
-        string to,
-        ProgressRecords records,
-        Action progress
+        string to
     )
     {
-        ArgumentNullException.ThrowIfNull(program);
         ArgumentNullException.ThrowIfNull(directory);
-        ArgumentNullException.ThrowIfNull(records);
-        ArgumentNullException.ThrowIfNull(progress);
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
 
-        var (done, said, _) = CommandLine.Asked(
-            program,
-            Arguments(layout, from, to),
-            directory,
-            records,
-            progress
-        );
+        try
+        {
+            using var workspace = WorkspaceScope.Open(directory);
+            workspace.Read();
 
-        return (done, said);
+            // A Layout the caller names is opened by that name; one it does not is the one being worked in, which is
+            // what the writer reads from the Workspace's own scope.
+            var target = layout is { Length: > 0 }
+                ? new LayoutScope(workspace.Root.FullName, layout)
+                : (LayoutScope)workspace.Layout;
+
+            // A name carrying `@` is a fetched copy of a Vault's Layout, which the Vault itself is asked to move. Every
+            // other name is a Layout of the Workspace's own, moved in place.
+            if (layout is { Length: > 0 } && layout.Contains('@', StringComparison.Ordinal))
+            {
+                new LayoutWriter(target).MoveFetched(from, to);
+            }
+            else
+            {
+                new LayoutWriter(target).MovePath(from, to);
+            }
+
+            return (true, string.Empty);
+        }
+        catch (RolaWriteError error)
+        {
+            return (false, Sync.Told(error));
+        }
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.NoWorkspace or RolaReadErrorKind.Unavailable)
+        {
+            return (false, RolaI18N.Get("rorolala_vcs.not_a_workspace"));
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            return (false, error.Message);
+        }
     }
 }
