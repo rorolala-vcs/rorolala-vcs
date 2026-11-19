@@ -14,6 +14,7 @@ using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using Key = Avalonia.Input.Key;
 
 namespace RorolalaVCSPlugin;
 
@@ -798,7 +799,7 @@ internal sealed partial class VersionGraphView : Control
 
         _ = Task.Run(() =>
         {
-            RolaVariantGraph? graph = null;
+            VariantGraphReading? graph = null;
             IReadOnlyList<DraftFact> drafts = [];
             var emphasized = false;
             string? root = null;
@@ -810,10 +811,7 @@ internal sealed partial class VersionGraphView : Control
                 var focus = FocusOf(files, root);
 
                 emphasized = focus.Count > 0;
-                graph = RolaVariantGraph.Locate(
-                    directory,
-                    new VariantGraphRequest { Focus = focus.Count > 0 ? focus : null }
-                );
+                graph = GraphReading(directory, focus.Count > 0 ? focus : null);
 
                 if (graph is not null && status is not null && root is not null)
                 {
@@ -936,7 +934,7 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="status">What the work says about its files.</param>
     /// <param name="root">Where the Workspace is rooted.</param>
     /// <returns>The drafts, one per changed local entry.</returns>
-    internal static List<DraftFact> DraftsOf(RolaVariantGraph graph, RolaStatus status, string root)
+    internal static List<DraftFact> DraftsOf(VariantGraphReading graph, StatusReading status, string root)
     {
         var numbers = new Dictionary<string, ulong>(StringComparer.Ordinal);
         var variants = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -983,7 +981,7 @@ internal sealed partial class VersionGraphView : Control
             // is a change to record even when every path still agrees.
             if (Directory.Exists(Path.Combine(absolute, ".rola-tree")))
             {
-                var staged = RolaTreeStatus.Locate(absolute);
+                var staged = TreeReading(absolute);
                 var described = File.Exists(Path.Combine(absolute, ".rola-tree", "description"));
 
                 if ((staged is null || !staged.HasWork) && !described)
@@ -1054,6 +1052,67 @@ internal sealed partial class VersionGraphView : Control
         }
 
         return drafts;
+    }
+
+    /// <summary>Reads how a tree stands, or nothing when there is no tree to read.</summary>
+    /// <param name="tree">The tree's directory.</param>
+    /// <returns>The reading, or nothing when it is not there.</returns>
+    private static TreeStatus? TreeReading(string tree)
+    {
+        try
+        {
+            var scope = new TreeScope(tree);
+            scope.Read();
+
+            return scope.Status;
+        }
+        catch (RolaReadError error)
+            when (
+                error.Kind
+                is RolaReadErrorKind.InvalidArgument
+                    or RolaReadErrorKind.Unavailable
+            )
+        {
+            // A tree that is not there, or one with nothing to read, is the absence V1's Locate
+            // answered with nothing rather than a failure; the drawing keeps the same silence.
+            return null;
+        }
+    }
+
+    /// <summary>Reads the variant graph of a directory, or nothing when there is none to draw.</summary>
+    /// <remarks>
+    /// A directory no Workspace holds, a Workspace in no Layout, and one with no index are the absence
+    /// V1's Locate answered with nothing rather than a failure; the drawing keeps the same silence for
+    /// them. Anything the native side could not read is left to the caller, which reports it and draws
+    /// the empty graph.
+    /// </remarks>
+    /// <param name="directory">The directory the Workspace is searched upwards from.</param>
+    /// <param name="focus">The entries to stand on, or nothing for the work's own entries.</param>
+    /// <returns>The reading, or nothing when there is nothing to draw.</returns>
+    private static VariantGraphReading? GraphReading(
+        string directory,
+        IReadOnlyList<VariantGraphFocus>? focus
+    )
+    {
+        try
+        {
+            using var scope = new VariantGraphScope(
+                directory,
+                new VariantGraphRequest { Focus = focus }
+            );
+
+            scope.Read();
+
+            return scope.Reading;
+        }
+        catch (RolaReadError error)
+            when (
+                error.Kind
+                is RolaReadErrorKind.InvalidArgument or RolaReadErrorKind.Unavailable
+            )
+        {
+            return null;
+        }
     }
 
     /// <summary>The newer version a draft should stand on, when a Vault's copy names one.</summary>

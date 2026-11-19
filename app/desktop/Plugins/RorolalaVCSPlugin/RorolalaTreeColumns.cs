@@ -1,5 +1,4 @@
 using FileSystemPlugin;
-using RolaSharp;
 using RorolalaDesktop.Contract;
 
 namespace RorolalaVCSPlugin;

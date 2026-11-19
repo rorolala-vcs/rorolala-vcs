@@ -4,15 +4,16 @@ using RorolalaDesktop.I18n;
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// What the Tree panel asks the command line for: staging a path, taking it back out, and putting
-/// the work back to the version the tree records.
+/// What the Tree panel asks for: staging a path and taking it back out through the command line,
+/// and putting the work back to the version the tree records through the writer.
 /// </summary>
 /// <remarks>
 /// The staging area and the description are the tree's own, and the command line is what owns both.
 /// These are the words it takes rather than a second reading of the tree's format in this program:
-/// `tree add` stages what a path holds, `tree rm` stages its removal, `tree reset` puts it back to
-/// the recorded version, and `align --restore-modify` writes the recorded version of one file,
-/// which is also what recreates a file the work has lost.
+/// `tree add` stages what a path holds, `tree rm` stages its removal, and `tree reset` puts it back
+/// to the recorded version. The restore is the alignment writer's, through
+/// <see cref="AlignCommand.RestoreBaseline"/>, which writes the recorded version of one file and is
+/// also what recreates a file the work has lost.
 /// <para>
 /// The commands are run where the tree is rooted rather than where the panel is, because every one
 /// of them locates the tree from the path it is given. What they answer is whether they ended and
@@ -168,18 +169,6 @@ internal static class TreePanelCommands
     public static IReadOnlyList<string> ResetArguments() =>
         Arguments("tree", "reset");
 
-    /// <summary>The arguments `align --restore-modify` writes a recorded file back with.</summary>
-    /// <remarks>
-    /// The same words restore a modified file and recreate a deleted one: the command writes the
-    /// entry the recorded structure holds at the path, and a path the work no longer has is one it
-    /// creates again. `--restore-delete` is not used here because a path inside a tree is not a
-    /// Layout entry: that mode restores the whole tree.
-    /// </remarks>
-    /// <param name="path">The path inside the tree.</param>
-    /// <returns>The arguments, after the program's name.</returns>
-    public static IReadOnlyList<string> RestoreArguments(string path) =>
-        Arguments("align", "--restore-modify", path);
-
     /// <summary>How much of a command line paths may take, in characters.</summary>
     /// <remarks>
     /// Windows ends a process whose command line passes about thirty-two thousand characters, and a
@@ -292,11 +281,23 @@ internal static class TreePanelCommands
         Run(tree, ResetArguments());
 
     /// <summary>Writes the recorded version of `path` back over the work.</summary>
+    /// <remarks>
+    /// The panel names the path the way the tree does, relative to the tree's root, while the writer
+    /// reads a relative path from the Workspace root. The path is made absolute here so that the two
+    /// name the same file whether the tree sits at the Workspace root or under a directory.
+    /// </remarks>
     /// <param name="tree">The tree's root, where the run is made.</param>
     /// <param name="path">The path inside the tree.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
-    public static (bool Done, string Said) Restore(string tree, string path) =>
-        Run(tree, RestoreArguments(path));
+    public static (bool Done, string Said) Restore(string tree, string path)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        ArgumentNullException.ThrowIfNull(path);
+
+        var at = Path.IsPathRooted(path) ? path : Path.Combine(tree, path);
+
+        return AlignCommand.RestoreBaseline(tree, at);
+    }
 
     /// <summary>Stages a rename as the two facts it is: the new path, and the old one gone.</summary>
     /// <param name="tree">The tree's root, where the runs are made.</param>

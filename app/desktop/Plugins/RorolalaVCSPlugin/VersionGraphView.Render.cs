@@ -4,7 +4,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
-using RolaSharp;
 using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;

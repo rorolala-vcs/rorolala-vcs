@@ -12,6 +12,7 @@ using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using Key = Avalonia.Input.Key;
 
 namespace RorolalaVCSPlugin;
 
@@ -71,7 +72,7 @@ internal sealed class VersionGraphTrackBar : Border
     private bool _shifted;
 
     /// <summary>What each tree was read as, kept for the drawing between file changes.</summary>
-    private readonly Dictionary<string, RolaTreeStatus?> _trees = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TreeStatus?> _trees = new(StringComparer.Ordinal);
 
     /// <summary>The trees a reading is going for, so one tree is read once at a time.</summary>
     private readonly HashSet<string> _askingTrees = new(StringComparer.Ordinal);
@@ -582,7 +583,7 @@ internal sealed class VersionGraphTrackBar : Border
     /// </remarks>
     /// <param name="tree">The tree's directory.</param>
     /// <returns>The reading, or nothing while it is being read or when it cannot be.</returns>
-    private RolaTreeStatus? TreeStatus(string tree)
+    private TreeStatus? TreeStatus(string tree)
     {
         if (_trees.TryGetValue(tree, out var known))
         {
@@ -598,7 +599,7 @@ internal sealed class VersionGraphTrackBar : Border
 
         _ = Task.Run(() =>
         {
-            var status = RolaTreeStatus.Locate(tree);
+            var status = ReadTree(tree);
 
             Dispatcher.UIThread.Post(() =>
             {
@@ -614,6 +615,31 @@ internal sealed class VersionGraphTrackBar : Border
         });
 
         return null;
+    }
+
+    /// <summary>Reads how a tree stands, or nothing when there is no tree to read.</summary>
+    /// <param name="tree">The tree's directory.</param>
+    /// <returns>The reading, or nothing when it is not there.</returns>
+    private static TreeStatus? ReadTree(string tree)
+    {
+        try
+        {
+            var scope = new TreeScope(tree);
+            scope.Read();
+
+            return scope.Status;
+        }
+        catch (RolaReadError error)
+            when (
+                error.Kind
+                is RolaReadErrorKind.InvalidArgument
+                    or RolaReadErrorKind.Unavailable
+            )
+        {
+            // A tree that is not there, or one with nothing to read, is the absence V1's Locate
+            // answered with nothing rather than a failure, and the row keeps the same silence.
+            return null;
+        }
     }
 
     /// <summary>The files a track on a directory would record: every recordable entry under it.</summary>
@@ -689,7 +715,7 @@ internal sealed class VersionGraphTrackBar : Border
     /// <param name="force">Whether the files a plain track refuses are to be recorded anyway.</param>
     /// <returns>The full paths to record, in the order the reading names them.</returns>
     internal static IReadOnlyList<string> RecordableUnder(
-        RolaStatus read,
+        StatusReading read,
         string directory,
         bool force = false
     )

@@ -21,7 +21,7 @@ namespace RorolalaVCSPlugin;
 internal sealed class TreeReadings
 {
     /// <summary>What was read for each tree, so a listing costs one read rather than one per row.</summary>
-    private readonly Dictionary<string, RolaTreeStatus?> _readings = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TreeStatus?> _readings = new(StringComparer.Ordinal);
 
     /// <summary>The trees a read is going for, so one tree is read once at a time.</summary>
     private readonly HashSet<string> _asking = new(StringComparer.Ordinal);
@@ -56,7 +56,7 @@ internal sealed class TreeReadings
     /// <summary>The status of a tree, read once and kept.</summary>
     /// <param name="tree">The tree's directory.</param>
     /// <returns>The reading, or nothing while it is being read or when it cannot be.</returns>
-    public RolaTreeStatus? Reading(string tree)
+    public TreeStatus? Reading(string tree)
     {
         ArgumentNullException.ThrowIfNull(tree);
 
@@ -95,11 +95,23 @@ internal sealed class TreeReadings
     /// <summary>Reads a tree's status, saying so if it could not be read at all.</summary>
     /// <param name="tree">The tree's directory.</param>
     /// <returns>The reading, or nothing when there is nothing to read.</returns>
-    private RolaTreeStatus? Locate(string tree)
+    private TreeStatus? Locate(string tree)
     {
         try
         {
-            return RolaTreeStatus.Locate(tree);
+            // The scope is made over the tree rather than kept: it owns no handle, and the reading it
+            // answers with is a value the cache keeps.
+            var scope = new TreeScope(tree);
+            scope.Read();
+
+            return scope.Status;
+        }
+        catch (RolaReadError error)
+            when (error.Kind is RolaReadErrorKind.InvalidArgument or RolaReadErrorKind.Unavailable)
+        {
+            // A directory that is not there, or is in no tree, is the absence the V1 call answered with
+            // nothing rather than a failure, and nothing is said about it here for the same reason.
+            return null;
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
@@ -113,7 +125,7 @@ internal sealed class TreeReadings
     /// <param name="tree">The tree it was read for.</param>
     /// <param name="version">Which reading of the work it was asked for in.</param>
     /// <param name="status">What it came to.</param>
-    private void Land(string tree, int version, RolaTreeStatus? status)
+    private void Land(string tree, int version, TreeStatus? status)
     {
         Dispatcher.UIThread.Post(() =>
         {

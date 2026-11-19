@@ -50,7 +50,7 @@ internal static class RolaTreeWork
     /// <param name="tree">The tree's directory.</param>
     /// <param name="entry">The path inside the tree.</param>
     /// <returns>What it is and how much of it is staged, or nothing when nothing changed.</returns>
-    public static TreeWork? Of(RolaTreeStatus status, string tree, Entry entry)
+    public static TreeWork? Of(TreeStatus status, string tree, Entry entry)
     {
         ArgumentNullException.ThrowIfNull(status);
         ArgumentNullException.ThrowIfNull(tree);

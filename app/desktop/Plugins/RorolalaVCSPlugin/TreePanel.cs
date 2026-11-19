@@ -154,7 +154,7 @@ internal sealed class TreePanelView : UserControl
     private string? _signature;
 
     /// <summary>The last reading of the tree, kept while a run is going and a new reading is not in yet.</summary>
-    private RolaTreeStatus? _reading;
+    private TreeStatus? _reading;
 
     /// <summary>The directories the staged tree has been collapsed at, so a redraw keeps them closed.</summary>
     private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal);
@@ -653,7 +653,7 @@ internal sealed class TreePanelView : UserControl
     /// <summary>Draws what a reading of the tree came to.</summary>
     /// <param name="tree">The tree's root.</param>
     /// <param name="reading">What the tree says.</param>
-    private void ShowReading(string tree, RolaTreeStatus reading)
+    private void ShowReading(string tree, TreeStatus reading)
     {
         _reading = reading;
 
@@ -686,7 +686,7 @@ internal sealed class TreePanelView : UserControl
     /// <param name="reading">What the tree says.</param>
     /// <returns>The paths to stage, the paths to remove, and the conflicts.</returns>
     private static (string[] Adds, string[] Removals, HashSet<string> Conflicts) Work(
-        RolaTreeStatus reading
+        TreeStatus reading
     )
     {
         var conflicts = reading
@@ -723,7 +723,7 @@ internal sealed class TreePanelView : UserControl
     /// <summary>Draws the staged paths as the tree a version records.</summary>
     /// <param name="tree">The tree's root.</param>
     /// <param name="changes">The staged changes.</param>
-    private void BuildStaged(string tree, IReadOnlyList<RolaTreeChange> changes)
+    private void BuildStaged(string tree, IReadOnlyList<TreeChange> changes)
     {
         var leaves = changes
             .Select(change => new Leaf(
@@ -1145,7 +1145,7 @@ internal sealed class TreePanelView : UserControl
     /// <param name="tree">The tree's root.</param>
     /// <param name="reading">What the tree says.</param>
     /// <param name="conflicts">The paths a merge left in conflict.</param>
-    private void BuildChanges(string tree, RolaTreeStatus reading, HashSet<string> conflicts)
+    private void BuildChanges(string tree, TreeStatus reading, HashSet<string> conflicts)
     {
         var leaves = new List<Leaf>();
 
@@ -1199,7 +1199,7 @@ internal sealed class TreePanelView : UserControl
     /// <param name="tree">The tree's root.</param>
     /// <param name="change">The work's change.</param>
     /// <returns>The leaf.</returns>
-    private Leaf ChangedLeaf(string tree, RolaTreeChange change)
+    private Leaf ChangedLeaf(string tree, TreeChange change)
     {
         Action check = change.Change switch
         {
@@ -1274,7 +1274,7 @@ internal sealed class TreePanelView : UserControl
     /// <param name="tree">The tree's root.</param>
     /// <param name="entry">The untracked path.</param>
     /// <returns>The leaf.</returns>
-    private Leaf UntrackedLeaf(string tree, RolaTreeUntracked entry) =>
+    private Leaf UntrackedLeaf(string tree, TreeUntracked entry) =>
         new(
             Path: entry.Path,
             Change: "added",
@@ -1351,7 +1351,7 @@ internal sealed class TreePanelView : UserControl
     /// <summary>The paths one staged change names, with both ends of a rename.</summary>
     /// <param name="change">The change.</param>
     /// <returns>The paths, once each.</returns>
-    private static IReadOnlyList<string> PathsOf(RolaTreeChange change) =>
+    private static IReadOnlyList<string> PathsOf(TreeChange change) =>
         change.OldPath is { Length: > 0 } old
             ? [change.Path, old]
             : [change.Path];
@@ -1359,7 +1359,7 @@ internal sealed class TreePanelView : UserControl
     /// <summary>The paths a set of staged changes names, once each.</summary>
     /// <param name="changes">The changes.</param>
     /// <returns>The paths.</returns>
-    private static IReadOnlyList<string> StagedPaths(IEnumerable<RolaTreeChange> changes) =>
+    private static IReadOnlyList<string> StagedPaths(IEnumerable<TreeChange> changes) =>
         changes
             .SelectMany(PathsOf)
             .Distinct(StringComparer.Ordinal)
@@ -1433,7 +1433,7 @@ internal sealed class TreePanelView : UserControl
     /// <param name="described">Whether a description is staged.</param>
     /// <param name="busy">Whether a run is going.</param>
     /// <returns>The signature.</returns>
-    private static string SignatureOf(RolaTreeStatus reading, bool described, bool busy)
+    private static string SignatureOf(TreeStatus reading, bool described, bool busy)
     {
         var signature = new System.Text.StringBuilder();
 

@@ -526,7 +526,7 @@ internal sealed class VariantGraphDrawing
     /// </param>
     /// <returns>The drawing.</returns>
     internal static VariantGraphDrawing From(
-        RolaVariantGraph graph,
+        VariantGraphReading graph,
         IReadOnlyList<DraftFact> drafts,
         GraphVocabulary words,
         GraphMeasure measure,
