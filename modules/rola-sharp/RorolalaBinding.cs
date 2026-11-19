@@ -99,6 +99,85 @@ internal struct RolaLayoutError
     public RolaLayoutErrorPayload payload;
 }
 
+internal enum RolaV2ReadErrorTag : int
+{
+    /// <summary>
+    /// The request is not one this build knows, or not one of its fields reads.
+    /// </summary>
+    RolaV2ReadError_InvalidRequest = 0,
+    /// <summary>
+    /// No Workspace holds the directory.
+    /// </summary>
+    RolaV2ReadError_NoWorkspace = 1,
+    /// <summary>
+    /// No Layout is there.
+    /// </summary>
+    RolaV2ReadError_NoLayout = 2,
+    /// <summary>
+    /// No store is there.
+    /// </summary>
+    RolaV2ReadError_NoStore = 3,
+    /// <summary>
+    /// No index is there.
+    /// </summary>
+    RolaV2ReadError_NoIndex = 4,
+    /// <summary>
+    /// What the request names is not there.
+    /// </summary>
+    RolaV2ReadError_NotFound = 5,
+    /// <summary>
+    /// What is there did not read.
+    /// </summary>
+    RolaV2ReadError_Unreadable = 6,
+    /// <summary>
+    /// The caller asked the read to stop.
+    /// </summary>
+    RolaV2ReadError_Cancelled = 7,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaV2ReadErrorInvalidRequest
+{
+    /// <summary>
+    /// Why it did not read.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaV2ReadErrorUnreadable
+{
+    /// <summary>
+    /// Why it did not.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaV2ReadErrorPayload
+{
+    /// <summary>
+    /// The request is not one this build knows, or not one of its fields reads.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaV2ReadErrorInvalidRequest InvalidRequest;
+    /// <summary>
+    /// What is there did not read.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaV2ReadErrorUnreadable Unreadable;
+}
+
+/// <summary>
+/// Why an aggregate read did not produce a document.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaV2ReadError
+{
+    public RolaV2ReadErrorTag tag;
+    public RolaV2ReadErrorPayload payload;
+}
+
 internal enum RolaStorageErrorTag : int
 {
     /// <summary>
@@ -181,6 +260,337 @@ internal struct RolaStorageError
 {
     public RolaStorageErrorTag tag;
     public RolaStorageErrorPayload payload;
+}
+
+internal enum RolaWriteErrorTag : int
+{
+    /// <summary>
+    /// No Workspace holds the directory.
+    /// </summary>
+    RolaWriteError_NoWorkspace = 0,
+    /// <summary>
+    /// The Workspace is working in no Layout.
+    /// </summary>
+    RolaWriteError_NoLayout = 1,
+    /// <summary>
+    /// No Workspace or Vault holds a store.
+    /// </summary>
+    RolaWriteError_NoStore = 2,
+    /// <summary>
+    /// No Workspace, Vault or directory holds an index.
+    /// </summary>
+    RolaWriteError_NoIndex = 3,
+    /// <summary>
+    /// No account is bound, or the account named is not here.
+    /// </summary>
+    RolaWriteError_NoAccount = 4,
+    /// <summary>
+    /// The Layout tracks no Vault.
+    /// </summary>
+    RolaWriteError_NoTrack = 5,
+    /// <summary>
+    /// The copy of a Vault's Layout a name asked for was never fetched here.
+    /// </summary>
+    RolaWriteError_NotCached = 6,
+    /// <summary>
+    /// The action needs the Vault and the run was told to stay offline.
+    /// </summary>
+    RolaWriteError_Offline = 7,
+    /// <summary>
+    /// Another run holds the lock the write needs.
+    /// </summary>
+    RolaWriteError_Locked = 8,
+    /// <summary>
+    /// A path is not one the write accepts.
+    /// </summary>
+    RolaWriteError_InvalidPath = 9,
+    /// <summary>
+    /// The thing the write names is not there.
+    /// </summary>
+    RolaWriteError_NotFound = 10,
+    /// <summary>
+    /// The write would break a rule it cannot break.
+    /// </summary>
+    RolaWriteError_Precondition = 11,
+    /// <summary>
+    /// Ownership refuses the write.
+    /// </summary>
+    RolaWriteError_Ownership = 12,
+    /// <summary>
+    /// The caller asked the write to stop.
+    /// </summary>
+    RolaWriteError_Cancelled = 13,
+    /// <summary>
+    /// An exchange with the Vault failed.
+    /// </summary>
+    RolaWriteError_Action = 14,
+    /// <summary>
+    /// A Layout could not be read or written.
+    /// </summary>
+    RolaWriteError_Layout = 15,
+    /// <summary>
+    /// A store could not be read or written.
+    /// </summary>
+    RolaWriteError_Storage = 16,
+    /// <summary>
+    /// An index could not be read or written.
+    /// </summary>
+    RolaWriteError_Index = 17,
+    /// <summary>
+    /// A file or a directory failed.
+    /// </summary>
+    RolaWriteError_Io = 18,
+    /// <summary>
+    /// A JSON document did not read as the shape a request or a plan has.
+    /// </summary>
+    RolaWriteError_Json = 19,
+    /// <summary>
+    /// The write stopped for a reason this build does not name.
+    /// </summary>
+    RolaWriteError_Internal = 20,
+    /// <summary>
+    /// A tree could not be read or written.
+    /// </summary>
+    RolaWriteError_Tree = 21,
+    /// <summary>
+    /// No tree holds the path.
+    /// </summary>
+    RolaWriteError_NotAtree = 22,
+    /// <summary>
+    /// No Vault holds the directory.
+    /// </summary>
+    RolaWriteError_NoVault = 23,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorLocked
+{
+    /// <summary>
+    /// The path whose lock is held.
+    /// </summary>
+    public nint path;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorInvalidPath
+{
+    /// <summary>
+    /// The path that was refused.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// Why it was refused.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorNotFound
+{
+    /// <summary>
+    /// What is not there.
+    /// </summary>
+    public nint what;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorPrecondition
+{
+    /// <summary>
+    /// What the precondition is about.
+    /// </summary>
+    public nint what;
+    /// <summary>
+    /// Why it does not hold.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorOwnership
+{
+    /// <summary>
+    /// The path ownership is about.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// What ownership says, as a short word.
+    /// </summary>
+    public nint what;
+    /// <summary>
+    /// Why, when there is a longer reason.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorAction
+{
+    /// <summary>
+    /// Why the exchange failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorLayout
+{
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorStorage
+{
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorIndex
+{
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorIo
+{
+    /// <summary>
+    /// The path that failed.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorJson
+{
+    /// <summary>
+    /// Why it did not.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorInternal
+{
+    /// <summary>
+    /// Why it stopped.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorTree
+{
+    /// <summary>
+    /// Why it failed.
+    /// </summary>
+    public nint reason;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteErrorNotAtree
+{
+    /// <summary>
+    /// The path that is not inside a tree.
+    /// </summary>
+    public nint path;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaWriteErrorPayload
+{
+    /// <summary>
+    /// Another run holds the lock the write needs.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorLocked Locked;
+    /// <summary>
+    /// A path is not one the write accepts.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorInvalidPath InvalidPath;
+    /// <summary>
+    /// The thing the write names is not there.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorNotFound NotFound;
+    /// <summary>
+    /// The write would break a rule it cannot break.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorPrecondition Precondition;
+    /// <summary>
+    /// Ownership refuses the write.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorOwnership Ownership;
+    /// <summary>
+    /// An exchange with the Vault failed.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorAction Action;
+    /// <summary>
+    /// A Layout could not be read or written.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorLayout Layout;
+    /// <summary>
+    /// A store could not be read or written.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorStorage Storage;
+    /// <summary>
+    /// An index could not be read or written.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorIndex Index;
+    /// <summary>
+    /// A file or a directory failed.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorIo Io;
+    /// <summary>
+    /// A JSON document did not read as the shape a request or a plan has.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorJson Json;
+    /// <summary>
+    /// The write stopped for a reason this build does not name.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorInternal Internal;
+    /// <summary>
+    /// A tree could not be read or written.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorTree Tree;
+    /// <summary>
+    /// No tree holds the path.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteErrorNotAtree NotATree;
+}
+
+/// <summary>
+/// Why a write did not finish.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteError
+{
+    public RolaWriteErrorTag tag;
+    public RolaWriteErrorPayload payload;
 }
 
 internal enum RolaAuthErrorTag : int
@@ -1781,7 +2191,19 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_layout_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_v2read_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_storage_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_cancellation(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_error(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_progress(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_account(nint value);
@@ -1997,6 +2419,16 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_vault_config_json(nint directory);
 
     /// <summary>
+    /// The Vaults the machine's daemon serves, by namespace.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"vaults":[{"name":"default","path":"/vaults/default"}]}`, or `null` when the table cannot be
+    /// read.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_daemon_vaults_json();
+
+    /// <summary>
     /// Which Vaults can provide what a variant, a version or a Layout entry names.
     ///
     /// `directory` is the directory the Workspace is searched upwards from, and `request` is a UTF-8
@@ -2033,9 +2465,11 @@ internal static partial class RorolalaBinding
     /// What a Layout's entries hold, as `rola layout entries --json` writes it.
     ///
     /// An owned JSON string the caller releases with `free_string`, `{"entries":[{"path","uuid",
-    /// "version","owner","description","deprecated"}]}`, in path order and then `Uuid` order. `path` is
+    /// "version","owner","description","preference","deprecated"}]}`, in path order and then `Uuid`
+    /// order. `path` is
     /// `.` for the root entry, `version` is the hex the version is stored under, `owner` is empty when
-    /// no account holds it, and `deprecated` says whether the Vault moved it under `@/removed/`. A
+    /// no account holds it, `preference` is empty when the store may choose, and `deprecated` says
+    /// whether the Vault moved it under `@/removed/`. A
     /// failure is a `RolaLayoutError *` the caller releases with `free_rola_layout_error`.
     ///
     /// Returns a result:
@@ -2052,6 +2486,14 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_member_locate(nint vault, nint rule);
 
     /// <summary>
+    /// Every member `rule` finds beside the current Workspace, with no Vault to search beside.
+    ///
+    /// A `RolaMembers` the caller releases with `free_rola_members`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_member_locate_local(nint rule);
+
+    /// <summary>
     /// The member named `member_name`, if any scope the rule turns on holds its public key.
     ///
     /// Returns an owned `RolaMember *`, or `NULL` when there is nothing; release it with `free_rola_member`.
@@ -2066,7 +2508,27 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_account_locate(nint vault, nint rule);
 
     /// <summary>
-    /// The account named `account_name`, if a local root holds its private key.
+    /// Every account `rule` finds beside the current Workspace, with no Vault to search beside.
+    ///
+    /// A `RolaAccounts` the caller releases with `free_rola_accounts`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_account_locate_local(nint rule);
+
+    /// <summary>
+    /// Every account whose private key is directly inside `keys`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_user_accounts(nint keys, nint rule);
+
+    /// <summary>
+    /// Every member whose public key is directly inside `keys`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_user_members(nint keys, nint rule);
+
+    /// <summary>
+    /// The account named `account_name`, if any scope the rule turns on holds its private key.
     ///
     /// Returns an owned `RolaAccount *`, or `NULL` when there is nothing; release it with `free_rola_account`.
     /// </summary>
@@ -2098,6 +2560,20 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint rola_current_account();
+
+    /// <summary>
+    /// Runs one read named by a request document.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, or a `RolaV2ReadError *` the caller
+    /// releases with `free_rola_v2read_error`. The request is one object,
+    /// `{"kind":"tree_status","path":"..."}`, and the cancellation is checked before the read starts.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaV2ReadError *`, owned; release it with `free_rola_v2read_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_v2_read_json(nint directory, nint request, nint cancellation);
 
     /// <summary>
     /// Reads how the work under `directory` stands beside the Layout it works from.
@@ -2182,6 +2658,868 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_storage_extract(nint directory, nint hash, nint destination);
+
+    /// <summary>
+    /// The chunks a manifest names, when the content under `hash` was stored chunked.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"chunks":[{"key":"blake3:...","len":N}]}`, or `null` when the content is not chunked. A failure
+    /// is a `RolaStorageError *` the caller releases with `free_rola_storage_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_storage_manifest_json(nint directory, nint hash);
+
+    /// <summary>
+    /// The structure stored under `hash`, as the entries a tree version names.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, or `null` when the content does not
+    /// decode as a tree structure. A failure is a `RolaStorageError *` the caller releases with
+    /// `free_rola_storage_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_tree_structure_json(nint directory, nint hash);
+
+    /// <summary>
+    /// Puts a path under a Workspace on one version and writes what the record says about it.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `owner` and `preference` are empty when the entry has none.
+    ///
+    /// It is the single-entry form: it aligns one path with one version. The `rola_write_align` export
+    /// is the whole `rola align` workflow, which takes a request document instead.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_align_entry(nint directory, nint path, nint version, nint owner, nint description, nint preference);
+
+    /// <summary>
+    /// Puts a path under a Vault on one version and writes what the record says about it.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `owner` and `preference` are empty when the entry has none.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_align_vault(nint directory, nint path, nint version, nint owner, nint description, nint preference);
+
+    /// <summary>
+    /// Runs the whole `rola align` workflow for a request document and answers what it came to.
+    ///
+    /// `request` is an owned JSON document the caller keeps; it names the Workspace, the path and the
+    /// mode, and carries the `Common` fields beside them:
+    /// `{"workspace":"D:/work","path":"a.txt","mode":{"kind":"delete"}}`. The mode is one of `delete`,
+    /// `rename`, `break`, `move_to`, `restore_move`, `restore_modify`, `restore_staged`,
+    /// `restore_delete` and `restore`, where `move_to` also carries `path`. Relative paths in `path`
+    /// and in a `move_to` mode resolve against the Workspace root. `completely` and `include_ignored`
+    /// are false when left out.
+    ///
+    /// `progress` is the `RolaProgress *` the run says its events to, and `cancellation` is the
+    /// `RolaCancellation *` it checks. The outcome is an owned JSON string the caller releases with
+    /// `free_string`, tagged by `kind`: `{"kind":"paths","paths":[{"did":"...","what":"..."}]}`,
+    /// `{"kind":"tree","path":"..."}`, `{"kind":"tree_file","path":"...","staged":...}` or
+    /// `{"kind":"refused","refusal":{...}}`. A failure is a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_align(nint request, nint progress, nint cancellation);
+
+    /// <summary>
+    /// Brings what a Vault holds and a Layout does not into it, or a variant the index holds in to be
+    ///
+    /// An owned JSON string the caller releases with `free_string`, or a `RolaWriteError *` the caller
+    /// releases with `free_rola_write_error`. `progress` is the handle the caller polls with
+    /// `rola_progress_next_json`, and `cancellation` is the flag it sets with
+    /// `rola_cancellation_cancel`.
+    ///
+    /// A request that names no `join` brings entries in, and the answer is
+    /// `{"entries":[{"uuid":"...","remote_path":"...","local_path":"..."}],"failed":["..."]}`.
+    /// `remote_path` is null when the Vault's Layout names no path for the entry, and `failed` holds
+    /// one line per entry that could not come in. Its document is the fields every write request
+    /// carries (`workspace`, `account`, `target`, `offline`, `force`, `concurrency` and `labels`) at
+    /// the top level, `refs` as an array of strings, `to` as a string or null, and `by_name` as a
+    /// bool. The references are paths of the Vault's Layout and are never read as filesystem paths;
+    /// `to` is where this side writes, and a relative one is read against the Workspace's root, not
+    /// against a process directory.
+    ///
+    /// A request that carries `join` brings a variant in, and the answer is
+    /// `{"target":"...","variant":"...","path":"..."}`, the file it waits to be joined into, the
+    /// variant that came in and the path its file was written to. Its document is the same fields
+    /// every write request carries, `join` as the marker that asks for this form and whose value is not
+    /// read, `variant` as the variant to bring in, `file` as the file it is joined into, `to` as where
+    /// the variant file is to lie or null for the place the convention gives it, and `tree_merge` as a
+    /// bool. `refs` and `by_name` are not part of it.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_bring(nint request, nint progress, nint cancellation);
+
+    /// <summary>
+    /// Makes a cancellation a C caller can set.
+    ///
+    /// A `RolaCancellation *` the caller releases with `free_rola_cancellation`, or null when one cannot
+    /// be made.
+    ///
+    /// Returns an owned `RolaCancellation *`, or `NULL` when there is nothing; release it with `free_rola_cancellation`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_cancellation_new();
+
+    /// <summary>
+    /// Asks a write to stop.
+    ///
+    /// Nothing is returned. The write checks the flag at its next step.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void rola_cancellation_cancel(nint cancellation);
+
+    /// <summary>
+    /// Whether a write has been asked to stop.
+    ///
+    /// The flag as a `bool`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_cancellation_is_cancelled(nint cancellation);
+
+    /// <summary>
+    /// Puts a version's content back at a path under a Workspace.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_checkout_restore(nint directory, nint path, nint version);
+
+    /// <summary>
+    /// Puts a version's content back at a path under a Vault.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_checkout_restore_vault(nint directory, nint path, nint version);
+
+    /// <summary>
+    /// Forgets the reading of a path under a Workspace.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_checkout_forget(nint directory, nint path);
+
+    /// <summary>
+    /// Writes down that a path under a Workspace holds what its Layout now names.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_checkout_remember(nint directory, nint path);
+
+    /// <summary>
+    /// Reads what a collecting run would take away under a directory.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, the plan's numbers, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. A grace of zero means the
+    /// default.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_collect_plan(nint directory, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index, ulong grace);
+
+    /// <summary>
+    /// Carries out a collecting run under a directory, reading its plan afresh.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, the sweep's numbers, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. A grace of zero means the
+    /// default.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_collect_apply(nint directory, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index, ulong grace);
+
+    /// <summary>
+    /// Records a file's content as a variant and a version in the index a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"variant":"blake3:...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases
+    /// with `free_rola_write_error`. `join` is the empty string when the variant merges nothing.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_index_file_version(nint directory, nint storage, nint @base, nint join, nint creator, nint message);
+
+    /// <summary>
+    /// Writes one object into the index a directory is in.
+    ///
+    /// An owned string the caller releases with `free_string`, the key the object was written under,
+    /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. The request is one
+    /// object, `{"kind":"variant",...}`, `{"kind":"version",...}`, `{"kind":"creator",...}` or
+    /// `{"kind":"message",...}`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_index_object_json(nint directory, nint request);
+
+    /// <summary>
+    /// Moves one path of a Layout a directory holds.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_move_path(nint directory, nint layout, nint from, nint to);
+
+    /// <summary>
+    /// Binds a path of a Layout a directory holds.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_create_path(nint directory, nint layout, nint path, nint uuid);
+
+    /// <summary>
+    /// Removes a path of a Layout a directory holds.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_remove_path(nint directory, nint layout, nint path);
+
+    /// <summary>
+    /// Makes or changes an entry of a Layout a directory holds.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    /// `owner` and `description` are empty when the entry has neither. `update` says whether the entry
+    /// must already be there.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_write_entry(nint directory, nint layout, nint uuid, nint version, nint owner, nint description, [MarshalAs(UnmanagedType.U1)] bool update);
+
+    /// <summary>
+    /// Changes the owner of one entry of a Layout a directory holds.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in; an
+    /// empty `owner` clears the owner.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_set_owner(nint directory, nint layout, nint uuid, nint owner);
+
+    /// <summary>
+    /// Changes the description of one entry of a Layout a directory holds.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_set_description(nint directory, nint layout, nint uuid, nint description);
+
+    /// <summary>
+    /// Changes the cut one entry of a Layout a directory holds prefers.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in; an
+    /// empty `preference` clears it.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_set_preference(nint directory, nint layout, nint uuid, nint preference);
+
+    /// <summary>
+    /// Changes the version one entry of a Layout a directory holds names.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_set_version(nint directory, nint layout, nint uuid, nint version);
+
+    /// <summary>
+    /// Changes everything an entry of a Layout a directory holds holds.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in; an
+    /// empty `owner` or `preference` clears it.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_set_all(nint directory, nint layout, nint uuid, nint version, nint owner, nint description, nint preference);
+
+    /// <summary>
+    /// Drops an entry of a Layout a directory holds.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_remove_entry(nint directory, nint layout, nint uuid);
+
+    /// <summary>
+    /// Gives the entry at a path of a Layout a directory holds a new `Uuid`.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_switch_entry(nint directory, nint layout, nint path, nint uuid, nint version, nint owner, nint description, nint preference);
+
+    /// <summary>
+    /// Applies a batch of changes named as JSON to the Layout a directory is in.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_apply(nint directory, nint layout, nint ops);
+
+    /// <summary>
+    /// Moves a path in the fetched copy of a Vault's own Layout.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `truth@VAULT`, the name a fetch left the copy under. The
+    /// Vault is asked first, and the copy follows only what it answered; a failure leaves the copy as
+    /// it was.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_move_fetched(nint directory, nint layout, nint from, nint to);
+
+    /// <summary>
+    /// Removes the entry a fetched copy names, path and all.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `truth@VAULT`, the name a fetch left the copy under, and
+    /// `uuid` is the entry as the copy names it. The Vault is asked first, and the copy follows only
+    /// what it answered; a failure leaves the copy as it was.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_remove_fetched_entry(nint directory, nint layout, nint uuid);
+
+    /// <summary>
+    /// Plans the ownership moves a JSON request names, without moving any.
+    ///
+    /// `request` is a JSON object of the shape [`OwnershipRequest`] reads: `workspace`, `account`,
+    /// `target`, `offline`, `force`, `concurrency`, `labels`, `kind`, `paths` and `allow_partial`. A
+    /// relative name in `paths` is read from the Workspace's root, not from the process's working
+    /// directory, and an absolute one is taken as it stands. The answer is a JSON string the caller
+    /// releases with `free_string`, the shape [`OwnershipPlanReport`] writes:
+    /// `{"wanted":[{"path":"...","uuid":"..."}],"refused":[...],"skipped":0}`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_ownership_plan(nint request, nint progress, nint cancellation);
+
+    /// <summary>
+    /// Moves the ownership a JSON request names and a plan agreed to.
+    ///
+    /// `request` is the JSON object [`ownership_plan_at`] reads, with the same rule for a relative
+    /// `paths` entry. `plan` is the JSON that call answered with, or an empty string for a run that
+    /// wants the plan re-made and applied without comparing. The answer is a JSON string the caller
+    /// releases with `free_string`, the shape [`Outcome`] writes:
+    /// `{"entries":[{"path":"...","uuid":"...","owner":"..."}],"failed":[...]}`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_ownership_apply(nint request, nint plan, nint progress, nint cancellation);
+
+    /// <summary>
+    /// Lays the store a directory is in out afresh.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_pack_storage(nint directory);
+
+    /// <summary>
+    /// Lays the VCS index a directory is in out afresh.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_pack_index(nint directory);
+
+    /// <summary>
+    /// Lays the store and index of the Workspace a directory is in out afresh.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_pack(nint directory, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index);
+
+    /// <summary>
+    /// Lays the store and index of the Vault a directory is in out afresh.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_pack_vault(nint directory, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index);
+
+    /// <summary>
+    /// Makes a progress handle for a C caller.
+    ///
+    /// A `RolaProgress *` the caller releases with `free_rola_progress`, or null when one cannot be
+    /// made.
+    ///
+    /// Returns an owned `RolaProgress *`, or `NULL` when there is nothing; release it with `free_rola_progress`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_progress_new();
+
+    /// <summary>
+    /// The next event a write has said, as JSON.
+    ///
+    /// An owned string the caller releases with `free_string`, or the JSON `null` when nothing is
+    /// waiting. The shape is `rorolala_utils_progress::Signal`'s serde output.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_progress_next_json(nint progress);
+
+    /// <summary>
+    /// Moves the record of a path under a Workspace to a version.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. An empty `target` moves one version back, `fork` gives the path a fresh
+    /// `Uuid`, and `only_index` leaves the work on disk alone. `force` goes past changes the record does
+    /// not name, and `deny_jump` refuses a target off the path's chain.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_retrack_file(nint directory, nint path, nint target, [MarshalAs(UnmanagedType.U1)] bool fork, [MarshalAs(UnmanagedType.U1)] bool only_index, [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool deny_jump);
+
+    /// <summary>
+    /// Moves the record of a path under a Vault to a version.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. An empty `target` moves one version back, `fork` gives the path a fresh
+    /// `Uuid`, and `only_index` leaves the work on disk alone. `force` goes past changes the record does
+    /// not name, and `deny_jump` refuses a target off the path's chain.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_retrack_vault_file(nint directory, nint path, nint target, [MarshalAs(UnmanagedType.U1)] bool fork, [MarshalAs(UnmanagedType.U1)] bool only_index, [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool deny_jump);
+
+    /// <summary>
+    /// Retracks one path of a Workspace from a JSON request.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, or a `RolaWriteError *` the caller
+    /// releases with `free_rola_write_error`. A path is answered as
+    /// `{"kind":"path","path":"art/a.psd","version":"0f0f0f","number":3,"changed":true,
+    /// "switched":true,"from":null,"to":null,"forked":false,"took":[["origin",2]]}`, and a tree as
+    /// `{"kind":"tree","path":"art","version":"0f0f0f","took":[]}`. `version` is the digest in hex, and
+    /// `number` is the version's number in its chain, or null when the run does not know it; `from` and
+    /// `to` are the `Uuid`s a run that recorded another entry moved between, or null; and `took` names
+    /// each Vault that handed content over and how many objects it brought. `progress` is the handle the
+    /// caller polls with `rola_progress_next_json`, and `cancellation` is the flag it sets with
+    /// `rola_cancellation_cancel`.
+    ///
+    /// `request` is the JSON of a [`RetrackRequest`]: its flattened `common` fields at the top level,
+    /// `file` and `record` as strings, and `only_index`, `deny_jump` and `fork` as bools. `file` is a
+    /// path in the Workspace, relative to its root or absolute. An empty or missing `record` moves one
+    /// version back.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_retrack(nint request, nint progress, nint cancellation);
+
+    /// <summary>
+    /// Puts a file's content into the store a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"key":"blake3:...","chunked":false}`,
+    /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is the empty
+    /// string when the store is to choose the cut.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_storage_put_file(nint directory, nint file, nint policy);
+
+    /// <summary>
+    /// Builds a sync plan from a JSON request.
+    ///
+    /// `request` is a JSON object of the shape [`SyncRequest`] reads: the fields every write request
+    /// carries (`workspace`, `account`, `target`, `offline`, `force`, `concurrency` and `labels`) at
+    /// the top level, and `direction` (`up`, `down` or `both`), `forced`, `storage`, `index` and
+    /// `layout` when they are needed. The answer is an owned JSON string the caller releases with
+    /// `free_string`:
+    /// `{"layout":"main","vault":"default","forced":false,"entries":[...],"up_to_date":0,"layout_read":true,"index":true,"storage":true}`.
+    /// An entry is
+    /// `{"uuid":"...","local_path":"...","remote_path":"...","planned_path":null,"local_version":"...","remote_version":"...","owner":"...","deprecated":false,"item_kind":"file","modified":false,"kind":"send"}`.
+    /// `progress` is the handle the caller polls with `rola_progress_next_json`, and `cancellation` is
+    /// the flag it sets with `rola_cancellation_cancel`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_sync_plan(nint request, nint progress, nint cancellation);
+
+    /// <summary>
+    /// Carries a sync run out under a Workspace.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, the run's numbers, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `direction` is `up`, `down`
+    /// or `both`; `layout` says whether the Vault's Layout is read and written. `key_path` is the
+    /// private key the run signs with.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_sync(nint directory, nint vault, nint account, nint key_path, nint address, nint direction, [MarshalAs(UnmanagedType.U1)] bool forced, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index, [MarshalAs(UnmanagedType.U1)] bool layout);
+
+    /// <summary>
+    /// Carries out a sync plan a caller agreed to.
+    ///
+    /// `request` is a JSON object of the shape [`SyncRequest`] reads, the same document
+    /// `rola_write_sync_plan` takes. `plan` is the JSON that call answered with, which this one reads
+    /// again and compares with the work before writing. The answer is an owned JSON string the caller
+    /// releases with `free_string`:
+    /// `{"layout":"main","vault":"default","applied":0,"received":0,"up_to_date":0,"failed":[],"layout_read":true,"index_objects":0,"storage_objects":0}`.
+    /// `failed` holds one line per entry that was not written, and `layout_read` is false for a request
+    /// that leaves the Vault's Layout alone. `progress` is the handle the caller polls with
+    /// `rola_progress_next_json`, and `cancellation` is the flag it sets with
+    /// `rola_cancellation_cancel`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_sync_apply(nint request, nint plan, nint progress, nint cancellation);
+
+    /// <summary>
+    /// Records one file's content as a version in the Workspace a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","storage":"...","variant":"...","version":"..."}`, or a `RolaWriteError *` the
+    /// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice,
+    /// `owner` is empty when the entry has no owner, and `description` is the entry's description.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_track_file(nint directory, nint path, nint creator, nint message, nint policy, nint owner, nint description);
+
+    /// <summary>
+    /// Records one file's content as a version in the Vault a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"id":"...","storage":"...","variant":"...","version":"..."}`, or a `RolaWriteError *` the
+    /// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice,
+    /// `owner` is empty when the entry has no owner, and `description` is the entry's description.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_track_vault_file(nint directory, nint path, nint creator, nint message, nint policy, nint owner, nint description);
+
+    /// <summary>
+    /// Reads what a batch recording would record, without writing anything.
+    ///
+    /// `request` is a JSON object of the shape [`batch::TrackRequest`] reads: the fields every write
+    /// request carries (`workspace`, `account`, `target`, `offline`, `force`, `concurrency` and
+    /// `labels`) at the top level, `files` as an array of strings, and `replace`, `policy` and
+    /// `include_ignored` when they are needed. A relative name in `files` is read from the Workspace
+    /// root, not from the process directory. The answer is an owned JSON string the caller releases
+    /// with `free_string`,
+    /// `{"subjects":[{"tree":false,"key":"...","path":"a.txt","digest":"..."}],"unchanged":0,"prefill":[],"refused":null}`.
+    /// `digest` is the content's digest in lowercase hex, and empty for a tree. `key` is the subject's
+    /// section key, and `path` is the name the messages object maps. `refused` is null or an externally
+    /// tagged refusal object. `progress` is the handle the caller polls with
+    /// `rola_progress_next_json`, and `cancellation` is the flag it sets with
+    /// `rola_cancellation_cancel`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_track_plan(nint request, nint progress, nint cancellation);
+
+    /// <summary>
+    /// Records what a plan named, once the caller has said what each subject did.
+    ///
+    /// `request` is the JSON object [`track_plan_at`] reads. `plan` is the JSON that call answered
+    /// with. `messages` is a JSON object mapping each subject's `path` to the words its version
+    /// carries, as `{"a.txt":"first","art":"tree structure"}`. The answer is an owned JSON string the
+    /// caller releases with `free_string`,
+    /// `{"items":[{"path":"a.txt","action":"added"}],"refused":[]}`. `action` is `added`, `updated` or
+    /// `replaced`. `refused` is the same externally tagged shape the plan answers with, and `items` is
+    /// empty when it is not.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_track_apply(nint request, nint plan, nint messages, nint progress, nint cancellation);
+
+    /// <summary>
+    /// Writes the description of the tree a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"bytes":N}`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `target` is the tree's
+    /// path, relative to `directory`, and empty for the directory itself.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tree_description(nint directory, nint target, nint text);
+
+    /// <summary>
+    /// Stages work into the tree a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`,
+    /// `{"changes":[{"path":"a","kind":"added"}]}`, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `paths` is a JSON array of strings, and `target` is the tree's path,
+    /// empty for the directory itself.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tree_add(nint directory, nint target, nint paths, [MarshalAs(UnmanagedType.U1)] bool include_ignored);
+
+    /// <summary>
+    /// Makes the tree a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"path":".","collapsed":0,
+    /// "is_root":true}`, or a `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    /// `target` is the tree's path, empty for the directory itself, and `force` says the caller has
+    /// agreed to the collapse.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tree_init(nint directory, nint target, [MarshalAs(UnmanagedType.U1)] bool force);
+
+    /// <summary>
+    /// Stages the removal of paths from the tree a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"paths":[...],"cached":false}`,
+    /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a JSON array
+    /// of strings, and `target` is the tree's path, empty for the directory itself.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tree_remove_paths(nint directory, nint target, nint paths, [MarshalAs(UnmanagedType.U1)] bool cached, [MarshalAs(UnmanagedType.U1)] bool recursive, [MarshalAs(UnmanagedType.U1)] bool force);
+
+    /// <summary>
+    /// Resets the staging area of the tree a directory is in.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"whole":false,"paths":[...]}`, or
+    /// a `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a JSON array of
+    /// strings, and `target` is the tree's path, empty for the directory itself.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_tree_reset(nint directory, nint target, nint paths);
+
+    /// <summary>
+    /// Makes the Layout of the Workspace holding a directory track a Vault.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_workspace_set_track(nint directory, nint track);
+
+    /// <summary>
+    /// Makes the Layout of the Workspace holding a directory track no Vault.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_workspace_clear_track(nint directory);
+
+    /// <summary>
+    /// Rebuilds the tree cache of the Workspace holding a directory.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, `{"paths":N,"bytes":N}`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_workspace_rebuild_cache(nint directory);
 
     /// <summary>
     /// Opens the book at `path`.
