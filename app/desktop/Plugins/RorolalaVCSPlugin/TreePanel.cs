@@ -517,14 +517,17 @@ internal sealed class TreePanelView : UserControl
     /// <returns>The tree's root, or nothing.</returns>
     private static string? ChosenTree()
     {
-        if (ChosenEntry.Current is { } file)
-        {
-            return InTree(file);
-        }
-
+        // The directory is the newer answer when one is chosen: a file's click clears it, so a
+        // directory still standing is what the last choice was about. Asking the file first leaves a
+        // tree picked after a file unseen, and a tree with nothing in it has no file to pick instead.
         if (ChosenDirectory.Current is { } directory)
         {
             return InTree(directory);
+        }
+
+        if (ChosenEntry.Current is { } file)
+        {
+            return InTree(file);
         }
 
         var at = BaseDirectory.Current;

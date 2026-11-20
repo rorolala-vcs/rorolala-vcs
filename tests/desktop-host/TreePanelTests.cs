@@ -34,6 +34,42 @@ public sealed class TreePanelTests
     /// </remarks>
     public TreePanelTests() => Environment.SetEnvironmentVariable("ROLA_EXE", Program());
 
+    /// <summary>A tree chosen after a file is the tree the panel shows, even when it holds nothing.</summary>
+    /// <remarks>
+    /// A file's click leaves the file as the last entry chosen and a tree's click clears it, so the
+    /// directory is the newer answer. Asking the file first kept the panel on the file's tree, which left
+    /// a tree with no path inside it unable to be the one the panel was about.
+    /// </remarks>
+    [Fact]
+    public void ATreeChosenAfterAFileIsTheOneThePanelShows()
+    {
+        var tree = TreeMark("after-file");
+        var elsewhere = Scratch.New("tree-panel-file");
+        var file = Path.Combine(elsewhere, "a.txt");
+
+        File.WriteAllText(file, "x");
+
+        var services = Host.Services();
+        var view = Panel(services);
+        var window = new Window { Width = 520, Height = 520, Content = view };
+
+        window.Show();
+
+        try
+        {
+            BaseDirectory.Publish(tree);
+            ChosenEntry.Publish(new Entry(file, EntryKind.File));
+            ChosenDirectory.Publish(new Entry(tree, EntryKind.Directory));
+            Pump();
+
+            Assert.Equal(Path.GetFileName(Path.TrimEndingDirectorySeparator(tree)), view.Title);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>A description typed into the panel is written to the tree's mark without a save.</summary>
     [Fact]
     public void ADescriptionIsWrittenToTheTreesMark()
