@@ -1,9 +1,9 @@
 ---
-name: adult
-description: Audit the current state of rorolala and record it under `__ADULT_<subject>_<YYYYMMDD>/README.md` without touching code. Every run appends a dated `# Adult - <date> - <hash>` section to the same README, so one subject can be audited again while the earlier snapshots stay. Use when the user asks for an audit, a review, a check or a health assessment, or asks what the current state is, with no code change allowed.
+name: audit
+description: Audit the current state of rorolala and record it under `__AUDIT_<subject>_<YYYYMMDD>/README.md` without touching code. Every run appends a dated `# Audit - <date> - <hash>` section to the same README, so one subject can be audited again while the earlier snapshots stay. Use when the user asks for an audit, a review, a check or a health assessment, or asks what the current state is, with no code change allowed.
 ---
 
-# Adult
+# Audit
 
 An audit records what the tree is, with evidence, and leaves the code alone. One subject gets one
 directory; each run appends a dated section, so the log shows how the subject moved.
@@ -49,7 +49,7 @@ has no `&&`, so run chained lines one at a time.
    Get-Date -Format 'yyyy-MM-dd'
    ```
 
-4. Look for `__ADULT_<subject>_*` in the project root. When it exists, read the README and append; the
+4. Look for `__AUDIT_<subject>_*` in the project root. When it exists, read the README and append; the
    frontmatter and the earlier sections stay untouched. Say which directory you reuse or create.
 5. Gather evidence with read-only means: reading, `rg` or `Select-String`, `git --no-pager log`,
    `git --no-pager diff`, and running the program when its behaviour is the subject. `grep` is not a
@@ -58,7 +58,7 @@ has no `&&`, so run chained lines one at a time.
 
 ## Where the record lives
 
-`__ADULT_<subject>_<YYYYMMDD>/README.md` in the project root, the date being the day of the first
+`__AUDIT_<subject>_<YYYYMMDD>/README.md` in the project root, the date being the day of the first
 audit. Supporting files (a captured output, a table) may sit beside it. `__*` is gitignored, so the
 record is local unless the user force-adds it.
 
@@ -79,7 +79,7 @@ section heading carries the current pair.
 Sections are separated by `---`, newest last:
 
 ```markdown
-# Adult - 2026-11-20 - 4f3a9c1
+# Audit - 2026-11-20 - 4f3a9c1
 
 ## Scope
 
@@ -110,7 +110,7 @@ them.
 
 ---
 
-# Adult - 2026-12-02 - 8b1d0aa
+# Audit - 2026-12-02 - 8b1d0aa
 ```
 
 A finding states the condition, the consequence and the evidence. `AD-<nnn>` numbering continues
