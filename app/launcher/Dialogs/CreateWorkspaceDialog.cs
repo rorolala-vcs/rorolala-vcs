@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using RorolalaDesktop.I18n;
 using RorolalaLauncher.Controls;
 using RorolalaLauncher.Rola;
@@ -43,6 +44,9 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
 
     /// <summary>What is wrong with the directory.</summary>
     private readonly TextBlock _directorySays;
+
+    /// <summary>The button that asks the platform for a directory.</summary>
+    private readonly FlatButton _browse;
 
     /// <summary>The button that makes the Workspace.</summary>
     private readonly FlatButton _create;
@@ -160,9 +164,31 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
         _directorySays.TextWrapping = TextWrapping.NoWrap;
         _directorySays.TextTrimming = TextTrimming.CharacterEllipsis;
 
+        _browse = new FlatButton(Line(skin, RolaI18N.Get("launcher.create.browse")), skin, ButtonKind.Surface)
+        {
+            Height = 34,
+            CornerRadius = new CornerRadius(5),
+            Padding = new Thickness(12, 0, 12, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Focusable = true,
+        };
+
+        _browse.Clicked += (_, _) => _ = Choose();
+
+        var place = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ColumnSpacing = 8,
+        };
+
+        place.Children.Add(_directory);
+
+        Grid.SetColumn(_browse, 1);
+        place.Children.Add(_browse);
+
         Body.Children.Add(Line(skin, RolaI18N.Get("launcher.create.vault_address"), 11.5, muted: true));
         Body.Children.Add(pickHost);
-        Body.Children.Add(Block(skin, RolaI18N.Get("launcher.create.directory"), _directory, _directorySays));
+        Body.Children.Add(Block(skin, RolaI18N.Get("launcher.create.directory"), place, _directorySays));
 
         var cancel = new FlatButton(Line(skin, RolaI18N.Get("launcher.common.cancel")), skin)
         {
@@ -396,11 +422,62 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
         return held;
     }
 
+    /// <summary>
+    /// Asks the platform for a directory, and writes what it answered.
+    /// </summary>
+    /// <remarks>
+    /// The keyboard is taken off the field before the picker opens, because what a text box is still composing
+    /// is committed when it loses the keyboard, and a commit that landed after the answer would write over it.
+    /// A picker the platform cannot show leaves the field editable by hand rather than failing the window.
+    /// </remarks>
+    private async Task Choose()
+    {
+        _browse.Focus();
+
+        IReadOnlyList<IStorageFolder> folders;
+
+        try
+        {
+            folders = await StorageProvider.OpenFolderPickerAsync(
+                new FolderPickerOpenOptions
+                {
+                    Title = RolaI18N.Get("launcher.create.browse"),
+                    AllowMultiple = false,
+                }
+            );
+        }
+        catch (Exception error) when (error is InvalidOperationException or NotSupportedException)
+        {
+            Say(RolaI18N.Get("launcher.create.picker_failed", error.Message));
+
+            return;
+        }
+
+        if (folders.Count == 0)
+        {
+            return;
+        }
+
+        var picked = folders[0].TryGetLocalPath() ?? folders[0].Path.LocalPath;
+
+        if (string.IsNullOrWhiteSpace(picked))
+        {
+            return;
+        }
+
+        _directory.Text = picked;
+        _directory.CaretIndex = picked.Length;
+        _directory.Focus();
+    }
+
     /// <summary>Holds the window while something is done, or lets it go.</summary>
     /// <param name="busy">Whether something is being done.</param>
     private void Busy(bool busy)
     {
         _busy = busy;
+
+        _directory.IsEnabled = !busy;
+        _browse.Enabled = !busy;
 
         _create.Child = Line(
             _skin,
@@ -420,7 +497,7 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
     /// <param name="field">The field.</param>
     /// <param name="says">Where what is wrong is written.</param>
     /// <returns>The block.</returns>
-    private static Control Block(Skin skin, string label, TextBox field, TextBlock says)
+    private static Control Block(Skin skin, string label, Control field, TextBlock says)
     {
         var block = new StackPanel { Spacing = 5 };
 

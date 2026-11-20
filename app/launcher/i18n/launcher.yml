@@ -308,6 +308,12 @@ launcher:
     directory_unreadable:
       en: "That folder could not be read: %{reason}"
       zh-CN: "无法读取这个文件夹：%{reason}"
+    browse:
+      en: Choose
+      zh-CN: 选择
+    picker_failed:
+      en: "The folder picker could not be opened: %{reason}"
+      zh-CN: "无法打开文件夹选择器：%{reason}"
     create:
       en: Create
       zh-CN: 创建
