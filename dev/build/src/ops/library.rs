@@ -3,6 +3,8 @@
 
 use std::ffi::OsStr;
 
+use rorolala_utils_constants::USERDATA_NAME_ENV_VAR;
+
 use crate::paths::Workspace;
 use crate::toolchain::Tool;
 use mingling::{
@@ -24,17 +26,18 @@ pub fn library() -> StateLibrary {
 #[derive(Grouped)]
 pub struct StateLibrary;
 
-/// Builds the release library the C ABI is handed over as.
+/// Builds the release library the C ABI is handed over as, for `userdata_name`.
 ///
 /// `--all-features` is what reaches the ABI the crate only carries behind a feature, and the header
 /// is written by the root build script while the crate compiles, so building the artifact is also
-/// what refreshes the header.
+/// what refreshes the header. The name is compiled into the library, which is what the C# bindings
+/// and the Desktop program it is laid beside read back.
 ///
 /// # Errors
 ///
 /// Reports the build's own failure, and [`crate::Error::Directory`] when the workspace cannot name
 /// where it builds.
-pub fn build_library() -> Result<(), crate::Error> {
+pub fn build_library(userdata_name: &str) -> Result<(), crate::Error> {
     let workspace = Workspace::discover()?;
 
     ensure_header(&workspace)?;
@@ -45,18 +48,24 @@ pub fn build_library() -> Result<(), crate::Error> {
     // glibc machine cannot link one. What that target can hand a C consumer is the static library;
     // the header beside it is the same one every platform is given.
     if is_musl(&workspace) {
-        return Tool::cargo().run([
-            "rustc",
-            "--release",
-            "--all-features",
-            "-p",
-            "rorolala-ffi",
-            "--crate-type",
-            "staticlib",
-        ]);
+        return Tool::cargo().run_with_env(
+            &[(USERDATA_NAME_ENV_VAR, OsStr::new(userdata_name))],
+            [
+                "rustc",
+                "--release",
+                "--all-features",
+                "-p",
+                "rorolala-ffi",
+                "--crate-type",
+                "staticlib",
+            ],
+        );
     }
 
-    Tool::cargo().run(["build", "--release", "--all-features", "-p", "rorolala-ffi"])
+    Tool::cargo().run_with_env(
+        &[(USERDATA_NAME_ENV_VAR, OsStr::new(userdata_name))],
+        ["build", "--release", "--all-features", "-p", "rorolala-ffi"],
+    )
 }
 
 /// Writes the C header when a cached build left no copy of it.
@@ -103,9 +112,9 @@ fn ensure_header(workspace: &Workspace) -> Result<(), crate::Error> {
 ///
 /// Reports the build's own failure or the copy's, and [`crate::Error::Directory`] when the workspace
 /// cannot name where it builds.
-pub fn build_suite_library(workspace: &Workspace) -> Result<(), crate::Error> {
+pub fn build_suite_library(workspace: &Workspace, userdata_name: &str) -> Result<(), crate::Error> {
     if !is_musl(workspace) {
-        return build_library();
+        return build_library(userdata_name);
     }
 
     let host = format!("{}-unknown-linux-gnu", std::env::consts::ARCH);
@@ -114,7 +123,10 @@ pub fn build_suite_library(workspace: &Workspace) -> Result<(), crate::Error> {
     // compiles C would otherwise be compiled by a musl driver into a library the glibc target it is
     // being built for cannot link.
     Tool::cargo().run_with_env(
-        &[("CC", OsStr::new("cc"))],
+        &[
+            ("CC", OsStr::new("cc")),
+            (USERDATA_NAME_ENV_VAR, OsStr::new(userdata_name)),
+        ],
         [
             "build",
             "--release",
@@ -145,7 +157,9 @@ fn is_musl(workspace: &Workspace) -> bool {
 /// Builds the library and the header.
 #[chain]
 pub fn handle_library(_state: StateLibrary, ec: &mut ResExitCode) -> Next {
-    run_step(ec, build_library);
+    run_step(ec, || {
+        build_library(&crate::userdata_name_from_environment())
+    });
 
     empty_result!()
 }

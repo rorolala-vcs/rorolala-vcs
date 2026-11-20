@@ -1,46 +1,65 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
+using Rorolala;
+
 namespace RolaSharp;
 
-/// <summary>The user's own data: the accounts, keys and daemon registrations under a home directory.</summary>
+/// <summary>The user's own data: the accounts, keys and daemon registrations under a userdata name.</summary>
+/// <remarks>
+/// The name is the one this assembly was built for, which is <c>release</c> unless the build named
+/// another; the constructor names one explicitly. Where a name sits is
+/// <see cref="UserDataPaths"/>'s to say, so this class says what a name holds rather than where the
+/// platform keeps it.
+/// </remarks>
 public sealed class UserScope : Scope
 {
-    private readonly string _home;
+    private readonly string _name;
+    private readonly string _root;
     private readonly string _keys;
     private IReadOnlyList<Account> _accounts = [];
     private IReadOnlyList<PublicKey> _publicKeys = [];
     private IReadOnlyList<PrivateKey> _privateKeys = [];
 
-    /// <summary>Makes a scope over a user's home directory.</summary>
-    /// <param name="name">
-    /// The user's name, or nothing for the current user. A name is resolved under the parent of the
-    /// current user's home, which is where a family of user directories sits.
+    /// <summary>Makes a scope over a userdata name.</summary>
+    /// <param name="profile">
+    /// The name to read, or nothing for the one this assembly was built for. It is one directory
+    /// segment: letters, digits, <c>-</c> and <c>_</c>, not starting with <c>-</c>.
     /// </param>
-    public UserScope(string? name = null)
+    /// <exception cref="ArgumentException">The name is not one directory segment.</exception>
+    public UserScope(string? profile = null)
     {
-        var current = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        _home = string.IsNullOrEmpty(name)
-            ? current
-            : Path.IsPathRooted(name)
-                ? name
-                : Path.Combine(Path.GetDirectoryName(current) ?? current, name);
-        _keys = KeysUnder(_home);
+        _name = string.IsNullOrEmpty(profile) ? UserDataPaths.Name : profile;
+
+        if (!IsName(_name))
+        {
+            throw new ArgumentException(
+                "a userdata name is one directory segment of letters, digits, `-` and `_`",
+                nameof(profile)
+            );
+        }
+
+        _root = UserDataPaths.RootFor(_name);
+        _keys = UserDataPaths.KeysFor(_name);
     }
 
-    /// <summary>The current user's scope.</summary>
+    /// <summary>The current user's scope, under the name the assembly was built for.</summary>
     public static UserScope Current => new();
 
     /// <summary>The account the work acts as, as Rorolala's own file for the user names it.</summary>
     /// <remarks>
     /// An account that was never named answers empty, which is the same answer the command line gives.
     /// </remarks>
-    public static string CurrentAccount => NativeText.Taken(RorolalaBinding.rola_current_account());
+    public static string CurrentAccount =>
+        NativeText.Taken(RorolalaBinding.rola_current_account());
 
-    /// <summary>The user's home directory.</summary>
-    public DirectoryInfo Home => new(_home);
+    /// <summary>The userdata name this scope reads.</summary>
+    public string Profile => _name;
 
-    /// <summary>Where this user's keys are kept.</summary>
+    /// <summary>The directory this name's own files sit in.</summary>
+    public DirectoryInfo Root => new(_root);
+
+    /// <summary>Where this name's keys are kept.</summary>
     public DirectoryInfo KeysDirectory => new(_keys);
 
     /// <summary>The accounts the user holds.</summary>
@@ -85,10 +104,8 @@ public sealed class UserScope : Scope
     /// <inheritdoc/>
     protected override void IsValid()
     {
-        if (!Directory.Exists(_home))
-        {
-            throw new RolaReadError(RolaReadErrorKind.InvalidArgument, _home, "the user's home is not there");
-        }
+        // A name's directory need not be there yet: reading a directory no run has written is an
+        // empty answer, the one a fresh machine gives, rather than a failure.
     }
 
     /// <inheritdoc/>
@@ -205,18 +222,13 @@ public sealed class UserScope : Scope
 
     private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);
 
-    private static string KeysUnder(string home)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return Path.Combine(home, "AppData", "Local", "rola", "keys");
-        }
-
-        if (OperatingSystem.IsMacOS())
-        {
-            return Path.Combine(home, "Library", "Application Support", "rola", "keys");
-        }
-
-        return Path.Combine(home, ".local", "share", "rola", "keys");
-    }
+    /// <summary>Whether a name is one directory segment.</summary>
+    /// <param name="name">The name to check.</param>
+    /// <returns>Whether the name may be used.</returns>
+    private static bool IsName(string name) =>
+        name.Length > 0
+        && name[0] != '-'
+        && name.All(character =>
+            char.IsAsciiLetterOrDigit(character) || character is '-' or '_'
+        );
 }

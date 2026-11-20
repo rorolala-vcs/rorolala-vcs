@@ -14,26 +14,20 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use rorolala_utils_configure::{Config as Staged, Configure};
-use rorolala_utils_constants::{
-    DAEMON_DIR, DAEMON_PREFERENCE_FILE, DAEMON_REGISTRY_FILE, USER_DATA_DIR,
-};
-use rorolala_utils_location::data_home;
+use rorolala_utils_constants::{DAEMON_DIR, DAEMON_PREFERENCE_FILE, DAEMON_REGISTRY_FILE};
+use rorolala_utils_location::user_data_dir;
 use serde::{Deserialize, Serialize};
 
 /// Where the machine's daemon looks for the Vaults it serves, if this machine, or the run,
 /// names a place.
 ///
-/// It is `~/.local/share/rola/daemon/registry.toml` on a machine that follows XDG; a machine
-/// that names no local data directory, and a run that names none either, has nowhere to keep the
-/// table, which is the `None`.
+/// It is `~/.local/share/rola/<name>/daemon/registry.toml` on a machine that follows XDG, where
+/// `<name>` is the userdata name this build was made for; a machine that names no local data
+/// directory, and a run that names none either, has nowhere to keep the table, which is the
+/// `None`.
 #[must_use]
 pub fn registry_path() -> Option<PathBuf> {
-    Some(
-        data_home()?
-            .join(USER_DATA_DIR)
-            .join(DAEMON_DIR)
-            .join(DAEMON_REGISTRY_FILE),
-    )
+    Some(user_data_dir()?.join(DAEMON_DIR).join(DAEMON_REGISTRY_FILE))
 }
 
 /// Where this machine's preferences are kept, if this machine names a place.
@@ -43,8 +37,7 @@ pub fn registry_path() -> Option<PathBuf> {
 #[must_use]
 pub fn preference_path() -> Option<PathBuf> {
     Some(
-        data_home()?
-            .join(USER_DATA_DIR)
+        user_data_dir()?
             .join(DAEMON_DIR)
             .join(DAEMON_PREFERENCE_FILE),
     )

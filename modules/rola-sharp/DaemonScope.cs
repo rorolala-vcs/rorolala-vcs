@@ -30,12 +30,12 @@ public sealed class DaemonScope : Scope
     /// <inheritdoc/>
     protected override void IsValid()
     {
-        if (!Directory.Exists(_user.Home.FullName))
+        if (!Directory.Exists(_user.Root.FullName))
         {
             throw new RolaReadError(
                 RolaReadErrorKind.InvalidArgument,
-                _user.Home.FullName,
-                "the user's home is not there"
+                _user.Root.FullName,
+                "the user's data directory is not there"
             );
         }
     }

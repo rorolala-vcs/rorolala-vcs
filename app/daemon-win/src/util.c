@@ -11,6 +11,16 @@
 #include <knownfolders.h>
 #include <shlobj.h>
 
+/* `cargo dev export` states the two paths a build's user data sits at, relative to the base; a
+   build run on its own falls back to the development name, which is what `cargo dev export` uses
+   when it names none. The values are wide because every path in this program is. */
+#ifndef ROLA_USER_KEYS_PATH
+#define ROLA_USER_KEYS_PATH L"rola/develop/keys"
+#endif
+#ifndef ROLA_DAEMON_REGISTRY_PATH
+#define ROLA_DAEMON_REGISTRY_PATH L"rola/develop/daemon/registry.toml"
+#endif
+
 static BOOL sb_grow(StrBuf *sb, size_t needed) {
   size_t cap;
   WCHAR *grown;
@@ -440,27 +450,36 @@ WCHAR *local_app_data_dir(void) {
   return NULL;
 }
 
+WCHAR *data_home(void) {
+  const WCHAR *named = _wgetenv(L"ROLA_DATA_HOME");
+
+  if (named && named[0]) {
+    return str_dup(named);
+  }
+  return local_app_data_dir();
+}
+
 WCHAR *keys_dir(void) {
-  WCHAR *local = local_app_data_dir();
+  WCHAR *home = data_home();
   WCHAR *result;
 
-  if (!local) {
+  if (!home) {
     return NULL;
   }
-  result = path_join(local, L"rola\\keys");
-  free(local);
+  result = path_join(home, ROLA_USER_KEYS_PATH);
+  free(home);
   return result;
 }
 
 WCHAR *registry_file(void) {
-  WCHAR *local = local_app_data_dir();
+  WCHAR *home = data_home();
   WCHAR *result;
 
-  if (!local) {
+  if (!home) {
     return NULL;
   }
-  result = path_join(local, L"rola\\daemon\\registry.toml");
-  free(local);
+  result = path_join(home, ROLA_DAEMON_REGISTRY_PATH);
+  free(home);
   return result;
 }
 

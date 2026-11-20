@@ -38,6 +38,7 @@
          second statement of the same file that could drift from the first. -->
     <Compile Include="../desktop/Core/Configuration/Configuration.cs" Link="Shared/Configuration.cs" />
     <Compile Include="../desktop/Core/Configuration/ConfigPaths.cs" Link="Shared/ConfigPaths.cs" />
+  <Compile Include="../../modules/rola-sharp/UserDataPaths.cs" Link="Shared/UserDataPaths.cs" />
     <Compile Include="../desktop/Core/Configuration/ConfigurationLoader.cs" Link="Shared/ConfigurationLoader.cs" />
     <Compile Include="../desktop/Core/Configuration/Failure.cs" Link="Shared/Failure.cs" />
     <Compile Include="../desktop/Core/Theming/WindowStyle.cs" Link="Shared/WindowStyle.cs" />

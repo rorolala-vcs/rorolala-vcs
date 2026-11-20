@@ -1869,7 +1869,7 @@ fn accounts(rola: &Rola, plain: &Path, ws: &Path, checked: &mut Checked) {
         &ran,
         0,
     );
-    let user_keys = rola.data.join("rola/keys");
+    let user_keys = rorolala_utils_location::user_data_dir_in(&rola.data).join("keys");
     checked.wants(
         "the installed pair is under the user's data",
         user_keys.join("bob.pem").is_file() && user_keys.join("bob.pub").is_file(),

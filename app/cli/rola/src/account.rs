@@ -8,13 +8,12 @@
 use std::fs;
 use std::path::Path;
 
-use librorolala::auth::current_account;
+use librorolala::auth::{account_path, current_account};
 use mingling::{Grouped, LazyInit, ProgramCollect, setup::ProgramSetup};
 use rorolala_errors::Failure;
 use rust_i18n::t;
 
 use crate::failure::failure;
-use crate::user::account_path;
 
 /// The account the work acts as, as the program found it.
 ///

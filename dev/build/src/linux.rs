@@ -19,6 +19,8 @@ use std::path::Path;
 
 use serde::Serialize;
 
+use rorolala_utils_constants::RELEASE_USERDATA_NAME;
+
 use crate::Error;
 use crate::appimagetool;
 use crate::fs;
@@ -202,7 +204,7 @@ pub fn publish(workspace: &Workspace) -> Result<(), Error> {
     };
     let metadata = Metadata::read(workspace)?;
 
-    export_artifacts(true)?;
+    export_artifacts(RELEASE_USERDATA_NAME, true)?;
     if musl {
         add_shared_library_for_desktop(workspace, &workspace.build_dir()?)?;
     }

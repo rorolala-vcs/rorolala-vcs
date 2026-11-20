@@ -11,7 +11,7 @@ use mingling::{
     macros::{chain, command, empty_result},
     res::ResExitCode,
 };
-use rola_build::{dotnet, paths::Workspace};
+use rola_build::{DEVELOPMENT_USERDATA_NAME, dotnet, paths::Workspace};
 
 use super::run_check;
 use crate::Next;
@@ -33,7 +33,7 @@ pub fn handle_dotnet_lint(_state: StateDotnetLint, ec: &mut ResExitCode) -> Next
         "dotnet-lint",
         "dotnet msbuild RorolalaSharp.sln -t:Rebuild -warnAsError -p:AnalysisMode=All",
         ec,
-        || dotnet::lint_solution(&Workspace::discover()?),
+        || dotnet::lint_solution(&Workspace::discover()?, DEVELOPMENT_USERDATA_NAME),
     );
 
     empty_result!()

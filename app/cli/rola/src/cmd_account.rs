@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 
+use librorolala::auth::account_path;
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest, Wrap,
     macros::{
@@ -30,7 +31,6 @@ use crate::exit_codes::{EC_ERR_ACCOUNT_NO_DIR, EC_ERR_ACCOUNT_NOT_FOUND, EC_ERR_
 use crate::failure::failure;
 use crate::format::ResFormat;
 use crate::keys::account_names;
-use crate::user::account_path;
 
 /// How a listing of the accounts is drawn when no template is named.
 ///

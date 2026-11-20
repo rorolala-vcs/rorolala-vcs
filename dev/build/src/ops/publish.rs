@@ -14,6 +14,7 @@ use mingling::{
     macros::{chain, command, empty_result},
     res::ResExitCode,
 };
+use rorolala_utils_constants::RELEASE_USERDATA_NAME;
 
 use crate::Next;
 #[cfg(not(target_os = "linux"))]
@@ -76,7 +77,7 @@ pub fn publish_package() -> Result<(), crate::Error> {
             None
         };
 
-        export_artifacts(false)?;
+        export_artifacts(RELEASE_USERDATA_NAME, false)?;
 
         if let Some(compiler) = compiler {
             let installer = build.join(format!("{setup}.exe"));

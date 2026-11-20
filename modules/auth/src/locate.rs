@@ -4,9 +4,8 @@ use std::path::{Path, PathBuf};
 
 use rorolala_utils_constants::{
     ENV_KEYS_DIR, GLOBAL_KEYS_DIR, HOME_ENV_VAR, PRIVATE_KEY_EXTENSION, PUBLIC_KEY_EXTENSION,
-    USER_KEYS_DIR,
 };
-use rorolala_utils_location::data_home;
+use rorolala_utils_location::user_keys_dir;
 
 use crate::{Account, Accounts, KeyLocateRule, Member, Members};
 
@@ -261,17 +260,6 @@ fn find_key<T>(
         let key_path = dir.join(format!("{name}.{extension}"));
         key_path.is_file().then(|| make(name.to_string(), key_path))
     })
-}
-
-/// The directory keys are kept in under the user's local data directory.
-///
-/// This is the scope a generated pair is installed into, and the one a member is looked for
-/// in when the user scope is turned on: `~/.local/share/rola/keys` on a machine that follows
-/// the XDG layout. It is `None` when the machine does not say where that directory is, and when
-/// neither does the run, see [`data_home`].
-#[must_use]
-pub fn user_keys_dir() -> Option<PathBuf> {
-    Some(data_home()?.join(USER_KEYS_DIR))
 }
 
 /// The directory keys are kept in under the filesystem root: `/.rola/keys` on Unix.

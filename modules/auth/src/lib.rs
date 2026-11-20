@@ -25,3 +25,6 @@ pub use key::*;
 pub use locate::*;
 pub use member::*;
 pub use rule::*;
+
+/// The directory a user's keys are kept in, under this build's userdata name.
+pub use rorolala_utils_location::user_keys_dir;

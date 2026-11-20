@@ -205,19 +205,50 @@ pub const PORT_ENV_VAR: &str = "ROLA_DEFAULT_PORT";
 #[lazyffi(export = ROLA_GLOBAL_KEYS_DIR)]
 pub const GLOBAL_KEYS_DIR: &str = ".rola/keys";
 
-/// Keys of a user scope, under the user's local data directory
+/// Keys of a user scope, under a userdata name's directory
+///
+/// It sits under [`USER_DATA_DIR`] and [`USERDATA_NAME`], which is what separates one build's
+/// keys from another's.
 #[lazyffi(export = ROLA_USER_KEYS_DIR)]
-pub const USER_KEYS_DIR: &str = "rola/keys";
+pub const USER_KEYS_DIR: &str = "keys";
 
 /// The directory, under the user's local data directory, Rorolala keeps its own files in
 ///
 /// These belong to no Vault and no Workspace: they are the user's own, and they are small enough
-/// to be plain files rather than configurations. It is the parent of [`USER_KEYS_DIR`], which
-/// keeps the one thing here that is a directory rather than a file, and of
-/// [`DAEMON_DIR`], which is what the machine's daemon keeps.
+/// to be plain files rather than configurations. Under it sits one directory per
+/// [`USERDATA_NAME`], which is what separates a development build's files from a released one's;
+/// see [`USER_KEYS_DIR`] for the one thing there that is a directory rather than a file, and
+/// [`DAEMON_DIR`] for what the machine's daemon keeps.
 pub const USER_DATA_DIR: &str = "rola";
 
-/// The directory, under [`USER_DATA_DIR`], the machine's daemon keeps its files in.
+/// The userdata name a development build uses, and the one a build that names none uses
+pub const DEVELOPMENT_USERDATA_NAME: &str = "develop";
+
+/// The userdata name `cargo dev publish` builds every artifact for
+pub const RELEASE_USERDATA_NAME: &str = "release";
+
+/// The userdata name this build's programs look under [`USER_DATA_DIR`] for
+///
+/// It is compiled in rather than read at run time: `cargo dev export --userdata-name` sets
+/// [`USERDATA_NAME_ENV_VAR`] for the build, and a build that sets nothing is
+/// [`DEVELOPMENT_USERDATA_NAME`]. A name chosen at run time would be a second answer to the
+/// question this constant is, and the C windows and the C# assemblies could each answer it
+/// differently.
+pub const USERDATA_NAME: &str = match option_env!("ROLA_USERDATA_NAME") {
+    Some(name) => name,
+    None => DEVELOPMENT_USERDATA_NAME,
+};
+
+/// The variable `cargo dev export` sets to name the userdata directory a build looks under
+///
+/// It is read while the artifacts are built, not when they run; the value is compiled into each
+/// of them. A build tool, a C script and the C# projects read it, which is what lets one flag
+/// reach Rust, C and C# alike.
+pub const USERDATA_NAME_ENV_VAR: &str = "ROLA_USERDATA_NAME";
+
+/// The directory, under a userdata name, the machine's daemon keeps its files in
+///
+/// It sits under [`USER_DATA_DIR`] and [`USERDATA_NAME`].
 #[lazyffi(export = ROLA_DAEMON_DIR)]
 pub const DAEMON_DIR: &str = "daemon";
 
@@ -236,22 +267,25 @@ pub const DAEMON_REGISTRY_FILE: &str = "registry.toml";
 #[lazyffi(export = ROLA_DAEMON_PREFERENCE_FILE)]
 pub const DAEMON_PREFERENCE_FILE: &str = "preference.toml";
 
-/// The file, under [`USER_DATA_DIR`], naming the account the work acts as
+/// The file, under [`USER_DATA_DIR`] and [`USERDATA_NAME`], naming the account the work acts as
 pub const USER_ACCOUNT_FILE: &str = "user";
 
-/// The file, under [`USER_DATA_DIR`], the addresses seen so far are kept in, one per line
+/// The file, under [`USER_DATA_DIR`] and [`USERDATA_NAME`], the addresses seen so far are kept
+/// in, one per line
 pub const USER_HISTORY_FILE: &str = "addr.hs";
 
-/// The file, under [`USER_DATA_DIR`], the exit code of the last run is kept in
+/// The file, under [`USER_DATA_DIR`] and [`USERDATA_NAME`], the exit code of the last run is
+/// kept in
 pub const USER_LASTEC_FILE: &str = "lastec";
 
 /// The variable naming the directory the user's own files are kept under
 ///
 /// What it names is the directory [`USER_DATA_DIR`] sits in, which is the same thing a machine
-/// that follows the XDG layout means by `XDG_DATA_HOME`. It is for a run that must keep its files
-/// somewhere other than the user's, an integration suite, which would otherwise read and write
-/// the machine's, rather than for a person to set: a sandbox built on `XDG_DATA_HOME` alone is a
-/// sandbox on Unix, since Windows has no such variable to read.
+/// that follows the XDG layout means by `XDG_DATA_HOME`; the name [`USERDATA_NAME`] is chosen by
+/// the build and sits under it. It is for a run that must keep its files somewhere other than
+/// the user's, an integration suite, which would otherwise read and write the machine's, rather
+/// than for a person to set: a sandbox built on `XDG_DATA_HOME` alone is a sandbox on Unix,
+/// since Windows has no such variable to read.
 #[lazyffi(export = ROLA_DATA_HOME_ENV_VAR)]
 pub const DATA_HOME_ENV_VAR: &str = "ROLA_DATA_HOME";
 

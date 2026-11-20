@@ -441,13 +441,13 @@ fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
 
 /// Writes the table naming `dir` as [`NAMESPACE`], and gives the daemon an account of its own.
 fn register(data: &Path, dir: &Path) {
-    let registry = data.join("rola").join("daemon").join("registry.toml");
+    let registry = librorolala::location::user_data_dir_in(&data).join("daemon").join("registry.toml");
 
     fs::create_dir_all(registry.parent().expect("the daemon's directory"))
         .expect("the daemon's directory");
     fs::write(&registry, format!("{NAMESPACE} = {dir:?}\n")).expect("the namespace table");
 
-    let keys = data.join("rola").join("keys");
+    let keys = librorolala::location::user_data_dir_in(&data).join("keys");
     if !keys.join("daemon.pem").is_file() {
         pair(&keys, "daemon");
     }

@@ -20,24 +20,25 @@ pub fn build() -> StateBuild {
 #[derive(Grouped)]
 pub struct StateBuild;
 
-/// Builds everything that ships: the library first, and the programs after it.
+/// Builds everything that ships, for the userdata name `userdata_name`.
 ///
-/// The order is the order of what a program is built against: the programs link the library, so a
-/// build that ran them the other way round would be building one against the last library there
-/// happened to be.
+/// The name is what every artifact is compiled with, so the library and the programs a run links
+/// against it always name the same directory.
 ///
 /// # Errors
 ///
 /// Reports whichever of the two builds failed first.
-pub fn build_everything() -> Result<(), crate::Error> {
-    build_library()?;
-    build_programs()
+pub fn build_everything(userdata_name: &str) -> Result<(), crate::Error> {
+    build_library(userdata_name)?;
+    build_programs(userdata_name)
 }
 
 /// Builds everything that ships.
 #[chain]
 pub fn handle_build(_state: StateBuild, ec: &mut ResExitCode) -> Next {
-    run_step(ec, build_everything);
+    run_step(ec, || {
+        build_everything(&crate::userdata_name_from_environment())
+    });
 
     empty_result!()
 }

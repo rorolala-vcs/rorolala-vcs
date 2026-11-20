@@ -8,14 +8,14 @@
 use std::fs;
 use std::path::PathBuf;
 
-use rorolala_utils_constants::{USER_ACCOUNT_FILE, USER_DATA_DIR};
-use rorolala_utils_location::data_home;
+use rorolala_utils_constants::USER_ACCOUNT_FILE;
+use rorolala_utils_location::user_data_dir;
 
 /// The file the account the work acts as is kept in, if the machine or a run names a data
 /// directory.
 #[must_use]
 pub fn account_path() -> Option<PathBuf> {
-    data_home().map(|dir| dir.join(USER_DATA_DIR).join(USER_ACCOUNT_FILE))
+    Some(user_data_dir()?.join(USER_ACCOUNT_FILE))
 }
 
 /// The account the work acts as, or nothing when none is named.

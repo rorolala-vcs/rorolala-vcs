@@ -25,8 +25,8 @@ pub struct KeyLocateRule {
     /// This is the only scope an account is ever looked for in, since a private key is
     /// not shared.
     pub find_local: bool,
-    /// Search the public keys under the user's local data directory
-    /// (`~/.local/share/rola/keys`).
+    /// Search the public keys under the user's data directory
+    /// (`~/.local/share/rola/<name>/keys`).
     pub find_user: bool,
     /// Search the public keys under `ROLA_HOME` (`$ROLA_HOME/keys`).
     pub find_env: bool,

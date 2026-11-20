@@ -22,7 +22,7 @@
 //! restores, `build/lib/RolaSharp.{version}.nupkg` and
 //! `build/lib/RolaSharp.native.{runtime}.{version}.nupkg`, see [`crate::nuget`].
 
-#[cfg(target_os = "linux")]
+#[cfg(any(windows, target_os = "linux"))]
 use std::ffi::OsStr;
 #[cfg(windows)]
 use std::ffi::OsString;
@@ -32,6 +32,9 @@ use mingling::{
     macros::{chain, command, empty_result},
     res::ResExitCode,
 };
+#[cfg(any(windows, target_os = "linux"))]
+use rorolala_utils_constants::{DAEMON_DIR, DAEMON_REGISTRY_FILE, USER_DATA_DIR, USER_KEYS_DIR};
+use rorolala_utils_constants::{DEVELOPMENT_USERDATA_NAME, USERDATA_NAME_ENV_VAR};
 
 use crate::Next;
 use crate::dotnet;
@@ -45,20 +48,108 @@ use crate::toolchain::Tool;
 /// The plugins' own pictures first, and deliberately: they are drawn from the pinned icon set rather
 /// than carried, so what is laid out is what the pin holds rather than whatever was last in the tree.
 #[command(node = "export")]
-pub fn export() -> StateExport {
-    StateExport
+pub fn export(args: Vec<String>) -> StateExport {
+    StateExport {
+        userdata_name: userdata_name_from_args(&args),
+    }
 }
 
-/// The state the command starts in: it names nothing, since the whole export is what is laid out.
+/// The state the command starts in: the userdata name every artifact of this export looks under.
 #[derive(Grouped)]
-pub struct StateExport;
+pub struct StateExport {
+    /// The name the export's programs discover their user data by.
+    userdata_name: String,
+}
+
+/// The userdata name a build is for, from `ROLA_USERDATA_NAME` or the development name.
+///
+/// `build`, `lib` and `bin` have no flag of their own: they are the steps `export` and the gate run,
+/// and the name reaches them the same way it reaches the C and C# children, through the environment.
+pub(crate) fn userdata_name_from_environment() -> String {
+    std::env::var(USERDATA_NAME_ENV_VAR)
+        .ok()
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| DEVELOPMENT_USERDATA_NAME.to_owned())
+}
+
+/// The userdata name `args` names, or the development name when they name none.
+///
+/// Both spellings are taken, `--userdata-name=value` and `--userdata-name value`, because a build
+/// command is typed by hand as often as it is run by a script.
+pub(crate) fn userdata_name_from_args(args: &[String]) -> String {
+    let mut name = DEVELOPMENT_USERDATA_NAME.to_owned();
+    let mut words = args.iter();
+
+    while let Some(word) = words.next() {
+        if let Some(value) = word.strip_prefix("--userdata-name=") {
+            name = value.to_owned();
+        } else if word == "--userdata-name" {
+            name = words.next().cloned().unwrap_or_default();
+        }
+    }
+
+    name
+}
+
+/// Refuses a name that is not one directory segment.
+///
+/// The name becomes a directory under the user's data directory, so a separator or `..` would put
+/// a build's files somewhere it never meant to write. The rule is the one the C# side and the
+/// documentation state: ASCII letters, digits, `-` and `_`, not starting with `-`.
+pub(crate) fn checked_userdata_name(name: &str) -> Result<&str, crate::Error> {
+    let invalid = |reason| crate::Error::UserDataName {
+        value: name.to_owned(),
+        reason,
+    };
+    let mut characters = name.chars();
+    let Some(first) = characters.next() else {
+        return Err(invalid("it is empty"));
+    };
+
+    if first == '-' {
+        return Err(invalid("it starts with `-`"));
+    }
+    if !(first.is_ascii_alphanumeric() || first == '_') {
+        return Err(invalid(
+            "only ASCII letters, digits, `-` and `_` are allowed",
+        ));
+    }
+    if !characters
+        .all(|character| character.is_ascii_alphanumeric() || character == '-' || character == '_')
+    {
+        return Err(invalid(
+            "only ASCII letters, digits, `-` and `_` are allowed",
+        ));
+    }
+
+    Ok(name)
+}
+
+/// The keys directory a build's user data holds, relative to the base that data sits in.
+#[cfg(any(windows, target_os = "linux"))]
+fn userdata_keys_path(name: &str) -> String {
+    format!("{USER_DATA_DIR}/{name}/{USER_KEYS_DIR}")
+}
+
+/// The daemon's registry file a build's user data holds, relative to the base.
+#[cfg(any(windows, target_os = "linux"))]
+fn userdata_registry_path(name: &str) -> String {
+    format!("{USER_DATA_DIR}/{name}/{DAEMON_DIR}/{DAEMON_REGISTRY_FILE}")
+}
 
 /// Lays the build out for hand-off.
 ///
+/// `userdata_name` is the directory every artifact discovers its own files under, and
 /// `self_contained` is what the Desktop program and the launcher are published as. A plain export
 /// leaves the .NET runtime to the machine, which is what a developer runs; a package carries it, so
 /// that installing the package is the whole of what a reader does.
-pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
+///
+/// # Errors
+///
+/// Reports [`crate::Error::UserDataName`] before anything is written when the name is not one
+/// directory segment, and the first failing step after that.
+pub fn export_artifacts(userdata_name: &str, self_contained: bool) -> Result<(), crate::Error> {
+    let userdata_name = checked_userdata_name(userdata_name)?;
     let workspace = Workspace::discover()?;
     let platform = Platform::current();
 
@@ -68,7 +159,7 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
     stop_running_programs()?;
 
     Tool::cargo().run(["run", "--quiet", "-p", "rorolala-dev-icons"])?;
-    crate::build_everything()?;
+    crate::build_everything(userdata_name)?;
 
     let build = workspace.build_dir()?;
     fs::remove(&build)?;
@@ -116,7 +207,7 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
 
     // The window over the daemon is laid down after them rather than with them: it is a C program
     // rather than a cargo one, and it looks for `rola-daemon` beside itself.
-    build_daemon_window(&workspace)?;
+    build_daemon_window(&workspace, userdata_name)?;
 
     // The completions are laid down for the programs that have them: one directory per program, so
     // what a shell's setup sources is named once per program rather than once per program and shell.
@@ -136,12 +227,12 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
     // The whole solution is restored and built once for everything below rather than a project at a
     // time: the restore is shared, and one build over the solution is what builds the host, the
     // plugins and the bindings together.
-    dotnet::build_solution(&workspace)?;
+    dotnet::build_solution(&workspace, userdata_name)?;
 
     let desktop = workspace.desktop_dir()?;
-    dotnet::publish_desktop(&workspace, &desktop, self_contained)?;
-    dotnet::publish_host(&workspace, &desktop, self_contained)?;
-    dotnet::publish_launcher(&workspace, &desktop, self_contained)?;
+    dotnet::publish_desktop(&workspace, &desktop, self_contained, userdata_name)?;
+    dotnet::publish_host(&workspace, &desktop, self_contained, userdata_name)?;
+    dotnet::publish_launcher(&workspace, &desktop, self_contained, userdata_name)?;
     dotnet::publish_plugins(&workspace, &desktop)?;
     crate::ops::desktop::lay_out_presets(&workspace)?;
 
@@ -170,8 +261,8 @@ pub fn export_artifacts(self_contained: bool) -> Result<(), crate::Error> {
 
 /// Lays the export out.
 #[chain]
-pub fn handle_export(_state: StateExport, ec: &mut ResExitCode) -> Next {
-    run_step(ec, || export_artifacts(false));
+pub fn handle_export(state: StateExport, ec: &mut ResExitCode) -> Next {
+    run_step(ec, || export_artifacts(&state.userdata_name, false));
 
     empty_result!()
 }
@@ -209,12 +300,19 @@ fn stop_running_programs() -> Result<(), crate::Error> {
 /// write into: `BUILD_DIR` is the same override this build honours, so an export laid out elsewhere
 /// is still the one the window lands in.
 #[cfg(windows)]
-fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
+fn build_daemon_window(workspace: &Workspace, userdata_name: &str) -> Result<(), crate::Error> {
     let script = workspace.daemon_window_script().into_os_string();
     let build = workspace.build_dir()?.into_os_string();
+    let keys = userdata_keys_path(userdata_name);
+    let registry = userdata_registry_path(userdata_name);
 
     Tool::powershell().run_with_env(
-        &[("BUILD_DIR", build.as_os_str())],
+        &[
+            ("BUILD_DIR", build.as_os_str()),
+            (USERDATA_NAME_ENV_VAR, OsStr::new(userdata_name)),
+            ("ROLA_USER_KEYS_PATH", OsStr::new(&keys)),
+            ("ROLA_DAEMON_REGISTRY_PATH", OsStr::new(&registry)),
+        ],
         [
             OsString::from("-NoProfile"),
             OsString::from("-NonInteractive"),
@@ -270,10 +368,17 @@ fn mark_export_integrity(_workspace: &Workspace) -> Result<(), crate::Error> {
 /// therefore the host's, like the shared library a musl package lays beside the Desktop program (see
 /// `linux::add_shared_library_for_desktop`), while the programs beside it stay musl.
 #[cfg(target_os = "linux")]
-fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
+fn build_daemon_window(workspace: &Workspace, userdata_name: &str) -> Result<(), crate::Error> {
     let script = workspace.daemon_window_script();
     let build = workspace.build_dir()?;
-    let mut environment: Vec<(&str, &OsStr)> = vec![("BUILD_DIR", build.as_os_str())];
+    let keys = userdata_keys_path(userdata_name);
+    let registry = userdata_registry_path(userdata_name);
+    let mut environment: Vec<(&str, &OsStr)> = vec![
+        ("BUILD_DIR", build.as_os_str()),
+        (USERDATA_NAME_ENV_VAR, OsStr::new(userdata_name)),
+        ("ROLA_USER_KEYS_PATH", OsStr::new(&keys)),
+        ("ROLA_DAEMON_REGISTRY_PATH", OsStr::new(&registry)),
+    ];
 
     if workspace
         .target_triple()
@@ -291,6 +396,6 @@ fn build_daemon_window(workspace: &Workspace) -> Result<(), crate::Error> {
 /// The signature is the twins' above, so all three call sites read the same.
 #[cfg(not(any(windows, target_os = "linux")))]
 #[allow(clippy::unnecessary_wraps)]
-fn build_daemon_window(_workspace: &Workspace) -> Result<(), crate::Error> {
+fn build_daemon_window(_workspace: &Workspace, _userdata_name: &str) -> Result<(), crate::Error> {
     Ok(())
 }

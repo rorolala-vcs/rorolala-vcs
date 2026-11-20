@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Reflection;
 
+using Rorolala;
+
 namespace RorolalaDesktopConfig.IntegrationTests;
 
 /// <summary>
@@ -116,7 +118,7 @@ public sealed class DesktopConfigTests
     private static Run Start(string? plugins, string? preference, string? theme = null)
     {
         var data = Path.Combine(Path.GetTempPath(), $"rorolala-config-{Guid.NewGuid():N}");
-        var configuration = Path.Combine(data, "rola", "desktop");
+        var configuration = Path.Combine(UserDataPaths.RootIn(data, UserDataPaths.Name), "desktop");
         Directory.CreateDirectory(configuration);
 
         if (plugins is not null)

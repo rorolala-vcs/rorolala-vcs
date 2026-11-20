@@ -33,6 +33,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The test names the directory the program under test writes to, so it compiles the same
+         rule the program does rather than restating it. -->
+    <Compile Include="../../modules/rola-sharp/UserDataPaths.cs" Link="UserDataPaths.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Built, not referenced: what is tested is the program a caller runs, so it is compiled first
          and then started as a program rather than called into. -->
     <ProjectReference Include="../../app/desktop/Core/RorolalaDesktop.csproj" ReferenceOutputAssembly="false" />

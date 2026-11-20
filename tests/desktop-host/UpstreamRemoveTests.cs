@@ -1,5 +1,6 @@
 using RorolalaDesktop.Progress;
 using FileSystemPlugin;
+using Rorolala;
 using RorolalaDesktop.Contract;
 using RorolalaVCSPlugin;
 
@@ -73,7 +74,7 @@ public sealed class UpstreamRemoveTests
     /// <returns>The account named before, or an empty string when none was.</returns>
     private static string Acting(string name)
     {
-        var directory = Path.Combine(DataHome.Root, "rola");
+        var directory = UserDataPaths.Root;
         var file = Path.Combine(directory, "user");
         var before = File.Exists(file) ? File.ReadAllText(file).Trim() : string.Empty;
 

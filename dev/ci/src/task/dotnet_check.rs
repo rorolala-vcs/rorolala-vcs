@@ -9,7 +9,7 @@ use mingling::{
     macros::{chain, command, empty_result},
     res::ResExitCode,
 };
-use rola_build::{dotnet, paths::Workspace};
+use rola_build::{DEVELOPMENT_USERDATA_NAME, dotnet, paths::Workspace};
 
 use super::run_check;
 use crate::Next;
@@ -31,7 +31,7 @@ pub fn handle_dotnet_check(_state: StateDotnetCheck, ec: &mut ResExitCode) -> Ne
         "dotnet-check",
         "dotnet build/test RorolalaSharp.sln -c Release --no-restore",
         ec,
-        || dotnet::check_solution(&Workspace::discover()?),
+        || dotnet::check_solution(&Workspace::discover()?, DEVELOPMENT_USERDATA_NAME),
     );
 
     empty_result!()

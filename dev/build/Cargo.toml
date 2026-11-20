@@ -22,6 +22,10 @@ mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267f
 # while the header itself is gone. The build tool writes it itself before handing the ABI over.
 rorolala-dev-bindgen = { path = "../bindgen" }
 
+# What a build's user data directory is called and what sits under it. The C windows are told the
+# same paths this crate composes, so the layout is not restated in their scripts.
+rorolala-utils-constants = { path = "../../utils/constants" }
+
 # The workspace's own manifest is read for what no program knows, the version everything is at, and
 # the publisher a package is named for, and it is read as TOML rather than as lines, so a value
 # that moves within the section is still found.

@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using Rorolala;
+
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
@@ -69,7 +71,7 @@ internal static class DataHome
     /// </summary>
     public static void Clean()
     {
-        var configuration = Path.Combine(Root, "rola", "desktop");
+        var configuration = UserDataPaths.Desktop;
 
         if (Directory.Exists(configuration))
         {

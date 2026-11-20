@@ -10,7 +10,7 @@ use mingling::{
     macros::{chain, command, empty_result},
     res::ResExitCode,
 };
-use rola_build::{build_programs, dotnet, paths::Workspace};
+use rola_build::{DEVELOPMENT_USERDATA_NAME, build_programs, dotnet, paths::Workspace};
 
 use super::run_check;
 use crate::Next;
@@ -40,10 +40,10 @@ pub fn handle_dotnet_integration_test(
         ec,
         || {
             let workspace = Workspace::discover()?;
-            build_programs()?;
+            build_programs(DEVELOPMENT_USERDATA_NAME)?;
             let bin_dir = workspace.release_dir()?;
 
-            dotnet::run_integration_suites(&workspace, &bin_dir)
+            dotnet::run_integration_suites(&workspace, &bin_dir, DEVELOPMENT_USERDATA_NAME)
         },
     );
 

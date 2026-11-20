@@ -69,6 +69,12 @@ pub(crate) use show_shape::*;
 
 pub use error::Error;
 
+/// The userdata name a development build uses, and the variable a build is told a name by.
+///
+/// Re-exported because the gate runs the same steps with the development name, and a second
+/// spelling of either would be a second place the name is decided.
+pub use rorolala_utils_constants::{DEVELOPMENT_USERDATA_NAME, USERDATA_NAME_ENV_VAR};
+
 /// Everything that ships, built: the library first, and the programs after it.
 ///
 /// It is reached by name as well as by the `build` command, because the gate is a sequence of steps

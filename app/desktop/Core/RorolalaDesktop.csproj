@@ -100,4 +100,12 @@
     <Delete Files="@(PublishedSymbols)" />
   </Target>
 
+  <ItemGroup>
+    <!-- One C# answer to where a run's user data is, compiled into this assembly rather than
+         carried as a second implementation: the launcher compiles it beside this file, and the
+         binding library compiles the same file, so a change to the rule is one change. The
+         Desktop program does not reference the binding library for a path. -->
+    <Compile Include="../../../modules/rola-sharp/UserDataPaths.cs" Link="Configuration/UserDataPaths.cs" />
+  </ItemGroup>
+
 </Project>

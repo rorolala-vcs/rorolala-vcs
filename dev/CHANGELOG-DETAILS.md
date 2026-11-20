@@ -36,7 +36,7 @@ The five whole workflows are there as well: `write::ownership` plans and applies
 
 ### 4. [`modules`] [`rola-sharp`] Add the C# bindings
 
-`RolaSharp` is the C# bindings: a generated `RorolalaBinding`, the `Scope` family over users, daemons, Workspaces, Vaults, Layouts, stores, VCS indexes, statuses, trees, ownership, inverse indexes, version graphs, books and ignore rules, and the writers over storage, Layouts, the tree cache, VCS indexes, file versions, one file's tracking and one path's retracking, and store and index packing. The read side no longer writes the tree cache; the write side calls the same `librorolala` workflows as the command line. Workspace and Vault scopes can be opened from any nested directory. The tree scope answers a tree's mark as well as its status: the Layout entry id, whether a description is staged and what it says.
+`RolaSharp` is the C# bindings: a generated `RorolalaBinding`, the `Scope` family over users, daemons, Workspaces, Vaults, Layouts, stores, VCS indexes, statuses, trees, ownership, inverse indexes, version graphs, books and ignore rules, and the writers over storage, Layouts, the tree cache, VCS indexes, file versions, one file's tracking and one path's retracking, and store and index packing. The read side no longer writes the tree cache; the write side calls the same `librorolala` workflows as the command line. Workspace and Vault scopes can be opened from any nested directory. The tree scope answers a tree's mark as well as its status: the Layout entry id, whether a description is staged and what it says. The user scope reads the userdata name the assembly was built for, which is `release` unless the build names another, and takes a name explicitly when a caller wants one; `Home` is gone, because the name rather than the user's home is what it reads.
 
 The writers over the whole workflows are there too: `Bring`, `BringVariant`, `Retrack`, `Align`, `PlanOwnership`, `ApplyOwnership`, `PlanTrack` and `Track`. Each takes a request record and answers a result record, the plan a track asks for is the exact text the native side answered with, and the single-entry alignment is now `AlignEntry`. The sync writer takes a `SyncRequest`, the plan it was handed and a `Progress`, so what a panel previewed is what it applies. An ownership plan can be handed back to `ApplyOwnership`, and every write failure has its own kind, tree and missing Vault included.
 
@@ -67,47 +67,61 @@ no longer panics.
 
 The first-generation C# bindings are gone from `modules/rola-sharp`. The project, the assembly and the namespaces are `RolaSharp` and `RolaSharp.Write`, the names the removed generation held, and the `Scope` family and the writers are the whole surface. A caller of the removed `RolaLayouts`, `RolaLayoutEntries`, `RolaWorkspaceConfig`, `RolaAccounts`, `RolaMembers`, `RolaTreeMark` or `RolaKeyLocateRule` moves to `LayoutScope`, `WorkspaceScope`, `UserScope`, `AccountScope`, `TreeScope` and `RolaPaths`; the key rule is no longer a public handle. A binary built against the old `RolaSharp.dll` has to be rebuilt, since the assembly carries the same name and a different surface.
 
-### 2. [`app`] [`rola`] Run the write commands through librorolala
+### 2. **\[BREAKING!\]** [`utils`] [`location`] [`user-data`] Keep each build's user data under its userdata name
+
+The user-level directory is now `<data home>/rola/<userdata-name>/`, where the name is chosen when
+the artifacts are built: `cargo dev export --userdata-name=<name>` (default `develop`) and
+`cargo dev publish` (always `release`). The keys, the account the work acts as, the address
+history, the last exit code, the daemon's registry and preference, and the Desktop program's
+configuration and cache all sit under the name. A run built for one name does not read another
+name's files.
+
+A machine that already has files under `~/.local/share/rola/keys`, `rola/daemon` or
+`rola/desktop` does not find them after this change. Move them under `rola/release/` for a
+published program, or `rola/develop/` for a development export. The old layout is not read and is
+not migrated.
+
+### 3. [`app`] [`rola`] Run the write commands through librorolala
 
 `rola bring`, `rola track`, `rola align`, `rola retrack`, `rola hold` and `rola giveup` no longer keep their own workflow bodies. Each builds the library's request, calls the same function the C ABI calls, and keeps only the arguments, the completion, the editor, the words and the drawing. What a run prints and the exit code it ends with are unchanged, except that a variant merge no longer says what was fetched from the Vaults, since the library answers the merge without that report.
 
-### 3. [`app`] [`RorolalaVCSPlugin`] Bring and own entries through the C# writers
+### 4. [`app`] [`RorolalaVCSPlugin`] Bring and own entries through the C# writers
 
 The bring flow, the join path, the ownership menu and the ownership sources no longer start `rola`. Bring builds a `BringRequest`, the join a `BringVariantRequest`, and ownership plans with `PlanOwnership` before it applies with `ApplyOwnership`, keeping the per-path failures and the allow-partial behaviour. No desktop file references the V1 assembly any more; the layout path move and the Vault's own ownership doors stay on the command line.
 
-### 4. [`app`] [`RorolalaVCSPlugin`] Read the ignore rules, the Workspace and the account from the C# bindings
+### 5. [`app`] [`RorolalaVCSPlugin`] Read the ignore rules, the Workspace and the account from the C# bindings
 
 The ignore rules, the Workspace check and the account the work acts as now come from `RolaSharp`'s `IgnoreScope`, `WorkspaceScope` and `UserScope`. The V2 user scope gained the current account name, which the old user reader had and no V2 member answered. Listing order, i18n keys and the silence of a read that cannot be made are unchanged.
 
-### 5. [`app`] [`RorolalaVCSPlugin`] Run track, align and retrack through the C# writers
+### 6. [`app`] [`RorolalaVCSPlugin`] Run track, align and retrack through the C# writers
 
 The track, retrack and align commands no longer start `rola`. Track plans, keeps the subjects the plan answered and applies that same plan with the one message the panel holds; retrack and the align modes build their request and call the writer; the tree restore makes the tree-relative path absolute before it asks. A refusal whose category the desktop has no words for is shown as the writer's message. The command line remains only for the file removal an unmerge does before its align.
 
-### 6. [`app`] [`RorolalaVCSPlugin`] [`graph`] Read the version graph from the C# bindings
+### 7. [`app`] [`RorolalaVCSPlugin`] [`graph`] Read the version graph from the C# bindings
 
 The version graph's variant reading comes from `RolaSharp`'s `VariantGraphScope`, with the same records, the same silence when there is no graph, the same one warning for a read that fails otherwise, and the same drawing. V1's version graph type stays until a V2 consumer needs the fields it alone carries.
 
-### 7. [`app`] [`RorolalaVCSPlugin`] [`layout`] Move a path through the C# Layout writer
+### 8. [`app`] [`RorolalaVCSPlugin`] [`layout`] Move a path through the C# Layout writer
 
 A move in the Workspace's own Layout, and the bring's local move, no longer start `rola`: they open the Layout the panel holds and call `LayoutWriter.MovePath`. A move in a fetched Vault copy and the new-uuid fork stay on the command line, because the writer cannot write a fetched copy and its `ChangeUuid` is not the fork the command makes.
 
-### 8. [`app`] [`RorolalaVCSPlugin`] [`overview`] Read the overview from the C# bindings
+### 9. [`app`] [`RorolalaVCSPlugin`] [`overview`] Read the overview from the C# bindings
 
 The overview, status, standing, merge, upstream, lock and sync panels read through `RolaSharp`'s `StatusScope` and `OwnershipScope` instead of V1's `RolaStatus` and `RolaOwnership`. The fields, the i18n keys and the silence when there is no Workspace are unchanged; the graph and tree panels keep V1 until their own slices.
 
-### 9. [`app`] [`RorolalaVCSPlugin`] [`sync`] Run sync through the C# writer
+### 10. [`app`] [`RorolalaVCSPlugin`] [`sync`] Run sync through the C# writer
 
 The sync panel and the sync strip no longer start `rola`: they build a `SyncRequest`, plan with `PlanSync`, and apply the same plan with `Sync`, draining `Progress` on the dispatcher into the same records and bars. The scope dropdowns no longer show the `--no-index`, `--no-layout` and `--no-storage` flags, since the command no longer runs; their labels, checked state and effects are unchanged. The Vault Layout fetch that planning makes before the apply has no bar yet, because only the apply holds a progress handle.
 
-### 10. [`app`] [`RorolalaVCSPlugin`] [`tree`] Read a tree from the C# bindings
+### 11. [`app`] [`RorolalaVCSPlugin`] [`tree`] Read a tree from the C# bindings
 
 The tree panel, the tree reading and the graph bars that show a tree read through `RolaSharp`'s `TreeScope` and `TreeStatus`. The records, the silence when no tree is there and the i18n keys are unchanged; the graph records themselves stay on V1 until their own slice.
 
-### 11. [`app`] [`TerminalPlugin`] Run the terminal's pty through the C# bindings
+### 12. [`app`] [`TerminalPlugin`] Run the terminal's pty through the C# bindings
 
 The terminal view opens, reads, writes and resizes its pseudo-terminal through `RolaSharp`'s `Pty`. The argument encoding and the size clamp are the ones the old wrapper made, so the program started and the terminal's extent are the same. The plugin references V2 alone now that its only V1 use is gone.
 
-### 12. [`librorolala`] Resolve accounts and Vaults from one implementation
+### 13. [`librorolala`] Resolve accounts and Vaults from one implementation
 
 The account search and the Vault name and address rules are now `librorolala::keys` and `librorolala::remote`. The command line's key search and `ResCurrentRemoteVault` delegate to them, and the ABI request layer calls the same functions, so the scopes, the order, the shadowing and the failure wording have one place to be kept right.
 

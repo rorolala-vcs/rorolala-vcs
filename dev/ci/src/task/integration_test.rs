@@ -10,6 +10,7 @@
 //! run from is what picks its target directory out of `tests/.cargo/config.toml`, which is how
 //! running them leaves nothing inside the workspace they test.
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use mingling::{
@@ -65,7 +66,7 @@ fn skipped(suite: &str, workspace: &Workspace) -> Option<&'static str> {
 /// Runs the cargo suites one at a time, then the .NET ones, and names every suite that failed.
 fn run_integration_test() -> Result<(), Error> {
     let workspace = Workspace::discover()?;
-    rola_build::build_programs()?;
+    rola_build::build_programs(rola_build::DEVELOPMENT_USERDATA_NAME)?;
 
     // The programs are named to a suite by where they are, which has to be said before the suites
     // are entered: from here on, everything is relative to `tests/`.
@@ -97,7 +98,13 @@ fn run_integration_test() -> Result<(), Error> {
         let manifest = manifest.to_string_lossy().into_owned();
         let status = Tool::cargo().status_in(
             &tests,
-            &[("ROLA_BIN_DIR", bin_dir.as_os_str())],
+            &[
+                ("ROLA_BIN_DIR", bin_dir.as_os_str()),
+                (
+                    rola_build::USERDATA_NAME_ENV_VAR,
+                    OsStr::new(rola_build::DEVELOPMENT_USERDATA_NAME),
+                ),
+            ],
             ["run", "--manifest-path", &manifest],
         )?;
 
@@ -108,7 +115,11 @@ fn run_integration_test() -> Result<(), Error> {
 
     // The .NET suites are run after them, all together, for the same reason: one run reports every
     // suite that failed.
-    if let Err(error) = rola_build::dotnet::run_integration_suites(&workspace, &bin_dir) {
+    if let Err(error) = rola_build::dotnet::run_integration_suites(
+        &workspace,
+        &bin_dir,
+        rola_build::DEVELOPMENT_USERDATA_NAME,
+    ) {
         eprintln!("{error}");
         failed.push(".NET".to_owned());
     }

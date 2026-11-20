@@ -60,8 +60,17 @@ fi
 cflags=$("$PKG_CONFIG" --cflags gtk4)
 libs=$("$PKG_CONFIG" --libs gtk4)
 
+# The two paths a build's user data sits at, relative to the base. `cargo dev export` names them
+# for the export it is laying out; a build run on its own uses the development name, which is what
+# the export uses when it names none.
+userdata_name=${ROLA_USERDATA_NAME:-develop}
+userdata_keys=${ROLA_USER_KEYS_PATH:-rola/$userdata_name/keys}
+userdata_registry=${ROLA_DAEMON_REGISTRY_PATH:-rola/$userdata_name/daemon/registry.toml}
+
 # POSIX process and signal declarations, which a strict C11 run hides by default.
 defines="-D_POSIX_C_SOURCE=200809L"
+defines="$defines -DROLA_USER_KEYS_PATH=\"$userdata_keys\""
+defines="$defines -DROLA_DAEMON_REGISTRY_PATH=\"$userdata_registry\""
 # GTK's own headers are not pedantic C (they carry declarations that end in an
 # extra semicolon), so -Wpedantic would fail inside them rather than here.
 warnings="-std=c11 -O2 -Wall -Wextra -Werror -Wshadow -Wformat=2 -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings"

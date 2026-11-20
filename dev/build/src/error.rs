@@ -21,6 +21,13 @@ pub enum Error {
         /// Why that value is not a directory a build may use.
         reason: &'static str,
     },
+    /// A userdata name a build may not write under.
+    UserDataName {
+        /// The value that was given.
+        value: String,
+        /// Why that value is not one directory name.
+        reason: &'static str,
+    },
     /// The workspace's manifest does not say what a step needs.
     Manifest {
         /// The manifest that was read.
@@ -68,6 +75,7 @@ impl Error {
         match self {
             Self::Status { code, .. } => *code,
             Self::NoWorkspace
+            | Self::UserDataName { .. }
             | Self::Directory { .. }
             | Self::Manifest { .. }
             | Self::Io { .. }
@@ -91,6 +99,10 @@ impl fmt::Display for Error {
             } => write!(
                 f,
                 "{name} is set to `{value}`, which is not a directory a build may write to: {reason}"
+            ),
+            Self::UserDataName { value, reason } => write!(
+                f,
+                "the userdata name `{value}` is not one directory name: {reason}"
             ),
             Self::Manifest { path, detail } => write!(f, "{}: {detail}", path.display()),
             Self::Io { doing, detail } => write!(f, "{doing}: {detail}"),

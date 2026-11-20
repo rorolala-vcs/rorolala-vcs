@@ -1,6 +1,7 @@
 using System.Diagnostics;
 
 using RolaSharp;
+using Rorolala;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -191,15 +192,9 @@ public sealed class LayoutReadTests
         Assert.False(string.IsNullOrEmpty(account.KeyPath));
     }
 
-    /// <summary>A user scope over a scratch home, holding a copy of the account the fixture installed.</summary>
+    /// <summary>The user scope of this run, which holds the account the fixture installed.</summary>
     /// <returns>The scope, which has not been read.</returns>
-    private static UserScope UserScopeWithInstalledKey()
-    {
-        var user = new UserScope(Scratch.New("user-home"));
-        CopyInstalledKeys(user.KeysDirectory.FullName);
-
-        return user;
-    }
+    private static UserScope UserScopeWithInstalledKey() => new();
 
     /// <summary>Copies the account the fixture installed into a key directory.</summary>
     /// <param name="into">The directory the key files are copied into.</param>
@@ -219,14 +214,7 @@ public sealed class LayoutReadTests
 
     /// <summary>Where the command line installed the fixture's key pair.</summary>
     /// <returns>The user key directory of the run's data home.</returns>
-    private static string InstalledKeys()
-    {
-        var home =
-            Environment.GetEnvironmentVariable("ROLA_DATA_HOME")
-            ?? throw new InvalidOperationException("the suites are run with ROLA_DATA_HOME");
-
-        return Path.Combine(home, "rola", "keys");
-    }
+    private static string InstalledKeys() => UserDataPaths.Keys;
 
     /// <summary>A workspace holding one recorded file, recorded as Alice.</summary>
     /// <param name="label">What the workspace is for, for a person reading the path.</param>

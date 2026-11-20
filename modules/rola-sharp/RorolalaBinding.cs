@@ -2152,13 +2152,13 @@ internal static partial class RorolalaBinding
     internal static extern nint ROLA_GLOBAL_KEYS_DIR();
 
     /// <summary>
-    /// Keys of a user scope, under the user's local data directory
+    /// Keys of a user scope, under a userdata name's directory
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint ROLA_USER_KEYS_DIR();
 
     /// <summary>
-    /// The directory, under [`USER_DATA_DIR`], the machine's daemon keeps its files in.
+    /// The directory, under a userdata name, the machine's daemon keeps its files in
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern nint ROLA_DAEMON_DIR();

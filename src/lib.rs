@@ -47,6 +47,9 @@ pub use write::*;
 /// Authentication
 pub use rorolala_auth as auth;
 
+/// Locating and normalizing local paths
+pub use rorolala_utils_location as location;
+
 /// Searching the built-in book: the articles, their descriptions and the fragments a query matched
 pub use rorolala_book_search as book_search;
 
@@ -210,7 +213,8 @@ pub fn account_locate_local(rule: &KeyLocateRule) -> Accounts {
 /// Every account whose private key is directly inside `keys`.
 ///
 /// It is the user-scoped counterpart of [`account_locate`]: the caller names the directory that
-/// holds the accounts, usually the user's own `rola/keys`, rather than a Workspace or a Vault. The
+/// holds the accounts, usually the user's own `rola/<name>/keys`, rather than a Workspace or a
+/// Vault. The
 /// rule still says which scopes to search, but an account is only ever a private key, so only the
 /// local root named here can answer.
 #[must_use]

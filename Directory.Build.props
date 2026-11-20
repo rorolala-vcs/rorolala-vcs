@@ -35,4 +35,24 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <!--
+    The userdata name every assembly is built with. `cargo dev export` sets `ROLA_USERDATA_NAME`
+    for the whole export, so the Desktop program, the launcher and the bindings it carries all name
+    the same directory as the Rust programs beside them. A build that sets nothing is `release`:
+    that is what a program is handed over as, and a standalone build is that shape rather than a
+    developer's. The value is compiled into each assembly as metadata, which is how
+    `UserDataPaths.cs` reads it back without either a generated source or a second place that
+    decides it.
+  -->
+  <PropertyGroup>
+    <RolaUserDataName
+            Condition="'$(RolaUserDataName)' == '' and '$(ROLA_USERDATA_NAME)' != ''"
+        >$(ROLA_USERDATA_NAME)</RolaUserDataName>
+    <RolaUserDataName Condition="'$(RolaUserDataName)' == ''">release</RolaUserDataName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="RolaUserDataName" Value="$(RolaUserDataName)" />
+  </ItemGroup>
+
 </Project>

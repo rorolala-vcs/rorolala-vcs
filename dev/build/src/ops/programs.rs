@@ -4,6 +4,10 @@
 //! output, so a program added to [`crate::paths::PROGRAMS`] is one a shell can be completed for
 //! without anything here changing.
 
+use std::ffi::OsStr;
+
+use rorolala_utils_constants::USERDATA_NAME_ENV_VAR;
+
 use crate::{
     paths::{PROGRAMS, PROGRAMS_WITHOUT_COMPLETIONS},
     toolchain::Tool,
@@ -27,7 +31,7 @@ pub fn programs() -> StatePrograms {
 #[derive(Grouped)]
 pub struct StatePrograms;
 
-/// Builds every program, named to cargo one at a time.
+/// Builds every program, named to cargo one at a time, for `userdata_name`.
 ///
 /// A program is named with its own `-p` rather than in one word that happens to hold several: cargo
 /// takes one package per flag, and a name is a name.
@@ -35,7 +39,7 @@ pub struct StatePrograms;
 /// # Errors
 ///
 /// Reports the build's own failure.
-pub fn build_programs() -> Result<(), crate::Error> {
+pub fn build_programs(userdata_name: &str) -> Result<(), crate::Error> {
     let mut arguments: Vec<String> = vec![
         "build".to_owned(),
         "--release".to_owned(),
@@ -47,13 +51,18 @@ pub fn build_programs() -> Result<(), crate::Error> {
         arguments.push(program.to_owned());
     }
 
-    Tool::cargo().run(arguments)
+    Tool::cargo().run_with_env(
+        &[(USERDATA_NAME_ENV_VAR, OsStr::new(userdata_name))],
+        arguments,
+    )
 }
 
 /// Builds every program the tree ships.
 #[chain]
 pub fn handle_programs(_state: StatePrograms, ec: &mut ResExitCode) -> Next {
-    run_step(ec, build_programs);
+    run_step(ec, || {
+        build_programs(&crate::userdata_name_from_environment())
+    });
 
     empty_result!()
 }

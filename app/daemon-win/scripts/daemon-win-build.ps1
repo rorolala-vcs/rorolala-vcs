@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [switch]$Check
 )
@@ -68,6 +68,16 @@ $common = @(
 # errors, and a toolset or SDK that never emits it is unaffected. It can go once no supported SDK
 # still carries that macro.
 $common += '/wd5105'
+
+# The two paths a build's user data sits at, relative to the base. `cargo dev export` names them
+# for the export it is laying out; a build run on its own uses the development name, which is what
+# the export uses when it names none. They are wide literals because every path this program
+# handles is wide.
+$userdataName = if ($env:ROLA_USERDATA_NAME) { $env:ROLA_USERDATA_NAME } else { 'develop' }
+$userdataKeys = if ($env:ROLA_USER_KEYS_PATH) { $env:ROLA_USER_KEYS_PATH } else { "rola/$userdataName/keys" }
+$userdataRegistry = if ($env:ROLA_DAEMON_REGISTRY_PATH) { $env:ROLA_DAEMON_REGISTRY_PATH } else { "rola/$userdataName/daemon/registry.toml" }
+$common += '/DROLA_USER_KEYS_PATH=L\"' + $userdataKeys + '\"'
+$common += '/DROLA_DAEMON_REGISTRY_PATH=L\"' + $userdataRegistry + '\"'
 
 if ($analyze) {
     $common += $analyze

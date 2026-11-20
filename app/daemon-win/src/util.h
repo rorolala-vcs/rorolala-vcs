@@ -41,6 +41,7 @@ BOOL file_is_readable(const WCHAR *path);
 
 WCHAR *module_dir(void);
 WCHAR *local_app_data_dir(void);
+WCHAR *data_home(void);
 WCHAR *keys_dir(void);
 WCHAR *registry_file(void);
 

@@ -124,6 +124,7 @@ version = "0.1.0"
 dependencies = [
  "mingling",
  "rorolala-dev-bindgen",
+ "rorolala-utils-constants",
  "serde",
  "serde_yaml",
  "toml",
@@ -149,10 +150,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "rorolala-utils-constants"
+version = "0.4.0"
+dependencies = [
+ "rorolala-utils-lazyffi",
+]
+
+[[package]]
+name = "rorolala-utils-lazyffi"
+version = "0.4.0"
+dependencies = [
+ "rorolala-utils-lazyffi-core",
+ "rorolala-utils-lazyffi-macros",
+]
+
+[[package]]
 name = "rorolala-utils-lazyffi-core"
 version = "0.4.0"
 dependencies = [
  "just_fmt",
+]
+
+[[package]]
+name = "rorolala-utils-lazyffi-macros"
+version = "0.4.0"
+dependencies = [
+ "just_fmt",
+ "proc-macro2",
+ "quote",
+ "rorolala-utils-lazyffi-core",
+ "syn 3.0.9",
 ]
 
 [[package]]

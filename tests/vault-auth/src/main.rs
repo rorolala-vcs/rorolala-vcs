@@ -51,7 +51,7 @@ fn main() {
 
     // The daemon proves itself with the user's own account, so one is made where the user keeps
     // theirs.
-    pair(&data.join("rola").join("keys"), "daemon");
+    pair(&librorolala::location::user_data_dir_in(&data).join("keys"), "daemon");
 
     // The client's own side: the pairs it can act as, and a place to keep them. Its accounts are
     // looked up the way the program looks them up, from the Workspace's keys.
@@ -225,7 +225,7 @@ fn serveable(dir: &Path) {
 
 /// Writes the table naming each of `entries`, under the namespace beside it.
 fn register(data: &Path, entries: &[(&str, &Path)]) {
-    let registry = data.join("rola").join("daemon").join("registry.toml");
+    let registry = librorolala::location::user_data_dir_in(&data).join("daemon").join("registry.toml");
 
     fs::create_dir_all(registry.parent().expect("the daemon's directory"))
         .expect("the daemon's directory");

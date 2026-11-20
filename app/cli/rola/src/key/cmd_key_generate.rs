@@ -80,8 +80,8 @@ pub fn complete_key_generate(ctx: ShellContext) -> Suggest {
 /// `NAME` names the *pair*, not one file: an extension on it separates the stem from what a
 /// key is written as, so `alice`, `alice.pem` and `alice.pub` all name the same two files.
 ///
-/// With `--install`, the pair goes into the user's key directory under the local data
-/// directory instead, and that directory is created if it is not there yet.
+/// With `--install`, the pair goes into the user data directory's key directory instead, and that
+/// directory is created if it is not there yet.
 ///
 /// # Errors
 ///

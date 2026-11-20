@@ -19,29 +19,35 @@ use crate::{Next, ops::library::build_library};
 
 /// Lays the Desktop program out where an export lays it out.
 #[command(node = "desktop")]
-pub fn desktop() -> StateDesktop {
-    StateDesktop
+pub fn desktop(args: Vec<String>) -> StateDesktop {
+    StateDesktop {
+        userdata_name: crate::userdata_name_from_args(&args),
+    }
 }
 
-/// The state the command starts in: it names nothing, since the Desktop program is what is laid out.
+/// The state the command starts in: the userdata name the layout is built for.
 #[derive(Grouped)]
-pub struct StateDesktop;
+pub struct StateDesktop {
+    /// The name the Desktop program discovers its own files by.
+    userdata_name: String,
+}
 
 /// Builds the library and the solution, then lays the program, its launcher and its plugins down.
 ///
 /// The whole solution is restored and built once for the two layouts rather than a project at a
 /// time: the restore is shared, and one `MSBuild` over the solution is what builds the host and the
 /// plugins together.
-pub fn lay_out_desktop() -> Result<(), crate::Error> {
+pub fn lay_out_desktop(userdata_name: &str) -> Result<(), crate::Error> {
+    let userdata_name = crate::checked_userdata_name(userdata_name)?;
     let workspace = Workspace::discover()?;
 
-    build_library()?;
-    dotnet::build_solution(&workspace)?;
+    build_library(userdata_name)?;
+    dotnet::build_solution(&workspace, userdata_name)?;
 
     let directory = workspace.desktop_dir()?;
-    dotnet::publish_desktop(&workspace, &directory, false)?;
-    dotnet::publish_host(&workspace, &directory, false)?;
-    dotnet::publish_launcher(&workspace, &directory, false)?;
+    dotnet::publish_desktop(&workspace, &directory, false, userdata_name)?;
+    dotnet::publish_host(&workspace, &directory, false, userdata_name)?;
+    dotnet::publish_launcher(&workspace, &directory, false, userdata_name)?;
     dotnet::publish_plugins(&workspace, &directory)?;
     lay_out_presets(&workspace)?;
 
@@ -89,8 +95,8 @@ pub fn lay_out_presets(workspace: &Workspace) -> Result<(), crate::Error> {
 
 /// Lays the Desktop program out.
 #[chain]
-pub fn handle_desktop(_state: StateDesktop, ec: &mut ResExitCode) -> Next {
-    run_step(ec, lay_out_desktop);
+pub fn handle_desktop(state: StateDesktop, ec: &mut ResExitCode) -> Next {
+    run_step(ec, || lay_out_desktop(&state.userdata_name));
 
     empty_result!()
 }

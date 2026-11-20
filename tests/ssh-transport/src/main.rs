@@ -88,7 +88,7 @@ fn checks() {
     let auth = workspace.join(".rola").join("auth");
     pair(&auth, CLIENT);
     publish(&auth, &root, CLIENT);
-    pair(&data.join("rola").join("keys"), "daemon");
+    pair(&librorolala::location::user_data_dir_in(&data).join("keys"), "daemon");
 
     run(&mut client(
         &workspace,
@@ -137,7 +137,7 @@ fn checks() {
 
     // Nothing had written this machine's preferences yet, and the session asked them what it may do:
     // what a machine that has said nothing means is now the file it can be changed in.
-    let preferences = data.join("rola").join("daemon").join("preference.toml");
+    let preferences = librorolala::location::user_data_dir_in(&data).join("daemon").join("preference.toml");
     checked.wants(
         "a machine that has said nothing has its preferences written down by the first session",
         fs::read_to_string(&preferences).is_ok_and(|said| {
@@ -475,7 +475,7 @@ fn client_with_ssh(
 /// Writes this machine's preferences: what a session may be served and what it may register.
 #[cfg(unix)]
 fn preference(data: &Path, ssh_connection: bool, auto_register: bool) {
-    let directory = data.join("rola").join("daemon");
+    let directory = librorolala::location::user_data_dir_in(&data).join("daemon");
     fs::create_dir_all(&directory).expect("the daemon's directory");
 
     fs::write(

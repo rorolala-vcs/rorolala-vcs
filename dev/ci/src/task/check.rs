@@ -51,7 +51,7 @@ fn build(ec: &mut ResExitCode) {
         "build",
         "cargo build --release --all-features -p rorolala-ffi, then the programs",
         ec,
-        rola_build::build_everything,
+        || rola_build::build_everything(rola_build::DEVELOPMENT_USERDATA_NAME),
     );
 }
 

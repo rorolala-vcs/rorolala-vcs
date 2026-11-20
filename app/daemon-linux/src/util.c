@@ -7,6 +7,16 @@
 #include <string.h>
 #include <unistd.h>
 
+/* `cargo dev export` states the two paths a build's user data sits at, relative to the base; a
+   build run on its own falls back to the development name, which is what `cargo dev export` uses
+   when it names none. */
+#ifndef ROLA_USER_KEYS_PATH
+#define ROLA_USER_KEYS_PATH "rola/develop/keys"
+#endif
+#ifndef ROLA_DAEMON_REGISTRY_PATH
+#define ROLA_DAEMON_REGISTRY_PATH "rola/develop/daemon/registry.toml"
+#endif
+
 static gboolean sb_grow(StrBuf *sb, size_t needed) {
   size_t cap;
   char *grown;
@@ -250,7 +260,7 @@ char *data_home(void) {
 
 char *keys_dir(void) {
   char *home = data_home();
-  char *result = g_build_filename(home, "rola", "keys", NULL);
+  char *result = g_build_filename(home, ROLA_USER_KEYS_PATH, NULL);
 
   g_free(home);
   return result;
@@ -258,8 +268,7 @@ char *keys_dir(void) {
 
 char *registry_file(void) {
   char *home = data_home();
-  char *result =
-      g_build_filename(home, "rola", "daemon", "registry.toml", NULL);
+  char *result = g_build_filename(home, ROLA_DAEMON_REGISTRY_PATH, NULL);
 
   g_free(home);
   return result;

@@ -6,7 +6,10 @@
 //! of the gate, and a build or a test that restores on its own asks that feed once per project it
 //! touches.
 
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+
+use rorolala_utils_constants::USERDATA_NAME_ENV_VAR;
 
 use crate::{
     Error,
@@ -66,6 +69,14 @@ pub fn restore(workspace: &Workspace, args: &[&str]) -> Result<(), Error> {
     Tool::dotnet().run(online)
 }
 
+/// The environment every .NET build and test of an export is given.
+///
+/// The property is read by `Directory.Build.props`, which stamps it into each assembly as metadata;
+/// one name reaches the Desktop program, the launcher and the bindings alike.
+fn userdata_env<'a>(userdata_name: &'a str) -> [(&'static str, &'a OsStr); 1] {
+    [(USERDATA_NAME_ENV_VAR, OsStr::new(userdata_name))]
+}
+
 /// Restores and builds the whole solution, once, for everything the .NET side of an export is made
 /// of.
 ///
@@ -76,11 +87,14 @@ pub fn restore(workspace: &Workspace, args: &[&str]) -> Result<(), Error> {
 /// # Errors
 ///
 /// Reports the restore or the build's own failure.
-pub fn build_solution(workspace: &Workspace) -> Result<(), Error> {
+pub fn build_solution(workspace: &Workspace, userdata_name: &str) -> Result<(), Error> {
     let solution = workspace.solution().to_string_lossy().into_owned();
     restore(workspace, &[&solution])?;
 
-    Tool::dotnet().run(["build", &solution, "-c", CONFIGURATION, "--no-restore"])
+    Tool::dotnet().run_with_env(
+        &userdata_env(userdata_name),
+        ["build", &solution, "-c", CONFIGURATION, "--no-restore"],
+    )
 }
 
 /// Builds and tests the solution: the Desktop program, the translations it reads, and the tests of
@@ -93,13 +107,19 @@ pub fn build_solution(workspace: &Workspace) -> Result<(), Error> {
 /// # Errors
 ///
 /// Reports the restore, the build or the tests' own failure.
-pub fn check_solution(workspace: &Workspace) -> Result<(), Error> {
+pub fn check_solution(workspace: &Workspace, userdata_name: &str) -> Result<(), Error> {
     let solution = workspace.solution().to_string_lossy().into_owned();
     restore(workspace, &[&solution])?;
 
-    Tool::dotnet().run(["build", &solution, "-c", CONFIGURATION, "--no-restore"])?;
+    Tool::dotnet().run_with_env(
+        &userdata_env(userdata_name),
+        ["build", &solution, "-c", CONFIGURATION, "--no-restore"],
+    )?;
 
-    Tool::dotnet().run(["test", &solution, "-c", CONFIGURATION, "--no-restore"])
+    Tool::dotnet().run_with_env(
+        &userdata_env(userdata_name),
+        ["test", &solution, "-c", CONFIGURATION, "--no-restore"],
+    )
 }
 
 /// Lints the .NET side: every rule the analyzer set carries, over the whole solution, with any
@@ -118,24 +138,27 @@ pub fn check_solution(workspace: &Workspace) -> Result<(), Error> {
 /// # Errors
 ///
 /// Reports the restore's or the rebuild's own failure.
-pub fn lint_solution(workspace: &Workspace) -> Result<(), Error> {
+pub fn lint_solution(workspace: &Workspace, userdata_name: &str) -> Result<(), Error> {
     let solution = workspace.solution().to_string_lossy().into_owned();
     restore(workspace, &[&solution])?;
 
-    Tool::dotnet().run([
-        "msbuild",
-        &solution,
-        "-t:Rebuild",
-        "-warnAsError",
-        "-nologo",
-        "-v:m",
-        "-tl:off",
-        "-p:Configuration=Release",
-        "-p:AnalysisMode=All",
-        "-p:AnalysisLevel=latest-all",
-        "-p:EnforceCodeStyleInBuild=true",
-        "-p:TreatWarningsAsErrors=false",
-    ])
+    Tool::dotnet().run_with_env(
+        &userdata_env(userdata_name),
+        [
+            "msbuild",
+            &solution,
+            "-t:Rebuild",
+            "-warnAsError",
+            "-nologo",
+            "-v:m",
+            "-tl:off",
+            "-p:Configuration=Release",
+            "-p:AnalysisMode=All",
+            "-p:AnalysisLevel=latest-all",
+            "-p:EnforceCodeStyleInBuild=true",
+            "-p:TreatWarningsAsErrors=false",
+        ],
+    )
 }
 
 /// The suites under `tests/` that are run by the .NET test host, in directory order.
@@ -202,12 +225,19 @@ pub fn integration_suites(workspace: &Workspace) -> Result<Vec<PathBuf>, Error> 
 /// # Errors
 ///
 /// Reports the build's own failure, and [`Error::Status`] naming the count when any suite failed.
-pub fn run_integration_suites(workspace: &Workspace, bin_dir: &Path) -> Result<(), Error> {
-    crate::ops::library::build_suite_library(workspace)?;
+pub fn run_integration_suites(
+    workspace: &Workspace,
+    bin_dir: &Path,
+    userdata_name: &str,
+) -> Result<(), Error> {
+    crate::ops::library::build_suite_library(workspace, userdata_name)?;
 
     let suites = integration_suites(workspace)?;
     let mut failed = Vec::new();
-    let environment = [("ROLA_BIN_DIR", bin_dir.as_os_str())];
+    let environment = [
+        ("ROLA_BIN_DIR", bin_dir.as_os_str()),
+        (USERDATA_NAME_ENV_VAR, OsStr::new(userdata_name)),
+    ];
 
     for suite in &suites {
         println!("==> {}", suite.display());
@@ -252,6 +282,7 @@ pub fn publish_desktop(
     workspace: &Workspace,
     into: &Path,
     self_contained: bool,
+    userdata_name: &str,
 ) -> Result<(), Error> {
     let rid = runtime_identifier()?;
     let project = workspace.desktop_project().to_string_lossy().into_owned();
@@ -259,19 +290,22 @@ pub fn publish_desktop(
     let contained = if self_contained { "true" } else { "false" };
 
     restore(workspace, &[&project, "-r", &rid])?;
-    Tool::dotnet().run([
-        "publish",
-        &project,
-        "-c",
-        CONFIGURATION,
-        "--no-restore",
-        "-r",
-        &rid,
-        "--self-contained",
-        contained,
-        "-o",
-        &destination,
-    ])?;
+    Tool::dotnet().run_with_env(
+        &userdata_env(userdata_name),
+        [
+            "publish",
+            &project,
+            "-c",
+            CONFIGURATION,
+            "--no-restore",
+            "-r",
+            &rid,
+            "--self-contained",
+            contained,
+            "-o",
+            &destination,
+        ],
+    )?;
 
     // The native library the Desktop's own bindings reach for, beside the program that binds it: a
     // plugin asks the C ABI through the C# bindings, which `DllImport` `rorolala`, and the runtime
@@ -324,26 +358,34 @@ pub fn publish_desktop(
 /// # Errors
 ///
 /// Reports the restore or the publish.
-pub fn publish_host(workspace: &Workspace, into: &Path, self_contained: bool) -> Result<(), Error> {
+pub fn publish_host(
+    workspace: &Workspace,
+    into: &Path,
+    self_contained: bool,
+    userdata_name: &str,
+) -> Result<(), Error> {
     let rid = runtime_identifier()?;
     let project = workspace.host_project().to_string_lossy().into_owned();
     let destination = into.to_string_lossy().into_owned();
     let contained = if self_contained { "true" } else { "false" };
 
     restore(workspace, &[&project, "-r", &rid])?;
-    Tool::dotnet().run([
-        "publish",
-        &project,
-        "-c",
-        CONFIGURATION,
-        "--no-restore",
-        "-r",
-        &rid,
-        "--self-contained",
-        contained,
-        "-o",
-        &destination,
-    ])?;
+    Tool::dotnet().run_with_env(
+        &userdata_env(userdata_name),
+        [
+            "publish",
+            &project,
+            "-c",
+            CONFIGURATION,
+            "--no-restore",
+            "-r",
+            &rid,
+            "--self-contained",
+            contained,
+            "-o",
+            &destination,
+        ],
+    )?;
 
     Ok(())
 }
@@ -362,6 +404,7 @@ pub fn publish_launcher(
     workspace: &Workspace,
     into: &Path,
     self_contained: bool,
+    userdata_name: &str,
 ) -> Result<(), Error> {
     let rid = runtime_identifier()?;
     let project = workspace.launcher_project().to_string_lossy().into_owned();
@@ -369,19 +412,22 @@ pub fn publish_launcher(
     let contained = if self_contained { "true" } else { "false" };
 
     restore(workspace, &[&project, "-r", &rid])?;
-    Tool::dotnet().run([
-        "publish",
-        &project,
-        "-c",
-        CONFIGURATION,
-        "--no-restore",
-        "-r",
-        &rid,
-        "--self-contained",
-        contained,
-        "-o",
-        &destination,
-    ])
+    Tool::dotnet().run_with_env(
+        &userdata_env(userdata_name),
+        [
+            "publish",
+            &project,
+            "-c",
+            CONFIGURATION,
+            "--no-restore",
+            "-r",
+            &rid,
+            "--self-contained",
+            contained,
+            "-o",
+            &destination,
+        ],
+    )
 }
 
 /// Lays each plugin that ships with the Desktop program where the program looks for it: its
