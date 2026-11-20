@@ -13,10 +13,11 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 ## Feature
 
 1. [`app`] [`rola`] Stop a running write with Ctrl+C. [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-stop-a-running-write-with-ctrlc)
-2. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#2-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
-3. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#3-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
-4. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#4-modules-rola-sharp-add-the-c-bindings)
-5. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#5-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
+2. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-show-entries-that-are-not-on-disk-as-pending-in-progress-or-lost)
+3. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#3-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
+4. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#4-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
+5. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#5-modules-rola-sharp-add-the-c-bindings)
+6. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#6-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
 
 ## Refactor
 

@@ -131,6 +131,27 @@ internal sealed class Files : Listing<Entry>
     /// <inheritdoc />
     public override IReadOnlyList<EntryBadge> Badges(Entry item)
     {
+        // What a virtual entry wears is what it was given when it was put there, and nothing else is asked:
+        // the providers speak for entries of a directory, and an entry that is not in one has nothing for
+        // them to answer about, a state mark of a work among them.
+        if (VirtualEntries.Find(item.Path) is { } virtualEntry)
+        {
+            List<EntryBadge> own = [];
+
+            foreach (var mark in virtualEntry.Badges)
+            {
+                if (
+                    mark.IconKey is { Length: > 0 } key
+                    && Host.Icons.Find(key) is { } picture
+                )
+                {
+                    own.Add(new EntryBadge(picture, mark));
+                }
+            }
+
+            return own;
+        }
+
         var badges = new List<EntryBadge>();
 
         // Asked here rather than kept from the constructor, and asked of the entry's own directory rather than of
@@ -153,11 +174,26 @@ internal sealed class Files : Listing<Entry>
     }
 
     /// <inheritdoc />
-    public override bool Openable(Entry item) =>
-        item.Kind == EntryKind.Directory && !Browser.IsUp(item.Path);
+    public override bool Inert(Entry item) => VirtualEntries.Find(item.Path) is not null;
 
     /// <inheritdoc />
-    public override bool Seekable(Entry item) => !Browser.IsUp(item.Path);
+    public override string? NameInk(Entry item) =>
+        VirtualEntries.Find(item.Path) is { State: VirtualEntryState.Lost }
+            ? PaletteKeys.Del
+            : null;
+
+    /// <inheritdoc />
+    public override bool Openable(Entry item) =>
+        !Inert(item) && item.Kind == EntryKind.Directory && !Browser.IsUp(item.Path);
+
+    /// <inheritdoc />
+    public override bool Seekable(Entry item) => !Inert(item) && !Browser.IsUp(item.Path);
+
+    /// <inheritdoc />
+    public override bool Renamable(Entry item) => !Inert(item);
+
+    /// <inheritdoc />
+    public override bool Removable(Entry item) => !Inert(item);
 
     /// <summary>
     /// Whether the listing holds nothing but the way up.
@@ -203,7 +239,15 @@ internal sealed class Files : Listing<Entry>
         };
 
     /// <inheritdoc />
-    public override void Open(Entry item) => _actions.Open(item);
+    public override void Open(Entry item)
+    {
+        if (Inert(item))
+        {
+            return;
+        }
+
+        _actions.Open(item);
+    }
 
     /// <inheritdoc />
     public override void Fill(
@@ -306,7 +350,8 @@ internal sealed class Files : Listing<Entry>
     public override void Touch() => _browser.Touch();
 
     /// <inheritdoc />
-    public override void Chosen(IReadOnlyList<Entry> chosen) => ChosenEntries.Publish(chosen);
+    public override void Chosen(IReadOnlyList<Entry> chosen) =>
+        ChosenEntries.Publish([.. chosen.Where(item => !Inert(item))]);
 
     /// <inheritdoc />
     public override void Clicked(Entry item)
@@ -324,7 +369,7 @@ internal sealed class Files : Listing<Entry>
     /// <param name="item">The entry to consider.</param>
     /// <returns>Whether a drag may begin on it.</returns>
     public override bool CanDrag(Entry item) =>
-        !Browser.IsUp(item.Path) && !Browser.IsComputer(item.Path);
+        !Inert(item) && !Browser.IsUp(item.Path) && !Browser.IsComputer(item.Path);
 
     /// <inheritdoc />
     public override void DragOut(
@@ -357,6 +402,13 @@ internal sealed class Files : Listing<Entry>
     /// <returns>Where it would land.</returns>
     public override Land? Landing(Entry? item, DragEventArgs e)
     {
+        // A thing that is only shown is not a place to let go into: there is nothing there to hold a drop, and
+        // a directory that has not been made is not one to put something in.
+        if (item is { } shown && Inert(shown))
+        {
+            return null;
+        }
+
         if (
             !e.DataTransfer.Contains(DataFormat.File)
             && e.DataTransfer.TryGetValue(Drag.Payload) is { } logical

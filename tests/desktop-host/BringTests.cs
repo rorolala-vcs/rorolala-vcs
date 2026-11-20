@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using FileSystemPlugin;
 using RolaSharp;
+using RorolalaDesktop.Contract;
 using RorolalaVCSPlugin;
 using LayoutEntry = RorolalaVCSPlugin.LayoutEntry;
 
@@ -324,6 +325,83 @@ public sealed class BringTests
         Assert.Null(layout.Find("imported.fbx"));
         Assert.Null(layout.Find("A/b.fbx"));
         Assert.Equal(id, layout.Find("A/c.fbx")?.Uuid);
+    }
+
+    /// <summary>A drop shows one waiting row for what it carried, not one per entry under it.</summary>
+    [Fact]
+    public void APendingDropNamesTheCarryAndNotEveryEntryUnderIt()
+    {
+        var root = Scratch.New("bring-pending");
+        var destination = Path.Combine(root, "landing");
+
+        Directory.CreateDirectory(destination);
+
+        LayoutEntry[] local = [];
+        var tree = UpstreamEntriesTree.Build(
+            [Entry("Folder/a.psd", "a"), Entry("Folder/b.psd", "b")],
+            local
+        );
+
+        var plan = BringPlanning.Of(
+            tree,
+            local,
+            root,
+            destination,
+            "origin",
+            [new UpstreamCarry(Origin, "Folder")]
+        );
+
+        var pending = Assert.Single(plan.Pending);
+
+        Assert.Equal("landing/Folder", pending.Path);
+        Assert.Equal(EntryKind.Directory, pending.Kind);
+    }
+
+    /// <summary>A run that names entries shows one waiting row for each entry that will actually land.</summary>
+    [Fact]
+    public void APendingBringNamesOnlyWhatTheRunWillWrite()
+    {
+        LayoutEntry[] local = [Entry("Folder/a.psd", "a")];
+        var tree = UpstreamEntriesTree.Build(
+            [Entry("Folder/a.psd", "a"), Entry("Folder/b.psd", "b")],
+            local
+        );
+
+        var plan = BringPlanning.Of(
+            tree,
+            local,
+            Path.GetTempPath(),
+            destination: null,
+            "origin",
+            [new UpstreamCarry(Origin, "Folder")]
+        );
+
+        // The folder is already here at the path the Vault names, so only the other entry is brought and only
+        // it is shown waiting.
+        var pending = Assert.Single(plan.Pending);
+
+        Assert.Equal("Folder/b.psd", pending.Path);
+        Assert.Equal(EntryKind.File, pending.Kind);
+    }
+
+    /// <summary>The proportion the waiting rows show is the one the progress capsule draws with.</summary>
+    [Fact]
+    public void TheWaitingRowsFollowThePhaseTheRunIsOn()
+    {
+        var records = new ProgressRecords();
+
+        Assert.Null(BringFlow.Fraction(records));
+
+        records.Read("""{"signal":"begin","id":1,"total":10,"what":""}""");
+        records.Read("""{"signal":"advance","id":1,"done":4}""");
+
+        Assert.Equal(0.4f, BringFlow.Fraction(records));
+
+        var endless = new ProgressRecords();
+
+        endless.Read("""{"signal":"begin","id":1,"what":""}""");
+
+        Assert.Null(BringFlow.Fraction(endless));
     }
 
     /// <summary>An entry as the copy names it, with a path and the `Uuid` it is known by.</summary>

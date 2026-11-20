@@ -35,14 +35,27 @@ internal enum BringBlocker
 /// <param name="Landing">The path it would be named at here, relative to the Workspace's root.</param>
 /// <param name="Local">The path this side names it at, when it holds it; empty for one it holds at no path.</param>
 /// <param name="Blocker">What is in the way.</param>
+/// <param name="Kind">Whether it lands as a file or a directory, as the Vault's tree says it.</param>
 /// <param name="Carried">The path the drag carried that brought this entry, which is what a drop brings in whole.</param>
 internal sealed record BringStep(
     LayoutEntry Entry,
     string Landing,
     string? Local,
     BringBlocker Blocker,
+    EntryKind Kind,
     string Carried
 );
+
+/// <summary>One thing a bring is going to put on disk: where it lands, and what kind of thing it is.</summary>
+/// <remarks>
+/// It is the carry rather than every entry under it: a folder is brought in as the folder, and a reader
+/// watching the directory it is dropped on sees the one row that is waiting rather than a row per file that
+/// is not there yet.
+/// </remarks>
+/// <param name="Path">The path it lands at, relative to the Workspace's root.</param>
+/// <param name="Kind">Whether it lands as a file or a directory.</param>
+/// <param name="Carried">The path the drag carried that brought it, which is what a drop brings in whole.</param>
+internal sealed record BringPlace(string Path, EntryKind Kind, string Carried);
 
 /// <summary>
 /// A bring worked out before anything is done: every entry it would bring, and what is in the way of each.
@@ -56,15 +69,41 @@ internal sealed record BringStep(
 /// <param name="Root">The Workspace's root, which Layout paths are relative to.</param>
 /// <param name="Destination">The directory they are to land under, or nothing for the paths the Vault names.</param>
 /// <param name="Steps">What the bring comes to, in the order the entries were carried.</param>
+/// <param name="Places">What the run will put on disk, one for each thing the drag carried.</param>
 /// <param name="Carried">What the drag carried, in the order it carried it.</param>
 internal sealed record BringPlan(
     string Vault,
     string Root,
     string? Destination,
     IReadOnlyList<BringStep> Steps,
+    IReadOnlyList<BringPlace> Places,
     IReadOnlyList<UpstreamCarry> Carried
 )
 {
+    /// <summary>The things this bring will put on disk, in the order the drag carried them.</summary>
+    /// <remarks>
+    /// A drop names what it carried, so a drop shows one row for the folder or file that was let go, and only
+    /// where that whole carry comes in: one entry of it left out is the whole item left out. A run that names
+    /// the entries themselves, a button or a menu item, shows one row for each entry that will actually land,
+    /// since that is what the run will write.
+    /// </remarks>
+    public IReadOnlyList<BringPlace> Pending =>
+        Destination is { Length: > 0 }
+            ? [.. Places.Where(place => Whole(place.Carried))]
+            : [.. Clean.Select(step => new BringPlace(step.Landing, step.Kind, step.Carried))];
+
+    /// <summary>Whether every entry a drag carried comes in as it stands.</summary>
+    /// <param name="carried">The path the drag carried.</param>
+    /// <returns>Whether the carry brings at least one entry and nothing of it is in the way.</returns>
+    private bool Whole(string carried)
+    {
+        var steps = Steps
+            .Where(step => string.Equals(step.Carried, carried, StringComparison.Ordinal))
+            .ToArray();
+
+        return steps.Length > 0 && steps.All(step => step.Blocker is BringBlocker.None);
+    }
+
     /// <summary>The entries that can be brought in as they stand.</summary>
     public IReadOnlyList<BringStep> Clean =>
         [.. Steps.Where(step => step.Blocker is BringBlocker.None)];
@@ -168,6 +207,7 @@ internal static class BringPlanning
         var under = destination is { Length: > 0 } ? Relative(root, destination) : null;
 
         List<BringStep> steps = [];
+        List<BringPlace> places = [];
 
         foreach (var carry in carrying)
         {
@@ -176,6 +216,26 @@ internal static class BringPlanning
             // a folder keeps the tree it is. The button writes no destination, and then the Vault's path is the answer.
             var carried = Unplaced(carry.Path);
             var name = carried[(carried.LastIndexOf('/') + 1)..];
+
+            // What the carry itself lands as, which is the row a reader sees waiting before anything inside it.
+            // A folder is one the Vault's tree holds paths under; a tree of the work is one entry with no outer
+            // path under it, and is read as a file here for the same reason the place draws it as one.
+            var landed = under switch
+            {
+                null => carried,
+                { Length: 0 } => name,
+                _ => under + "/" + name,
+            };
+
+            places.Add(
+                new BringPlace(
+                    landed,
+                    tree.Find(carry.Path) is { HasChildren: true }
+                        ? EntryKind.Directory
+                        : EntryKind.File,
+                    carry.Path
+                )
+            );
 
             foreach (var entry in UpstreamBringing.Entries(tree, [carry]))
             {
@@ -199,6 +259,9 @@ internal static class BringPlanning
                         landing,
                         here,
                         Blocker(root, landing, here, named),
+                        tree.Find(entry.Path) is { HasChildren: true }
+                            ? EntryKind.Directory
+                            : EntryKind.File,
                         carry.Path
                     )
                 );
@@ -218,7 +281,7 @@ internal static class BringPlanning
             ),
         ];
 
-        return new BringPlan(vault, root, destination, steps, carrying);
+        return new BringPlan(vault, root, destination, steps, places, carrying);
     }
 
     /// <summary>Where an entry a drag carried lands under a destination.</summary>
@@ -712,6 +775,22 @@ internal sealed class BringFlow
 
         var run = _hub.Begin("rorolala_vcs.progress.bring");
 
+        // What the run is going to make is shown as soon as it is known to be going ahead, one row for each
+        // thing the drag carried: what is coming is seen before the first byte of it is here.
+        var pending = plan.Pending;
+        var placed = pending
+            .Select(place =>
+                Path.Combine(plan.Root, place.Path.Replace('/', Path.DirectorySeparatorChar))
+            )
+            .ToArray();
+
+        for (var at = 0; at < placed.Length; at++)
+        {
+            VirtualEntries.Place(placed[at], pending[at].Kind, VirtualEntryState.Pending);
+        }
+
+        _host.Files.Redraw();
+
         _ = Task.Run(() =>
         {
             List<string> failed = [];
@@ -733,7 +812,11 @@ internal sealed class BringFlow
                 };
 
                 using var native = Progress.New();
-                using var watching = new Watching(native, run.Records, _hub.Touch);
+                using var watching = new Watching(native, run.Records, () =>
+                {
+                    Tick(placed, run.Records);
+                    _hub.Touch();
+                });
 
                 failed = [.. new WorkspaceWriter(workspace).Bring(request, native).Failed];
             }
@@ -753,6 +836,13 @@ internal sealed class BringFlow
 
             Dispatcher.UIThread.Post(() =>
             {
+                // What was waiting is either here now or was not brought: the rows go either way, and the
+                // touch below reads the files that arrived so each is drawn as itself.
+                foreach (var path in placed)
+                {
+                    VirtualEntries.Withdraw(path);
+                }
+
                 _hub.End(run);
 
                 if (said is { Length: > 0 } || failed.Count > 0)
@@ -770,6 +860,64 @@ internal sealed class BringFlow
                 _host.Files.Touch();
             });
         });
+    }
+
+    /// <summary>Says how far along the run has got to everything it put in the catalogue.</summary>
+    /// <remarks>
+    /// The proportion is the one the progress capsule draws, which is the phase the run is working on: the
+    /// writer reports phases, not one file at a time, so every row waiting for the run fills with the same
+    /// answer rather than each pretending to have a proportion of its own.
+    /// </remarks>
+    /// <param name="placed">What the run put in the catalogue.</param>
+    /// <param name="records">What the run has said about itself.</param>
+    private static void Tick(IReadOnlyList<string> placed, ProgressRecords records)
+    {
+        if (Fraction(records) is not { } fraction)
+        {
+            return;
+        }
+
+        foreach (var path in placed)
+        {
+            VirtualEntries.Advance(path, fraction);
+        }
+    }
+
+    /// <summary>
+    /// How far the phase the run is working on has got, or nothing while it has not said how long it is.
+    /// </summary>
+    /// <remarks>
+    /// The same rule the progress capsule draws with: the phase is the last top-level task that is not
+    /// finished, or the last one when they all are, and a phase that says no length has nothing to divide.
+    /// </remarks>
+    /// <param name="records">What the run has said about itself.</param>
+    /// <returns>The share from nothing to all of it, or nothing.</returns>
+    internal static float? Fraction(ProgressRecords records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+
+        var tops = records.Tasks.Where(task => task.Parent is null).ToArray();
+
+        if (tops.Length == 0)
+        {
+            return null;
+        }
+
+        var at = Array.FindLastIndex(
+            tops,
+            task => task.Total is not { } total || task.Done < total
+        );
+
+        if (at < 0)
+        {
+            at = tops.Length - 1;
+        }
+
+        var focus = tops[at];
+
+        return focus.Total is { } length && length > 0
+            ? (float)Math.Clamp(focus.Done / (double)length, 0, 1)
+            : null;
     }
 
     /// <summary>Puts a notification in the host's stack.</summary>

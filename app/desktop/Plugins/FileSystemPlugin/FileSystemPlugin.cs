@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 
 namespace FileSystemPlugin;
@@ -72,6 +73,12 @@ public sealed class FileSystemPlugin : IRolaPlugin
         ArgumentNullException.ThrowIfNull(host);
 
         host.I18n.RegisterDirectory(Translations());
+
+        // What the catalogue of virtual entries changes is a listing to draw again, not a directory to read:
+        // what moved is what a view shows over the files, and nothing on disk did. It is wired here rather
+        // than left to whoever put an entry there, because a caller that forgot would leave a row missing
+        // with nothing saying why.
+        VirtualEntries.Changed += () => Dispatcher.UIThread.Post(host.Files.Redraw);
 
         // The pictures this plugin draws are contributed before anything reads one: the docks this registers name the
         // one their tab and their Window menu item wear, so the library has to hold them by the time a dock is made.

@@ -688,11 +688,31 @@ internal sealed class Browser : IDisposable
         // Copied rather than handed on as it came, so that a staging with nothing switched is still a list
         // another one is not: what a dock holds to tell a staged listing from one it has not staged again is
         // the list itself, and the switch that shows what is hidden leaves the entries exactly as they are.
-        var staged = shown.ToArray();
+        var staged = shown.ToList();
+
+        // What the catalogue shows of this directory is added after the hiding: a virtual entry is not a thing
+        // on disk, so no rule of what to hide has anything to say about it. A real entry of the same path is
+        // already here and wins, in the spelling the platform compares paths by.
+        if (!IsComputer(directory))
+        {
+            foreach (var virtualEntry in VirtualEntries.In(directory))
+            {
+                if (staged.Any(real => Pathing.Same(real.Path, virtualEntry.Path)))
+                {
+                    continue;
+                }
+
+                staged.Add(virtualEntry.Entry);
+            }
+
+            staged.Sort(Compare);
+        }
+
+        var arranged = staged.ToArray();
 
         return ParentOf(directory) is null || Same(directory, _shared.BaseDir)
-            ? staged
-            : [new Entry(UpName, EntryKind.Directory), .. staged];
+            ? arranged
+            : [new Entry(UpName, EntryKind.Directory), .. arranged];
     }
 
     /// <summary>

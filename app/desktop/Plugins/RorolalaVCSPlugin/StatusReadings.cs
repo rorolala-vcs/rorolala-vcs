@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Avalonia.Threading;
+using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
 
@@ -38,6 +39,17 @@ internal sealed class StatusReadings
     /// may both read rather than one wait for the other.
     /// </remarks>
     private readonly Dictionary<string, StatusReading?> _readings = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The paths each Workspace was last read as having lost, which is what the catalogue is kept in step
+    /// with.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by the Workspace's root, because a reading is taken of one Workspace and its paths are relative
+    /// to it. What is kept is the set rather than the entries: an entry is the catalogue's, and what this
+    /// needs to know is which ones it put there and may have to take away.
+    /// </remarks>
+    private readonly Dictionary<string, HashSet<string>> _lost = new(StringComparer.Ordinal);
 
     /// <summary>The directories a read is going for, so that one directory is read once at a time.</summary>
     private readonly HashSet<string> _asking = new(StringComparer.Ordinal);
@@ -142,12 +154,22 @@ internal sealed class StatusReadings
     public void Forget()
     {
         StatusReading?[] statuses;
+        HashSet<string>[] lost;
 
         lock (_gate)
         {
             _version++;
             statuses = [.. _readings.Values];
+            lost = [.. _lost.Values];
             _readings.Clear();
+            _lost.Clear();
+        }
+
+        // What was shown as lost is taken away before what it was read from is let go of: the next reading
+        // will put back what is still gone, and a path that has come back is one nothing should be showing.
+        foreach (var paths in lost)
+        {
+            VirtualEntries.Withdraw(paths);
         }
 
         foreach (var status in statuses)
@@ -226,11 +248,60 @@ internal sealed class StatusReadings
                 status?.Dispose();
             }
 
+            // What the work has lost is put in the catalogue before the drawing that shows it: the redraw is
+            // handed on below, and an entry put after it would wait for the next one.
+            if (current && status is not null)
+            {
+                Publish(status);
+            }
+
             // Drawn either way: what landed is drawn when it stands, and when it does not, the drawing is what asks
             // for it again, the answer being one from before the change the drawing is following. It is a drawing and
             // not a change, so nothing anyone else read is given back for it.
             _files.Redraw();
         });
+    }
+
+    /// <summary>
+    /// Keeps the catalogue in step with what a reading says the work has lost.
+    /// </summary>
+    /// <remarks>
+    /// Every path is put rather than only the ones that were not there before: a path may already have been
+    /// put as something on its way, which the catalogue keeps rather than replacing, and when the bring that
+    /// put it is over this same reading is what puts the loss back if the file never arrived. A path the
+    /// reading no longer names is taken away, which is what a file that came back looks like.
+    /// </remarks>
+    /// <param name="reading">What was read.</param>
+    private void Publish(StatusReading reading)
+    {
+        var paths = LostPaths.Of(reading.Root, reading.Lost);
+        var now = paths.ToHashSet(StringComparer.Ordinal);
+        HashSet<string> old;
+
+        lock (_gate)
+        {
+            if (!_lost.TryGetValue(reading.Root, out var known))
+            {
+                known = new(StringComparer.Ordinal);
+            }
+
+            old = known;
+        }
+
+        foreach (var gone in old.Except(now, StringComparer.Ordinal))
+        {
+            VirtualEntries.Withdraw(gone);
+        }
+
+        foreach (var path in paths)
+        {
+            VirtualEntries.Place(path, EntryKind.File, VirtualEntryState.Lost);
+        }
+
+        lock (_gate)
+        {
+            _lost[reading.Root] = now;
+        }
     }
 
     /// <summary>
@@ -256,5 +327,38 @@ internal sealed class StatusReadings
         }
 
         _log.Warn($"{what} could not be read: {error.Message}");
+    }
+}
+
+/// <summary>Where the paths a reading calls lost are, as the program names them.</summary>
+/// <remarks>
+/// A reading names a path relative to the Workspace it was taken of, and a listing, a tree step and the
+/// catalogue all name one by the path the system gives: the two are joined before anything is compared or
+/// put, which is the same joining the columns make for the standings.
+/// </remarks>
+internal static class LostPaths
+{
+    /// <summary>The absolute path for each path a reading named.</summary>
+    /// <param name="root">Where the Workspace the reading was taken of is rooted.</param>
+    /// <param name="lost">The paths the reading named, relative to the root.</param>
+    /// <returns>The paths, each made absolute, without repeats.</returns>
+    public static IReadOnlyList<string> Of(string root, IReadOnlyList<string> lost)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(lost);
+
+        var at = Path.GetFullPath(root);
+
+        return
+        [
+            .. lost
+                .Where(named => named.Length > 0)
+                .Select(named =>
+                    Path.GetFullPath(
+                        Path.Combine(at, named.Replace('/', Path.DirectorySeparatorChar))
+                    )
+                )
+                .Distinct(StringComparer.Ordinal),
+        ];
     }
 }

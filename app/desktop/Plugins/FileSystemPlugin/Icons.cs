@@ -130,7 +130,75 @@ internal static partial class Icons
             IconSets.Picture(entry, size)
             ?? (directory ? SysIcons.Directory(size) : SysIcons.File(entry.Path, size));
 
-        return picture is null ? Marked(directory, size) : Shown(picture, size);
+        Control drawn = picture is null ? Marked(directory, size) : Shown(picture, size);
+
+        // What a virtual entry is drawn as is the same picture with one of two answers over it. It is done
+        // here rather than at each call site so that a row, a tile, a tree step and the card a drag carries
+        // all say the same thing about one entry.
+        return VirtualEntries.Find(entry.Path) is { } virtualEntry
+            ? Virtual(drawn, picture, virtualEntry, size)
+            : drawn;
+    }
+
+    /// <summary>How faded a thing on its way is drawn, which reads as not yet being here.</summary>
+    private const double Dimmed = 0.55;
+
+    /// <summary>How much of a lost entry's picture the red over it leaves of the picture's own colours.</summary>
+    private const double Tint = 0.55;
+
+    /// <summary>
+    /// One entry drawn as what it says: faded under a ring, or coloured red for what is gone.
+    /// </summary>
+    /// <remarks>
+    /// A ring is drawn over the picture rather than beside it, so that the entry keeps the one place the
+    /// listing gave it: a mark added beside a name would take room from the name at every zoom, and a row's
+    /// icon is as wide as the icon.
+    /// <para>
+    /// A lost entry is a picture with a red stamp over it rather than a picture drawn in red: the picture is
+    /// the icon set's or the system's, and a set whose colours were replaced would be a set the user did not
+    /// choose. The stamp is the picture's own shape, so the red reaches no further than the drawing.
+    /// </para>
+    /// </remarks>
+    /// <param name="drawn">The picture as it would be drawn for any entry.</param>
+    /// <param name="picture">The picture the system or the set gave, or nothing for the fallback mark.</param>
+    /// <param name="entry">What the entry says about its path.</param>
+    /// <param name="size">How many pixels wide and tall the icon is.</param>
+    /// <returns>What to draw where the entry's picture goes.</returns>
+    private static Control Virtual(
+        Control drawn,
+        Bitmap? picture,
+        VirtualEntry entry,
+        int size
+    )
+    {
+        if (entry.State == VirtualEntryState.Lost)
+        {
+            var lost = new Grid { Width = size, Height = size };
+            lost.Children.Add(drawn);
+
+            if (picture is not null)
+            {
+                var stamp = Glyph(picture, PaletteKeys.Del, size);
+                stamp.Opacity = Tint;
+                lost.Children.Add(stamp);
+            }
+            else if (drawn is Border mark)
+            {
+                // The fallback mark is this plugin's own square rather than a picture, so it has no colours
+                // of its own to keep: it is drawn in the red of what is lost.
+                mark[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Del);
+            }
+
+            return lost;
+        }
+
+        drawn.Opacity = Dimmed;
+
+        var ring = new Grid { Width = size, Height = size };
+        ring.Children.Add(drawn);
+        ring.Children.Add(new VirtualRing(entry, size));
+
+        return ring;
     }
 
     /// <summary>One picture, drawn at the size a row gives it.</summary>
@@ -591,6 +659,14 @@ internal static partial class Icons
     private static Bitmap Reduced(Bitmap picture, int side)
     {
         if (side >= picture.PixelSize.Width)
+        {
+            return picture;
+        }
+
+        // A writable bitmap is one the renderer cannot resize, and the shell's own icons are made as them: the
+        // picture is drawn at the size it has, and the brush drawing the mask scales it where a copy cannot be
+        // made. Asking for the copy is a crash, not a soft picture, which is why the kind is asked for here.
+        if (picture is WriteableBitmap)
         {
             return picture;
         }

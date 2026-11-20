@@ -89,12 +89,13 @@ internal sealed class TreeControl : UserControl
     /// What the tree was last read against, so that a change to any of it is a tree to read again.
     /// </summary>
     /// <remarks>
-    /// The base, the switch that shows what is hidden, and the providers in force: the first is what the
-    /// tree is rooted at, and the other two decide which rows there are under it. A tree is read a step at
-    /// a time and keeps what it read, so a hiding that changed is not something a repaint reaches, the rows
-    /// themselves come and go, which is why it is compared here rather than faded where they are drawn.
+    /// The base, the switch that shows what is hidden, the providers in force and the set of virtual entries:
+    /// the first is what the tree is rooted at, and the rest decide which rows there are under it. A tree is
+    /// read a step at a time and keeps what it read, so a hiding that changed or an entry that arrived or went
+    /// is not something a repaint reaches, the rows themselves come and go, which is why it is compared here
+    /// rather than faded where they are drawn.
     /// </remarks>
-    private (string Base, bool Shown, IReadOnlySet<string> Rules, IReadOnlySet<string> Gray)? _drawn;
+    private (string Base, bool Shown, IReadOnlySet<string> Rules, IReadOnlySet<string> Gray, int Shape)? _drawn;
 
     /// <summary>Makes the tree's control.</summary>
     /// <param name="host">The host, for what a drop cannot do.</param>
@@ -170,6 +171,7 @@ internal sealed class TreeControl : UserControl
             || drawn.Shown != _browser.ShowHidden
             || !drawn.Rules.SetEquals(_browser.HideRegistry.Selection())
             || !drawn.Gray.SetEquals(_browser.HideRegistry.Gray())
+            || drawn.Shape != VirtualEntries.Shape
         )
         {
             Draw();
@@ -317,7 +319,8 @@ internal sealed class TreeControl : UserControl
             _browser.BaseDir,
             _browser.ShowHidden,
             _browser.HideRegistry.Selection(),
-            _browser.HideRegistry.Gray()
+            _browser.HideRegistry.Gray(),
+            VirtualEntries.Shape
         );
     }
 
@@ -1674,6 +1677,15 @@ internal sealed class TreeBrowser : UserControl
             .OfType<string>()
             .ToArray() ?? [];
 
+        // A row the tree only shows is not part of a choice: the toolkit can still put one under the keyboard
+        // or in a range, so what it chose is put back without the rows that cannot be acted on.
+        if (picked.Any(one => VirtualEntries.Find(one) is not null))
+        {
+            Restore([.. picked.Where(one => VirtualEntries.Find(one) is null)]);
+
+            return;
+        }
+
         if (Same(_chosen, picked))
         {
             return;
@@ -1725,7 +1737,11 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Chooses every row the tree is showing.</summary>
     public void SelectAll()
     {
-        var rows = VisibleRows();
+        // A row the tree only shows is not chosen by choosing everything, which is the rule a listing's
+        // control-all follows.
+        var rows = VisibleRows()
+            .Where(row => row.Tag is not string path || VirtualEntries.Find(path) is null)
+            .ToArray();
 
         _selecting = true;
 
@@ -2287,8 +2303,13 @@ internal sealed class TreeBrowser : UserControl
 
         foreach (var child in Children(path))
         {
-            // A directory is a step, which opens onto its own entries; a file is where the walking stops.
-            item.Items.Add(child.Kind is EntryKind.Directory ? Node(child.Path) : Leaf(child));
+            // A directory is a step, which opens onto its own entries; a file is where the walking stops. A
+            // directory the tree only shows is where the walking stops too: there is nothing under it to read.
+            item.Items.Add(
+                child.Kind is EntryKind.Directory && VirtualEntries.Find(child.Path) is null
+                    ? Node(child.Path)
+                    : Leaf(child)
+            );
         }
 
         // What a rebuild is to bring back is opened as the reading holding it lands: what is under a step is
@@ -2350,54 +2371,61 @@ internal sealed class TreeBrowser : UserControl
     {
         var path = entry.Path;
         var name = _listing.Name(entry);
+        var virtualEntry = VirtualEntries.Find(path);
 
         // Filled when it opens rather than when the row is made, which is how a listing's menu is made as
         // well (see `EntryView.Prepared`). What a menu holds is asked of the plugins, and what they answer
         //, the ownership commands among them, is read from the filesystem: a tree builds a row for every
-        // step under an opened one, so a menu made here is a menu paid for on every row nobody opened.
-        var menu = new ContextMenu();
-        menu.Opening += (_, _) =>
+        // step under an opened one, so a menu made here is a menu paid for on every row nobody opened. A row
+        // the tree only shows has no menu, for the reason a listing's inert row has none.
+        ContextMenu? menu = null;
+
+        if (virtualEntry is null)
         {
-            // A right click inside the choice acts on the whole of it, with the row it landed on first; one outside
-            // it acts on that row alone, which is what a click that did not select anything is about. The base row
-            // is left out of what may be removed, and so is a step holding it.
-            var chosen = _chosen.Count > 0 && _chosen.Contains(path) ? _chosen : [path];
-            var order = VisibleRows()
-                .Select((row, at) => (Path: row.Tag as string, At: at))
-                .Where(one => one.Path is not null)
-                .ToDictionary(one => one.Path!, one => one.At, StringComparer.Ordinal);
+            menu = new ContextMenu();
+            menu.Opening += (_, _) =>
+            {
+                // A right click inside the choice acts on the whole of it, with the row it landed on first; one outside
+                // it acts on that row alone, which is what a click that did not select anything is about. The base row
+                // is left out of what may be removed, and so is a step holding it.
+                var chosen = _chosen.Count > 0 && _chosen.Contains(path) ? _chosen : [path];
+                var order = VisibleRows()
+                    .Select((row, at) => (Path: row.Tag as string, At: at))
+                    .Where(one => one.Path is not null)
+                    .ToDictionary(one => one.Path!, one => one.At, StringComparer.Ordinal);
 
-            var entries = chosen
-                .OrderBy(one => string.Equals(one, path, StringComparison.Ordinal) ? -1 : order.GetValueOrDefault(one))
-                .Select(Being)
-                .ToArray();
+                var entries = chosen
+                    .OrderBy(one => string.Equals(one, path, StringComparison.Ordinal) ? -1 : order.GetValueOrDefault(one))
+                    .Select(Being)
+                    .ToArray();
 
-            // Offered by every row with steps under it, which is the same row that is given an expander, since
-            // closing them all is worth offering where there is more than one to close. What is not offered is
-            // the other half, opening them all, since that would read every directory under the row, which is
-            // what a tree read a step at a time is for avoiding. It goes in the same menu as the entry, under
-            // the view category, because it is about how the tree is showing a place rather than about the place.
-            IReadOnlyList<MenuLeaf>? extra =
-                collapse is null
-                    ? null
-                    :
-                    [
-                        new MenuLeaf(
-                            ["menu.entry.view", "menu.entry.collapse_all"],
-                            30,
-                            collapse,
-                            "rorolala_file_system.collapse_all"
-                        ),
-                    ];
+                // Offered by every row with steps under it, which is the same row that is given an expander, since
+                // closing them all is worth offering where there is more than one to close. What is not offered is
+                // the other half, opening them all, since that would read every directory under the row, which is
+                // what a tree read a step at a time is for avoiding. It goes in the same menu as the entry, under
+                // the view category, because it is about how the tree is showing a place rather than about the place.
+                IReadOnlyList<MenuLeaf>? extra =
+                    collapse is null
+                        ? null
+                        :
+                        [
+                            new MenuLeaf(
+                                ["menu.entry.view", "menu.entry.collapse_all"],
+                                30,
+                                collapse,
+                                "rorolala_file_system.collapse_all"
+                            ),
+                        ];
 
-            _actions.Fill(
-                menu,
-                this,
-                entries,
-                entries.All(one => !HoldsRoot(one.Path)),
-                extra: extra
-            );
-        };
+                _actions.Fill(
+                    menu,
+                    this,
+                    entries,
+                    entries.All(one => !HoldsRoot(one.Path)),
+                    extra: extra
+                );
+            };
+        }
 
         // The menu is opened by the control the row is in rather than by the row, since one of the
         // things it does, putting a path on the clipboard, is reached through a control on screen.
@@ -2425,6 +2453,11 @@ internal sealed class TreeBrowser : UserControl
             TextWrapping = TextWrapping.NoWrap,
             ClipToBounds = true,
         };
+
+        if (_listing.NameInk(entry) is { Length: > 0 } ink)
+        {
+            label[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(ink);
+        }
 
         // Three columns rather than a dock: the name column is the one that gives way, and a TextBlock in a
         // DockPanel's last-child fill can draw past the width it was arranged in and cover the badges. The icon
@@ -2454,6 +2487,13 @@ internal sealed class TreeBrowser : UserControl
 
         row.Tapped += (_, tapped) =>
         {
+            // A row the tree only shows is not a place to walk into and not a thing to open: the press is
+            // taken here so that neither the row nor the tree reads it as one.
+            if (virtualEntry is not null)
+            {
+                return;
+            }
+
             // A press that became a drag is not also a step: the drag took the pointer, and a hand letting go of
             // one is putting something down rather than choosing a place.
             if (_dragged)
@@ -2507,7 +2547,7 @@ internal sealed class TreeBrowser : UserControl
         // that is how a word of a name is chosen.
         row.DoubleTapped += (_, e) =>
         {
-            if (e.Source is TextBox)
+            if (virtualEntry is not null || e.Source is TextBox)
             {
                 return;
             }
@@ -2928,7 +2968,20 @@ internal sealed class TreeBrowser : UserControl
                 .OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)
                 .Select(file => new Entry(file, EntryKind.File));
 
-            return [.. directories, .. files];
+            // What the catalogue shows of this directory is added after the hiding, for the reason a listing
+            // stages it there: it is not on disk, so no rule has anything to say about it. It is read with the
+            // real entries so that the two kinds stay in the order a tree reads them.
+            var virtualEntries = VirtualEntries.In(path).Select(entry => entry.Entry).ToArray();
+
+            return
+            [
+                .. directories
+                    .Concat(virtualEntries.Where(entry => entry.Kind is EntryKind.Directory))
+                    .OrderBy(entry => Path.GetFileName(entry.Path), StringComparer.OrdinalIgnoreCase),
+                .. files
+                    .Concat(virtualEntries.Where(entry => entry.Kind is EntryKind.File))
+                    .OrderBy(entry => Path.GetFileName(entry.Path), StringComparer.OrdinalIgnoreCase),
+            ];
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {

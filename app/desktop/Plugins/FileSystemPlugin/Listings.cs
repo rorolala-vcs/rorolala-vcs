@@ -493,6 +493,29 @@ internal abstract class Listing<TItem>
     /// <returns>Whether it may be removed.</returns>
     public virtual bool Removable(TItem item) => true;
 
+    /// <summary>
+    /// Whether an item is seen rather than handled: drawn, listed and scrolled, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// A place a plugin answers for says no, and so does this listing: what is inert is not chosen, opened,
+    /// renamed, removed or dragged, and the keyboard steps over it. It is how a thing that is not on disk is
+    /// shown without pretending to be one: the reader sees what is coming or what has gone, and every gesture
+    /// that would act on an entry acts on the entries around it instead.
+    /// </remarks>
+    /// <param name="item">The item to consider.</param>
+    /// <returns>Whether it is drawn and nothing more.</returns>
+    public virtual bool Inert(TItem item) => false;
+
+    /// <summary>The theme resource an item's name is written in, or nothing for the listing's own ink.</summary>
+    /// <remarks>
+    /// A name is usually written in whatever the row is written in, and a name that is not is saying something
+    /// the row's other words are not: what has gone is read in the colour of what is wrong, and everything
+    /// about it that is not the name is left as it was.
+    /// </remarks>
+    /// <param name="item">The item whose name is written.</param>
+    /// <returns>The name of the resource to write it in, or nothing.</returns>
+    public virtual string? NameInk(TItem item) => null;
+
     /// <summary>Reads the listing again, which is what an edit that changed the files leaves behind.</summary>
     public virtual void Touch() { }
 
@@ -967,31 +990,36 @@ internal abstract class EntryView<TItem> : EntryView
     /// <returns>The row.</returns>
     protected Control Prepared(TItem item, Control row)
     {
-        var menu = new ContextMenu();
-
-        menu.Opening += (_, _) =>
+        // A row that is not a thing of the listing has no menu: everything it would offer is about an entry
+        // no gesture can act on, and a menu with nothing in it is worse than no menu at all.
+        if (!Source.Inert(item))
         {
-            // The words the menu was opened on are read before the menu is filled, because a menu is filled
-            // once: what a reader pointed at is one more thing the copy category can take, and a second pass
-            // that put it in afterwards would have to find the category again. A menu opened from the keyboard
-            // was pointed at nothing.
-            var words = _pointed;
+            var menu = new ContextMenu();
 
-            _pointed = null;
+            menu.Opening += (_, _) =>
+            {
+                // The words the menu was opened on are read before the menu is filled, because a menu is filled
+                // once: what a reader pointed at is one more thing the copy category can take, and a second pass
+                // that put it in afterwards would have to find the category again. A menu opened from the keyboard
+                // was pointed at nothing.
+                var words = _pointed;
 
-            Source.Fill(menu, this, Chosen(item), force: Held, words: words);
-        };
+                _pointed = null;
 
-        row.ContextMenu = menu;
+                Source.Fill(menu, this, Chosen(item), force: Held, words: words);
+            };
+
+            // And while the menu is up, the key itself decides: Shift unfolds what it forces, and letting it
+            // go folds it away again. Tunnelled, because the item under the keyboard reads the key first.
+            menu.AddHandler(KeyDownEvent, (_, key) => Revealed(menu, key), RoutingStrategies.Tunnel);
+            menu.AddHandler(KeyUpEvent, (_, key) => Revealed(menu, key), RoutingStrategies.Tunnel);
+
+            row.ContextMenu = menu;
+        }
 
         // What the pointer held is read when it is pressed, because the menu that opens next is laid out before
         // anything can be asked of it, and Shift+right-click means the forced actions are wanted from the start.
         row.PointerPressed += (_, pressed) => Held = (pressed.KeyModifiers & KeyModifiers.Shift) != 0;
-
-        // And while the menu is up, the key itself decides: Shift unfolds what it forces, and letting it go
-        // folds it away again. Tunnelled, because the item under the keyboard reads the key first.
-        menu.AddHandler(KeyDownEvent, (_, key) => Revealed(menu, key), RoutingStrategies.Tunnel);
-        menu.AddHandler(KeyUpEvent, (_, key) => Revealed(menu, key), RoutingStrategies.Tunnel);
 
         Source.Fade(row, item);
 
@@ -1478,8 +1506,15 @@ internal abstract class EntryView<TItem> : EntryView
 
         switch (e.Key)
         {
+            // Choosing everything means everything that can be acted on: a row the listing only shows is not
+            // part of a choice, and a choice that held one would have every action filter it out again.
+            case Key.A when e.KeyModifiers.HasFlag(KeyModifiers.Control)
+                && !e.KeyModifiers.HasFlag(KeyModifiers.Alt):
+                Select([.. Enumerable.Range(0, Items.Count).Where(at => !Source.Inert(Items[at]))]);
+                e.Handled = true;
+                break;
             case Key.Enter:
-                if (Lead is { } lead)
+                if (Lead is { } lead && !Source.Inert(lead))
                 {
                     Source.Open(lead);
                 }
@@ -1506,11 +1541,11 @@ internal abstract class EntryView<TItem> : EntryView
                 e.Handled = true;
                 break;
             case Key.Home:
-                To(0, shift);
+                To(First(1), shift);
                 e.Handled = true;
                 break;
             case Key.End:
-                To(Items.Count - 1, shift);
+                To(First(-1), shift);
                 e.Handled = true;
                 break;
             case Key.PageUp:
@@ -1615,14 +1650,60 @@ internal abstract class EntryView<TItem> : EntryView
     /// <param name="shift">Whether the step extends the choice rather than replacing it.</param>
     private void Step(int by, bool shift)
     {
+        if (by == 0)
+        {
+            return;
+        }
+
+        var direction = Math.Sign(by);
+
         if (_lead < 0)
         {
-            To(by < 0 ? Items.Count - 1 : 0, false);
+            var end = First(direction);
+
+            if (end >= 0)
+            {
+                To(end, false);
+            }
 
             return;
         }
 
-        To(_lead + by, shift);
+        // A step lands on the next thing that can be acted on rather than on the row that happens to stand
+        // there: a listing that only shows something is stepped over, not into.
+        var at = _lead + by;
+
+        while (at >= 0 && at < Items.Count && Source.Inert(Items[at]))
+        {
+            at += direction;
+        }
+
+        if (at < 0 || at >= Items.Count)
+        {
+            return;
+        }
+
+        To(at, shift);
+    }
+
+    /// <summary>
+    /// The first item from one end of the listing that can be acted on, or nothing when none can.
+    /// </summary>
+    /// <param name="by">Which end: a positive number is the start, a negative one the end.</param>
+    /// <returns>Where it stands, or nothing.</returns>
+    private int First(int by)
+    {
+        for (var step = 0; step < Items.Count; step++)
+        {
+            var at = by > 0 ? step : Items.Count - 1 - step;
+
+            if (!Source.Inert(Items[at]))
+            {
+                return at;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>
@@ -1640,12 +1721,17 @@ internal abstract class EntryView<TItem> : EntryView
     {
         var count = Items.Count;
 
-        if (count == 0)
+        if (count == 0 || target < 0)
         {
             return;
         }
 
         target = Math.Clamp(target, 0, count - 1);
+
+        if (Source.Inert(Items[target]))
+        {
+            return;
+        }
 
         var selection = List.Selection;
 
@@ -1735,6 +1821,16 @@ internal abstract class EntryView<TItem> : EntryView
         {
             _resizing = true;
             e.Pointer.Capture(this);
+            e.Handled = true;
+
+            return;
+        }
+
+        // A press on something the listing only shows is not a press on the listing: nothing is chosen, no
+        // menu is opened, and no drag or frame begins. It is handled here so that the toolkit and the row's
+        // own menu do not read it as one either.
+        if (at >= 0 && at < Items.Count && Source.Inert(Items[at]))
+        {
             e.Handled = true;
 
             return;
@@ -2184,7 +2280,7 @@ internal abstract class EntryView<TItem> : EntryView
     /// <param name="e">The tap.</param>
     private void Opened(object? sender, TappedEventArgs e)
     {
-        if (IndexAt(e.Source) is var at && at >= 0 && at < Items.Count)
+        if (IndexAt(e.Source) is var at && at >= 0 && at < Items.Count && !Source.Inert(Items[at]))
         {
             Source.Open(Items[at]);
         }
@@ -3009,8 +3105,9 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// </remarks>
     /// <param name="item">The entry the name belongs to.</param>
     /// <param name="text">The name as it is written.</param>
-    private TextBlock Named(TItem item, string text) =>
-        new()
+    private TextBlock Named(TItem item, string text)
+    {
+        var name = new TextBlock
         {
             Text = text,
             TextWrapping = TextWrapping.NoWrap,
@@ -3021,6 +3118,16 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
             Classes = { "entry-name" },
             FontWeight = Source.Openable(item) ? FontWeight.SemiBold : FontWeight.Normal,
         };
+
+        // The name of what has gone is written in the look's own red, as a resource rather than a colour so
+        // that the theme in force is the one it is read in.
+        if (Source.NameInk(item) is { Length: > 0 } ink)
+        {
+            name[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(ink);
+        }
+
+        return name;
+    }
 
     /// <summary>One cell's value: one line, cut off rather than wrapped, in the faint metadata ink.</summary>
     /// <param name="text">What the cell says.</param>
@@ -3215,6 +3322,11 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
             Classes = { "entry-name", "caption" },
             HorizontalAlignment = HorizontalAlignment.Center,
         };
+
+        if (Source.NameInk(item) is { Length: > 0 } ink)
+        {
+            name[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(ink);
+        }
 
         if (Source.Band(item) is not { } colour)
         {
