@@ -125,7 +125,7 @@ internal sealed class Shared
 
         _asked = true;
 
-        Dispatcher.UIThread.Post(() =>
+        Frame.Post(() =>
         {
             _asked = false;
             FilesChanged();

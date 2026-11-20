@@ -5,6 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using FileSystemPlugin;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
@@ -262,10 +263,7 @@ public sealed class TreeTests
 
             window.KeyPress(Key.F2, RawInputModifiers.None, PhysicalKey.F2, null);
 
-            var box = Until(
-                window,
-                () => window.GetVisualDescendants().OfType<TextBox>().FirstOrDefault()
-            );
+            var box = Until(window, () => RenameBubble.Current?.Field);
 
             Assert.Equal("alpha", box.Text);
 
@@ -282,10 +280,7 @@ public sealed class TreeTests
             window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
             PumpFrames(window, 20);
 
-            Assert.DoesNotContain(
-                window.GetVisualDescendants().OfType<TextBox>(),
-                text => text.Text == "alpha"
-            );
+            Assert.Null(RenameBubble.Current);
             Assert.True(Directory.Exists(Path.Combine(directory, "alpha")));
         }
         finally
@@ -442,7 +437,7 @@ public sealed class TreeTests
 
         var offset = scroll.Offset;
 
-        browser.Refresh();
+        browser.Touch();
 
         Pump(window, () => RowByPath(window, path)?.IsSelected == true);
 
@@ -458,43 +453,17 @@ public sealed class TreeTests
         window.Close();
     }
 
-    /// <summary>
-    /// The word for an empty base is about what the base holds now, not about what it held when the tree was made.
-    /// </summary>
-    /// <remarks>
-    /// A base that was empty is a base that can be given something while the tree is looking at it, a sync, a
-    /// fetch, a file made by another program, and the word drawn over the tree has to go when it is. A tree read
-    /// again is the same view, so a word decided once where the tree was made would be a word about a base that is
-    /// no longer there: what is checked is the word after the base is given something, and again after the
-    /// something is taken away.
-    /// </remarks>
+    /// <summary>An empty base shows its own row and says nothing about being empty.</summary>
     [Fact]
-    public void TheWordForAnEmptyBaseIsNotKeptWhenTheBaseIsGivenSomething()
+    public void AnEmptyBaseShowsItsRowAndSaysNothing()
     {
         var directory = Scratch.New("tree-empty");
-        var (window, browser) = OpenAt(directory);
-
-        var word = Assert.IsType<StackPanel>(Until(window, () => EmptyWord(window)));
-
-        Assert.True(word.IsVisible, "a base holding nothing is not said to hold nothing");
+        var (window, _) = OpenAt(directory);
 
         var root = Until(window, () => Root(window));
 
         Assert.Empty(root.Items);
-
-        var file = Path.Combine(directory, "hero.psd");
-
-        File.WriteAllText(file, "x");
-        browser.Refresh();
-
-        Assert.False(word.IsVisible, "the word for an empty base outlived the base being given something");
-        Assert.NotEmpty(root.Items);
-
-        File.Delete(file);
-        browser.Refresh();
-
-        Assert.True(word.IsVisible, "a base emptied again is not said to hold nothing");
-        Assert.Empty(root.Items);
+        Assert.Null(EmptyWord(window));
 
         window.Close();
     }

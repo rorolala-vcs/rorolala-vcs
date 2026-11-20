@@ -95,7 +95,7 @@ public sealed class TreeRowTests
             var header = Assert.IsType<Border>(row.Header);
             var badges = Named<StackPanel>(row, "entry-badges");
 
-            Assert.InRange(Right(window, badges), Right(window, header) - 2, Right(window, header) + 1);
+            Assert.InRange(Right(window, badges), Right(window, header) - 7, Right(window, header) - 5);
 
             window.Width = 220;
             PumpFrames(window, 20);
@@ -104,7 +104,7 @@ public sealed class TreeRowTests
             header = Assert.IsType<Border>(row.Header);
             badges = Named<StackPanel>(row, "entry-badges");
 
-            Assert.InRange(Right(window, badges), Right(window, header) - 2, Right(window, header) + 1);
+            Assert.InRange(Right(window, badges), Right(window, header) - 7, Right(window, header) - 5);
         }
         finally
         {
@@ -146,9 +146,9 @@ public sealed class TreeRowTests
         }
     }
 
-    /// <summary>A chosen row is one rounded wash, with no second fill inside it.</summary>
+    /// <summary>A chosen row is one square wash, with no second fill inside it.</summary>
     [Fact]
-    public void AChosenRowIsOneRoundedWash()
+    public void AChosenRowIsOneSquareWash()
     {
         var directory = Scratch.New("tree-selected");
 
@@ -179,7 +179,12 @@ public sealed class TreeRowTests
 
             Assert.NotNull(border);
             Assert.NotNull(presenter);
-            Assert.Equal(new CornerRadius(5), border!.CornerRadius);
+            Assert.Equal(new CornerRadius(0), border!.CornerRadius);
+
+            var tree = window.GetVisualDescendants().OfType<TreeView>().First();
+
+            Assert.Equal(Left(window, tree), Left(window, border), 1);
+            Assert.Equal(Right(window, tree), Right(window, border), 1);
             Assert.True(
                 presenter!.Background is null
                     || presenter.Background is ISolidColorBrush { Color.A: 0 },
@@ -388,9 +393,7 @@ public sealed class TreeRowTests
                 Colors.Red,
                 Assert.IsType<SolidColorBrush>(ring!.BorderBrush).Color
             );
-            Assert.Empty(
-                Named<Control>(row, "entry-icon").GetVisualDescendants().OfType<BadgeArc>()
-            );
+            Assert.DoesNotContain(row.GetVisualDescendants(), one => one.Name == "entry-icon");
         }
         finally
         {
@@ -625,6 +628,42 @@ public sealed class TreeRowTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
             Thread.Sleep(10);
+        }
+    }
+
+    /// <summary>A file's picture stands where the name of the directory holding it begins.</summary>
+    [Fact]
+    public void AFileIconAlignsWithItsParentsName()
+    {
+        var directory = Scratch.New("tree-file-align");
+        var folder = Directory.CreateDirectory(Path.Combine(directory, "folder")).FullName;
+        var file = Path.Combine(folder, "hero.psd");
+
+        File.WriteAllText(file, "x");
+
+        var (window, _) = OpenAt(directory, width: 400);
+
+        try
+        {
+            var root = Until(window, () => Root(window));
+
+            root.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var folderRow = Until(window, () => Row(window, folder));
+
+            folderRow.IsExpanded = true;
+            PumpFrames(window, 20);
+
+            var fileRow = Until(window, () => Row(window, file));
+            var name = Named<TextBlock>(folderRow, "entry-name");
+            var icon = Named<Control>(fileRow, "entry-icon");
+
+            Assert.Equal(Left(window, name), Left(window, icon), 1);
+        }
+        finally
+        {
+            window.Close();
         }
     }
 

@@ -7,6 +7,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
@@ -268,7 +269,7 @@ internal sealed class RorolalaTheme
     /// children three pixels closer to it than they are to each other. Stating the room below the line makes
     /// every pair of consecutive steps the same distance apart, whichever of them is the other's parent.
     /// </remarks>
-    private const double TreeRowHeight = 24.0;
+    private const double TreeRowHeight = 26.0;
 
     /// <inheritdoc cref="TreeRowHeight" />
     private const double TreeRowRoom = 3.0;
@@ -1154,18 +1155,23 @@ internal sealed class RorolalaTheme
             // would box in the three sides that are the window's edge and belong to no surface of this program.
             On(
                 selector => selector.OfType<TreeView>(),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0))
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                // No room across the pane: a step's wash and its hover reach both edges of the dock, and
+                // padding at the tree's own edge would leave a strip of the ground beside every row.
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(0, 4))
             ),
             On(
                 selector => selector.OfType<TreeViewItem>(),
-                new Setter(TemplatedControl.PaddingProperty, new Thickness(2, 1)),
+                // No room across: a row's wash and its hover are the panel's width, and a padding at the
+                // item's own edge leaves a strip of the ground beside both.
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(0, 1)),
                 // A step of a tree is a row of its own height rather than a listing's, and the room between two
                 // steps is stated below rather than being the difference between that height and what a step
                 // draws. See the two constants named here for why each is what it is.
                 new Setter(Layoutable.MinHeightProperty, TreeRowHeight),
-                // The base theme paints the chosen row on the SelectionBorder, which takes its corner from the
-                // item. The row is one rounded wash, the same as a chosen listing row, rather than a rectangle.
-                new Setter(TemplatedControl.CornerRadiusProperty, Small)
+                // A tree is a list of places rather than a stack of cards: its wash reaches every edge of the
+                // row, so a corner on it would be a corner cut out of the panel.
+                new Setter(TemplatedControl.CornerRadiusProperty, new CornerRadius(0))
             ),
             // The room under a step, which is also the room between a step and whatever it holds: the presenter
             // is what the row's own line is drawn in, and the steps under it are laid out directly below it, so
@@ -1189,6 +1195,11 @@ internal sealed class RorolalaTheme
             // a name of this program's own would be a style that applies to nothing at all.
             On(
                 selector => selector.OfType<TreeViewItem>().Template().Name(Chevron),
+                new Setter(Layoutable.MarginProperty, new Thickness(6, 0, 6, 0)),
+                new Setter(
+                    Layoutable.HorizontalAlignmentProperty,
+                    HorizontalAlignment.Left
+                ),
                 new Setter(Visual.RenderTransformProperty, TransformOperations.Parse("rotate(0deg)")),
                 new Setter(
                     Visual.TransitionsProperty,
@@ -1205,6 +1216,47 @@ internal sealed class RorolalaTheme
             On(
                 selector => selector.OfType<TreeViewItem>().Template().Name(Chevron).Class(":checked"),
                 new Setter(Visual.RenderTransformProperty, TransformOperations.Parse("rotate(45deg)"))
+            ),
+            // A vertical bar is a mark over what it scrolls rather than a column of its own: it is
+            // overlaid by the ScrollViewer template below, has no arrow at either end, and is two
+            // thirds of the panel's edge wide. It is drawn only while the pointer is in the pane, and
+            // the thumb is a pill so both of its ends are round.
+            On(
+                selector => selector.OfType<ScrollBar>().Class(":vertical"),
+                new Setter(Layoutable.WidthProperty, 10.0),
+                new Setter(Layoutable.MinWidthProperty, 10.0),
+                new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
+                new Setter(Visual.OpacityProperty, 0.0),
+                new Setter(TemplatedControl.TemplateProperty, VerticalBar()),
+                new Setter(
+                    Visual.TransitionsProperty,
+                    new Transitions
+                    {
+                        new DoubleTransition
+                        {
+                            Property = Visual.OpacityProperty,
+                            Duration = TreeTurn,
+                        },
+                    }
+                )
+            ),
+            On(
+                selector => selector.OfType<ScrollBar>().Class(":vertical").Class(":pointerover"),
+                new Setter(Visual.OpacityProperty, 0.9)
+            ),
+            On(
+                selector => selector.OfType<ScrollViewer>().Class(":pointerover").Template().Name("PART_VerticalScrollBar"),
+                new Setter(Visual.OpacityProperty, 0.55)
+            ),
+            On(
+                selector => selector.OfType<ScrollBar>().Template().Name("thumb"),
+                new Setter(TemplatedControl.TemplateProperty, RoundedThumb())
+            ),
+            // The scrollbars are children of the same cell as the content rather than columns beside
+            // it, so a bar is drawn over the rows and never takes room from them.
+            On(
+                selector => selector.OfType<ScrollViewer>(),
+                new Setter(TemplatedControl.TemplateProperty, OverlayScrolling())
             ),
             On(
                 selector => selector.OfType<MenuItem>(),
@@ -2212,6 +2264,127 @@ internal sealed class RorolalaTheme
         /// </remarks>
         object? ITemplate.Build() => content.Result;
     }
+
+    /// <summary>A vertical scroll bar with no arrows and a track that fills the whole mark.</summary>
+    /// <returns>The template.</returns>
+    private static IControlTemplate VerticalBar() =>
+        new FuncControlTemplate<ScrollBar>((bar, scope) =>
+        {
+            var track = new Track
+            {
+                IsDirectionReversed = true,
+                Orientation = Orientation.Vertical,
+            };
+
+            track.Bind(Track.MaximumProperty, new TemplateBinding(ScrollBar.MaximumProperty));
+            track.Bind(Track.MinimumProperty, new TemplateBinding(ScrollBar.MinimumProperty));
+            track.Bind(Track.ViewportSizeProperty, new TemplateBinding(ScrollBar.ViewportSizeProperty));
+            // A template binding rather than a local two-way binding: a local value written back by
+            // the track would outrank the ScrollBar's own binding to the ScrollViewer, and a wheel that
+            // moved the pane would leave the thumb where it was.
+            track.Bind(
+                Track.ValueProperty,
+                new TemplateBinding(ScrollBar.ValueProperty) { Mode = BindingMode.TwoWay }
+            );
+            track.Bind(
+                Track.DeferThumbDragProperty,
+                new TemplateBinding(ScrollViewer.IsDeferredScrollingEnabledProperty)
+            );
+
+            var up = new RepeatButton
+            {
+                Name = "PART_PageUpButton",
+                Focusable = false,
+                IsVisible = false,
+            };
+            var down = new RepeatButton
+            {
+                Name = "PART_PageDownButton",
+                Focusable = false,
+                IsVisible = false,
+            };
+            var thumb = new Thumb { Name = "thumb" };
+
+            track.DecreaseButton = up;
+            track.IncreaseButton = down;
+            track.Thumb = thumb;
+
+            scope.Register("PART_PageUpButton", up);
+            scope.Register("PART_PageDownButton", down);
+            scope.Register("thumb", thumb);
+
+            return new Border { Background = Brushes.Transparent, Child = track };
+        });
+
+    /// <summary>A thumb whose two ends are round, whatever its length.</summary>
+    /// <returns>The template.</returns>
+    private static IControlTemplate RoundedThumb() =>
+        new FuncControlTemplate<Thumb>((_, _) =>
+        {
+            var border = new Border { CornerRadius = Pill };
+            border.Bind(
+                Border.BackgroundProperty,
+                new TemplateBinding(TemplatedControl.BackgroundProperty)
+            );
+
+            return border;
+        });
+
+    /// <summary>
+    /// A scrolling pane whose scrollbars lie over its content rather than beside it.
+    /// </summary>
+    /// <remarks>
+    /// The content takes the whole pane, so a bar appearing does not move what is being read. Both
+    /// bars are in the same cell as the content and are drawn after it, which is what puts them on
+    /// top, and each keeps the alignment its own edge names.
+    /// </remarks>
+    /// <returns>The template.</returns>
+    private static IControlTemplate OverlayScrolling() =>
+        new FuncControlTemplate<ScrollViewer>((viewer, scope) =>
+        {
+            var content = new ScrollContentPresenter { Name = "PART_ContentPresenter" };
+
+            content.Bind(
+                ScrollContentPresenter.PaddingProperty,
+                new TemplateBinding(ScrollViewer.PaddingProperty)
+            );
+            content.Bind(
+                ScrollContentPresenter.BackgroundProperty,
+                new TemplateBinding(ScrollViewer.BackgroundProperty)
+            );
+            content.Bind(
+                ScrollViewer.IsScrollInertiaEnabledProperty,
+                new TemplateBinding(ScrollViewer.IsScrollInertiaEnabledProperty)
+            );
+
+            var vertical = new ScrollBar
+            {
+                Name = "PART_VerticalScrollBar",
+                Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Margin = new Thickness(0, 2, 2, 2),
+            };
+            var horizontal = new ScrollBar
+            {
+                Name = "PART_HorizontalScrollBar",
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(2, 0, 2, 2),
+            };
+
+            scope.Register("PART_ContentPresenter", content);
+            scope.Register("PART_VerticalScrollBar", vertical);
+            scope.Register("PART_HorizontalScrollBar", horizontal);
+
+            var pane = new Grid();
+            pane.Children.Add(content);
+            pane.Children.Add(vertical);
+            pane.Children.Add(horizontal);
+
+            return pane;
+        });
 
     /// <summary>A style over a selector, carrying the setters it was given.</summary>
     private static Style On(Func<Selector?, Selector> selector, params SetterBase[] setters)

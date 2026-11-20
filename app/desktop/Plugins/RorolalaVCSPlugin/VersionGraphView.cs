@@ -72,9 +72,9 @@ internal sealed class VersionGraphDock : IDockView
         // The row under the graph is always there: a reader who has just changed a file is already
         // looking at the graph and has nowhere else to say what the change was.
         var stage = new Grid { Children = { graph } };
-        var toggle = InfoToggle(host, graph);
+        var tools = CornerTools(host, graph);
 
-        stage.Children.Add(toggle);
+        stage.Children.Add(tools);
 
         // The table is drawn after the switch and over it, so that when it appears it covers the switch
         // rather than standing under it. It takes no pointer: the switch stays the thing the pointer
@@ -95,43 +95,29 @@ internal sealed class VersionGraphDock : IDockView
     }
 
     /// <summary>
-    /// The switch in the graph's corner: whether hovering a thing says what it is.
+    /// The buttons in the graph's corner: the hover table, and showing the whole work again.
     /// </summary>
     /// <remarks>
-    /// It is drawn over the graph rather than in the dock's strip because it is about the drawing: a
-    /// reader looking at the graph is looking there for what it is made of. The table it shows is laid
-    /// over the graph's own corner so that the drawing is not given less room for it.
+    /// They are drawn over the graph rather than in the dock's strip because they are about the drawing: a
+    /// reader looking at the graph is looking there for what it is made of. The table the first one shows is
+    /// laid over the graph's own corner so that the drawing is not given less room for it.
     /// </remarks>
-    /// <param name="host">The host, whose pictures the switch is drawn with.</param>
-    /// <param name="graph">The graph it turns the hover table on and off for.</param>
-    /// <returns>The switch.</returns>
-    private static ToggleButton InfoToggle(IPluginHost host, VersionGraphView graph)
+    /// <param name="host">The host, whose pictures the buttons are drawn with.</param>
+    /// <param name="graph">The graph the buttons act on.</param>
+    /// <returns>The buttons, one under the other.</returns>
+    private static Control CornerTools(IPluginHost host, VersionGraphView graph)
     {
         var toggle = new ToggleButton
         {
             Classes = { "tool" },
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, VersionGraphView.Corner, VersionGraphView.Corner, 0),
             Padding = new Thickness(6),
             IsChecked = true,
         };
 
-        Border? mark = null;
+        var mark = Mark(host, Icons.Visibility);
 
-        if (host.Icons.Find(Icons.Visibility) is { } picture)
+        if (mark is not null)
         {
-            mark = new Border
-            {
-                Width = 14,
-                Height = 14,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
-            };
-
-            RenderOptions.SetBitmapInterpolationMode(mark, BitmapInterpolationMode.HighQuality);
-            mark[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Front);
             toggle.Content = mark;
         }
 
@@ -161,7 +147,63 @@ internal sealed class VersionGraphDock : IDockView
             graph.ShowInfo(on);
         };
 
-        return toggle;
+        // The same control the switch above is, rather than a plain button: the two stand in one
+        // corner, and the look dresses a toggle and a button differently.
+        var all = new ToggleButton
+        {
+            Classes = { "tool" },
+            Padding = new Thickness(6),
+            IsChecked = true,
+        };
+
+        if (Mark(host, Icons.AltRoute) is { } route)
+        {
+            all.Content = route;
+        }
+
+        all.Classes.Add("on");
+        ToolTip.SetTip(all, RolaI18N.Get("rorolala_vcs.version_graph.show_all"));
+        all.Click += (_, _) =>
+        {
+            all.IsChecked = true;
+            graph.ShowAll();
+        };
+
+        return new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 6,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, VersionGraphView.Corner, VersionGraphView.Corner, 0),
+            Children = { toggle, all },
+        };
+    }
+
+    /// <summary>One corner button's picture, in the look's front ink.</summary>
+    /// <param name="host">The host, whose icon library holds the picture.</param>
+    /// <param name="key">The picture's key.</param>
+    /// <returns>The mark, or nothing when the library holds no such picture.</returns>
+    private static Border? Mark(IPluginHost host, string key)
+    {
+        if (host.Icons.Find(key) is not { } picture)
+        {
+            return null;
+        }
+
+        var mark = new Border
+        {
+            Width = 14,
+            Height = 14,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            OpacityMask = new ImageBrush(picture) { Stretch = Stretch.Uniform },
+        };
+
+        RenderOptions.SetBitmapInterpolationMode(mark, BitmapInterpolationMode.HighQuality);
+        mark[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Front);
+
+        return mark;
     }
 
     /// <inheritdoc />
@@ -302,6 +344,9 @@ internal sealed partial class VersionGraphView : Control
     /// Whether the graph is being kept after its choice was taken away. The next choice of a file ends it.
     /// </summary>
     private bool _retained;
+
+    /// <summary>Whether the next reading is to draw the whole work rather than stay on the drawing it has.</summary>
+    private bool _everything;
 
     /// <summary>What is said in place of a drawing, or nothing while a read is going.</summary>
     private string? _emptyText;
@@ -767,8 +812,10 @@ internal sealed partial class VersionGraphView : Control
         // Taking the choice away is not a reason to read the whole work: the graph that was on screen is
         // still the graph the reader was looking at, and it stays while the emphasis goes. A read that was
         // already in flight is overtaken here, so it cannot put another graph up after the choice is gone.
+        // The corner's show-all is the one press that means the whole work instead.
         if (
-            _drawing is not null
+            !_everything
+            && _drawing is not null
             && (
                 (_retained && ChosenFiles.Current.Count == 0)
                 || (entries.Count == 0 && ChosenFiles.Current.Count == 0)
@@ -782,6 +829,8 @@ internal sealed partial class VersionGraphView : Control
 
         var directory = DirectoryOf(entries);
         var generation = ++_generation;
+
+        _everything = false;
 
         if (directory is null)
         {
@@ -1531,6 +1580,19 @@ internal sealed partial class VersionGraphView : Control
         }
 
         return null;
+    }
+
+    /// <summary>Shows the whole work again, as a press on the ground does.</summary>
+    /// <remarks>
+    /// It is the corner's answer for a reader who has clicked a file and wants every lane back without
+    /// finding a patch of empty drawing to click.
+    /// </remarks>
+    public void ShowAll()
+    {
+        _everything = true;
+        _retained = false;
+        CancelSelection();
+        Refresh();
     }
 
     /// <summary>Takes the choice away, which is a click on the ground with no file chosen any more.</summary>

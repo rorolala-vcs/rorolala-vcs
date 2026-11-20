@@ -117,6 +117,27 @@ public sealed class DockTests
         Assert.Equal(DockLayout.StartingRatio, root.Ratio + ((1 - root.Ratio) * rest.Ratio), 6);
     }
 
+    /// <summary>A drop on the window edge wraps the whole tree rather than one group in it.</summary>
+    [Fact]
+    public void InsertingOnTheWindowEdgeWrapsTheWholeTree()
+    {
+        var layout = DockLayout.Starting();
+        var before = layout.Root;
+
+        var made = DockTree.Insert(
+            layout,
+            new DockTarget("", DockSide.Left, 0, Whole: true),
+            Dock("it.dock.edge")
+        );
+
+        var root = Assert.IsType<LayoutSplit>(layout.Root);
+
+        Assert.Equal(DockAxis.Columns, root.Axis);
+        Assert.Equal(0.5, root.Ratio);
+        Assert.Equal(made, Assert.IsType<LayoutGroup>(root.First).Id);
+        Assert.Same(before, root.Second);
+    }
+
     /// <summary>A dock dropped on the right of the second group makes a split on the other side.</summary>
     [Fact]
     public void InsertingOnTheOtherSidePutsTheNewGroupSecond()

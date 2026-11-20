@@ -13,7 +13,12 @@ namespace RorolalaDesktop.Docking;
 /// <param name="GroupId">The group the dock was dropped on, or empty to make the root group.</param>
 /// <param name="Side">Whether to tab into that group or split it on that side.</param>
 /// <param name="Index">Where among the tabs to insert, used only for <see cref="DockSide.Center"/>.</param>
-internal readonly record struct DockTarget(string GroupId, DockSide Side, int Index);
+internal readonly record struct DockTarget(
+    string GroupId,
+    DockSide Side,
+    int Index,
+    bool Whole = false
+);
 
 /// <summary>
 /// The operations on the layout tree, as pure functions over a <see cref="DockLayout"/>.
@@ -161,6 +166,33 @@ internal static class DockTree
             return made.Id;
         }
 
+        var before = target.Side is DockSide.Left or DockSide.Top;
+        var axis = target.Side is DockSide.Left or DockSide.Right
+            ? DockAxis.Columns
+            : DockAxis.Rows;
+
+        // A drop on the window's own edge wraps the whole root rather than one group: what it means is
+        // the outermost side of the arrangement, not the side of whichever group the pointer happened
+        // to be over. The new group is the first child for a left or top edge and the second for a
+        // right or bottom one, the order the axis draws its children in.
+        if (target.Whole && target.Side != DockSide.Center)
+        {
+            var edge = new LayoutGroup { Id = NextGroupId(layout) };
+
+            edge.Docks.Add(dock);
+            layout.Root = Flatten(
+                new LayoutSplit
+                {
+                    Axis = axis,
+                    Ratio = 0.5,
+                    First = before ? edge : root,
+                    Second = before ? root : edge,
+                }
+            );
+
+            return edge.Id;
+        }
+
         var group = target.GroupId.Length > 0 ? Find(layout, target.GroupId) : null;
 
         group ??= layout.ActiveGroup is { } active ? Find(layout, active) : null;
@@ -182,10 +214,9 @@ internal static class DockTree
 
         // Left and top put the dock before the group it was dropped on, right and bottom after it, which is
         // the order the axis draws its two children in.
-        var before = target.Side is DockSide.Left or DockSide.Top;
         var split = new LayoutSplit
         {
-            Axis = target.Side is DockSide.Left or DockSide.Right ? DockAxis.Columns : DockAxis.Rows,
+            Axis = axis,
             Ratio = 0.5,
             First = before ? added : group,
             Second = before ? group : added,

@@ -166,13 +166,13 @@ internal sealed class NavigationBar : UserControl
         AttachedToVisualTree += (_, _) =>
         {
             _watching = true;
-            _browser.Changed += Update;
+            _browser.Changed += UpdateOwed;
             Update();
         };
         DetachedFromVisualTree += (_, _) =>
         {
             _watching = false;
-            _browser.Changed -= Update;
+            _browser.Changed -= UpdateOwed;
         };
 
         Update();
@@ -207,14 +207,14 @@ internal sealed class NavigationBar : UserControl
 
         if (_watching)
         {
-            _browser.Changed -= Update;
+            _browser.Changed -= UpdateOwed;
         }
 
         _browser = location;
 
         if (_watching)
         {
-            _browser.Changed += Update;
+            _browser.Changed += UpdateOwed;
             Update();
         }
     }
@@ -385,6 +385,9 @@ internal sealed class NavigationBar : UserControl
     }
 
     /// <summary>Brings the toolbar in step with the location.</summary>
+    /// <summary>Says that the toolbar's answer may have changed, once for the frame.</summary>
+    private void UpdateOwed() => Frame.Post(Update);
+
     private void Update()
     {
         _back.IsEnabled = _browser.CanGoBack;

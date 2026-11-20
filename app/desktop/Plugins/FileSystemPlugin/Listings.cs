@@ -741,6 +741,9 @@ internal abstract class EntryView<TItem> : EntryView
     /// <summary>The press a drag would begin from, while it may still become one.</summary>
     private PointerPressedEventArgs? _from;
 
+    /// <summary>The height to put back after the rows have been replaced, while a restore is waiting.</summary>
+    private Vector? _scrollToKeep;
+
     /// <summary>
     /// The words a right press landed on, which the menu opened there copies.
     /// </summary>
@@ -872,7 +875,76 @@ internal abstract class EntryView<TItem> : EntryView
     protected IPluginHost Host { get; }
 
     /// <summary>What is listed, and what every entry of it is answered by.</summary>
-    protected Listing<TItem> Source { get; }
+    protected Listing<TItem> Source { get; private set; }
+
+    /// <summary>Points the view at another listing without taking the control out of the dock.</summary>
+    /// <remarks>
+    /// A step to another directory is another listing over another list of entries, but the arrangement
+    /// around it, its rows and its scroller are the same control. Handing the new listing to that control
+    /// keeps the dock's own place in the window and is one swap of the items rather than a control taken
+    /// out and another put in its place.
+    /// </remarks>
+    /// <param name="source">The listing the view is to read now.</param>
+    /// <param name="keepScroll">Whether the reader keeps the place they had scrolled to.</param>
+    protected void Rebind(Listing<TItem> source, bool keepScroll)
+    {
+        var scroll = List.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+
+        // Kept until the restore has run rather than read again here: replacing the items resets the
+        // scroller at once, and a second read a moment later would take that reset for the place the
+        // reader was at.
+        if (keepScroll)
+        {
+            _scrollToKeep ??= scroll?.Offset;
+        }
+        else
+        {
+            _scrollToKeep = null;
+        }
+
+        Source = source;
+        Source.Marking = Mark;
+        List.ContextMenu = source.Space(this);
+
+        _rows.Clear();
+        _lead = -1;
+        _anchor = -1;
+        _pressedAt = -1;
+        _base = [];
+        _atPress = [];
+        _typed = string.Empty;
+
+        List.SelectedItems?.Clear();
+        List.ItemsSource = source.Items;
+
+        if (_scrollToKeep is { } offset)
+        {
+            // The same directory read again is the same rows in the same order: the reader stays where
+            // they were, and the scroller is put back after the new rows have been laid out. Render is
+            // the last word before the frame is drawn, so a later layout cannot clamp it first.
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    if (List.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } now)
+                    {
+                        now.Offset = offset;
+                    }
+
+                    _scrollToKeep = null;
+                },
+                DispatcherPriority.Render
+            );
+        }
+        else if (source.Items.Count > 0)
+        {
+            List.ScrollIntoView(source.Items[0]);
+        }
+
+        // A name the new listing is waiting to have typed is claimed here as well as when the view first
+        // enters a window: a step that reused this view does not enter it again, and a folder just made is
+        // exactly the name that arrives with the new listing.
+        Naming();
+    }
 
     /// <summary>What is in the listing, in the order it is shown.</summary>
     protected IReadOnlyList<TItem> Items => Source.Items;
@@ -1148,26 +1220,16 @@ internal abstract class EntryView<TItem> : EntryView
     /// </remarks>
     public void NewFolder(FolderVariant? variant = null) => Source.NewFolder(variant);
 
-    /// <summary>The box a name is being edited in, and the entry it is about, while one is.</summary>
+    /// <summary>The bubble a name is being typed in, and the entry it is about, while one is.</summary>
     /// <remarks>
-    /// The name is edited in the row itself rather than asked for in a window: what is being renamed is a
-    /// name in a listing, and the listing is where it can be seen against the names around it.
+    /// The bubble is under the name rather than in its place: the row is not rebuilt for an edit, and the
+    /// field is where the keyboard is, so the dock's shortcuts wait while a name is being typed.
     /// </remarks>
-    private TextBox? _editor;
+    private RenameBubble? _bubble;
     private TItem? _editing;
 
-    /// <summary>
-    /// The name a box replaced, and where, so the row reads as a row again once the edit is over.
-    /// </summary>
-    /// <remarks>
-    /// The box is put in the name's place rather than the row being built again around it, which is what keeps the
-    /// name where the layout put it, and it is why the name has to be carried back: a listing that is not read again
-    /// after an edit, because nothing about it changed, would otherwise leave a field standing in the row.
-    /// </remarks>
-    private (Panel Parent, int At, Control Name)? _named;
-
     /// <inheritdoc />
-    public override bool Editing => _editor is not null;
+    public override bool Editing => _bubble is not null;
 
     /// <summary>Renames what is chosen, or the entry the pointer last landed on.</summary>
     public void Rename()
@@ -1178,12 +1240,12 @@ internal abstract class EntryView<TItem> : EntryView
         }
     }
 
-    /// <summary>Puts the name of `item` into a box where the listing draws it.</summary>
+    /// <summary>Opens a bubble under the name of `item`.</summary>
     /// <param name="item">What is being renamed.</param>
     public void Rename(TItem item)
     {
-        // What is edited is a row, and a row that is not on screen has no container to hold a cell: bringing
-        // it into view is what makes a name reachable in a listing too long to show at once.
+        // What is edited is a row, and a row that is not on screen has no name to stand a bubble under:
+        // bringing it into view is what makes a name reachable in a listing too long to show at once.
         List.ScrollIntoView(item);
 
         if (Beginning(item))
@@ -1192,21 +1254,21 @@ internal abstract class EntryView<TItem> : EntryView
         }
 
         // The container is made by the layout the scroll asks for, so it is a moment behind: one more turn
-        // of the loop is what puts the box in a row rather than nowhere.
+        // of the loop is what puts the bubble under a name rather than nowhere.
         Dispatcher.UIThread.Post(() => Beginning(item), DispatcherPriority.Background);
     }
 
-    /// <summary>Puts the name of `item` into a box, where its row and the cell in it are already drawn.</summary>
+    /// <summary>Puts a bubble under the name of `item`, where its row and its label are already drawn.</summary>
     /// <param name="item">What is being renamed.</param>
-    /// <returns>Whether the box was made.</returns>
+    /// <returns>Whether the bubble was made.</returns>
     private bool Beginning(TItem item)
     {
-        if (_editor is not null)
+        if (_bubble is not null)
         {
             return true;
         }
 
-        // A name the place would not take is a box that would put itself away again, so one is not put up.
+        // A name the place would not take is a bubble that would put itself away again, so one is not put up.
         if (!Source.Renamable(item))
         {
             return false;
@@ -1219,133 +1281,53 @@ internal abstract class EntryView<TItem> : EntryView
             .OfType<TextBlock>()
             .FirstOrDefault(text => text.Classes.Contains("entry-name"));
 
-        if (label?.Parent is not Panel parent)
+        if (label is null)
         {
             return false;
         }
 
-        var at = parent.Children.IndexOf(label);
         var name = Source.Name(item);
-        var box = new TextBox
-        {
-            Text = name,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
 
-        // The box takes the place the name had, in the cell that name sat in: a grid's cell is the child's,
-        // so it is carried over rather than the row being built again around it.
-        Grid.SetColumn(box, Grid.GetColumn(label));
-        Grid.SetRow(box, Grid.GetRow(label));
-        Grid.SetColumnSpan(box, Grid.GetColumnSpan(label));
-
-        _named = (parent, at, label);
-        parent.Children[at] = box;
-
-        _editor = box;
         _editing = item;
-
-        // Taken on the way down, so that Enter and Escape are read before the box's own reading of them: a
-        // field that took Enter for itself would be a name nobody could finish.
-        box.AddHandler(KeyDownEvent, (_, args) => Edited(args), RoutingStrategies.Tunnel);
-        box.LostFocus += (_, _) => Committed();
-
-        box.Focus();
-
-        // The name is chosen rather than taken whole, so that what is typed over is the name and not the
-        // extension where the listing leaves the extension out (see `Listing.Select`).
-        box.SelectionStart = 0;
-        box.SelectionEnd = Source.Select(item, name);
+        _bubble = new RenameBubble(
+            label,
+            name,
+            Source.Select(item, name),
+            Committed,
+            Cancelled
+        );
 
         return true;
     }
 
-    /// <summary>Reads a key while a name is being edited: Enter takes it, Escape leaves the name alone.</summary>
-    /// <param name="e">The key.</param>
-    private void Edited(KeyEventArgs e)
+    /// <summary>Takes what the bubble says as the name the entry is to have, and lets go of the bubble.</summary>
+    /// <param name="name">The name that was typed.</param>
+    private void Committed(string name)
     {
-        switch (e.Key)
-        {
-            case Key.Enter:
-                e.Handled = true;
-                Committed();
-                break;
-            case Key.Escape:
-                e.Handled = true;
-                Cancelled();
-                break;
-            default:
-                break;
-        }
-    }
-
-    /// <summary>Takes what the box says as the name the entry is to have, and lets go of the box.</summary>
-    private void Committed()
-    {
-        var box = _editor;
         var item = _editing;
 
-        if (box is null || item is null)
+        _bubble = null;
+        _editing = null;
+
+        if (item is null)
         {
             return;
         }
 
-        _editor = null;
-        _editing = null;
-
-        Restore(box);
-        Source.Rename(item, box.Text ?? string.Empty);
-
-        // The box belongs to a row, and the reading is what puts the name back: a rename that had nothing to
-        // do would otherwise leave the field standing. The keyboard goes back to the listing with it.
+        Source.Rename(item, name);
         Source.Touch();
         Listen();
         Ended();
     }
 
-    /// <summary>Leaves the name as it was, and reads the listing again so the box goes away.</summary>
+    /// <summary>Leaves the name as it was and closes the bubble.</summary>
     private void Cancelled()
     {
-        if (_editor is not { } box)
-        {
-            return;
-        }
-
-        _editor = null;
+        _bubble = null;
         _editing = null;
 
-        Restore(box);
-        Source.Touch();
         Listen();
         Ended();
-    }
-
-    /// <summary>
-    /// Puts the name back where the box was, so the row is a row again.
-    /// </summary>
-    /// <remarks>
-    /// What a listing that is not read again after the edit needs: a place names a row without the files changing, so
-    /// nothing in the file system draws the listing again, and a box that stayed there would be a field nothing
-    /// answers in, in a row that is no longer being edited. A rename the place refused is the case that needs it most:
-    /// the name was not taken, and the row has to show the one it has.
-    /// </remarks>
-    /// <param name="box">The box that was in the name's place.</param>
-    private void Restore(TextBox box)
-    {
-        if (_named is not { } named)
-        {
-            return;
-        }
-
-        _named = null;
-
-        if (
-            named.At >= 0
-            && named.At < named.Parent.Children.Count
-            && ReferenceEquals(named.Parent.Children[named.At], box)
-        )
-        {
-            named.Parent.Children[named.At] = named.Name;
-        }
     }
 
     /// <summary>
@@ -1495,7 +1477,7 @@ internal abstract class EntryView<TItem> : EntryView
     {
         // A name being edited is the box's own: the arrows move its caret and Enter takes what it says, so
         // the keys below are not read while a row is a field. The listing is not what has the keyboard then.
-        if (_editor is not null || e.Source is TextBox)
+        if (_bubble is not null || e.Source is TextBox)
         {
             return;
         }
@@ -1580,7 +1562,7 @@ internal abstract class EntryView<TItem> : EntryView
     {
         // The letters are the box's while a name is being edited, and the field's wherever else a field is
         // what has the keyboard: what is typed there is a name, not a run to seek entries by.
-        if (_editor is not null || e.Source is TextBox)
+        if (_bubble is not null || e.Source is TextBox)
         {
             return;
         }
@@ -1798,7 +1780,7 @@ internal abstract class EntryView<TItem> : EntryView
     {
         // A name being edited is the box's own: a press in it moves the caret, and one outside it is what ends
         // the edit by taking the keyboard away. Either way the press is not this view's to read.
-        if (_editor is not null || e.Source is TextBox)
+        if (_bubble is not null || e.Source is TextBox)
         {
             return;
         }
@@ -2392,10 +2374,10 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     private const double NameColumnWidth = 200;
 
     /// <summary>The contributed columns read with the name, which stand in front of the room the table is read in.</summary>
-    private readonly Column<TItem>[] _beside;
+    private Column<TItem>[] _beside = [];
 
     /// <summary>The columns after the name, which every row of the table has the same of.</summary>
-    private readonly IReadOnlyList<Column<TItem>> _values;
+    private IReadOnlyList<Column<TItem>> _values = [];
 
     /// <summary>
     /// How wide every column wants to be, the grabs between them included.
@@ -2405,7 +2387,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// table puts every column under, see <see cref="Squeezed"/>. A drag of a column edge writes here, because
     /// what a hand moved is what the column is to be when there is room for it.
     /// </remarks>
-    private readonly GridLength[] _widths;
+    private GridLength[] _widths = [];
 
     /// <summary>
     /// How wide every column is drawn, which every sheet of the table is given.
@@ -2416,13 +2398,13 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// two rows that hold different words would then disagree about where a column begins. The written widths are
     /// pixels, so what a cell stands at is the same in the band and in every row, whatever the dock's width is.
     /// </remarks>
-    private GridLength[] _shown;
+    private GridLength[] _shown = [];
 
     /// <summary>How wide the table itself was when it was last squeezed, or nothing while it has not been laid.</summary>
     private double _laid = -1;
 
     /// <summary>Which of the table's columns is the one that takes what is left over, and holds nothing.</summary>
-    private readonly int _star;
+    private int _star;
 
     /// <summary>
     /// Where every edge between two columns is, as the grab column and the pair it is between.
@@ -2432,7 +2414,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     /// table rather than a shape of the measure: the pair a grab moves is settled where the table is built, and
     /// the room the table is read in means the edges are no longer evenly spaced.
     /// </remarks>
-    private readonly Dictionary<int, (int Left, int Right)> _grabs;
+    private Dictionary<int, (int Left, int Right)> _grabs = [];
 
     /// <summary>The row of column names, which every row is kept in step with.</summary>
     private readonly Grid _header = new();
@@ -2450,7 +2432,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     private (int Left, int Right, double At, double LeftWas, double RightWas)? _grabbed;
 
     /// <summary>The contributed columns that stand before everything, the picture included.</summary>
-    private readonly Column<TItem>[] _leads;
+    private Column<TItem>[] _leads = [];
 
     /// <summary>Makes the table over what the listing holds.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
@@ -2458,28 +2440,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
     public ListBrowser(IPluginHost host, Listing<TItem> source)
         : base(host, source)
     {
-        // A column is placed where its own contribution asks to be. The split is the view's, since the
-        // arrangement knows where the room the table is read in falls and the listing that contributed the
-        // column does not.
-        var columns = source.Columns;
-
-        _leads = [.. columns.Where(column => column.Placement == ColumnPlacement.Leftmost)];
-        _beside = [.. columns.Where(column => column.Placement == ColumnPlacement.BesideName)];
-        _values =
-        [
-            .. columns.Where(column =>
-                column.Placement is not ColumnPlacement.Leftmost and not ColumnPlacement.BesideName
-            ),
-        ];
-
-        var (widths, star, grabs) = Lay();
-        _widths = widths;
-        _star = star;
-        _grabs = grabs;
-
-        // What is drawn is what is wanted until the table has been laid out once, which is when there is a width
-        // to fit the columns into, see `Fit`.
-        _shown = [.. widths];
+        Adopt(source);
 
         // The list's own border and inset are taken off: what draws the table is the view, and a border and a
         // padding of the list's own would be a second edge and a second inset inside it.
@@ -2536,7 +2497,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         // The width is read after the layout that produced it rather than inside it: writing the table's column
         // widths while the header is arranging changes the definitions the arrange pass is walking, which is what
         // the toolkit answers with a null in the middle of `Grid.ArrangeOverride`.
-        row.SizeChanged += (_, _) => Dispatcher.UIThread.Post(() => Fit(row));
+        row.SizeChanged += (_, _) => Frame.Post(() => Fit(row));
 
         return row;
     }
@@ -2696,6 +2657,50 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         }
 
         return columns;
+    }
+
+    /// <summary>Reads the columns of another listing into this table and puts its rows in place.</summary>
+    /// <param name="source">The listing the table is to show now.</param>
+    /// <param name="keepScroll">Whether the reader keeps the place they had scrolled to.</param>
+    internal void Retarget(Listing<TItem> source, bool keepScroll)
+    {
+        Adopt(source);
+        Rebind(source, keepScroll);
+        _laid = -1;
+    }
+
+    /// <summary>Reads a listing's columns and builds the table around them.</summary>
+    /// <param name="source">The listing whose columns are read.</param>
+    private void Adopt(Listing<TItem> source)
+    {
+        // A column is placed where its own contribution asks to be. The split is the view's, since the
+        // arrangement knows where the room the table is read in falls and the listing that contributed the
+        // column does not.
+        var columns = source.Columns;
+
+        _leads = [.. columns.Where(column => column.Placement == ColumnPlacement.Leftmost)];
+        _beside = [.. columns.Where(column => column.Placement == ColumnPlacement.BesideName)];
+        _values =
+        [
+            .. columns.Where(column =>
+                column.Placement is not ColumnPlacement.Leftmost and not ColumnPlacement.BesideName
+            ),
+        ];
+
+        var (widths, star, grabs) = Lay();
+        _widths = widths;
+        _star = star;
+        _grabs = grabs;
+
+        // What is drawn is what is wanted until the table has been laid out once, which is when there is a width
+        // to fit the columns into, see `Fit`.
+        _shown = [.. widths];
+
+        if (_heading is not null)
+        {
+            _header.Children.Clear();
+            Header();
+        }
     }
 
     /// <summary>
@@ -3167,6 +3172,9 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
     private readonly int _icon;
 
+    /// <summary>How large this grid draws an icon, which a retarget is only allowed to keep.</summary>
+    internal int IconSize => _icon;
+
     /// <summary>Makes the grid layout over what the listing holds.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
     /// <param name="source">What is listed.</param>
@@ -3233,6 +3241,11 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
 
         Present(List);
     }
+
+    /// <summary>Reads another listing into the same grid.</summary>
+    /// <param name="source">The listing the grid is to show now.</param>
+    /// <param name="keepScroll">Whether the reader keeps the place they had scrolled to.</param>
+    internal void Retarget(Listing<TItem> source, bool keepScroll) => Rebind(source, keepScroll);
 
     /// <summary>One entry as a tile: its icon above its name, on one line and cut off when it is too long.</summary>
     /// <remarks>

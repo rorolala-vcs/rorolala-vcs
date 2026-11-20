@@ -211,39 +211,6 @@ internal sealed class Files : Listing<Entry>
     /// </remarks>
     public override bool Barren => !Items.Any(item => !Browser.IsUp(item.Path));
 
-    /// <summary>
-    /// What a listing with nothing in it says.
-    /// </summary>
-    /// <remarks>
-    /// It takes no pointer of its own: the space it sits over is still the list's, and a word that ate the
-    /// right-click there would take the empty-space menu and the start of a frame with it.
-    /// </remarks>
-    /// <returns>The word.</returns>
-    public override Control? Notice() =>
-        new StackPanel
-        {
-            Spacing = 8,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = "\U0001F5C2",
-                    FontSize = 24,
-                    Classes = { "faint" },
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                },
-                new TextBlock
-                {
-                    Text = RolaI18N.Get("rorolala_file_system.empty"),
-                    Classes = { "empty" },
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                },
-            },
-        };
-
     /// <inheritdoc />
     public override void Open(Entry item)
     {

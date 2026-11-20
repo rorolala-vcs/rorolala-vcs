@@ -157,11 +157,7 @@ public sealed class DirectoryEditingTests
     /// <summary>The name box on screen, or nothing while no row is being named.</summary>
     /// <param name="window">The window the docks are in.</param>
     /// <returns>The box.</returns>
-    private static TextBox? Box(Window window) =>
-        window
-            .GetVisualDescendants()
-            .OfType<TextBox>()
-            .FirstOrDefault(text => text.IsEffectivelyVisible);
+    private static TextBox? Box(Window window) => RenameBubble.Current?.Field;
 
     /// <summary>Waits for a name box to appear, which the view puts up a turn after the rows are drawn.</summary>
     /// <param name="window">The window the docks are in.</param>

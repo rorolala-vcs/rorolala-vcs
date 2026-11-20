@@ -233,6 +233,15 @@ internal sealed class DirectoryControl : UserControl
     /// <summary>One row per provider, so that the mode each rule is in follows the settings.</summary>
     private readonly List<(IEntryHideProvider Provider, Button Row, Border Glyph)> _hiders = [];
 
+    /// <summary>What the eye last said, so a read that says the same thing does not redraw it.</summary>
+    private bool? _showing;
+
+    /// <summary>What each rule last said, so a read that says the same thing does not redraw it.</summary>
+    private readonly Dictionary<string, HideState> _hideStates = new(StringComparer.Ordinal);
+
+    /// <summary>The words under the rules button, so they are set only when they change.</summary>
+    private string? _hiddenSummary;
+
     /// <summary>The three pictures a rule's mode is drawn with, in the order the mode is read.</summary>
     private (Bitmap Show, Bitmap Gray, Bitmap Hide)? _marks;
 
@@ -306,6 +315,9 @@ internal sealed class DirectoryControl : UserControl
 
     /// <summary>The location being listened to, so that one left behind is stopped being listened to.</summary>
     private Browser? _watched;
+
+    /// <summary>Whether an update is already waiting for the next turn.</summary>
+    private bool _updateOwed;
 
     /// <summary>What the dock kept, and where the next of it is kept.</summary>
     private IDockState? _state;
@@ -414,7 +426,19 @@ internal sealed class DirectoryControl : UserControl
             logical.Changed += RepaintPlace;
             ChosenFiles.Cleared += ClearedSelection;
             Watch(Location);
-            Draw();
+
+            // The constructor has already drawn what this location held. Drawing again on the way into
+            // the window is a second listing built for the same answer, which is the flicker of a dock
+            // opening. A dock that comes back after looking elsewhere meanwhile is read again, which is
+            // what the comparison says.
+            if (
+                !Equals(_drawnPlace, Location.Place)
+                || _drawnAt != Location.Current
+                || !ReferenceEquals(_drawn, Location.Shown)
+            )
+            {
+                Draw();
+            }
         };
         DetachedFromVisualTree += (_, _) =>
         {
@@ -733,11 +757,12 @@ internal sealed class DirectoryControl : UserControl
     /// <param name="shown">Whether what the rules hide is being shown.</param>
     private void Show(bool shown)
     {
-        if (_showGlyph is null || _eyes is not { } eyes)
+        if (_showGlyph is null || _eyes is not { } eyes || _showing == shown)
         {
             return;
         }
 
+        _showing = shown;
         _showGlyph.OpacityMask = new ImageBrush(shown ? eyes.Shown : eyes.Hidden)
         {
             Stretch = Stretch.Uniform,
@@ -838,6 +863,12 @@ internal sealed class DirectoryControl : UserControl
                     ? HideState.Gray
                     : HideState.Show;
 
+            if (_hideStates.TryGetValue(provider.Id, out var was) && was == state)
+            {
+                continue;
+            }
+
+            _hideStates[provider.Id] = state;
             glyph.OpacityMask = new ImageBrush(Mark(state))
             {
                 Stretch = Stretch.Uniform,
@@ -858,7 +889,11 @@ internal sealed class DirectoryControl : UserControl
             _ => RolaI18N.Get("rorolala_file_system.hidden_many", named.Length),
         };
 
-        ToolTip.SetTip(_rules, summary);
+        if (!string.Equals(_hiddenSummary, summary, StringComparison.Ordinal))
+        {
+            _hiddenSummary = summary;
+            ToolTip.SetTip(_rules, summary);
+        }
     }
 
     /// <summary>The picture a rule's mode wears.</summary>
@@ -1002,15 +1037,41 @@ internal sealed class DirectoryControl : UserControl
 
         if (_watched is not null)
         {
-            _watched.Changed -= Update;
+            _watched.Changed -= Owed;
         }
 
         _watched = location;
 
         if (_watched is not null)
         {
-            _watched.Changed += Update;
+            _watched.Changed += Owed;
         }
+    }
+
+    /// <summary>Asks for one update after the turn that raised the change, however many changes it raised.</summary>
+    /// <remarks>
+    /// A step and a read can raise more than one change before the frame is drawn, and drawing the
+    /// listing on each of them is a listing built, laid out and thrown away in the same frame. The
+    /// update is posted once and reads the last answer, which is the only one a viewer would have seen.
+    /// </remarks>
+    private void Owed()
+    {
+        if (_updateOwed)
+        {
+            return;
+        }
+
+        _updateOwed = true;
+
+        Frame.Post(() =>
+        {
+            _updateOwed = false;
+
+            if (_watched is not null)
+            {
+                Update();
+            }
+        });
     }
 
     /// <summary>
@@ -1298,36 +1359,55 @@ internal sealed class DirectoryControl : UserControl
         // What was chosen goes with it, for the same reason the tree keeps what was open: a read that found the
         // files it found before is not a reason to stop working with them. Only within one
         // directory, stepping elsewhere is a different listing, and its choice starts empty.
-        var chosen = _drawnAt == Location.Current ? _view?.Chosen() ?? [] : [];
+        var sameDirectory = _drawnAt == Location.Current;
+        var chosen = sameDirectory ? _view?.Chosen() ?? [] : [];
 
-        EntryView<Entry> drawn = Zoom > GridAbove
-            ? new GridBrowser<Entry>(
-                _host,
-                new Files(
-                    _host,
-                    Location,
-                    _actions,
-                    _clip,
-                    _logicalClip,
-                    Icons.CompactMark
-                ),
-                Icons.SizeAt(Zoom)
-            )
-            : new ListBrowser<Entry>(
-                _host,
-                new Files(
-                    _host,
-                    Location,
-                    _actions,
-                    _clip,
-                    _logicalClip,
-                    Icons.CompactMark
-                )
-            );
+        // The listing is a new answer about a new directory, but the arrangement around it is the same
+        // one: the same rows, the same scroller, and the same place in the dock. A view of the same kind
+        // is told what it now lists rather than being taken out of the window and another put in its
+        // place, which is the frame the eye caught as a flicker.
+        var files = new Files(
+            _host,
+            Location,
+            _actions,
+            _clip,
+            _logicalClip,
+            Icons.CompactMark
+        );
+        var icon = Icons.SizeAt(Zoom);
+        var created = false;
+        EntryView<Entry> drawn;
+
+        if (Zoom > GridAbove && _view is GridBrowser<Entry> grid && grid.IconSize == icon)
+        {
+            grid.Retarget(files, sameDirectory);
+            drawn = grid;
+        }
+        else if (Zoom <= GridAbove && _view is ListBrowser<Entry> list)
+        {
+            list.Retarget(files, sameDirectory);
+            drawn = list;
+        }
+        else if (Zoom > GridAbove)
+        {
+            drawn = new GridBrowser<Entry>(_host, files, icon);
+            created = true;
+        }
+        else
+        {
+            drawn = new ListBrowser<Entry>(_host, files);
+            created = true;
+        }
+
+        drawn.EditEnded -= Resumed;
         drawn.EditEnded += Resumed;
         _view = drawn;
 
-        _content.Content = drawn;
+        if (created || !ReferenceEquals(_content.Content, drawn))
+        {
+            _content.Content = drawn;
+        }
+
         drawn.Choose(chosen);
 
         // A place this dock was told to show is shown by its directory with the row chosen: what asked for it wanted

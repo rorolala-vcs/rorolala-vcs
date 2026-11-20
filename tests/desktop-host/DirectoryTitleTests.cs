@@ -259,6 +259,75 @@ public sealed class DirectoryTitleTests
         }
     }
 
+    /// <summary>A step to another directory keeps the listing control rather than replacing it.</summary>
+    [Fact]
+    public void AStepKeepsTheSameListingControl()
+    {
+        var (root, _, whole, window, control) = Open();
+        var art = Directory.CreateDirectory(Path.Combine(root, "art")).FullName;
+        var shots = Directory.CreateDirectory(Path.Combine(art, "shots")).FullName;
+
+        try
+        {
+            whole.Go(art);
+            Pump();
+
+            var first = control.GetVisualDescendants().OfType<EntryView>().Single();
+
+            whole.Go(shots);
+            Pump();
+
+            var second = control.GetVisualDescendants().OfType<EntryView>().Single();
+
+            Assert.Same(first, second);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>A directory read again keeps the reader at the height they had scrolled to.</summary>
+    [Fact]
+    public void ARefreshKeepsTheDirectoriesScroll()
+    {
+        var (root, _, whole, window, _) = Open();
+
+        try
+        {
+            for (var index = 0; index < 240; index++)
+            {
+                File.WriteAllText(Path.Combine(root, $"file-{index:D3}.txt"), "x");
+            }
+
+            whole.Refresh();
+            Pump();
+
+            var scroll = window
+                .GetVisualDescendants()
+                .OfType<ScrollViewer>()
+                .First(bars => bars.Extent.Height > bars.Viewport.Height);
+
+            var list = window.GetVisualDescendants().OfType<ListBox>().First();
+            list.SelectedIndex = 0;
+            Pump();
+
+            scroll.Offset = new Avalonia.Vector(0, 2000);
+            Pump();
+
+            var offset = scroll.Offset;
+
+            whole.Touch();
+            Pump();
+
+            Assert.Equal(offset.Y, scroll.Offset.Y, 1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>A directory browser over a scratch root, on a headless window, drawn once.</summary>
     /// <returns>The root, the shared answers, the location, the window, and the dock's control.</returns>
     private static (string Root, Shared Shared, Browser Browser, Window Window, DirectoryControl Dock) Open()

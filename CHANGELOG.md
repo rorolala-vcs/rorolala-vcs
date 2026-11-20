@@ -10,30 +10,40 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 2. [`app`] [`RorolalaDesktop`] [`docking`] Give a dock's header strip back when the dock leaves its group. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-docking-give-a-docks-header-strip-back-when-the-dock-leaves-its-group)
 3. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault. [See details](dev/CHANGELOG-DETAILS.md#3-modules-rola-sharp-locate-accounts-and-members-without-a-vault)
 
+## Optimized
+
+1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event. [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-file-system-redraw-a-dock-once-for-a-change-instead-of-once-per-event)
+
 ## Feature
 
 1. [`app`] [`rola`] Stop a running write with Ctrl+C. [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-stop-a-running-write-with-ctrlc)
-2. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-show-entries-that-are-not-on-disk-as-pending-in-progress-or-lost)
-3. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#3-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
-4. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#4-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
-5. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#5-modules-rola-sharp-add-the-c-bindings)
-6. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#6-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
+2. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-docking-dock-a-panel-against-the-windows-own-edge)
+3. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-show-entries-that-are-not-on-disk-as-pending-in-progress-or-lost)
+4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Type a name in a bubble under its row. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-file-system-type-a-name-in-a-bubble-under-its-row)
+5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-show-the-whole-version-graph-again-from-its-corner)
+6. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#6-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
+7. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#7-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
+8. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#8-modules-rola-sharp-add-the-c-bindings)
+9. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#9-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
 
 ## Refactor
 
 1. **\[BREAKING!\]** [`modules`] [`rola-sharp`] Remove the first-generation C# bindings and keep RolaSharp as the one assembly. [See details](dev/CHANGELOG-DETAILS.md#1-breaking-modules-rola-sharp-remove-the-first-generation-c-bindings-and-keep-rolasharp-as-the-one-assembly)
 2. **\[BREAKING!\]** [`utils`] [`location`] [`user-data`] Keep each build's user data under its userdata name. [See details](dev/CHANGELOG-DETAILS.md#2-breaking-utils-location-user-data-keep-each-builds-user-data-under-its-userdata-name)
 3. [`app`] [`rola`] Run the write commands through librorolala. [See details](dev/CHANGELOG-DETAILS.md#3-app-rola-run-the-write-commands-through-librorolala)
-4. [`app`] [`RorolalaVCSPlugin`] Bring and own entries through the C# writers. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolalavcsplugin-bring-and-own-entries-through-the-c-writers)
-5. [`app`] [`RorolalaVCSPlugin`] Read the ignore rules, the Workspace and the account from the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolalavcsplugin-read-the-ignore-rules-the-workspace-and-the-account-from-the-c-bindings)
-6. [`app`] [`RorolalaVCSPlugin`] Run track, align and retrack through the C# writers. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolalavcsplugin-run-track-align-and-retrack-through-the-c-writers)
-7. [`app`] [`RorolalaVCSPlugin`] [`graph`] Read the version graph from the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolalavcsplugin-graph-read-the-version-graph-from-the-c-bindings)
-8. [`app`] [`RorolalaVCSPlugin`] [`layout`] Move a path through the C# Layout writer. [See details](dev/CHANGELOG-DETAILS.md#8-app-rorolalavcsplugin-layout-move-a-path-through-the-c-layout-writer)
-9. [`app`] [`RorolalaVCSPlugin`] [`overview`] Read the overview from the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#9-app-rorolalavcsplugin-overview-read-the-overview-from-the-c-bindings)
-10. [`app`] [`RorolalaVCSPlugin`] [`sync`] Run sync through the C# writer. [See details](dev/CHANGELOG-DETAILS.md#10-app-rorolalavcsplugin-sync-run-sync-through-the-c-writer)
-11. [`app`] [`RorolalaVCSPlugin`] [`tree`] Read a tree from the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#11-app-rorolalavcsplugin-tree-read-a-tree-from-the-c-bindings)
-12. [`app`] [`TerminalPlugin`] Run the terminal's pty through the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#12-app-terminalplugin-run-the-terminals-pty-through-the-c-bindings)
-13. [`librorolala`] Resolve accounts and Vaults from one implementation. [See details](dev/CHANGELOG-DETAILS.md#13-librorolala-resolve-accounts-and-vaults-from-one-implementation)
+4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Stop drawing a word over an empty folder. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-file-system-stop-drawing-a-word-over-an-empty-folder)
+5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw the folder tree as a list of places. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-file-system-tree-draw-the-folder-tree-as-a-list-of-places)
+6. [`app`] [`RorolalaDesktop`] [`theme`] Draw a scrollbar as a quiet pill over the content. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-theme-draw-a-scrollbar-as-a-quiet-pill-over-the-content)
+7. [`app`] [`RorolalaVCSPlugin`] Bring and own entries through the C# writers. [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolalavcsplugin-bring-and-own-entries-through-the-c-writers)
+8. [`app`] [`RorolalaVCSPlugin`] Read the ignore rules, the Workspace and the account from the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#8-app-rorolalavcsplugin-read-the-ignore-rules-the-workspace-and-the-account-from-the-c-bindings)
+9. [`app`] [`RorolalaVCSPlugin`] Run track, align and retrack through the C# writers. [See details](dev/CHANGELOG-DETAILS.md#9-app-rorolalavcsplugin-run-track-align-and-retrack-through-the-c-writers)
+10. [`app`] [`RorolalaVCSPlugin`] [`graph`] Read the version graph from the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#10-app-rorolalavcsplugin-graph-read-the-version-graph-from-the-c-bindings)
+11. [`app`] [`RorolalaVCSPlugin`] [`layout`] Move a path through the C# Layout writer. [See details](dev/CHANGELOG-DETAILS.md#11-app-rorolalavcsplugin-layout-move-a-path-through-the-c-layout-writer)
+12. [`app`] [`RorolalaVCSPlugin`] [`overview`] Read the overview from the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#12-app-rorolalavcsplugin-overview-read-the-overview-from-the-c-bindings)
+13. [`app`] [`RorolalaVCSPlugin`] [`sync`] Run sync through the C# writer. [See details](dev/CHANGELOG-DETAILS.md#13-app-rorolalavcsplugin-sync-run-sync-through-the-c-writer)
+14. [`app`] [`RorolalaVCSPlugin`] [`tree`] Read a tree from the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#14-app-rorolalavcsplugin-tree-read-a-tree-from-the-c-bindings)
+15. [`app`] [`TerminalPlugin`] Run the terminal's pty through the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#15-app-terminalplugin-run-the-terminals-pty-through-the-c-bindings)
+16. [`librorolala`] Resolve accounts and Vaults from one implementation. [See details](dev/CHANGELOG-DETAILS.md#16-librorolala-resolve-accounts-and-vaults-from-one-implementation)
 
 # 0.3.0 (2026-11-17)
 

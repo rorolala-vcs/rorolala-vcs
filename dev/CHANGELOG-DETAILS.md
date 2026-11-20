@@ -18,13 +18,36 @@ A dock's header strip is one control the plugin draws, and the region that showe
 
 `RolaAccounts.Locate(null, rule)` and `RolaMembers.Locate(null, rule)` passed a zero Vault pointer to a native export that requires one, which panicked inside the library. The two now call `rola_account_locate_local` and `rola_member_locate_local`, the same search with the Vault's root left out, so a run with no Vault in scope lists the Workspace's and the user's keys instead of crashing.
 
+## Optimized
+
+### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event
+
+The File System plugin's directory dock and folder tree hand what a change asks for to one queue,
+`Frame`, which runs it once at the end of the turn. Several events raised by one step, one read or
+one touch now cost one layout and one draw rather than one each, and the same action asked for twice
+in a turn runs once. The flicker a dock showed when it opened, stepped into another directory or read
+itself again is gone: a dock that enters the window draws only what its constructor has not drawn, a
+step points the list or the grid it already has at the new listing instead of putting another control
+in its place, and a listing or a tree read again puts the reader back at the height they had scrolled
+to. What an eye, a hide rule or a badge strip says is redrawn only when the answer changed.
+
+The navigation bar asks for one toolbar update per turn as well.
+
 ## Feature
 
 ### 1. [`app`] [`rola`] Stop a running write with Ctrl+C
 
 `rola bring`, `rola track`, `rola align`, `rola retrack`, `rola hold` and `rola giveup` stop when Ctrl+C is pressed. The signal only sets a flag, so the step in hand finishes, the write returns after it, and what was already written stays: the caller reads where the run stopped instead of assuming nothing happened. A handler that cannot be installed leaves the run uncancellable rather than failing the command.
 
-### 2. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost
+### 2. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge
+
+Dragging a dock near the outer edge of the pane now offers that side of the whole arrangement rather
+than the side of the group under the pointer. A drop there wraps the entire layout tree in a new group
+on that side, so a dock reaches the edge of the window however the tree happens to be arranged. The
+offer appears only as the pointer comes near the edge, and the points a group shows inside the pane
+are as they were.
+
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost
 
 The File System plugin keeps a catalogue of virtual entries: a path that is not on disk but is shown
 in its directory, in the list, the grid and the folder tree. A pending entry is drawn faded under an
@@ -38,23 +61,41 @@ with the proportion the run's progress capsule shows while it carries content, a
 every path `layout tree-diff` reports as lost and on every unstaged deletion inside a rola-tree. A
 reading keeps them in step: a file that comes back, or a bring that finishes, puts its row away.
 
-### 3. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Type a name in a bubble under its row
+
+Renaming a row in a directory listing or in the folder tree opens a field in a bubble under the name
+rather than a box standing in the name's place. The row is not rebuilt for the edit, so the name
+keeps the place the layout gave it, and the listing is not read again just to put the name back.
+Enter takes the name, while Escape or a press anywhere outside the bubble leaves it as it was; before,
+a field that lost the keyboard took what it held.
+
+At most one bubble is on screen, and it holds the keyboard, so the dock's shortcuts wait while a name
+is being typed.
+
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner
+
+The Version Graph's corner holds a second button under the hover switch: the show-all button clears
+the chosen file and draws the whole work again. It gives the same answer as a press on empty drawing,
+for a reader who wants every lane back without finding a patch of ground to click, and a tooltip
+names it.
+
+### 6. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala
 
 The write workflows behind `rola layout path` and `rola layout entry` now live in `librorolala::write`: storage puts and extracts, Layout batches, path bind, unbind, move and switch, entry write, remove, owner changes, description changes, preference changes and version changes, the tree cache rebuild, VCS index object writes, file version writes, single file tracking, single path retracking and alignment in a Workspace or a Vault, content fetching, and the sync plan and its carry, the collecting planning and sweep, the checkout cache writes, restores and forgets, and store and index repacking. The tree's own writes live there too: `tree init`, `tree add`, `tree rm`, `tree reset` and `tree write-desc`. The command line and the C ABI call the same functions, so their order, their checks and their failures cannot drift.
 
 The five whole workflows are there as well: `write::ownership` plans and applies a hold or a giveup, `write::bring` resolves references, brings entries in and merges a variant, `write::track` plans a recording and applies the messages in one batch, `write::align` runs every alignment mode, and `write::retrack` moves a recording. A shared request layer resolves the Workspace, the account, the Vault name and address, and the candidate Vaults from values rather than from a command's resources. The C ABI exports the one-shot flows as JSON requests and answers: `rola_write_bring` for both the bring of entries and the variant merge, `rola_write_retrack`, `rola_write_align` for the whole workflow with the single-entry form renamed `rola_write_align_entry`, `rola_write_ownership_plan`, `rola_write_ownership_apply`, `rola_write_track_plan` and `rola_write_track_apply`, each taking a `RolaProgress` and a `RolaCancellation`. The sync workflow is a request-shaped plan and apply as well: the plan fetches the Vault's Layout before reading it, a plan holding a blocked entry is refused before anything is written, and both check the caller's cancellation between entries.
 
-### 4. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry
+### 7. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry
 
 `rola_write_layout_move_fetched` and `rola_write_layout_remove_fetched_entry` move a path or remove an entry in the fetched copy of a Vault's own Layout, making the Vault's action first and writing the copy only to what it answered. `LayoutWriter` gained `MoveFetched`, `RemoveFetchedEntry` and `SwitchEntry`, the last carrying the entry's preference along with its version, owner and description. The desktop's low-level Layout commands no longer start `rola`.
 
-### 5. [`modules`] [`rola-sharp`] Add the C# bindings
+### 8. [`modules`] [`rola-sharp`] Add the C# bindings
 
 `RolaSharp` is the C# bindings: a generated `RorolalaBinding`, the `Scope` family over users, daemons, Workspaces, Vaults, Layouts, stores, VCS indexes, statuses, trees, ownership, inverse indexes, version graphs, books and ignore rules, and the writers over storage, Layouts, the tree cache, VCS indexes, file versions, one file's tracking and one path's retracking, and store and index packing. The read side no longer writes the tree cache; the write side calls the same `librorolala` workflows as the command line. Workspace and Vault scopes can be opened from any nested directory. The tree scope answers a tree's mark as well as its status: the Layout entry id, whether a description is staged and what it says. The user scope reads the userdata name the assembly was built for, which is `release` unless the build names another, and takes a name explicitly when a caller wants one; `Home` is gone, because the name rather than the user's home is what it reads.
 
 The writers over the whole workflows are there too: `Bring`, `BringVariant`, `Retrack`, `Align`, `PlanOwnership`, `ApplyOwnership`, `PlanTrack` and `Track`. Each takes a request record and answers a result record, the plan a track asks for is the exact text the native side answered with, and the single-entry alignment is now `AlignEntry`. The sync writer takes a `SyncRequest`, the plan it was handed and a `Progress`, so what a panel previewed is what it applies. An ownership plan can be handed back to `ApplyOwnership`, and every write failure has its own kind, tree and missing Vault included.
 
-### 6. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores
+### 9. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores
 
 The store a Workspace, a Vault or a `git-rola` project writes content to is a set of stores rather
 than one directory. `workspace.toml` takes `[default] storages`, `vault.toml` takes
@@ -99,43 +140,69 @@ not migrated.
 
 `rola bring`, `rola track`, `rola align`, `rola retrack`, `rola hold` and `rola giveup` no longer keep their own workflow bodies. Each builds the library's request, calls the same function the C ABI calls, and keeps only the arguments, the completion, the editor, the words and the drawing. What a run prints and the exit code it ends with are unchanged, except that a variant merge no longer says what was fetched from the Vaults, since the library answers the merge without that report.
 
-### 4. [`app`] [`RorolalaVCSPlugin`] Bring and own entries through the C# writers
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Stop drawing a word over an empty folder
+
+The folder tree and a plain directory listing no longer draw a folder picture and a word over a place
+that holds nothing. The row the tree has is the answer, and the word sat over space that belongs to
+the tree. A logical listing, which lists what a provider answers at an address rather than what a
+directory holds, keeps its word, because there the empty answer is about the address.
+
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw the folder tree as a list of places
+
+A folder's step in the tree is now its name alone: the shared folder picture is gone, since the
+chevron already says which rows open. A file keeps its picture, and the picture stands where the name
+of the folder holding it begins rather than one indent further in, so a file reads as something
+inside the folder rather than as a step beside it. Badges stop six pixels before the row's right
+edge, the guides start half an indent from the pane's edge and reach the foot of each step, and the
+tree no longer scrolls sideways.
+
+The look gives a step the pane's whole width: the wash reaches both edges, its corners are square,
+the arrow has room on either side, and a step is two pixels taller.
+
+### 6. [`app`] [`RorolalaDesktop`] [`theme`] Draw a scrollbar as a quiet pill over the content
+
+Every scrolling pane in the Desktop now draws its scrollbars over the content rather than beside it,
+so a bar that appears or goes away does not narrow what is being read. The vertical bar has no arrow
+at either end and its thumb is a pill whatever its length. It is invisible until the pointer is in
+the pane, is drawn faintly then, and is drawn more strongly while the pointer is over the bar itself.
+
+### 7. [`app`] [`RorolalaVCSPlugin`] Bring and own entries through the C# writers
 
 The bring flow, the join path, the ownership menu and the ownership sources no longer start `rola`. Bring builds a `BringRequest`, the join a `BringVariantRequest`, and ownership plans with `PlanOwnership` before it applies with `ApplyOwnership`, keeping the per-path failures and the allow-partial behaviour. No desktop file references the V1 assembly any more; the layout path move and the Vault's own ownership doors stay on the command line.
 
-### 5. [`app`] [`RorolalaVCSPlugin`] Read the ignore rules, the Workspace and the account from the C# bindings
+### 8. [`app`] [`RorolalaVCSPlugin`] Read the ignore rules, the Workspace and the account from the C# bindings
 
 The ignore rules, the Workspace check and the account the work acts as now come from `RolaSharp`'s `IgnoreScope`, `WorkspaceScope` and `UserScope`. The V2 user scope gained the current account name, which the old user reader had and no V2 member answered. Listing order, i18n keys and the silence of a read that cannot be made are unchanged.
 
-### 6. [`app`] [`RorolalaVCSPlugin`] Run track, align and retrack through the C# writers
+### 9. [`app`] [`RorolalaVCSPlugin`] Run track, align and retrack through the C# writers
 
 The track, retrack and align commands no longer start `rola`. Track plans, keeps the subjects the plan answered and applies that same plan with the one message the panel holds; retrack and the align modes build their request and call the writer; the tree restore makes the tree-relative path absolute before it asks. A refusal whose category the desktop has no words for is shown as the writer's message. The command line remains only for the file removal an unmerge does before its align.
 
-### 7. [`app`] [`RorolalaVCSPlugin`] [`graph`] Read the version graph from the C# bindings
+### 10. [`app`] [`RorolalaVCSPlugin`] [`graph`] Read the version graph from the C# bindings
 
 The version graph's variant reading comes from `RolaSharp`'s `VariantGraphScope`, with the same records, the same silence when there is no graph, the same one warning for a read that fails otherwise, and the same drawing. V1's version graph type stays until a V2 consumer needs the fields it alone carries.
 
-### 8. [`app`] [`RorolalaVCSPlugin`] [`layout`] Move a path through the C# Layout writer
+### 11. [`app`] [`RorolalaVCSPlugin`] [`layout`] Move a path through the C# Layout writer
 
 A move in the Workspace's own Layout, and the bring's local move, no longer start `rola`: they open the Layout the panel holds and call `LayoutWriter.MovePath`. A move in a fetched Vault copy and the new-uuid fork stay on the command line, because the writer cannot write a fetched copy and its `ChangeUuid` is not the fork the command makes.
 
-### 9. [`app`] [`RorolalaVCSPlugin`] [`overview`] Read the overview from the C# bindings
+### 12. [`app`] [`RorolalaVCSPlugin`] [`overview`] Read the overview from the C# bindings
 
 The overview, status, standing, merge, upstream, lock and sync panels read through `RolaSharp`'s `StatusScope` and `OwnershipScope` instead of V1's `RolaStatus` and `RolaOwnership`. The fields, the i18n keys and the silence when there is no Workspace are unchanged; the graph and tree panels keep V1 until their own slices.
 
-### 10. [`app`] [`RorolalaVCSPlugin`] [`sync`] Run sync through the C# writer
+### 13. [`app`] [`RorolalaVCSPlugin`] [`sync`] Run sync through the C# writer
 
 The sync panel and the sync strip no longer start `rola`: they build a `SyncRequest`, plan with `PlanSync`, and apply the same plan with `Sync`, draining `Progress` on the dispatcher into the same records and bars. The scope dropdowns no longer show the `--no-index`, `--no-layout` and `--no-storage` flags, since the command no longer runs; their labels, checked state and effects are unchanged. The Vault Layout fetch that planning makes before the apply has no bar yet, because only the apply holds a progress handle.
 
-### 11. [`app`] [`RorolalaVCSPlugin`] [`tree`] Read a tree from the C# bindings
+### 14. [`app`] [`RorolalaVCSPlugin`] [`tree`] Read a tree from the C# bindings
 
 The tree panel, the tree reading and the graph bars that show a tree read through `RolaSharp`'s `TreeScope` and `TreeStatus`. The records, the silence when no tree is there and the i18n keys are unchanged; the graph records themselves stay on V1 until their own slice.
 
-### 12. [`app`] [`TerminalPlugin`] Run the terminal's pty through the C# bindings
+### 15. [`app`] [`TerminalPlugin`] Run the terminal's pty through the C# bindings
 
 The terminal view opens, reads, writes and resizes its pseudo-terminal through `RolaSharp`'s `Pty`. The argument encoding and the size clamp are the ones the old wrapper made, so the program started and the terminal's extent are the same. The plugin references V2 alone now that its only V1 use is gone.
 
-### 13. [`librorolala`] Resolve accounts and Vaults from one implementation
+### 16. [`librorolala`] Resolve accounts and Vaults from one implementation
 
 The account search and the Vault name and address rules are now `librorolala::keys` and `librorolala::remote`. The command line's key search and `ResCurrentRemoteVault` delegate to them, and the ABI request layer calls the same functions, so the scopes, the order, the shadowing and the failure wording have one place to be kept right.
 

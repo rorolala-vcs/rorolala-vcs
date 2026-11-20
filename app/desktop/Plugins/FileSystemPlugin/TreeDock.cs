@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -120,14 +121,21 @@ internal sealed class TreeControl : UserControl
 
         AttachedToVisualTree += (_, _) =>
         {
-            _browser.Changed += Update;
-            _browser.Reread += Again;
-            Draw();
+            _browser.Changed += UpdateOwed;
+            _browser.Reread += AgainOwed;
+
+            // The constructor has already built the tree once. Building it again on the way into the
+            // window would replace the rows the reader is about to see for the same rows, which is a
+            // whole tree laid out twice for one opening.
+            if (_content.Content is not TreeBrowser)
+            {
+                Draw();
+            }
         };
         DetachedFromVisualTree += (_, _) =>
         {
-            _browser.Changed -= Update;
-            _browser.Reread -= Again;
+            _browser.Changed -= UpdateOwed;
+            _browser.Reread -= AgainOwed;
         };
 
         // Taken on the way down, like the keys a listing answers: F5 is a key the dock answers wherever in it the
@@ -161,6 +169,12 @@ internal sealed class TreeControl : UserControl
 
         Draw();
     }
+
+    /// <summary>Says that what the tree is worth may have changed, once for the frame.</summary>
+    private void UpdateOwed() => Frame.Post(Update);
+
+    /// <summary>Says that the files behind the tree may have changed, once for the frame.</summary>
+    private void AgainOwed() => Frame.Post(Again);
 
     /// <summary>Roots the tree again when the base or the hiding is not what it was read against.</summary>
     private void Update()
@@ -296,6 +310,17 @@ internal sealed class TreeControl : UserControl
     {
         var was = _content.Content as TreeBrowser;
 
+        // The tree being replaced keeps the reader's height when it is the same base read under another
+        // answer: a rule, a hiding, a virtual entry. A tree rooted somewhere else starts at the top.
+        var keepScroll =
+            was is not null
+            && _drawn is { } kept
+            && string.Equals(kept.Base, _browser.BaseDir, StringComparison.Ordinal);
+        var offset =
+            keepScroll
+                ? was?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault()?.Offset ?? default
+                : default;
+
         // Whether the keyboard is inside the tree about to be replaced, for the reason a listing is asked about as
         // well: a view replaced from under the keyboard takes it away, and this dock answers its keys at the top of
         // itself, so a tree rebuilt while it had the keyboard would answer nothing afterwards.
@@ -309,6 +334,20 @@ internal sealed class TreeControl : UserControl
         tree.StepChanged += Stepped;
         _content.Content = tree;
         tree.Reopen(opened, was?.Chosen());
+
+        if (keepScroll)
+        {
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    if (tree.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } scroll)
+                    {
+                        scroll.Offset = offset;
+                    }
+                },
+                DispatcherPriority.Render
+            );
+        }
 
         if (seating)
         {
@@ -428,6 +467,10 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Every row's badge strip, so that what it holds can be asked for again.</summary>
     private readonly List<(string Path, StackPanel Strip)> _worn = [];
 
+    /// <summary>What each row's badge strip was filled with, so a repaint with the same answer changes nothing.</summary>
+    private readonly Dictionary<string, IReadOnlyList<EntryBadge>> _wornBadges =
+        new(StringComparer.Ordinal);
+
     /// <summary>What each row made is, so that a block does not have to ask the filesystem again.</summary>
     private readonly Dictionary<string, EntryKind> _kinds = new(StringComparer.Ordinal);
 
@@ -517,21 +560,18 @@ internal sealed class TreeBrowser : UserControl
     /// </remarks>
     private bool _refreshing;
 
-    /// <summary>
-    /// The box a step's name is being typed in, while one is, and nothing otherwise.
-    /// </summary>
+    /// <summary>The height to put back after a reread, while a restore is waiting.</summary>
+    private Vector? _scrollToKeep;
+
+    /// <summary>The bubble a step's name is being typed in, while one is, and nothing otherwise.</summary>
     /// <remarks>
-    /// Held rather than looked up, because whether a name is being edited is a state of the view: a box found
-    /// in the tree would be as likely to be the search field of something else, and the row it is in is what
-    /// has to be replaced when the editing ends.
+    /// The bubble stands under the name rather than in its place: the row is not rebuilt for an edit, and the
+    /// field is where the keyboard is, so the tree's keys wait while a name is being typed.
     /// </remarks>
-    private TextBox? _editor;
+    private RenameBubble? _bubble;
 
     /// <summary>Whether a step's name is being typed, which is when the tree's keys are the box's.</summary>
-    public bool Editing => _editor is not null;
-
-    /// <summary>The name the box was put in place of, so that cancelling puts it back.</summary>
-    private TextBlock? _label;
+    public bool Editing => _bubble is not null;
 
     /// <summary>
     /// How many turns a box is asked for before it is given up on.
@@ -574,7 +614,6 @@ internal sealed class TreeBrowser : UserControl
     /// base's own level is: a word added once and never taken away would outlive the empty base it was added for,
     /// and sit over a base that has since been given something.
     /// </remarks>
-    private readonly Control _empty;
 
     /// <summary>Makes the tree rooted at a directory.</summary>
     /// <param name="host">The host, for what a drop or a drag cannot do.</param>
@@ -599,7 +638,6 @@ internal sealed class TreeBrowser : UserControl
         _listing = listing;
         _root = root;
         _drops = new Drops(host, browser, Mark);
-        _empty = Empty();
 
         var tree = new TreeView
         {
@@ -608,6 +646,7 @@ internal sealed class TreeBrowser : UserControl
             ContextMenu = actions.Empty(this),
         };
         tree.Items.Add(Node(root));
+        ScrollViewer.SetHorizontalScrollBarVisibility(tree, ScrollBarVisibility.Disabled);
         _tree = tree;
 
         // A mark covers the step it is on and every step under it, and both a layout and a scroll move where
@@ -670,33 +709,10 @@ internal sealed class TreeBrowser : UserControl
         var grid = new Grid();
         grid.Children.Add(tree);
         grid.Children.Add(_blocks);
-        grid.Children.Add(_empty);
         grid.Children.Add(over);
-
-        // The base is a row of the tree whether or not it holds anything under it, so a base that holds
-        // nothing still shows that one row; the word says so rather than leaving the pane reading as a
-        // tree that has not finished loading. A root whose rules are not read yet holds the mark that says
-        // it may be opened rather than what it holds, so what it holds is read here for the word; a tree
-        // whose rules are read has had the word settled with the root's row (see `Settle`).
-        if (!HideRegistry.Ready(root))
-        {
-            Emptiness(!HoldsAny(root));
-        }
 
         Content = grid;
     }
-
-    /// <summary>
-    /// Says whether the base holds nothing under it, which is what the word drawn over the tree is for.
-    /// </summary>
-    /// <remarks>
-    /// Said again whenever the base's own level is read, the tree read again after the files changed, and a
-    /// reading of the root that lands, because what the base holds is not what it held when the tree was made:
-    /// a base that was empty when it was first read is a base that may have been given something since, and a
-    /// word kept from that first reading is a word about a tree that is no longer there.
-    /// </remarks>
-    /// <param name="empty">Whether the base holds nothing under it.</param>
-    private void Emptiness(bool empty) => _empty.IsVisible = empty;
 
     /// <summary>Says whether a drag may land here, and lights the step it would land in.</summary>
     /// <param name="sender">The tree.</param>
@@ -971,7 +987,7 @@ internal sealed class TreeBrowser : UserControl
             {
                 // A box already open is a box this is not to take the place of: the user may have begun typing
                 // in it, and the step a folder was made in is not always the step that was asked about.
-                if (_editor is not null)
+                if (_bubble is not null)
                 {
                     return;
                 }
@@ -1118,10 +1134,13 @@ internal sealed class TreeBrowser : UserControl
     {
         var opened = Opened();
         var chosen = Chosen();
+        var scroll = _tree.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+
+        _scrollToKeep ??= scroll?.Offset;
 
         // A box a name is being typed in does not outlive the row it was put in, and the row is about to be read
         // again: the name is given up rather than left half-typed in a row nothing holds.
-        if (_editor is not null)
+        if (_bubble is not null)
         {
             Stop();
         }
@@ -1160,6 +1179,24 @@ internal sealed class TreeBrowser : UserControl
         if (chosen.Count > 0)
         {
             ChooseOnceDrawn(chosen);
+        }
+
+        // The same tree read again is the same rows in the same places: the reader stays at the height
+        // they had scrolled to, after the rows and the choice have been put back.
+        if (_scrollToKeep is { } offset)
+        {
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    if (_tree.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } now)
+                    {
+                        now.Offset = offset;
+                    }
+
+                    _scrollToKeep = null;
+                },
+                DispatcherPriority.Render
+            );
         }
     }
 
@@ -1264,14 +1301,11 @@ internal sealed class TreeBrowser : UserControl
 
         _blocksPosted = true;
 
-        Dispatcher.UIThread.Post(
-            () =>
-            {
-                _blocksPosted = false;
-                PaintBlocks();
-            },
-            DispatcherPriority.Loaded
-        );
+        Frame.Post(() =>
+        {
+            _blocksPosted = false;
+            PaintBlocks();
+        });
     }
 
     /// <summary>
@@ -1454,7 +1488,11 @@ internal sealed class TreeBrowser : UserControl
             line,
             Math.Max(
                 0,
-                block.Rect.X + (block.Level * Indent) - (Indent / 2) - (BandWidth / 2)
+                block.Rect.X
+                    + Lead
+                    + (block.Level * Indent)
+                    - (Indent / 2)
+                    - (BandWidth / 2)
             )
         );
         Canvas.SetTop(line, block.Rect.Y);
@@ -1770,7 +1808,7 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="e">The key.</param>
     private void ChosenAll(object? sender, KeyEventArgs e)
     {
-        if (_editor is not null)
+        if (_bubble is not null)
         {
             return;
         }
@@ -1954,11 +1992,16 @@ internal sealed class TreeBrowser : UserControl
         );
     }
 
-    /// <summary>Puts the name of a step into a box, where its row and its label are already drawn.</summary>
+    /// <summary>Puts a bubble under the name of a step, where its row and its label are already drawn.</summary>
     /// <param name="entry">The directory whose name is being edited.</param>
-    /// <returns>Whether the box was made.</returns>
+    /// <returns>Whether the bubble was made.</returns>
     private bool Beginning(Entry entry)
     {
+        if (_bubble is not null)
+        {
+            return true;
+        }
+
         var label = _rows
             .Where(row => string.Equals(row.Path, entry.Path, StringComparison.Ordinal))
             .Select(row => row.Row)
@@ -1966,102 +2009,58 @@ internal sealed class TreeBrowser : UserControl
             .OfType<TextBlock>()
             .FirstOrDefault(text => text.Classes.Contains(EntryName));
 
-        if (label?.Parent is not Panel parent)
+        if (label is null)
         {
             return false;
         }
 
         var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(entry.Path)) ?? string.Empty;
-        var box = new TextBox
-        {
-            Text = name,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
 
-        // The box takes the place the name had, in the panel the name sat in, rather than the row being built
-        // again around it: the row is the one the tree holds, and swapping it would take the step with it.
-        var at = parent.Children.IndexOf(label);
-        parent.Children[at] = box;
-
-        _editor = box;
-        _label = label;
         _actions.Renaming = entry;
-
-        // Taken on the way down, so that Enter and Escape are read before the box's own reading of them: a
-        // field that took Enter for itself would be a name nobody could finish.
-        box.AddHandler(KeyDownEvent, (_, args) => Edited(args), RoutingStrategies.Tunnel);
-        box.LostFocus += (_, _) => Committed();
-
-        box.Focus();
-        box.SelectionStart = 0;
-        box.SelectionEnd = Names.Chosen(entry.Kind, name);
+        _bubble = new RenameBubble(
+            label,
+            name,
+            Names.Chosen(entry.Kind, name),
+            Committed,
+            Cancelled
+        );
 
         return true;
     }
 
-    /// <summary>Reads a key in the box a name is being typed in.</summary>
-    /// <param name="e">The key.</param>
-    private void Edited(KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter)
-        {
-            e.Handled = true;
-            Committed();
-
-            return;
-        }
-
-        if (e.Key == Key.Escape)
-        {
-            e.Handled = true;
-            Cancelled();
-        }
-    }
-
     /// <summary>Takes the name that was typed as the step's new name.</summary>
     /// <remarks>
-    /// The keyboard goes back to the tree with it, as it does in a listing: the box was where it was, and the
-    /// keys a dock answers are answered from the rows, so a keyboard left in a box that is gone is a dock whose
-    /// keys do nothing.
+    /// The keyboard goes back to the tree with it, as it does in a listing: the field was where it was, and
+    /// the keys a dock answers are answered from the rows, so a keyboard left in a field that is gone is a
+    /// dock whose keys do nothing.
     /// </remarks>
-    private void Committed()
+    /// <param name="name">The name that was typed.</param>
+    private void Committed(string name)
     {
-        if (_editor is not { } box || _actions.Renaming is not { } entry)
+        if (_actions.Renaming is not { } entry)
         {
+            Stop();
+
             return;
         }
 
-        var name = box.Text ?? string.Empty;
         Stop();
-
         _actions.Rename(entry, name);
         Listen();
     }
 
-    /// <summary>Leaves the name as it was.</summary>
-    /// <remarks>
-    /// The label the box was put in place of is put back, because taking it out is what made room for the box:
-    /// leaving the box there with the old name in it would leave a field where a name is drawn.
-    /// </remarks>
+    /// <summary>Leaves the name as it was and closes the bubble.</summary>
     private void Cancelled()
     {
-        if (_editor is { } box)
-        {
-            if (box.Parent is Panel panel && _label is { } label && panel.Children.IndexOf(box) is var at && at >= 0)
-            {
-                panel.Children[at] = label;
-            }
-
-            Stop();
-            Listen();
-        }
+        Stop();
+        Listen();
     }
 
-    /// <summary>Takes the box out of the row and forgets what was being renamed.</summary>
+    /// <summary>Takes the bubble down and forgets what was being renamed.</summary>
     private void Stop()
     {
-        _editor = null;
-        _label = null;
+        _bubble?.Dismiss();
+        _bubble = null;
         _actions.Renaming = null;
     }
 
@@ -2112,38 +2111,6 @@ internal sealed class TreeBrowser : UserControl
             Fade(row, path);
         }
     }
-
-    /// <summary>
-    /// What the tree says where the base holds nothing under it.
-    /// </summary>
-    /// <remarks>
-    /// It takes no pointer of its own: the space it sits over is still the tree's, and a word that ate the
-    /// right-click there would take the tree's own menu with it.
-    /// </remarks>
-    private static Control Empty() =>
-        new StackPanel
-        {
-            Spacing = 8,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = "\U0001F5C2",
-                    FontSize = 24,
-                    Classes = { "faint" },
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                },
-                new TextBlock
-                {
-                    Text = RolaI18N.Get("rorolala_file_system.empty"),
-                    Classes = { "empty" },
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                },
-            },
-        };
 
     /// <summary>One directory as a step of the tree, reading its children when first opened.</summary>
     /// <remarks>
@@ -2263,13 +2230,6 @@ internal sealed class TreeBrowser : UserControl
         else
         {
             item.Items.Clear();
-        }
-
-        // The word over the tree is about the base's own level, and this is where what that level holds is said
-        // when the tree is made: a root that holds nothing is one whose one row is all there is.
-        if (string.Equals(path, _root, StringComparison.Ordinal))
-        {
-            Emptiness(!holds);
         }
 
         // Faded here rather than where the row is made, because what a row is faded by is the rules, and the
@@ -2434,12 +2394,20 @@ internal sealed class TreeBrowser : UserControl
         // on the picture rather than an answer about the entry.
         var badges = Worn(entry);
         badges.Name = "entry-badges";
+        badges.Margin = new Thickness(0, 0, 6, 0);
 
         _worn.RemoveAll(one => string.Equals(one.Path, path, StringComparison.Ordinal));
+        _wornBadges.Remove(path);
         _worn.Add((path, badges));
 
-        var icon = _listing.Icon(entry, Icons.Row);
-        icon.Name = "entry-icon";
+        // A directory is the thing a tree is made of, so its step is its name: a folder picture beside every
+        // step would be the same answer on every row, and the chevron already says which rows open.
+        var icon = entry.Kind is EntryKind.Directory ? null : _listing.Icon(entry, Icons.Row);
+
+        if (icon is not null)
+        {
+            icon.Name = "entry-icon";
+        }
 
         var label = new TextBlock
         {
@@ -2459,23 +2427,42 @@ internal sealed class TreeBrowser : UserControl
             label[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(ink);
         }
 
-        // Three columns rather than a dock: the name column is the one that gives way, and a TextBlock in a
-        // DockPanel's last-child fill can draw past the width it was arranged in and cover the badges. The icon
-        // and the badges are measured before the name, so the name is trimmed rather than the badges clipped.
+        // The name column is the one that gives way, and a TextBlock in a DockPanel's last-child fill can
+        // draw past the width it was arranged in and cover the badges. The badges are measured before the
+        // name, so the name is trimmed rather than the strip clipped or pushed out of the panel.
         var panel = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            ColumnDefinitions =
+                icon is null ? new ColumnDefinitions("*,Auto") : new ColumnDefinitions("Auto,*,Auto"),
             ColumnSpacing = 8,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        Grid.SetColumn(icon, 0);
-        Grid.SetColumn(label, 1);
-        Grid.SetColumn(badges, 2);
-        panel.Children.Add(icon);
-        panel.Children.Add(label);
-        panel.Children.Add(badges);
+        // A file has no arrow of its own, so its picture stands where the name of the directory that
+        // holds it does rather than one indent step further in. The depth is still read from the rows
+        // above, and a directory's own row keeps its arrow and its name where they were.
+        if (icon is not null)
+        {
+            panel.Margin = new Thickness(-Indent, 0, 0, 0);
+        }
+
+        if (icon is null)
+        {
+            Grid.SetColumn(label, 0);
+            Grid.SetColumn(badges, 1);
+            panel.Children.Add(label);
+            panel.Children.Add(badges);
+        }
+        else
+        {
+            Grid.SetColumn(icon, 0);
+            Grid.SetColumn(label, 1);
+            Grid.SetColumn(badges, 2);
+            panel.Children.Add(icon);
+            panel.Children.Add(label);
+            panel.Children.Add(badges);
+        }
 
         var row = new Border
         {
@@ -2598,9 +2585,20 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="entry">The entry the row is for.</param>
     private void Wear(StackPanel strip, Entry entry)
     {
+        var badges = _listing.Badges(entry);
+
+        // A strip already saying this is left alone. The call comes on every change the browser reports,
+        // including one that changed another directory, and clearing and rebuilding every row's strip
+        // for an answer that did not change is a relayout the eye reads as a flicker.
+        if (_wornBadges.TryGetValue(entry.Path, out var was) && was.SequenceEqual(badges))
+        {
+            return;
+        }
+
+        _wornBadges[entry.Path] = badges;
         strip.Children.Clear();
 
-        foreach (var badge in _listing.Badges(entry))
+        foreach (var badge in badges)
         {
             strip.Children.Add(Icons.WornAt(badge, Icons.Badge));
         }
@@ -2658,6 +2656,13 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>How far one step of the tree is indented, which the template's own margin uses too.</summary>
     private const double Indent = 16.0;
 
+    /// <summary>How far the first guide line stands from the pane's left edge.</summary>
+    /// <remarks>
+    /// Half an indent: the first line is then as far from the edge as one line is from the next, so
+    /// the depth reads as one rhythm rather than as a line that happens to start close to the edge.
+    /// </remarks>
+    private const double Lead = 8.0;
+
     /// <summary>How wide the coloured line beside a marked step is.</summary>
     private const double BandWidth = 4.0;
 
@@ -2691,8 +2696,15 @@ internal sealed class TreeBrowser : UserControl
     /// <param name="item">The row.</param>
     private void Guides(TreeViewItem item)
     {
-        item.TemplateApplied += (_, _) => Dispatcher.UIThread.Post(() => DrawGuides(item));
-        item.AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => DrawGuides(item));
+        // The template's first column is sixteen pixels, which is the arrow's picture and one of the
+        // two margins around it. The row asks for the wider column after the template is applied, so
+        // the six pixels on either side of the arrow are real room rather than an overhang.
+        // The row's own shape decides where its chevron is, so it is settled while the template is
+        // applied rather than after the row is laid out: a margin settled later moves the control out
+        // from under a press already made. The guide layer it adds takes no width, so doing it here
+        // cannot push the row it is in.
+        item.TemplateApplied += (_, _) => Shape(item);
+        item.AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => Shape(item));
 
         // The level is worked out from where the row stands in the tree, which can happen before or after
         // the template is applied. Asking again when it changes is what makes the guides appear whichever
@@ -2704,6 +2716,33 @@ internal sealed class TreeBrowser : UserControl
                 Dispatcher.UIThread.Post(() => DrawGuides(item));
             }
         };
+    }
+
+    /// <summary>Widens the arrow's column and draws the row's guides once the template is there.</summary>
+    /// <param name="item">The row.</param>
+    private void Shape(TreeViewItem item)
+    {
+        if (
+            item.GetVisualDescendants()
+                .OfType<Grid>()
+                .FirstOrDefault(one => one.Name == "PART_Header") is { } header
+            && header.ColumnDefinitions.Count > 0
+            && header.ColumnDefinitions[0].Width.Value < 34
+        )
+        {
+            header.ColumnDefinitions = new ColumnDefinitions("34,*");
+        }
+
+        if (
+            item.GetVisualDescendants()
+                .OfType<ToggleButton>()
+                .FirstOrDefault(one => one.Name == "PART_ExpandCollapseChevron") is { } chevron
+        )
+        {
+            chevron.Margin = new Thickness(14, 0, 6, 0);
+        }
+
+        DrawGuides(item);
     }
 
     /// <summary>Puts the guide lines in a row's template once it has one.</summary>
@@ -2738,8 +2777,16 @@ internal sealed class TreeBrowser : UserControl
             .Children.OfType<Panel>()
             .FirstOrDefault(one => one.Name == GuideName);
 
+        // The line stands in the header, which is shorter than the step: the room below the line is
+        // the step's, and a line that stopped at the header would leave a gap at every row. The
+        // overhang is read from the two heights rather than written as a number, so a row that grows
+        // again takes its lines with it.
+        var overhang = Math.Max(0, item.Bounds.Height - border.Bounds.Height);
+        var margin = new Thickness((-depth * Indent) + Lead, 0, 0, -overhang);
+
         if (existing is not null)
         {
+            existing.Margin = margin;
             WearGuides(existing, depth, path);
 
             return;
@@ -2748,8 +2795,12 @@ internal sealed class TreeBrowser : UserControl
         var guides = new Panel
         {
             Name = GuideName,
-            Width = depth * Indent,
-            Margin = new Thickness(-depth * Indent, 0, 0, 0),
+
+            // No width of its own: the lines are drawn past the panel's edge, and a panel that asked
+            // for the indent's width would be a child added to the row after the row was measured,
+            // which is the step the eye sees as the whole tree being pushed aside.
+            Width = 0,
+            Margin = margin,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Stretch,
             IsHitTestVisible = false,

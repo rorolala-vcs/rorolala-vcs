@@ -206,6 +206,9 @@ internal sealed class DockArea : UserControl
     /// </remarks>
     private const double DockPointEdge = 120;
 
+    /// <summary>How near the pane's own edge a drag has to be to dock against the whole window edge.</summary>
+    private const double EdgeReach = 28;
+
     /// <summary>How large a command's picture is in a strip, which is the size of the words beside it.</summary>
     private const double CommandMark = 14.0;
 
@@ -731,7 +734,7 @@ internal sealed class DockArea : UserControl
     /// </remarks>
     /// <param name="Leaf">The rectangle the group is drawn in, or the whole area when there is no group.</param>
     /// <param name="Group">The group under the pointer, or nothing when there is none to be over.</param>
-    private readonly record struct Approach(Rect Leaf, LayoutGroup? Group);
+    private readonly record struct Approach(Rect Leaf, LayoutGroup? Group, DockSide? Edge = null);
 
     /// <summary>One point of the cluster: what it would do, and the outline that hit tests the pointer.</summary>
     /// <param name="Side">What a drop on it would do.</param>
@@ -2209,6 +2212,14 @@ internal sealed class DockArea : UserControl
             return null;
         }
 
+        // The pane's own edge means the outermost side of the arrangement, not the side of the group
+        // under the pointer: a drop there wraps the whole tree, which is what makes a dock reach the
+        // edge of the window however the tree happens to be arranged.
+        if (EdgeAt(at) is { } edge)
+        {
+            return new Approach(new Rect(0, 0, Bounds.Width, Bounds.Height), null, edge);
+        }
+
         if (Layout.Root is not null)
         {
             foreach (var group in DockTree.Groups(Layout))
@@ -2227,6 +2238,29 @@ internal sealed class DockArea : UserControl
         return new Approach(new Rect(0, 0, Bounds.Width, Bounds.Height), null);
     }
 
+    /// <summary>The pane edge a point is near, or nothing when it is not near one.</summary>
+    /// <param name="at">The point, in the area's coordinates.</param>
+    /// <returns>The edge, or nothing.</returns>
+    private DockSide? EdgeAt(Point at)
+    {
+        if (at.X <= EdgeReach)
+        {
+            return DockSide.Left;
+        }
+
+        if (at.X >= Bounds.Width - EdgeReach)
+        {
+            return DockSide.Right;
+        }
+
+        if (at.Y <= EdgeReach)
+        {
+            return DockSide.Top;
+        }
+
+        return at.Y >= Bounds.Height - EdgeReach ? DockSide.Bottom : null;
+    }
+
     /// <summary>Which of a group's points a point in it is over, or nothing when it is over none.</summary>
     /// <remarks>
     /// The approach of a group is the whole of it, so most of a group is near it without being on an answer: the
@@ -2238,6 +2272,11 @@ internal sealed class DockArea : UserControl
     /// <returns>What a drop there would do, or nothing when it is not on a point.</returns>
     private static DockSide? SideAt(Approach approach, Point at)
     {
+        if (approach.Edge is { } edge)
+        {
+            return edge;
+        }
+
         if (approach.Group is null)
         {
             return DockSide.Center;
@@ -2260,6 +2299,11 @@ internal sealed class DockArea : UserControl
     /// <returns>What to land.</returns>
     private DockTarget TargetOf(Approach approach, DockSide side)
     {
+        if (approach.Edge is not null)
+        {
+            return new DockTarget("", side, 0, Whole: true);
+        }
+
         if (approach.Group is { } group)
         {
             return new DockTarget(group.Id, side, group.Docks.Count);
@@ -2308,6 +2352,7 @@ internal sealed class DockArea : UserControl
         if (
             _approaching is not { } drawn
             || drawn.Leaf != here.Leaf
+            || drawn.Edge != here.Edge
             || !ReferenceEquals(drawn.Group, here.Group)
         )
         {
@@ -2337,7 +2382,13 @@ internal sealed class DockArea : UserControl
         _points.Clear();
         _shapes.Clear();
 
-        foreach (var shape in approach.Group is null ? Whole(approach.Leaf) : Shapes(approach.Leaf))
+        IReadOnlyList<DockPointShape> shapes = approach.Edge is { } edge
+            ? [.. Shapes(approach.Leaf).Where(shape => shape.Side == edge)]
+            : approach.Group is null
+                ? Whole(approach.Leaf)
+                : Shapes(approach.Leaf);
+
+        foreach (var shape in shapes)
         {
             var polygon = new Polygon { Points = [.. shape.Outline] };
 
