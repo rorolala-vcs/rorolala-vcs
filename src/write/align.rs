@@ -1903,7 +1903,11 @@ fn assert_move(
         path: path.as_str().to_owned(),
     };
 
-    if !diff.lost.contains(path) {
+    // A path the reading has already paired with the target is one it found moved, and asserting
+    // that move is still what the run was asked to do. It is no longer in `lost`, since a move is
+    // not also a loss, but the Layout still names it and the tree still does not hold it.
+    let found = diff.renamed.iter().any(|pair| pair.from == *path);
+    if !diff.lost.contains(path) && !found {
         return Err(not_lost().into());
     }
 
@@ -1960,7 +1964,12 @@ fn assert_move(
         .into());
     }
 
-    let entry = entry_of(&disk).map_err(internal)?;
+    // The content written down is what the target holds now, which is what pairs the two paths
+    // next time. What the Layout agrees with is still the version it names at the lost path: an
+    // asserted move of a file that was edited as well has to leave that change to be reported,
+    // and a target written down as agreeing with itself would be a move that changed nothing.
+    let agreed = layout.entry(id).map(|data| data.version());
+    let entry = entry_of(&disk).map_err(internal)?.with_agreed(agreed);
 
     let cache_file = cache_path(root, layout);
     let mut cache = Cache::read(&cache_file);
@@ -2393,6 +2402,7 @@ mod tests {
     use rorolala_vault::Vault;
     use rorolala_vcs::VCSIndex;
     use rorolala_workspace::Workspace;
+    use rorolala_workspace_analyze::tree_diff;
 
     use super::{
         AlignMode, AlignRequest, Carry, Did, Item, Messages, Mode, MoveKind, Options, Outcome,
@@ -2665,6 +2675,73 @@ mod tests {
             Outcome::Paths(items) => assert_eq!(items[0].did, Did::Deleted),
             other => panic!("{other:?}"),
         }
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Asserting a move of a file that was edited as well leaves the change to be reported.
+    ///
+    /// What an assertion writes down is what the target holds now, so the next reading pairs the two
+    /// paths. What the lost path was known to agree with is the version the Layout names, and it has to
+    /// be carried over: a path written down as agreeing with what it holds now is a move that changed
+    /// nothing, and a move the likeness found is one that changed something by definition.
+    #[test]
+    fn an_asserted_move_of_an_edited_file_is_still_modified() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-align-assert-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+
+        let prose = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n";
+        fs::write(dir.join("a.txt"), prose.as_bytes()).unwrap();
+        track_file(
+            &workspace,
+            &dir,
+            "a.txt",
+            "alice",
+            "first",
+            TrackOptions::default(),
+        )
+        .unwrap();
+
+        // Moved, and edited as well: alike enough to be the same file, not the same bytes.
+        fs::rename(dir.join("a.txt"), dir.join("b.txt")).unwrap();
+        fs::write(dir.join("b.txt"), format!("{prose}nine\n").as_bytes()).unwrap();
+
+        let request = AlignRequest {
+            common: Common {
+                workspace: dir.clone(),
+                ..Common::default()
+            },
+            path: "a.txt".to_owned(),
+            mode: AlignMode::MoveTo {
+                path: "b.txt".to_owned(),
+            },
+            completely: false,
+            include_ignored: false,
+        };
+
+        match request
+            .run(&Progress::silent(), &Cancellation::new())
+            .expect("the move is asserted")
+        {
+            Outcome::Paths(items) => assert_eq!(items[0].did, Did::Asserted),
+            other => panic!("{other:?}"),
+        }
+
+        let layout = workspace.layout().unwrap();
+        let diff =
+            tree_diff(&layout, &workspace, 0.6, &IgnoreRuleSet::empty()).expect("the tree reads");
+
+        assert_eq!(diff.renamed.len(), 1, "{diff:?}");
+        assert_eq!(diff.renamed[0].from.as_str(), "a.txt");
+        assert_eq!(diff.renamed[0].to.as_str(), "b.txt");
+        assert!(
+            diff.modified.iter().any(|path| path.as_str() == "b.txt"),
+            "{diff:?}"
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
