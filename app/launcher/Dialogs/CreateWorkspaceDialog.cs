@@ -1,8 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
 using RorolalaDesktop.I18n;
 using RorolalaLauncher.Controls;
 using RorolalaLauncher.Rola;
@@ -11,19 +12,14 @@ using RorolalaLauncher.Theming;
 namespace RorolalaLauncher.Dialogs;
 
 /// <summary>
-/// Creates a Workspace: an address to work against, a directory to work in, and a check that the first can
-/// be reached before the second is made.
+/// Creates a Workspace: the Vault it is bound to, and the directory it is made in.
 /// </summary>
 /// <remarks>
-/// What is checked here is checked twice over, because a creation is not something to find out about
-/// afterwards: the address is read as an address as it is typed, the directory is read as one that may be
-/// created as it is typed, and the address is reached once, by a handshake spoken as the account in use,
-/// before the button that makes anything is allowed to be pressed. Editing the address takes the check back,
-/// since a check is about the words that were checked.
-/// <para>
-/// A creation that fails does not close the window: what a person typed is theirs, and losing it over a
-/// daemon that was not up would be losing more than the failure is worth.
-/// </para>
+/// The address is chosen from the dock rather than typed: an address is not something a person should have
+/// to remember when the launcher already knows every one it can reach. What the picker says about
+/// reachability is a warning rather than a gate. Binding does not open the Vault, so a Workspace can be made
+/// against a daemon that is not answering; the connection is needed later, when something is read or
+/// written, and refusing here would refuse a creation that would have worked.
 /// </remarks>
 internal sealed class CreateWorkspaceDialog : DialogWindow
 {
@@ -33,44 +29,29 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
     /// <summary>The command line program.</summary>
     private readonly RolaRunner _rola;
 
-    /// <summary>What the connection is checked through.</summary>
-    private readonly Connection _connection;
+    /// <summary>The Workspaces already on the list, which is what a directory is compared against.</summary>
+    private readonly WorkspacesFile _opened;
 
-    /// <summary>Where the address is written.</summary>
-    private readonly TextBox _address;
+    /// <summary>Every address the picker offers.</summary>
+    private readonly IReadOnlyList<VaultEntry> _vaults;
+
+    /// <summary>The rows the picker drew, so that a handshake that lands can redraw one.</summary>
+    private readonly List<VaultPick> _rows = [];
 
     /// <summary>Where the directory is written.</summary>
     private readonly TextBox _directory;
 
-    /// <summary>What is wrong with the address.</summary>
-    private readonly TextBlock _addressSays;
-
     /// <summary>What is wrong with the directory.</summary>
     private readonly TextBlock _directorySays;
-
-    /// <summary>
-    /// What the last thing this window did came to, which is the check of the connection or the creation.
-    /// </summary>
-    /// <remarks>
-    /// One line rather than two: the two are never said at once, a creation began after a check that
-    /// answered, and a window this short has room for one line at the bottom, not a stack of them.
-    /// </remarks>
-    private readonly TextBlock _status;
-
-    /// <summary>The button that asks the platform for a directory.</summary>
-    private readonly FlatButton _browse;
-
-    /// <summary>The button that reaches the daemon.</summary>
-    private readonly FlatButton _check;
 
     /// <summary>The button that makes the Workspace.</summary>
     private readonly FlatButton _create;
 
+    /// <summary>The address chosen, or nothing when there is nothing to choose.</summary>
+    private VaultEntry? _selected;
+
     /// <summary>Whether something is being done, so that nothing else is.</summary>
     private bool _busy;
-
-    /// <summary>The address the handshake last answered for, if one did.</summary>
-    private string? _reached;
 
     /// <summary>Whether this window made the directory, which is what a retry must not try again.</summary>
     private bool _created;
@@ -78,102 +59,147 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
     /// <summary>Makes the window.</summary>
     /// <param name="skin">The colours in force.</param>
     /// <param name="rola">The command line program.</param>
-    /// <param name="connection">What the address is reached through.</param>
-    public CreateWorkspaceDialog(Skin skin, RolaRunner rola, Connection connection)
-        : base(skin, RolaI18N.Get("launcher.create.title"), 500, 280)
+    /// <param name="vaults">Every address the picker offers.</param>
+    /// <param name="opened">The Workspaces already on the list.</param>
+    public CreateWorkspaceDialog(
+        Skin skin,
+        RolaRunner rola,
+        IReadOnlyList<VaultEntry> vaults,
+        WorkspacesFile opened
+    )
+        : base(skin, RolaI18N.Get("launcher.create.title"), 520, 430)
     {
         ArgumentNullException.ThrowIfNull(rola);
-        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(vaults);
+        ArgumentNullException.ThrowIfNull(opened);
 
         _skin = skin;
         _rola = rola;
-        _connection = connection;
+        _vaults = vaults;
+        _opened = opened;
 
-        _address = Field(skin, RolaI18N.Get("launcher.create.address"));
-        _directory = Field(skin, RolaI18N.Get("launcher.create.directory"));
+        Height = double.NaN;
+        SizeToContent = SizeToContent.Height;
+        Body.Margin = new Thickness(18, 8, 18, 16);
+        Body.Spacing = 13;
 
-        _addressSays = Says(skin, alarm: true);
-        _directorySays = Says(skin, alarm: true);
-        _status = Says(skin, alarm: false);
+        foreach (var entry in vaults)
+        {
+            if (entry.Status == VaultStatus.Reachable)
+            {
+                _selected = entry;
 
-        // The window is a fixed 280 tall, so every line in it is one line tall: a field that says what is
-        // wrong with it says it to the width it has, and the line at the bottom, which is where a reason the
-        // command line gave goes, has two lines and then an ellipsis. A window that grew as it was filled in
-        // would be a window that moved the buttons under the hand that was reaching for them.
-        _addressSays.TextWrapping = TextWrapping.NoWrap;
-        _addressSays.TextTrimming = TextTrimming.CharacterEllipsis;
+                break;
+            }
+        }
+
+        _selected ??= vaults.Count > 0 ? vaults[0] : null;
+
+        var picker = new StackPanel();
+
+        foreach (var entry in vaults)
+        {
+            var row = new VaultPick(
+                entry,
+                ReferenceEquals(entry, _selected),
+                skin,
+                () => Choose(entry)
+            );
+
+            _rows.Add(row);
+            picker.Children.Add(row);
+
+            entry.Changed += OnEntryChanged;
+        }
+
+        if (vaults.Count == 0)
+        {
+            picker.Children.Add(
+                new TextBlock
+                {
+                    Text = RolaI18N.Get("launcher.create.vaults_empty"),
+                    FontSize = 12,
+                    Foreground = skin.Faint,
+                    Margin = new Thickness(14, 16, 14, 16),
+                }
+            );
+        }
+
+        var pickHost = new Border
+        {
+            Background = skin.Dark,
+            BorderBrush = skin.Splitter,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(7),
+            MaxHeight = 212,
+            ClipToBounds = true,
+            Child = new ScrollViewer
+            {
+                Content = picker,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            },
+        };
+
+        _directory = Field(skin, string.Empty);
+
+        _directory.Height = 34;
+        _directory.CornerRadius = new CornerRadius(5);
+        _directory.TextChanged += (_, _) =>
+        {
+            // A directory that changed is a directory a creation has not been run in: what was made
+            // before is not the place the button would bind now.
+            _created = false;
+
+            Update();
+        };
+
+        _directorySays = Line(skin, string.Empty, 11.5, muted: true);
+
+        _directorySays.IsVisible = false;
         _directorySays.TextWrapping = TextWrapping.NoWrap;
         _directorySays.TextTrimming = TextTrimming.CharacterEllipsis;
-        _status.MaxLines = 2;
-        _status.TextTrimming = TextTrimming.CharacterEllipsis;
 
-        Body.Margin = new Thickness(24, 6, 24, 16);
+        Body.Children.Add(Line(skin, RolaI18N.Get("launcher.create.vault_address"), 11.5, muted: true));
+        Body.Children.Add(pickHost);
+        Body.Children.Add(Block(skin, RolaI18N.Get("launcher.create.directory"), _directory, _directorySays));
 
-        _check = new FlatButton(Line(skin, RolaI18N.Get("launcher.create.check")), skin, ButtonKind.Surface);
-        _create = new FlatButton(Line(skin, RolaI18N.Get("launcher.create.create")), skin, ButtonKind.Primary);
-
-        var cancel = new FlatButton(Line(skin, RolaI18N.Get("launcher.common.cancel")), skin);
-
-        _browse = new FlatButton(Line(skin, RolaI18N.Get("launcher.create.browse")), skin, ButtonKind.Surface)
+        var cancel = new FlatButton(Line(skin, RolaI18N.Get("launcher.common.cancel")), skin)
         {
-            Focusable = true,
+            Height = 32,
+            CornerRadius = new CornerRadius(5),
         };
 
-        _check.Clicked += (_, _) => _ = Check();
-        _create.Clicked += (_, _) => _ = Make();
-        _browse.Clicked += (_, _) => _ = Choose();
+        _create = new FlatButton(Line(skin, RolaI18N.Get("launcher.create.create")), skin, ButtonKind.Primary)
+        {
+            Height = 32,
+            CornerRadius = new CornerRadius(5),
+        };
+
         cancel.Clicked += (_, _) => Close();
+        _create.Clicked += (_, _) => _ = Make();
 
-        _address.TextChanged += (_, _) => Edited();
-        _directory.TextChanged += (_, _) => Edited();
+        Body.Children.Add(Row(cancel, _create));
 
-        // The two fields are two rows of one grid, so that the fields stand in one column and the two buttons
-        // in the one after it: a label written above its field would make the window taller than the two
-        // questions in it need, and a label beside it makes the two fields read as one form.
-        var labels = new ColumnDefinitions("Auto,*,Auto");
-
-        var grid = new Grid
+        Closed += (_, _) =>
         {
-            ColumnDefinitions = labels,
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
-            ColumnSpacing = 10,
-            RowSpacing = 4,
+            foreach (var entry in _vaults)
+            {
+                entry.Changed -= OnEntryChanged;
+            }
         };
 
-        Body.Spacing = 8;
-
-        var address = Label(skin, RolaI18N.Get("launcher.create.address_label"));
-        var directory = Label(skin, RolaI18N.Get("launcher.create.directory_label"));
-
-        _check.HorizontalAlignment = HorizontalAlignment.Left;
-        _browse.HorizontalAlignment = HorizontalAlignment.Left;
-
-        grid.Children.Add(address);
-        Grid.SetColumn(_address, 1);
-        grid.Children.Add(_address);
-        Grid.SetColumn(_check, 2);
-        grid.Children.Add(_check);
-
-        Grid.SetColumn(_addressSays, 1);
-        Grid.SetRow(_addressSays, 1);
-        grid.Children.Add(_addressSays);
-
-        Grid.SetRow(directory, 2);
-        grid.Children.Add(directory);
-        Grid.SetColumn(_directory, 1);
-        Grid.SetRow(_directory, 2);
-        grid.Children.Add(_directory);
-        Grid.SetColumn(_browse, 2);
-        Grid.SetRow(_browse, 2);
-        grid.Children.Add(_browse);
-
-        Grid.SetColumn(_directorySays, 1);
-        Grid.SetRow(_directorySays, 3);
-        grid.Children.Add(_directorySays);
-
-        Body.Children.Add(grid);
-        Body.Children.Add(_status);
-        Body.Children.Add(Row(cancel, _create));
+        Opened += (_, _) =>
+        {
+            if (_rows.Count > 0)
+            {
+                _rows[0].Focus();
+            }
+            else
+            {
+                _directory.Focus();
+            }
+        };
 
         Update();
     }
@@ -181,144 +207,40 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
     /// <summary>The Workspace this window made, if it made one.</summary>
     public string? Created { get; private set; }
 
-    /// <summary>The address that was reached, as it was written.</summary>
-    private string Address => _address.Text?.Trim() ?? string.Empty;
-
     /// <summary>The directory that is to be made, as it was written.</summary>
     private string Place => _directory.Text?.Trim() ?? string.Empty;
 
-    /// <summary>A line that says what is wrong with a field, which is hidden until something is.</summary>
-    /// <param name="skin">The colours in force.</param>
-    /// <param name="alarm">Whether it is something that went wrong.</param>
-    /// <returns>The line.</returns>
-    private static TextBlock Says(Skin skin, bool alarm)
+    /// <summary>Chooses an address.</summary>
+    /// <param name="entry">The address chosen.</param>
+    private void Choose(VaultEntry entry)
     {
-        var line = Line(skin, string.Empty, 12, muted: !alarm);
+        _selected = entry;
 
-        if (alarm)
+        foreach (var row in _rows)
         {
-            line.Foreground = skin.Alarm;
+            row.SetChosen(ReferenceEquals(row.Entry, entry), _skin);
         }
 
-        line.IsVisible = false;
-
-        return line;
-    }
-
-    /// <summary>A field's name, read against the field's own left edge.</summary>
-    /// <param name="skin">The colours in force.</param>
-    /// <param name="text">What it says.</param>
-    /// <returns>The label.</returns>
-    private static TextBlock Label(Skin skin, string text)
-    {
-        var label = Line(skin, text, 12, muted: true);
-
-        label.HorizontalAlignment = HorizontalAlignment.Right;
-        label.VerticalAlignment = VerticalAlignment.Center;
-
-        return label;
-    }
-
-    /// <summary>
-    /// Asks the directory picker for a directory, and writes what it answered.
-    /// </summary>
-    /// <remarks>
-    /// What the picker answers is written and then the caret is put after it: a field that is still being
-    /// edited keeps the caret it had, and a field whose text grew under a caret that stayed where it was is a
-    /// field that shows what it showed when the picker was opened. The caret is moved, and the field focused,
-    /// so that what was written is what is read.
-    /// </remarks>
-    private async Task Choose()
-    {
-        // The keyboard is taken off the field before the picker opens: what a text box is still composing is
-        // committed when it loses the keyboard, and a commit that landed after the answer would write over
-        // the answer. The button that was pressed is the thing that holds it meanwhile, which is also where
-        // the keyboard would go if the window were moved by hand.
-        _browse.Focus();
-
-        IReadOnlyList<IStorageFolder> folders;
-
-        try
-        {
-            folders = await StorageProvider.OpenFolderPickerAsync(
-                new FolderPickerOpenOptions
-                {
-                    Title = RolaI18N.Get("launcher.create.browse"),
-                    AllowMultiple = false,
-                }
-            );
-        }
-        catch (Exception error) when (error is InvalidOperationException or NotSupportedException)
-        {
-            // The picker is the platform's, and a platform that cannot show one is a failure this window can
-            // at least say out loud: the directory can still be written by hand.
-            Say(_status, RolaI18N.Get("launcher.create.picker_failed", error.Message), alarm: true);
-
-            return;
-        }
-
-        if (folders.Count == 0)
-        {
-            return;
-        }
-
-        // What the platform answered is asked for as a local path first, and as the path it holds when the
-        // platform does not call it local, a portal that hands back a path it will not name otherwise is a
-        // directory the window can still work in.
-        var picked = folders[0].TryGetLocalPath() ?? folders[0].Path.LocalPath;
-
-        if (string.IsNullOrWhiteSpace(picked))
-        {
-            return;
-        }
-
-        _directory.Text = picked;
-        _directory.CaretIndex = picked.Length;
-        _directory.Focus();
-    }
-
-    /// <summary>Speaks the handshake to the address, as the account the work acts as.</summary>
-    private async Task Check()
-    {
-        if (_busy || !VaultAddressSyntax.Valid(Address))
-        {
-            return;
-        }
-
-        var address = Address;
-
-        Busy(RolaI18N.Get("launcher.create.checking"));
-
-        var report = await Task.Run(() => _connection.Check(address));
-
-        Busy(null);
-
-        if (report.Reached)
-        {
-            _reached = address;
-            Say(_status, RolaI18N.Get("launcher.create.reached"), alarm: false);
-            Update();
-
-            return;
-        }
-
-        _reached = null;
-
-        if (report.State == ConnectionState.NoAccount)
-        {
-            Say(_status, RolaI18N.Get("launcher.create.need_account"), alarm: true);
-            Update();
-
-            return;
-        }
-
-        Say(_status, RolaI18N.Get("launcher.create.failed", report.Reason), alarm: true);
         Update();
     }
 
-    /// <summary>
-    /// Makes the Workspace, and puts it against the address.
-    /// </summary>
+    /// <summary>Draws a row again when its handshake landed, and the button that stands on it.</summary>
+    /// <param name="sender">The entry that changed.</param>
+    /// <param name="e">The event.</param>
+    private void OnEntryChanged(object? sender, EventArgs e)
+    {
+        foreach (var row in _rows)
+        {
+            if (ReferenceEquals(row.Entry, sender))
+            {
+                row.Repaint(_skin);
+            }
+        }
+
+        Update();
+    }
+
+    /// <summary>Makes the Workspace, and binds it to the address chosen.</summary>
     /// <remarks>
     /// The creation is the command line's, in the form a person would write it: <c>rola create</c> in the
     /// directory that is to be made, then <c>rola bind</c> inside it. A creation that made the directory and
@@ -331,10 +253,10 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
             return;
         }
 
-        var address = Address;
+        var address = _selected!.Address;
         var directory = Place;
 
-        Busy(RolaI18N.Get("launcher.create.creating"));
+        Busy(true);
 
         var failure = string.Empty;
 
@@ -362,11 +284,11 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
             }
         }
 
-        Busy(null);
+        Busy(false);
 
         if (failure.Length > 0)
         {
-            Say(_status, failure, alarm: true);
+            Say(failure);
 
             return;
         }
@@ -375,62 +297,42 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
         Close();
     }
 
-    /// <summary>Whether the window may make anything: both fields read, and the address reached.</summary>
+    /// <summary>Whether the window may make anything: an address chosen and a directory that is free.</summary>
     private bool Ready =>
         !_busy
-        && VaultAddressSyntax.Valid(Address)
+        && _selected is not null
+        && Place.Length > 0
         && (_created || Problem(Place) is null)
-        && _reached == Address
-        && Address.Length > 0;
+        && !_opened.Contains(Place);
 
-    /// <summary>
-    /// Reads both fields again after either changed.
-    /// </summary>
-    /// <remarks>
-    /// An address that changed takes the check back with it: a handshake that answered for one address does
-    /// not answer for another, and a creation would otherwise be let through on a check of something else.
-    /// </remarks>
-    private void Edited()
-    {
-        if (_reached is not null && _reached != Address)
-        {
-            _reached = null;
-        }
-
-        // The line at the bottom is the last thing this window said, and what was said about a field that has
-        // since changed is no longer about anything: it is cleared here, and the window says again what stands
-        // once the two fields are read.
-        Say(_status, string.Empty, alarm: false);
-        Update();
-    }
-
-    /// <summary>Draws what the two fields say, which is what the buttons stand on.</summary>
+    /// <summary>Draws what the fields say, which is what the button stands on.</summary>
     private void Update()
     {
-        var address = Address;
-        var directory = Place;
-
-        var addressProblem = address.Length == 0
-            ? RolaI18N.Get("launcher.create.address_empty")
-            : VaultAddressSyntax.Valid(address)
+        var duplicate = Place.Length > 0 && _opened.Contains(Place);
+        var problem = duplicate
+            ? RolaI18N.Get("launcher.create.directory_duplicate")
+            : _created
                 ? null
-                : RolaI18N.Get("launcher.create.address_invalid");
+                : Problem(Place);
 
-        var directoryProblem = _created ? null : Problem(directory);
+        _directorySays.Text = problem ?? string.Empty;
+        _directorySays.Foreground = _skin.Alarm;
+        _directorySays.IsVisible = problem is not null;
+        _directory.BorderBrush = problem is null ? _skin.Splitter : _skin.Alarm;
 
-        Say(_addressSays, addressProblem ?? string.Empty, alarm: true);
-        Say(_directorySays, directoryProblem ?? string.Empty, alarm: true);
+        var warning = _selected is { Status: VaultStatus.Failed };
+        var ready = Ready;
 
-        _address.BorderBrush = addressProblem is null ? _skin.Splitter : _skin.Alarm;
-        _directory.BorderBrush = directoryProblem is null ? _skin.Splitter : _skin.Alarm;
+        _create.Enabled = ready;
+        _create.Restyle(
+            _skin,
+            warning && ready ? ButtonKind.Warning : ButtonKind.Primary
+        );
 
-        if (_reached is null && string.IsNullOrEmpty(_status.Text))
-        {
-            Say(_status, RolaI18N.Get("launcher.create.unchecked"), alarm: false);
-        }
-
-        _check.Enabled = !_busy && addressProblem is null;
-        _create.Enabled = Ready;
+        ToolTip.SetTip(
+            _create,
+            warning && ready ? RolaI18N.Get("launcher.create.may_not_connect") : null
+        );
     }
 
     /// <summary>
@@ -447,7 +349,7 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
     {
         if (path.Length == 0)
         {
-            return RolaI18N.Get("launcher.create.directory_empty");
+            return null;
         }
 
         try
@@ -495,38 +397,46 @@ internal sealed class CreateWorkspaceDialog : DialogWindow
     }
 
     /// <summary>Holds the window while something is done, or lets it go.</summary>
-    /// <param name="says">What is being done, or nothing when it is done.</param>
-    private void Busy(string? says)
+    /// <param name="busy">Whether something is being done.</param>
+    private void Busy(bool busy)
     {
-        _busy = says is not null;
+        _busy = busy;
 
-        _check.Child = Line(_skin, says ?? RolaI18N.Get("launcher.create.check"));
         _create.Child = Line(
             _skin,
-            says ?? RolaI18N.Get("launcher.create.create")
+            busy
+                ? RolaI18N.Get("launcher.create.creating")
+                : RolaI18N.Get("launcher.create.create")
         );
 
-        _check.Repaint(_skin);
         _create.Repaint(_skin);
 
         Update();
     }
 
-    /// <summary>
-    /// Says one thing about a field, or takes the saying away.
-    /// </summary>
-    /// <remarks>
-    /// The line keeps its room when it says nothing: a line that folded away would move the two fields and the
-    /// buttons under it every time a question was answered, and a form that moves while it is being filled in
-    /// is a form that is harder to fill in.
-    /// </remarks>
-    /// <param name="line">The line.</param>
-    /// <param name="says">What it says.</param>
-    /// <param name="alarm">Whether it is something that went wrong.</param>
-    private void Say(TextBlock line, string says, bool alarm)
+    /// <summary>A field's name and field, with the line that says what is wrong under it.</summary>
+    /// <param name="skin">The colours in force.</param>
+    /// <param name="label">What the field is called.</param>
+    /// <param name="field">The field.</param>
+    /// <param name="says">Where what is wrong is written.</param>
+    /// <returns>The block.</returns>
+    private static Control Block(Skin skin, string label, TextBox field, TextBlock says)
     {
-        line.Text = says;
-        line.Foreground = alarm ? _skin.Alarm : _skin.Muted;
-        line.IsVisible = true;
+        var block = new StackPanel { Spacing = 5 };
+
+        block.Children.Add(Line(skin, label, 11.5, muted: true));
+        block.Children.Add(field);
+        block.Children.Add(says);
+
+        return block;
+    }
+
+    /// <summary>Puts a line under the directory field.</summary>
+    /// <param name="says">What it says.</param>
+    private void Say(string says)
+    {
+        _directorySays.Text = says;
+        _directorySays.Foreground = _skin.Alarm;
+        _directorySays.IsVisible = true;
     }
 }

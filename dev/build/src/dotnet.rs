@@ -31,12 +31,6 @@ const PLUGINS_IN_DESKTOP: &str = "plugins";
 /// The icon sets inside an export's Desktop directory.
 const ICON_SETS_IN_DESKTOP: &str = "icon-sets";
 
-/// The banners inside an export's Desktop directory.
-const BANNERS_IN_DESKTOP: &str = "launcher-banners";
-
-/// The banner files the launcher may play.
-const BANNER_EXTENSION: &str = "aseprite";
-
 /// The icon set that is documentation rather than a set, and so does not travel with the program.
 const EXAMPLE_ICON_SET: &str = "example";
 
@@ -354,7 +348,7 @@ pub fn publish_host(workspace: &Workspace, into: &Path, self_contained: bool) ->
     Ok(())
 }
 
-/// Publishes the launcher into the Desktop program's directory, and lays the banners beside it.
+/// Publishes the launcher into the Desktop program's directory.
 ///
 /// The launcher is published after the Desktop program rather than before: the two share a
 /// directory, and what a publish lays down is what that program is made of. The launcher comes
@@ -363,7 +357,7 @@ pub fn publish_host(workspace: &Workspace, into: &Path, self_contained: bool) ->
 ///
 /// # Errors
 ///
-/// Reports the restore, the publish, or a copy's own failure.
+/// Reports the restore or the publish.
 pub fn publish_launcher(
     workspace: &Workspace,
     into: &Path,
@@ -387,26 +381,7 @@ pub fn publish_launcher(
         contained,
         "-o",
         &destination,
-    ])?;
-
-    let banners = workspace.launcher_banners();
-    if banners.is_dir() {
-        let destination = into.join(BANNERS_IN_DESKTOP);
-        std::fs::create_dir_all(&destination).map_err(|error| Error::Io {
-            doing: "creating the banners' directory",
-            detail: format!("{}: {error}", destination.display()),
-        })?;
-
-        for banner in read_files(&banners)? {
-            if banner.extension().and_then(std::ffi::OsStr::to_str) == Some(BANNER_EXTENSION)
-                && let Some(name) = banner.file_name()
-            {
-                copy_file(&banner, &destination.join(name))?;
-            }
-        }
-    }
-
-    Ok(())
+    ])
 }
 
 /// Lays each plugin that ships with the Desktop program where the program looks for it: its

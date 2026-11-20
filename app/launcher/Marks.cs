@@ -5,16 +5,102 @@ using ShapePath = Avalonia.Controls.Shapes.Path;
 namespace RorolalaLauncher;
 
 /// <summary>
-/// The one picture this program still draws for itself: the cog that opens what it may be told.
+/// The pictures this program draws for itself: the cog that opens what it may be told, the caret a menu
+/// button carries, and the small marks the docks and their menus are made of.
 /// </summary>
 /// <remarks>
-/// Everything else the program is drawn with is a picture from the pinned Material Design set, the three
+/// Everything else the program is drawn with is a picture from the pinned Material Design set, the pictures
 /// the toolbar wears and the two a window's frame carries, because those are the product's artwork and are
-/// drawn from one manifest by <c>cargo dev icons</c>. The cog is the exception: the set this project pins has
-/// no settings picture, and a mark from another set would be a second artwork in a program drawn with one.
+/// drawn from one manifest by <c>cargo dev icons</c>. These are the exceptions: the set this project pins has
+/// no settings picture, no rack, no refresh and no menu marks, and a mark from another set would be a second
+/// artwork in a program drawn with one.
 /// </remarks>
 internal static class Marks
 {
+    /// <summary>The rack the Vaults dock is headed by.</summary>
+    /// <param name="ink">What it is drawn in.</param>
+    /// <param name="size">The room it is drawn in, on both axes.</param>
+    /// <returns>The drawing.</returns>
+    public static ShapePath Vault(IBrush ink, double size) =>
+        Drawn(
+            "M3.5 3h9a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
+                + "M3.5 9h9a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"
+                + "M5 5h.01M5 11h.01",
+            ink,
+            size,
+            size,
+            1.4
+        );
+
+    /// <summary>The window the Workspaces dock is headed by.</summary>
+    /// <param name="ink">What it is drawn in.</param>
+    /// <param name="size">The room it is drawn in, on both axes.</param>
+    /// <returns>The drawing.</returns>
+    public static ShapePath Workspace(IBrush ink, double size) =>
+        Drawn(
+            "M3.4 3.2h9.2a1 1 0 0 1 1 1v8.6a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1V4.2a1 1 0 0 1 1-1Z"
+                + "M2.4 6.4h11.2M6.5 6.4v7.4",
+            ink,
+            size,
+            size,
+            1.4
+        );
+
+    /// <summary>The plus a button that adds something carries.</summary>
+    /// <param name="ink">What it is drawn in.</param>
+    /// <param name="size">The room it is drawn in, on both axes.</param>
+    /// <returns>The drawing.</returns>
+    public static ShapePath Plus(IBrush ink, double size) =>
+        Drawn("M8 3.4v9.2M3.4 8h9.2", ink, size, size, 1.4);
+
+    /// <summary>The arrow that checks an address again.</summary>
+    /// <param name="ink">What it is drawn in.</param>
+    /// <param name="size">The room it is drawn in, on both axes.</param>
+    /// <returns>The drawing.</returns>
+    public static ShapePath Refresh(IBrush ink, double size) =>
+        Drawn(
+            "M12.6 8a4.6 4.6 0 1 1-1.5-3.4M12.8 2.9v2.4h-2.4",
+            ink,
+            size,
+            size,
+            1.4
+        );
+
+    /// <summary>The pencil a menu that edits an address carries.</summary>
+    /// <param name="ink">What it is drawn in.</param>
+    /// <param name="size">The room it is drawn in, on both axes.</param>
+    /// <returns>The drawing.</returns>
+    public static ShapePath Pencil(IBrush ink, double size) =>
+        Drawn(
+            "M10.4 3.4l2.2 2.2M3 13l.5-2.6L10 3.9l2.1 2.1-6.5 6.5L3 13Z",
+            ink,
+            size,
+            size,
+            1.3
+        );
+
+    /// <summary>The bin a menu that removes an address carries.</summary>
+    /// <param name="ink">What it is drawn in.</param>
+    /// <param name="size">The room it is drawn in, on both axes.</param>
+    /// <returns>The drawing.</returns>
+    public static ShapePath Trash(IBrush ink, double size) =>
+        Drawn(
+            "M3.4 4.5h9.2M6.4 4.5V3.1h3.2v1.4M4.5 4.5l.6 8a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8",
+            ink,
+            size,
+            size,
+            1.3
+        );
+
+    /// <summary>
+    /// The tick a chosen language carries.
+    /// </summary>
+    /// <param name="ink">What it is drawn in.</param>
+    /// <param name="size">The room it is drawn in, on both axes.</param>
+    /// <returns>The drawing.</returns>
+    public static ShapePath Check(IBrush ink, double size) =>
+        Drawn("M3.2 8.4l3.1 3.1 6.5-6.6", ink, size, size, 1.4);
+
     /// <summary>The cog, drawn as a line rather than stamped from a file.</summary>
     /// <param name="ink">What it is drawn in.</param>
     /// <param name="size">The room it is drawn in, on both axes.</param>

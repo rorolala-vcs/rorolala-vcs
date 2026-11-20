@@ -27,9 +27,6 @@ launcher:
     account:
       en: Set up your account
       zh-CN: 初始化账户
-    create:
-      en: Create a Workspace
-      zh-CN: 创建工作区
     create_needs_account:
       en: Set up your account first
       zh-CN: 请先初始化账户
@@ -37,87 +34,163 @@ launcher:
       en: Add a Workspace you already have
       zh-CN: 导入工作区
 
-  welcome:
-    appearance:
-      en: "Choose the look you want"
-      zh-CN: "请选择想要的视觉风格"
-    account:
-      en: Set up account
-      zh-CN: 设置账户
-    no_account:
-      en: "First, let's set up your account."
-      zh-CN: 首先，让我们设置账户。
-    create:
-      en: Create a Workspace
-      zh-CN: 创建工作区
-    import:
-      en: Import a Workspace
-      zh-CN: 导入工作区
-    empty:
-      en: No Workspace exists yet, you can create one or import one
-      zh-CN: 尚不存在任何工作区，你可以导入或创建
-
-  settings:
+  vaults:
     title:
-      en: Settings
-      zh-CN: 设置
-    appearance:
-      en: Day or night
-      zh-CN: 日夜主题
+      en: Vaults
+      zh-CN: 保险库
+    registry:
+      en: Address book
+      zh-CN: 地址簿
+    hosted:
+      en: Hosted
+      zh-CN: 托管
+    registry_empty:
+      en: The address book is empty.
+      zh-CN: 地址簿是空的。
+    hosted_empty:
+      en: No hosted Vault yet.
+      zh-CN: 还没有托管的保险库。
+    add:
+      en: Add a Vault
+      zh-CN: 添加保险库
+    check:
+      en: Check connection
+      zh-CN: 检查连接性
+    edit:
+      en: Edit
+      zh-CN: 编辑
+    remove:
+      en: Delete
+      zh-CN: 删除
+    reachable:
+      en: Reachable
+      zh-CN: 可连接
+    failed:
+      en: No answer
+      zh-CN: 无响应
+    checking:
+      en: Handshaking
+      zh-CN: 正在握手
+    unchecked:
+      en: Not checked
+      zh-CN: 尚未检查
+    reachable_tip:
+      en: The Vault answered the handshake.
+      zh-CN: 保险库已回应握手。
+    failed_tip:
+      en: "No answer: %{reason}"
+      zh-CN: "无响应：%{reason}"
+    checking_tip:
+      en: Handshaking with the Vault.
+      zh-CN: 正在向保险库握手。
+    unchecked_tip:
+      en: The connection has not been checked.
+      zh-CN: 尚未检查连接。
+    recheck_all:
+      en: Check all again
+      zh-CN: 重新检查全部
+    rechecking:
+      en: Checking every Vault again.
+      zh-CN: 正在重新检查全部保险库。
+    summary_empty:
+      en: The address book is empty
+      zh-CN: 地址簿是空的
+    summary_checking:
+      en: "Handshaking with %{count} Vaults"
+      zh-CN: "正在握手 %{count} 个保险库"
+    summary_reachable:
+      en: "%{count} reachable"
+      zh-CN: "%{count} 个可连接"
+    summary_failed:
+      en: "%{count} without an answer"
+      zh-CN: "%{count} 个无响应"
+    summary_unchecked:
+      en: "%{count} not checked"
+      zh-CN: "%{count} 个尚未检查"
+    summary_separator:
+      en: ", "
+      zh-CN: "，"
+    added:
+      en: "Added the Vault %{name}."
+      zh-CN: "已添加保险库 %{name}。"
+    saved:
+      en: The Vault was saved.
+      zh-CN: 保险库已保存。
+    removed:
+      en: "Removed %{name} from the hosted addresses."
+      zh-CN: "已从托管地址中移除 %{name}。"
 
-    light:
-      en: Light
-      zh-CN: 亮色
-    dark:
-      en: Dark
-      zh-CN: 暗色
-    system:
-      en: Follow the system
-      zh-CN: 跟随系统
-    frame:
-      en: Window frame
-      zh-CN: 窗口边框
-    style_windows:
-      en: Windows
-      zh-CN: Windows
-    style_mac:
-      en: macOS
-      zh-CN: macOS
-    style_tillingwm:
-      en: Tiling window manager
-      zh-CN: 平铺窗口管理器
+  vault:
+    add_title:
+      en: Add a Vault
+      zh-CN: 添加保险库
+    edit_title:
+      en: Edit the Vault
+      zh-CN: 编辑保险库
+    name:
+      en: Name
+      zh-CN: 名称
+    address:
+      en: Address
+      zh-CN: 地址
+    name_placeholder:
+      en: studio
+      zh-CN: studio
+    address_placeholder:
+      en: rola://example.com:7420/studio
+      zh-CN: rola://example.com:7420/studio
+    name_empty:
+      en: Please give this Vault a name.
+      zh-CN: 请给这个保险库起一个名字。
+    address_invalid:
+      en: That is not an address.
+      zh-CN: 这不是一个地址。
+    address_duplicate:
+      en: That address is already in the dock.
+      zh-CN: 地址簿里已经有这个地址了。
+    add:
+      en: Add and connect
+      zh-CN: 添加并连接
+    save:
+      en: Save
+      zh-CN: 保存
 
-
-  banner:
-    pick:
-      en: Choose a banner
-      zh-CN: 选择横幅
-    type:
-      en: Aseprite picture
-      zh-CN: Aseprite 图片
-    empty:
-      en: Double-click here to choose a banner
-      zh-CN: 双击这里选择横幅
-    problem:
-      en: "This banner could not be read: %{reason}"
-      zh-CN: "无法读取这个横幅：%{reason}"
+  workspaces:
+    title:
+      en: Workspaces
+      zh-CN: 工作区
 
   workspace:
     title:
       en: Workspace
       zh-CN: 工作区
+    create:
+      en: Create a Workspace
+      zh-CN: 创建工作区
+    created:
+      en: "Created the Workspace %{name}."
+      zh-CN: "已创建工作区 %{name}。"
+    empty:
+      en: No Workspace yet.
+      zh-CN: 还没有工作区。
+    empty_hint:
+      en: Create one, or import a directory you already have.
+      zh-CN: 创建一个工作区，或者导入已有的目录。
     remove:
       en: Remove from this list
       zh-CN: 从列表中移除
+    removed:
+      en: "Removed %{name} from the list."
+      zh-CN: "已从列表中移除 %{name}。"
     missing:
       en: Not there
       zh-CN: 不存在
     not_workspace:
       en: Not a Workspace
       zh-CN: 不是工作区
-    git_project:
-      en: Git project
-      zh-CN: git 项目
+    git_workspace:
+      en: Git Workspace
+      zh-CN: Git 工作区
     gone:
       en: "%{path} is not a Workspace any more"
       zh-CN: "%{path} 已经不是一个工作区了"
@@ -214,60 +287,27 @@ launcher:
     title:
       en: Create a Workspace
       zh-CN: 创建工作区
-    address:
-      en: "rola://host:port/namespace"
-      zh-CN: "rola://主机:端口/命名空间"
-    address_label:
-      en: "Vault address:"
-      zh-CN: 保险库地址：
-    address_empty:
-      en: Please write the Vault's address.
-      zh-CN: 请写出保险库的地址。
-    address_invalid:
-      en: "That is not an address."
-      zh-CN: "这不是一个地址。"
+    vault_address:
+      en: Vault address
+      zh-CN: 保险库地址
+    vaults_empty:
+      en: The address book is empty. Add a Vault first.
+      zh-CN: 地址簿是空的，先添加一个保险库。
     directory:
-      en: The folder to work in
-      zh-CN: 要工作的文件夹
-    directory_label:
-      en: "Folder:"
-      zh-CN: 目录：
-    directory_empty:
-      en: Please choose a folder.
-      zh-CN: 请选择一个文件夹。
+      en: Folder
+      zh-CN: 目录
+    directory_duplicate:
+      en: That folder is already in the Workspace list.
+      zh-CN: 这个目录已经在工作区列表里。
     directory_is_file:
       en: That is a file, not a folder.
       zh-CN: 这是一个文件，不是文件夹。
     directory_not_empty:
-      en: "That folder must be empty, or not exist yet."
-      zh-CN: "这个文件夹需要是空的、或者还不存在。"
+      en: That folder must be empty, or not exist yet.
+      zh-CN: 这个文件夹需要是空的、或者还不存在。
     directory_unreadable:
       en: "That folder could not be read: %{reason}"
       zh-CN: "无法读取这个文件夹：%{reason}"
-    browse:
-      en: Choose
-      zh-CN: 选择
-    picker_failed:
-      en: "The folder picker could not be opened: %{reason}"
-      zh-CN: "无法打开文件夹选择器：%{reason}"
-    check:
-      en: Check connection
-      zh-CN: 检查连接
-    checking:
-      en: Checking
-      zh-CN: 正在检查
-    reached:
-      en: The Vault answered.
-      zh-CN: 保险库已回应。
-    need_account:
-      en: "An account is needed to reach a Vault: set one up first."
-      zh-CN: "连接保险库需要一个账户：请先初始化账户。"
-    failed:
-      en: "The Vault did not answer: %{reason}"
-      zh-CN: "保险库没有回应：%{reason}"
-    unchecked:
-      en: Press Check connection to reach the Vault before creating.
-      zh-CN: 创建之前请先点击“检查连接”。
     create:
       en: Create
       zh-CN: 创建
@@ -277,3 +317,44 @@ launcher:
     failed_create:
       en: "The Workspace could not be created: %{reason}"
       zh-CN: "无法创建工作区：%{reason}"
+    need_account:
+      en: "An account is needed to reach a Vault: set one up first."
+      zh-CN: 连接保险库需要一个账户：请先初始化账户。
+    may_not_connect:
+      en: The server may not be reachable
+      zh-CN: 可能无法连接至服务器
+
+  settings:
+    title:
+      en: Settings
+      zh-CN: 设置
+    appearance:
+      en: Day or night
+      zh-CN: 日夜主题
+    appearance_hint:
+      en: Switch between light, dark and the system.
+      zh-CN: 在亮色、暗色和系统的选择之间切换。
+    light:
+      en: Light
+      zh-CN: 亮色
+    dark:
+      en: Dark
+      zh-CN: 暗色
+    system:
+      en: Follow the system
+      zh-CN: 跟随系统
+    frame:
+      en: Window frame
+      zh-CN: 窗口边框
+    frame_hint:
+      en: Decide where the window buttons are drawn.
+      zh-CN: 决定窗口按钮画在哪里。
+    style_windows:
+      en: Windows
+      zh-CN: Windows
+    style_mac:
+      en: macOS
+      zh-CN: macOS
+    style_tillingwm:
+      en: Tiling window manager
+      zh-CN: 平铺窗口管理器

@@ -33,7 +33,7 @@ internal static class LauncherLanguage
     public static readonly IReadOnlyList<LanguageOption> Options =
     [
         new("en", "English"),
-        new("zh-CN", "中文"),
+        new("zh-CN", "简体中文"),
     ];
 
     /// <summary>The language in force, as the files name it.</summary>

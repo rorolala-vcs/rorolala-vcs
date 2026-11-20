@@ -11,9 +11,10 @@ namespace RorolalaLauncher;
 /// The pictures this program is drawn with, by the key the manifest names each under.
 /// </summary>
 /// <remarks>
-/// The three the toolbar wears are this project's own set, drawn from the pinned Material Design set by
+/// The four the toolbar wears are this project's own set, drawn from the pinned Material Design set by
 /// <c>cargo dev icons</c> and named by the generated <see cref="Icons"/>; the two a window's frame carries are
-/// the Desktop program's own files, because the two programs draw one frame.
+/// the Desktop program's own files, because the two programs draw one frame. The Git logomark is the one
+/// picture copied from outside the set, and it travels here so the launcher does not read a plugin's files.
 /// <para>
 /// They are read once and kept: a picture is stamped every time its button is drawn, and a file opened once
 /// per hover would be the wrong price for a mark.
@@ -32,6 +33,16 @@ internal static class LauncherIcons
 
     /// <summary>The picture the close button of a frame carries.</summary>
     public static Bitmap Close => Named("close");
+
+    /// <summary>
+    /// The Git logomark a git-rola Workspace wears beside its name.
+    /// </summary>
+    /// <remarks>
+    /// A copy in this project's own icon area rather than a file of the Git plugin: the launcher must
+    /// open on a machine where the plugin is not installed, and a mark read from a plugin's directory
+    /// would be a mark that disappeared with it.
+    /// </remarks>
+    public static Bitmap Git => Named("git");
 
     /// <summary>
     /// One of this program's own pictures, by the key the generated keys name it under.

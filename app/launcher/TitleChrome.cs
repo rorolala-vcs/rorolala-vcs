@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using RorolalaDesktop.Theming;
@@ -9,27 +10,22 @@ using RorolalaLauncher.Theming;
 namespace RorolalaLauncher;
 
 /// <summary>
-/// The window's own buttons, on one strip at the corner of the banner.
+/// The row at the top of the window: what the program is called, and the buttons its frame carries.
 /// </summary>
 /// <remarks>
-/// The strip is one block of a light black with square corners, and the buttons sit on it: a picture is the
-/// frame here, and a mark drawn straight onto a picture is a mark that disappears into it wherever the art
-/// happens to be the colour of the ink. One block behind all of them rather than one behind each is also
-/// what makes them read as a row of controls rather than as three things in three boxes.
+/// The row is a real title bar rather than a strip drawn over a picture. The Desktop program's three frames
+/// are the same three here: Windows puts the settings, the minimize and the close at the right in the order
+/// they are read, macOS puts its three lights at the left and hides the marks until the pointer reaches them,
+/// and a tiling window manager is the frame already, so only the settings is drawn.
 /// <para>
-/// What is drawn on it is the Desktop program's own two frames. The Windows frame puts its marks at the
-/// corner in the order they read, the settings, then the one that puts the window away, then the one that
-/// closes it, each as wide as a caption button there, filling only under the pointer. The macOS frame puts
-/// its lights at the other corner, in its own order, with the mark each one carries hidden until the pointer
-/// reaches it; the settings is drawn beside them as the one control that is this program's rather than the
-/// frame's. A tiling window manager is the frame already, so nothing that belongs to a frame is drawn there
-/// and only the settings is left.
+/// The background is the elevated ground and the line beneath it is the border, which is what makes the row
+/// read as part of the frame rather than as something laid over the content.
 /// </para>
 /// </remarks>
-internal sealed class TitleChrome : Panel
+internal sealed class TitleChrome : Border
 {
-    /// <summary>What the strip is filled with: a black light enough to read a picture through.</summary>
-    private static readonly Color Bed = Color.FromArgb(0x66, 0x00, 0x00, 0x00);
+    /// <summary>How tall the row is, which is the window's title bar.</summary>
+    private const double HeightOfRow = 34;
 
     /// <summary>The window the buttons act on.</summary>
     private readonly Window _window;
@@ -37,10 +33,7 @@ internal sealed class TitleChrome : Panel
     /// <summary>The colours in force.</summary>
     private Skin _skin;
 
-    /// <summary>The style the buttons were last arranged in.</summary>
-    private WindowStyle _style;
-
-    /// <summary>Makes the buttons, drawn the way a Windows frame is drawn until told otherwise.</summary>
+    /// <summary>Makes the row, drawn the way a Windows frame is drawn until told otherwise.</summary>
     /// <param name="window">The window they act on.</param>
     /// <param name="skin">The colours in force.</param>
     public TitleChrome(Window window, Skin skin)
@@ -49,19 +42,22 @@ internal sealed class TitleChrome : Panel
 
         _window = window;
         _skin = skin;
-        _style = WindowStyle.Windows;
 
-        HorizontalAlignment = HorizontalAlignment.Stretch;
-        VerticalAlignment = VerticalAlignment.Stretch;
+        Height = HeightOfRow;
+        Background = skin.Bright;
+        BorderBrush = skin.Splitter;
+        BorderThickness = new Thickness(0, 0, 0, 1);
 
-        Arrange(skin, _style);
+        PointerPressed += (_, e) => _window.BeginMoveDrag(e);
+
+        Arrange(skin, WindowStyle.Windows);
     }
 
     /// <summary>Raised when what the program may be told was asked for.</summary>
     public event EventHandler? SettingsAsked;
 
     /// <summary>
-    /// Puts the strip where a style puts it, with the buttons that style has.
+    /// Puts the title and the buttons where a style puts them.
     /// </summary>
     /// <param name="skin">The colours in force.</param>
     /// <param name="style">How this window's frame is drawn.</param>
@@ -70,55 +66,74 @@ internal sealed class TitleChrome : Panel
         ArgumentNullException.ThrowIfNull(skin);
 
         _skin = skin;
-        _style = style;
 
-        Children.Clear();
+        Background = skin.Bright;
+        BorderBrush = skin.Splitter;
 
-        var row = new StackPanel
+        var row = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"),
+        };
 
-            // The lights stand off one another, where the marks are a row of one control each: room left
-            // between two of them is room the frame has between its own buttons.
-            Spacing = style == WindowStyle.Mac ? 8 : 0,
+        var brand = new TextBlock
+        {
+            Text = "ROLA Launcher",
+            FontSize = 13,
+            FontWeight = FontWeight.Bold,
+            Foreground = skin.Front,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 0, 0),
         };
 
         if (style == WindowStyle.Mac)
         {
-            row.Children.Add(Button(CaptionKind.Close, style));
-            row.Children.Add(Button(CaptionKind.Minimize, style));
-            row.Children.Add(Button(CaptionKind.Settings, style));
+            var lights = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0),
+            };
+
+            lights.Children.Add(Button(CaptionKind.Close, style));
+            lights.Children.Add(Button(CaptionKind.Minimize, style));
+            lights.Children.Add(Button(CaptionKind.Settings, style));
+
+            row.Children.Add(lights);
+            Grid.SetColumn(brand, 1);
+            row.Children.Add(brand);
+
+            Child = row;
+
+            return;
         }
-        else
+
+        row.Children.Add(brand);
+
+        var buttons = new StackPanel
         {
-            row.Children.Add(Button(CaptionKind.Settings, style));
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
 
-            // A tiling window manager is the frame already: a window button drawn here would be a button
-            // inside a frame the manager has.
-            if (style != WindowStyle.TillingWm)
-            {
-                row.Children.Add(Button(CaptionKind.Minimize, style));
-                row.Children.Add(Button(CaptionKind.Close, style));
-            }
+        buttons.Children.Add(Button(CaptionKind.Settings, style));
+
+        // A tiling window manager is the frame already: a window button drawn here would be a button
+        // inside a frame the manager has.
+        if (style != WindowStyle.TillingWm)
+        {
+            buttons.Children.Add(Button(CaptionKind.Minimize, style));
+            buttons.Children.Add(Button(CaptionKind.Close, style));
         }
 
-        Children.Add(
-            new Border
-            {
-                Background = new SolidColorBrush(Bed),
-                CornerRadius = new CornerRadius(0),
-                Padding = style == WindowStyle.Mac ? new Thickness(12, 5, 12, 5) : default,
-                Child = row,
-                HorizontalAlignment = style == WindowStyle.Mac
-                    ? HorizontalAlignment.Left
-                    : HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
-            }
-        );
+        Grid.SetColumn(buttons, 3);
+        row.Children.Add(buttons);
+
+        Child = row;
     }
 
-    /// <summary>One of the buttons on the strip.</summary>
+    /// <summary>One of the buttons on the row.</summary>
     /// <param name="kind">What it does.</param>
     /// <param name="style">How the frame is drawn.</param>
     /// <returns>The button.</returns>

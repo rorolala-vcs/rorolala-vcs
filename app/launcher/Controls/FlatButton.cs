@@ -13,11 +13,17 @@ internal enum ButtonKind
     /// <summary>No surface of its own: an ink on the ground, for what is beside the thing it is about.</summary>
     Quiet,
 
+    /// <summary>No surface of its own, written in the error colour, for taking something away.</summary>
+    QuietDanger,
+
     /// <summary>A surface of its own with a line around it, for an ordinary choice.</summary>
     Surface,
 
     /// <summary>Filled with the primary, for the choice the window is asking for.</summary>
     Primary,
+
+    /// <summary>Filled with the warning colour, for a choice that may not reach its server.</summary>
+    Warning,
 
     /// <summary>In the colour a thing that went wrong is written in, for taking something away.</summary>
     Danger,
@@ -64,8 +70,8 @@ internal sealed class FlatButton : Border
         _content = content;
         Kind = kind;
 
-        CornerRadius = new CornerRadius(6);
-        Height = 34;
+        CornerRadius = new CornerRadius(5);
+        Height = 32;
         Padding = new Thickness(14, 0, 14, 0);
         VerticalAlignment = VerticalAlignment.Center;
         Child = content;
@@ -96,7 +102,21 @@ internal sealed class FlatButton : Border
     }
 
     /// <summary>How it stands out.</summary>
-    public ButtonKind Kind { get; }
+    public ButtonKind Kind { get; private set; }
+
+    /// <summary>
+    /// Draws the button as another kind, which a button that changes its meaning while it stands does.
+    /// </summary>
+    /// <param name="skin">The colours in force.</param>
+    /// <param name="kind">How it stands out now.</param>
+    public void Restyle(Skin skin, ButtonKind kind)
+    {
+        ArgumentNullException.ThrowIfNull(skin);
+
+        Kind = kind;
+
+        Repaint(skin);
+    }
 
     /// <summary>Whether it may be pressed.</summary>
     public bool Enabled
@@ -123,12 +143,13 @@ internal sealed class FlatButton : Border
         _hover = hover;
 
         Background = _over ? _hover : _idle;
-        BorderThickness = Kind is ButtonKind.Surface or ButtonKind.Primary or ButtonKind.Danger
+        BorderThickness = Kind is ButtonKind.Surface or ButtonKind.Primary or ButtonKind.Warning or ButtonKind.Danger
             ? new Thickness(1)
             : default;
         BorderBrush = Kind switch
         {
             ButtonKind.Primary => new SolidColorBrush(skin.Palette.Primary),
+            ButtonKind.Warning => new SolidColorBrush(skin.WarningColour),
             ButtonKind.Danger => skin.Alarm,
             _ => skin.Splitter,
         };
@@ -147,6 +168,10 @@ internal sealed class FlatButton : Border
                 new SolidColorBrush(skin.Palette.Primary),
                 new SolidColorBrush(skin.Palette.Primary, 0.86)
             ),
+            ButtonKind.Warning => (
+                new SolidColorBrush(skin.WarningColour),
+                new SolidColorBrush(Skin.Mix(skin.WarningColour, Colors.White, 0.14))
+            ),
             ButtonKind.Surface => (
                 new SolidColorBrush(skin.Palette.Bright),
                 new SolidColorBrush(skin.Palette.Dark)
@@ -154,6 +179,10 @@ internal sealed class FlatButton : Border
             ButtonKind.Danger => (
                 new SolidColorBrush(skin.Palette.Bright),
                 new SolidColorBrush(skin.Palette.Front, 0.1)
+            ),
+            ButtonKind.QuietDanger => (
+                Brushes.Transparent,
+                new SolidColorBrush(skin.AlarmColour, 0.14)
             ),
             _ => (Brushes.Transparent, new SolidColorBrush(skin.Palette.Front, 0.09)),
         };
@@ -220,7 +249,9 @@ internal sealed class FlatButton : Border
         var ink = Kind switch
         {
             ButtonKind.Primary => skin.OnPrimary,
+            ButtonKind.Warning => skin.OnWarning,
             ButtonKind.Danger => skin.Alarm,
+            ButtonKind.QuietDanger => skin.Alarm,
             _ => skin.Front,
         };
 

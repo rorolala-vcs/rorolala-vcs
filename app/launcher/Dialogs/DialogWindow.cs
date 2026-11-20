@@ -22,6 +22,9 @@ internal abstract class DialogWindow : Window
     /// <summary>The row the window is moved by, and the title it states.</summary>
     private readonly Grid _bar;
 
+    /// <summary>The head, which carries the line under the title.</summary>
+    private readonly Border _head;
+
     /// <summary>The title, which is drawn in the ink in force.</summary>
     private readonly TextBlock _heading;
 
@@ -44,7 +47,7 @@ internal abstract class DialogWindow : Window
         ShowInTaskbar = false;
         WindowDecorations = Avalonia.Controls.WindowDecorations.None;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = skin.Mid;
+        Background = skin.Bright;
 
         _heading = new TextBlock
         {
@@ -52,15 +55,16 @@ internal abstract class DialogWindow : Window
             FontSize = 13,
             FontWeight = FontWeight.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(20, 0, 0, 0),
+            Margin = new Thickness(14, 0, 0, 0),
         };
 
         _close = new FlatButton(LauncherIcons.Glyph(LauncherIcons.Close, 10, skin.Front), skin)
         {
-            Width = 34,
-            Height = 26,
+            Width = 30,
+            Height = 30,
             Padding = default,
-            Margin = new Thickness(0, 0, 10, 0),
+            Margin = new Thickness(0, 0, 6, 0),
+            CornerRadius = new CornerRadius(5),
             VerticalAlignment = VerticalAlignment.Center,
         };
 
@@ -68,7 +72,7 @@ internal abstract class DialogWindow : Window
 
         _bar = new Grid
         {
-            Height = 44,
+            Height = 42,
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
         };
 
@@ -78,11 +82,19 @@ internal abstract class DialogWindow : Window
 
         _bar.PointerPressed += (_, e) => BeginMoveDrag(e);
 
-        Body = new StackPanel { Spacing = 14, Margin = new Thickness(24, 6, 24, 24) };
+        _head = new Border
+        {
+            Background = skin.Bright,
+            BorderBrush = skin.Splitter,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child = _bar,
+        };
+
+        Body = new StackPanel { Spacing = 14, Margin = new Thickness(18, 6, 18, 16) };
 
         var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
 
-        root.Children.Add(_bar);
+        root.Children.Add(_head);
         Grid.SetRow(Body, 1);
         root.Children.Add(Body);
 
@@ -91,7 +103,7 @@ internal abstract class DialogWindow : Window
             BorderBrush = skin.Splitter,
             BorderThickness = new Thickness(1),
             Child = root,
-            Background = skin.Mid,
+            Background = skin.Bright,
         };
     }
 
@@ -119,14 +131,17 @@ internal abstract class DialogWindow : Window
     {
         ArgumentNullException.ThrowIfNull(skin);
 
-        Background = skin.Mid;
+        Background = skin.Bright;
         _heading.Foreground = skin.Front;
 
         if (Content is Border frame)
         {
-            frame.Background = skin.Mid;
+            frame.Background = skin.Bright;
             frame.BorderBrush = skin.Splitter;
         }
+
+        _head.Background = skin.Bright;
+        _head.BorderBrush = skin.Splitter;
 
         // The mark is stamped in the ink it stands on, so a variant that changed is a mark made again
         // rather than one left in the colour of the variant it was made in.

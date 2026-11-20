@@ -69,6 +69,18 @@ internal sealed class WorkspacesFile
     }
 
     /// <summary>
+    /// Whether a directory is already on the list.
+    /// </summary>
+    /// <param name="path">The directory.</param>
+    /// <returns>Whether it is already there.</returns>
+    public bool Contains(string path)
+    {
+        var whole = Whole(path);
+
+        return Paths.Exists(held => string.Equals(held, whole, Comparison));
+    }
+
+    /// <summary>
     /// Takes a directory off the list.
     /// </summary>
     /// <remarks>

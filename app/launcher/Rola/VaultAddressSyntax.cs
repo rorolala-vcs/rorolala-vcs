@@ -31,6 +31,20 @@ internal static partial class VaultAddressSyntax
     private const string Scheme = "rola://";
 
     /// <summary>
+    /// Whether a written address is a full link: a scheme, a host, an optional port and a namespace.
+    /// </summary>
+    /// <remarks>
+    /// The address book and the hosted list write a link, so the field that adds one is read as a link
+    /// rather than as the several shorter spellings the command line also accepts. A bare host would be
+    /// an address the dock could not show next to the registry's own, and the namespace is what makes a
+    /// link name a Vault rather than a daemon.
+    /// </remarks>
+    /// <param name="text">What was written.</param>
+    /// <returns>Whether it is a full link.</returns>
+    public static bool Link(string? text) =>
+        !string.IsNullOrWhiteSpace(text) && LinkSyntax().IsMatch(text.Trim());
+
+    /// <summary>
     /// Whether a written address names a daemon.
     /// </summary>
     /// <param name="text">What was written.</param>
@@ -279,6 +293,10 @@ internal static partial class VaultAddressSyntax
     /// <summary>Every character a host is written with.</summary>
     [GeneratedRegex("^[A-Za-z0-9._-]+$")]
     private static partial Regex HostCharacters();
+
+    /// <summary>The shape of a full link, which is what the address field accepts.</summary>
+    [GeneratedRegex(@"^rola://[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9_-]+$")]
+    private static partial Regex LinkSyntax();
 
     /// <summary>Every character an account is written with.</summary>
     [GeneratedRegex("^[A-Za-z0-9._-]+$")]

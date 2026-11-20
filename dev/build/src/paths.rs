@@ -73,9 +73,6 @@ const DESKTOP_PLUGINS: &str = "app/desktop/Plugins";
 /// The launcher's project, from the workspace root.
 const LAUNCHER_PROJECT: &str = "app/launcher/ROLALauncher.csproj";
 
-/// The banners the launcher may play.
-const LAUNCHER_BANNERS: &str = "res/desktop-launcher-banner";
-
 /// The icon sets the Desktop may draw its file listing with.
 const DESKTOP_ICON_SETS: &str = "res/desktop-icon-set";
 
@@ -426,12 +423,6 @@ impl Workspace {
     #[must_use]
     pub fn launcher_project(&self) -> PathBuf {
         self.root.join(LAUNCHER_PROJECT)
-    }
-
-    /// The banners the launcher may play, taken from the tree rather than built.
-    #[must_use]
-    pub fn launcher_banners(&self) -> PathBuf {
-        self.root.join(LAUNCHER_BANNERS)
     }
 
     /// The icon sets the Desktop may draw its file listing with.

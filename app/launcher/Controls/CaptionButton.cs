@@ -47,15 +47,6 @@ internal sealed class CaptionButton : Border
     /// <summary>How wide it is on a light, where a light is smaller than a button.</summary>
     private const double LightExtent = 8.0;
 
-    /// <summary>The ink a mark is drawn in while the pointer is elsewhere, which is the look's muted ink.</summary>
-    private static readonly Color Resting = Color.FromArgb(0xBE, 0xFF, 0xFF, 0xFF);
-
-    /// <summary>The ink a mark is drawn in while the pointer is over it, which is the look's own ink.</summary>
-    private static readonly Color Aroused = Colors.White;
-
-    /// <summary>What a press that is held fills a mark with, as the look fills a held caption button.</summary>
-    private static readonly Color Held = Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF);
-
     /// <summary>What a mark that is neither hovered nor held is filled with, which is nothing.</summary>
     private static readonly IBrush Nothing = Brushes.Transparent;
 
@@ -65,14 +56,14 @@ internal sealed class CaptionButton : Border
     /// <summary>The colour of the light that puts the window away, which is the one the Desktop program draws.</summary>
     private static readonly Color MinimizeLight = Color.FromRgb(0xFE, 0xBC, 0x2E);
 
+    /// <summary>The colour of the light that opens what the program may be told.</summary>
+    private static readonly Color SettingsLight = Color.FromRgb(0x28, 0xC8, 0x40);
+
     /// <summary>The ink the mark on a light is drawn in, which is the one the Desktop program draws it in.</summary>
     private static readonly Color LightInk = Color.FromArgb(0x66, 0x00, 0x00, 0x00);
 
     /// <summary>What the button does.</summary>
     private readonly CaptionKind _kind;
-
-    /// <summary>How the frame is drawn, which decides which of the two spellings this mark is.</summary>
-    private readonly WindowStyle _style;
 
     /// <summary>The colours in force, which the close mark's wash is taken from.</summary>
     private readonly Skin _skin;
@@ -100,17 +91,16 @@ internal sealed class CaptionButton : Border
     {
         ArgumentNullException.ThrowIfNull(skin);
 
-        _style = style;
         _kind = kind;
         _skin = skin;
 
         var mac = style == WindowStyle.Mac;
 
-        _light = mac && kind != CaptionKind.Settings;
+        _light = mac;
 
         Width = mac ? 20 : 44;
-        Height = mac ? 20 : 29;
-        CornerRadius = mac ? new CornerRadius(10) : new CornerRadius(0);
+        Height = 34;
+        CornerRadius = new CornerRadius(0);
         BorderThickness = default;
         Padding = default;
         Background = Nothing;
@@ -133,22 +123,36 @@ internal sealed class CaptionButton : Border
                     Height = 12,
                     CornerRadius = new CornerRadius(6),
                     Background = new SolidColorBrush(
-                        kind == CaptionKind.Close ? CloseLight : MinimizeLight
+                        kind switch
+                        {
+                            CaptionKind.Close => CloseLight,
+                            CaptionKind.Minimize => MinimizeLight,
+                            _ => SettingsLight,
+                        }
                     ),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                 }
             );
 
-            _picture = Picture(kind, LightExtent);
-            _picture.Opacity = 0;
-            face.Children.Add(_picture);
+            if (kind == CaptionKind.Settings)
+            {
+                _mark = Marks.Cog(new SolidColorBrush(LightInk), LightExtent + 2);
+                _mark.Opacity = 0;
+                face.Children.Add(_mark);
+            }
+            else
+            {
+                _picture = Picture(kind, LightExtent);
+                _picture.Opacity = 0;
+                face.Children.Add(_picture);
+            }
         }
         else if (kind == CaptionKind.Settings)
         {
             // The settings is this program's own button and the set holds no picture for it, so it is the
             // one mark on the strip drawn as a line rather than stamped from a file.
-            _mark = Marks.Cog(new SolidColorBrush(Resting), 14);
+            _mark = Marks.Cog(_skin.Muted, 14);
             face.Children.Add(_mark);
         }
         else
@@ -165,16 +169,7 @@ internal sealed class CaptionButton : Border
     /// <summary>Raised when the mark is pressed and released on.</summary>
     public event EventHandler? Pressed;
 
-    /// <summary>The same colour at another opacity, which is how a wash is made from an ink.</summary>
-    /// <param name="colour">The colour.</param>
-    /// <param name="alpha">How opaque the wash is.</param>
-    /// <returns>The wash.</returns>
-    private static Color Wash(Color colour, byte alpha) =>
-        Color.FromArgb(alpha, colour.R, colour.G, colour.B);
-
-    /// <summary>
-    /// One of the Desktop program's two pictures, stamped in whatever ink the button is drawn in.
-    /// </summary>
+    /// <summary>One of the Desktop program's two pictures, stamped in whatever ink the button is drawn in.</summary>
     /// <param name="kind">Which picture.</param>
     /// <param name="extent">How wide it is drawn.</param>
     /// <returns>The picture, which is its own ink's to colour.</returns>
@@ -190,39 +185,47 @@ internal sealed class CaptionButton : Border
     {
         if (_light)
         {
-            // The light itself is the state: its colour is constant and its mark is what a reach for it
-            // reveals, which is the one thing the frame does for these buttons.
-            // UNWRAP: a light is made with a picture, which is what says it is one.
-            _picture!.Background = new SolidColorBrush(LightInk);
-            _picture.Opacity = _over ? 1 : 0;
+            if (_picture is not null)
+            {
+                _picture.Background = new SolidColorBrush(LightInk);
+                _picture.Opacity = _over ? 1 : 0;
+            }
+
+            if (_mark is not null)
+            {
+                _mark.Stroke = new SolidColorBrush(LightInk);
+                _mark.Opacity = _over ? 1 : 0;
+            }
 
             return;
         }
 
-        var closing = _kind == CaptionKind.Close && _style != WindowStyle.Mac;
+        var closing = _kind == CaptionKind.Close;
 
-        var ink = closing && _over ? _skin.AlarmColour
-            : _over ? Aroused
-            : Resting;
+        var ink = closing && _over
+            ? _skin.Alarm
+            : _over
+                ? _skin.Front
+                : new SolidColorBrush(_skin.Palette.Front, 0.74);
 
         if (_picture is not null)
         {
-            _picture.Background = new SolidColorBrush(ink);
+            _picture.Background = ink;
         }
 
         if (_mark is not null)
         {
-            _mark.Stroke = new SolidColorBrush(ink);
+            _mark.Stroke = ink;
         }
 
         Background = _pressed
             ? (closing
-                ? new SolidColorBrush(Wash(_skin.AlarmColour, 0x66))
-                : new SolidColorBrush(Held))
+                ? new SolidColorBrush(_skin.AlarmColour, 0.4)
+                : new SolidColorBrush(_skin.Palette.Front, 0.12))
             : _over
                 ? (closing
-                    ? new SolidColorBrush(Wash(_skin.AlarmColour, 0x3C))
-                    : new SolidColorBrush(Wash(Colors.White, 0x1F)))
+                    ? new SolidColorBrush(_skin.AlarmColour, 0.24)
+                    : new SolidColorBrush(_skin.Palette.Front, 0.08))
                 : Nothing;
     }
 

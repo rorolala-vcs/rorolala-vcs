@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -7,67 +8,61 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Theming;
-using RorolalaLauncher.Banner;
 using RorolalaLauncher.Controls;
 using RorolalaLauncher.Dialogs;
 using RorolalaLauncher.Rola;
 using RorolalaLauncher.Theming;
+using ShapeRectangle = Avalonia.Controls.Shapes.Rectangle;
 
 namespace RorolalaLauncher;
 
 /// <summary>
-/// The launcher's window: a picture at the top, the Workspaces this machine has opened under it, and what
-/// can be done about them at the bottom.
+/// The launcher's window: the Vaults this machine knows on the left, the Workspaces it has opened on the
+/// right, and the account and the create button in the strip at the bottom.
 /// </summary>
 /// <remarks>
-/// On a desktop that draws its own frame the window is one size and draws that frame itself: the picture is
-/// the frame, so a window whose frame was the desktop's would be two frames around one picture. Under a
-/// tiling window manager it is a resizable window the manager may tile, with the same drawn frame and a
-/// banner sized from the window's width and the picture's own ratio.
-/// <para>
 /// What the window is made of is made again whenever the look or the list changes: a launcher is a small
 /// window over a small state, and one statement of what it looks like is easier to keep true than a hundred
-/// brushes updated in place.
-/// </para>
+/// brushes updated in place. What is read from files and programs is read once by <see cref="Load"/>, and
+/// the handshakes that follow are spoken in the background, because a window that waited for each address
+/// before drawing would be a window that appeared late.
 /// </remarks>
 internal sealed class LauncherWindow : Window
 {
-    /// <summary>The window's width when it is not a tiling window manager's, which is also the width the list is laid out in.</summary>
-    private const double WidthOfWindow = 540;
+    /// <summary>The window's width when it is not a tiling window manager's.</summary>
+    private const double WidthOfWindow = 1100;
 
     /// <summary>The window's height when it is not a tiling window manager's.</summary>
-    private const double HeightOfWindow = 600;
+    private const double HeightOfWindow = 720;
 
-    /// <summary>The height of the banner before its picture says otherwise, which is the window's width over four.</summary>
-    private const double HeightOfBanner = WidthOfWindow / 4;
+    /// <summary>The columns of the body: the Vaults dock, the splitter, and what is left.</summary>
+    private const string ColumnsOfBody = "340,1,*";
 
-    /// <summary>The height of the row the three buttons sit in.</summary>
-    private const double HeightOfToolbar = 64;
+    /// <summary>The rows of the window: the title, and the body.</summary>
+    private const string RowsOfWindow = "34,*";
 
-    /// <summary>How many times the theme artwork's own size the welcome draws the look it is chosen in.</summary>
-    private const double ModeScale = 1.5;
+    /// <summary>The rows of a dock: its head, its body, and its foot.</summary>
+    private const string RowsOfDock = "36,*,40";
 
-    /// <summary>How far apart the three pictures of the look stand.</summary>
-    private const double ModeSpacing = 10;
+    /// <summary>How wide the mark the window waits under is.</summary>
+    private const double LoadingMarkDiameter = 26;
 
-    /// <summary>
-    /// How tall the welcome is when it centres something: the window, less the banner and the strip at the
-    /// bottom, less the room the list keeps above and below what it holds.
-    /// </summary>
-    private const double WelcomeHeight = HeightOfWindow - HeightOfBanner - HeightOfToolbar - 36;
-
-    /// <summary>How wide each of the two buttons under the welcome is drawn, which is one width for both.</summary>
-    private const double ActionWidth = 190;
+    /// <summary>How long a window is waited for before this window takes the wait back.</summary>
+    private static readonly TimeSpan WaitForWindow = TimeSpan.FromSeconds(30);
 
     /// <summary>Where this program keeps its own files.</summary>
     private readonly LauncherFiles _files;
 
     /// <summary>The command line program.</summary>
     private readonly RolaRunner _rola;
+
+    /// <summary>The daemon, which is the address book's own program.</summary>
+    private readonly Daemon _daemon;
 
     /// <summary>The accounts on this machine.</summary>
     private readonly Accounts _accounts;
@@ -81,63 +76,32 @@ internal sealed class LauncherWindow : Window
     /// <summary>What this program was told.</summary>
     private readonly LauncherSettings _settings;
 
-    /// <summary>
-    /// What this machine draws a frame in, which is what an unchosen frame is.
-    /// </summary>
-    /// <remarks>
-    /// Asked for with the rest of what the window shows, once it is on the screen: what a frame is drawn from is
-    /// not known before the command line has answered, and a window that waited for the answer before appearing
-    /// would be a window that appeared late.
-    /// </remarks>
-    private WindowStyle _machine = WindowStyle.Windows;
-
-    /// <summary>The Workspaces this machine has opened.</summary>
-    private WorkspacesFile _opened = null!;
-
-    /// <summary>The account the work acts as, or nothing when none has been chosen.</summary>
-    private string? _account;
-
-    /// <summary>The lines the welcome says about the program, read with the rest of what the window shows.</summary>
-    private IReadOnlyList<string> _slogans = [];
-
-    /// <summary>
-    /// Whether the window's own work has been read and drawn.
-    /// </summary>
-    /// <remarks>
-    /// Nothing that redraws the window runs before it is true: a window that draws itself again is one whose
-    /// list, picture and account have been read, and a redraw before they have is one over nothing.
-    /// </remarks>
-    private bool _ready;
+    /// <summary>What the machine draws a frame in, which is what an unchosen frame is.</summary>
+    private WindowStyle _machine;
 
     /// <summary>How this window's frame is drawn.</summary>
     private WindowStyle _frame;
 
-    /// <summary>The picture the banner plays, if one could be read.</summary>
-    private AsepriteAnimation? _animation;
-
-    /// <summary>What went wrong with the picture, if anything did.</summary>
-    private string? _bannerProblem;
-
     /// <summary>The colours of the variant in force.</summary>
     private Skin _skin;
 
-    /// <summary>The banner.</summary>
-    private BannerView _banner = null!;
+    /// <summary>The Workspaces this machine has opened.</summary>
+    private WorkspacesFile _opened = null!;
 
-    /// <summary>The row the banner is drawn in, whose height follows the width and the picture's ratio.</summary>
-    private Grid _bannerFrame = null!;
+    /// <summary>The addresses this launcher hosts.</summary>
+    private VaultsFile _hosted = null!;
 
-    /// <summary>The window's own buttons.</summary>
-    private TitleChrome _chrome = null!;
+    /// <summary>Every address in the dock, from the registry and from the file.</summary>
+    private readonly List<VaultEntry> _vaults = [];
 
-    /// <summary>What the list or the welcome is drawn in.</summary>
-    private StackPanel _content = null!;
+    /// <summary>The slots the racks were last drawn as, so that a handshake can redraw one.</summary>
+    private readonly Dictionary<VaultEntry, VaultSlot> _slots = [];
 
-    /// <summary>The button that creates a Workspace, which an account is needed for.</summary>
-    private FlatButton _create = null!;
+    /// <summary>The account the work acts as, or nothing when none has been chosen.</summary>
+    private string? _account;
 
-    /// <summary>The welcome's own button for the same thing, while the welcome is what is shown.</summary>
-    private FlatButton? _welcomeCreate;
+    /// <summary>Whether the window's own work has been read and drawn.</summary>
+    private bool _ready;
 
     /// <summary>Whether a Desktop window is being opened, which is what makes the rest of this one unavailable.</summary>
     private bool _busy;
@@ -148,17 +112,53 @@ internal sealed class LauncherWindow : Window
     /// <summary>The cards the list was last drawn as, which is what being busy is said to.</summary>
     private readonly List<WorkspaceCard> _cards = [];
 
-    /// <summary>The toolbar's own buttons, which are out of reach while a window is being opened.</summary>
+    /// <summary>The buttons that are out of reach while a window is being opened.</summary>
     private readonly List<FlatButton> _buttons = [];
 
     /// <summary>The language button and the menu it opens, out of reach for the same reason.</summary>
     private Control? _language;
 
-    /// <summary>How long a window is waited for before this window takes the wait back.</summary>
-    private static readonly TimeSpan WaitForWindow = TimeSpan.FromSeconds(30);
+    /// <summary>The window's own title row.</summary>
+    private TitleChrome _chrome = null!;
 
-    /// <summary>How wide the mark the window waits under is drawn, which is as wide as a wait this short wants.</summary>
-    private const double LoadingMarkDiameter = 26;
+    /// <summary>What the left dock shows, which is rebuilt when the address list changes.</summary>
+    private StackPanel _leftBody = null!;
+
+    /// <summary>The rack of addresses the daemon serves.</summary>
+    private StackPanel _registryRack = null!;
+
+    /// <summary>The rack of addresses this launcher hosts.</summary>
+    private StackPanel _hostedRack = null!;
+
+    /// <summary>The list of Workspaces.</summary>
+    private StackPanel _workspaceList = null!;
+
+    /// <summary>How many addresses the dock holds.</summary>
+    private TextBlock _vaultCount = null!;
+
+    /// <summary>How many Workspaces the list holds.</summary>
+    private TextBlock _workspaceCount = null!;
+
+    /// <summary>What the dock's foot says about the handshakes.</summary>
+    private TextBlock _summary = null!;
+
+    /// <summary>The lamp beside the summary.</summary>
+    private VaultLed _summaryLed = null!;
+
+    /// <summary>The button that creates a Workspace, which an account is needed for.</summary>
+    private FlatButton _create = null!;
+
+    /// <summary>Where toasts are laid over the window.</summary>
+    private StackPanel _toastLayer = null!;
+
+    /// <summary>The menu that opens over an address.</summary>
+    private Popup _vaultMenu = null!;
+
+    /// <summary>The menu the language button opens, so that Escape closes it before the window.</summary>
+    private Popup? _languageMenu;
+
+    /// <summary>The create button the empty state carries, which an account is also needed for.</summary>
+    private FlatButton? _emptyCreate;
 
     /// <summary>Makes the window, holding only the mark it waits under.</summary>
     /// <param name="files">Where this program keeps its own files.</param>
@@ -167,12 +167,6 @@ internal sealed class LauncherWindow : Window
     /// <param name="connection">What a connection is checked through.</param>
     /// <param name="theme">The look.</param>
     /// <param name="settings">What this program was told.</param>
-    /// <remarks>
-    /// The window is made with nothing in it but the mark, and what it shows is read once it is on the screen.
-    /// How this machine draws a frame and what accounts it holds are both questions answered by starting the
-    /// command line program, and a launcher that appeared only once those had answered would be a launcher that
-    /// appeared late. What is read is read by <see cref="Load"/>, which the window is asked for when it is up.
-    /// </remarks>
     public LauncherWindow(
         LauncherFiles files,
         RolaRunner rola,
@@ -191,23 +185,21 @@ internal sealed class LauncherWindow : Window
 
         _files = files;
         _rola = rola;
+        _daemon = new Daemon(files.Daemon);
         _accounts = accounts;
         _connection = connection;
         _theme = theme;
         _settings = settings;
 
-        // What the machine draws is not known yet and is not waited for before the window. Until it has been
-        // asked, the frame a choice does not name is drawn the way an unchosen frame would be if the machine
-        // said nothing, which is what the window is rebuilt with once its work has been read.
         _machine = WindowStyle.Windows;
         _frame = settings.Frame ?? _machine;
         _skin = theme.Skin;
 
-        Title = "Rola Launcher";
+        Title = "ROLA Launcher";
         Width = WidthOfWindow;
         Height = HeightOfWindow;
-        MinWidth = 360;
-        MinHeight = 360;
+        MinWidth = 900;
+        MinHeight = 560;
         CanResize = Program.Tiling;
         WindowDecorations = Avalonia.Controls.WindowDecorations.None;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -215,16 +207,31 @@ internal sealed class LauncherWindow : Window
 
         KeyDown += (_, e) =>
         {
-            // A window that is being opened is not one to leave: what it started is being waited for, and the
-            // wait is the way out rather than a key that ends the window over it.
-            if (e.Key == Key.Escape && !_busy)
+            if (e.Key != Key.Escape)
+            {
+                return;
+            }
+
+            if (_vaultMenu is not null && _vaultMenu.IsOpen)
+            {
+                _vaultMenu.IsOpen = false;
+
+                return;
+            }
+
+            if (_languageMenu is not null && _languageMenu.IsOpen)
+            {
+                _languageMenu.IsOpen = false;
+
+                return;
+            }
+
+            if (!_busy)
             {
                 Close();
             }
         };
 
-        // The same judgement for the window's own way out, and for the desktop's: a closing window would leave
-        // the start it made unreported and the process it started nobody's. What ends the wait is the wait.
         Closing += (_, leave) =>
         {
             if (_busy)
@@ -242,8 +249,6 @@ internal sealed class LauncherWindow : Window
         {
             _skin = _theme.Skin;
 
-            // A window that has not been read yet is one with nothing to draw again: what it is drawn from is
-            // read once, by `Load`, and the skin it wears when that runs is the one this has just set.
             if (!_ready)
             {
                 return;
@@ -256,14 +261,8 @@ internal sealed class LauncherWindow : Window
     }
 
     /// <summary>
-    /// Reads what the window shows, once the window is on the screen, and draws it.
+    /// Reads what the window shows, once it is on the screen, and draws it.
     /// </summary>
-    /// <remarks>
-    /// The two questions that cost a process each are asked where the window's thread does not have to wait for
-    /// them: what a thread waiting on a program does is nothing the window can draw while it waits. Everything
-    /// else here is a file, and what comes out of it is what the window is drawn from, so it is read on the
-    /// window's own thread.
-    /// </remarks>
     /// <returns>A task that ends when the window has been built.</returns>
     internal async Task Load()
     {
@@ -274,10 +273,10 @@ internal sealed class LauncherWindow : Window
 
         var machine = Task.Run(() => _rola.ProbeWindowStyle(_files.Beside));
         var account = Task.Run(() => _accounts.List(_files.Root).Current);
+        var registry = Task.Run(() => _daemon.List(_files.Beside, _rola.Language));
 
         _machine = (await machine) ?? WindowStyle.Windows;
         _frame = _settings.Frame ?? _machine;
-        _slogans = Slogans.Read(_files.Slogans);
 
         try
         {
@@ -285,30 +284,57 @@ internal sealed class LauncherWindow : Window
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            // A list that could not be read is a list with nothing on it: the file is a convenience, and a
-            // window that refused to open over it would be refusing over the wrong thing.
             _opened = new WorkspacesFile();
+        }
+
+        try
+        {
+            _hosted = VaultsFile.Read(_files.Vaults);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            _hosted = new VaultsFile();
+        }
+
+        var served = await registry;
+
+        _vaults.Clear();
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var space in served.Namespaces)
+        {
+            var address = $"rola://localhost/{space}";
+
+            if (seen.Add(address))
+            {
+                _vaults.Add(new VaultEntry(space, address, VaultSource.Registry));
+            }
+        }
+
+        foreach (var hosted in _hosted.Entries)
+        {
+            if (seen.Add(hosted.Address))
+            {
+                _vaults.Add(hosted);
+            }
         }
 
         _account = await account;
 
-        // The window may have been left while its work was being read: there is nothing to draw in then, and a
-        // window that is gone is not one to build a list for.
         if (!IsVisible)
         {
             return;
         }
 
-        LoadBanner();
-
         Build();
 
         _ready = true;
+
+        CheckAll();
     }
 
-    /// <summary>
-    /// Puts up the mark the window waits under, which is all it holds before there is something in it.
-    /// </summary>
+    /// <summary>Puts up the mark the window waits under, which is all it holds before it is read.</summary>
     private void ShowLoading()
     {
         Content = new Grid
@@ -318,158 +344,536 @@ internal sealed class LauncherWindow : Window
         };
     }
 
-    /// <summary>
-    /// Builds the whole window from what is in force.
-    /// </summary>
+    /// <summary>Builds the whole window from what is in force.</summary>
     private void Build()
     {
-        // A window drawn again is one whose words or look changed, and neither can happen while a Desktop window
-        // is being opened: the rebuild would replace the card that is turning its mark, and the wait would be
-        // waiting over a list that no longer says so.
         if (_busy)
         {
             return;
         }
-
-        _banner = new BannerView();
-
-        _banner.Play(_animation);
-        _banner.Repaint(_skin);
-        _banner.ReplacementAsked += (_, _) => _ = ReplaceBanner();
 
         _chrome = new TitleChrome(this, _skin);
 
         _chrome.Arrange(_skin, _frame);
         _chrome.SettingsAsked += (_, _) => _ = OpenSettings();
 
-        _content = new StackPanel { Spacing = 10, Margin = new Thickness(20, 18, 20, 18) };
+        var body = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions(ColumnsOfBody),
+        };
+
+        body.Children.Add(LeftDock());
+
+        var splitter = new Border { Background = _skin.Splitter };
+
+        Grid.SetColumn(splitter, 1);
+        body.Children.Add(splitter);
+
+        var workspaces = RightDock();
+
+        Grid.SetColumn(workspaces, 2);
+        body.Children.Add(workspaces);
+
+        _toastLayer = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 14, 54),
+            IsHitTestVisible = false,
+        };
+
+        _vaultMenu = new Popup
+        {
+            Placement = PlacementMode.Pointer,
+            IsLightDismissEnabled = true,
+        };
+
+        var root = new Grid
+        {
+            RowDefinitions = new RowDefinitions(RowsOfWindow),
+            Background = _skin.Mid,
+        };
+
+        root.Children.Add(_chrome);
+
+        Grid.SetRow(body, 1);
+        root.Children.Add(body);
+
+        Grid.SetRow(_toastLayer, 1);
+        root.Children.Add(_toastLayer);
+        root.Children.Add(_vaultMenu);
+
+        Content = root;
+
+        Fill();
+    }
+
+    /// <summary>The left dock: the Vaults head, the racks, and the handshake summary.</summary>
+    /// <returns>The dock.</returns>
+    private Control LeftDock()
+    {
+        _vaultCount = new TextBlock
+        {
+            FontSize = 11,
+            FontWeight = FontWeight.Bold,
+            Foreground = _skin.Muted,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var add = IconButton(
+            Marks.Plus(_skin.Muted, 14),
+            RolaI18N.Get("launcher.vaults.add"),
+            () => _ = OpenVaultDialog(null)
+        );
+
+        _leftBody = new StackPanel
+        {
+            Margin = new Thickness(12),
+            Spacing = 0,
+        };
+
+        _registryRack = new StackPanel();
+        _hostedRack = new StackPanel();
+
+        _leftBody.Children.Add(GroupHead(RolaI18N.Get("launcher.vaults.registry"), first: true));
+        _leftBody.Children.Add(Rack(_registryRack));
+        _leftBody.Children.Add(GroupHead(RolaI18N.Get("launcher.vaults.hosted"), first: false));
+        _leftBody.Children.Add(Rack(_hostedRack));
+
+        var tile = new AddTile(RolaI18N.Get("launcher.vaults.add"), _skin);
+
+        tile.Clicked += (_, _) => _ = OpenVaultDialog(null);
+        _leftBody.Children.Add(tile);
+
+        _summaryLed = new VaultLed(6);
+
+        _summary = new TextBlock
+        {
+            FontSize = 11.5,
+            Foreground = _skin.Muted,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+
+        var dock = new Grid
+        {
+            RowDefinitions = new RowDefinitions(RowsOfDock),
+        };
+
+        dock.Children.Add(
+            DockHead(
+                Marks.Vault(_skin.Muted, 15),
+                "Vaults",
+                _vaultCount,
+                add
+            )
+        );
 
         var scroll = new ScrollViewer
         {
-            Content = _content,
+            Content = _leftBody,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Background = _skin.Mid,
         };
 
-        _bannerFrame = new Grid { Height = HeightOfBanner };
+        Grid.SetRow(scroll, 1);
+        dock.Children.Add(scroll);
 
-        _bannerFrame.Children.Add(new Border { Background = _skin.Dark });
-        _bannerFrame.Children.Add(_banner);
-        _bannerFrame.Children.Add(OverBanner());
-        _bannerFrame.Children.Add(_chrome);
+        var foot = DockFoot();
 
-        var root = new Grid
+        Grid.SetRow(foot, 2);
+        dock.Children.Add(foot);
+
+        return dock;
+    }
+
+    /// <summary>The right dock: the Workspaces head, the cards, and the toolbar.</summary>
+    /// <returns>The dock.</returns>
+    private Control RightDock()
+    {
+        _workspaceCount = new TextBlock
         {
-            RowDefinitions = new RowDefinitions($"Auto,*,{HeightOfToolbar}"),
+            FontSize = 11,
+            FontWeight = FontWeight.Bold,
+            Foreground = _skin.Muted,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        _workspaceList = new StackPanel
+        {
+            Spacing = 10,
+            Margin = new Thickness(12),
+        };
+
+        var dock = new Grid
+        {
+            RowDefinitions = new RowDefinitions(RowsOfDock),
+        };
+
+        dock.Children.Add(
+            DockHead(
+                Marks.Workspace(_skin.Muted, 15),
+                RolaI18N.Get("launcher.workspaces.title"),
+                _workspaceCount,
+                null
+            )
+        );
+
+        var scroll = new ScrollViewer
+        {
+            Content = _workspaceList,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Background = _skin.Mid,
         };
 
+        Grid.SetRow(scroll, 1);
+        dock.Children.Add(scroll);
+
         var toolbar = Toolbar();
 
-        root.Children.Add(_bannerFrame);
-        Grid.SetRow(scroll, 1);
-        root.Children.Add(scroll);
         Grid.SetRow(toolbar, 2);
-        root.Children.Add(toolbar);
+        dock.Children.Add(toolbar);
 
-        root.SizeChanged += (_, _) => FitBanner(root.Bounds.Width);
-        Content = root;
-
-        FitBanner(WidthOfWindow);
-        Fill();
+        return dock;
     }
 
-    /// <summary>
-    /// Sizes the banner to the window's width and the picture's own ratio.
-    /// </summary>
-    /// <remarks>
-    /// The banner is the window's frame, so it follows the window's width; what it is tall is the
-    /// picture's ratio rather than a number written here, which is what keeps a picture drawn at its
-    /// own shape when the window is a tiling window manager's and is made a different size.
-    /// </remarks>
-    /// <param name="width">The width the banner has to fill.</param>
-    private void FitBanner(double width)
+    /// <summary>One dock's head: its mark, its name, how many it holds, and what may be done there.</summary>
+    /// <param name="icon">The mark.</param>
+    /// <param name="title">What the dock is called.</param>
+    /// <param name="count">How many it holds.</param>
+    /// <param name="tool">What may be done there, or nothing.</param>
+    /// <returns>The head.</returns>
+    private Control DockHead(Control icon, string title, TextBlock count, Control? tool)
     {
-        if (_bannerFrame is null)
+        var grid = new Grid
         {
-            return;
-        }
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"),
+            Margin = new Thickness(12, 0, 8, 0),
+        };
 
-        var ratio = _banner.AspectRatio > 0 ? _banner.AspectRatio : 4;
-        var height = Math.Max(1, width / ratio);
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(icon);
 
-        if (Math.Abs(_bannerFrame.Height - height) > 0.5)
+        var name = new TextBlock
         {
-            _bannerFrame.Height = height;
-        }
-    }
+            Text = title,
+            FontSize = 13,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = _skin.Front,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
+        };
 
-    /// <summary>
-    /// What is written over the picture when there is none, or when the one there could not be read.
-    /// </summary>
-    /// <returns>The layer.</returns>
-    private Control OverBanner()
-    {
-        if (_bannerProblem is null && _animation is not null)
+        Grid.SetColumn(name, 1);
+        grid.Children.Add(name);
+
+        var badge = new Border
         {
-            return new Panel();
-        }
+            Height = 18,
+            MinWidth = 20,
+            Padding = new Thickness(6, 0, 6, 0),
+            CornerRadius = new CornerRadius(9),
+            Background = _skin.Dark,
+            BorderBrush = _skin.Splitter,
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
+            Child = count,
+        };
 
-        var says = _bannerProblem is null
-            ? RolaI18N.Get("launcher.banner.empty")
-            : RolaI18N.Get("launcher.banner.problem", _bannerProblem);
+        Grid.SetColumn(badge, 2);
+        grid.Children.Add(badge);
+
+        if (tool is not null)
+        {
+            tool.VerticalAlignment = VerticalAlignment.Center;
+
+            Grid.SetColumn(tool, 4);
+            grid.Children.Add(tool);
+        }
 
         return new Border
         {
-            Background = _skin.Dark,
-            Child = new TextBlock
-            {
-                Text = says,
-                FontSize = 12,
-                Foreground = _skin.Muted,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth = WidthOfWindow - 120,
-                TextAlignment = TextAlignment.Center,
-            },
-            IsHitTestVisible = false,
+            Background = _skin.Bright,
+            BorderBrush = _skin.Splitter,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child = grid,
         };
     }
 
-    /// <summary>The row at the bottom: the language on the left, and what can be done on the right.</summary>
-    /// <returns>The row.</returns>
+    /// <summary>The left dock's foot: what the handshakes came to, and the button that asks again.</summary>
+    /// <returns>The foot.</returns>
+    private Control DockFoot()
+    {
+        var recheck = IconButton(
+            Marks.Refresh(_skin.Muted, 14),
+            RolaI18N.Get("launcher.vaults.recheck_all"),
+            () =>
+            {
+                CheckAll();
+                Toast(RolaI18N.Get("launcher.vaults.rechecking"));
+            }
+        );
+
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            Margin = new Thickness(12, 0, 8, 0),
+            ColumnSpacing = 8,
+        };
+
+        grid.Children.Add(_summaryLed);
+
+        Grid.SetColumn(_summary, 1);
+        grid.Children.Add(_summary);
+
+        Grid.SetColumn(recheck, 2);
+        grid.Children.Add(recheck);
+
+        return new Border
+        {
+            Background = _skin.Mid,
+            BorderBrush = _skin.Splitter,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Child = grid,
+        };
+    }
+
+    /// <summary>A group's name above a rack.</summary>
+    /// <param name="label">What the group is called.</param>
+    /// <param name="first">Whether it is the first group, which carries no room above it.</param>
+    /// <returns>The label.</returns>
+    private Control GroupHead(string label, bool first)
+    {
+        return new TextBlock
+        {
+            Text = label,
+            FontSize = 11,
+            FontWeight = FontWeight.Bold,
+            LetterSpacing = 1,
+            Foreground = _skin.Muted,
+            Margin = new Thickness(2, first ? 1 : 16, 2, 7),
+        };
+    }
+
+    /// <summary>A rack: a rounded surface that holds slots, or says it is empty.</summary>
+    /// <param name="host">Where the slots are put.</param>
+    /// <returns>The rack.</returns>
+    private Control Rack(StackPanel host)
+    {
+        return new Border
+        {
+            Background = _skin.Bright,
+            BorderBrush = _skin.Splitter,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            ClipToBounds = true,
+            Child = host,
+        };
+    }
+
+    /// <summary>Draws both racks from the addresses in force.</summary>
+    private void FillVaults()
+    {
+        foreach (var slot in _slots.Values)
+        {
+            slot.Stop();
+        }
+
+        _slots.Clear();
+        _registryRack.Children.Clear();
+        _hostedRack.Children.Clear();
+
+        AddSlots(_registryRack, _vaults.FindAll(entry => entry.Source == VaultSource.Registry), RolaI18N.Get("launcher.vaults.registry_empty"));
+        AddSlots(_hostedRack, _vaults.FindAll(entry => entry.Source == VaultSource.Hosted), RolaI18N.Get("launcher.vaults.hosted_empty"));
+
+        _vaultCount.Text = _vaults.Count.ToString(CultureInfo.InvariantCulture);
+
+        UpdateSummary();
+    }
+
+    /// <summary>Puts one group's slots into its rack.</summary>
+    /// <param name="host">The rack's stack.</param>
+    /// <param name="entries">The addresses.</param>
+    /// <param name="empty">What the rack says when it holds none.</param>
+    private void AddSlots(StackPanel host, List<VaultEntry> entries, string empty)
+    {
+        if (entries.Count == 0)
+        {
+            host.Children.Add(
+                new TextBlock
+                {
+                    Text = empty,
+                    FontSize = 12,
+                    Foreground = _skin.Faint,
+                    Margin = new Thickness(14, 16, 14, 16),
+                }
+            );
+
+            return;
+        }
+
+        for (var index = 0; index < entries.Count; index++)
+        {
+            var entry = entries[index];
+            var slot = new VaultSlot(entry, _skin, index == 0, OpenVaultMenu);
+
+            entry.Changed -= OnVaultChanged;
+            entry.Changed += OnVaultChanged;
+
+            _slots[entry] = slot;
+            host.Children.Add(slot);
+        }
+    }
+
+    /// <summary>Draws the Workspaces from the list in force.</summary>
+    private void FillWorkspaces()
+    {
+        _workspaceList.Children.Clear();
+        _cards.Clear();
+        _emptyCreate = null;
+
+        if (_opened.Paths.Count == 0)
+        {
+            _workspaceList.Children.Add(EmptyWorkspaces());
+
+            _workspaceCount.Text = "0";
+            UpdateCreate();
+
+            return;
+        }
+
+        foreach (var path in _opened.Paths)
+        {
+            var card = new WorkspaceCard(path, _skin, chosen => _ = Open(chosen), Remove);
+
+            _cards.Add(card);
+            _workspaceList.Children.Add(card);
+        }
+
+        _workspaceCount.Text = _opened.Paths.Count.ToString(CultureInfo.InvariantCulture);
+
+        UpdateCreate();
+    }
+
+    /// <summary>What a machine with no Workspaces is shown.</summary>
+    /// <returns>The empty state.</returns>
+    private Control EmptyWorkspaces()
+    {
+        var icon = Marks.Workspace(_skin.Faint, 26);
+
+        var title = new TextBlock
+        {
+            Text = RolaI18N.Get("launcher.workspace.empty"),
+            FontSize = 15,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = _skin.Front,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+
+        var sub = new TextBlock
+        {
+            Text = RolaI18N.Get("launcher.workspace.empty_hint"),
+            FontSize = 12.5,
+            Foreground = _skin.Muted,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 300,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+
+        var create = new FlatButton(
+            new TextBlock { Text = RolaI18N.Get("launcher.workspace.create"), FontSize = 13, FontWeight = FontWeight.SemiBold },
+            _skin,
+            ButtonKind.Primary
+        )
+        {
+            Height = 32,
+            CornerRadius = new CornerRadius(5),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+
+        create.Enabled = _account is not null;
+        create.Clicked += (_, _) => _ = OpenCreate();
+
+        _emptyCreate = create;
+
+        var stack = new StackPanel
+        {
+            Spacing = 6,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(20, 32, 20, 32),
+        };
+
+        stack.Children.Add(icon);
+        stack.Children.Add(title);
+        stack.Children.Add(sub);
+        stack.Children.Add(create);
+
+        var outline = new ShapeRectangle
+        {
+            StrokeThickness = 1,
+            Stroke = _skin.Splitter,
+            StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 4, 3 },
+            RadiusX = 10,
+            RadiusY = 10,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            IsHitTestVisible = false,
+            Margin = new Thickness(0.5),
+        };
+
+        var root = new Panel { Margin = new Thickness(0, 12, 0, 0) };
+
+        root.Children.Add(outline);
+        root.Children.Add(stack);
+
+        return root;
+    }
+
+    /// <summary>The right dock's foot: the language, the account, importing and creating.</summary>
+    /// <returns>The foot.</returns>
     private Control Toolbar()
     {
+        _buttons.Clear();
+
+        _language = LanguageMenu();
+
         var account = ToolbarButton(
             LauncherIcons.Of(Icons.AccountCircle),
+            17,
             RolaI18N.Get("launcher.toolbar.account"),
             () => _ = OpenAccount()
         );
 
-        _create = ToolbarButton(
-            LauncherIcons.Of(Icons.AddCircle),
-            RolaI18N.Get("launcher.toolbar.create"),
-            () => _ = OpenCreate()
-        );
-
         var import = ToolbarButton(
             LauncherIcons.Of(Icons.FolderOpen),
+            17,
             RolaI18N.Get("launcher.toolbar.import"),
             () => _ = Import()
         );
 
-        var language = LanguageMenu();
+        _create = new FlatButton(CreateFace(), _skin, ButtonKind.Primary)
+        {
+            Height = 32,
+            CornerRadius = new CornerRadius(5),
+            Padding = new Thickness(14, 0, 14, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
 
-        // The row is what the window offers while nothing is being opened: what is kept is the same controls, so
-        // that opening a window can put all of them out of reach at once rather than one at a time.
-        _buttons.Clear();
+        _create.Clicked += (_, _) => _ = OpenCreate();
+
         _buttons.Add(account);
         _buttons.Add(_create);
         _buttons.Add(import);
-
-        _language = language;
 
         var buttons = new StackPanel
         {
@@ -478,18 +882,16 @@ internal sealed class LauncherWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
         };
 
+        buttons.Children.Add(_language);
         buttons.Children.Add(account);
-        buttons.Children.Add(_create);
         buttons.Children.Add(import);
+        buttons.Children.Add(_create);
 
         var row = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(20, 0, 20, 0),
+            Margin = new Thickness(10, 0, 10, 0),
         };
-
-        row.Children.Add(language);
 
         Grid.SetColumn(buttons, 1);
         row.Children.Add(buttons);
@@ -503,16 +905,84 @@ internal sealed class LauncherWindow : Window
         };
     }
 
+    /// <summary>What the create button carries: a plus and its name.</summary>
+    /// <returns>The face.</returns>
+    private Control CreateFace()
+    {
+        var face = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        face.Children.Add(LauncherIcons.Glyph(LauncherIcons.Of(Icons.AddCircle), 14, _skin.OnPrimary));
+        face.Children.Add(
+            new TextBlock
+            {
+                Text = RolaI18N.Get("launcher.workspace.create"),
+                FontSize = 13,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = _skin.OnPrimary,
+                VerticalAlignment = VerticalAlignment.Center,
+            }
+        );
+
+        return face;
+    }
+
+    /// <summary>One of the foot's icon buttons: a picture, what it is for, and what pressing it does.</summary>
+    /// <param name="picture">The picture.</param>
+    /// <param name="extent">How wide it is drawn.</param>
+    /// <param name="tip">What it is for.</param>
+    /// <param name="pressed">What pressing it does.</param>
+    /// <returns>The button.</returns>
+    private FlatButton ToolbarButton(Bitmap picture, double extent, string tip, Action pressed)
+    {
+        var button = new FlatButton(LauncherIcons.Glyph(picture, extent, _skin.Front), _skin, ButtonKind.Surface)
+        {
+            Width = 42,
+            Height = 32,
+            Padding = default,
+            CornerRadius = new CornerRadius(5),
+        };
+
+        button.Clicked += (_, _) => pressed();
+
+        ToolTip.SetTip(button, tip);
+        AutomationProperties.SetName(button, tip);
+
+        return button;
+    }
+
+    /// <summary>A small button that carries a drawn mark.</summary>
+    /// <param name="mark">The mark.</param>
+    /// <param name="tip">What it is for.</param>
+    /// <param name="pressed">What pressing it does.</param>
+    /// <returns>The button.</returns>
+    private FlatButton IconButton(Avalonia.Controls.Shapes.Path mark, string tip, Action pressed)
+    {
+        var button = new FlatButton(mark, _skin, ButtonKind.Quiet)
+        {
+            Width = 26,
+            Height = 26,
+            Padding = default,
+            CornerRadius = new CornerRadius(5),
+        };
+
+        button.Clicked += (_, _) => pressed();
+
+        mark.Stroke = _skin.Muted;
+
+        ToolTip.SetTip(button, tip);
+        AutomationProperties.SetName(button, tip);
+
+        return button;
+    }
+
     /// <summary>
     /// The language the program speaks, as a button that opens the two it may speak.
     /// </summary>
-    /// <remarks>
-    /// The button is the size of the three beside it and carries no word: the language a window is written
-    /// in is not something a person reads the name of once they are in it, and the three buttons it stands
-    /// beside are marks too. What it is, and what it would say, is the mark and the caret under it. What is
-    /// chosen is written to the preference file the Desktop program reads, so the two programs go on
-    /// speaking one language rather than each its own.
-    /// </remarks>
     /// <returns>The button, and the menu it opens.</returns>
     private Control LanguageMenu()
     {
@@ -531,10 +1001,10 @@ internal sealed class LauncherWindow : Window
 
         var button = new FlatButton(face, _skin, ButtonKind.Surface)
         {
-            Width = 46,
-            Height = 38,
+            Width = 42,
+            Height = 32,
             Padding = default,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            CornerRadius = new CornerRadius(5),
         };
 
         var named = RolaI18N.Get("launcher.language");
@@ -551,6 +1021,8 @@ internal sealed class LauncherWindow : Window
             IsLightDismissEnabled = true,
         };
 
+        _languageMenu = menu;
+
         foreach (var option in LauncherLanguage.Options)
         {
             var chosen = string.Equals(option.Locale, current.Locale, StringComparison.Ordinal);
@@ -561,9 +1033,10 @@ internal sealed class LauncherWindow : Window
                 chosen ? ButtonKind.Primary : ButtonKind.Quiet
             )
             {
-                Height = 32,
+                Height = 30,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(12, 0, 12, 0),
+                Padding = new Thickness(9, 0, 9, 0),
+                CornerRadius = new CornerRadius(5),
             };
 
             item.Clicked += (_, _) =>
@@ -583,6 +1056,7 @@ internal sealed class LauncherWindow : Window
             BorderThickness = new Thickness(1),
             Padding = new Thickness(4),
             Width = 168,
+            CornerRadius = new CornerRadius(8),
             Child = options,
         };
 
@@ -591,14 +1065,7 @@ internal sealed class LauncherWindow : Window
         return new Panel { Children = { button, menu } };
     }
 
-    /// <summary>
-    /// Switches the language the window speaks, and keeps the choice.
-    /// </summary>
-    /// <remarks>
-    /// The window is drawn again whole rather than having its words replaced: every word it shows is read
-    /// while it is built, and one statement of what it says is easier to keep true than a hundred labels
-    /// changed in place.
-    /// </remarks>
+    /// <summary>Switches the language the window speaks, and keeps the choice.</summary>
     /// <param name="locale">The locale chosen.</param>
     private void Choose(string locale)
     {
@@ -608,8 +1075,6 @@ internal sealed class LauncherWindow : Window
         }
         catch (ConfigurationFailure failure)
         {
-            // The file the choice is kept in could not be written, so the window is left speaking what it was
-            // speaking: a choice the next run would not find is a choice it did not make.
             _ = Notice(RolaI18N.Get("launcher.language"), failure.Message);
 
             return;
@@ -618,403 +1083,429 @@ internal sealed class LauncherWindow : Window
         Build();
     }
 
-
-    /// <summary>One of the toolbar's buttons: a picture, and what pressing it does.</summary>
-    /// <param name="picture">The picture.</param>
-    /// <param name="tip">What it is for.</param>
-    /// <param name="pressed">What pressing it does.</param>
-    /// <returns>The button.</returns>
-    private FlatButton ToolbarButton(Bitmap picture, string tip, Action pressed)
-    {
-        var button = new FlatButton(LauncherIcons.Glyph(picture, 16, _skin.Front), _skin, ButtonKind.Surface)
-        {
-            Width = 46,
-            Height = 38,
-            Padding = default,
-        };
-
-        button.Clicked += (_, _) => pressed();
-
-        ToolTip.SetTip(button, tip);
-
-        return button;
-    }
-
-    /// <summary>
-    /// Draws what the list area shows: the Workspaces, or the welcome a machine with none is met with.
-    /// </summary>
+    /// <summary>Draws what the window shows: both docks.</summary>
     private void Fill()
     {
-        // The list is not redrawn while a window is being opened, for the reason the whole window is not: the card
-        // that is turning its mark is in this list, and a list drawn again would be a list without it.
         if (_busy)
         {
             return;
         }
 
-        _content.Children.Clear();
-        _welcomeCreate = null;
-        _cards.Clear();
+        FillVaults();
+        FillWorkspaces();
+    }
 
-        if (_create is not null)
+    /// <summary>Sets the create button and the empty state's button to what the account allows.</summary>
+    private void UpdateCreate()
+    {
+        if (_create is null)
         {
-            // A Workspace is made against a Vault as somebody, so a machine with no account has nothing to
-            // make one as. Importing one needs no account: it is a directory that already exists.
-            _create.Enabled = _account is not null;
-
-            var tip = _account is null
-                ? RolaI18N.Get("launcher.toolbar.create_needs_account")
-                : RolaI18N.Get("launcher.toolbar.create");
-
-            ToolTip.SetTip(_create, tip);
-        }
-
-        if (_opened.Paths.Count == 0)
-        {
-            Welcome();
-
             return;
         }
 
-        foreach (var path in _opened.Paths)
+        _create.Enabled = _account is not null;
+
+        if (_emptyCreate is not null)
         {
-            var card = new WorkspaceCard(path, _skin, chosen => _ = Open(chosen), Remove);
-
-            card.Margin = new Thickness(0, 0, 0, 0);
-
-            _cards.Add(card);
-            _content.Children.Add(card);
+            _emptyCreate.Enabled = _account is not null;
         }
-    }
-
-    /// <summary>
-    /// The welcome a machine with no Workspaces is met with: the program's own name and line, who the machine
-    /// is, the look it is drawn in, and what there is to do with no work in it yet.
-    /// </summary>
-    /// <remarks>
-    /// It is the one screen that is read before anything is done, so each of its parts is one thing: the name
-    /// at the top, the line written under it, and then what the machine can do. The buttons are here as well
-    /// as in the strip at the bottom because this is the screen that offers them, what a person meets first
-    /// should not have to be found in a row of marks.
-    /// <para>
-    /// A machine with no account is shown the one thing such a machine can do, and it is shown it in the
-    /// middle of the window: there is no work yet, and the account is what the work would be done as. Once
-    /// there is an account the greeting is not said again, the window is not being met for the first time
-    /// any more, and what it has to offer is the look and the work.
-    /// </para>
-    /// </remarks>
-    private void Welcome()
-    {
-        var header = new StackPanel
-        {
-            Spacing = 8,
-            Margin = new Thickness(0, 24, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-        };
-
-        header.Children.Add(
-            new TextBlock
-            {
-                Text = "- ROLA -",
-                FontSize = 12,
-                LetterSpacing = 2.4,
-                Foreground = _skin.Muted,
-                HorizontalAlignment = HorizontalAlignment.Center,
-            }
-        );
-
-        var slogan = new SloganView(_skin) { Margin = new Thickness(0, 2, 0, 0) };
-
-        header.Children.Add(slogan);
-
-        slogan.Say(_slogans);
-
-        if (_account is null)
-        {
-            Start(header);
-
-            return;
-        }
-
-        // The body is the width of the three pictures and centred as a column, so that what is written over
-        // them starts where they start whatever the window is: the three are the widest thing the screen has,
-        // and a column of one width is what makes a line of copy and a row of pictures read as one block.
-        var pictures = ThemePreview.Of(_theme.Configuration.LightTheme);
-        var body = new StackPanel
-        {
-            Spacing = 8,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Width = ((pictures.PixelSize.Width * ModeScale) + 4) * 3 + (ModeSpacing * 2),
-        };
-
-        body.Children.Add(
-            new TextBlock
-            {
-                Text = RolaI18N.Get("launcher.welcome.appearance"),
-                FontSize = 12,
-                Foreground = _skin.Muted,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(0, 18, 0, 2),
-            }
-        );
-
-        body.Children.Add(Modes());
-
-        body.Children.Add(
-            new TextBlock
-            {
-                Text = RolaI18N.Get("launcher.welcome.empty"),
-                FontSize = 13,
-                Foreground = _skin.Muted,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 18, 0, 2),
-            }
-        );
-
-        body.Children.Add(Actions());
-
-        var panel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Stretch };
-
-        panel.Children.Add(header);
-        panel.Children.Add(body);
-
-        _content.Children.Add(panel);
-    }
-
-    /// <summary>
-    /// What a machine with no account is shown: the one thing it can do, in the middle of the window.
-    /// </summary>
-    /// <remarks>
-    /// The header stays where it is and the rest is centred in what is left, rather than the whole screen
-    /// being centred as one group: the name and the line are where they are on every screen the program has,
-    /// and what is different about this one is that there is something waiting to be done.
-    /// </remarks>
-    /// <param name="header">The name and the line, which are drawn at the top.</param>
-    private void Start(StackPanel header)
-    {
-        var middle = new StackPanel
-        {
-            Spacing = 14,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        middle.Children.Add(
-            new TextBlock
-            {
-                Text = RolaI18N.Get("launcher.welcome.no_account"),
-                FontSize = 15,
-                Foreground = _skin.Front,
-                HorizontalAlignment = HorizontalAlignment.Center,
-            }
-        );
-
-        middle.Children.Add(
-            LabeledButton(
-                LauncherIcons.Of(Icons.AccountCircle),
-                RolaI18N.Get("launcher.welcome.account"),
-                () => _ = OpenAccount()
-            )
-        );
-
-        var screen = new Grid
-        {
-            RowDefinitions = new RowDefinitions("Auto,*"),
-            MinHeight = WelcomeHeight,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-        };
-
-        screen.Children.Add(header);
-
-        Grid.SetRow(middle, 1);
-        screen.Children.Add(middle);
-
-        _content.Children.Add(screen);
-    }
-
-    /// <summary>
-    /// The three pictures of the window a look is chosen between.
-    /// </summary>
-    /// <remarks>
-    /// Three pictures of this window rather than three of its words: what the look would be is easier to see
-    /// than to be told, and the one in force says so by the frame it wears. They are drawn smaller than the
-    /// welcome used to draw them, because the screen has more to say than a choice of look.
-    /// </remarks>
-    /// <returns>The row.</returns>
-    private Control Modes()
-    {
-        var modes = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = ModeSpacing,
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-
-        var light = _theme.Configuration.LightTheme;
-        var dark = _theme.Configuration.Theme;
-
-        modes.Children.Add(
-            new ThemeButton(
-                ColorMode.Light,
-                ThemePreview.Of(light),
-                _theme.Mode == ColorMode.Light,
-                _skin,
-                Choose,
-                ModeScale
-            )
-        );
-        modes.Children.Add(
-            new ThemeButton(
-                ColorMode.Dark,
-                ThemePreview.Of(dark),
-                _theme.Mode == ColorMode.Dark,
-                _skin,
-                Choose,
-                ModeScale
-            )
-        );
-        modes.Children.Add(
-            new ThemeButton(
-                ColorMode.System,
-                ThemePreview.HalfAndHalf(light, dark),
-                _theme.Mode == ColorMode.System,
-                _skin,
-                Choose,
-                ModeScale
-            )
-        );
-
-        return modes;
-    }
-
-    /// <summary>
-    /// The two things there are to do with no work in the window: make a Workspace, or take one that is there.
-    /// </summary>
-    /// <remarks>
-    /// The two are centred as a pair rather than set against the column the copy is read in: they are what the
-    /// screen is asking for, and what it asks for is the one thing on it that is not read left to right. They
-    /// are the same width as one another with what they say against their own left edges, so that the pair
-    /// reads as one row of choices rather than as two words of two lengths.
-    /// </remarks>
-    /// <returns>The row.</returns>
-    private Control Actions()
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 6, 0, 0),
-        };
-
-        _welcomeCreate = LabeledButton(
-            LauncherIcons.Of(Icons.AddCircle),
-            RolaI18N.Get("launcher.welcome.create"),
-            () => _ = OpenCreate()
-        );
-
-        _welcomeCreate.Enabled = _account is not null;
 
         ToolTip.SetTip(
-            _welcomeCreate,
+            _create,
             _account is null
                 ? RolaI18N.Get("launcher.toolbar.create_needs_account")
-                : RolaI18N.Get("launcher.toolbar.create")
+                : RolaI18N.Get("launcher.workspace.create")
         );
-
-        var import = LabeledButton(
-            LauncherIcons.Of(Icons.FolderOpen),
-            RolaI18N.Get("launcher.welcome.import"),
-            () => _ = Import()
-        );
-
-        row.Children.Add(_welcomeCreate);
-        row.Children.Add(import);
-
-        return row;
     }
 
-    /// <summary>
-    /// A button that says what it does: one of the pictures at its left edge, and the word for it centred.
-    /// </summary>
-    /// <remarks>
-    /// The picture and the word are laid over one another rather than set side by side, because a row of the
-    /// two would put the word after the picture instead of in the middle of the button: what is being read is
-    /// the word, and the picture is the mark that says which of the buttons it is. The room the picture takes
-    /// is left out of what the word is centred in only at its left, so a long word still has the whole of the
-    /// rest to itself.
-    /// </remarks>
-    /// <param name="picture">The picture.</param>
-    /// <param name="label">What it says.</param>
-    /// <param name="pressed">What pressing it does.</param>
-    /// <returns>The button.</returns>
-    private FlatButton LabeledButton(Bitmap picture, string label, Action pressed)
+    /// <summary>Draws one slot again when its handshake landed, and the summary that counts it.</summary>
+    /// <param name="sender">The entry that changed.</param>
+    /// <param name="e">The event.</param>
+    private void OnVaultChanged(object? sender, EventArgs e)
     {
-        var face = new Grid
+        if (sender is VaultEntry entry && _slots.TryGetValue(entry, out var slot))
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+            slot.Repaint(_skin);
+        }
 
-        var glyph = LauncherIcons.Glyph(picture, 16, _skin.Front);
-
-        glyph.HorizontalAlignment = HorizontalAlignment.Left;
-
-        var text = new TextBlock
-        {
-            Text = label,
-            FontSize = 13,
-            Foreground = _skin.Front,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextAlignment = TextAlignment.Center,
-        };
-
-        face.Children.Add(text);
-        face.Children.Add(glyph);
-
-        var button = new FlatButton(face, _skin, ButtonKind.Surface)
-        {
-            Height = 38,
-            MinWidth = ActionWidth,
-            Padding = new Thickness(16, 0, 16, 0),
-            HorizontalAlignment = HorizontalAlignment.Center,
-        };
-
-        button.Clicked += (_, _) => pressed();
-
-        return button;
+        UpdateSummary();
     }
 
-    /// <summary>Chooses the day/night variant, which writes it and draws the window again.</summary>
-    /// <param name="mode">The variant.</param>
-    private void Choose(ColorMode mode)
+    /// <summary>Counts the handshakes and says what the foot says about them.</summary>
+    private void UpdateSummary()
+    {
+        if (_summary is null)
+        {
+            return;
+        }
+
+        if (_vaults.Count == 0)
+        {
+            _summary.Text = RolaI18N.Get("launcher.vaults.summary_empty");
+            _summaryLed.Show(VaultStatus.Unchecked, _skin);
+
+            return;
+        }
+
+        var checking = _vaults.Count(entry => entry.Status == VaultStatus.Checking);
+
+        if (checking > 0)
+        {
+            _summary.Text = RolaI18N.Get("launcher.vaults.summary_checking", checking);
+            _summaryLed.Show(VaultStatus.Checking, _skin);
+
+            return;
+        }
+
+        var reachable = _vaults.Count(entry => entry.Status == VaultStatus.Reachable);
+        var failed = _vaults.Count(entry => entry.Status == VaultStatus.Failed);
+        var uncheckedCount = _vaults.Count(entry => entry.Status == VaultStatus.Unchecked);
+
+        var parts = new List<string>();
+
+        if (reachable > 0)
+        {
+            parts.Add(RolaI18N.Get("launcher.vaults.summary_reachable", reachable));
+        }
+
+        if (failed > 0)
+        {
+            parts.Add(RolaI18N.Get("launcher.vaults.summary_failed", failed));
+        }
+
+        if (uncheckedCount > 0)
+        {
+            parts.Add(RolaI18N.Get("launcher.vaults.summary_unchecked", uncheckedCount));
+        }
+
+        _summary.Text = string.Join(RolaI18N.Get("launcher.vaults.summary_separator"), parts);
+
+        _summaryLed.Show(
+            failed > 0
+                ? VaultStatus.Failed
+                : reachable > 0
+                    ? VaultStatus.Reachable
+                    : VaultStatus.Unchecked,
+            _skin
+        );
+    }
+
+    /// <summary>Checks every address at once, each in the background.</summary>
+    private void CheckAll()
+    {
+        foreach (var entry in _vaults)
+        {
+            entry.Token++;
+            entry.Reason = string.Empty;
+            entry.Status = VaultStatus.Checking;
+        }
+
+        foreach (var entry in _vaults)
+        {
+            _ = CheckAsync(entry, entry.Token);
+        }
+    }
+
+    /// <summary>Checks one address again.</summary>
+    /// <param name="entry">The address.</param>
+    private void CheckOne(VaultEntry entry)
+    {
+        entry.Token++;
+        entry.Reason = string.Empty;
+        entry.Status = VaultStatus.Checking;
+
+        _ = CheckAsync(entry, entry.Token);
+    }
+
+    /// <summary>Speaks one handshake in the background and applies it if it is still the newest.</summary>
+    /// <param name="entry">The address.</param>
+    /// <param name="token">Which handshake this is.</param>
+    /// <returns>A task that ends when the answer has been applied.</returns>
+    private async Task CheckAsync(VaultEntry entry, int token)
+    {
+        var report = await Task.Run(() => _connection.Check(entry.Address));
+
+        if (entry.Token != token)
+        {
+            return;
+        }
+
+        entry.Reason = report.State == ConnectionState.NoAccount
+            ? RolaI18N.Get("launcher.create.need_account")
+            : report.Reason;
+
+        entry.Status = report.Reached ? VaultStatus.Reachable : VaultStatus.Failed;
+    }
+
+    /// <summary>Opens the menu over an address.</summary>
+    /// <param name="entry">The address.</param>
+    /// <param name="target">What the menu is placed against.</param>
+    private void OpenVaultMenu(VaultEntry entry, Control target)
+    {
+        var items = new StackPanel { Spacing = 0 };
+
+        items.Children.Add(
+            MenuItem(
+                RolaI18N.Get("launcher.vaults.check"),
+                Marks.Refresh(_skin.Muted, 13),
+                () =>
+                {
+                    _vaultMenu.IsOpen = false;
+                    CheckOne(entry);
+                },
+                danger: false
+            )
+        );
+
+        if (entry.Source == VaultSource.Hosted)
+        {
+            items.Children.Add(
+                MenuItem(
+                    RolaI18N.Get("launcher.vaults.edit"),
+                    Marks.Pencil(_skin.Muted, 13),
+                    () =>
+                    {
+                        _vaultMenu.IsOpen = false;
+                        _ = OpenVaultDialog(entry);
+                    },
+                    danger: false
+                )
+            );
+
+            items.Children.Add(
+                new Border
+                {
+                    Height = 1,
+                    Margin = new Thickness(4, 4, 4, 4),
+                    Background = _skin.Splitter,
+                }
+            );
+
+            items.Children.Add(
+                MenuItem(
+                    RolaI18N.Get("launcher.vaults.remove"),
+                    Marks.Trash(_skin.Alarm, 13),
+                    () =>
+                    {
+                        _vaultMenu.IsOpen = false;
+                        RemoveVault(entry);
+                    },
+                    danger: true
+                )
+            );
+        }
+
+        _vaultMenu.Child = new Border
+        {
+            Width = 184,
+            Background = _skin.Bright,
+            BorderBrush = _skin.Splitter,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(4),
+            Child = items,
+        };
+
+        _vaultMenu.PlacementTarget = target;
+        _vaultMenu.IsOpen = true;
+    }
+
+    /// <summary>One item of the address menu.</summary>
+    /// <param name="label">What it says.</param>
+    /// <param name="mark">The mark before it.</param>
+    /// <param name="pressed">What pressing it does.</param>
+    /// <param name="danger">Whether it takes something away.</param>
+    /// <returns>The item.</returns>
+    private FlatButton MenuItem(string label, Avalonia.Controls.Shapes.Path mark, Action pressed, bool danger)
+    {
+        var face = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        face.Children.Add(mark);
+        face.Children.Add(
+            new TextBlock
+            {
+                Text = label,
+                FontSize = 12.5,
+                Foreground = danger ? _skin.Alarm : _skin.Front,
+                VerticalAlignment = VerticalAlignment.Center,
+            }
+        );
+
+        var item = new FlatButton(
+            face,
+            _skin,
+            danger ? ButtonKind.QuietDanger : ButtonKind.Quiet
+        )
+        {
+            Height = 30,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(9, 0, 9, 0),
+            CornerRadius = new CornerRadius(5),
+        };
+
+        mark.Stroke = danger ? _skin.Alarm : _skin.Muted;
+
+        item.Clicked += (_, _) => pressed();
+
+        return item;
+    }
+
+    /// <summary>Adds an address the launcher hosts, or edits one it already hosts.</summary>
+    /// <param name="editing">The entry being edited, or nothing when one is being added.</param>
+    /// <returns>A task that ends when the window is closed.</returns>
+    private async Task OpenVaultDialog(VaultEntry? editing)
+    {
+        var dialog = new VaultDialog(_skin, editing, _vaults);
+
+        await dialog.ShowDialog(this);
+
+        if (!dialog.Saved)
+        {
+            return;
+        }
+
+        if (editing is null)
+        {
+            var made = new VaultEntry(dialog.SavedName, dialog.SavedAddress, VaultSource.Hosted);
+
+            _hosted.Entries.Add(made);
+            _vaults.Add(made);
+
+            SaveVaults();
+            FillVaults();
+            CheckOne(made);
+
+            Toast(RolaI18N.Get("launcher.vaults.added", made.Name));
+
+            return;
+        }
+
+        editing.Name = dialog.SavedName;
+        editing.Address = dialog.SavedAddress;
+
+        SaveVaults();
+        FillVaults();
+        CheckOne(editing);
+
+        Toast(RolaI18N.Get("launcher.vaults.saved"));
+    }
+
+    /// <summary>Removes an address the launcher hosts, and says so.</summary>
+    /// <param name="entry">The entry.</param>
+    private void RemoveVault(VaultEntry entry)
+    {
+        var name = entry.Name;
+
+        _hosted.Remove(entry);
+        _vaults.Remove(entry);
+
+        SaveVaults();
+        FillVaults();
+
+        Toast(RolaI18N.Get("launcher.vaults.removed", name));
+    }
+
+    /// <summary>Writes the hosted addresses, saying so when they could not be written.</summary>
+    private void SaveVaults()
     {
         try
         {
-            _theme.Choose(mode);
+            _hosted.Write(_files.Vaults);
         }
-        catch (ConfigurationFailure failure)
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            _ = Notice(RolaI18N.Get("launcher.settings.title"), failure.Message);
+            _ = Notice(RolaI18N.Get("launcher.vaults.title"), error.Message);
         }
+    }
+
+    /// <summary>Opens the window that makes sure there is an account.</summary>
+    private async Task OpenAccount()
+    {
+        var dialog = new AccountDialog(_skin, _files, _accounts);
+
+        await dialog.ShowDialog(this);
+
+        _account = _accounts.List(_files.Root).Current;
+
+        FillWorkspaces();
+        CheckAll();
+    }
+
+    /// <summary>Opens the window that creates a Workspace.</summary>
+    private async Task OpenCreate()
+    {
+        if (_account is null)
+        {
+            await Notice(RolaI18N.Get("launcher.toolbar.account"), RolaI18N.Get("launcher.toolbar.create_needs_account"));
+
+            return;
+        }
+
+        var dialog = new CreateWorkspaceDialog(_skin, _rola, _vaults, _opened);
+
+        await dialog.ShowDialog(this);
+
+        if (dialog.Created is { } made)
+        {
+            _opened.Add(made);
+            Save();
+            FillWorkspaces();
+
+            Toast(RolaI18N.Get("launcher.workspace.created", Workspaces.Named(made)));
+        }
+    }
+
+    /// <summary>Asks for a directory and adds it to the list, if it is a Workspace.</summary>
+    private async Task Import()
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(
+            new FolderPickerOpenOptions
+            {
+                Title = RolaI18N.Get("launcher.toolbar.import"),
+                AllowMultiple = false,
+            }
+        );
+
+        if (folders.Count == 0 || folders[0].TryGetLocalPath() is not { } picked)
+        {
+            return;
+        }
+
+        if (Workspaces.Of(picked) is not (WorkspaceState.Workspace or WorkspaceState.GitProject))
+        {
+            await Notice(RolaI18N.Get("launcher.import.title"), RolaI18N.Get("launcher.import.not_a_workspace", picked));
+
+            return;
+        }
+
+        if (_opened.Add(picked))
+        {
+            Save();
+        }
+
+        FillWorkspaces();
+    }
+
+    /// <summary>Opens the window that says what this program may be told.</summary>
+    private async Task OpenSettings()
+    {
+        var dialog = new SettingsDialog(_skin, _theme, _settings, _files, _machine);
+
+        await dialog.ShowDialog(this);
+
+        _frame = dialog.Frame;
+
+        _chrome.Arrange(_skin, _frame);
     }
 
     /// <summary>
     /// Opens the Desktop program onto a Workspace, and closes this one once its window is up.
     /// </summary>
-    /// <remarks>
-    /// Closing as the window opens is what makes the two programs read as one: the launcher has nothing left to do
-    /// once there is a window, and a launcher standing beside an open window is two programs to one person. What
-    /// is waited for is the window rather than the process that opens it, because the process lasts as long as the
-    /// window does.
-    /// <para>
-    /// A window that does not come in time gives this window back rather than ending the start: the window may
-    /// still arrive, and a process ended for being slow is a window lost. The state is put back before the closing
-    /// rather than after it, because a busy window is one whose closing is refused.
-    /// </para>
-    /// </remarks>
     /// <param name="path">The Workspace.</param>
     private async Task Open(string path)
     {
@@ -1030,9 +1521,6 @@ internal sealed class LauncherWindow : Window
             return;
         }
 
-        // Given to the window rather than kept here: the attempt outlives this method, because the wait may be
-        // given up on while the window it asked for is still coming, and the window holds it for as long as it
-        // is open.
         _launch?.Dispose();
         _launch = _rola.Launch(path, _frame);
 
@@ -1067,10 +1555,7 @@ internal sealed class LauncherWindow : Window
         );
     }
 
-    /// <summary>
-    /// Puts all of the window but the wait out of reach: the card that was chosen turns its mark, and everything
-    /// that would start something else is unavailable.
-    /// </summary>
+    /// <summary>Puts all of the window but the wait out of reach.</summary>
     /// <param name="path">The Workspace whose window is being opened.</param>
     private void SetBusy(string path)
     {
@@ -1082,8 +1567,6 @@ internal sealed class LauncherWindow : Window
 
             card.SetBusy(chosen);
 
-            // A card other than the chosen one is not out of reach because of itself but because of the one
-            // window being opened: what it would do is start a second one.
             if (!chosen)
             {
                 card.IsEnabled = false;
@@ -1093,6 +1576,11 @@ internal sealed class LauncherWindow : Window
         foreach (var button in _buttons)
         {
             button.Enabled = false;
+        }
+
+        if (_emptyCreate is not null)
+        {
+            _emptyCreate.Enabled = false;
         }
 
         if (_language is not null)
@@ -1119,11 +1607,14 @@ internal sealed class LauncherWindow : Window
             button.Enabled = true;
         }
 
-        // The one button that is not simply made available again: making a Workspace needs an account, which is
-        // not this window's busy state to decide. It is put back the way the list puts it.
         if (_create is not null)
         {
             _create.Enabled = _account is not null;
+        }
+
+        if (_emptyCreate is not null)
+        {
+            _emptyCreate.Enabled = _account is not null;
         }
 
         if (_language is not null)
@@ -1134,13 +1625,7 @@ internal sealed class LauncherWindow : Window
         _chrome.IsEnabled = true;
     }
 
-    /// <summary>
-    /// Takes a Workspace off the list, and says so if the list could not be written.
-    /// </summary>
-    /// <remarks>
-    /// What is taken away is the entry, not the directory: a person tidying the list is not asking for their
-    /// work to be deleted, and importing the same directory puts it back where it was.
-    /// </remarks>
+    /// <summary>Takes a Workspace off the list, and says so if the list could not be written.</summary>
     /// <param name="path">The Workspace.</param>
     private void Remove(string path)
     {
@@ -1149,214 +1634,9 @@ internal sealed class LauncherWindow : Window
             Save();
         }
 
-        Fill();
-    }
+        FillWorkspaces();
 
-    /// <summary>Opens the window that makes sure there is an account.</summary>
-    private async Task OpenAccount()
-    {
-        var dialog = new AccountDialog(_skin, _files, _accounts);
-
-        await dialog.ShowDialog(this);
-
-        _account = _accounts.List(_files.Root).Current;
-
-        Fill();
-    }
-
-    /// <summary>Opens the window that creates a Workspace.</summary>
-    private async Task OpenCreate()
-    {
-        if (_account is null)
-        {
-            await Notice(RolaI18N.Get("launcher.toolbar.account"), RolaI18N.Get("launcher.toolbar.create_needs_account"));
-
-            return;
-        }
-
-        var dialog = new CreateWorkspaceDialog(_skin, _rola, _connection);
-
-        await dialog.ShowDialog(this);
-
-        if (dialog.Created is { } made)
-        {
-            _opened.Add(made);
-            Save();
-            Fill();
-        }
-    }
-
-    /// <summary>Asks for a directory and adds it to the list, if it is a Workspace.</summary>
-    private async Task Import()
-    {
-        var folders = await StorageProvider.OpenFolderPickerAsync(
-            new FolderPickerOpenOptions
-            {
-                Title = RolaI18N.Get("launcher.toolbar.import"),
-                AllowMultiple = false,
-            }
-        );
-
-        if (folders.Count == 0 || folders[0].TryGetLocalPath() is not { } picked)
-        {
-            return;
-        }
-
-        if (Workspaces.Of(picked) is not (WorkspaceState.Workspace or WorkspaceState.GitProject))
-        {
-            await Notice(RolaI18N.Get("launcher.import.title"), RolaI18N.Get("launcher.import.not_a_workspace", picked));
-
-            return;
-        }
-
-        if (_opened.Add(picked))
-        {
-            Save();
-        }
-
-        Fill();
-    }
-
-    /// <summary>Opens the window that says what this program may be told.</summary>
-    private async Task OpenSettings()
-    {
-        var dialog = new SettingsDialog(_skin, _theme, _settings, _files, _machine);
-
-        await dialog.ShowDialog(this);
-
-        _frame = dialog.Frame;
-
-        // The look may have changed while the window was open, and the window's own buttons are drawn
-        // where the frame puts them rather than where they were.
-        _chrome.Arrange(_skin, _frame);
-    }
-
-    /// <summary>
-    /// Asks for another picture for the banner, and puts it up when it is one that can be read.
-    /// </summary>
-    /// <remarks>
-    /// What is chosen is read before it is copied over the picture that is there: a file that is not an
-    /// aseprite one would otherwise be the end of a banner that was working.
-    /// </remarks>
-    private async Task ReplaceBanner()
-    {
-        // The pictures that shipped with the program are where a replacement is looked for first, since
-        // they are the ones a person is choosing between when they have not drawn one of their own.
-        var start = Directory.Exists(_files.Banners)
-            ? await StorageProvider.TryGetFolderFromPathAsync(_files.Banners)
-            : null;
-
-        var files = await StorageProvider.OpenFilePickerAsync(
-            new FilePickerOpenOptions
-            {
-                Title = RolaI18N.Get("launcher.banner.pick"),
-                AllowMultiple = false,
-                SuggestedStartLocation = start,
-                FileTypeFilter =
-                [
-                    new FilePickerFileType(RolaI18N.Get("launcher.banner.type"))
-                    {
-                        Patterns = ["*.aseprite"],
-                    },
-                ],
-            }
-        );
-
-        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } chosen)
-        {
-            return;
-        }
-
-        AsepriteAnimation animation;
-
-        try
-        {
-            animation = Aseprite.Read(chosen);
-        }
-        catch (Exception error)
-            when (error is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            await Notice(RolaI18N.Get("launcher.banner.pick"), RolaI18N.Get("launcher.banner.problem", error.Message));
-
-            return;
-        }
-
-        try
-        {
-            Directory.CreateDirectory(_files.Root);
-            File.Copy(chosen, _files.Banner, overwrite: true);
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            await Notice(RolaI18N.Get("launcher.banner.pick"), RolaI18N.Get("launcher.banner.problem", error.Message));
-
-            return;
-        }
-
-        _animation = animation;
-        _bannerProblem = null;
-
-        _banner.Play(animation);
-
-        Build();
-    }
-
-    /// <summary>
-    /// Reads the picture the banner plays, and the one that ships with the program when there is none.
-    /// </summary>
-    /// <remarks>
-    /// The picture is the user's own once there is one at the path the program reads. A machine that has
-    /// never opened the launcher has none, so the first of the pictures that shipped with it is copied
-    /// there: what the program shows is then a file the person can replace, in the place the program reads.
-    /// </remarks>
-    private void LoadBanner()
-    {
-        try
-        {
-            if (!File.Exists(_files.Banner))
-            {
-                Ship();
-            }
-
-            if (!File.Exists(_files.Banner))
-            {
-                _animation = null;
-                _bannerProblem = null;
-
-                return;
-            }
-
-            _animation = Aseprite.Read(_files.Banner);
-            _bannerProblem = null;
-        }
-        catch (Exception error)
-            when (error is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            _animation = null;
-            _bannerProblem = error.Message;
-        }
-    }
-
-    /// <summary>Copies the first of the pictures that shipped with the program where the banner is read.</summary>
-    private void Ship()
-    {
-        if (!Directory.Exists(_files.Banners))
-        {
-            return;
-        }
-
-        var first = Directory
-            .EnumerateFiles(_files.Banners, "*.aseprite")
-            .OrderBy(path => path, StringComparer.Ordinal)
-            .FirstOrDefault();
-
-        if (first is null)
-        {
-            return;
-        }
-
-        Directory.CreateDirectory(_files.Root);
-        File.Copy(first, _files.Banner);
+        Toast(RolaI18N.Get("launcher.workspace.removed", Workspaces.Named(path)));
     }
 
     /// <summary>Writes the list of Workspaces, saying so when it could not be written.</summary>
@@ -1373,6 +1653,59 @@ internal sealed class LauncherWindow : Window
     }
 
     /// <summary>Says one thing over the window.</summary>
+    /// <param name="text">What it says.</param>
+    private void Toast(string text)
+    {
+        if (_toastLayer is null)
+        {
+            return;
+        }
+
+        var face = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        face.Children.Add(Marks.Check(_skin.Success, 13));
+        face.Children.Add(
+            new TextBlock
+            {
+                Text = text,
+                FontSize = 12.5,
+                Foreground = _skin.Front,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 340,
+                VerticalAlignment = VerticalAlignment.Center,
+            }
+        );
+
+        var toast = new Border
+        {
+            Background = _skin.Bright,
+            BorderBrush = _skin.Splitter,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12, 9, 12, 9),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Child = face,
+        };
+
+        _toastLayer.Children.Add(toast);
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3.2) };
+
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            _toastLayer.Children.Remove(toast);
+        };
+
+        timer.Start();
+    }
+
+    /// <summary>Says one thing over the window, in a window of its own.</summary>
     /// <param name="heading">What it is about.</param>
     /// <param name="message">What it says.</param>
     /// <returns>A task that ends when it is read.</returns>

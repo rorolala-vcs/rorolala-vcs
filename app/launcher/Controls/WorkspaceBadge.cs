@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using RorolalaLauncher.Theming;
 
 namespace RorolalaLauncher.Controls;
 
@@ -19,6 +20,11 @@ namespace RorolalaLauncher.Controls;
 /// What is written on it is the directory's own first character: a Latin letter is uppercased and a Chinese
 /// one is kept as it is, because the two are not the same thing and uppercasing the wrong one is how a mark
 /// comes out with nothing on it.
+/// </para>
+/// <para>
+/// A Workspace that is missing or is not a Workspace gives the colour up: the mark becomes the look's error
+/// wash with the error's ink, so the whole card reads as one state rather than as a coloured card with a
+/// red edge.
 /// </para>
 /// </remarks>
 internal sealed class WorkspaceBadge : Border
@@ -38,6 +44,12 @@ internal sealed class WorkspaceBadge : Border
     /// <summary>How light the bottom-right end of it is.</summary>
     private const double Dim = 0.32;
 
+    /// <summary>The colour the mark was made with, kept so that a repaint can put it back.</summary>
+    private readonly LinearGradientBrush _colour;
+
+    /// <summary>What is written on the mark.</summary>
+    private readonly TextBlock _letter;
+
     /// <summary>Makes the mark for one Workspace.</summary>
     /// <param name="path">The Workspace's whole directory, which the colour is read from.</param>
     public WorkspaceBadge(string path)
@@ -47,12 +59,7 @@ internal sealed class WorkspaceBadge : Border
         var hue = Hue(Hashed(path));
         var (lit, dim) = (Hsl(hue, Saturation, Lit), Hsl(hue, Saturation, Dim));
 
-        Width = Extent;
-        Height = Extent;
-        CornerRadius = new CornerRadius(Rounding);
-        Margin = new Thickness(0, 0, 12, 0);
-        VerticalAlignment = VerticalAlignment.Center;
-        Background = new LinearGradientBrush
+        _colour = new LinearGradientBrush
         {
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
             EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
@@ -63,7 +70,7 @@ internal sealed class WorkspaceBadge : Border
             },
         };
 
-        Child = new TextBlock
+        _letter = new TextBlock
         {
             Text = Initial(Workspaces.Named(path)),
             FontSize = 17,
@@ -72,6 +79,37 @@ internal sealed class WorkspaceBadge : Border
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
+
+        Width = Extent;
+        Height = Extent;
+        CornerRadius = new CornerRadius(Rounding);
+        Background = _colour;
+        Child = _letter;
+
+        Apply(false, null);
+    }
+
+    /// <summary>
+    /// Draws the mark as its Workspace's own colour, or as the error state.
+    /// </summary>
+    /// <param name="error">Whether the Workspace is in the error state.</param>
+    /// <param name="skin">The colours in force, or nothing before there are any.</param>
+    public void Apply(bool error, Skin? skin)
+    {
+        if (!error || skin is null)
+        {
+            Background = _colour;
+            BorderThickness = default;
+            BorderBrush = null;
+            _letter.Foreground = new SolidColorBrush(Colors.White);
+
+            return;
+        }
+
+        Background = new SolidColorBrush(Skin.Mix(skin.Palette.Bright, skin.AlarmColour, 0.14));
+        BorderThickness = new Thickness(1);
+        BorderBrush = new SolidColorBrush(skin.AlarmColour, 0.32);
+        _letter.Foreground = skin.Alarm;
     }
 
     /// <summary>

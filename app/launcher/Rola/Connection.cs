@@ -45,6 +45,16 @@ internal sealed class Connection(RolaRunner rola, Accounts accounts, string prob
     private const string DataDirectory = ".rola";
 
     /// <summary>
+    /// What guards the probe's making, because several handshakes are spoken at once.
+    /// </summary>
+    /// <remarks>
+    /// Every address in the dock is checked at the same time, and the probe is one directory: two checks
+    /// that both found it absent would both run <c>rola create</c> over it. The lock is held only while
+    /// the directory is read and, if it is absent, made.
+    /// </remarks>
+    private readonly object _gate = new();
+
+    /// <summary>
     /// Speaks the handshake to the daemon an address names.
     /// </summary>
     /// <param name="address">The address, as it was typed.</param>
@@ -63,13 +73,16 @@ internal sealed class Connection(RolaRunner rola, Accounts accounts, string prob
             return new ConnectionReport(ConnectionState.NoAccount, string.Empty);
         }
 
-        if (!System.IO.Directory.Exists(Path.Combine(probe, DataDirectory)))
+        lock (_gate)
         {
-            var made = Stand();
-
-            if (made is not null)
+            if (!System.IO.Directory.Exists(Path.Combine(probe, DataDirectory)))
             {
-                return new ConnectionReport(ConnectionState.Failed, made);
+                var made = Stand();
+
+                if (made is not null)
+                {
+                    return new ConnectionReport(ConnectionState.Failed, made);
+                }
             }
         }
 

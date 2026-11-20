@@ -33,8 +33,8 @@ internal sealed record LauncherFiles(string Root, string Beside)
     /// <summary>What the user chose about this program, as opposed to what the machine is drawn in.</summary>
     public string Settings => Path.Combine(Root, "settings.toml");
 
-    /// <summary>The picture the banner plays, which is the user's own once it is there.</summary>
-    public string Banner => Path.Combine(Root, "banner.aseprite");
+    /// <summary>The addresses this launcher hosts, as opposed to the daemon's own registry.</summary>
+    public string Vaults => Path.Combine(Root, "vaults.toml");
 
     /// <summary>
     /// The Workspace a connection is checked from.
@@ -46,23 +46,14 @@ internal sealed record LauncherFiles(string Root, string Beside)
     /// </remarks>
     public string Probe => Path.Combine(Root, "probe");
 
-    /// <summary>The pictures an aseprite replacement may be chosen from, beside the program.</summary>
-    public string Banners => Path.Combine(Beside, "launcher-banners");
-
     /// <summary>The command line program, beside this one in a published layout.</summary>
     public string Rola => Path.Combine(Beside, "..", "rola" + Suffix);
 
+    /// <summary>The daemon program, beside the command line program in the same layout.</summary>
+    public string Daemon => Path.Combine(Beside, "..", "rola-daemon" + Suffix);
+
     /// <summary>The Desktop program, in the same directory as this one.</summary>
     public string Desktop => Path.Combine(Beside, "RorolalaDesktop" + Suffix);
-
-    /// <summary>
-    /// The lines the launcher says about itself, beside the program.
-    /// </summary>
-    /// <remarks>
-    /// Beside the program rather than under the user's data directory: they are the release's own copy, not
-    /// a choice of the person reading it, and a build carries them the way it carries the banners.
-    /// </remarks>
-    public string Slogans => Path.Combine(Beside, "slogan.txt");
 
     /// <summary>What a platform puts after a program's name, if anything.</summary>
     private static string Suffix => OperatingSystem.IsWindows() ? ".exe" : string.Empty;

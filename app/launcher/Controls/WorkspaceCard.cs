@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Automation;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -7,6 +8,7 @@ using Avalonia.Media;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.I18n;
 using RorolalaLauncher.Theming;
+using ShapeRectangle = Avalonia.Controls.Shapes.Rectangle;
 
 namespace RorolalaLauncher.Controls;
 
@@ -19,6 +21,12 @@ namespace RorolalaLauncher.Controls;
 /// next time the list is seen. A card is a place rather than a button, the whole of it is pressed, and the
 /// window is opened where the card says; the one thing on it that is not the place is the mark at its end,
 /// which takes the card off the list and is the only part of it that must not open anything.
+/// <para>
+/// A Workspace that is missing, or that is a directory holding no Workspace, is drawn in the error state:
+/// a dashed edge, a wash of the error colour, and every piece of it in that colour. The edge is dashed
+/// because a card that is present but under the pointer is a card with a solid edge, and the two should
+/// not be told apart by the wash alone.
+/// </para>
 /// </remarks>
 internal sealed class WorkspaceCard : Border
 {
@@ -37,8 +45,17 @@ internal sealed class WorkspaceCard : Border
     /// <summary>The mark that turns while the window it is about is being opened.</summary>
     private readonly TurningMark _busyMark;
 
+    /// <summary>The line beside the mark that says what is happening.</summary>
+    private readonly TextBlock _busyText;
+
+    /// <summary>The row that says the window is being opened.</summary>
+    private readonly StackPanel _busyRow;
+
     /// <summary>What takes the card off the list, which is not offered while the window is being opened.</summary>
     private readonly FlatButton _close;
+
+    /// <summary>The picture the close button carries, which is drawn in the state's colour.</summary>
+    private readonly Border _closeGlyph;
 
     /// <summary>What the card is called.</summary>
     private readonly TextBlock _name;
@@ -46,11 +63,23 @@ internal sealed class WorkspaceCard : Border
     /// <summary>Where the card is.</summary>
     private readonly TextBlock _place;
 
+    /// <summary>The mark the Workspace wears.</summary>
+    private readonly WorkspaceBadge _badge;
+
+    /// <summary>The Git logomark beside the name of a git-rola Workspace.</summary>
+    private readonly Border _git;
+
+    /// <summary>The dashed edge an invalid Workspace is drawn with.</summary>
+    private readonly ShapeRectangle _outline;
+
     /// <summary>Whether a press is being made.</summary>
     private bool _pressed;
 
     /// <summary>Whether the window this card is about is being opened, which is not a card to press again.</summary>
     private bool _busy;
+
+    /// <summary>Whether the pointer is over the card.</summary>
+    private bool _over;
 
     /// <summary>The colours the card was last drawn in.</summary>
     private Skin _skin = null!;
@@ -77,12 +106,15 @@ internal sealed class WorkspaceCard : Border
             Text = Workspaces.Named(path),
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
         };
 
         _place = new TextBlock
         {
             Text = path,
-            FontSize = 11,
+            FontFamily = skin.Mono,
+            FontSize = 11.5,
             Margin = new Thickness(0, 3, 0, 0),
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
@@ -93,33 +125,67 @@ internal sealed class WorkspaceCard : Border
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        _busyMark = new TurningMark(new SolidColorBrush(skin.Palette.Primary), 14)
+        _busyMark = new TurningMark(new SolidColorBrush(skin.Palette.Primary), 13)
         {
             IsVisible = false,
         };
 
-        AutomationProperties.SetName(_busyMark, RolaI18N.Get("launcher.workspace.opening"));
+        _busyText = new TextBlock
+        {
+            Text = RolaI18N.Get("launcher.workspace.opening"),
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
 
-        // The state and the mark share one cell: a card is either saying what its directory is or saying that its
-        // window is being opened, and the two are never true at once.
+        _busyRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 7,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsVisible = false,
+        };
+
+        _busyRow.Children.Add(_busyMark);
+        _busyRow.Children.Add(_busyText);
+
         var state = new Panel
         {
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(12, 0, 8, 0),
         };
 
         state.Children.Add(_state);
-        state.Children.Add(_busyMark);
+        state.Children.Add(_busyRow);
+
+        _git = LauncherIcons.Glyph(LauncherIcons.Git, 14, skin.Muted);
+        _git.VerticalAlignment = VerticalAlignment.Center;
+        _git.IsHitTestVisible = true;
+        ToolTip.SetTip(_git, RolaI18N.Get("launcher.workspace.git_workspace"));
+        AutomationProperties.SetName(_git, RolaI18N.Get("launcher.workspace.git_workspace"));
+
+        var nameLine = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ColumnSpacing = 6,
+        };
+
+        nameLine.Children.Add(_name);
+
+        Grid.SetColumn(_git, 1);
+        nameLine.Children.Add(_git);
 
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(_name);
+
+        text.Children.Add(nameLine);
         text.Children.Add(_place);
 
-        _close = new FlatButton(LauncherIcons.Glyph(LauncherIcons.Close, 12, skin.Muted), skin)
+        _closeGlyph = LauncherIcons.Glyph(LauncherIcons.Close, 12, skin.Muted);
+
+        _close = new FlatButton(_closeGlyph, skin, ButtonKind.QuietDanger)
         {
             Width = 28,
             Height = 28,
             Padding = default,
+            CornerRadius = new CornerRadius(5),
             VerticalAlignment = VerticalAlignment.Center,
         };
 
@@ -127,9 +193,16 @@ internal sealed class WorkspaceCard : Border
 
         _close.Clicked += (_, _) => _removed(_path);
 
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto") };
+        _badge = new WorkspaceBadge(path);
 
-        row.Children.Add(new WorkspaceBadge(path));
+        var row = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("40,*,Auto,28"),
+            ColumnSpacing = 12,
+            Margin = new Thickness(10, 12, 10, 12),
+        };
+
+        row.Children.Add(_badge);
 
         Grid.SetColumn(text, 1);
         row.Children.Add(text);
@@ -140,10 +213,29 @@ internal sealed class WorkspaceCard : Border
         Grid.SetColumn(_close, 3);
         row.Children.Add(_close);
 
-        Child = row;
-        Padding = new Thickness(12, 10, 12, 10);
+        _outline = new ShapeRectangle
+        {
+            StrokeThickness = 1,
+            StrokeDashArray = new AvaloniaList<double> { 4, 3 },
+            RadiusX = 10,
+            RadiusY = 10,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            IsHitTestVisible = false,
+            IsVisible = false,
+            Margin = new Thickness(0.5),
+        };
+
+        var root = new Panel();
+
+        root.Children.Add(row);
+        root.Children.Add(_outline);
+
+        Child = root;
+        Padding = default;
         CornerRadius = new CornerRadius(10);
         BorderThickness = new Thickness(1);
+        ClipToBounds = true;
         Cursor = new Cursor(StandardCursorType.Hand);
 
         Repaint(skin);
@@ -155,6 +247,9 @@ internal sealed class WorkspaceCard : Border
     /// <summary>The directory the card is about.</summary>
     public string Path => _path;
 
+    /// <summary>Whether the Workspace is one the error state is drawn for.</summary>
+    private bool Invalid => State is WorkspaceState.Missing or WorkspaceState.NotWorkspace;
+
     /// <summary>Draws the card in the colours of the variant in force.</summary>
     /// <param name="skin">The colours.</param>
     public void Repaint(Skin skin)
@@ -163,22 +258,36 @@ internal sealed class WorkspaceCard : Border
 
         _skin = skin;
 
-        Background = new SolidColorBrush(skin.Palette.Bright);
-        BorderBrush = skin.Splitter;
+        var invalid = Invalid;
 
-        _name.Foreground = skin.Front;
-        _place.Foreground = skin.Muted;
+        _name.Foreground = invalid ? skin.Alarm : skin.Front;
+        _place.Foreground = invalid ? skin.Alarm : skin.Muted;
+        _closeGlyph.Background = invalid ? skin.Alarm : skin.Muted;
+        _git.Background = _over ? skin.Front : skin.Muted;
+        _git.IsVisible = !invalid && State == WorkspaceState.GitProject;
+        _close.IsVisible = !_busy;
 
         _state.Text = State switch
         {
             WorkspaceState.Missing => RolaI18N.Get("launcher.workspace.missing"),
             WorkspaceState.NotWorkspace => RolaI18N.Get("launcher.workspace.not_workspace"),
-            WorkspaceState.GitProject => RolaI18N.Get("launcher.workspace.git_project"),
             _ => string.Empty,
         };
 
-        _state.Foreground =
-            State is WorkspaceState.Workspace or WorkspaceState.GitProject ? skin.Muted : skin.Alarm;
+        _state.Foreground = skin.Alarm;
+        _state.IsVisible = !_busy && !string.IsNullOrEmpty(_state.Text);
+        _busyText.Foreground = skin.Muted;
+
+        _badge.Apply(invalid, skin);
+
+        _outline.IsVisible = invalid;
+        _outline.Stroke = skin.Alarm;
+
+        BorderThickness = invalid ? default : new Thickness(1);
+        BorderBrush = skin.Splitter;
+        Background = invalid
+            ? new SolidColorBrush(Skin.Mix(skin.Palette.Bright, skin.AlarmColour, _over ? 0.11 : 0.07))
+            : new SolidColorBrush(_over ? skin.Palette.Dark : skin.Palette.Bright);
     }
 
     /// <summary>
@@ -194,8 +303,9 @@ internal sealed class WorkspaceCard : Border
     {
         _busy = busy;
 
+        _busyRow.IsVisible = busy;
         _busyMark.IsVisible = busy;
-        _state.IsVisible = !busy;
+        _state.IsVisible = !busy && !string.IsNullOrEmpty(_state.Text);
         _close.IsVisible = !busy;
 
         Cursor = new Cursor(busy ? StandardCursorType.Arrow : StandardCursorType.Hand);
@@ -204,9 +314,11 @@ internal sealed class WorkspaceCard : Border
     /// <inheritdoc />
     protected override void OnPointerEntered(PointerEventArgs e)
     {
+        _over = true;
+
         if (_skin is not null && !_busy)
         {
-            Background = new SolidColorBrush(_skin.Palette.Dark);
+            Repaint(_skin);
         }
 
         base.OnPointerEntered(e);
@@ -249,10 +361,11 @@ internal sealed class WorkspaceCard : Border
     protected override void OnPointerExited(PointerEventArgs e)
     {
         _pressed = false;
+        _over = false;
 
         if (_skin is not null)
         {
-            Background = new SolidColorBrush(_skin.Palette.Bright);
+            Repaint(_skin);
         }
 
         base.OnPointerExited(e);

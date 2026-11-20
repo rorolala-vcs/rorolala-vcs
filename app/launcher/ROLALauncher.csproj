@@ -54,7 +54,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The pictures this program is drawn with, embedded so that they travel in it: the three its own
+    <!-- The pictures this program is drawn with, embedded so that they travel in it: the four its own
          toolbar wears, which are drawn into `icons/` from the pinned Material set by `cargo dev icons`, and
          the two marks a window's frame carries, which are the Desktop program's own files, the frames the
          two programs draw are one frame, so the marks on them are one set. The Desktop's are linked rather
@@ -63,24 +63,20 @@
     <EmbeddedResource Include="icons/add_circle.png" LogicalName="RorolalaLauncher.icons.add_circle.png" />
     <EmbeddedResource Include="icons/folder_open.png" LogicalName="RorolalaLauncher.icons.folder_open.png" />
     <EmbeddedResource Include="icons/language.png" LogicalName="RorolalaLauncher.icons.language.png" />
+    <!-- The Git logomark a git-rola Workspace wears. It is a copy in this project's own icon area rather
+         than a file of the Git plugin, because a plugin may not be installed and the launcher still has
+         to open on a machine without it. -->
+    <EmbeddedResource Include="icons/git.png" LogicalName="RorolalaLauncher.icons.git.png" />
     <EmbeddedResource Include="../desktop/Core/icons/close.png" Link="icons/close.png" LogicalName="RorolalaLauncher.icons.close.png" />
     <EmbeddedResource Include="../desktop/Core/icons/minimize.png" Link="icons/minimize.png" LogicalName="RorolalaLauncher.icons.minimize.png" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- The artwork a day-or-night choice is made by: one wireframe of the window, recoloured by the look it
-         would put the program in. It is linked rather than copied so that the tree keeps one place it lives. -->
-    <EmbeddedResource Include="../../res/desktop-launcher-theme-preview.png" Link="theme-preview.png" LogicalName="RorolalaLauncher.theme-preview.png" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- What the launcher says is read from beside the program rather than built into it, following the
          Desktop program: the two are laid down in one directory, and what each states travels with it. -->
     <None Update="i18n/**/*.yml" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The line the launcher says about itself, laid beside the program by a build and by a publish: it is
-         copy rather than a string, so it is a file the release carries, and it is linked rather than copied
-         so that the tree keeps one place it lives. -->
-    <None Include="../../res/desktop-launcher-slogan.txt" Link="slogan.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The Git logomark's attribution, which the license under it asks a distribution to carry. -->
+    <None Update="icons/GIT-LICENSE" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- What a published layout is handed over without: debug symbols. The Desktop program states the same
