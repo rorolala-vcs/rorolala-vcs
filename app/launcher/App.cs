@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Media;
 using Avalonia.Themes.Simple;
 using RorolalaLauncher.Theming;
 
@@ -11,12 +10,12 @@ namespace RorolalaLauncher;
 /// The application: one look, and one window.
 /// </summary>
 /// <remarks>
-/// On a desktop that draws its own frame the window is opened as a dialog over a window that is not seen:
-/// a tiling window manager does not tile a dialog, and a launcher tiled into a corner would have a list
-/// it cannot show. Under a tiling window manager the launcher is a window in its own right instead, the
-/// manager tiles that one and keeps no hidden companion behind it, and the window is made resizable so
-/// the manager can place it like any other window. The two columns inside it follow the window: the Vaults
-/// dock keeps its width and the Workspaces take what is left.
+/// The launcher is the application's main window, not a dialog over an unseen owner: a dialog is a
+/// floating window with a hidden companion behind it, and the launcher is the thing a person is looking
+/// at. On a desktop that draws its own frame the window is fixed at its own size and cannot be resized;
+/// under a tiling window manager it is resizable so the manager can place it like any other window. The
+/// two columns inside it follow the window: the Vaults dock keeps its width and the Workspaces take what
+/// is left.
 /// </remarks>
 public sealed class App : Application
 {
@@ -33,9 +32,8 @@ public sealed class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // What ends the program is the launcher being closed, and not whatever else the toolkit counts:
-            // the window it was opened over is still up when the launcher is done, and it is not a window
-            // anybody is looking at.
+            // The launcher is the only window, so closing it ends the program: there is no hidden owner
+            // left behind to keep the lifetime open.
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             var theme = new LauncherTheme(this, Program.Theme);
@@ -58,36 +56,9 @@ public sealed class App : Application
             window.Closed += (_, _) => desktop.Shutdown();
             window.Opened += (_, _) => _ = window.Load();
 
-            if (Program.Tiling)
-            {
-                // Under a tiling window manager a dialog over an unseen owner is a floating window with a
-                // hidden companion: the manager tiles the owner and keeps the launcher over it, which is
-                // two windows for one person. The launcher is the window instead, and the manager tiles
-                // it like any other.
-                desktop.MainWindow = window;
-                window.Show();
-            }
-            else
-            {
-                var owner = new Window
-                {
-                    Width = 1,
-                    Height = 1,
-                    CanResize = false,
-                    ShowInTaskbar = false,
-                    WindowDecorations = Avalonia.Controls.WindowDecorations.None,
-                    WindowStartupLocation = WindowStartupLocation.Manual,
-                    Position = new PixelPoint(-32000, -32000),
-                    Background = Brushes.Transparent,
-                    Opacity = 0,
-                };
+            desktop.MainWindow = window;
 
-                owner.Show();
-
-                desktop.MainWindow = owner;
-
-                _ = window.ShowDialog(owner);
-            }
+            window.Show();
         }
 
         base.OnFrameworkInitializationCompleted();

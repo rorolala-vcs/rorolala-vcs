@@ -69,6 +69,7 @@
     <EmbeddedResource Include="icons/git.png" LogicalName="RorolalaLauncher.icons.git.png" />
     <EmbeddedResource Include="../desktop/Core/icons/close.png" Link="icons/close.png" LogicalName="RorolalaLauncher.icons.close.png" />
     <EmbeddedResource Include="../desktop/Core/icons/minimize.png" Link="icons/minimize.png" LogicalName="RorolalaLauncher.icons.minimize.png" />
+    <EmbeddedResource Include="../desktop/Core/icons/settings.png" Link="icons/settings.png" LogicalName="RorolalaLauncher.icons.settings.png" />
   </ItemGroup>
 
   <ItemGroup>

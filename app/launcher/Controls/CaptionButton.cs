@@ -6,7 +6,6 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using RorolalaDesktop.Theming;
 using RorolalaLauncher.Theming;
-using ShapePath = Avalonia.Controls.Shapes.Path;
 
 namespace RorolalaLauncher.Controls;
 
@@ -47,6 +46,9 @@ internal sealed class CaptionButton : Border
     /// <summary>How wide it is on a light, where a light is smaller than a button.</summary>
     private const double LightExtent = 8.0;
 
+    /// <summary>How wide the settings picture is drawn, which has more detail than a line mark.</summary>
+    private const double SettingsExtent = 14.0;
+
     /// <summary>What a mark that is neither hovered nor held is filled with, which is nothing.</summary>
     private static readonly IBrush Nothing = Brushes.Transparent;
 
@@ -62,6 +64,12 @@ internal sealed class CaptionButton : Border
     /// <summary>The ink the mark on a light is drawn in, which is the one the Desktop program draws it in.</summary>
     private static readonly Color LightInk = Color.FromArgb(0x66, 0x00, 0x00, 0x00);
 
+    /// <summary>
+    /// The ink the settings light's gear is drawn in, darker than the other lights' marks because it is
+    /// the one mark that has to say what its light opens without being reached for.
+    /// </summary>
+    private static readonly Color SettingsInk = Color.FromArgb(0xB3, 0x00, 0x00, 0x00);
+
     /// <summary>What the button does.</summary>
     private readonly CaptionKind _kind;
 
@@ -73,9 +81,6 @@ internal sealed class CaptionButton : Border
 
     /// <summary>The picture the button carries, where it carries one of the product's own.</summary>
     private readonly Border? _picture;
-
-    /// <summary>The mark drawn as a line, where it is not one of the product's pictures.</summary>
-    private readonly ShapePath? _mark;
 
     /// <summary>Whether the pointer is over the mark.</summary>
     private bool _over;
@@ -137,27 +142,21 @@ internal sealed class CaptionButton : Border
 
             if (kind == CaptionKind.Settings)
             {
-                _mark = Marks.Cog(new SolidColorBrush(LightInk), LightExtent + 2);
-                _mark.Opacity = 0;
-                face.Children.Add(_mark);
+                // The same extent as the light, so the gear's centre and the light's centre fall on the
+                // same pixel rather than half a pixel apart.
+                _picture = Picture(kind, LightExtent + 4);
             }
             else
             {
                 _picture = Picture(kind, LightExtent);
-                _picture.Opacity = 0;
-                face.Children.Add(_picture);
             }
-        }
-        else if (kind == CaptionKind.Settings)
-        {
-            // The settings is this program's own button and the set holds no picture for it, so it is the
-            // one mark on the strip drawn as a line rather than stamped from a file.
-            _mark = Marks.Cog(_skin.Muted, 14);
-            face.Children.Add(_mark);
+
+            _picture.Opacity = 0;
+            face.Children.Add(_picture);
         }
         else
         {
-            _picture = Picture(kind, MarkExtent);
+            _picture = Picture(kind, kind == CaptionKind.Settings ? SettingsExtent : MarkExtent);
             face.Children.Add(_picture);
         }
 
@@ -169,13 +168,18 @@ internal sealed class CaptionButton : Border
     /// <summary>Raised when the mark is pressed and released on.</summary>
     public event EventHandler? Pressed;
 
-    /// <summary>One of the Desktop program's two pictures, stamped in whatever ink the button is drawn in.</summary>
+    /// <summary>One of the product's pictures, stamped in whatever ink the button is drawn in.</summary>
     /// <param name="kind">Which picture.</param>
     /// <param name="extent">How wide it is drawn.</param>
     /// <returns>The picture, which is its own ink's to colour.</returns>
     private static Border Picture(CaptionKind kind, double extent) =>
         LauncherIcons.Glyph(
-            kind == CaptionKind.Close ? LauncherIcons.Close : LauncherIcons.Minimize,
+            kind switch
+            {
+                CaptionKind.Close => LauncherIcons.Close,
+                CaptionKind.Settings => LauncherIcons.Settings,
+                _ => LauncherIcons.Minimize,
+            },
             extent,
             Brushes.Transparent
         );
@@ -187,14 +191,14 @@ internal sealed class CaptionButton : Border
         {
             if (_picture is not null)
             {
-                _picture.Background = new SolidColorBrush(LightInk);
-                _picture.Opacity = _over ? 1 : 0;
-            }
+                _picture.Background = new SolidColorBrush(
+                    _kind == CaptionKind.Settings ? SettingsInk : LightInk
+                );
 
-            if (_mark is not null)
-            {
-                _mark.Stroke = new SolidColorBrush(LightInk);
-                _mark.Opacity = _over ? 1 : 0;
+                // The settings light carries its gear at rest, because a green light on its own does not
+                // say what it opens. The other two keep their marks for the pointer, as their lights say
+                // what they do by their colour.
+                _picture.Opacity = _kind == CaptionKind.Settings || _over ? 1 : 0;
             }
 
             return;
@@ -211,11 +215,6 @@ internal sealed class CaptionButton : Border
         if (_picture is not null)
         {
             _picture.Background = ink;
-        }
-
-        if (_mark is not null)
-        {
-            _mark.Stroke = ink;
         }
 
         Background = _pressed

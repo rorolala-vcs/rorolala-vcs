@@ -201,7 +201,14 @@ internal sealed class LauncherWindow : Window
         MinWidth = 900;
         MinHeight = 560;
         CanResize = Program.Tiling;
-        WindowDecorations = Avalonia.Controls.WindowDecorations.None;
+
+        // The system draws the border, and nothing draws a system title bar: the launcher's own row is the
+        // only top row, and a tiling window manager is already the frame around it. `BorderOnly` is that
+        // one without the other, where the full decorations would put a second title row above this one.
+        WindowDecorations = Program.Tiling
+            ? Avalonia.Controls.WindowDecorations.None
+            : Avalonia.Controls.WindowDecorations.BorderOnly;
+
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = _skin.Mid;
 

@@ -19,6 +19,9 @@ launcher:
     close:
       en: Close
       zh-CN: 关闭
+    minimize:
+      en: Minimize
+      zh-CN: 最小化
     done:
       en: Done
       zh-CN: 完成

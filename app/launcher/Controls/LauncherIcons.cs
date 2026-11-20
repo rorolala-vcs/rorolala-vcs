@@ -34,6 +34,9 @@ internal static class LauncherIcons
     /// <summary>The picture the close button of a frame carries.</summary>
     public static Bitmap Close => Named("close");
 
+    /// <summary>The picture the settings button of a frame carries.</summary>
+    public static Bitmap Settings => Named("settings");
+
     /// <summary>
     /// The Git logomark a git-rola Workspace wears beside its name.
     /// </summary>
