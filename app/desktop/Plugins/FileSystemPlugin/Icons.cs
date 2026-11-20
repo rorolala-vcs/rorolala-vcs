@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Styling;
@@ -7,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.SysIcons;
 
@@ -120,7 +122,19 @@ internal static partial class Icons
     /// <param name="entry">The entry to draw.</param>
     /// <param name="size">How many pixels wide and tall.</param>
     /// <returns>What to draw beside the entry's name.</returns>
-    public static Control For(Entry entry, int size)
+    public static Control For(Entry entry, int size) => For(entry, size, 1);
+
+    /// <inheritdoc cref="For(Entry, int)" />
+    /// <param name="entry">The entry to draw.</param>
+    /// <param name="size">How many pixels wide and tall.</param>
+    /// <param name="mark">How much of the icon a virtual ring covers.</param>
+    /// <remarks>
+    /// The share is the directory dock's to say: its grid draws the same icon at up to a hundred and
+    /// twenty-eight pixels, and a ring at the whole of that reads as a frame around the tile rather than
+    /// as a mark over the picture. The tree's rows are at <see cref="Row"/>, where the whole icon is
+    /// already a small ring.
+    /// </remarks>
+    internal static Control For(Entry entry, int size, double mark)
     {
         var directory = entry.Kind == EntryKind.Directory;
 
@@ -136,15 +150,20 @@ internal static partial class Icons
         // here rather than at each call site so that a row, a tile, a tree step and the card a drag carries
         // all say the same thing about one entry.
         return VirtualEntries.Find(entry.Path) is { } virtualEntry
-            ? Virtual(drawn, picture, virtualEntry, size)
+            ? Virtual(drawn, picture, virtualEntry, size, mark)
             : drawn;
     }
 
+    /// <summary>How much of an icon the directory dock's virtual ring covers.</summary>
+    /// <remarks>
+    /// Smaller than the icon rather than the same size because the dock's grid draws the icon at up to
+    /// a hundred and twenty-eight pixels: a ring at the whole of it is the tile's frame, and what it
+    /// says is lost behind how much room it takes.
+    /// </remarks>
+    internal const double CompactMark = 0.6;
+
     /// <summary>How faded a thing on its way is drawn, which reads as not yet being here.</summary>
     private const double Dimmed = 0.55;
-
-    /// <summary>How much of a lost entry's picture the red over it leaves of the picture's own colours.</summary>
-    private const double Tint = 0.55;
 
     /// <summary>
     /// One entry drawn as what it says: faded under a ring, or coloured red for what is gone.
@@ -154,21 +173,24 @@ internal static partial class Icons
     /// listing gave it: a mark added beside a name would take room from the name at every zoom, and a row's
     /// icon is as wide as the icon.
     /// <para>
-    /// A lost entry is a picture with a red stamp over it rather than a picture drawn in red: the picture is
-    /// the icon set's or the system's, and a set whose colours were replaced would be a set the user did not
-    /// choose. The stamp is the picture's own shape, so the red reaches no further than the drawing.
+    /// A lost entry keeps the picture's own lightness and saturation and takes only the red hue, which is
+    /// what the hue blend mode is: a red stamp over the picture is a wash that leaves the picture a
+    /// duller version of itself, and a picture replaced with red is a set the user did not choose. The
+    /// stamp is the picture's own shape, so the hue reaches no further than the drawing.
     /// </para>
     /// </remarks>
     /// <param name="drawn">The picture as it would be drawn for any entry.</param>
     /// <param name="picture">The picture the system or the set gave, or nothing for the fallback mark.</param>
     /// <param name="entry">What the entry says about its path.</param>
     /// <param name="size">How many pixels wide and tall the icon is.</param>
+    /// <param name="mark">How much of the icon a ring covers.</param>
     /// <returns>What to draw where the entry's picture goes.</returns>
     private static Control Virtual(
         Control drawn,
         Bitmap? picture,
         VirtualEntry entry,
-        int size
+        int size,
+        double mark
     )
     {
         if (entry.State == VirtualEntryState.Lost)
@@ -178,15 +200,13 @@ internal static partial class Icons
 
             if (picture is not null)
             {
-                var stamp = Glyph(picture, PaletteKeys.Del, size);
-                stamp.Opacity = Tint;
-                lost.Children.Add(stamp);
+                lost.Children.Add(Hue(picture, size));
             }
-            else if (drawn is Border mark)
+            else if (drawn is Border fallback)
             {
                 // The fallback mark is this plugin's own square rather than a picture, so it has no colours
                 // of its own to keep: it is drawn in the red of what is lost.
-                mark[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Del);
+                fallback[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Del);
             }
 
             return lost;
@@ -195,10 +215,100 @@ internal static partial class Icons
         drawn.Opacity = Dimmed;
 
         var ring = new Grid { Width = size, Height = size };
+
+        // A whole number of pixels, because the grid centres the ring by halving what is left: a
+        // fractional diameter is rounded on each side of the division, and the circle then turns about
+        // a point half a pixel from the middle of the icon it lies over.
+        var extent = Math.Max(
+            1,
+            Math.Round(size * mark, MidpointRounding.AwayFromZero)
+        );
+
         ring.Children.Add(drawn);
-        ring.Children.Add(new VirtualRing(entry, size));
+        ring.Children.Add(new VirtualRing(entry, extent));
 
         return ring;
+    }
+
+    /// <summary>The red silhouettes already cut from pictures, so one picture is read once.</summary>
+    private static readonly Dictionary<Bitmap, Bitmap> Silhouettes = [];
+
+    /// <summary>A lost entry's picture with the red hue over it.</summary>
+    /// <remarks>
+    /// The picture is the blend's backdrop and a red silhouette is its source, which is the order the hue
+    /// blend is defined in: the source supplies the hue and the backdrop the lightness and saturation.
+    /// The silhouette carries the picture's own alpha rather than being cut by an opacity mask: a mask
+    /// is a layer of its own, and what the image is blended with inside that layer is nothing, so the
+    /// hue would be a plain red wash laid over the picture instead of a hue taken from it.
+    /// </remarks>
+    /// <param name="picture">The picture to draw the hue over.</param>
+    /// <param name="size">How many pixels wide and tall the picture is.</param>
+    /// <returns>What to draw over the picture.</returns>
+    private static Control Hue(Bitmap picture, int size)
+    {
+        var stamp = new Image
+        {
+            Source = Silhouette(picture),
+            Width = size,
+            Height = size,
+            Stretch = Stretch.Uniform,
+            BlendMode = BitmapBlendingMode.Hue,
+        };
+
+        // The silhouette is the picture's own pixels at their own size, so a thin stroke keeps the
+        // antialiasing the set drew rather than what a cheaper scale of it would leave.
+        RenderOptions.SetBitmapInterpolationMode(stamp, BitmapInterpolationMode.HighQuality);
+
+        return stamp;
+    }
+
+    /// <summary>The picture as a red silhouette, keeping only how opaque each pixel is.</summary>
+    /// <remarks>
+    /// The hue blend asks the source for its hue and the backdrop for everything else, so the source's
+    /// own colour is only there to be read as a hue: pure red gives the red of what has gone, and the
+    /// picture's alpha keeps the shape. What is written is premultiplied, as the bitmap it is written
+    /// into states, so the red of an edge is the red of its own coverage rather than full red at a
+    /// fraction of the alpha.
+    /// </remarks>
+    /// <param name="picture">The picture to cut the silhouette from.</param>
+    /// <returns>The silhouette, kept for the next entry drawn with the same picture.</returns>
+    private static Bitmap Silhouette(Bitmap picture)
+    {
+        if (Silhouettes.TryGetValue(picture, out var known))
+        {
+            return known;
+        }
+
+        var silhouette = new WriteableBitmap(
+            picture.PixelSize,
+            picture.Dpi,
+            PixelFormat.Bgra8888,
+            AlphaFormat.Premul
+        );
+
+        using (var frame = silhouette.Lock())
+        {
+            picture.CopyPixels(frame);
+
+            var pixels = new byte[frame.RowBytes * frame.Size.Height];
+
+            Marshal.Copy(frame.Address, pixels, 0, pixels.Length);
+
+            for (var at = 0; at + 3 < pixels.Length; at += 4)
+            {
+                var alpha = pixels[at + 3];
+
+                pixels[at] = 0x00;
+                pixels[at + 1] = 0x00;
+                pixels[at + 2] = alpha;
+            }
+
+            Marshal.Copy(pixels, 0, frame.Address, pixels.Length);
+        }
+
+        Silhouettes[picture] = silhouette;
+
+        return silhouette;
     }
 
     /// <summary>One picture, drawn at the size a row gives it.</summary>
@@ -496,7 +606,6 @@ internal static partial class Icons
     /// <returns>What to draw, which is a picture and no colour.</returns>
     private static Border Picture(Bitmap picture, double extent)
     {
-        var side = Math.Max(1, (int)Math.Round(extent));
         var glyph = new Border
         {
             Width = extent,
@@ -504,7 +613,7 @@ internal static partial class Icons
             UseLayoutRounding = true,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            OpacityMask = new ImageBrush(Reduced(picture, side)) { Stretch = Stretch.Uniform },
+            OpacityMask = Mask(picture, extent),
         };
 
         // Every picture this plugin draws is read at many times the size it is shown at, so what the mask
@@ -516,6 +625,17 @@ internal static partial class Icons
         );
 
         return glyph;
+    }
+
+    /// <summary>The picture as the shape a stamp is cut to.</summary>
+    /// <param name="picture">The picture whose shape is taken.</param>
+    /// <param name="extent">How many pixels wide and tall it is drawn at.</param>
+    /// <returns>The mask.</returns>
+    private static ImageBrush Mask(Bitmap picture, double extent)
+    {
+        var side = Math.Max(1, (int)Math.Round(extent));
+
+        return new ImageBrush(Reduced(picture, side)) { Stretch = Stretch.Uniform };
     }
 
     /// <summary>

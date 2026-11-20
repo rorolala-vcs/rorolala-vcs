@@ -42,16 +42,18 @@ internal sealed class PreviewTile : Grid
     /// <param name="entry">The entry the tile is for.</param>
     /// <param name="size">How wide and tall the picture is.</param>
     /// <param name="badges">What the contributions said, drawn above the picture.</param>
+    /// <param name="mark">How much of the icon a virtual entry's ring covers.</param>
     public PreviewTile(
         IPreviewService previews,
         Entry entry,
         int size,
-        IReadOnlyList<EntryBadge> badges
+        IReadOnlyList<EntryBadge> badges,
+        double mark = 1
     )
     {
         _previews = previews;
         _entry = entry;
-        _icon = Icons.For(entry, size);
+        _icon = Icons.For(entry, size, mark);
         _picture = new Image
         {
             Width = size,

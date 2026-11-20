@@ -48,9 +48,6 @@ internal sealed class VirtualRing : Control
     public static readonly StyledProperty<IBrush?> ArcBrushProperty =
         AvaloniaProperty.Register<VirtualRing, IBrush?>(nameof(ArcBrush));
 
-    /// <summary>How wide and tall the ring is, which is the icon it lies over.</summary>
-    private readonly double _size;
-
     /// <summary>The entry the ring is for, which is what it asks how far along it is.</summary>
     private readonly VirtualEntry _entry;
 
@@ -78,21 +75,23 @@ internal sealed class VirtualRing : Control
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
 
         _entry = entry;
-        _size = size;
 
         Width = size;
         Height = size;
         HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
 
-        // The turn is drawn around the middle of the room the ring was given, which is said once here and
-        // never again: the drawing itself is not told to move.
+        // The turn is drawn around the middle of the room the ring was given. Avalonia's own origin is
+        // already the centre, and the rotation itself is left without a centre of its own: stating both
+        // moves the centre twice, which is the ring orbiting the icon instead of turning in place.
         RenderTransformOrigin = RelativePoint.Center;
         RenderTransform = _turning;
 
         // Named rather than written as a colour, so a theme the user chooses is the ring's own: the ink is a
         // resource of the look, and a value read here would be the colour of the theme it was read under.
-        this[!ArcBrushProperty] = new DynamicResourceExtension(PaletteKeys.Primary);
+        // It is the front ink rather than the primary because what is on its way is a fact about the entry
+        // rather than a choice the user made, and a ring in the program's chosen colour reads as one.
+        this[!ArcBrushProperty] = new DynamicResourceExtension(PaletteKeys.Front);
 
         _clock.Tick += (_, _) =>
         {
@@ -111,7 +110,7 @@ internal sealed class VirtualRing : Control
     /// <summary>How thick the line is at an icon of a size, which leaves the line inside the mark.</summary>
     /// <param name="size">How wide and tall the icon is.</param>
     /// <returns>How many pixels wide the line is.</returns>
-    internal static double Stroke(double size) => Math.Max(2, size * 0.08);
+    internal static double Stroke(double size) => Math.Max(2, size * 0.14);
 
     /// <summary>How far the line's middle is from the ring's centre, at an icon of a size.</summary>
     /// <param name="size">How wide and tall the icon is.</param>
@@ -137,15 +136,19 @@ internal sealed class VirtualRing : Control
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var radius = Radius(_size);
-        var stroke = Stroke(_size);
+        // What the ring is drawn in is the room it was actually given, not the size it was asked for:
+        // a layout rounds that size to whole pixels, and the circle has to stay on the centre the
+        // rotation turns about even when the two are not the same number.
+        var extent = Math.Min(Bounds.Width, Bounds.Height);
+        var radius = Radius(extent);
+        var stroke = Stroke(extent);
 
         if (radius <= 0 || stroke <= 0 || ArcBrush is not { } ink)
         {
             return;
         }
 
-        var centre = new Point(_size / 2, _size / 2);
+        var centre = new Point(Bounds.Width / 2, Bounds.Height / 2);
         var pen = new Pen(ink, stroke, lineCap: PenLineCap.Round);
         var sweep = Sweep(_entry.State, _entry.Progress);
 

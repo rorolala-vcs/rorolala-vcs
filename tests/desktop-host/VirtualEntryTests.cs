@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -278,7 +279,80 @@ public sealed class VirtualEntryTests
         Assert.InRange(gone.Children.Count, 1, 2);
         Assert.Equal(1, gone.Children[0].Opacity);
 
+        var hue = Assert.IsType<Image>(gone.Children[1]);
+
+        Assert.Equal(BitmapBlendingMode.Hue, hue.BlendMode);
+        Assert.IsAssignableFrom<Bitmap>(hue.Source);
+
         Assert.IsNotType<Grid>(Icons.For(new Entry(real, EntryKind.File), 16));
+    }
+
+    /// <summary>A directory dock draws the ring smaller than the icon its grid gives it.</summary>
+    [Fact]
+    public void TheDirectoryDockDrawsTheRingSmallerThanItsIcon()
+    {
+        var directory = Scratch.New("virtual-mark");
+        var path = Path.Combine(directory, "growing.psd");
+        var entry = new Entry(path, EntryKind.File);
+
+        VirtualEntries.Place(path, EntryKind.File, VirtualEntryState.Pending);
+
+        var compact = Assert.IsType<Grid>(Icons.For(entry, 64, Icons.CompactMark));
+        var small = Assert.IsType<VirtualRing>(compact.Children[1]);
+
+        Assert.Equal(
+            Math.Round(64 * Icons.CompactMark, MidpointRounding.AwayFromZero),
+            small.Width,
+            3
+        );
+
+        var row = Assert.IsType<Grid>(Icons.For(entry, 16));
+        var whole = Assert.IsType<VirtualRing>(row.Children[1]);
+
+        Assert.Equal(16, whole.Width);
+    }
+
+    /// <summary>A virtual ring is centred on the icon it lies over, at the size it was given there.</summary>
+    /// <remarks>
+    /// The ring's layout size is rounded to whole pixels while the icon's may not be, so a share of the
+    /// icon that is not a whole number is rounded before it is handed over: halving a fractional size
+    /// leaves the circle a fraction of a pixel from the middle it is meant to turn about.
+    /// </remarks>
+    [Fact]
+    public void AVirtualRingIsCentredOnItsIcon()
+    {
+        var directory = Scratch.New("virtual-ring-centre");
+        var path = Path.Combine(directory, "growing.psd");
+
+        VirtualEntries.Place(path, EntryKind.File, VirtualEntryState.Pending);
+
+        var entry = new Entry(path, EntryKind.File);
+        var icon = Icons.For(entry, 64, Icons.CompactMark);
+        var window = new Window { Content = icon, Width = 200, Height = 200 };
+
+        window.Show();
+
+        try
+        {
+            var ring = Until(
+                window,
+                () => icon.GetVisualDescendants().OfType<VirtualRing>().FirstOrDefault()
+            );
+            var centre = ring.TranslatePoint(
+                new Point(ring.Bounds.Width / 2, ring.Bounds.Height / 2),
+                icon
+            );
+
+            Assert.NotNull(centre);
+            Assert.Equal(32, centre.Value.X, 3);
+            Assert.Equal(32, centre.Value.Y, 3);
+            Assert.Equal(RelativePoint.Center, ring.RenderTransformOrigin);
+            Assert.IsType<RotateTransform>(ring.RenderTransform);
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     /// <summary>A picture the renderer cannot resize is stamped at its own size rather than crashing.</summary>

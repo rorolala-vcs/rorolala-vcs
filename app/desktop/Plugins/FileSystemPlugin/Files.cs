@@ -42,6 +42,9 @@ internal sealed class Files : Listing<Entry>
     /// <summary>What a place's own copy or cut has put within reach of a paste, or nothing when none was made.</summary>
     private readonly LogicalClip? _logical;
 
+    /// <summary>How much of an icon a virtual entry's ring covers.</summary>
+    private readonly double _mark;
+
     /// <summary>The location, which is what the files and the columns are read through.</summary>
     private readonly Browser _browser;
 
@@ -74,18 +77,21 @@ internal sealed class Files : Listing<Entry>
     /// What a place's own copy or cut has put within reach of a paste, which a directory offers its drop targets
     /// before it falls back on the file clipboard.
     /// </param>
+    /// <param name="mark">How much of an icon a virtual entry's ring covers.</param>
     public Files(
         IPluginHost host,
         Browser browser,
         BrowserActions actions,
         Clip clip,
-        LogicalClip? logical = null
+        LogicalClip? logical = null,
+        double mark = 1
     )
         : base(host, browser.Shown)
     {
         _actions = actions;
         _clip = clip;
         _logical = logical;
+        _mark = mark;
         _browser = browser;
         _locks = EntryLockProviders.For(browser.Current);
 
@@ -105,7 +111,7 @@ internal sealed class Files : Listing<Entry>
     public override string Name(Entry item) => Names.Show(item);
 
     /// <inheritdoc />
-    public override Control Icon(Entry item, int size) => Icons.For(item, size);
+    public override Control Icon(Entry item, int size) => Icons.For(item, size, _mark);
 
     /// <inheritdoc />
     public override Color? Band(Entry item) => FolderColours.Band(item);
@@ -126,7 +132,7 @@ internal sealed class Files : Listing<Entry>
     /// <param name="size">How many pixels wide and tall.</param>
     /// <returns>What to draw in the tile.</returns>
     public override Control Marked(Entry item, int size) =>
-        new PreviewTile(Host.Previews, item, size, Badges(item));
+        new PreviewTile(Host.Previews, item, size, Badges(item), _mark);
 
     /// <inheritdoc />
     public override IReadOnlyList<EntryBadge> Badges(Entry item)

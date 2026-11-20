@@ -1303,12 +1303,26 @@ internal sealed class DirectoryControl : UserControl
         EntryView<Entry> drawn = Zoom > GridAbove
             ? new GridBrowser<Entry>(
                 _host,
-                new Files(_host, Location, _actions, _clip, _logicalClip),
+                new Files(
+                    _host,
+                    Location,
+                    _actions,
+                    _clip,
+                    _logicalClip,
+                    Icons.CompactMark
+                ),
                 Icons.SizeAt(Zoom)
             )
             : new ListBrowser<Entry>(
                 _host,
-                new Files(_host, Location, _actions, _clip, _logicalClip)
+                new Files(
+                    _host,
+                    Location,
+                    _actions,
+                    _clip,
+                    _logicalClip,
+                    Icons.CompactMark
+                )
             );
         drawn.EditEnded += Resumed;
         _view = drawn;
