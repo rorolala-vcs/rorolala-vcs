@@ -11,14 +11,14 @@ using RorolalaLauncher.Theming;
 namespace RorolalaLauncher.Dialogs;
 
 /// <summary>
-/// What this program may be told about how it is drawn: the day/night choice, which is the Desktop
-/// program's own file, and the window's frame, which is this program's own choice.
+/// What this program may be told about how the windows it opens are drawn: the day/night choice, which is
+/// the Desktop program's own file, and the frame of the Desktop window it opens.
 /// </summary>
 /// <remarks>
 /// The day/night choice is written to <c>theme.json</c>, which the Desktop program reads, so a choice made
 /// here is the choice in force in both. The frame is written to this program's settings and handed to the
-/// Desktop program when a window is opened from here, because the frame is the launcher's own: the two
-/// programs are drawn alike because they are told alike, not because one writes the other's file.
+/// Desktop program when a window is opened from here. The launcher's own window keeps the system title bar
+/// and border, so this choice is about the Desktop window and not about the launcher.
 /// <para>
 /// Each choice is a segmented control rather than a row of buttons: the options are one control with the
 /// one in force filled, which is how a setting reads as one setting rather than as several actions.
@@ -74,7 +74,7 @@ internal sealed class SettingsDialog : DialogWindow
         Build();
     }
 
-    /// <summary>The frame in force once the window is closed, which is what the launcher is drawn in.</summary>
+    /// <summary>The frame in force once the window is closed, which is what the Desktop window is drawn in.</summary>
     public WindowStyle Frame => _settings.Frame ?? _machine;
 
     /// <summary>

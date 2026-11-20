@@ -202,9 +202,11 @@ internal sealed class LauncherWindow : Window
         MinHeight = 560;
         CanResize = Program.Tiling;
 
-        // The system draws the border, and nothing draws a system title bar: the launcher's own row is the
-        // only top row, and a tiling window manager is already the frame around it. `BorderOnly` is that
-        // one without the other, where the full decorations would put a second title row above this one.
+        // The Desktop program's frame mode: the system draws the border, the client area extends into what
+        // would have been the title bar, and the window draws its own top row. There is no system title bar
+        // above it, and no menu. A tiling window manager is the frame instead, so it gets neither.
+        ExtendClientAreaToDecorationsHint = !Program.Tiling;
+        ExtendClientAreaTitleBarHeightHint = 34;
         WindowDecorations = Program.Tiling
             ? Avalonia.Controls.WindowDecorations.None
             : Avalonia.Controls.WindowDecorations.BorderOnly;

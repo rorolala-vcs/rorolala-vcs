@@ -12,10 +12,10 @@ namespace RorolalaLauncher;
 /// <remarks>
 /// The launcher is the application's main window, not a dialog over an unseen owner: a dialog is a
 /// floating window with a hidden companion behind it, and the launcher is the thing a person is looking
-/// at. On a desktop that draws its own frame the window is fixed at its own size and cannot be resized;
-/// under a tiling window manager it is resizable so the manager can place it like any other window. The
-/// two columns inside it follow the window: the Vaults dock keeps its width and the Workspaces take what
-/// is left.
+/// at. On a desktop that is not tiling the window keeps the system title bar and border, is fixed at its
+/// own size and cannot be resized; under a tiling window manager the manager draws the frame and the
+/// window is resizable so it can be placed like any other. The two columns inside it follow the window:
+/// the Vaults dock keeps its width and the Workspaces take what is left.
 /// </remarks>
 public sealed class App : Application
 {

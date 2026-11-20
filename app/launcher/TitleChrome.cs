@@ -1,10 +1,8 @@
 using Avalonia;
-using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using RorolalaDesktop.I18n;
 using RorolalaDesktop.Theming;
 using RorolalaLauncher.Controls;
 using RorolalaLauncher.Theming;
@@ -17,8 +15,8 @@ namespace RorolalaLauncher;
 /// <remarks>
 /// The row is a real title bar rather than a strip drawn over a picture. The Desktop program's three frames
 /// are the same three here: Windows puts the settings, the minimize and the close at the right in the order
-/// they are read, macOS puts its three lights at the left with the settings gear always visible, and a
-/// tiling window manager is the frame already, so only the settings is drawn.
+/// they are read, macOS puts its three lights at the left and hides the marks until the pointer reaches them,
+/// and a tiling window manager is the frame already, so only the settings is drawn.
 /// <para>
 /// The background is the elevated ground and the line beneath it is the border, which is what makes the row
 /// read as part of the frame rather than as something laid over the content.
@@ -142,16 +140,6 @@ internal sealed class TitleChrome : Border
     private CaptionButton Button(CaptionKind kind, WindowStyle style)
     {
         var button = new CaptionButton(style, kind, _skin);
-
-        var named = kind switch
-        {
-            CaptionKind.Close => RolaI18N.Get("launcher.common.close"),
-            CaptionKind.Minimize => RolaI18N.Get("launcher.common.minimize"),
-            _ => RolaI18N.Get("launcher.settings.title"),
-        };
-
-        ToolTip.SetTip(button, named);
-        AutomationProperties.SetName(button, named);
 
         button.Pressed += (_, _) =>
         {

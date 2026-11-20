@@ -151,7 +151,7 @@ internal sealed class CaptionButton : Border
                 _picture = Picture(kind, LightExtent);
             }
 
-            _picture.Opacity = 0;
+            _picture.Opacity = kind == CaptionKind.Settings ? 1 : 0;
             face.Children.Add(_picture);
         }
         else
@@ -194,10 +194,6 @@ internal sealed class CaptionButton : Border
                 _picture.Background = new SolidColorBrush(
                     _kind == CaptionKind.Settings ? SettingsInk : LightInk
                 );
-
-                // The settings light carries its gear at rest, because a green light on its own does not
-                // say what it opens. The other two keep their marks for the pointer, as their lights say
-                // what they do by their colour.
                 _picture.Opacity = _kind == CaptionKind.Settings || _over ? 1 : 0;
             }
 

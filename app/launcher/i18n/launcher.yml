@@ -19,9 +19,6 @@ launcher:
     close:
       en: Close
       zh-CN: 关闭
-    minimize:
-      en: Minimize
-      zh-CN: 最小化
     done:
       en: Done
       zh-CN: 完成
@@ -350,8 +347,8 @@ launcher:
       en: Window frame
       zh-CN: 窗口边框
     frame_hint:
-      en: Decide where the window buttons are drawn.
-      zh-CN: 决定窗口按钮画在哪里。
+      en: Decide how the Desktop window opened from here is framed.
+      zh-CN: 决定从这里打开的 Desktop 窗口怎么画边框。
     style_windows:
       en: Windows
       zh-CN: Windows
