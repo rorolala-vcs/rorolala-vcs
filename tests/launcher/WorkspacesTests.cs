@@ -33,6 +33,19 @@ public sealed class WorkspacesTests
         Assert.Equal(WorkspaceState.GitProject, Workspaces.Of(directory));
     }
 
+    /// <summary>A directory that is both a Workspace and a git-rola project still wears the Git mark.</summary>
+    [Fact]
+    public void AWorkspaceThatIsAlsoAGitProjectIsStillGit()
+    {
+        var directory = Scratch.New("git-workspace");
+        Directory.CreateDirectory(Path.Combine(directory, Workspaces.DataDirectory));
+        Directory.CreateDirectory(Path.Combine(directory, ".git"));
+        File.WriteAllText(Path.Combine(directory, Workspaces.ProjectFile), string.Empty);
+
+        Assert.Equal(WorkspaceState.Workspace, Workspaces.Of(directory));
+        Assert.True(Workspaces.IsGit(directory));
+    }
+
     /// <summary>A repository with no project file has nothing for the view to read.</summary>
     [Fact]
     public void ARepositoryWithoutAProjectFileIsNotOne()

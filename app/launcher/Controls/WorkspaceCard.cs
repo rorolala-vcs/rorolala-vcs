@@ -69,6 +69,12 @@ internal sealed class WorkspaceCard : Border
     /// <summary>The Git logomark beside the name of a git-rola Workspace.</summary>
     private readonly Border _git;
 
+    /// <summary>Whether the directory is a git-rola project, which is shown even where it is also a Workspace.</summary>
+    private readonly bool _isGit;
+
+    /// <summary>The row the name and the Git mark share, which is what keeps the mark against the name.</summary>
+    private readonly Grid _nameLine;
+
     /// <summary>The dashed edge an invalid Workspace is drawn with.</summary>
     private readonly ShapeRectangle _outline;
 
@@ -100,6 +106,7 @@ internal sealed class WorkspaceCard : Border
         _opened = opened;
         _removed = removed;
         State = Workspaces.Of(path);
+        _isGit = Workspaces.IsGit(path);
 
         _name = new TextBlock
         {
@@ -162,20 +169,25 @@ internal sealed class WorkspaceCard : Border
         ToolTip.SetTip(_git, RolaI18N.Get("launcher.workspace.git_workspace"));
         AutomationProperties.SetName(_git, RolaI18N.Get("launcher.workspace.git_workspace"));
 
-        var nameLine = new Grid
+        _nameLine = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            // The name takes only the room it needs, the Git mark follows it, and the rest of the row is
+            // empty. A star on the name would push the mark to the far end of the card, which reads as an
+            // action on the card rather than as part of what the Workspace is.
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"),
             ColumnSpacing = 6,
         };
 
-        nameLine.Children.Add(_name);
+        _nameLine.Children.Add(_name);
 
         Grid.SetColumn(_git, 1);
-        nameLine.Children.Add(_git);
+        _nameLine.Children.Add(_git);
+
+        _nameLine.SizeChanged += (_, _) => FitName();
 
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
 
-        text.Children.Add(nameLine);
+        text.Children.Add(_nameLine);
         text.Children.Add(_place);
 
         _closeGlyph = LauncherIcons.Glyph(LauncherIcons.Close, 12, skin.Muted);
@@ -264,8 +276,10 @@ internal sealed class WorkspaceCard : Border
         _place.Foreground = invalid ? skin.Alarm : skin.Muted;
         _closeGlyph.Background = invalid ? skin.Alarm : skin.Muted;
         _git.Background = _over ? skin.Front : skin.Muted;
-        _git.IsVisible = !invalid && State == WorkspaceState.GitProject;
+        _git.IsVisible = !invalid && _isGit;
         _close.IsVisible = !_busy;
+
+        FitName();
 
         _state.Text = State switch
         {
@@ -309,6 +323,17 @@ internal sealed class WorkspaceCard : Border
         _close.IsVisible = !busy;
 
         Cursor = new Cursor(busy ? StandardCursorType.Arrow : StandardCursorType.Hand);
+    }
+
+    /// <summary>
+    /// Gives the name the room left beside the Git mark, so a long name ends in an ellipsis before it
+    /// reaches the mark rather than under it.
+    /// </summary>
+    private void FitName()
+    {
+        var room = _nameLine.Bounds.Width - (_git.IsVisible ? 20 : 0);
+
+        _name.MaxWidth = Math.Max(0, room);
     }
 
     /// <inheritdoc />

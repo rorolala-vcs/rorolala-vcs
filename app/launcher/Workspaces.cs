@@ -34,6 +34,24 @@ internal static class Workspaces
     public const string ProjectFile = "rola.toml";
 
     /// <summary>
+    /// Whether a directory is a git-rola project: a git repository holding a <c>rola.toml</c>.
+    /// </summary>
+    /// <remarks>
+    /// It is asked apart from <see cref="Of"/> because a directory can be both a Workspace and a git
+    /// checkout of one: the card then opens as a Workspace and still wears the Git mark, rather than the
+    /// mark disappearing because the data directory happened to be there first.
+    /// </remarks>
+    /// <param name="path">The directory.</param>
+    /// <returns>Whether it is a git-rola project.</returns>
+    public static bool IsGit(string path)
+    {
+        var git = Path.Combine(path, ".git");
+
+        return File.Exists(Path.Combine(path, ProjectFile))
+            && (Directory.Exists(git) || File.Exists(git));
+    }
+
+    /// <summary>
     /// What a directory is.
     /// </summary>
     /// <remarks>
@@ -56,12 +74,7 @@ internal static class Workspaces
             return WorkspaceState.Workspace;
         }
 
-        var git = Path.Combine(path, ".git");
-
-        return File.Exists(Path.Combine(path, ProjectFile))
-            && (Directory.Exists(git) || File.Exists(git))
-            ? WorkspaceState.GitProject
-            : WorkspaceState.NotWorkspace;
+        return IsGit(path) ? WorkspaceState.GitProject : WorkspaceState.NotWorkspace;
     }
 
     /// <summary>
