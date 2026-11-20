@@ -21,6 +21,16 @@ semantics may not.
   says what the crate is for, the second what it does not own and which crate owns that.
   `dev/project-orientation/list.py` reads the first.
 
+## Searching the tree
+
+- Search with `grep`, or with `rg` where it is installed, and always exclude the caches and the
+  history: `.cache`, `tests/.cache` and `.git`. Generated artifacts under those trees repeat the
+  same strings thousands of times and bury the hit that matters.
+- Set a timeout on every search, chosen to suit the question: `timeout 5s` for a single crate,
+  and never more than `timeout 20s`. Work out what the search is asking for, narrow it with
+  directory and file-type limits, and let it finish. A search that needs a longer timeout means
+  the search is not smart enough: make it narrower rather than waiting it out.
+
 ## Text and punctuation
 
 The closed list of sentence punctuation covers what a user reads at run time: the i18n files under
