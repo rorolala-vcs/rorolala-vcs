@@ -337,9 +337,6 @@ launcher:
     appearance:
       en: Day or night
       zh-CN: 日夜主题
-    appearance_hint:
-      en: Switch between light, dark and the system.
-      zh-CN: 在亮色、暗色和系统的选择之间切换。
     light:
       en: Light
       zh-CN: 亮色
@@ -352,9 +349,6 @@ launcher:
     frame:
       en: Window frame
       zh-CN: 窗口边框
-    frame_hint:
-      en: Decide how the Desktop window opened from here is framed.
-      zh-CN: 决定从这里打开的 Desktop 窗口怎么画边框。
     style_windows:
       en: Windows
       zh-CN: Windows

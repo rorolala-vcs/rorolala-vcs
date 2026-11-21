@@ -111,23 +111,11 @@ internal sealed class SettingsDialog : DialogWindow
         );
 
         Body.Children.Add(
-            Setting(
-                _skin,
-                RolaI18N.Get("launcher.settings.appearance"),
-                RolaI18N.Get("launcher.settings.appearance_hint"),
-                theme,
-                first: true
-            )
+            Setting(_skin, RolaI18N.Get("launcher.settings.appearance"), theme, first: true)
         );
 
         Body.Children.Add(
-            Setting(
-                _skin,
-                RolaI18N.Get("launcher.settings.frame"),
-                RolaI18N.Get("launcher.settings.frame_hint"),
-                frame,
-                first: false
-            )
+            Setting(_skin, RolaI18N.Get("launcher.settings.frame"), frame, first: false)
         );
 
         var done = new FlatButton(Line(_skin, RolaI18N.Get("launcher.common.done")), _skin, ButtonKind.Primary)
@@ -145,37 +133,26 @@ internal sealed class SettingsDialog : DialogWindow
         Body.Children.Add(footer);
     }
 
-    /// <summary>One setting: its name, what it means, and the control that chooses it.</summary>
+    /// <summary>One setting: its name and the control that chooses it.</summary>
     /// <param name="skin">The colours in force.</param>
     /// <param name="title">What the setting is called.</param>
-    /// <param name="hint">What choosing it means.</param>
     /// <param name="control">The control.</param>
     /// <param name="first">Whether it is the first row, which has no line above it.</param>
     /// <returns>The row.</returns>
-    private static Control Setting(Skin skin, string title, string hint, Control control, bool first)
+    private static Control Setting(Skin skin, string title, Control control, bool first)
     {
         ArgumentNullException.ThrowIfNull(skin);
 
-        var copy = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-
-        copy.Children.Add(
-            new TextBlock
-            {
-                Text = title,
-                FontSize = 13,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = skin.Front,
-            }
-        );
-
-        copy.Children.Add(
-            new TextBlock
-            {
-                Text = hint,
-                FontSize = 11.5,
-                Foreground = skin.Muted,
-            }
-        );
+        // The name stands on its own now that the row carries no sentence beside it, so it sits on the
+        // control's own middle line rather than at the top of a block of copy.
+        var label = new TextBlock
+        {
+            Text = title,
+            FontSize = 13,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = skin.Front,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
 
         var row = new Grid
         {
@@ -184,7 +161,7 @@ internal sealed class SettingsDialog : DialogWindow
             Margin = new Thickness(0, 12, 0, 12),
         };
 
-        row.Children.Add(copy);
+        row.Children.Add(label);
 
         Grid.SetColumn(control, 1);
         control.VerticalAlignment = VerticalAlignment.Center;
