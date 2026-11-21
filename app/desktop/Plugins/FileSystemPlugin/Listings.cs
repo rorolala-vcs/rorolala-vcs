@@ -2696,6 +2696,8 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         // to fit the columns into, see `Fit`.
         _shown = [.. widths];
 
+        // The band the dock holds is not made again: only what the header grid says changes, and the band is
+        // the one the panel was given when the table was built, see `Header`.
         if (_heading is not null)
         {
             _header.Children.Clear();
@@ -2746,6 +2748,14 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
         }
 
         Place(_header, cells);
+
+        // A band already made is the one the dock holds, and the header grid is its child: wrapping that grid
+        // in a second band is a control with two parents, which the toolkit refuses, and a band made only to be
+        // dropped would leave the dock drawing the old one anyway. A redraw fills the band there is.
+        if (_heading is not null)
+        {
+            return _heading;
+        }
 
         var band = new Border
         {
