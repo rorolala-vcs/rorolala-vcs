@@ -103,7 +103,7 @@ internal sealed class SettingsDialog : DialogWindow
             [
                 ("windows", RolaI18N.Get("launcher.settings.style_windows")),
                 ("mac", RolaI18N.Get("launcher.settings.style_mac")),
-                ("tilling", RolaI18N.Get("launcher.settings.style_tillingwm")),
+                ("tiling", RolaI18N.Get("launcher.settings.style_tilingwm")),
             ],
             Style(Frame),
             _skin,
@@ -221,7 +221,7 @@ internal sealed class SettingsDialog : DialogWindow
         style switch
         {
             WindowStyle.Mac => "mac",
-            WindowStyle.TillingWm => "tilling",
+            WindowStyle.TilingWm => "tiling",
             _ => "windows",
         };
 
@@ -246,7 +246,7 @@ internal sealed class SettingsDialog : DialogWindow
             word switch
             {
                 "mac" => WindowStyle.Mac,
-                "tilling" => WindowStyle.TillingWm,
+                "tiling" => WindowStyle.TilingWm,
                 _ => WindowStyle.Windows,
             }
         );

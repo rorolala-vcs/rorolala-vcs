@@ -222,7 +222,7 @@ internal sealed class RorolalaTheme
         _style switch
         {
             WindowStyle.Mac => new Thickness(MacRoom, 0, 8, 0),
-            WindowStyle.TillingWm => new Thickness(8, 0, 8, 0),
+            WindowStyle.TilingWm => new Thickness(8, 0, 8, 0),
             _ => new Thickness(8, 0, (CaptionButtonWidth * CaptionButtonCount) + 8, 0),
         };
 
@@ -1897,7 +1897,7 @@ internal sealed class RorolalaTheme
                     new Setter(Visual.OpacityProperty, 1.0)
                 ),
             ],
-            WindowStyle.TillingWm => [],
+            WindowStyle.TilingWm => [],
             _ =>
             [
                 On(
@@ -2089,7 +2089,7 @@ internal sealed class RorolalaTheme
         Button? maximize = null;
         Button? close = null;
 
-        if (style != WindowStyle.TillingWm)
+        if (style != WindowStyle.TilingWm)
         {
             // Made in the order they are drawn, which is the style's own: Windows puts its three marks in the
             // order they read (minimize, maximize, close) and macOS puts the one that closes the window at

@@ -121,7 +121,7 @@ internal sealed class TitleChrome : Border
 
         // A tiling window manager is the frame already: a window button drawn here would be a button
         // inside a frame the manager has.
-        if (style != WindowStyle.TillingWm)
+        if (style != WindowStyle.TilingWm)
         {
             buttons.Children.Add(Button(CaptionKind.Minimize, style));
             buttons.Children.Add(Button(CaptionKind.Close, style));

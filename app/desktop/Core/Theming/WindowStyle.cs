@@ -19,7 +19,7 @@ internal enum WindowStyle
     Mac,
 
     /// <summary>No buttons: the window manager outside is the frame.</summary>
-    TillingWm,
+    TilingWm,
 }
 
 /// <summary>
@@ -46,7 +46,7 @@ internal static class WindowStyles
     public static WindowStyle Here() =>
         OperatingSystem.IsWindows() ? WindowStyle.Windows
         : OperatingSystem.IsMacOS() ? WindowStyle.Mac
-        : Tiling(Environment.GetEnvironmentVariable) ? WindowStyle.TillingWm
+        : Tiling(Environment.GetEnvironmentVariable) ? WindowStyle.TilingWm
         : WindowStyle.Windows;
 
     /// <summary>
@@ -54,7 +54,7 @@ internal static class WindowStyles
     /// </summary>
     /// <remarks>
     /// Read without regard to case, because the two spellings one name has, the command line's
-    /// <c>tillingwm</c> and this program's own <c>TillingWM</c>, are one name to whoever wrote it.
+    /// <c>tilingwm</c> and this program's own <c>TilingWM</c>, are one name to whoever wrote it.
     /// </remarks>
     /// <param name="name">What was written.</param>
     /// <returns>The style, or nothing when the name is not one of the three.</returns>
@@ -72,9 +72,9 @@ internal static class WindowStyles
             return WindowStyle.Mac;
         }
 
-        if (string.Equals(written, "tillingwm", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(written, "tilingwm", StringComparison.OrdinalIgnoreCase))
         {
-            return WindowStyle.TillingWm;
+            return WindowStyle.TilingWm;
         }
 
         return null;

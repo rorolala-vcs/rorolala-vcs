@@ -2485,7 +2485,7 @@ fn desktop(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.exits("a window style is queried", &ran, 0);
     checked.wants(
         "the query answers one of the three names",
-        matches!(ran.stdout.trim(), "windows" | "mac" | "tillingwm"),
+        matches!(ran.stdout.trim(), "windows" | "mac" | "tilingwm"),
         &said(&ran),
     );
 

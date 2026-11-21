@@ -210,7 +210,7 @@ internal sealed class RolaRunner(string program, string language)
         style switch
         {
             WindowStyle.Mac => "mac",
-            WindowStyle.TillingWm => "tillingwm",
+            WindowStyle.TilingWm => "tilingwm",
             _ => "windows",
         };
 }

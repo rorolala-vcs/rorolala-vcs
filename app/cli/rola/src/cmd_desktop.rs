@@ -95,7 +95,7 @@ const GIT_EXE_ENV: &str = "ROLA_GIT_EXE";
 
 /// What the style the window's own frame is drawn in is handed over under.
 ///
-/// The three names are the Desktop program's own (`Windows`, `Mac`, `TillingWM`) and what a run writes is
+/// The three names are the Desktop program's own (`Windows`, `Mac`, `TilingWM`) and what a run writes is
 /// one of the three lower-case ones: what a person types and what two programs agree on need not be spelled
 /// the same way, and the one that is handed over is the one the program's own code names.
 const STYLE_ARG: &str = "-WindowStyle:";
@@ -119,7 +119,7 @@ pub enum WindowStyle {
     /// Three coloured lights at the left.
     Mac,
     /// No buttons: the window manager outside is the frame.
-    TillingWm,
+    TilingWm,
 }
 
 impl WindowStyle {
@@ -131,7 +131,7 @@ impl WindowStyle {
         match name.to_ascii_lowercase().as_str() {
             "windows" => Some(Self::Windows),
             "mac" => Some(Self::Mac),
-            "tillingwm" => Some(Self::TillingWm),
+            "tilingwm" => Some(Self::TilingWm),
             _ => None,
         }
     }
@@ -141,7 +141,7 @@ impl WindowStyle {
         match self {
             Self::Windows => "Windows",
             Self::Mac => "Mac",
-            Self::TillingWm => "TillingWM",
+            Self::TilingWm => "TilingWM",
         }
     }
 
@@ -150,7 +150,7 @@ impl WindowStyle {
         match self {
             Self::Windows => "windows",
             Self::Mac => "mac",
-            Self::TillingWm => "tillingwm",
+            Self::TilingWm => "tilingwm",
         }
     }
 
@@ -167,7 +167,7 @@ impl WindowStyle {
         } else if cfg!(target_os = "macos") {
             Self::Mac
         } else if is_tiling(|name| std::env::var(name).ok()) {
-            Self::TillingWm
+            Self::TilingWm
         } else {
             Self::Windows
         }
@@ -218,7 +218,7 @@ const SESSIONS: [&str; 3] = [
 const MANAGERS: [&str; 4] = ["sway", "i3", "hyprland", "niri"];
 
 /// The styles a run may ask for, as it writes them.
-const WINDOW_STYLES: [&str; 3] = ["windows", "mac", "tillingwm"];
+const WINDOW_STYLES: [&str; 3] = ["windows", "mac", "tilingwm"];
 
 /// The style the window's own frame is to be drawn in.
 ///
@@ -231,7 +231,7 @@ const ARG_WINDOW_STYLE: PickerArg<'static, Option<String>> = arg![window_style: 
 ///
 /// It is the environment probe the Desktop program itself makes on a run that was told no style: what is
 /// asked is the machine, not the program, so the answer is written to standard output as the one name a
-/// person types (`windows`, `mac` or `tillingwm`) and nothing is opened.
+/// person types (`windows`, `mac` or `tilingwm`) and nothing is opened.
 const ARG_QUERY_WINDOW_STYLE: PickerArg<'static, Flag> = arg![query_window_style: Flag];
 
 /// The flag that asks the window to say when it is up.
@@ -295,7 +295,7 @@ pub fn complete_desktop(ctx: ShellContext) -> Suggest {
 /// run's own directory.
 ///
 /// `--window-style` chooses how the window's own frame is drawn, `windows` for the three buttons at the
-/// right, `mac` for the three lights at the left, `tillingwm` for no buttons at all. Absent, the Desktop
+/// right, `mac` for the three lights at the left, `tilingwm` for no buttons at all. Absent, the Desktop
 /// program draws the frame the machine it is opened on asks for.
 ///
 /// `--query-window-style` does not open anything: it answers how the machine this run is made on draws a
@@ -755,16 +755,10 @@ mod tests {
     fn every_style_is_read_by_the_name_a_run_writes() {
         assert_eq!(WindowStyle::named("windows"), Some(WindowStyle::Windows));
         assert_eq!(WindowStyle::named("mac"), Some(WindowStyle::Mac));
-        assert_eq!(
-            WindowStyle::named("tillingwm"),
-            Some(WindowStyle::TillingWm)
-        );
+        assert_eq!(WindowStyle::named("tilingwm"), Some(WindowStyle::TilingWm));
 
         // The two programs spell the names their own way, and one name is what both of them mean.
-        assert_eq!(
-            WindowStyle::named("TillingWM"),
-            Some(WindowStyle::TillingWm)
-        );
+        assert_eq!(WindowStyle::named("TilingWM"), Some(WindowStyle::TilingWm));
         assert_eq!(WindowStyle::named("MAC"), Some(WindowStyle::Mac));
     }
 
@@ -792,7 +786,7 @@ mod tests {
     fn a_style_is_handed_over_by_the_name_the_program_reads() {
         assert_eq!(WindowStyle::Windows.argument(), "Windows");
         assert_eq!(WindowStyle::Mac.argument(), "Mac");
-        assert_eq!(WindowStyle::TillingWm.argument(), "TillingWM");
+        assert_eq!(WindowStyle::TilingWm.argument(), "TilingWM");
     }
 
     #[test]
@@ -801,12 +795,12 @@ mod tests {
         // could not pass the answer to the next one.
         assert_eq!(WindowStyle::Windows.written(), "windows");
         assert_eq!(WindowStyle::Mac.written(), "mac");
-        assert_eq!(WindowStyle::TillingWm.written(), "tillingwm");
+        assert_eq!(WindowStyle::TilingWm.written(), "tilingwm");
 
         for style in [
             WindowStyle::Windows,
             WindowStyle::Mac,
-            WindowStyle::TillingWm,
+            WindowStyle::TilingWm,
         ] {
             assert_eq!(WindowStyle::named(style.written()), Some(style));
         }
@@ -830,7 +824,7 @@ mod tests {
         let tiling = is_tiling(|name| std::env::var(name).ok());
 
         if !cfg!(any(target_os = "windows", target_os = "macos")) && tiling {
-            assert_eq!(WindowStyle::here(), WindowStyle::TillingWm);
+            assert_eq!(WindowStyle::here(), WindowStyle::TilingWm);
         } else {
             assert_eq!(WindowStyle::here(), expected);
         }

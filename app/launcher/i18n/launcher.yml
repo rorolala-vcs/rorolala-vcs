@@ -361,6 +361,6 @@ launcher:
     style_mac:
       en: macOS
       zh-CN: macOS
-    style_tillingwm:
+    style_tilingwm:
       en: Tiling window manager
       zh-CN: 平铺窗口管理器

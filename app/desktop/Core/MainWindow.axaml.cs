@@ -524,7 +524,7 @@ public partial class MainWindow : Window
         WindowCaption.Margin = Program.WindowStyle switch
         {
             Theming.WindowStyle.Mac => new Thickness(80, 0, 80, 0),
-            Theming.WindowStyle.TillingWm => new Thickness(8, 0, 8, 0),
+            Theming.WindowStyle.TilingWm => new Thickness(8, 0, 8, 0),
             _ => new Thickness(150, 0, 150, 0),
         };
 

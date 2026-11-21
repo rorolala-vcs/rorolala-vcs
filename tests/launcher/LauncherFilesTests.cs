@@ -110,7 +110,7 @@ public sealed class LauncherFilesTests
         var directory = Scratch.New("settings");
         var path = Path.Combine(directory, "settings.toml");
 
-        foreach (var style in new[] { WindowStyle.Windows, WindowStyle.Mac, WindowStyle.TillingWm })
+        foreach (var style in new[] { WindowStyle.Windows, WindowStyle.Mac, WindowStyle.TilingWm })
         {
             new LauncherSettings { Frame = style }.Write(path);
 

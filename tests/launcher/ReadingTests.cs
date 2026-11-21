@@ -118,6 +118,6 @@ public sealed class ReadingTests
     {
         Assert.Equal("windows", RolaRunner.Written(WindowStyle.Windows));
         Assert.Equal("mac", RolaRunner.Written(WindowStyle.Mac));
-        Assert.Equal("tillingwm", RolaRunner.Written(WindowStyle.TillingWm));
+        Assert.Equal("tilingwm", RolaRunner.Written(WindowStyle.TilingWm));
     }
 }

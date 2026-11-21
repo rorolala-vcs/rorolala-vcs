@@ -26,8 +26,8 @@ public sealed class WindowStyleTests
         Assert.Equal(WindowStyle.Mac, WindowStyles.Named("mac"));
         Assert.Equal(WindowStyle.Mac, WindowStyles.Named("Mac"));
         Assert.Equal(WindowStyle.Mac, WindowStyles.Named(" mac "));
-        Assert.Equal(WindowStyle.TillingWm, WindowStyles.Named("tillingwm"));
-        Assert.Equal(WindowStyle.TillingWm, WindowStyles.Named("TillingWM"));
+        Assert.Equal(WindowStyle.TilingWm, WindowStyles.Named("tilingwm"));
+        Assert.Equal(WindowStyle.TilingWm, WindowStyles.Named("TilingWM"));
     }
 
     /// <summary>A name that is none of the three names nothing.</summary>
