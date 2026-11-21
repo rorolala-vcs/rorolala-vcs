@@ -56,6 +56,12 @@ __*
 # holds.
 /THIRD_PARTY/
 
+# The Adwaita set's pictures, license and release stamp belong to the upstream release and are
+# fetched by `cargo dev adwaita` where an export needs them, so they are not carried. The set's own
+# file names every picture and is ours, so it stays in the tree.
+/res/desktop-icon-set/adwaita/*
+!/res/desktop-icon-set/adwaita/icon-theme.toml
+
 # Corpora are not carried: a format's own files are megabytes each, several per pattern, and a
 # repository that carried one set per format would be a repository nobody clones. What is carried is
 # the two small files inside each one that make it a record, `policy.toml` and `SCORE.md`, and

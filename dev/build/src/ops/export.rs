@@ -157,6 +157,10 @@ pub fn export_artifacts(userdata_name: &str, self_contained: bool) -> Result<(),
     // project that was evaluated without them would compile a program with no face of its own.
     crate::fetch_fonts(&workspace)?;
 
+    // The Adwaita set is packaged beside the Desktop from the tree, so it is fetched before the
+    // program is published: a layout without it offers only the system's own icons.
+    crate::fetch_adwaita(&workspace)?;
+
     // The programs about to be written are stopped first: a running program holds its own executable
     // open, and on Windows a file in use can be neither replaced nor removed with the directory it
     // sits in.

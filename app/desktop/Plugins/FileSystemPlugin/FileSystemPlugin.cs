@@ -126,7 +126,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
         var sets = IconSets.Discover(IconSets.Root, host.Log.Warn);
         IconSets.Adopt(sets, host.Log.Warn, host.Files.Touch);
 
-        var iconSet = host.Config.ReadKeyAs<string>(IconSets.Setting, IconSets.System) ?? IconSets.System;
+        var iconSet = host.Config.ReadKeyAs<string>(IconSets.Setting, IconSets.Default) ?? IconSets.Default;
         var known = string.Equals(iconSet, IconSets.System, StringComparison.Ordinal)
             || sets.Any(set => string.Equals(set.Id, iconSet, StringComparison.Ordinal));
 

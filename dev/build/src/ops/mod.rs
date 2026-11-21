@@ -3,6 +3,7 @@
 //! A step is a function here and a command beside it: what the command does is run the function,
 //! and what the function does is run the tree's own programs, never a second description of them.
 
+pub mod adwaita;
 pub mod book;
 pub mod build;
 pub mod cargo_clean;
@@ -22,6 +23,6 @@ pub mod publish;
 // harness's, so it is reached by name rather than by this.
 #[allow(clippy::wildcard_imports, clippy::redundant_pub_crate)]
 pub(crate) use {
-    book::*, build::*, cargo_clean::*, clean::*, cli_help_editor::*, desktop::*, export::*,
-    fonts::*, icons::*, library::*, programs::*, publish::*,
+    adwaita::*, book::*, build::*, cargo_clean::*, clean::*, cli_help_editor::*, desktop::*,
+    export::*, fonts::*, icons::*, library::*, programs::*, publish::*,
 };

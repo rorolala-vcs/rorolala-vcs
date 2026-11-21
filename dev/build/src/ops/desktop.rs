@@ -12,6 +12,7 @@ use mingling::{
 };
 
 use crate::dotnet;
+use crate::ops::adwaita::fetch_adwaita;
 use crate::ops::book::build_book;
 use crate::ops::fonts::{fetch_fonts, lay_out_fonts};
 use crate::paths::Workspace;
@@ -45,6 +46,10 @@ pub fn lay_out_desktop(userdata_name: &str) -> Result<(), crate::Error> {
     // Before the .NET side is evaluated: the shared font project embeds the files, so a build that
     // started without them would be a program drawn in the machine's face rather than this one.
     fetch_fonts(&workspace)?;
+
+    // The Adwaita set is packaged beside the Desktop from the tree, so it is fetched before the
+    // program is published: a layout without it offers only the system's own icons.
+    fetch_adwaita(&workspace)?;
 
     build_library(userdata_name)?;
     dotnet::build_solution(&workspace, userdata_name)?;

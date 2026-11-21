@@ -124,6 +124,9 @@ internal static class IconSets
     /// <summary>The value of the setting that means "use the system's own icons".</summary>
     public const string System = "system";
 
+    /// <summary>The set a configuration that has chosen none starts with.</summary>
+    public const string Default = "adwaita";
+
     /// <summary>The setting the chosen set is kept under.</summary>
     public const string Setting = "Icons/set";
 

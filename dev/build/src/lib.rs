@@ -95,6 +95,11 @@ pub use ops::fonts::fetch_fonts;
 /// The fetched Noto Sans set, laid beside the programs with the license it is distributed under.
 pub use ops::fonts::lay_out_fonts;
 
+/// The Adwaita pictures the file listing draws with, fetched at the release the set pins.
+///
+/// Reached by name because `export` and `desktop` fetch them before the Desktop is published.
+pub use ops::adwaita::fetch_adwaita;
+
 /// The status of a run that named no command: it asked for nothing, so it is told what there is.
 const EC_NOTHING_NAMED: i32 = 1;
 

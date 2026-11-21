@@ -200,9 +200,10 @@ rorolala_file_system:
     remove_files:
       en: Remove file command
       zh-CN: 删除文件命令
-    # What the listing draws entries with. The system's own icons are the default and read no file; a set
+    # What the listing draws entries with. The system's own icons read no file and stay an option; a set
     # packaged beside the program is named by the directory it sits in, and its own name, authors and
     # description are put on the option rather than written here, because the set travels with the program.
+    # The packaged Adwaita set is what a new configuration starts with.
     icon_set_label:
       en: Icon set
       zh-CN: 图标集

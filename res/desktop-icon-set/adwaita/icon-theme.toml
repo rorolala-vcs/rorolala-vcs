@@ -1,0 +1,146 @@
+# The GNOME Adwaita icon theme, the pictures a file listing draws an entry with.
+#
+# The pictures are the theme's own scalable SVGs, fetched from release 51.0 by `cargo dev adwaita`
+# and laid beside this file, so a checkout carries the list and a build fetches what it names. The
+# artwork is distributed under the GNU LGPL v3, whose text travels as `COPYING_LGPL`, and the
+# authors are the GNOME Project's. The rules name a picture by what an entry is called, which is
+# what the theme's MIME names and place names are about.
+
+[metadata]
+name = "Adwaita"
+authors = ["GNOME Project"]
+description = """
+GNOME's Adwaita icon theme, one picture per kind of file and folder.
+"""
+license-file = "./COPYING_LGPL"
+
+[generation]
+mode = "svg"
+sizes = [16, 24, 32, 48, 64, 128, 256]
+
+[fallback]
+directory-format = "./folder.svg"
+text-format = "./text-x-generic.svg"
+audio-format = "./audio-x-generic.svg"
+media-format = "./image-x-generic.svg"
+binary-format = "./application-x-generic.svg"
+
+# A file whose name says what kind of thing it is is drawn with the theme's picture for that thing.
+# The rules are tried in the order written, and a rule that matches wins over the fallback table.
+
+[[rules]]
+regex = ['\.(mp4|m4v|mkv|mov|avi|webm|wmv|flv|mpg|mpeg|3gp|ogv)$']
+type = "file"
+icon = "./video-x-generic.svg"
+
+[[rules]]
+regex = ['\.(ttf|otf|ttc|woff|woff2|pfb|pfm)$']
+type = "file"
+icon = "./font-x-generic.svg"
+
+[[rules]]
+regex = ['\.(zip|tar|gz|tgz|bz2|xz|zst|lz|lzma|7z|rar|cab|deb|rpm|iso)$']
+type = "file"
+icon = "./package-x-generic.svg"
+
+[[rules]]
+regex = ['\.(pdf|doc|docx|odt|rtf|pages)$']
+type = "file"
+icon = "./x-office-document.svg"
+
+[[rules]]
+regex = ['\.(xls|xlsx|ods|numbers)$']
+type = "file"
+icon = "./x-office-spreadsheet.svg"
+
+[[rules]]
+regex = ['\.(ppt|pptx|odp|key)$']
+type = "file"
+icon = "./x-office-presentation.svg"
+
+# A file an artist works a picture in is drawn as a drawing rather than as a picture, because the
+# entry is a document a tool opens, which is what the drawing picture is about.
+[[rules]]
+regex = ['\.(psd|psb|ai|eps|indd|xd|fig|sketch|cdr)$']
+type = "file"
+icon = "./x-office-drawing.svg"
+
+# The scenes and caches a 3D tool writes are models, not pictures and not archives.
+[[rules]]
+regex = ['\.(obj|fbx|stl|blend|3ds|gltf|glb|usd|usda|usdc|ma|mb)$']
+type = "file"
+icon = "./model.svg"
+
+[[rules]]
+regex = ['\.(html|htm|xhtml)$']
+type = "file"
+icon = "./text-html.svg"
+
+[[rules]]
+regex = ['\.(sh|bash|zsh|fish|ps1|psm1|bat|cmd|py|rb|pl|lua)$']
+type = "file"
+icon = "./text-x-script.svg"
+
+[[rules]]
+regex = ['\.(exe|dll|so|dylib|msix|appimage|app)$']
+type = "file"
+icon = "./application-x-executable.svg"
+
+[[rules]]
+regex = ['\.(pem|crt|cer|p12|pfx)$']
+type = "file"
+icon = "./application-certificate.svg"
+
+# The places a person keeps things in are drawn as the theme's own place pictures. The patterns
+# carry the Chinese names as well, because the desktop speaks both languages and a listing shows the
+# names the system made rather than the English ones.
+
+[[rules]]
+regex = ['^Downloads?$', '^下载$']
+type = "directory"
+icon = "./folder-download.svg"
+
+[[rules]]
+regex = ['^Pictures$', '^图片$']
+type = "directory"
+icon = "./folder-pictures.svg"
+
+[[rules]]
+regex = ['^Music$', '^音乐$']
+type = "directory"
+icon = "./folder-music.svg"
+
+[[rules]]
+regex = ['^Videos?$', '^视频$']
+type = "directory"
+icon = "./folder-videos.svg"
+
+[[rules]]
+regex = ['^Documents$', '^文档$']
+type = "directory"
+icon = "./folder-documents.svg"
+
+[[rules]]
+regex = ['^Public$', '^公共$']
+type = "directory"
+icon = "./folder-publicshare.svg"
+
+[[rules]]
+regex = ['^Templates?$', '^模板$']
+type = "directory"
+icon = "./folder-templates.svg"
+
+[[rules]]
+regex = ['^Projects?$', '^项目$']
+type = "directory"
+icon = "./folder-projects.svg"
+
+[[rules]]
+regex = ['^home$']
+type = "directory"
+icon = "./user-home.svg"
+
+[[rules]]
+regex = ['^Desktop$', '^桌面$']
+type = "directory"
+icon = "./user-desktop.svg"

@@ -160,6 +160,61 @@ public sealed class IconSetTests
         Assert.NotEqual(drawn, File.ReadAllBytes(picture));
     }
 
+    /// <summary>The packaged Adwaita set states every kind of entry and every picture it names.</summary>
+    /// <remarks>
+    /// The set's own file is ours and is committed; the pictures are the upstream release's and are fetched
+    /// at build time, so a checkout has the list and not the pictures. What is checked here is the list: the
+    /// five kinds, the rules in the order they are tried, and the flat picture names the set names them by.
+    /// </remarks>
+    [Fact]
+    public void TheAdwaitaSetNamesEveryKindOfEntry()
+    {
+        var set = Adwaita(Repository());
+
+        Assert.Equal(5, set.Sources.Count);
+        Assert.Equal(22, set.Rules.Count);
+
+        foreach (var category in Enum.GetValues<IconCategory>())
+        {
+            Assert.Contains(set.Sources, source => source.Category == category);
+        }
+
+        foreach (var relative in Pictures(set))
+        {
+            var name = Path.GetFileName(relative);
+
+            Assert.EndsWith(".svg", name, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal($"./{name}", relative);
+        }
+    }
+
+    /// <summary>The set draws with the pictures an export fetched, where they are there.</summary>
+    /// <remarks>
+    /// A clean checkout has the list and not the pictures, so this says nothing there: the pictures are
+    /// fetched by `cargo dev adwaita`, and what a start-up draws is checked where a build has run. One size
+    /// is drawn because meeting the renderer is what this is for, and a start-up draws the set's own seven.
+    /// </remarks>
+    [Fact]
+    public void TheAdwaitaSetDrawsWhereItsPicturesAre()
+    {
+        var set = Adwaita(Repository());
+        var named = Pictures(set).ToArray();
+
+        if (!named.All(relative => File.Exists(Path.Combine(set.Folder, relative))))
+        {
+            return;
+        }
+
+        var cache = Scratch.New("adwaita-cache");
+        var warnings = new List<string>();
+
+        Assert.True(IconSets.Build(set with { Sizes = new[] { 16 } }, cache, warnings.Add));
+        Assert.Empty(warnings);
+        Assert.True(
+            File.Exists(Path.Combine(cache, set.Id, IconSets.NameOf("./folder.svg", 16)))
+        );
+    }
+
     /// <summary>
     /// A set in a scratch directory, drawn with a square of the colour given.
     /// </summary>
@@ -232,4 +287,45 @@ public sealed class IconSetTests
           <rect x="0" y="0" width="24" height="24" fill="{colour}"/>
         </svg>
         """;
+
+    /// <summary>The packaged Adwaita set, read from the tree.</summary>
+    /// <param name="root">The root of the tree.</param>
+    /// <returns>The set.</returns>
+    private static IconSet Adwaita(string root)
+    {
+        var sets = IconSets.Discover(
+            Path.Combine(root, "res", "desktop-icon-set"),
+            message => Assert.Fail(message)
+        );
+
+        return Assert.Single(
+            sets,
+            candidate => string.Equals(candidate.Id, "adwaita", StringComparison.Ordinal)
+        );
+    }
+
+    /// <summary>Every picture the set names, the fallbacks first.</summary>
+    /// <param name="set">The set.</param>
+    /// <returns>The paths, relative to the set's own directory.</returns>
+    private static IEnumerable<string> Pictures(IconSet set) =>
+        set.Sources
+            .Select(source => source.RelativePath)
+            .Concat(set.Rules.Select(rule => rule.RelativePath));
+
+    /// <summary>The tree this test runs in, found by the solution at its root.</summary>
+    /// <returns>The root of the tree, as an absolute path.</returns>
+    private static string Repository()
+    {
+        for (var at = new DirectoryInfo(AppContext.BaseDirectory); at is not null; at = at.Parent)
+        {
+            if (File.Exists(Path.Combine(at.FullName, "RorolalaSharp.sln")))
+            {
+                return at.FullName;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "the test's own directory is not under the tree that holds the solution"
+        );
+    }
 }
