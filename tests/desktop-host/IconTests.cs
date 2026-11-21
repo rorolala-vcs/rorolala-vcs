@@ -112,6 +112,45 @@ public sealed class IconTests
         Assert.True(second.Y > first.Y, "the second badge is not clockwise of the first");
     }
 
+    /// <summary>A full arc stands no further past the picture than a tile's least room reserves.</summary>
+    /// <remarks>
+    /// The ends of a crowded arc are drawn past the picture's edge, and the tile is the box a badge is worn in:
+    /// what the tile leaves around the picture is at least what an arc reaches into, so the badges of a tile
+    /// stand on the tile rather than over the gap beside it, where the drawing is cut and the pointer does not
+    /// reach. What is checked is the two halves of that one number, at every size a picture is drawn at.
+    /// </remarks>
+    [Fact]
+    public void TheArcStandsNoFurtherThanATileReserves()
+    {
+        foreach (var size in new[] { Icons.Row, 64, 110, Icons.SizeAt(200), Icons.SizeAt(400) })
+        {
+            var reach = BadgeArc.Reach(size);
+
+            for (var count = 1; count <= BadgeArc.Most; count++)
+            {
+                var half = BadgeArc.Extent(size) / 2;
+
+                for (var at = 0; at < count; at++)
+                {
+                    var middle = BadgeArc.Centre(at, count, size);
+
+                    Assert.True(
+                        middle.X + half <= size + reach + 1e-9,
+                        $"{count} badges at {size} reach further right than the tile reserves"
+                    );
+                    Assert.True(
+                        middle.Y - half >= -reach - 1e-9,
+                        $"{count} badges at {size} reach higher than the tile reserves"
+                    );
+                }
+            }
+        }
+
+        // At the size a grid opens at, the room a tile already leaves is the whole of what the arc needs: a
+        // listing at rest is not spread out for a mark it does not wear.
+        Assert.True(BadgeArc.Reach(64) <= 12);
+    }
+
     /// <summary>No icon wears more than five badges, however many are contributed.</summary>
     /// <remarks>
     /// An arc of a quarter turn stops being read as a set past a handful, so what is contributed beyond the

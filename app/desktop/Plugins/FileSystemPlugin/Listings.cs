@@ -3164,7 +3164,13 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
 internal sealed class GridBrowser<TItem> : EntryView<TItem>
     where TItem : class
 {
-    /// <summary>How much room is left around a tile's icon and name.</summary>
+    /// <summary>How much room is left around a tile's icon and name, at the least.</summary>
+    /// <remarks>
+    /// The least, because the room around the picture is what the badges stand in: the ends of a crowded arc
+    /// stand past the plate's edge, and the tile is the box a badge is worn in. What is left around the picture
+    /// is therefore at least the room an arc reaches into (see <see cref="BadgeArc.Reach"/>), which a picture
+    /// drawn large needs and a small one does not.
+    /// </remarks>
     private const int Around = 12;
 
     /// <summary>
@@ -3308,9 +3314,15 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
         // The surface a chosen tile wears is the item's; what is here is the content and the room around it.
         // A marked tile carries its colour as the line under its caption rather than as a wash on this
         // surface, so the picture and the name stand on the dock's own ground.
+        //
+        // The room is the least a tile is ever given and the most an arc of badges needs, because the badges of
+        // a crowded arc stand past the picture's edge and the tile is the box they are worn in: what is drawn
+        // past that box is not drawn at all, and what stands in it is not pointed at.
+        var room = Math.Max(Around, BadgeArc.Reach(_icon));
+
         var tile = new Border
         {
-            Padding = new Thickness(Around),
+            Padding = new Thickness(room),
             CornerRadius = new CornerRadius(8),
             Child = new StackPanel
             {

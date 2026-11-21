@@ -111,6 +111,20 @@ internal sealed class BadgeArc : Panel
     public static int Worn(int contributed) => Math.Min(contributed, Most);
 
     /// <summary>
+    /// How far a badge of a full arc stands past the picture's edge.
+    /// </summary>
+    /// <remarks>
+    /// The ring is about the picture's top right quarter and a badge is wider than the room between the ring and
+    /// the edge, so the ends of a crowded arc stand outside the picture. Nothing is drawn there: the tile is the
+    /// box a badge is worn in, and the room it leaves around the picture is what this states, so that a badge
+    /// stands on the tile rather than over the gap beside it, where the listing's clipping and its clicks end.
+    /// </remarks>
+    /// <param name="size">How many pixels wide and tall the picture is.</param>
+    /// <returns>How many pixels past its top and right edges a badge reaches.</returns>
+    public static double Reach(double size) =>
+        Math.Ceiling(Radius(size) + (Extent(size) / 2) - (size / 4));
+
+    /// <summary>
     /// The middle of the badge a contribution wears, in the icon's own coordinates.
     /// </summary>
     /// <remarks>
