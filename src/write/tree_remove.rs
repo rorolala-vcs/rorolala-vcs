@@ -358,7 +358,7 @@ fn take_work(root: &Path, path: &str, kind: EntryKind) {
 }
 
 /// Removes the directories a file's removal left empty, up to but not including the tree's root.
-fn prune_empty(root: &Path, mut at: Option<&Path>) {
+pub(crate) fn prune_empty(root: &Path, mut at: Option<&Path>) {
     while let Some(directory) = at {
         if directory == root
             || !directory.starts_with(root)

@@ -1,10 +1,16 @@
 //! Carrying a sync plan out: the Layout, the index and the content.
 
+use std::cmp::Reverse;
+use std::collections::BTreeMap;
+use std::path::Path;
 use std::str::FromStr as _;
 
 use rorolala_layout::{Batch, Layout, LayoutPath};
 use rorolala_protocol::VaultAddress;
 use rorolala_storage::{Key, StorageSet};
+use rorolala_tree::{
+    Baseline, EntryKind as TreeEntryKind, Staging, Tree, TreeEntry, TreeStructure,
+};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_progress::{Direction as MoveDirection, Progress};
@@ -16,10 +22,12 @@ use crate::daemon::{
     EntryWrite, RemoteWrites, action_sync_index_all_async, action_write_remote_entries,
 };
 use crate::fetch::Sources;
+use crate::write::bring::write_worktree;
 use crate::write::checkout::Checkout;
 use crate::write::layout::{add_cached_entry, cached_copy, set_cached_version};
 use crate::write::progress::WriteProgress;
 use crate::write::sync::{self, Entry, Kind, SyncRequest};
+use crate::write::tree_remove::prune_empty;
 use crate::write::{Cancellation, WriteError};
 use rorolala_utils_location::Locate as _;
 use serde::{Deserialize, Serialize};
@@ -607,6 +615,11 @@ fn name_of(entry: &Entry) -> &str {
 /// The path the file is at here is this side's own and is not moved by a pull; what the pull sets
 /// is the version and who holds it, since the Vault is where both are kept.
 ///
+/// A tree is put back as a directory rather than written at its path as content: its version names a
+/// structure, and the work the structure describes is what the directory is made of. Writing the
+/// structure there would put a file where a directory belongs, which is why the two shapes take
+/// different ways down.
+///
 /// # Errors
 ///
 /// Returns a message when the index could not be read.
@@ -652,7 +665,24 @@ fn receive(
             return Ok(false);
         }
 
-        if let Err(error) = carry.runtime.block_on(store.extract_file(&stored, &target)) {
+        let written = if entry.item_kind == Some("tree") {
+            receive_tree(
+                &target,
+                carry.workspace.get_root(),
+                id,
+                version.digest(),
+                &stored,
+                store,
+                carry.runtime,
+            )
+        } else {
+            carry
+                .runtime
+                .block_on(store.extract_file(&stored, &target))
+                .map_err(|error| error.to_string())
+        };
+
+        if let Err(error) = written {
             failed.push(format!("{}: {error}", entry.uuid));
 
             return Ok(false);
@@ -681,6 +711,90 @@ fn receive(
     }
 
     Ok(true)
+}
+
+/// Writes a tree version's work under `root`, replacing what the tree recorded before.
+///
+/// The version's stored object is the structure, so this is not a file to extract at the path: the
+/// structure says which directory and which file hold what, and the content it names is already in
+/// this side's store, asked for by [`bring_tree_inside`] before the run reached here.
+///
+/// What the previous structure named and this one does not is taken away first, so a path the Vault
+/// removed does not stay behind under a tree that now says it is gone. A path whose kind changed is
+/// taken away too, since a file cannot be written where a directory stands, nor the other way.
+///
+/// # Errors
+///
+/// Returns what the store, the directory or the mark could not do.
+fn receive_tree(
+    root: &Path,
+    workspace_root: &Path,
+    id: Uuid,
+    version: &[u8; 32],
+    stored: &Key,
+    store: &StorageSet,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<(), String> {
+    let bytes = runtime
+        .block_on(store.read_object(stored))
+        .map_err(|error| error.to_string())?;
+    let structure = TreeStructure::decode(&bytes).map_err(|error| error.to_string())?;
+
+    if let Some(previous) = Baseline::new(root)
+        .tree()
+        .map_err(|error| error.to_string())?
+    {
+        remove_stale(root, &previous, &structure);
+    }
+
+    write_worktree(root, &structure, store, runtime)?;
+
+    Staging::new(root)
+        .ensure_store()
+        .map_err(|error| error.to_string())?;
+    let tree = Tree::open(workspace_root, root).map_err(|error| error.to_string())?;
+    tree.baseline()
+        .write(&structure, version)
+        .map_err(|error| error.to_string())?;
+    tree.write_local_id(id).map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+/// Takes away what `previous` named and `structure` does not, under `root`.
+///
+/// Paths are taken deepest first: a directory may only be removed once what it held is gone, and a
+/// file written over a directory, or the reverse, needs the old shape cleared before the new one
+/// arrives. A directory goes only when it is empty, so work the structure never named, a nested tree
+/// among it, is left where it is.
+fn remove_stale(root: &Path, previous: &TreeStructure, structure: &TreeStructure) {
+    let kept: BTreeMap<&str, TreeEntryKind> = structure
+        .entries()
+        .iter()
+        .map(|entry| (entry.path(), entry.kind()))
+        .collect();
+
+    let mut gone: Vec<&TreeEntry> = previous
+        .entries()
+        .iter()
+        .filter(|entry| kept.get(entry.path()) != Some(&entry.kind()))
+        .collect();
+
+    gone.sort_by_key(|entry| Reverse(entry.path().len()));
+
+    for entry in gone {
+        let at = root.join(entry.path());
+
+        match entry.kind() {
+            TreeEntryKind::Directory => {
+                let _ = std::fs::remove_dir(&at);
+            }
+            TreeEntryKind::File | TreeEntryKind::Symlink => {
+                let _ = std::fs::remove_file(&at);
+                prune_empty(root, at.parent());
+            }
+        }
+    }
 }
 
 /// Writes what the Vault is behind on, in one exchange, counting each done or naming why it was not.
@@ -1251,7 +1365,11 @@ pub fn sync_apply_at(
 
 #[cfg(test)]
 mod tests {
-    use super::sync_at;
+    use rorolala_storage::{Codec, RorolalaStorage, StorageSet};
+    use rorolala_tree::{Baseline, FileMode, TreeEntry, TreeStructure};
+    use uuid::Uuid;
+
+    use super::{receive_tree, sync_at};
     use crate::write::WriteError;
 
     #[test]
@@ -1301,6 +1419,60 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(error, WriteError::NoWorkspace));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_received_tree_is_written_as_the_directory_it_is() {
+        let dir = std::env::temp_dir().join(format!("rola-write-sync-tree-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        rorolala_workspace::Workspace::create(&dir).unwrap();
+
+        let tree = dir.join("charts");
+        std::fs::create_dir_all(tree.join(".rola-tree")).unwrap();
+        std::fs::write(tree.join("gone.txt"), b"old").unwrap();
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let store = StorageSet::sole(RorolalaStorage::create(dir.join(".rola").join("pulled")));
+
+        let kept = runtime
+            .block_on(store.write_object(b"new", Codec::Raw))
+            .unwrap();
+        let structure =
+            TreeStructure::build(None, [TreeEntry::file("kept.txt", FileMode::Regular, kept)])
+                .unwrap();
+
+        // What the tree recorded before the pull: `gone.txt` is the path the new version no longer
+        // names, and taking it away is the caller's part of writing a structure.
+        let previous =
+            TreeStructure::build(None, [TreeEntry::file("gone.txt", FileMode::Regular, kept)])
+                .unwrap();
+        Baseline::new(&tree).write(&previous, &[0; 32]).unwrap();
+
+        let stored = runtime
+            .block_on(store.write_object(&structure.encode(), Codec::Raw))
+            .unwrap();
+
+        receive_tree(
+            &tree,
+            &dir,
+            Uuid::from_u128(7),
+            &[1; 32],
+            &stored,
+            &store,
+            &runtime,
+        )
+        .unwrap();
+
+        assert_eq!(std::fs::read(tree.join("kept.txt")).unwrap(), b"new");
+        assert!(!tree.join("gone.txt").exists());
+        assert_eq!(Baseline::new(&tree).version(), Some([1; 32]));
+        assert_eq!(
+            std::fs::read_to_string(tree.join(".rola-tree/id")).unwrap(),
+            Uuid::from_u128(7).to_string()
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

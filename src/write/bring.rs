@@ -1792,7 +1792,7 @@ fn item(remote: &Layout, id: Uuid, path: &LayoutPath) -> Item {
 /// # Errors
 ///
 /// Returns what the directory, the store or a link could not do.
-fn write_worktree(
+pub(super) fn write_worktree(
     root: &Path,
     structure: &TreeStructure,
     store: &StorageSet,
