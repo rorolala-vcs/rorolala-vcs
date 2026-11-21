@@ -12,7 +12,8 @@ are one implementation and its proc macro.
 - The icon build script under `utils/icons`, which reads `res/icons/*.toml` and writes the `.ico`
   beside each picture.
 - The test sandbox under `utils/sandbox`, which the integration suites build their directories in.
-- The C# facilities under `utils/desktop-i18n`, `utils/desktop-menu` and `utils/desktop-sys-icons`.
+- The C# facilities under `utils/desktop-i18n`, `utils/desktop-menu`, `utils/desktop-sys-icons` and
+  `utils/desktop-fonts`.
 
 ## What it needs
 

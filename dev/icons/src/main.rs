@@ -29,7 +29,7 @@ use serde::Deserialize;
 const MANIFEST: &str = "app/desktop/icons.toml";
 
 /// Where the icon set is kept, from the root of the tree.
-const CLONE: &str = "THIRD-PARTY/material-icons";
+const CLONE: &str = "THIRD_PARTY/material-icons";
 
 /// Where the plugins are, from the root of the tree.
 const PLUGINS: &str = "app/desktop/Plugins";
@@ -343,7 +343,7 @@ fn said(material: &Material, set: &Set) -> String {
          [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). The license itself is\n\
          `LICENSE`, copied from the commit below.\n\
          \n\
-         **The set is not vendored here.** It is a shallow clone under `THIRD-PARTY/material-icons/`, which\n\
+         **The set is not vendored here.** It is a shallow clone under `THIRD_PARTY/material-icons/`, which\n\
          git ignores, and the pictures are drawn from it by `cargo dev icons` rather than copied by hand, so\n\
          that what is drawn is what the pinned commit holds. The manifest is `app/desktop/icons.toml`:\n\
          another picture is another name there rather than another file in this directory.\n\

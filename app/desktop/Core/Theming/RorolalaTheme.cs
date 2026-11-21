@@ -18,6 +18,7 @@ using Avalonia.Styling;
 using RorolalaDesktop.CoreDocks;
 using Contract = RorolalaDesktop.Contract;
 using RorolalaDesktop.Docking;
+using RorolalaDesktop.Fonts;
 using RorolalaDesktop.Hosting;
 using Path = Avalonia.Controls.Shapes.Path;
 
@@ -344,11 +345,11 @@ internal sealed class RorolalaTheme
     /// The typeface the program is set in.
     /// </summary>
     /// <remarks>
-    /// The platform's own face, as the design this comes from uses: it ships no font, so two machines
-    /// showing the same two colours are the same program either way. A face the program carried would
-    /// be one more thing to ship and one more thing to disagree about.
+    /// Noto Sans, which travels with the program rather than being asked of the machine: two machines
+    /// showing the same two colours are then the same program in the same face. The files are laid beside
+    /// the program as well, under `THIRD_PARTY/Fonts/NotoSans`, with the license they are distributed under.
     /// </remarks>
-    private static readonly FontFamily Face = FontFamily.Default;
+    private static readonly FontFamily Face = NotoSans.Family;
 
     /// <summary>
     /// The typeface a column of data is set in.

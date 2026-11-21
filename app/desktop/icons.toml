@@ -2,7 +2,7 @@
 # one file adding one means editing.
 #
 # What is drawn is Google's Material Design icons, from the maintained mirror of the set. The set is not
-# vendored: it is a shallow clone under `THIRD-PARTY/`, which git ignores, and every picture is drawn from
+# vendored: it is a shallow clone under `THIRD_PARTY/`, which git ignores, and every picture is drawn from
 # that clone by `cargo dev icons`, so what is drawn is what the pinned commit holds, and another picture is
 # another name below rather than another file copied into a plugin.
 #

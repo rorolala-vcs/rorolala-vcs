@@ -33,7 +33,11 @@ pub fn handle_dotnet_lint(_state: StateDotnetLint, ec: &mut ResExitCode) -> Next
         "dotnet-lint",
         "dotnet msbuild RorolalaSharp.sln -t:Rebuild -warnAsError -p:AnalysisMode=All",
         ec,
-        || dotnet::lint_solution(&Workspace::discover()?, DEVELOPMENT_USERDATA_NAME),
+        || {
+            let workspace = Workspace::discover()?;
+            rola_build::fetch_fonts(&workspace)?;
+            dotnet::lint_solution(&workspace, DEVELOPMENT_USERDATA_NAME)
+        },
     );
 
     empty_result!()

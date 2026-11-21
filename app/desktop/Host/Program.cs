@@ -8,6 +8,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
+using RorolalaDesktop.Fonts;
 
 namespace RorolalaDesktopHost;
 
@@ -415,6 +416,7 @@ internal sealed class CrashWindow : Window
 
         AppBuilder
             .Configure<CrashApp>()
+            .With(new FontManagerOptions { DefaultFamilyName = NotoSans.Address })
             .UsePlatformDetect()
             .LogToTrace()
             .StartWithClassicDesktopLifetime([]);

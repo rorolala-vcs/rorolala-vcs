@@ -70,6 +70,10 @@
          either. -->
     <ProjectReference Include="../Contract/RorolalaDesktop.Contract.csproj" />
     <ProjectReference Include="../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <!-- The face every word is set in, embedded in one assembly both this program and the launcher
+         carry, so that the two are drawn with one font and a plugin that draws text of its own reads
+         the same family. -->
+    <ProjectReference Include="../../../utils/desktop-fonts/RorolalaDesktopFonts.csproj" />
     <!-- The renderer the host's own dock-tab menu is drawn by, and the one every plugin draws its
          menus with: one assembly in the program, delegated to the plugins, rather than a copy each. -->
     <ProjectReference Include="../../../utils/desktop-menu/RorolalaDesktopMenu.csproj" />

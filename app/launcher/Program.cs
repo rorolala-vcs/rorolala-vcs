@@ -1,7 +1,9 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Media;
 using RorolalaDesktop;
 using RorolalaDesktop.Configuration;
+using RorolalaDesktop.Fonts;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Theming;
 using RorolalaLauncher.Rola;
@@ -119,6 +121,7 @@ internal static class Program
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder
             .Configure<App>()
+            .With(new FontManagerOptions { DefaultFamilyName = NotoSans.Address })
             .UsePlatformDetect()
             .UseWaylandWithFallback()
             .LogToTrace();

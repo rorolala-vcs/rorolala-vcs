@@ -81,6 +81,16 @@ impl Tool {
         Self::from_env("TAR", "tar")
     }
 
+    /// The downloader the Noto Sans set is fetched with: `CURL`, or the machine's own when it is
+    /// unset.
+    ///
+    /// The files are one set fetched at a pinned commit rather than a clone of the whole font
+    /// repository, so the step asks for exactly the six files and the license it hands over.
+    #[must_use]
+    pub fn curl() -> Self {
+        Self::from_env("CURL", "curl")
+    }
+
     /// The toolchain `variable` names, or `default` when the machine says nothing.
     fn from_env(variable: &str, default: &'static str) -> Self {
         let raw = std::env::var(variable).ok();

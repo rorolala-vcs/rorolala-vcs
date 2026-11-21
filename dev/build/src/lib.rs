@@ -86,6 +86,15 @@ pub use ops::build::build_everything;
 /// Reached by name for the same reason as [`build_everything`]: the gate runs it as a step.
 pub use ops::programs::build_programs;
 
+/// The Noto Sans files the desktop programs are drawn in, fetched at their pinned commit.
+///
+/// Reached by name because the gate builds the .NET side without an export, and the face has to be
+/// in the tree before a project that embeds it is evaluated.
+pub use ops::fonts::fetch_fonts;
+
+/// The fetched Noto Sans set, laid beside the programs with the license it is distributed under.
+pub use ops::fonts::lay_out_fonts;
+
 /// The status of a run that named no command: it asked for nothing, so it is told what there is.
 const EC_NOTHING_NAMED: i32 = 1;
 

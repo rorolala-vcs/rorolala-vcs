@@ -29,6 +29,9 @@
   <ItemGroup>
     <ProjectReference Include="../desktop/Contract/RorolalaDesktop.Contract.csproj" />
     <ProjectReference Include="../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <!-- The face every word is set in, embedded in the assembly the Desktop program also carries: the
+         two programs are drawn with one font, and this one asks nobody's machine for it. -->
+    <ProjectReference Include="../../utils/desktop-fonts/RorolalaDesktopFonts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

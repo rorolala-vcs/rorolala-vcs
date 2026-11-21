@@ -11,6 +11,7 @@ pub mod clean;
 pub mod cli_help_editor;
 pub mod desktop;
 pub mod export;
+pub mod fonts;
 pub mod icons;
 pub mod library;
 pub mod programs;
@@ -22,5 +23,5 @@ pub mod publish;
 #[allow(clippy::wildcard_imports, clippy::redundant_pub_crate)]
 pub(crate) use {
     book::*, build::*, cargo_clean::*, clean::*, cli_help_editor::*, desktop::*, export::*,
-    icons::*, library::*, programs::*, publish::*,
+    fonts::*, icons::*, library::*, programs::*, publish::*,
 };

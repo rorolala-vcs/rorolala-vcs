@@ -29,6 +29,7 @@ The sections name what each area needs. These are the ones that apply almost eve
 
 - Rust 1.97 or newer. The workspace is edition 2024.
 - `git`. `mingling` is taken from a git revision rather than the crates.io release.
+- `curl`, which fetches the pinned Noto Sans set the desktop programs are drawn in.
 - On Windows, the MSVC build tools and the Windows SDK.
 - The .NET SDK that `global.json` pins, for the desktop program, the launcher and the C# binding.
   `cargo` is needed on `PATH` as well, because the binding is generated from the C header.

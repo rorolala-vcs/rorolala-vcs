@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Produces everything this workspace ships, the library, the programs, the built-in book, the icons, the export layout, the Windows and Linux packages, and the `NuGet` packages the C# bindings are restored from, and is reached as `cargo dev`.
+Produces everything this workspace ships, the library, the programs, the built-in book, the icons, the fonts, the export layout, the Windows and Linux packages, and the `NuGet` packages the C# bindings are restored from, and is reached as `cargo dev`.
 
 ## Boundary
 

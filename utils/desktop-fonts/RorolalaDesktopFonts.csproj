@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>RorolalaDesktop.Fonts</RootNamespace>
+    <!-- The public surface is a contract, so every part of it is said in a comment and the
+         documentation file is what a caller reads it from. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The toolkit, for the FontFamily the family is handed over as. The files themselves are
+         resources rather than package contents: Avalonia reads an embedded family through its own
+         asset loader, and a file beside the program would be one more thing a copy can leave behind. -->
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The face the programs are drawn in, embedded so that it travels in them. The files are not
+         vendored: `cargo dev fonts` fetches them from the pinned Noto Sans commit into
+         `THIRD_PARTY/Fonts/NotoSans`, and the same files are laid beside the programs under
+         `THIRD_PARTY/Fonts/NotoSans` with their license. A build that has not fetched them yet has
+         no resource and falls back to the machine's own face. -->
+    <AvaloniaResource
+      Include="../../THIRD_PARTY/Fonts/NotoSans/*.ttf"
+      Link="Assets/Fonts/NotoSans/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

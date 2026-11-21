@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Media;
 using RorolalaDesktop;
+using RorolalaDesktop.Fonts;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -32,6 +34,7 @@ internal static class Platform
         {
             AppBuilder
                 .Configure<App>()
+                .With(new FontManagerOptions { DefaultFamilyName = NotoSans.Address })
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true })
                 .SetupWithoutStarting();
 

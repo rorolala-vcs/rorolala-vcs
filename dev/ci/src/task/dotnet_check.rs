@@ -31,7 +31,11 @@ pub fn handle_dotnet_check(_state: StateDotnetCheck, ec: &mut ResExitCode) -> Ne
         "dotnet-check",
         "dotnet build/test RorolalaSharp.sln -c Release --no-restore",
         ec,
-        || dotnet::check_solution(&Workspace::discover()?, DEVELOPMENT_USERDATA_NAME),
+        || {
+            let workspace = Workspace::discover()?;
+            rola_build::fetch_fonts(&workspace)?;
+            dotnet::check_solution(&workspace, DEVELOPMENT_USERDATA_NAME)
+        },
     );
 
     empty_result!()

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 /// Where the page goes, from the root of the tree: a directory of its own, beside the clone it draws from.
-pub const HOME: &str = "THIRD-PARTY/material-icon-preview";
+pub const HOME: &str = "THIRD_PARTY/material-icon-preview";
 
 /// The page itself, with `__ICONS__` standing where its index goes.
 const TEMPLATE: &str = include_str!("preview.html");

@@ -1,5 +1,7 @@
 using Avalonia;
+using Avalonia.Media;
 using RorolalaDesktop.Configuration;
+using RorolalaDesktop.Fonts;
 using RorolalaDesktop.I18n;
 using RorolalaDesktop.Theming;
 
@@ -140,6 +142,7 @@ class Program
 #pragma warning disable AVALONIA_X11_CSD, AVALONIA_WAYLAND_FORCE_CSD
         AppBuilder
             .Configure<App>()
+            .With(new FontManagerOptions { DefaultFamilyName = NotoSans.Address })
             .With(() => new X11PlatformOptions { EnableDrawnDecorations = true })
             .With(() => new WaylandPlatformOptions { ForceDrawnDecorations = true })
             .UsePlatformDetect()

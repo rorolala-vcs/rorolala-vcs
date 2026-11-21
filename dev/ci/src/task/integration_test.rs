@@ -114,7 +114,13 @@ fn run_integration_test() -> Result<(), Error> {
     }
 
     // The .NET suites are run after them, all together, for the same reason: one run reports every
-    // suite that failed.
+    // suite that failed. The face the programs are drawn in is fetched before them, since the projects
+    // that embed it are evaluated by that run.
+    if let Err(error) = rola_build::fetch_fonts(&workspace) {
+        eprintln!("{error}");
+        failed.push("fonts".to_owned());
+    }
+
     if let Err(error) = rola_build::dotnet::run_integration_suites(
         &workspace,
         &bin_dir,

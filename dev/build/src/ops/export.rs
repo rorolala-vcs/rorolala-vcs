@@ -153,6 +153,10 @@ pub fn export_artifacts(userdata_name: &str, self_contained: bool) -> Result<(),
     let workspace = Workspace::discover()?;
     let platform = Platform::current();
 
+    // The font files are fetched before anything is built, since the shared project embeds them and a
+    // project that was evaluated without them would compile a program with no face of its own.
+    crate::fetch_fonts(&workspace)?;
+
     // The programs about to be written are stopped first: a running program holds its own executable
     // open, and on Windows a file in use can be neither replaced nor removed with the directory it
     // sits in.
@@ -235,6 +239,7 @@ pub fn export_artifacts(userdata_name: &str, self_contained: bool) -> Result<(),
     dotnet::publish_launcher(&workspace, &desktop, self_contained, userdata_name)?;
     dotnet::publish_plugins(&workspace, &desktop)?;
     crate::ops::desktop::lay_out_presets(&workspace)?;
+    crate::lay_out_fonts(&workspace, &desktop)?;
 
     // The C# bindings beside the native library they bind, under `lib/` where a consumer of the C
     // ABI looks for both.

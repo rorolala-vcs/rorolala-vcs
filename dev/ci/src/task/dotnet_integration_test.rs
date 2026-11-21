@@ -40,6 +40,7 @@ pub fn handle_dotnet_integration_test(
         ec,
         || {
             let workspace = Workspace::discover()?;
+            rola_build::fetch_fonts(&workspace)?;
             build_programs(DEVELOPMENT_USERDATA_NAME)?;
             let bin_dir = workspace.release_dir()?;
 

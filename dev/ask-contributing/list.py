@@ -27,7 +27,7 @@ HEADING = "# Contributing"
 # Trees that are not this project's own prose: build output, the history, the third-party clones
 # and the packages an install leaves behind. `build` is skipped at the root only, because `dev/build`
 # is a crate of this tree.
-SKIPPED_ROOTS = {".git", ".cache", "build", "THIRD-PARTY"}
+SKIPPED_ROOTS = {".git", ".cache", "build", "THIRD_PARTY"}
 SKIPPED_ANYWHERE = {".cache", "node_modules", "vendor"}
 
 
