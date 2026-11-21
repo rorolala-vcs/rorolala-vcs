@@ -14,6 +14,9 @@ use mingling::{
     macros::{chain, command, empty_result},
     res::ResExitCode,
 };
+// The Windows and the other Unix packaging lays the artifacts out under this name; the Linux packaging is
+// `crate::linux`'s, and reads the same name there.
+#[cfg(not(target_os = "linux"))]
 use rorolala_utils_constants::RELEASE_USERDATA_NAME;
 
 use crate::Next;
