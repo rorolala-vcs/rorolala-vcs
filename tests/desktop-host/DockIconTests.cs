@@ -183,7 +183,7 @@ public sealed class DockIconTests
         );
     }
 
-    /// <summary>The menu stands where the frame leaves room: right on macOS, left elsewhere.</summary>
+    /// <summary>The menu and the layout tabs share the row with the frame's controls.</summary>
     [Fact]
     public void TheMenuStandsOnTheSideTheFrameLeavesFree()
     {
@@ -191,6 +191,11 @@ public sealed class DockIconTests
 
         Assert.Equal(1, mac.MenuColumn);
         Assert.Equal(HorizontalAlignment.Right, mac.MenuSide);
+
+        var tiling = MainWindow.TitlePlacement(WindowStyle.TilingWm);
+
+        Assert.Equal(1, tiling.MenuColumn);
+        Assert.Equal(HorizontalAlignment.Right, tiling.MenuSide);
 
         var windows = MainWindow.TitlePlacement(WindowStyle.Windows);
 

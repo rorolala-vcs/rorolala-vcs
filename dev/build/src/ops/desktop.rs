@@ -58,7 +58,7 @@ pub fn lay_out_desktop(userdata_name: &str) -> Result<(), crate::Error> {
     Ok(())
 }
 
-/// Lays the preset layouts beside the program, where the menu that switches them reads them.
+/// Lays the preset layouts beside the program, where the title row's tabs read them.
 ///
 /// The presets are the tree's own files rather than files written for a layout, because a second copy is a
 /// copy that goes stale. `__raw` is the set the adjusted presets were made from and is not laid down: the

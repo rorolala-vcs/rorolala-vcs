@@ -23,16 +23,16 @@
          X11 and Wayland both draw one unless they are told not to, and the request only takes effect on
          a window that extended into its decorations.
 
-         The top row is one line: the menu, then the window's own buttons. Its height is the height the
-         decorations are told to reserve, which the window says in code rather than here, one number for
-         every window, so that the row of a window that is one dock is the row of the main window, and the
-         look is what draws the row and the buttons. -->
+         The top row is one line: the menu, the layout tabs and the window's own buttons. Its height is the
+         height the decorations are told to reserve, which the window says in code rather than here, one
+         number for every window, so that the row of a window that is one dock is the row of the main window,
+         and the look is what draws the row and the buttons. -->
     <!-- Named because the covering the window is made with is laid over everything it holds, and there is
          nowhere but the top of this one for it to go: it is added in code, and only for a window that is
          opened while the host is still being assembled. -->
     <Grid x:Name="Root">
         <DockPanel>
-            <!-- The row's own surface, and what the row is made of: the look fills it with the elevated ground and
+            <!-- The row's own surface, and what the row is made of: the look fills it with the sunken ground and
                  draws the one line along its foot that separates the row from the dock area below. It
                  is the container rather than a layer beside the menu, because a sibling of the menu has no width to
                  be drawn in, the menu takes what is left of the row, and a border next to it would be a surface of
@@ -47,7 +47,7 @@
             <Border x:Name="TitleBar" Classes="title-bar" DockPanel.Dock="Top">
                 <!-- The room the window's own buttons take is reserved by the row's own padding, which the look
                      states, rather than by laying them out here: the frame draws them over the row, so a button
-                     that was a child of it would be a second one. What is left is the menu's.
+                     that was a child of it would be a second one. What is left is the menu's and the layout tabs'.
 
                      The name of the one dock a window holds is added to this panel in code, because only the
                      window knows whether it is one, and it is put over the menu rather than beside it, since a
@@ -58,7 +58,7 @@
                         Grid.Column="0"
                         Orientation="Horizontal"
                         Spacing="4"
-                        VerticalAlignment="Center"
+                        VerticalAlignment="Stretch"
                     >
                         <Button
                             x:Name="MenuButton"

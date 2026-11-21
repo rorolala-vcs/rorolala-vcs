@@ -20,13 +20,14 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 2. [`app`] [`rola`] Draw the version chain as one row per variant. [See details](dev/CHANGELOG-DETAILS.md#2-app-rola-draw-the-version-chain-as-one-row-per-variant)
 3. [`app`] [`rola`] Stop a running write with Ctrl+C. [See details](dev/CHANGELOG-DETAILS.md#3-app-rola-stop-a-running-write-with-ctrlc)
 4. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-docking-dock-a-panel-against-the-windows-own-edge)
-5. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-show-entries-that-are-not-on-disk-as-pending-in-progress-or-lost)
-6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Type a name in a bubble under its row. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-file-system-type-a-name-in-a-bubble-under-its-row)
-7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner. [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-show-the-whole-version-graph-again-from-its-corner)
-8. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#8-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
-9. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#9-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
-10. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#10-modules-rola-sharp-add-the-c-bindings)
-11. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#11-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
+5. [`app`] [`RorolalaDesktop`] [`menu`] Show the layout presets as tabs in the title row. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-menu-show-the-layout-presets-as-tabs-in-the-title-row)
+6. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-show-entries-that-are-not-on-disk-as-pending-in-progress-or-lost)
+7. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Type a name in a bubble under its row. [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolaladesktop-plugins-file-system-type-a-name-in-a-bubble-under-its-row)
+8. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner. [See details](dev/CHANGELOG-DETAILS.md#8-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-show-the-whole-version-graph-again-from-its-corner)
+9. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#9-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
+10. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#10-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
+11. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#11-modules-rola-sharp-add-the-c-bindings)
+12. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#12-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
 
 ## Refactor
 

@@ -31,7 +31,8 @@ using ShapePath = Avalonia.Controls.Shapes.Path;
 namespace RorolalaDesktop;
 
 /// <summary>
-/// A window of the program: the row its menu and its own buttons share, and the dock area below it.
+/// A window of the program: the row its menu, its layout tabs and its own buttons share, and the dock area
+/// below it.
 /// </summary>
 /// <remarks>
 /// Both are filled from what was registered, the kernel's own entries and the plugins', and a
@@ -77,6 +78,13 @@ public partial class MainWindow : Window
 
     /// <summary>How much of the toolbar size the menu's mark takes.</summary>
     private const double MenuGlyphScale = 0.8;
+
+    /// <summary>How wide a layout tab's word may grow before it is cut.</summary>
+    /// <remarks>
+    /// The strip is the row's own and the window's buttons are drawn over its right end, so a preset named at
+    /// length gives way rather than taking the room those buttons reserve.
+    /// </remarks>
+    private const double LayoutTabWidth = 160;
 
     /// <summary>The label key of the menu the registered docks appear under.</summary>
     private const string WindowMenu = "menu.window";
@@ -138,6 +146,13 @@ public partial class MainWindow : Window
 
     /// <summary>The menus the title row's button opens.</summary>
     private readonly MenuFlyout _menus = new() { Placement = PlacementMode.BottomEdgeAlignedLeft };
+
+    /// <summary>The layout tabs the main window's row carries, in the order it shows them.</summary>
+    /// <remarks>
+    /// Held because the tab whose arrangement is in force is the one the row marks as current, and the mark
+    /// follows a switch rather than a click: a preset that could not be read leaves the row as it was.
+    /// </remarks>
+    private readonly List<(LayoutPreset Preset, Button Tab)> _layoutTabs = [];
 
     /// <summary>
     /// The drag the name of the one dock this window holds has begun, if it has begun one.
@@ -263,16 +278,16 @@ public partial class MainWindow : Window
         // title bar of its own, and this would take it away.
         WindowDecorationsTheme = _frame.Theme;
 
-        // The row no longer carries a menu bar: one button opens the same top-level menus as a flyout. The
-        // button is the row's own, so a press on it is answered by the button before the row asks whether to
-        // move the window, and the flyout is drawn over the docks rather than in the row's visual tree.
+        // The row carries no menu bar: one button opens the top-level menus as a flyout. The button is the row's
+        // own, so a press on it is answered by the button before the row asks whether to move the window, and the
+        // flyout is drawn over the docks rather than in the row's visual tree.
         MenuButton.Flyout = _menus;
         MenuButton[!TemplatedControl.ForegroundProperty] =
             new DynamicResourceExtension(RorolalaDesktop.Contract.PaletteKeys.Front);
         MenuButton.Content = MenuGlyph();
 
-        // The macOS frame puts its three lights at the left, so the menu belongs at the right. Every other
-        // frame leaves the left of the row free and keeps its buttons at the right.
+        // Under a macOS frame the three lights are at the left; under a tiling one there are none. Both leave the
+        // menu at the right, and a Windows frame, whose three marks are at the right, leaves it at the left.
         var (menuColumn, menuSide) = TitlePlacement(Program.WindowStyle);
 
         Grid.SetColumn(MenuGroup, menuColumn);
@@ -288,22 +303,22 @@ public partial class MainWindow : Window
         ToolTip.SetTip(MenuButton, _services.I18n.Get("window.menu"));
         AutomationProperties.SetName(MenuButton, _services.I18n.Get("window.menu"));
 
-        // The main window is the program, so its row carries the program's name and the workspace it was
-        // started on. A window of one dock is that dock, and its row carries the dock's title instead.
-        if (_dock is null)
+        // The main window's row offers the preset layouts as tabs: a preset is a place the work moves to, and a
+        // row of them is one press away rather than a submenu. A window of one dock has no arrangement of its
+        // own to switch, so its row carries the dock's title instead, see `Caption`.
+        if (_dock is null && LayoutTabStrip() is { } tabs)
         {
-            var brand = Brand();
-
-            // The menu is at the left on every frame but the macOS one, where the lights are, so the brand
-            // stands beside it there and at the row's left end under macOS.
+            // The menu is at the left on every frame but the macOS one and the tiling one, where the window's
+            // own controls are at the left or absent, so the tabs stand at the row's left end there and beside
+            // the menu under Windows.
             if (menuColumn == 0)
             {
-                MenuGroup.Children.Add(brand);
+                MenuGroup.Children.Add(tabs);
             }
             else
             {
-                Grid.SetColumn(brand, 0);
-                TitleRow.Children.Add(brand);
+                Grid.SetColumn(tabs, 0);
+                TitleRow.Children.Add(tabs);
             }
         }
 
@@ -421,78 +436,94 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The program's name and the workspace it was started on, in the row the window draws for itself.
+    /// The preset layouts as the row's tabs, or nothing when no preset is laid beside the program.
     /// </summary>
     /// <remarks>
-    /// The name is written out rather than translated: it is the program's, and a translation of a name is a
-    /// second name. The workspace is the directory the program was started in, which is what the command line
-    /// hands over when it opens the window.
+    /// A tab switches the whole arrangement rather than one dock, which is why it stands in the window's own row
+    /// instead of in the Window menu: the presets are the places the work moves between, and a row of them is
+    /// read at a glance.
+    /// <para>
+    /// A tab has a dock tab's shape, but the one whose arrangement is in force is filled with the row's own
+    /// sunken ground rather than the bright fill a chosen dock tab takes: a layout is current for the window,
+    /// not open over it. The fill is opaque so that it covers the line along the row's foot.
+    /// </para>
     /// </remarks>
-    /// <returns>The row's brand.</returns>
-    private static Control Brand()
+    /// <returns>The strip, or nothing when there are no presets.</returns>
+    private Control? LayoutTabStrip()
     {
-        var brand = new StackPanel
+        if (LayoutPresets.All() is not { Count: > 0 } presets)
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false,
-            Margin = new Thickness(10, 0, 0, 0),
-        };
-
-        brand.Children.Add(
-            new TextBlock
-            {
-                Text = "Rorolala",
-                Classes = { "title" },
-                VerticalAlignment = VerticalAlignment.Center,
-            }
-        );
-
-        var workspace = WorkspaceName();
-
-        if (workspace.Length == 0)
-        {
-            return brand;
+            return null;
         }
 
-        var rule = new Border
-        {
-            Width = 1,
-            Height = 14,
-            Margin = new Thickness(2, 0, 2, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        rule[!Border.BackgroundProperty] = new DynamicResourceExtension(
-            RorolalaDesktop.Contract.PaletteKeys.Splitter
-        );
+        var headers = new StackPanel { Orientation = Orientation.Horizontal };
 
-        brand.Children.Add(rule);
-        brand.Children.Add(
-            new TextBlock
+        // The row is already the strip's ground, so the strip carries no fill and no line of its own: a second
+        // line under it would double the row's own edge.
+        var strip = new Border { Child = headers };
+
+        for (var at = 0; at < presets.Count; at++)
+        {
+            var preset = presets[at];
+
+            var name = new TextBlock
             {
-                Text = workspace,
-                Classes = { "caption", "muted" },
+                Text = preset.Name,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxWidth = 280,
-            }
-        );
+                MaxWidth = LayoutTabWidth,
+            };
 
-        return brand;
+            var tab = new Button
+            {
+                Content = name,
+                Classes = { DockArea.TitleClass, RorolalaTheme.LayoutTabClass },
+                Padding = new Thickness(12, 0),
+                VerticalAlignment = VerticalAlignment.Stretch,
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+
+            // The edge a tab carries is the one on its left, so the first has none and the last carries the one
+            // that closes the strip.
+            tab.Classes.Set(DockArea.LeadingClass, at == 0);
+            tab.Classes.Set(DockArea.TrailingClass, at == presets.Count - 1);
+            tab.Click += (_, _) => SwitchTo(preset, tab);
+            AutomationProperties.SetName(tab, preset.Name);
+
+            headers.Children.Add(tab);
+            _layoutTabs.Add((preset, tab));
+        }
+
+        return strip;
     }
 
-    /// <summary>The name of the directory the program was started in, or that directory when it has no name.</summary>
-    /// <returns>The workspace's name.</returns>
-    private static string WorkspaceName()
+    /// <summary>
+    /// Replaces the arrangement with the one a preset names.
+    /// </summary>
+    /// <remarks>
+    /// The windows of docks' own are closed before the main window's docks are let go, so what each held is
+    /// brought back or discarded by the window's own rule rather than left naming a window that is about to
+    /// go. The arrangement chosen here is written on the next save like any other, since it is where the user
+    /// is working from then on.
+    /// </remarks>
+    /// <param name="preset">The preset that was chosen.</param>
+    /// <param name="tab">The tab that asked for it, which is marked as current once the arrangement is.</param>
+    private void SwitchTo(LayoutPreset preset, Button tab)
     {
-        var directory = string.IsNullOrWhiteSpace(Program.CurrentDirectory)
-            ? Environment.CurrentDirectory
-            : Program.CurrentDirectory;
-        var trimmed = Path.TrimEndingDirectorySeparator(directory);
-        var name = Path.GetFileName(trimmed);
+        if (LayoutStore.Read(preset.Path, _services.Log) is not { } layout)
+        {
+            return;
+        }
 
-        return name.Length > 0 ? name : trimmed;
+        _services.Windows.CloseDetached();
+        _services.Docks.Unload();
+        _services.Docks.Restore(layout);
+        _services.Windows.RestoreWindows(layout.Windows);
+
+        foreach (var (_, one) in _layoutTabs)
+        {
+            one.Classes.Set(RorolalaTheme.LayoutTabCurrentClass, ReferenceEquals(one, tab));
+        }
     }
 
     /// <summary>
@@ -535,8 +566,8 @@ public partial class MainWindow : Window
         var handle = DragHandle(instance);
 
         // The hand stands beside the menu, on the inside of it: the menu keeps the frame's own edge, and the
-        // hand is the next thing inwards under macOS.
-        if (Program.WindowStyle == Theming.WindowStyle.Mac)
+        // hand is the next thing inwards under a frame whose controls are at the left or absent.
+        if (Program.WindowStyle is Theming.WindowStyle.Mac or Theming.WindowStyle.TilingWm)
         {
             MenuGroup.Children.Insert(0, handle);
         }
@@ -858,18 +889,19 @@ public partial class MainWindow : Window
 
     /// <summary>Where the menu stands in the title row, by the frame's style.</summary>
     /// <remarks>
-    /// A macOS frame draws its three lights at the window's left corner, so the menu moves to the right. The
-    /// other two styles are the other way round. The title is not placed by this: it is centred over the whole
-    /// window rather than laid out in the row the frame insets.
+    /// A macOS frame draws its three lights at the window's left corner and a tiling one draws none, so in both
+    /// the menu keeps the right end and the layout tabs take the left. A Windows frame keeps its three marks at
+    /// the right, so the menu stands at the left with the tabs beside it. The title is not placed by this: it is
+    /// centred over the whole window rather than laid out in the row the frame insets.
     /// </remarks>
     /// <param name="style">The frame's style.</param>
     /// <returns>The menu's column and side.</returns>
     internal static (int MenuColumn, HorizontalAlignment MenuSide) TitlePlacement(
         Theming.WindowStyle style
     ) =>
-        style == Theming.WindowStyle.Mac
-            ? (1, HorizontalAlignment.Right)
-            : (0, HorizontalAlignment.Left);
+        style == Theming.WindowStyle.Windows
+            ? (0, HorizontalAlignment.Left)
+            : (1, HorizontalAlignment.Right);
 
     /// <summary>
     /// Ends the covering this window was made with, once the work behind it is done.

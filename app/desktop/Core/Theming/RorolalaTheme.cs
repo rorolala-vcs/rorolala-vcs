@@ -55,8 +55,10 @@ namespace RorolalaDesktop.Theming;
 /// </para>
 /// <para>
 /// The shell marks the surfaces it owns with classes, which is how a rule here addresses a dock without
-/// knowing what one is: <see cref="MainWindow.MenuBarClass"/> on the menu bar,
-/// <see cref="DockArea.HeadersClass"/> on a region's header strip,
+/// knowing what one is: <see cref="MenuBarClass"/> on the menu bar, <see cref="TitleBarClass"/> on the row a
+/// window draws for itself, <see cref="LayoutTabClass"/> on a layout tab in that row, with
+/// <see cref="LayoutTabCurrentClass"/> on the arrangement in force, <see cref="DockArea.HeadersClass"/> on a
+/// region's header strip,
 /// <see cref="DockArea.TitleClass"/> on a dock's own tab, with <see cref="DockArea.SelectedClass"/> on
 /// the one being shown and <see cref="DockArea.LeadingClass"/> on the first of them, and
 /// <see cref="DockArea.CloseClass"/> on the close it carries, with
@@ -235,6 +237,24 @@ internal sealed class RorolalaTheme
     /// literal.
     /// </remarks>
     public const string TitleBarClass = "title-bar";
+
+    /// <summary>
+    /// The class a layout tab in the window's row wears, beside <see cref="DockArea.TitleClass"/>.
+    /// </summary>
+    /// <remarks>
+    /// A layout tab has a dock tab's shape, and this is what tells the look which row it stands in: a layout is
+    /// chosen for the whole window rather than opened in it.
+    /// </remarks>
+    public const string LayoutTabClass = "layout-tab";
+
+    /// <summary>
+    /// The class the layout tab whose arrangement is in force wears, beside <see cref="LayoutTabClass"/>.
+    /// </summary>
+    /// <remarks>
+    /// The chosen layout is filled with the row's own sunken ground rather than the elevated fill a chosen dock
+    /// tab takes. The fill is opaque rather than clear so that it covers the line along the row's foot.
+    /// </remarks>
+    public const string LayoutTabCurrentClass = "layout-tab-current";
 
     /// <summary>
     /// The class the title of a window that holds one dock wears, centred over that window's row.
@@ -1428,9 +1448,22 @@ internal sealed class RorolalaTheme
                 Brushed(ContentPresenter.BorderBrushProperty, BorderLine)
             ),
             On(
-                selector =>
-                    selector.OfType<Button>().Class(DockArea.TitleClass).Class(":pressed").Template().Name("PART_ContentPresenter"),
+                selector => selector.OfType<Button>().Class(DockArea.TitleClass).Class(":pressed").Template().Name("PART_ContentPresenter"),
                 Brushed(ContentPresenter.BackgroundProperty, Strong)
+            ),
+            // The chosen layout tab is filled with the row's own ground, and a press keeps it that way: what a
+            // press does to a dock tab is not what it should do to the arrangement the window is in.
+            On(
+                selector =>
+                    selector
+                        .OfType<Button>()
+                        .Class(DockArea.TitleClass)
+                        .Class(LayoutTabClass)
+                        .Class(LayoutTabCurrentClass)
+                        .Class(":pressed")
+                        .Template()
+                        .Name("PART_ContentPresenter"),
+                Brushed(ContentPresenter.BackgroundProperty, Sunken)
             ),
             On(
                 selector =>
@@ -1706,6 +1739,45 @@ internal sealed class RorolalaTheme
                         .Class(DockArea.SelectedClass)
                         .Class(":pressed"),
                 Brushed(TemplatedControl.BackgroundProperty, Elevated)
+            ),
+
+            // The layout tabs are the dock tabs' shape in the window's row, and the one whose arrangement is in
+            // force is filled with the row's own sunken ground rather than the elevated fill a chosen dock tab
+            // takes. The two are different selections: a dock tab is what a group shows, a layout tab is the
+            // arrangement the whole window is in. The fill is opaque rather than clear so that it covers the line
+            // along the row's foot, which is what joins the tab to the docks below.
+            On(
+                selector =>
+                    selector
+                        .OfType<Button>()
+                        .Class(DockArea.TitleClass)
+                        .Class(LayoutTabClass)
+                        .Class(LayoutTabCurrentClass),
+                Brushed(TemplatedControl.BackgroundProperty, Sunken),
+                Brushed(TemplatedControl.ForegroundProperty, Foreground),
+                new Setter(TemplatedControl.FontWeightProperty, FontWeight.SemiBold),
+                new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 0, -1))
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Button>()
+                        .Class(DockArea.TitleClass)
+                        .Class(LayoutTabClass)
+                        .Class(LayoutTabCurrentClass)
+                        .Class(":pointerover"),
+                Brushed(TemplatedControl.BackgroundProperty, Sunken),
+                Brushed(TemplatedControl.ForegroundProperty, Foreground)
+            ),
+            On(
+                selector =>
+                    selector
+                        .OfType<Button>()
+                        .Class(DockArea.TitleClass)
+                        .Class(LayoutTabClass)
+                        .Class(LayoutTabCurrentClass)
+                        .Class(":pressed"),
+                Brushed(TemplatedControl.BackgroundProperty, Sunken)
             ),
 
             // A strip of one dock is a title, not a tab. A tab's fill and divider are what place it
