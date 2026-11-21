@@ -148,11 +148,11 @@ public sealed class PreviewTests
         Assert.NotNull(image.Source);
     }
 
-    /// <summary>A thumbnail is cut round, and the type icon shrinks to the bottom right corner over it.</summary>
+    /// <summary>A thumbnail sits inside the plate round, and the type icon takes its bottom right corner.</summary>
     /// <remarks>
-    /// The two are checked as the tile's own children, in the order the tile adds them: the frame, the whole
-    /// icon, the type badge. Four tenths of a sixty-four pixel tile is twenty-six pixels, and the corner is
-    /// eight, which is what the tile states rather than what a renderer leaves.
+    /// The plate is the tile's own child; what it holds is the whole icon and the preview over it. Four tenths
+    /// of a sixty-four pixel tile is twenty-six pixels for the type, the plate's corner is nine, and the type is
+    /// anchored to the plate's bottom right rather than to the preview.
     /// </remarks>
     [Fact]
     public void AThumbnailIsCutRoundAndTheTypeTakesTheCorner()
@@ -172,20 +172,28 @@ public sealed class PreviewTests
 
         try
         {
-            var badge = Until(
+            var type = Until(
                 window,
-                () => tile.Children[2].IsVisible ? (Border)tile.Children[2] : null
+                () => tile.Children[1].IsVisible ? (Border)tile.Children[1] : null
             );
-            var frame = Assert.IsType<Border>(tile.Children[0]);
+            var plate = Assert.IsType<Border>(tile.Children[0]);
+            var inner = Assert.IsType<Grid>(plate.Child);
+
+            Assert.True(plate.IsVisible);
+            Assert.True(plate.ClipToBounds);
+            Assert.Equal(1, plate.BorderThickness.Left);
+            Assert.Equal(9.0, plate.CornerRadius.TopLeft);
+            Assert.False(inner.Children[0].IsVisible);
+
+            var frame = Assert.IsType<Border>(inner.Children[1]);
 
             Assert.True(frame.IsVisible);
             Assert.True(frame.ClipToBounds);
-            Assert.Equal(8.0, frame.CornerRadius.TopLeft);
-            Assert.False(tile.Children[1].IsVisible);
-            Assert.Equal(26.0, badge.Width);
-            Assert.Equal(26.0, badge.Height);
-            Assert.Equal(HorizontalAlignment.Right, badge.HorizontalAlignment);
-            Assert.Equal(VerticalAlignment.Bottom, badge.VerticalAlignment);
+            Assert.NotNull(Assert.IsType<Image>(frame.Child).Source);
+            Assert.Equal(26.0, type.Width);
+            Assert.Equal(26.0, type.Height);
+            Assert.Equal(HorizontalAlignment.Right, type.HorizontalAlignment);
+            Assert.Equal(VerticalAlignment.Bottom, type.VerticalAlignment);
         }
         finally
         {

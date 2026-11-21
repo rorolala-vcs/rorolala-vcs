@@ -351,23 +351,13 @@ internal static partial class Icons
     /// <inheritdoc cref="BallInset" />
     private const double BallLeast = 2;
 
-    /// <summary>How heavy the ring around a ball is.</summary>
+    /// <summary>The ink a filled badge's picture is always drawn in, whatever the mark's colour is.</summary>
     /// <remarks>
-    /// Thicker than the hairline a control wears, because a ball is a few pixels across and a line thinner than
-    /// this disappears into the antialiasing at the smallest zoom, and thinner than the border a letter tag
-    /// wears, because at this size that would be a third of the ball.
+    /// A filled bead is told from the picture it stands on by its fill and its shadow, so what is drawn on it
+    /// is the light ink rather than the mark's colour: a picture in the fill's own colour would be a picture
+    /// that vanished into it.
     /// </remarks>
-    private const double BallEdge = 1.5;
-
-    /// <summary>
-    /// The ground a tagged mark is drawn on, which is the dark role of the look it is drawn in.
-    /// </summary>
-    /// <remarks>
-    /// The badge is always drawn inside a dark variant scope, so this never resolves to the light look's
-    /// pale dark role: it is the dark that the palette in force names, which is what lets the ground follow
-    /// a theme rather than sit at one colour no theme can change.
-    /// </remarks>
-    private const string TagGround = PaletteKeys.Dark;
+    internal static readonly Color LightInk = Color.FromRgb(0xF7, 0xF8, 0xFA);
 
     /// <summary>The theme resource a contributed mark is drawn in.</summary>
     /// <remarks>
@@ -397,14 +387,14 @@ internal static partial class Icons
     /// badges say two different things (who holds the entry, and how far its version has come) and neither
     /// is the other's to replace.
     /// <para>
-    /// The picture is drawn as a mask over a coloured ground rather than as a picture, so that it takes the
-    /// ink the theme gives it: a picture carries whatever colours it was drawn with, and a mark that had to be
-    /// drawn once per colour would be a mark per theme.
+    /// The picture is drawn as a mask over the light ink rather than as a picture, so that a filled bead's mark
+    /// is told from what is drawn on it: a picture carries whatever colours it was drawn with, and one drawn
+    /// once per fill would be one per colour.
     /// </para>
     /// <para>
-    /// A mark the contribution asked to have tagged is drawn on the dark ground a badge wears, which is how
-    /// the shell draws a state, so that a badge saying an entry is somebody else's reads as an answer rather
-    /// than as another icon beside the file's own.
+    /// A mark the contribution asked to have tagged is a filled bead in its own colour, which is how the shell
+    /// draws a state, so that a badge saying an entry is somebody else's reads as an answer rather than as
+    /// another icon beside the file's own.
     /// </para>
     /// </remarks>
     /// <param name="icon">What the entry is drawn as.</param>
@@ -440,10 +430,10 @@ internal static partial class Icons
     }
 
     /// <summary>
-    /// One badge drawn: the picture on the ground it was asked to wear, or bare in the ink.
+    /// One badge drawn: a filled bead in the mark's colour, or bare in the ink.
     /// </summary>
     /// <remarks>
-    /// What it is drawn in is the role the contribution named, or its own colour where it named one: a
+    /// What a filled badge is drawn in is the role the contribution named, or its own colour where it named one: a
     /// contribution that has a palette of its own, the states a work's files are in, which are the plugin's
     /// answer and the user's to choose, says what its marks are coloured rather than which of the look's roles
     /// they wear.
@@ -452,6 +442,11 @@ internal static partial class Icons
     /// control carries is asked for when the control is attached to a tree, and what comes back is written over
     /// what the property held, so a badge made with the look's role and then painted with the contribution's
     /// own colour is a badge that turns the look's grey the moment it is drawn.
+    /// </para>
+    /// <para>
+    /// A filled badge's picture is always the light ink, and the bead carries a shadow of its own hue: darker
+    /// on the light look and lighter on the dark one. The shadow is what tells the bead from the picture under
+    /// it without a line around it, and the light picture is what tells the picture from the fill.
     /// </para>
     /// </remarks>
     /// <param name="badge">The picture and what the contribution said about the entry.</param>
@@ -484,40 +479,42 @@ internal static partial class Icons
 
         if (badge.Mark.Tagged)
         {
-            // The picture is taken off the badge's own edge, and the badge's line is the ground's edge rather
-            // than the picture's: a mark drawn to the very edge of what holds it reads as a picture with a
-            // border drawn over it rather than as a picture inside something. The picture's own edge is whole
-            // pixels, so a mask that is a few pixels across is scaled once to its size rather than to a
-            // fraction of one.
+            // The picture is taken off the bead's own edge, and what is left around it is the fill. The fill is
+            // the mark's own colour, or the look's role for it, and the picture is always light: the fill is what
+            // says which mark it is, and the picture is what is drawn on it.
             var room = Math.Max(BallLeast, extent * BallInset);
             var glyph = Picture(
                 badge.Picture,
                 Math.Max(1, Math.Round(extent - (2 * room), MidpointRounding.AwayFromZero))
             );
 
+            var fill = own ?? RoleColour(role) ?? Colors.Gray;
+            var shade = Shadow(fill, DarkLook);
+
             var worn = new Border
             {
                 Width = extent,
                 Height = extent,
                 UseLayoutRounding = true,
-                // A hairline of the ring, since the badge is a few pixels across: a line as heavy as the
-                // letter tags wear would be a third of the badge and would crowd the picture inside it.
-                BorderThickness = new Thickness(BallEdge),
                 CornerRadius = new CornerRadius(extent / 2),
                 Child = glyph,
+                BoxShadow = new BoxShadows(
+                    new BoxShadow
+                    {
+                        OffsetX = 0,
+                        OffsetY = 1,
+                        Blur = 3,
+                        Spread = 0,
+                        Color = shade,
+                    }
+                ),
             };
-            // The ground is the dark role of the look, read inside the badge's dark scope: a badge worn on a
-            // picture is part of the picture, so it stays dark on the light look while following the dark the
-            // palette in force names. What says which mark it is is the ring and the picture, both in the one
-            // colour the contribution asked for.
-            worn[!Border.BackgroundProperty] = new DynamicResourceExtension(TagGround);
-            Painted(glyph, Border.BackgroundProperty, own, role);
-            Painted(worn, Border.BorderBrushProperty, own, role);
+            Painted(worn, Border.BackgroundProperty, own, role);
+            glyph.Background = new SolidColorBrush(LightInk);
 
-            // The ink the badge is drawn in is the dark look's, whatever the program is drawn on: the ground
-            // is the dark one, so the colour that reads on it is the one the dark look holds, a mark that took
-            // the light look's darker ink would be a dark lock on a dark badge. Asked for as a scope rather
-            // than as a second set of colours, so that what the ink is stays the look's to say.
+            // The ink the badge is drawn in is the dark look's, whatever the program is drawn on: the picture
+            // is the light ink, and the fill is the look's role read in the dark palette, so the bead reads the
+            // same on either surface while its shadow follows the surface it actually stands on.
             drawn = new ThemeVariantScope
             {
                 RequestedThemeVariant = ThemeVariant.Dark,
@@ -543,7 +540,7 @@ internal static partial class Icons
     }
 
     /// <summary>
-    /// Paints a picture or a ring in the one colour the mark is drawn in: its own, or the look's role for it.
+    /// Paints a fill or a picture in the one colour the mark is drawn in: its own, or the look's role for it.
     /// </summary>
     /// <remarks>
     /// One or the other and never both, because what a control carries is asked for when the control is
@@ -570,6 +567,44 @@ internal static partial class Icons
         {
             target[!brush] = new DynamicResourceExtension(role);
         }
+    }
+
+    /// <summary>Whether the program is drawn on the dark look.</summary>
+    private static bool DarkLook =>
+        Application.Current?.ActualThemeVariant == ThemeVariant.Dark;
+
+    /// <summary>The colour a role is drawn in, read in the palette a filled badge is drawn in.</summary>
+    /// <param name="role">The resource key the look holds the role under.</param>
+    /// <returns>The colour, or nothing when the look is not there to answer.</returns>
+    private static Color? RoleColour(string role)
+    {
+        var look = Application.Current;
+
+        if (look is null || !look.TryFindResource(role, ThemeVariant.Dark, out var found))
+        {
+            return null;
+        }
+
+        return found switch
+        {
+            ISolidColorBrush brush => brush.Color,
+            Color colour => colour,
+            _ => null,
+        };
+    }
+
+    /// <summary>The shadow a filled badge wears: the fill's own hue, darker or lighter with the look.</summary>
+    /// <param name="fill">The colour the bead is filled with.</param>
+    /// <param name="dark">Whether the program is drawn on the dark look.</param>
+    /// <returns>The shadow's colour.</returns>
+    private static Color Shadow(Color fill, bool dark)
+    {
+        var towards = dark ? Colors.White : Colors.Black;
+        const double share = 0.45;
+
+        byte At(byte from, byte to) => (byte)Math.Round(from + ((to - from) * share));
+
+        return Color.FromArgb(0x99, At(fill.R, towards.R), At(fill.G, towards.G), At(fill.B, towards.B));
     }
 
     /// <summary>

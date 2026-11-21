@@ -384,14 +384,16 @@ public sealed class TreeRowTests
             var row = Until(window, () => Row(window, marked));
             var strip = Named<StackPanel>(row, "entry-badges");
             var badge = Assert.Single(strip.Children);
-            var ring = badge.GetVisualDescendants()
+            var fill = badge.GetVisualDescendants()
                 .OfType<Border>()
-                .FirstOrDefault(border => border.BorderBrush is ISolidColorBrush);
+                .FirstOrDefault(border =>
+                    border.Background is SolidColorBrush brush && brush.Color == Colors.Red
+                );
 
-            Assert.NotNull(ring);
-            Assert.Equal(
-                Colors.Red,
-                Assert.IsType<SolidColorBrush>(ring!.BorderBrush).Color
+            Assert.NotNull(fill);
+            Assert.DoesNotContain(
+                badge.GetVisualDescendants().OfType<Border>(),
+                border => border.BorderThickness.Left > 0
             );
             Assert.DoesNotContain(row.GetVisualDescendants(), one => one.Name == "entry-icon");
         }

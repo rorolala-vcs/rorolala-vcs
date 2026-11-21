@@ -89,7 +89,9 @@ public sealed class FolderColourTests
 
             var underline = tile.GetVisualDescendants()
                 .OfType<Border>()
-                .FirstOrDefault(border => border.BorderThickness.Bottom > 0);
+                .FirstOrDefault(border =>
+                    border.BorderThickness.Bottom > 0 && border.BorderThickness.Top == 0
+                );
 
             Assert.NotNull(underline);
             Assert.Equal(
@@ -199,14 +201,17 @@ public sealed class FolderColourTests
             var container = Assert.IsType<ListBoxItem>(list.ContainerFromItem(entry));
             var arc = Assert.Single(container.GetVisualDescendants().OfType<BadgeArc>());
             var badge = Assert.Single(arc.Children);
-            var ring = badge.GetVisualDescendants()
+            var expected = colours.Colour(new Entry(tree, EntryKind.Directory));
+            var fill = badge.GetVisualDescendants()
                 .OfType<Border>()
-                .FirstOrDefault(border => border.BorderBrush is ISolidColorBrush);
+                .FirstOrDefault(border =>
+                    border.Background is ISolidColorBrush brush && brush.Color == expected
+                );
 
-            Assert.NotNull(ring);
-            Assert.Equal(
-                colours.Colour(new Entry(tree, EntryKind.Directory)),
-                Assert.IsType<SolidColorBrush>(ring!.BorderBrush).Color
+            Assert.NotNull(fill);
+            Assert.DoesNotContain(
+                badge.GetVisualDescendants().OfType<Border>(),
+                border => border.BorderThickness.Left > 0
             );
         }
         finally

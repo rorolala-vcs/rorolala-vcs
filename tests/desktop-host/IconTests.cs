@@ -154,7 +154,6 @@ public sealed class IconTests
             look.Palette.ThemeDictionaries[ThemeVariant.Dark]
         );
         var faint = Assert.IsType<SolidColorBrush>(resources[PaletteKeys.Faint]).Color;
-        var ground = Assert.IsType<SolidColorBrush>(resources[PaletteKeys.Dark]).Color;
 
         using var picture = Icons.Picture(Icons.Pictures[0].Key);
         var ours = new EntryMark(Colour: Colors.Lime, Tagged: true, Text: "it");
@@ -177,21 +176,21 @@ public sealed class IconTests
 
         var both = Assert.IsType<StackPanel>(window.Content);
 
-        // The ground the badge is worn on is the dark role the look names inside the badge's dark scope, and
-        // the picture and the ring drawn on it are the contribution's colour, the look's resources being in
-        // reach and all.
+        // A filled bead's ground is the mark's own colour, its picture is always light, and the shadow is of
+        // the same hue. The look is not worn as a border around it any more.
         var (ball, glyph) = Worn(Assert.IsType<Grid>(both.Children[0]));
 
-        Assert.Equal(Colors.Lime, Assert.IsType<SolidColorBrush>(ball.BorderBrush).Color);
-        Assert.Equal(Colors.Lime, Assert.IsType<SolidColorBrush>(glyph.Background).Color);
-        Assert.Equal(ground, Assert.IsType<SolidColorBrush>(ball.Background).Color);
+        Assert.Equal(Colors.Lime, Assert.IsType<SolidColorBrush>(ball.Background).Color);
+        Assert.Equal(0, ball.BorderThickness.Left);
+        Assert.Equal(Icons.LightInk, Assert.IsType<SolidColorBrush>(glyph.Background).Color);
+        Assert.NotEqual(default, ball.BoxShadow);
 
         // A mark that named no colour is the look's own answer, which is the other half of the same rule.
         var (quiet, quietGlyph) = Worn(Assert.IsType<Grid>(both.Children[1]));
 
-        Assert.Equal(faint, Assert.IsType<SolidColorBrush>(quiet.BorderBrush).Color);
-        Assert.Equal(faint, Assert.IsType<SolidColorBrush>(quietGlyph.Background).Color);
-        Assert.Equal(ground, Assert.IsType<SolidColorBrush>(quiet.Background).Color);
+        Assert.Equal(faint, Assert.IsType<SolidColorBrush>(quiet.Background).Color);
+        Assert.Equal(Icons.LightInk, Assert.IsType<SolidColorBrush>(quietGlyph.Background).Color);
+        Assert.NotEqual(default, quiet.BoxShadow);
     }
 
     /// <summary>The ball and the picture one drawn badge is made of, wherever the arc put them.</summary>

@@ -34,7 +34,7 @@ namespace FileSystemPlugin;
 /// <param name="Ink">What the picture is drawn in.</param>
 /// <param name="TextInk">What the words are drawn in.</param>
 /// <param name="Tagged">
-/// Whether the picture is drawn on the dark ground a badge wears rather than bare on the tile. A badge that
+/// Whether the picture is drawn as a filled bead in its own colour rather than bare on the tile. A badge that
 /// says something is wrong wants saying, and one that says an entry is the reader's own does not.
 /// </param>
 /// <param name="HoverKey">
