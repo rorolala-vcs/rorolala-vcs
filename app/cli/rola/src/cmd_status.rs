@@ -1630,7 +1630,72 @@ pub fn render_result_status(result: ResultStatus) {
             }
         }
 
-        if local {
+        if let Some(vault) = &result.vault {
+            // The block is its own reading, so it is set off from what the worktree holds, and the
+            // sentence says what the list is about before the list says which paths.
+            r_println!("");
+
+            let count = vault.ahead.len() + vault.behind.len() + vault.apart.len();
+            let header = match (count, vault.apart.len()) {
+                (1, 0) => trd!(t!("status.header_vault_one")),
+                (1, _) => trd!(t!("status.header_vault_apart_one")),
+                (_, 0) => trd!(t!("status.header_vault", count = count)),
+                (_, apart) => trd!(t!(
+                    "status.header_vault_apart",
+                    count = count,
+                    apart = apart
+                )),
+            };
+            r_println!("{}", header.trim());
+            r_println!("");
+
+            for item in &vault.apart {
+                r_println!(
+                    "{}",
+                    trd!(format!("  {}", t!("status.vault_apart", path = item.path)))
+                );
+            }
+
+            for item in &vault.behind {
+                let line = match item.distance {
+                    Some(1) => t!("status.vault_behind_one", path = item.path).to_string(),
+                    Some(distance) => t!(
+                        "status.vault_behind_distance",
+                        path = item.path,
+                        distance = distance
+                    )
+                    .to_string(),
+                    None => t!("status.vault_behind", path = item.path).to_string(),
+                };
+
+                r_println!("{}", trd!(format!("  {line}")));
+            }
+
+            for item in &vault.ahead {
+                let line = match item.distance {
+                    Some(1) => t!("status.vault_ahead_one", path = item.path).to_string(),
+                    Some(distance) => t!(
+                        "status.vault_ahead_distance",
+                        path = item.path,
+                        distance = distance
+                    )
+                    .to_string(),
+                    None => t!("status.vault_ahead", path = item.path).to_string(),
+                };
+
+                r_println!("{}", trd!(format!("  {line}")));
+            }
+        }
+
+        // The hints all come last: a `Help:` line in the middle of the readings reads as though it
+        // belonged to the block above it rather than to the run. A run with nothing to advise writes
+        // no blank line before the hints it does not have.
+        let apart = result
+            .vault
+            .as_ref()
+            .is_some_and(|vault| !vault.apart.is_empty());
+
+        if local || apart {
             r_println!("");
         }
 
@@ -1655,56 +1720,8 @@ pub fn render_result_status(result: ResultStatus) {
         if content > 0 {
             r_println!("{}", help_line!(t!("status.help_track").trim()));
         }
-
-        if let Some(vault) = &result.vault {
-            r_println!("");
-            r_println!(
-                "{}",
-                trd!(t!(
-                    "status.header_vault",
-                    apart = vault.apart.len(),
-                    ahead = vault.ahead.len(),
-                    behind = vault.behind.len()
-                ))
-                .trim()
-            );
-
-            for item in &vault.apart {
-                r_println!(
-                    "{}",
-                    trd!(format!("  {}", t!("status.vault_apart", path = item.path)))
-                );
-            }
-
-            for item in &vault.ahead {
-                let line = match item.distance {
-                    Some(1) => t!("status.vault_ahead_one", path = item.path).to_string(),
-                    Some(distance) => t!(
-                        "status.vault_ahead_distance",
-                        path = item.path,
-                        distance = distance
-                    )
-                    .to_string(),
-                    None => t!("status.vault_ahead", path = item.path).to_string(),
-                };
-
-                r_println!("{}", trd!(format!("  {line}")));
-            }
-
-            for item in &vault.behind {
-                let line = match item.distance {
-                    Some(1) => t!("status.vault_behind_one", path = item.path).to_string(),
-                    Some(distance) => t!(
-                        "status.vault_behind_distance",
-                        path = item.path,
-                        distance = distance
-                    )
-                    .to_string(),
-                    None => t!("status.vault_behind", path = item.path).to_string(),
-                };
-
-                r_println!("{}", trd!(format!("  {line}")));
-            }
+        if apart {
+            r_println!("{}", help_line!(t!("status.help_apart").trim()));
         }
     }
 }

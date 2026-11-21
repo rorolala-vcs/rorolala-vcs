@@ -22,7 +22,15 @@ systems answered that the target is a directory. The pulled version is now writt
 writes one: the structure is read, the work is laid down under the tree, the paths the new version no
 longer names are taken away, and the baseline and the local id record the version that is now here.
 
-### 4. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault
+### 4. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused
+
+`rola track` refused a changed file that the fetched copy says another account holds, but a tree was
+recorded without `--force`: the check only looked at files, and a tree's commit wrote the committer in
+as its owner. A tree another account holds is now refused the same way, whether it is named itself,
+through a file inside it, or through a directory that contains it, and `--force` still records it. The
+refusal now counts entries rather than files.
+
+### 5. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault
 
 `RolaAccounts.Locate(null, rule)` and `RolaMembers.Locate(null, rule)` passed a zero Vault pointer to a native export that requires one, which panicked inside the library. The two now call `rola_account_locate_local` and `rola_member_locate_local`, the same search with the Vault's root left out, so a run with no Vault in scope lists the Workspace's and the user's keys instead of crashing.
 
@@ -83,11 +91,13 @@ lines in place.
 
 ### 5. [`app`] [`rola`] [`status`] Show how many entries are ahead, behind or apart in status
 
-`rola status` now closes with how this side stands beside the Vault's copy: how many entries are
-ahead, how many behind and how many have diverged, then the paths, ahead marked `↑` in bright green,
-behind `↓` in bright yellow and diverged `Y` in bright red. A path the Vault does not name counts as
-ahead, an entry in step is left out, and a run whose Vault copy has not been fetched says nothing
-about the two sides. The JSON output carries the three lists under `vault`.
+`rola status` now closes with how this side stands beside upstream: a sentence saying how many
+entries differ and how many of those have diverged, a blank line, then one line per entry, the
+diverged ones first as `Y` in bright red across the whole line, behind as `↓` in bright yellow and
+ahead as `↑` in bright green. A path upstream does not name counts as ahead, an entry in step is left
+out, and a run whose fetched copy is not here says nothing about the two sides. The `Help:` lines
+stay at the end, and a divergence adds the `rola retrack` hint. The JSON output carries the three
+lists under `vault`.
 
 ### 6. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge
 

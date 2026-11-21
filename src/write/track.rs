@@ -624,6 +624,28 @@ pub mod batch {
             }
         }
 
+        // A tree another account holds is not one to record either, for the same reason a file is
+        // not: the version made here is one this side cannot push, so recording it makes the
+        // conflict rather than avoiding it. The check is on the trees this run would commit, not on
+        // what the diff saw, since a tree's staged structure differs from its work.
+        if !options.force && !trees.is_empty() {
+            let held: Vec<(LayoutPath, Uuid)> = trees
+                .iter()
+                .filter_map(|change| {
+                    let path = change.tree.layout_path().ok()?;
+                    let id = carry.layout.id_of(&path)?;
+
+                    Some((path, id))
+                })
+                .collect();
+            let copy = crate::status::vault_copy(carry.workspace);
+            let blocked = super::trees_held_elsewhere(&held, copy.as_ref(), carry.creator);
+
+            if !blocked.is_empty() {
+                return Err(Refusal::Unowned { paths: blocked }.into());
+            }
+        }
+
         // A tree has no content to cut and no version to amend, so the flags that act on those are not
         // a tree's to carry: a run naming one is told so before anything is asked or written.
         if (options.replace || options.policy.is_some()) && !trees.is_empty() {
@@ -2654,6 +2676,31 @@ pub mod batch {
     }
 }
 
+/// The trees among `entries` that the Vault's copy says another account holds.
+///
+/// A tree is one Layout entry, so naming a file inside it is naming the tree: checking the tree's
+/// own id and owner covers `track <tree>`, `track <tree>/<file>` and `track <directory>` alike. A
+/// copy that is not here, and an entry it does not name, are not the Vault's to refuse.
+fn trees_held_elsewhere(
+    entries: &[(LayoutPath, Uuid)],
+    copy: Option<&Layout>,
+    me: &str,
+) -> Vec<String> {
+    let Some(copy) = copy else {
+        return Vec::new();
+    };
+
+    entries
+        .iter()
+        .filter(|(_, id)| {
+            copy.entry(*id)
+                .and_then(|data| data.owner().map(|owner| owner != me))
+                .unwrap_or(false)
+        })
+        .map(|(path, _)| path.as_str().to_owned())
+        .collect()
+}
+
 /// The parts a tracked file is written through.
 struct Place<'a> {
     layout: &'a Layout,
@@ -3029,14 +3076,60 @@ pub fn track_apply_at(
 mod tests {
     use std::fs;
 
+    use rorolala_layout::{EntryKind, Layout, LayoutPath, MutableData};
     use rorolala_utils_location::Locate as _;
     use rorolala_utils_progress::Progress;
     use rorolala_vault::Vault;
     use rorolala_vcs::VCSIndex;
     use rorolala_workspace::Workspace;
+    use uuid::Uuid;
 
     use super::batch::{Carry, Messages, Options, apply, plan};
-    use super::{TrackOptions, track_file, track_vault_file};
+    use super::{TrackOptions, track_file, track_vault_file, trees_held_elsewhere};
+
+    /// A Layout holding one tree entry at `path`, held by `owner`.
+    fn tree_entry(dir: &std::path::Path, path: &str, owner: &str) -> Layout {
+        let layout = Layout::open(dir).unwrap();
+        let mut batch = layout.batch();
+        let data = MutableData::new(Some(owner.to_owned()), [1; 32], String::new())
+            .with_kind(EntryKind::Tree);
+        batch
+            .create_file(Uuid::from_u128(1), data, &LayoutPath::new(path).unwrap())
+            .unwrap();
+        batch.commit().unwrap();
+
+        layout
+    }
+
+    /// A tree the Vault's copy says another account holds is named for the refusal.
+    #[test]
+    fn a_tree_another_account_holds_is_named() {
+        let dir = std::env::temp_dir().join(format!(
+            "rola-write-track-tree-owner-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let copy = tree_entry(&dir, "charts", "alice");
+        let path = LayoutPath::new("charts").unwrap();
+        let held = [(path, Uuid::from_u128(1))];
+
+        assert_eq!(
+            trees_held_elsewhere(&held, Some(&copy), "bob"),
+            vec!["charts".to_owned()]
+        );
+        assert_eq!(
+            trees_held_elsewhere(&held, Some(&copy), "alice"),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            trees_held_elsewhere(&held, None, "bob"),
+            Vec::<String>::new()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_file_is_recorded_and_named() {

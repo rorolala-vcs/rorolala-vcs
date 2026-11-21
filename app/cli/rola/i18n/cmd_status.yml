@@ -25,7 +25,7 @@ status:
       zh-CN: 同时画出未并入的变体
   help:
     en: |
-      # Show the state of the working tree relative to the Layout, how it stands beside the Vault, or look back from one item in it
+      # Show the state of the working tree relative to the Layout, how it stands beside upstream, or look back from one item in it
       **Usage**: rola [[GREEN]]__status__[[/]] [TARGET]
       **Flags**:
            __--compact__                   One line per variant, without the lines between them
@@ -37,7 +37,7 @@ status:
            __--show-unjoined-variants__    Draw the variants that have not been joined too
            __--include-ignored__           Include ignored files in the global status drawing
     zh-CN: |
-      # 查看工作区相对布局的状态，以及相对保险库的领先、落后与分叉；也可从其中某一项往回查看
+      # 查看工作区相对布局的状态，以及相对上游的领先、落后与分叉；也可从其中某一项往回查看
       **用法**：rola [[GREEN]]__status__[[/]] [目标]
       **标识**：
            __--compact__                   每个变体一行，不画中间的连线
@@ -50,8 +50,8 @@ status:
            __--include-ignored__           在全局状态绘制中包含被忽略的文件
 
   description:
-    en: Show the state of the working tree relative to the Layout and the Vault
-    zh-CN: 查看工作区相对布局与保险库的状态
+    en: Show the state of the working tree relative to the Layout and upstream
+    zh-CN: 查看工作区相对布局与上游的状态
 
   source:
     en: "The file is mapped from %{path} in %{vault}"
@@ -158,30 +158,43 @@ status:
     zh-CN: 你的工作区没有未记录的内容
 
   header_vault:
-    en: "Compared with the Vault: **[[RED]]Y[[/]]** %{apart} diverged, **[[GREEN]]↑[[/]]** %{ahead} ahead, **[[YELLOW]]↓[[/]]** %{behind} behind"
-    zh-CN: "与保险库相比：**[[RED]]Y[[/]]** %{apart} 项分叉，**[[GREEN]]↑[[/]]** %{ahead} 项领先，**[[YELLOW]]↓[[/]]** %{behind} 项落后"
+    en: "Compared with upstream, this side has %{count} differences:"
+    zh-CN: "与上游相比，本地版本存在如下共 %{count} 项差异："
+  header_vault_one:
+    en: "Compared with upstream, this side has 1 difference:"
+    zh-CN: "与上游相比，本地版本存在如下共 1 项差异："
+  header_vault_apart:
+    en: "Compared with upstream, this side has %{count} differences, %{apart} of them diverged:"
+    zh-CN: "与上游相比，本地共 %{count} 项差异，其中 %{apart} 项是异常情况："
+  header_vault_apart_one:
+    en: "Compared with upstream, this side has 1 difference, and it has diverged:"
+    zh-CN: "与上游相比，本地共 1 项差异，其中 1 项是异常情况："
 
   vault_apart:
-    en: "**[[RED]]Y[[/]]** %{path}"
-    zh-CN: "**[[RED]]Y[[/]]** %{path}"
+    en: "**[[RED]]Y %{path} (diverged)[[/]]**"
+    zh-CN: "**[[RED]]Y %{path}（版本产生分叉）[[/]]**"
   vault_ahead:
     en: "**[[GREEN]]↑[[/]]** %{path}"
     zh-CN: "**[[GREEN]]↑[[/]]** %{path}"
   vault_ahead_distance:
-    en: "**[[GREEN]]↑[[/]]** %{path}, %{distance} ahead"
-    zh-CN: "**[[GREEN]]↑[[/]]** %{path}，领先 %{distance} 个版本"
+    en: "**[[GREEN]]↑[[/]]** %{path} (%{distance} versions ahead)"
+    zh-CN: "**[[GREEN]]↑[[/]]** %{path}（领先 %{distance} 个版本）"
   vault_ahead_one:
-    en: "**[[GREEN]]↑[[/]]** %{path}, 1 version ahead"
-    zh-CN: "**[[GREEN]]↑[[/]]** %{path}，领先 1 个版本"
+    en: "**[[GREEN]]↑[[/]]** %{path} (1 version ahead)"
+    zh-CN: "**[[GREEN]]↑[[/]]** %{path}（领先 1 个版本）"
   vault_behind:
     en: "**[[YELLOW]]↓[[/]]** %{path}"
     zh-CN: "**[[YELLOW]]↓[[/]]** %{path}"
   vault_behind_distance:
-    en: "**[[YELLOW]]↓[[/]]** %{path}, %{distance} behind"
-    zh-CN: "**[[YELLOW]]↓[[/]]** %{path}，落后 %{distance} 个版本"
+    en: "**[[YELLOW]]↓[[/]]** %{path} (%{distance} versions behind)"
+    zh-CN: "**[[YELLOW]]↓[[/]]** %{path}（落后 %{distance} 个版本）"
   vault_behind_one:
-    en: "**[[YELLOW]]↓[[/]]** %{path}, 1 version behind"
-    zh-CN: "**[[YELLOW]]↓[[/]]** %{path}，落后 1 个版本"
+    en: "**[[YELLOW]]↓[[/]]** %{path} (1 version behind)"
+    zh-CN: "**[[YELLOW]]↓[[/]]** %{path}（落后 1 个版本）"
+
+  help_apart:
+    en: To resolve a divergence, revise the current version with `rola retrack`
+    zh-CN: 要解决分叉，请使用 `rola retrack` 命令来修订当前的版本
 
   header_merging:
     en: "Your workspace has %{count} merges in progress:"

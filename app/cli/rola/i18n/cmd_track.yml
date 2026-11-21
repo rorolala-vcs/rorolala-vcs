@@ -141,8 +141,8 @@ track:
     zh-CN: 请先用 `rola align <路径> --delete` 处理
 
   err_unowned:
-    en: "%{count} files named are not yours to record: %{paths}"
-    zh-CN: "指定的 %{count} 个文件不属于你，无法记录：%{paths}"
+    en: "%{count} named entries are not yours to record: %{paths}"
+    zh-CN: "指定的 %{count} 项不属于你，无法记录：%{paths}"
 
   err_unowned_help:
     en: Record them anyway with `rola track --force`, or ask the holder to give it up with `rola giveup <PATH>`
