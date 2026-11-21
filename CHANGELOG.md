@@ -34,11 +34,12 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Type a name in a bubble under its row. [See details](dev/CHANGELOG-DETAILS.md#13-app-rorolaladesktop-plugins-file-system-type-a-name-in-a-bubble-under-its-row)
 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Fetch a version's content from the Version Graph's node menu. [See details](dev/CHANGELOG-DETAILS.md#14-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-fetch-a-versions-content-from-the-version-graphs-node-menu)
 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner. [See details](dev/CHANGELOG-DETAILS.md#15-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-show-the-whole-version-graph-again-from-its-corner)
-16. [`librorolala`] [`write`] Export the content fetch as rola_write_fetch_with. [See details](dev/CHANGELOG-DETAILS.md#16-librorolala-write-export-the-content-fetch-as-rola_write_fetch_with)
-17. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#17-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
-18. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#18-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
-19. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#19-modules-rola-sharp-add-the-c-bindings)
-20. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#20-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
+16. [`app`] [`RorolalaDesktop`] [`theme`] State the light look's semantic colours in the bright set. [See details](dev/CHANGELOG-DETAILS.md#16-app-rorolaladesktop-theme-state-the-light-looks-semantic-colours-in-the-bright-set)
+17. [`librorolala`] [`write`] Export the content fetch as rola_write_fetch_with. [See details](dev/CHANGELOG-DETAILS.md#17-librorolala-write-export-the-content-fetch-as-rola_write_fetch_with)
+18. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#18-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
+19. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#19-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
+20. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#20-modules-rola-sharp-add-the-c-bindings)
+21. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#21-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
 
 ## Refactor
 

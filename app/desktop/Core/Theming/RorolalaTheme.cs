@@ -854,10 +854,11 @@ internal sealed class RorolalaTheme
             [Selection] = Fill(selection),
             [Shadow] = grounds.Raised,
             [Ring] = _ring,
-            // The semantic states, in the set the variant states. What a state is coloured is not a preference,
-            // and the light and dark sets are apart because a colour that reads on one ground is not the one
-            // that reads on the other. The older pairs point at the same answers so a mark that names one of
-            // them is drawn in the semantic colour too.
+            // The semantic states, in the set the look states. What a state is coloured is not a preference, and
+            // both variants ship the same bright set: a filled mark's picture is the light ink, and those are the
+            // colours it reads on. A user who wants the two looks apart states them apart in the file. The older
+            // pairs point at the same answers so a mark that names one of them is drawn in the semantic colour
+            // too.
             [Contract.PaletteKeys.Add] = Fill(grounds.Semantic.Success),
             [Contract.PaletteKeys.AddBackground] = Fill(WithAlpha(grounds.Semantic.Success, 0x24)),
             [Warn] = Fill(grounds.Semantic.Warning),

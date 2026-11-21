@@ -247,6 +247,28 @@ public sealed class ThemeTests
         }
     }
 
+    /// <summary>The light look states its states in the bright set the dark look states them in.</summary>
+    /// <remarks>
+    /// A state is not coloured by the ground it is drawn on: a badge is a filled bead whose picture is always the
+    /// light ink, and the bright colours are the ones that picture reads on. What this pins is that the two looks
+    /// ship one set, so a bead is the same colour whichever look the window is in, and that the set is stated
+    /// once rather than twice.
+    /// </remarks>
+    [Fact]
+    public void TheLightLookStatesItsStatesInTheBrightSet()
+    {
+        var look = new RorolalaTheme(new ThemeConfiguration().LightTheme, null, WindowStyle.Windows);
+        var light = Variant(look, ThemeVariant.Light);
+
+        Assert.Equal(ThemePalette.DefaultDark.Semantic.Success, Fill(light, PaletteKeys.Success));
+        Assert.Equal(ThemePalette.DefaultDark.Semantic.Modify, Fill(light, PaletteKeys.Modify));
+        Assert.Equal(ThemePalette.DefaultDark.Semantic.Allow, Fill(light, PaletteKeys.Allow));
+        Assert.Equal(ThemePalette.DefaultDark.Semantic.Disallow, Fill(light, PaletteKeys.Disallow));
+
+        // One set rather than two copies of it, so the two cannot drift apart.
+        Assert.Equal(SemanticPalette.Dark, SemanticPalette.Light);
+    }
+
     /// <summary>
     /// The two colours that stand on a filled surface are filled with the ink that goes with them.
     /// </summary>

@@ -66,10 +66,10 @@ public sealed class ConfigurationTests
         Assert.Contains("\"Theme/Light/Front\": \"#1B1C1F\"", written, StringComparison.Ordinal);
         Assert.Contains("\"Theme/Light/Splitter\": \"#C9CCD3\"", written, StringComparison.Ordinal);
 
-        // The semantic states are stated per variant too, since a light and a dark one are not the same
-        // colour, and a file that names none is still drawn in the defaults.
+        // The semantic states are stated per variant, so that a user may state the two looks apart, and a file
+        // that names none is drawn in the one bright set both looks ship.
         Assert.Contains("\"Theme/Dark/Modify\": \"#FFC857\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Light/Modify\": \"#B58600\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Modify\": \"#FFC857\"", written, StringComparison.Ordinal);
         Assert.Equal(ThemePalette.DefaultDark.Semantic.Modify, theme.Theme.Semantic.Modify);
         Assert.Equal(ThemePalette.DefaultLight.Semantic.Modify, theme.LightTheme.Semantic.Modify);
 

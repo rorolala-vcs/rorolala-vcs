@@ -3,13 +3,14 @@ using Avalonia.Media;
 namespace RorolalaDesktop.Contract;
 
 /// <summary>
-/// The colours the program says a state is, as one set per look.
+/// The colours the program says a state is.
 /// </summary>
 /// <remarks>
 /// They are the look's rather than a plugin's: a state means the same thing wherever it is drawn, and a
-/// second set in a plugin is a second vocabulary for one answer. The two sets are stated apart because a
-/// colour that reads on a light ground is not the one that reads on a dark one, and what a state is
-/// coloured is not a preference.
+/// second set in a plugin is a second vocabulary for one answer. What a state is coloured is not the ground
+/// it is drawn on, so both looks ship the same bright set: a badge is a filled bead whose picture is always
+/// the light ink, and the bright colours are the ones that picture reads on. A user who wants the two looks
+/// apart states them apart in <c>theme.json</c>, which is what the two variants' fields are for.
 /// </remarks>
 public readonly record struct SemanticPalette
 {
@@ -49,24 +50,6 @@ public readonly record struct SemanticPalette
     /// <summary>The third of the status colours, for a state that is neither of the first two.</summary>
     public required Color StatusDelta { get; init; }
 
-    /// <summary>The light look's set.</summary>
-    public static SemanticPalette Light =>
-        new()
-        {
-            Disabled = Color.FromRgb(0x8A, 0x8F, 0x98),
-            Modify = Color.FromRgb(0xB5, 0x86, 0x00),
-            Warning = Color.FromRgb(0xD9, 0x77, 0x06),
-            Error = Color.FromRgb(0xC6, 0x28, 0x28),
-            Fail = Color.FromRgb(0x7F, 0x12, 0x12),
-            Success = Color.FromRgb(0x2E, 0x7D, 0x32),
-            Allow = Color.FromRgb(0x00, 0x83, 0x8F),
-            Disallow = Color.FromRgb(0x6B, 0x72, 0x80),
-            Force = Color.FromRgb(0xB0, 0x00, 0x5A),
-            StatusAlpha = Color.FromRgb(0x15, 0x65, 0xC0),
-            StatusBeta = Color.FromRgb(0x6A, 0x1B, 0x9A),
-            StatusDelta = Color.FromRgb(0xD8, 0x4A, 0x84),
-        };
-
     /// <summary>The dark look's set.</summary>
     public static SemanticPalette Dark =>
         new()
@@ -84,4 +67,14 @@ public readonly record struct SemanticPalette
             StatusBeta = Color.FromRgb(0xBA, 0x68, 0xC8),
             StatusDelta = Color.FromRgb(0xF4, 0x8F, 0xB1),
         };
+
+    /// <summary>
+    /// The light look's set, which is the dark look's.
+    /// </summary>
+    /// <remarks>
+    /// Stated as the dark one rather than written out again, because a state is one colour on either ground: a
+    /// second copy would be a second statement of it, and the two would disagree the day one of them was
+    /// changed.
+    /// </remarks>
+    public static SemanticPalette Light => Dark;
 }
