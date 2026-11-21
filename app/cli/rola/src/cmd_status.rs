@@ -25,7 +25,7 @@ use std::str::FromStr as _;
 
 use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath};
-use librorolala::status::{Broken, Relation, Status, compare};
+use librorolala::status::{Broken, Relation, Status, compare, every};
 use librorolala::storage::{Blake3Hash, Key, StorageSet};
 use librorolala::tree::{Tree, TreeStatus};
 use librorolala::vcs::VCSIndex;
@@ -308,6 +308,20 @@ pub fn handle_status(
     // and the walk of the marks say about the two paths is the same fact seen separately.
     let (trees_structural, lost, untagged) = without_tree_duplicates(&status, trees_structural);
 
+    // How the entries stand beside the Vault's copy, when a copy is here. A Workspace that tracks no
+    // Vault, or one nobody has fetched, has nothing to compare against and says nothing.
+    let vault = match tracked_layout(held) {
+        Some((_, copy)) => {
+            let runtime = match runtime() {
+                Ok(runtime) => runtime,
+                Err(error) => return error.into(),
+            };
+
+            vault_relation(&layout, &copy, index, &runtime)
+        }
+        None => None,
+    };
+
     ResultStatus {
         trees_structural,
         trees_content,
@@ -336,6 +350,7 @@ pub fn handle_status(
             })
             .collect(),
         broken: status.broken.iter().map(broken_said).collect(),
+        vault,
     }
     .into()
 }
@@ -628,6 +643,61 @@ fn apart(
     };
 
     (relation, base.distance)
+}
+
+/// How the entries both sides name stand beside one another, when the Vault's copy is here.
+///
+/// `every` reads this Layout's own paths against the copy, so a path the Vault does not name is
+/// counted as ahead: the Vault has never been told of it. Entries in step, and versions the index
+/// cannot place, are left out, since the summary is about the work that has to move.
+fn vault_relation(
+    layout: &Layout,
+    copy: &Layout,
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+) -> Option<VaultRelation> {
+    vault_relation_of(every(layout, copy, index, runtime))
+}
+
+/// Groups what [`every`] read into the three lists a status draws, and nothing when they agree.
+fn vault_relation_of(
+    standings: impl IntoIterator<Item = (LayoutPath, librorolala::status::Standing)>,
+) -> Option<VaultRelation> {
+    let mut relation = VaultRelation {
+        ahead: Vec::new(),
+        behind: Vec::new(),
+        apart: Vec::new(),
+    };
+
+    for (path, standing) in standings {
+        let item = RelationItem {
+            path: path.as_str().to_owned(),
+            distance: standing.distance,
+        };
+
+        match standing.relation {
+            Relation::Ahead => relation.ahead.push(item),
+            Relation::Behind => relation.behind.push(item),
+            Relation::Apart => relation.apart.push(item),
+            Relation::Same | Relation::Unknown => {}
+        }
+    }
+
+    if relation.ahead.is_empty() && relation.behind.is_empty() && relation.apart.is_empty() {
+        return None;
+    }
+
+    relation
+        .ahead
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    relation
+        .behind
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    relation
+        .apart
+        .sort_by(|left, right| left.path.cmp(&right.path));
+
+    Some(relation)
 }
 
 /// The copy of the Vault's own Layout the Layout being worked in tracks, when there is one here,
@@ -1217,6 +1287,31 @@ pub struct ResultStatus {
     merging: Vec<MergingItem>,
     /// Merges that cannot go on, one line each.
     broken: Vec<String>,
+    /// How the entries stand beside the Vault's copy, when its copy is here.
+    vault: Option<VaultRelation>,
+}
+
+/// One entry this side and the Vault do not agree on.
+#[derive(Serialize)]
+pub struct RelationItem {
+    /// The path this Layout names it by.
+    path: String,
+    /// How many versions apart the two are, when the chain says.
+    distance: Option<u64>,
+}
+
+/// How the entries both sides name stand beside one another.
+///
+/// A path the Vault does not name is ahead, since the Vault has never been told of it; an entry in
+/// step, or one the index cannot place, is in none of the three lists.
+#[derive(Serialize)]
+pub struct VaultRelation {
+    /// Entries this side is ahead on.
+    ahead: Vec<RelationItem>,
+    /// Entries the Vault is ahead on.
+    behind: Vec<RelationItem>,
+    /// Entries whose two versions have diverged.
+    apart: Vec<RelationItem>,
 }
 
 /// One variant waiting to be joined into one file.
@@ -1330,14 +1425,20 @@ pub fn render_result_status(result: ResultStatus) {
 
     let content = changed.len() + result.trees_content.len();
 
-    if structural == 0
-        && content == 0
-        && result.unowned.is_empty()
-        && result.merging.is_empty()
-        && result.broken.is_empty()
-    {
+    // What the worktree holds is one axis, and what the two sides hold of the same entries is
+    // another: a workspace with nothing unrecorded can still be behind the Vault.
+    let local = structural > 0
+        || content > 0
+        || !result.unowned.is_empty()
+        || !result.merging.is_empty()
+        || !result.broken.is_empty();
+
+    if !local && result.vault.is_none() {
         r_println!("{}", trd!(t!("status.clean")).trim());
     } else {
+        if !local {
+            r_println!("{}", trd!(t!("status.clean")).trim());
+        }
         let mark = t!("status.mark_modified");
         let unowned = !result.unowned.is_empty();
         let merging = !result.merging.is_empty() || !result.broken.is_empty();
@@ -1529,7 +1630,9 @@ pub fn render_result_status(result: ResultStatus) {
             }
         }
 
-        r_println!("");
+        if local {
+            r_println!("");
+        }
 
         if !result.unowned.is_empty() {
             r_println!("{}", help_line!(t!("status.help_unowned").trim()));
@@ -1552,6 +1655,57 @@ pub fn render_result_status(result: ResultStatus) {
         if content > 0 {
             r_println!("{}", help_line!(t!("status.help_track").trim()));
         }
+
+        if let Some(vault) = &result.vault {
+            r_println!("");
+            r_println!(
+                "{}",
+                trd!(t!(
+                    "status.header_vault",
+                    apart = vault.apart.len(),
+                    ahead = vault.ahead.len(),
+                    behind = vault.behind.len()
+                ))
+                .trim()
+            );
+
+            for item in &vault.apart {
+                r_println!(
+                    "{}",
+                    trd!(format!("  {}", t!("status.vault_apart", path = item.path)))
+                );
+            }
+
+            for item in &vault.ahead {
+                let line = match item.distance {
+                    Some(1) => t!("status.vault_ahead_one", path = item.path).to_string(),
+                    Some(distance) => t!(
+                        "status.vault_ahead_distance",
+                        path = item.path,
+                        distance = distance
+                    )
+                    .to_string(),
+                    None => t!("status.vault_ahead", path = item.path).to_string(),
+                };
+
+                r_println!("{}", trd!(format!("  {line}")));
+            }
+
+            for item in &vault.behind {
+                let line = match item.distance {
+                    Some(1) => t!("status.vault_behind_one", path = item.path).to_string(),
+                    Some(distance) => t!(
+                        "status.vault_behind_distance",
+                        path = item.path,
+                        distance = distance
+                    )
+                    .to_string(),
+                    None => t!("status.vault_behind", path = item.path).to_string(),
+                };
+
+                r_println!("{}", trd!(format!("  {line}")));
+            }
+        }
     }
 }
 
@@ -1559,7 +1713,10 @@ pub fn render_result_status(result: ResultStatus) {
 mod tests {
     use std::path::Path;
 
-    use super::targets;
+    use librorolala::layout::LayoutPath;
+    use librorolala::status::{Relation, Standing};
+
+    use super::{targets, vault_relation_of};
 
     /// The paths a run in `cwd` makes of `target`, in the order they would be tried.
     fn candidates(target: &str, cwd: &str) -> Vec<String> {
@@ -1616,6 +1773,39 @@ mod tests {
     #[test]
     fn a_name_climbing_out_of_the_root_names_nothing() {
         assert_eq!(candidates("../hero.psd", "/ws"), Vec::<String>::new());
+    }
+
+    /// The three lists a status draws, and the standings it leaves out.
+    #[test]
+    fn the_vault_summary_groups_ahead_behind_and_apart() {
+        let standing = |relation, distance| Standing { relation, distance };
+        let path = |text| LayoutPath::new(text).expect("a path a Layout could name");
+
+        let vault = vault_relation_of([
+            (path("behind.psd"), standing(Relation::Behind, Some(2))),
+            (path("same.psd"), standing(Relation::Same, Some(0))),
+            (path("apart.psd"), standing(Relation::Apart, None)),
+            (path("unknown.psd"), standing(Relation::Unknown, None)),
+            (path("ahead.psd"), standing(Relation::Ahead, Some(1))),
+            (path("new.psd"), standing(Relation::Ahead, None)),
+        ])
+        .expect("the two sides are out of step");
+
+        assert_eq!(vault.ahead.len(), 2);
+        assert_eq!(vault.behind.len(), 1);
+        assert_eq!(vault.apart.len(), 1);
+        assert_eq!(vault.ahead[0].path, "ahead.psd");
+        assert_eq!(vault.ahead[1].path, "new.psd");
+        assert_eq!(vault.behind[0].distance, Some(2));
+        assert_eq!(vault.apart[0].path, "apart.psd");
+
+        assert!(
+            vault_relation_of([
+                (path("same.psd"), standing(Relation::Same, Some(0))),
+                (path("unknown.psd"), standing(Relation::Unknown, None)),
+            ])
+            .is_none()
+        );
     }
 
     #[test]
