@@ -279,10 +279,22 @@ public sealed class VirtualEntryTests
         Assert.InRange(gone.Children.Count, 1, 2);
         Assert.Equal(1, gone.Children[0].Opacity);
 
-        var hue = Assert.IsType<Image>(gone.Children[1]);
+        if (gone.Children.Count == 2)
+        {
+            var hue = Assert.IsType<Image>(gone.Children[1]);
 
-        Assert.Equal(BitmapBlendingMode.Hue, hue.BlendMode);
-        Assert.IsAssignableFrom<Bitmap>(hue.Source);
+            Assert.Equal(BitmapBlendingMode.Hue, hue.BlendMode);
+            Assert.IsAssignableFrom<Bitmap>(hue.Source);
+        }
+        else
+        {
+            // No picture to take a hue from: the system gave none, so the mark this plugin draws is the
+            // entry's icon, and its square is already painted with the red of what is lost.
+            var mark = Assert.IsType<Border>(gone.Children[0]);
+
+            Assert.Equal(16, mark.Width);
+            Assert.Equal(16, mark.Height);
+        }
 
         Assert.IsNotType<Grid>(Icons.For(new Entry(real, EntryKind.File), 16));
     }
