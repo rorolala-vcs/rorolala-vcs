@@ -1,10 +1,9 @@
 //! The chain an index object sits at the top of, as a drawing reads it.
 //!
-//! The graph itself is [`crate::draw`]'s business; what this module does is walk the index and say
-//! what is there, one level a version, each with the variant its version points at and the
-//! variants merged in beside it, and the variant itself at the top when the object named one. Both
-//! `rola vcs-index lookback` and the Desktop's Version Graph read the chain this way, so the walk is
-//! kept here rather than in each of them.
+//! What this module does is walk the index and say what is there, one level a version, each with the
+//! variant its version points at and the variants merged in beside it, and the variant itself at the
+//! top when the object named one. Both `rola vcs-index lookback` and `rola status` draw from this
+//! walk, so it is kept here rather than in either of them.
 
 use std::collections::{HashMap, HashSet};
 
@@ -180,7 +179,7 @@ pub enum LookbackError {
     Read(VCSIndexReadingError),
 }
 
-/// The chain a lookback draws, as [`crate::draw`] takes it.
+/// The chain a drawing reads, as the walk in this module says it.
 ///
 /// `has_first` says whether the oldest version's variant is held apart, see
 /// [`Lookback::first`], because a chain that recorded nothing has no such variant and its highest
@@ -216,7 +215,7 @@ pub fn chain_of(levels: &[LevelView], top_kind: TopKind, has_first: bool) -> Cha
 
     // The version a chain is looked back from a variant is one the index does not number, and one
     // being edited is a version it does not have at all: both are a level of their own over the
-    // highest one drawn, so `V{n}` numbers what was recorded and the placeholder stands above it.
+    // highest one read, so the top says which of the three it is.
     let number = match top_kind {
         TopKind::Editing => recorded.saturating_add(1),
         _ => recorded,
@@ -226,7 +225,7 @@ pub fn chain_of(levels: &[LevelView], top_kind: TopKind, has_first: bool) -> Cha
         TopKind::Unknown => Top::Unknown,
         TopKind::Editing => {
             // The variant the work is on its way to is not one the index has either, so the level
-            // it will be made by is drawn as a placeholder of its own.
+            // it will be made by is a placeholder of its own.
             nodes.push(Node::new(
                 "??".to_owned(),
                 number.saturating_sub(1),

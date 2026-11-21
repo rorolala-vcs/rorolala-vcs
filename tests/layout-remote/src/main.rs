@@ -1491,7 +1491,7 @@ async fn main() {
     ));
     checked.wants(
         "a lookback says who made each version and what it says",
-        said.success() && said.stdout.contains("alice: mine now"),
+        said.success() && said.stdout.contains("alice: \"mine now\""),
         &format!(
             "it ended with {:?} and said {:?}",
             said.code,
@@ -1505,8 +1505,18 @@ async fn main() {
         &["vcs-index", "lookback", &version, "--compact"],
     ));
     checked.wants(
-        "a compact lookback draws the versions alone",
-        said.success() && !said.stdout.contains('\\') && said.stdout.contains('V'),
+        "a compact lookback draws one line per variant",
+        said.success()
+            && !said.stdout.contains('\\')
+            && !said.stdout.contains('|')
+            && said
+                .stdout
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .all(|line| {
+                    let line = line.trim_start();
+                    line.len() >= 7 && line.chars().take(7).all(|ch| ch.is_ascii_hexdigit())
+                }),
         &format!(
             "it ended with {:?} and said {:?}",
             said.code,
@@ -1753,7 +1763,7 @@ async fn main() {
     let chain = clean(&said.stdout);
     checked.wants(
         "the version the Vault records is marked in the chain",
-        said.success() && chain.contains("(origin)"),
+        said.success() && chain.contains("ORIGIN") && chain.contains('['),
         &format!("it ended with {:?} and said {chain:?}", said.code),
     );
     checked.wants(
@@ -1793,7 +1803,7 @@ async fn main() {
     let graphed = clean(&said.stdout);
     checked.wants(
         "`--no-hint` draws the chain and says nothing about the file",
-        said.success() && !graphed.contains("Mapped from") && graphed.contains('\\'),
+        said.success() && !graphed.contains("mapped from") && graphed.contains("alice: \""),
         &format!("it ended with {:?} and said {graphed:?}", said.code),
     );
 
@@ -1970,7 +1980,14 @@ async fn main() {
         "`--replace` redoes the version with the words it had, on the version before it",
         said.success()
             && drawn.contains("the second cut")
-            && drawn.lines().filter(|line| line.starts_with('V')).count() == 2,
+            && drawn
+                .lines()
+                .filter(|line| {
+                    let line = line.trim_start();
+                    line.len() >= 7 && line.chars().take(7).all(|ch| ch.is_ascii_hexdigit())
+                })
+                .count()
+                == 2,
         &format!(
             "it ended with {:?}, said {:?}, the Layout names {:?}, and the chain is {:?}",
             said.code,
@@ -2005,7 +2022,7 @@ async fn main() {
     ));
     checked.wants(
         "status with the destination of a move looks back from the entry that moved",
-        said.success() && said.stdout.contains('V'),
+        said.success() && said.stdout.contains("the file to move"),
         &format!(
             "it ended with {:?} and said {:?}",
             said.code,
@@ -2705,7 +2722,9 @@ fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
 
 /// Writes the table naming `dir` as [`NAMESPACE`], and gives the daemon an account of its own.
 fn register(data: &Path, dir: &Path) {
-    let registry = librorolala::location::user_data_dir_in(&data).join("daemon").join("registry.toml");
+    let registry = librorolala::location::user_data_dir_in(&data)
+        .join("daemon")
+        .join("registry.toml");
 
     fs::create_dir_all(registry.parent().expect("the daemon's directory"))
         .expect("the daemon's directory");

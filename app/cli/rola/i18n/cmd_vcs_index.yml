@@ -257,8 +257,8 @@ vcs_index_my_creator_hash:
 vcs_index_lookback:
   complete:
     compact:
-      en: Draw the versions alone, without the variants between them
-      zh-CN: 只画版本，不画中间的变体
+      en: One line per variant, without the lines between them
+      zh-CN: 每个变体一行，不画中间的连线
     no_message:
       en: Leave out what each version says
       zh-CN: 省略每个版本的说明
@@ -268,30 +268,43 @@ vcs_index_lookback:
     max_message_length:
       en: How much of a message is shown before it is cut short
       zh-CN: 说明截断前显示多少字符
+    show_unjoined_variants:
+      en: Draw the variants that have not been joined too
+      zh-CN: 同时画出未并入的变体
   help:
     en: |
         # Draw the version chain with an index object on top
         **Usage**: rola vcs-index [[GREEN]]__lookback__[[/]] <HASH>
         **Flags**:
-             __--compact__                   Draw the versions alone, without the variants between them
+             __--compact__                   One line per variant, without the lines between them
              __--no-creator__                Do not show the creator of each version
              __--no-message__                Do not show what each version says
              __--max-message-length__ <N>    How many characters of a message are
                                      shown before it is cut short, 64 by default
+             __--show-unjoined-variants__    Draw the variants that have not been joined too
              __--json__                      Output as JSON
     zh-CN: |
         # 画出以索引对象为顶的版本链
         **用法**：rola vcs-index [[GREEN]]__lookback__[[/]] <哈希>
         **标识**：
-             __--compact__                   只画版本，不画中间的变体
+             __--compact__                   每个变体一行，不画中间的连线
              __--no-creator__                不显示每个版本的创建者
              __--no-message__                不显示每个版本的说明
              __--max-message-length__ <N>    说明截断前显示多少字符，默认为 64
+             __--show-unjoined-variants__    同时画出未并入的变体
              __--json__                      以 JSON 输出
 
-  being_edited:
-    en: being edited
-    zh-CN: 编辑中的版本
+  state_editing:
+    en: EDITING
+    zh-CN: 编辑中
+
+  state_joining:
+    en: JOIN
+    zh-CN: 并入中
+
+  origin:
+    en: ORIGIN
+    zh-CN: 来源
 
   description:
     en: Draw the version chain with an object on top

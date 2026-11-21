@@ -53,6 +53,7 @@ mod external;
 mod failure;
 mod fetch;
 mod format;
+mod graph;
 mod hash;
 mod ignore;
 mod inv_idx;

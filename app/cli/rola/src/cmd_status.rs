@@ -28,7 +28,7 @@ use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::{Broken, Relation, Status, compare};
 use librorolala::storage::{Blake3Hash, Key, StorageSet};
 use librorolala::tree::{Tree, TreeStatus};
-use librorolala::vcs::{LookbackError, VCSIndex, read_chain};
+use librorolala::vcs::VCSIndex;
 use librorolala::workspace::{Merging, Pending, Workspace};
 use librorolala::workspace_analyze::tree_diff;
 use mingling::{
@@ -58,6 +58,7 @@ use crate::complete::{
 };
 use crate::exit_codes::{EC_ERR_LAYOUT_ARGUMENT, EC_HELP};
 use crate::failure::failure;
+use crate::graph::{self, Options};
 use crate::hash::resolve as resolve_hash;
 use crate::layout::{
     ErrorLayoutFailed, ErrorLayoutShouldInWorkspace, chosen, readonly_layout_copy,
@@ -65,15 +66,13 @@ use crate::layout::{
 use crate::tree::cmd_tree::shown;
 use crate::tree::cmd_tree_status::lines as tree_lines;
 use crate::vcs_index::cmd_vcs_index_lookback::{
-    MergeHint, ResLookback, Standing, StandingRelation, from_object,
+    ARG_SHOW_UNJOINED_VARIANTS, MergeHint, ResLookback, ResultVcsIndexLookback, Standing,
+    StandingRelation, from_object,
 };
 use crate::vcs_index::{ErrorVcsIndexNoIndex, ErrorVcsIndexRead, runtime};
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const DEFAULT_ALIKE: f32 = 0.6;
-
-/// Show every unjoined variant of the target instead of drawing its chain.
-const ARG_SHOW_UNJOINED_VARIANTS: PickerArg<'static, Flag> = arg![show_unjoined_variants: Flag];
 
 /// Draw the lines above the chain without the chain itself.
 const ARG_NO_GRAPH: PickerArg<'static, Flag> = arg![no_graph: Flag];
@@ -109,6 +108,7 @@ pub fn complete_status(ctx: ShellContext) -> Suggest {
                 crate::vcs_index::cmd_vcs_index_lookback::ARG_MAX_MESSAGE_LENGTH: t!("status.complete.max_message_length"),
                 ARG_NO_GRAPH: t!("status.complete.no_graph"),
                 ARG_NO_HINT: t!("status.complete.no_hint"),
+                ARG_SHOW_UNJOINED_VARIANTS: t!("status.complete.show_unjoined_variants"),
                 crate::ignore::ARG_INCLUDE_IGNORED: t!("ignore.complete.include_ignored"),
             },
         );
@@ -179,6 +179,7 @@ pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
 
     lookback.asked(compact, no_message, no_creator, max_message_length);
     lookback.asked_status(no_graph, no_hint);
+    lookback.asked_unjoined(show_unjoined_variants);
 
     StateStatus {
         target,
@@ -193,7 +194,7 @@ pub fn status(args: EntryStatus, lookback: &mut ResLookback) -> Next {
 pub struct StateStatus {
     /// What to look back from, when the run named something rather than asking how the work stands.
     target: Option<String>,
-    /// Whether the target's unjoined variants are to be listed rather than its chain drawn.
+    /// Whether the target's unjoined variants are to be drawn with its chain.
     show_unjoined_variants: bool,
     /// Whether what the ignore rules govern is read too rather than left out.
     include_ignored: bool,
@@ -265,7 +266,7 @@ pub fn handle_status(
         }
 
         if state.show_unjoined_variants {
-            return unjoined_of(&target, &layout, held, index, cwd.as_deref());
+            return unjoined_of(&target, &layout, held, index, me, cwd.as_deref(), &merging);
         }
 
         return lookback_of(&target, &layout, held, index, me, cwd.as_deref(), &merging);
@@ -408,12 +409,36 @@ fn lookback_of(
     cwd: Option<&Path>,
     merging: &Merging,
 ) -> Next {
+    match chain_of_target(target, layout, held, index, me, cwd, merging, false) {
+        Ok(result) => result.into(),
+        Err(next) => next,
+    }
+}
+
+/// The chain a target names, with how the file it names stands.
+///
+/// `unjoined` asks for the variants no link reaches too, which only a drawing reads: the shape of the
+/// chain is the same either way.
+fn chain_of_target(
+    target: &str,
+    layout: &Layout,
+    held: &Workspace,
+    index: &mut LazyRes<ResVCSIndex>,
+    me: Option<&str>,
+    cwd: Option<&Path>,
+    merging: &Merging,
+    unjoined: bool,
+) -> Result<ResultVcsIndexLookback, Next> {
     let Some(index) = index.get_ref().as_ref() else {
-        return ErrorVcsIndexNoIndex.into();
+        return Err(ErrorVcsIndexNoIndex.into());
     };
+    // `?` would need a conversion this function does not have: a failure becomes the command's answer
+    // through the `#[renderer]` the routeified command is wired with, and this answers a result the
+    // command wraps.
+    #[allow(clippy::question_mark)]
     let runtime = match runtime() {
         Ok(runtime) => runtime,
-        Err(error) => return error.into(),
+        Err(error) => return Err(error.into()),
     };
 
     let remote = tracked_layout(held);
@@ -427,11 +452,11 @@ fn lookback_of(
     ) {
         Ok(found) => found,
         Err(cause) => {
-            return ErrorStatusTarget {
+            return Err(ErrorStatusTarget {
                 target: target.to_owned(),
                 cause,
             }
-            .into();
+            .into());
         }
     };
 
@@ -451,9 +476,9 @@ fn lookback_of(
     let id = found.id;
     let editing = found.editing;
 
-    let mut result = match from_object(index, &runtime, found.key, origin) {
+    let mut result = match from_object(index, &runtime, found.key, origin, unjoined) {
         Ok(result) => result,
-        Err(cause) => return ErrorVcsIndexRead::new(cause).into(),
+        Err(cause) => return Err(ErrorVcsIndexRead::new(cause).into()),
     };
     if editing {
         result.editing();
@@ -471,14 +496,14 @@ fn lookback_of(
         ));
     }
 
-    result.into()
+    Ok(result)
 }
 
-/// Lists the unjoined variants of the chain the target names.
+/// Draws the chain the target names with the variants no link reaches added to it.
 ///
-/// The target names what a lookback would draw, and the chain is read the same way; what is listed is
-/// the other half of it, the variants no link points at, which a drawing cannot reach. Each line
-/// carries the version it is based on, so a variant is placed in the chain without drawing it.
+/// The target names what a lookback would draw, and the chain is read the same way; what is added is
+/// the other half of it, the variants no link points at, each at the level of the version it is based
+/// on. What `--json` prints is still the listing of them, and the drawing is the chain they belong to.
 ///
 /// # Errors
 ///
@@ -490,79 +515,28 @@ fn unjoined_of(
     layout: &Layout,
     held: &Workspace,
     index: &mut LazyRes<ResVCSIndex>,
+    me: Option<&str>,
     cwd: Option<&Path>,
+    merging: &Merging,
 ) -> Next {
-    let Some(index) = index.get_ref().as_ref() else {
-        return ErrorVcsIndexNoIndex.into();
-    };
-    let runtime = match runtime() {
-        Ok(runtime) => runtime,
-        Err(error) => return error.into(),
-    };
-
-    let remote = tracked_layout(held);
-    let found = match found(
-        target,
-        layout,
-        remote.as_ref().map(|(_, layout)| layout),
-        held,
-        Some(index),
-        cwd,
-    ) {
-        Ok(found) => found,
-        Err(cause) => {
-            return ErrorStatusTarget {
-                target: target.to_owned(),
-                cause,
-            }
-            .into();
-        }
-    };
-
-    let chain = match read_chain(index, &runtime, found.key, None) {
+    let chain = match chain_of_target(target, layout, held, index, me, cwd, merging, true) {
         Ok(chain) => chain,
-        Err(LookbackError::NotAChain) => {
-            return ErrorStatusTarget {
-                target: target.to_owned(),
-                cause: t!("vcs_index_lookback.err_not_a_chain").trim().to_owned(),
-            }
-            .into();
-        }
-        Err(LookbackError::Broken) => {
-            return ErrorStatusTarget {
-                target: target.to_owned(),
-                cause: t!("vcs_index_lookback.err_broken").trim().to_owned(),
-            }
-            .into();
-        }
-        Err(LookbackError::Read(error)) => {
-            return ErrorVcsIndexRead::new(error.reason()).into();
-        }
+        Err(next) => return next,
     };
 
-    match chain.unjoined_variants(index, &runtime) {
-        Ok(variants) => ResultStatusUnjoined {
-            variants: variants
-                .into_iter()
-                .map(|variant| UnjoinedVariant {
-                    version_hash: variant.version,
-                    version_number: variant.number,
-                    variant_hash: variant.variant.hash,
-                    creator: variant.variant.creator,
-                    message: variant.variant.message,
-                })
-                .collect(),
-        }
-        .into(),
-        Err(error) => match error {
-            LookbackError::Read(error) => ErrorVcsIndexRead::new(error.reason()).into(),
-            _ => ErrorStatusTarget {
-                target: target.to_owned(),
-                cause: t!("vcs_index_lookback.err_broken").trim().to_owned(),
-            }
-            .into(),
-        },
-    }
+    let variants = chain
+        .unjoined
+        .iter()
+        .map(|variant| UnjoinedVariant {
+            version_hash: variant.version.clone(),
+            version_number: variant.number,
+            variant_hash: variant.variant.hash.clone(),
+            creator: variant.variant.creator.clone(),
+            message: variant.variant.message.clone(),
+        })
+        .collect();
+
+    ResultStatusUnjoined { variants, chain }.into()
 }
 
 /// How the file the target named stands, for the lines drawn above its chain.
@@ -1295,10 +1269,17 @@ pub fn render_result_status_merge(result: ResultStatusMerge, lookback: &ResLookb
 }
 
 /// Result: the unjoined variants of one chain, the highest base version first.
+///
+/// The variants are the listing `--json` prints, and the chain is what the drawing needs: the same
+/// rows a lookback draws, with the variants no link reaches added at the level of the version each of
+/// them is based on.
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultStatusUnjoined {
     /// The variants, one line each.
     variants: Vec<UnjoinedVariant>,
+    /// The chain the variants belong to.
+    #[serde(skip)]
+    chain: ResultVcsIndexLookback,
 }
 
 /// One unjoined variant, with the version it is based on.
@@ -1320,25 +1301,9 @@ pub struct UnjoinedVariant {
 }
 
 #[renderer(buffer)]
-pub fn render_result_status_unjoined(result: ResultStatusUnjoined) {
-    for variant in &result.variants {
-        let said = match (variant.creator.is_empty(), variant.message.is_empty()) {
-            (false, false) => format!("{}: {}", variant.creator, variant.message),
-            (false, true) => variant.creator.clone(),
-            (true, false) => variant.message.clone(),
-            (true, true) => String::new(),
-        };
-
-        r_println!(
-            "V{} {}{}",
-            variant.version_number,
-            variant.variant_hash,
-            if said.is_empty() {
-                String::new()
-            } else {
-                format!(" {said}")
-            }
-        );
+pub fn render_result_status_unjoined(result: ResultStatusUnjoined, lookback: &ResLookback) {
+    for line in graph::draw(&result.chain, &Options::of(lookback)) {
+        r_println!("{line}");
     }
 }
 

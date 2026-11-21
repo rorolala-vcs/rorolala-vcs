@@ -127,7 +127,7 @@ fn lifecycle(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["status", "main"]);
     checked.exits("a named tree is looked back from its version", &ran, 0);
-    checked.stdout_has("the chain draws the recorded version", &ran, "V0");
+    checked.stdout_has("the chain draws what the version recorded", &ran, "first tree");
     checked.wants(
         "a clean tree has no draft above the chain",
         !ran.stdout.contains("??"),
@@ -164,7 +164,7 @@ fn lifecycle(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["status", "main"]);
     checked.exits("a named tree is looked back from its version", &ran, 0);
-    checked.stdout_has("the chain draws the recorded version", &ran, "V0");
+    checked.stdout_has("the chain draws what the version recorded", &ran, "first tree");
     checked.stdout_has("an unrecorded change is a draft above the chain", &ran, "??");
     checked.wants(
         "a named tree is not read as the tree's own status",
@@ -860,7 +860,7 @@ fn root_tree(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(&root, &["status", "."]);
     checked.exits("the root tree is looked back at from `.`", &ran, 0);
-    checked.stdout_has("the chain draws the root tree's version", &ran, "V0");
+    checked.stdout_has("the chain draws what the root tree recorded", &ran, "the root tree");
 
     fs::write(root.join("a.psd"), b"two").expect("work the root tree has not recorded");
 

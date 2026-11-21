@@ -35,11 +35,39 @@ The navigation bar asks for one toolbar update per turn as well.
 
 ## Feature
 
-### 1. [`app`] [`rola`] Stop a running write with Ctrl+C
+### 1. [`app`] [`rola`] Draw the unjoined variants in the chain behind --show-unjoined-variants
+
+`--show-unjoined-variants` draws the variants no link reaches into the chain now, each at the level
+of the version it is based on, rather than listing them instead of the chain. `rola vcs-index
+lookback` takes the same flag, since the two commands draw the same chain.
+
+`rola status --show-unjoined-variants --json` still answers with the listing, and the JSON of a
+lookback is unchanged.
+
+### 2. [`app`] [`rola`] Draw the version chain as one row per variant
+
+`rola vcs-index lookback` and `rola status <TARGET>` now draw the version chain as one row per
+variant: the variant's hash, who made it, and what it said between quotes. No version row is drawn,
+and no version number or version hash appears, since a version is only what its variants hang from;
+the variant that made the oldest version is the last row.
+
+The variants based on one version are bracketed on the left, the merged ones above and the spine
+last, and a merge is a line from the variant that joins down to the variant it merges in. A variant
+merged in that is not drawn below the one that merges it has no row of its own: the line names its
+short hash instead, in bright magenta, which is the colour that says a variant is not part of the
+drawing. Colours say which kind a row is: bright yellow for the chain, bright green for a variant
+merged into it, bright magenta for one merged in from outside, and bright cyan for work that is not
+recorded. The version the Vault records is marked by a line over the row that produced it, and
+`--compact` draws one line per variant with the merge named after it.
+
+Every column is measured in display width, so a Chinese creator or message keeps the columns and the
+lines in place.
+
+### 3. [`app`] [`rola`] Stop a running write with Ctrl+C
 
 `rola bring`, `rola track`, `rola align`, `rola retrack`, `rola hold` and `rola giveup` stop when Ctrl+C is pressed. The signal only sets a flag, so the step in hand finishes, the write returns after it, and what was already written stays: the caller reads where the run stopped instead of assuming nothing happened. A handler that cannot be installed leaves the run uncancellable rather than failing the command.
 
-### 2. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge
+### 4. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge
 
 Dragging a dock near the outer edge of the pane now offers that side of the whole arrangement rather
 than the side of the group under the pointer. A drop there wraps the entire layout tree in a new group
@@ -47,7 +75,7 @@ on that side, so a dock reaches the edge of the window however the tree happens 
 offer appears only as the pointer comes near the edge, and the points a group shows inside the pane
 are as they were.
 
-### 3. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost
 
 The File System plugin keeps a catalogue of virtual entries: a path that is not on disk but is shown
 in its directory, in the list, the grid and the folder tree. A pending entry is drawn faded under an
@@ -61,7 +89,7 @@ with the proportion the run's progress capsule shows while it carries content, a
 every path `layout tree-diff` reports as lost and on every unstaged deletion inside a rola-tree. A
 reading keeps them in step: a file that comes back, or a bring that finishes, puts its row away.
 
-### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Type a name in a bubble under its row
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Type a name in a bubble under its row
 
 Renaming a row in a directory listing or in the folder tree opens a field in a bubble under the name
 rather than a box standing in the name's place. The row is not rebuilt for the edit, so the name
@@ -72,30 +100,30 @@ a field that lost the keyboard took what it held.
 At most one bubble is on screen, and it holds the keyboard, so the dock's shortcuts wait while a name
 is being typed.
 
-### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner
+### 7. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner
 
 The Version Graph's corner holds a second button under the hover switch: the show-all button clears
 the chosen file and draws the whole work again. It gives the same answer as a press on empty drawing,
 for a reader who wants every lane back without finding a patch of ground to click, and a tooltip
 names it.
 
-### 6. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala
+### 8. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala
 
 The write workflows behind `rola layout path` and `rola layout entry` now live in `librorolala::write`: storage puts and extracts, Layout batches, path bind, unbind, move and switch, entry write, remove, owner changes, description changes, preference changes and version changes, the tree cache rebuild, VCS index object writes, file version writes, single file tracking, single path retracking and alignment in a Workspace or a Vault, content fetching, and the sync plan and its carry, the collecting planning and sweep, the checkout cache writes, restores and forgets, and store and index repacking. The tree's own writes live there too: `tree init`, `tree add`, `tree rm`, `tree reset` and `tree write-desc`. The command line and the C ABI call the same functions, so their order, their checks and their failures cannot drift.
 
 The five whole workflows are there as well: `write::ownership` plans and applies a hold or a giveup, `write::bring` resolves references, brings entries in and merges a variant, `write::track` plans a recording and applies the messages in one batch, `write::align` runs every alignment mode, and `write::retrack` moves a recording. A shared request layer resolves the Workspace, the account, the Vault name and address, and the candidate Vaults from values rather than from a command's resources. The C ABI exports the one-shot flows as JSON requests and answers: `rola_write_bring` for both the bring of entries and the variant merge, `rola_write_retrack`, `rola_write_align` for the whole workflow with the single-entry form renamed `rola_write_align_entry`, `rola_write_ownership_plan`, `rola_write_ownership_apply`, `rola_write_track_plan` and `rola_write_track_apply`, each taking a `RolaProgress` and a `RolaCancellation`. The sync workflow is a request-shaped plan and apply as well: the plan fetches the Vault's Layout before reading it, a plan holding a blocked entry is refused before anything is written, and both check the caller's cancellation between entries.
 
-### 7. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry
+### 9. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry
 
 `rola_write_layout_move_fetched` and `rola_write_layout_remove_fetched_entry` move a path or remove an entry in the fetched copy of a Vault's own Layout, making the Vault's action first and writing the copy only to what it answered. `LayoutWriter` gained `MoveFetched`, `RemoveFetchedEntry` and `SwitchEntry`, the last carrying the entry's preference along with its version, owner and description. The desktop's low-level Layout commands no longer start `rola`.
 
-### 8. [`modules`] [`rola-sharp`] Add the C# bindings
+### 10. [`modules`] [`rola-sharp`] Add the C# bindings
 
 `RolaSharp` is the C# bindings: a generated `RorolalaBinding`, the `Scope` family over users, daemons, Workspaces, Vaults, Layouts, stores, VCS indexes, statuses, trees, ownership, inverse indexes, version graphs, books and ignore rules, and the writers over storage, Layouts, the tree cache, VCS indexes, file versions, one file's tracking and one path's retracking, and store and index packing. The read side no longer writes the tree cache; the write side calls the same `librorolala` workflows as the command line. Workspace and Vault scopes can be opened from any nested directory. The tree scope answers a tree's mark as well as its status: the Layout entry id, whether a description is staged and what it says. The user scope reads the userdata name the assembly was built for, which is `release` unless the build names another, and takes a name explicitly when a caller wants one; `Home` is gone, because the name rather than the user's home is what it reads.
 
 The writers over the whole workflows are there too: `Bring`, `BringVariant`, `Retrack`, `Align`, `PlanOwnership`, `ApplyOwnership`, `PlanTrack` and `Track`. Each takes a request record and answers a result record, the plan a track asks for is the exact text the native side answered with, and the single-entry alignment is now `AlignEntry`. The sync writer takes a `SyncRequest`, the plan it was handed and a `Progress`, so what a panel previewed is what it applies. An ownership plan can be handed back to `ApplyOwnership`, and every write failure has its own kind, tree and missing Vault included.
 
-### 9. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores
+### 11. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores
 
 The store a Workspace, a Vault or a `git-rola` project writes content to is a set of stores rather
 than one directory. `workspace.toml` takes `[default] storages`, `vault.toml` takes
@@ -205,6 +233,12 @@ The terminal view opens, reads, writes and resizes its pseudo-terminal through `
 ### 16. [`librorolala`] Resolve accounts and Vaults from one implementation
 
 The account search and the Vault name and address rules are now `librorolala::keys` and `librorolala::remote`. The command line's key search and `ResCurrentRemoteVault` delegate to them, and the ABI request layer calls the same functions, so the scopes, the order, the shadowing and the failure wording have one place to be kept right.
+
+### 17. [`librorolala`] [`vcs`] Drop the chain's terminal drawing
+
+The terminal drawing is gone from `rorolala-vcs`: `draw`, `Cell`, `Role`, `Drawing`, `VersionRow` and
+the layout that fed them. What a terminal shows is drawn in `rola`, and the chain's shape stays, since
+the Desktop's Version Graph reads it. Nothing the command line or the C ABI exposes changes.
 
 # 0.3.0 (2026-11-17)
 

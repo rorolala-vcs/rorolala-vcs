@@ -1,24 +1,20 @@
 //! The `rola vcs-index lookback` command: draw the chain an object sits at the top of.
 //!
-//! The drawing is made of two halves: [`read_chain`] walks the chain and says what is there, one
-//! level a version, each with the variant its version points at and the variants merged in beside
-//! it, and the variant itself at the top when the hash named one, and [`draw_chain`] turns that
-//! into a grid. What `--json` prints is [`ResultVcsIndexLookback`], which is the same thing the
-//! drawing is made from.
+//! [`read_chain`] walks the chain and says what is there, one level a version, each with the variant
+//! its version points at and the variants merged in beside it, and the variant itself at the top when
+//! the hash named one. What `--json` prints is [`ResultVcsIndexLookback`], which is what the drawing is
+//! made from: [`crate::graph`] lays the rows out and colours them.
 //!
 //! A version is what a message belongs to: it points at one variant, and that variant carries who
 //! made it and what it says, both by hash, at a [`Creator`](librorolala::vcs::Creator) and a
-//! [`Message`](librorolala::vcs::Message) in the index. So what a level is drawn with is read from
-//! the variant its version points at, and the drawing is [rola status](crate::cmd_status)'s too:
-//! what it draws for a file is this, with [`TopKind::Editing`] over it when the file has changes
-//! that were never recorded.
-
-use std::collections::HashMap;
+//! [`Message`](librorolala::vcs::Message) in the index. The drawing is
+//! [rola status](crate::cmd_status)'s too: what it draws for a file is this, with a row for the work
+//! that was never recorded over it.
 
 use librorolala::storage::{Blake3Hash, Key};
 use librorolala::vcs::{
-    Cell, LevelView, LookbackError, Origin, Role, TopKind, VCSIndex, VariantView, chain_of,
-    draw as draw_chain, read_chain, short_hash,
+    BasedVariant, LevelView, LookbackError, Origin, TopKind, VCSIndex, VariantView, read_chain,
+    short_hash,
 };
 use mingling::{
     Grouped, LazyRes, ProgramCollect, Routable, ShellContext, StructuralData, Suggest,
@@ -44,6 +40,7 @@ use crate::complete::{
     typing_flag,
 };
 use crate::exit_codes::EC_HELP;
+use crate::graph::{self, Options};
 use crate::vcs_index::{
     ErrorVcsIndexArgument, ErrorVcsIndexNoIndex, ErrorVcsIndexRead, hash_of, runtime,
 };
@@ -51,10 +48,7 @@ use crate::vcs_index::{
 /// How much of a message a drawing shows before it is cut short, when the run names no length.
 pub const DEFAULT_MESSAGE_LENGTH: usize = 64;
 
-/// What a message that was cut short ends with.
-const ELLIPSIS: &str = "...";
-
-/// Draw the versions alone, without the variants between them.
+/// Draw one line per variant, without the lines between them.
 pub const ARG_COMPACT: PickerArg<'static, Flag> = arg![compact: Flag];
 
 /// Leave out what each version says.
@@ -66,6 +60,9 @@ pub const ARG_NO_CREATOR: PickerArg<'static, Flag> = arg![no_creator: Flag];
 /// How much of a message is shown before it is cut short.
 pub const ARG_MAX_MESSAGE_LENGTH: PickerArg<'static, Option<usize>> =
     arg![max_message_length: Option<usize>];
+
+/// Draw the variants that have not been joined too.
+pub const ARG_SHOW_UNJOINED_VARIANTS: PickerArg<'static, Flag> = arg![show_unjoined_variants: Flag];
 
 /// What a lookback is drawn as, by the run that asked for it.
 ///
@@ -90,6 +87,8 @@ pub struct ResLookback {
     graph: bool,
     /// Whether the lines that say where the file comes from and how it stands are drawn.
     hint: bool,
+    /// Whether the variants that have not been joined are drawn too.
+    unjoined: bool,
 }
 
 impl Default for ResLookback {
@@ -101,6 +100,7 @@ impl Default for ResLookback {
             max_message_length: DEFAULT_MESSAGE_LENGTH,
             graph: true,
             hint: true,
+            unjoined: false,
         }
     }
 }
@@ -140,6 +140,17 @@ impl ResLookback {
     #[must_use]
     pub const fn hint(&self) -> bool {
         self.hint
+    }
+
+    /// Whether the variants that have not been joined are drawn too.
+    #[must_use]
+    pub const fn unjoined(&self) -> bool {
+        self.unjoined
+    }
+
+    /// Takes whether the variants that have not been joined are to be drawn.
+    pub const fn asked_unjoined(&mut self, show_unjoined_variants: Flag) {
+        self.unjoined = matches!(show_unjoined_variants, Flag::Active);
     }
 
     /// Takes what `rola status` asked for from the two flags only it has.
@@ -210,6 +221,7 @@ pub fn complete_vcs_index_lookback(ctx: ShellContext, index: &mut LazyRes<ResVCS
                 ARG_NO_MESSAGE: t!("vcs_index_lookback.complete.no_message"),
                 ARG_NO_CREATOR: t!("vcs_index_lookback.complete.no_creator"),
                 ARG_MAX_MESSAGE_LENGTH: t!("vcs_index_lookback.complete.max_message_length"),
+                ARG_SHOW_UNJOINED_VARIANTS: t!("vcs_index_lookback.complete.show_unjoined_variants"),
             },
         );
     }
@@ -227,13 +239,13 @@ pub fn complete_vcs_index_lookback(ctx: ShellContext, index: &mut LazyRes<ResVCS
 /// Draws the chain one index object sits at the top of
 ///
 /// A Version is drawn at the top, and the chain walked back to the first version, the root, a
-/// version of its own, is not drawn, reading each version once, so the numbers fall by one a step.
-/// A Variant names the same chain from the other side: it is drawn over the version it is based on,
-/// under a version whose number nothing here knows, drawn `?`.
+/// version of its own, is never drawn: a row is a variant, and the oldest version's variant is the
+/// last one. A Variant names the same chain from the other side, and is drawn as its top row.
 ///
-/// Each version is drawn with who made it and what it says, both read from the variant it points
-/// at, since a version is what a message belongs to. `--no-creator` and `--no-message` leave one of
-/// them out, `--max-message-length` cuts a message short, and `--compact` draws the versions alone.
+/// Each row carries who made the variant and what it says. `--no-creator` and `--no-message` leave
+/// one of them out, `--max-message-length` cuts a message short, `--compact` draws one line per
+/// variant without the lines between them, and `--show-unjoined-variants` adds the variants based on
+/// a version of the chain that no link reaches.
 ///
 /// # Errors
 ///
@@ -247,6 +259,7 @@ pub fn vcs_index_lookback(args: EntryVcsIndexLookback, lookback: &mut ResLookbac
         .pick(ARG_NO_MESSAGE)
         .pick(ARG_NO_CREATOR)
         .pick(ARG_MAX_MESSAGE_LENGTH)
+        .pick(ARG_SHOW_UNJOINED_VARIANTS)
         .pick_or_route(arg![String], || {
             ErrorVcsIndexArgument {
                 argument: "HASH".to_owned(),
@@ -255,16 +268,18 @@ pub fn vcs_index_lookback(args: EntryVcsIndexLookback, lookback: &mut ResLookbac
         })
         .pick(&UNMATCHED)
         .to_result();
-    let (compact, no_message, no_creator, max_message_length, hash, unmatched) = match picked {
-        Ok(picked) => picked,
-        Err(next) => return next,
-    };
+    let (compact, no_message, no_creator, max_message_length, unjoined, hash, unmatched) =
+        match picked {
+            Ok(picked) => picked,
+            Err(next) => return next,
+        };
 
     if let Some(next) = crate::unmatched::refused(&unmatched, "vcs-index lookback") {
         return next;
     }
 
     lookback.asked(compact, no_message, no_creator, max_message_length);
+    lookback.asked_unjoined(unjoined);
 
     StateVcsIndexLookback { hash }.into()
 }
@@ -280,6 +295,7 @@ pub struct StateVcsIndexLookback {
 pub fn handle_vcs_index_lookback(
     state: StateVcsIndexLookback,
     index: &mut LazyRes<ResVCSIndex>,
+    lookback: &ResLookback,
 ) -> Next {
     let StateVcsIndexLookback { hash } = state;
     let Some(index) = index.get_ref().as_ref() else {
@@ -294,7 +310,7 @@ pub fn handle_vcs_index_lookback(
         Err(error) => return error.into(),
     };
 
-    match from_object(index, &runtime, key, None) {
+    match from_object(index, &runtime, key, None, lookback.unjoined()) {
         Ok(result) => result.into(),
         Err(cause) => ErrorVcsIndexRead { cause }.into(),
     }
@@ -305,16 +321,19 @@ pub fn handle_vcs_index_lookback(
 /// A Version is the top of the chain. A Variant is the top itself, over the version it is based on;
 /// anything else starts no chain. `origin` is the version a Vault's own Layout records for the
 /// entry being drawn, with the Vault's name, so that where the Vault stands in the chain can be
-/// marked; a chain drawn by name alone names no Vault and marks nothing.
+/// marked; a chain drawn by name alone names no Vault and marks nothing. `unjoined` asks for the
+/// variants based on a version of the chain that no link reaches, which only a drawing reads.
 ///
 /// # Errors
 ///
-/// Returns why the object is not the top of a chain, or why the chain could not be read.
+/// Returns why the object is not the top of a chain, or why the chain or its unjoined variants could
+/// not be read.
 pub fn from_object(
     index: &VCSIndex,
     runtime: &tokio::runtime::Runtime,
     key: Key,
     origin: Option<(&str, Blake3Hash)>,
+    unjoined: bool,
 ) -> Result<ResultVcsIndexLookback, String> {
     let chain = read_chain(index, runtime, key, origin).map_err(|error| match error {
         LookbackError::NotAChain => t!("vcs_index_lookback.err_not_a_chain").trim().to_string(),
@@ -322,11 +341,26 @@ pub fn from_object(
         LookbackError::Read(error) => error.reason(),
     })?;
 
+    let unjoined = if unjoined {
+        chain
+            .unjoined_variants(index, runtime)
+            .map_err(|error| match error {
+                LookbackError::NotAChain => {
+                    t!("vcs_index_lookback.err_not_a_chain").trim().to_string()
+                }
+                LookbackError::Broken => t!("vcs_index_lookback.err_broken").trim().to_string(),
+                LookbackError::Read(error) => error.reason(),
+            })?
+    } else {
+        Vec::new()
+    };
+
     Ok(ResultVcsIndexLookback {
         levels: chain.levels,
         top: chain.top,
         origin: chain.origin,
         first: chain.first,
+        unjoined,
         standing: None,
     })
 }
@@ -387,31 +421,35 @@ pub enum StandingRelation {
 
 /// Result: the chain, one level a version, the highest version's first.
 ///
-/// It is what a drawing needs and no more, a level's number, the variant its version points at,
-/// and the variants merged in beside it, and what the top of the chain is, so what a `--json` run
-/// prints is the graph itself.
+/// It is what a drawing needs, a level's number, the variant its version points at, and the variants
+/// merged in beside it, what the top of the chain is, and the merges that came in from outside it, so
+/// what a `--json` run prints is the graph itself and what a terminal shows is drawn from the same
+/// thing.
 #[derive(StructuralData, Serialize, Grouped)]
 pub struct ResultVcsIndexLookback {
     /// The levels, the highest version's first.
-    levels: Vec<LevelView>,
+    pub(crate) levels: Vec<LevelView>,
     /// What the top of the chain is.
-    top: TopKind,
+    pub(crate) top: TopKind,
     /// The version a Vault records for the entry, when one was named and this chain holds it.
-    origin: Option<Origin>,
+    pub(crate) origin: Option<Origin>,
     /// The variant that made the oldest version, when the chain has one.
     ///
     /// It is the one based on the root, which is drawn at no level and so is not among the levels;
-    /// its words are the oldest version's own, which the drawing would otherwise leave out.
-    first: Option<VariantView>,
+    /// it is drawn as the last row, since a row is a variant.
+    pub(crate) first: Option<VariantView>,
+    /// The variants based on a version of the chain that no link reaches, when they were asked for.
+    #[serde(skip)]
+    pub(crate) unjoined: Vec<BasedVariant>,
     /// How the file the chain was drawn for stands, when it was drawn for one.
-    standing: Option<Standing>,
+    pub(crate) standing: Option<Standing>,
 }
 
 impl ResultVcsIndexLookback {
     /// Says the highest version is being edited, over the chain as it was recorded.
     ///
     /// It is what `rola status` says of a file whose changes were never recorded: the work is on its
-    /// way to a version the index does not have, and drawing that is drawing one more level over
+    /// way to a version the index does not have, and drawing that is drawing a row of its own over
     /// the chain the file's own version sits at.
     pub const fn editing(&mut self) {
         self.top = TopKind::Editing;
@@ -446,45 +484,8 @@ pub fn render_result_vcs_index_lookback(result: ResultVcsIndexLookback, lookback
             r_println!("");
         }
 
-        let chain = chain_of(&result.levels, result.top, result.first.is_some());
-        let drawing = draw_chain(&chain);
-        let notes = notes(&result, lookback);
-        let mut level_of: HashMap<usize, u64> = drawing
-            .versions()
-            .iter()
-            .map(|version| (version.row(), version.level()))
-            .collect();
-
-        for (index, row) in drawing.rows().iter().enumerate() {
-            // `--compact` draws the versions alone: what is between them is what a reader who wants
-            // the chain's shape already has from the numbers.
-            let Some(level) = level_of.remove(&index) else {
-                if lookback.compact() {
-                    continue;
-                }
-
-                r_println!("{}", drawn(row));
-                continue;
-            };
-
-            // The version the Vault records is the one a run reading this is looking for: where the
-            // Vault stands is what says whether the work has been told to it. It is drawn as a line
-            // of its own colour, so it is found without reading every number.
-            if let Some(origin) = result
-                .origin
-                .as_ref()
-                .filter(|origin| origin.number == level)
-            {
-                let note = notes.get(&level);
-
-                r_println!("{}", marked(row, &origin.vault, note));
-                continue;
-            }
-
-            match notes.get(&level) {
-                Some(note) => r_println!("{} {}", drawn(row), note),
-                None => r_println!("{}", drawn(row)),
-            }
+        for line in graph::draw(&result, &Options::of(lookback)) {
+            r_println!("{line}");
         }
     }
 }
@@ -653,146 +654,11 @@ fn anomalous(standing: &Standing) -> bool {
         )
 }
 
-/// One row as the line that says the Vault records the version it draws.
-///
-/// The whole line is drawn as one thing (the number, the Vault's name and the version's words)
-/// since what it says is where the Vault stands rather than what any part of it is.
-fn marked(row: &[Cell], vault: &str, note: Option<&String>) -> String {
-    let text = plain(row);
-    let said = note.map_or_else(
-        || format!("{text} ({vault})"),
-        |note| format!("{text} ({vault}) {note}"),
-    );
-
-    said.bold().bright_cyan().to_string()
-}
-
-/// One row of a drawing as its characters alone, with nothing said about colour.
-fn plain(row: &[Cell]) -> String {
-    let mut line = String::new();
-
-    for cell in row {
-        match cell {
-            Cell::Blank => line.push(' '),
-            Cell::Glyph(_, glyph) => line.push(*glyph),
-        }
-    }
-
-    line.trim_end().to_owned()
-}
-
-/// One row of a drawing, its colours and nothing else.
-fn drawn(row: &[Cell]) -> String {
-    let mut line = String::new();
-
-    for cell in row {
-        match cell {
-            Cell::Blank => line.push(' '),
-            Cell::Glyph(Role::Version, glyph) => {
-                line.push_str(&glyph.to_string().bright_magenta().to_string());
-            }
-            Cell::Glyph(Role::Variant, glyph) => {
-                line.push_str(&glyph.to_string().bright_cyan().to_string());
-            }
-            Cell::Glyph(Role::Edge, glyph) => {
-                line.push_str(&glyph.to_string().bold().white().to_string());
-            }
-        }
-    }
-
-    line.trim_end().to_owned()
-}
-
-/// The words that go beside each version the drawing has, by the version's number.
-///
-/// A version's words are its variant's, and its variant is the one drawn at the level below it, so
-/// a level's words stand beside the version one number up from it. The number the top placeholder
-/// stands at has words of its own when the version there is being edited.
-fn notes(result: &ResultVcsIndexLookback, lookback: &ResLookback) -> HashMap<u64, String> {
-    let mut notes = HashMap::new();
-
-    for level in &result.levels {
-        let said = said(&level.variant, lookback);
-        if !said.is_empty() {
-            notes.insert(level.number.saturating_add(1), said);
-        }
-    }
-
-    // The oldest version's words come from the variant based on the root, which is drawn at no
-    // level: they belong beside version 0, which no level names.
-    if let Some(first) = &result.first {
-        let said = said(first, lookback);
-        if !said.is_empty() {
-            notes.insert(0, said);
-        }
-    }
-
-    if result.top == TopKind::Editing && lookback.message() {
-        notes.insert(
-            recorded_top(result).saturating_add(1),
-            t!("vcs_index_lookback.being_edited").trim().to_owned(),
-        );
-    }
-
-    notes
-}
-
-/// The number the highest version the chain recorded carries.
-///
-/// One version is number 0, and every version over the oldest, a level of the drawing, or the head
-/// a chain was started from, adds one. The levels alone do not count them, since the oldest
-/// version's variant is based on the root and hangs from no level; a chain that recorded nothing is
-/// number 0 all the same, which is where a placeholder stands when there is nothing under it.
-fn recorded_top(result: &ResultVcsIndexLookback) -> u64 {
-    u64::try_from(result.levels.len() + usize::from(result.first.is_some()))
-        .unwrap_or(u64::MAX)
-        .saturating_sub(1)
-}
-
-/// What is said beside one variant: who made it, what it says, or both.
-fn said(variant: &VariantView, lookback: &ResLookback) -> String {
-    let creator = lookback
-        .creator()
-        .then_some(variant.creator.as_str())
-        .filter(|creator| !creator.is_empty());
-    let message = lookback
-        .message()
-        .then(|| truncate(&variant.message, lookback.max_message_length()))
-        .filter(|message| !message.is_empty());
-
-    match (creator, message) {
-        (Some(creator), Some(message)) => format!("{creator}: {message}"),
-        (Some(creator), None) => creator.to_owned(),
-        (None, Some(message)) => message,
-        (None, None) => String::new(),
-    }
-}
-
-/// `text` cut to `longest` characters, ending in an ellipsis when it was cut.
-///
-/// The ellipsis is part of what is shown, so a message of `longest` characters exactly is shown
-/// whole and a longer one is cut to `longest - 3` and the three dots that say so. A `longest` too
-/// small to hold the ellipsis cuts the text alone: what a run asked for is a length, and an
-/// ellipsis that overran it would be saying something else.
-fn truncate(text: &str, longest: usize) -> String {
-    if text.chars().count() <= longest {
-        return text.to_owned();
-    }
-
-    if longest <= ELLIPSIS.len() {
-        return text.chars().take(longest).collect();
-    }
-
-    let kept: String = text.chars().take(longest - ELLIPSIS.len()).collect();
-
-    format!("{kept}{ELLIPSIS}")
-}
-
 #[cfg(test)]
 mod tests {
     use rust_i18n::t;
 
-    use super::{Standing, StandingRelation, holder_words, state_words, truncate};
+    use super::{Standing, StandingRelation, holder_words, state_words};
 
     /// A file this side holds, standing as told.
     fn ours(relation: StandingRelation, distance: Option<u64>) -> Standing {
@@ -806,13 +672,6 @@ mod tests {
             distance,
             merging: None,
         }
-    }
-
-    /// A message that fits is shown whole.
-    #[test]
-    fn a_message_that_fits_is_shown_whole() {
-        assert_eq!(truncate("abc", 3), "abc");
-        assert_eq!(truncate("abc", 64), "abc");
     }
 
     /// Being behind is said with the count the chain gave, and without a count when it did not give one.
@@ -843,25 +702,5 @@ mod tests {
             .trim()
         );
         assert_ne!(state_words(&counted), state_words(&untold));
-    }
-
-    /// What is cut ends in an ellipsis that fits the length.
-    #[test]
-    fn what_is_cut_ends_in_an_ellipsis_that_fits_the_length() {
-        assert_eq!(truncate("abcdefgh", 6), "abc...");
-        assert_eq!(truncate("abcdefgh", 4), "a...");
-    }
-
-    /// A length too small for an ellipsis cuts the text alone.
-    #[test]
-    fn a_length_too_small_for_an_ellipsis_cuts_the_text_alone() {
-        assert_eq!(truncate("abcdefgh", 3), "abc");
-        assert_eq!(truncate("abcdefgh", 0), "");
-    }
-
-    /// Characters are what is counted.
-    #[test]
-    fn characters_are_what_is_counted() {
-        assert_eq!(truncate("中文中文中文", 5), "中文...");
     }
 }
