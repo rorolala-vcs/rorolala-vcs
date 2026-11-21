@@ -1,5 +1,7 @@
+using System.Security.Cryptography;
 using Avalonia.Threading;
 using FileSystemPlugin;
+using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
 
@@ -199,8 +201,15 @@ internal sealed class VaultFetch
 
         _ = Task.Run(() =>
         {
+            // What the copy holds before the fetch, so that a run which brings the copy already here is
+            // told from one that changed it. The loop's fetch is the quiet one, and its no-change is what
+            // keeps a minute from redrawing the same rows.
+            var before = quiet ? Fingerprint(directory) : null;
+
             // The static runner is named in full: this class's own Fetch would be the one looked for.
             var (done_well, said) = global::RorolalaVCSPlugin.Fetch.Run(program, directory);
+            var changed =
+                !quiet || !string.Equals(before, Fingerprint(directory), StringComparison.Ordinal);
 
             Dispatcher.UIThread.Post(() =>
             {
@@ -216,8 +225,17 @@ internal sealed class VaultFetch
                 if (done_well)
                 {
                     // What was fetched is what every reading is made from, so what the columns answered about the
-                    // entries is let go of with the files, and the listing and the reading are read again.
-                    _host.Files.Touch();
+                    // entries is let go of with the files, and the listing and the reading are read again. A quiet
+                    // fetch that brought the copy already here has nothing a view would read, and a minute that
+                    // redrew the same rows would be the user's time spent on no change. What a foreground change
+                    // marked still reads, because the change is this side's.
+                    var dirty = _dirty;
+
+                    if (!quiet || changed || dirty)
+                    {
+                        _host.Files.Touch();
+                    }
+
                     _dirty = false;
                     SetState(FetchState.Ready);
                     done();
@@ -278,6 +296,72 @@ internal sealed class VaultFetch
         }
 
         Fetch(at, () => { }, silent: true, quiet: true);
+    }
+
+    /// <summary>
+    /// What a fetch would have to change to leave a view with something new to read.
+    /// </summary>
+    /// <remarks>
+    /// A Layout's copy is kept in generations and named by a pointer, and a fetch that finds the Vault's
+    /// Layout already here writes nothing at all: the pointer is the whole of what says the copy became
+    /// another one. The rules are swapped whole on every fetch even when they say the same, so their bytes
+    /// rather than their times are what says whether they changed. A fingerprint that cannot be read is
+    /// answered as nothing, which the caller treats as a change: a view read once more costs less than one
+    /// left stale.
+    /// </remarks>
+    /// <param name="directory">Where the work is rooted.</param>
+    /// <returns>One line per file, or nothing when they cannot be read.</returns>
+    internal static string? Fingerprint(string directory)
+    {
+        try
+        {
+            using var workspace = WorkspaceScope.Open(directory);
+            var root = workspace.Root.FullName;
+
+            return Fingerprint(
+                RolaPaths.WorkspaceReadonlyLayouts(root),
+                RolaPaths.WorkspaceIgnoreRules(root)
+            );
+        }
+        catch (Exception error)
+            when (error is RolaReadError or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The fingerprint of the copies a Workspace keeps and the rules it fetched.</summary>
+    /// <param name="layouts">Where the fetched Layout copies are kept.</param>
+    /// <param name="rules">Where the fetched ignore rules are kept.</param>
+    /// <returns>One line per file, in the order their paths sort.</returns>
+    internal static string Fingerprint(string layouts, string rules)
+    {
+        var lines = new List<string>();
+
+        Adding(lines, layouts, "CURRENT", hash: false);
+        Adding(lines, rules, "*", hash: true);
+
+        lines.Sort(StringComparer.Ordinal);
+
+        return string.Join('\n', lines);
+
+        static void Adding(List<string> lines, string folder, string pattern, bool hash)
+        {
+            if (!Directory.Exists(folder))
+            {
+                return;
+            }
+
+            foreach (var file in Directory.EnumerateFiles(folder, pattern, SearchOption.AllDirectories))
+            {
+                var path = Path.GetRelativePath(folder, file);
+                var value = hash
+                    ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file)))
+                    : File.ReadAllText(file).Trim();
+
+                lines.Add($"{path}={value}");
+            }
+        }
     }
 
     /// <summary>Says what the last fetch came to, when that is something else than it was.</summary>

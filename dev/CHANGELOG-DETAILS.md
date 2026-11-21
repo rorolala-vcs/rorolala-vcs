@@ -49,6 +49,10 @@ to. What an eye, a hide rule or a badge strip says is redrawn only when the answ
 
 The navigation bar asks for one toolbar update per turn as well.
 
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing
+
+A background fetch that brings the Vault's Layout already here no longer tells the listing and the readings that the files changed. The run fingerprints the copy's generation pointer and the fetched ignore rules before and after the exchange; when both are the same, the view is left as it is. A foreground change still reads once its next fetch ends, and a refresh the user asked for still reads when it finishes.
+
 ## Feature
 
 ### 1. [`app`] [`rola`] Draw the unjoined variants in the chain behind --show-unjoined-variants

@@ -15,6 +15,7 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 ## Optimized
 
 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event. [See details](dev/CHANGELOG-DETAILS.md#1-app-rorolaladesktop-plugins-file-system-redraw-a-dock-once-for-a-change-instead-of-once-per-event)
+2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-rorolala-vcs-leave-the-views-alone-when-a-background-fetch-changes-nothing)
 
 ## Feature
 

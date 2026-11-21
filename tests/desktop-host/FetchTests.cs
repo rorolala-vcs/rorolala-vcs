@@ -57,6 +57,38 @@ public sealed class FetchTests
         Assert.False(read);
     }
 
+    /// <summary>An unchanged copy fingerprints the same, and a changed rule or pointer does not.</summary>
+    /// <remarks>
+    /// The rules are written whole on every fetch, so their bytes are what says whether they changed; the
+    /// Layout's copy moves by moving its pointer, so the pointer's own line is what says the copy became
+    /// another one.
+    /// </remarks>
+    [Fact]
+    public void AnUnchangedCopyFingerprintsTheSame()
+    {
+        var layouts = Scratch.New("fetch-layouts");
+        var rules = Scratch.New("fetch-rules");
+        var pointer = Path.Combine(layouts, "origin", "truth", "CURRENT");
+        var rule = Path.Combine(rules, "vaults", "origin", "maya");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(pointer)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(rule)!);
+        File.WriteAllText(pointer, "g-1\n");
+        File.WriteAllText(rule, "*.mb\n");
+
+        var before = VaultFetch.Fingerprint(layouts, rules);
+
+        Assert.Equal(before, VaultFetch.Fingerprint(layouts, rules));
+
+        File.WriteAllText(rule, "*.ma\n");
+        Assert.NotEqual(before, VaultFetch.Fingerprint(layouts, rules));
+
+        var afterRules = VaultFetch.Fingerprint(layouts, rules);
+
+        File.WriteAllText(pointer, "g-2\n");
+        Assert.NotEqual(afterRules, VaultFetch.Fingerprint(layouts, rules));
+    }
+
     /// <summary>The status bar names the Vault in capitals, in bold, and shows the address beside it.</summary>
     [Fact]
     public void TheStatusBarNamesTheVaultAndItsAddress()
