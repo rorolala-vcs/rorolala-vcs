@@ -1,87 +1,98 @@
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// Bringing the content a version is made of here, through the store's own command.
+/// Bringing a version's content here through the command line's fetch.
 /// </summary>
 /// <remarks>
-/// A node of the graph is a variant, and a variant names its content by one store key. What a reader
-/// who asks for a version's blobs wants is that key on both ends, and nothing written into the work:
-/// the store's sync is the command that does exactly that, and it expands a content kept as chunks
-/// from the side holding it, so one key carries the manifest and every chunk behind it.
+/// A node of the graph is a variant, and a variant is a name the command line's fetch reads: the
+/// content it points at is brought for the variant as it stands, rather than for the version an
+/// entry happens to record now. A recursive run follows the version the variant is based on back to
+/// its root, which is every version the node stands on. The command also expands a tree's structure
+/// into the files it names, which is what the node's own mark requires before it can say the content
+/// is all here.
 /// </remarks>
 internal static class BlobFetch
 {
     /// <summary>The arguments a content fetch is run with, after the program's name.</summary>
-    /// <param name="keys">The store keys to make the two ends hold.</param>
+    /// <param name="variant">The variant whose content is to come, as its whole hash.</param>
+    /// <param name="recursive">Whether the versions the variant stands on come with it.</param>
     /// <returns>The arguments.</returns>
-    public static IReadOnlyList<string> Arguments(IReadOnlyList<string> keys)
+    public static IReadOnlyList<string> Arguments(string variant, bool recursive)
     {
-        ArgumentNullException.ThrowIfNull(keys);
+        ArgumentNullException.ThrowIfNull(variant);
 
-        var arguments = new List<string>
+        var arguments = new List<string> { "--theme-choice=" + Sync.Theme, "fetch" };
+
+        if (recursive)
         {
-            "--theme-choice=" + Sync.Theme,
-            "storage",
-            "sync-hashes",
-        };
-        arguments.AddRange(keys);
+            arguments.Add("--recursive");
+        }
+
+        arguments.Add("--with");
+        arguments.Add(variant);
 
         return arguments;
     }
 
     /// <summary>
-    /// The keys of the versions of one lane whose content is not all here, each key once.
+    /// Whether any version from `hash` back along its chain is not all here.
     /// </summary>
     /// <remarks>
-    /// A lane is one file's chain, so what the item offers is that file's history rather than every
-    /// version on screen. A version whose objects are all here is left out: the fetch would carry
-    /// nothing, and the run that follows a press is worth a round trip only for what is missing.
+    /// A recursive fetch follows the base version the variant points at, so the item that offers it
+    /// is worth pressing when the node or any version below it is missing content. A chain that
+    /// reaches a base the drawing does not hold stops there: nothing below it can be named.
     /// </remarks>
-    /// <param name="versions">The versions the drawing holds, with the lane and the state of each.</param>
-    /// <param name="lane">The lane the menu was opened in.</param>
-    /// <returns>The keys, in the order the drawing holds them.</returns>
-    internal static IReadOnlyList<string> MissingInLane(
-        IEnumerable<(int Lane, string Storage, bool Offline)> versions,
-        int lane
+    /// <param name="chain">Each variant the drawing holds, with its base and whether it is all here.</param>
+    /// <param name="hash">The variant the menu was opened on.</param>
+    /// <returns>Whether the fetch would carry anything.</returns>
+    internal static bool AnyMissing(
+        IReadOnlyDictionary<string, (string? Base, bool Offline)> chain,
+        string hash
     )
     {
-        ArgumentNullException.ThrowIfNull(versions);
+        ArgumentNullException.ThrowIfNull(chain);
+        ArgumentNullException.ThrowIfNull(hash);
 
-        var keys = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var at = hash;
 
-        foreach (var (at, storage, offline) in versions)
+        while (seen.Add(at) && chain.TryGetValue(at, out var version))
         {
-            if (
-                at == lane
-                && !offline
-                && storage.Length > 0
-                && !keys.Contains(storage, StringComparer.Ordinal)
-            )
+            if (!version.Offline)
             {
-                keys.Add(storage);
+                return true;
             }
+
+            if (version.Base is not { Length: > 0 } below)
+            {
+                return false;
+            }
+
+            at = below;
         }
 
-        return keys;
+        return false;
     }
 
     /// <summary>Runs a content fetch, answering whether it ended well and what it said.</summary>
     /// <remarks>Run off the window's thread: the exchange takes as long as the network takes.</remarks>
     /// <param name="program">The program the window was opened by.</param>
     /// <param name="directory">Where the work is rooted, and where the run is made.</param>
-    /// <param name="keys">The store keys to make the two ends hold.</param>
+    /// <param name="variant">The variant whose content is to come, as its whole hash.</param>
+    /// <param name="recursive">Whether the versions the variant stands on come with it.</param>
     /// <returns>Whether it ended well, and what to say when it did not.</returns>
     public static (bool Done, string Said) Run(
         string program,
         string directory,
-        IReadOnlyList<string> keys
+        string variant,
+        bool recursive
     )
     {
         ArgumentNullException.ThrowIfNull(program);
         ArgumentNullException.ThrowIfNull(directory);
-        ArgumentNullException.ThrowIfNull(keys);
+        ArgumentNullException.ThrowIfNull(variant);
 
-        var (done, said, _) = Sync.Asked(program, Arguments(keys), directory);
+        var (done, said, _) = Sync.Asked(program, Arguments(variant, recursive), directory);
 
         return (done, said);
     }

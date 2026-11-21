@@ -19,6 +19,7 @@
 use librorolala::daemon::{action_fetch_ignore_rules, action_fetch_layout};
 use librorolala::write::fetch_with::{
     FetchWithMissing, FetchWithRefusal, FetchWithRequest, FetchWithSource,
+    HashMiss as FetchHashMiss,
 };
 use librorolala::write::request::{Common, Target};
 use librorolala::write::{Labels, WriteError};
@@ -48,10 +49,11 @@ use crate::account::{ErrorNoAccount, ResCurrentAccount};
 use crate::complete::{filling_flag, layout_names, offer, positional, typing_flag, vault_names};
 use crate::error::ErrorOffline;
 use crate::exit_codes::{
-    EC_CANCELLED, EC_ERR_FETCH_WITH_CHAIN, EC_ERR_FETCH_WITH_FAILED, EC_ERR_FETCH_WITH_INCOMPLETE,
-    EC_ERR_LAYOUT_ARGUMENT, EC_HELP,
+    EC_CANCELLED, EC_ERR_FETCH_WITH_CHAIN, EC_ERR_FETCH_WITH_FAILED, EC_ERR_FETCH_WITH_HASH,
+    EC_ERR_FETCH_WITH_INCOMPLETE, EC_ERR_LAYOUT_ARGUMENT, EC_HELP,
 };
 use crate::failure::failure;
+use crate::hash::HashMiss;
 use crate::keys::account_named;
 use crate::layout::{
     ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutNoCurrent, ErrorLayoutNotCached, remote_spec,
@@ -132,10 +134,12 @@ pub const ARG_SHALLOW: PickerArg<'static, Flag> = arg![shallow: Flag];
 /// The copy is written under `.rola/cache/readonly-layouts/<VAULT>/` and replaces whatever was
 /// there. Nothing of the Workspace's own Layouts is touched, and nothing moves the other way.
 ///
-/// `--with` brings the content of the entries its words name, `--shallow` (the default) taking the
-/// version each entry is at and `--recursive` the whole chain behind it. A word that names no entry
-/// and no directory holding one is passed over. `--layout` names the Layout the words are read in,
-/// and a run that names `truth@VAULT` there need not name the Vault again.
+/// `--with` brings the content of the entries, variants and versions its words name, `--shallow`
+/// (the default) taking the version each entry is at or the content each variant points at, and
+/// `--recursive` the whole chain behind either. A word that names no entry and no directory holding
+/// one is passed over, and a word written as a hash is refused when it names no variant or version.
+/// `--layout` names the Layout the path words are read in, and a run that names `truth@VAULT` there
+/// need not name the Vault again.
 ///
 /// # Errors
 ///
@@ -145,7 +149,8 @@ pub const ARG_SHALLOW: PickerArg<'static, Flag> = arg![shallow: Flag];
 /// no scope holds ([`ErrorNoAccount`], [`ErrorAccountUnknown`]), or the exchange itself failed
 /// ([`ActionError`]). A fetch of content adds [`ErrorFetchWithMode`] when `--recursive` and
 /// `--shallow` are both given, [`ErrorFetchWithVault`] when the Layout's Vault and the one named are
-/// two answers, [`ErrorFetchWithChain`] when the index holds no chain for an entry,
+/// two answers, [`ErrorFetchWithHash`] when a hash names no variant or version,
+/// [`ErrorFetchWithChain`] when the index holds no chain for a target,
 /// [`ErrorFetchWithIncomplete`] when the content did not all arrive, and [`ErrorFetchWithFailed`]
 /// for the rest.
 ///
@@ -391,7 +396,15 @@ fn refused(refusal: FetchWithRefusal) -> Next {
         }
         FetchWithRefusal::LayoutName => ErrorLayoutMissing.into(),
         FetchWithRefusal::LayoutFailed { reason } => ErrorLayoutFailed::new(reason).into(),
-        FetchWithRefusal::Chain { uuid, reason } => ErrorFetchWithChain { uuid, reason }.into(),
+        FetchWithRefusal::Hash { hash, miss } => ErrorFetchWithHash {
+            hash,
+            miss: match miss {
+                FetchHashMiss::Unknown => HashMiss::Unknown,
+                FetchHashMiss::Ambiguous(candidates) => HashMiss::Ambiguous(candidates),
+            },
+        }
+        .into(),
+        FetchWithRefusal::Chain { target, reason } => ErrorFetchWithChain { target, reason }.into(),
         FetchWithRefusal::Incomplete { entries } => ErrorFetchWithIncomplete { entries }.into(),
         FetchWithRefusal::Action(error) => error.to_chain(),
         FetchWithRefusal::Failed(WriteError::NoIndex) => ErrorVcsIndexNoIndex.into(),
@@ -518,11 +531,42 @@ pub fn render_error_fetch_with_vault(error: ErrorFetchWithVault, ec: &mut ResExi
     ec.exit_code = EC_ERR_LAYOUT_ARGUMENT;
 }
 
-/// Error: the index holds no chain for an entry the words name.
+/// Error: a word written as a hash names no one variant or version.
+#[derive(Grouped)]
+pub struct ErrorFetchWithHash {
+    /// The word, as it was written.
+    hash: String,
+    /// Why it named no one object.
+    miss: HashMiss,
+}
+
+impl Failure for ErrorFetchWithHash {
+    fn name(&self) -> &'static str {
+        "error_fetch_with_hash"
+    }
+
+    fn reason(&self) -> String {
+        self.miss.reason(&self.hash, || {
+            t!("fetch.with_hash", hash = self.hash).trim().to_owned()
+        })
+    }
+}
+
+failure!(ErrorFetchWithHash);
+
+#[renderer(buffer)]
+pub fn render_error_fetch_with_hash(error: ErrorFetchWithHash, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    let malformed = t!("fetch.with_hash_help").trim().to_owned();
+    r_eprintln!("{}", help_line!(error.miss.help(&malformed)));
+    ec.exit_code = EC_ERR_FETCH_WITH_HASH;
+}
+
+/// Error: the index holds no chain for a target the words name.
 #[derive(Grouped)]
 pub struct ErrorFetchWithChain {
-    /// The entry the chain was wanted for.
-    uuid: String,
+    /// The target the chain was wanted for.
+    target: String,
     /// Why no chain could be read.
     reason: String,
 }
@@ -533,9 +577,13 @@ impl Failure for ErrorFetchWithChain {
     }
 
     fn reason(&self) -> String {
-        t!("fetch.with_chain", uuid = self.uuid, reason = self.reason)
-            .trim()
-            .to_owned()
+        t!(
+            "fetch.with_chain",
+            target = self.target,
+            reason = self.reason
+        )
+        .trim()
+        .to_owned()
     }
 }
 
@@ -547,10 +595,10 @@ pub fn render_error_fetch_with_chain(error: ErrorFetchWithChain, ec: &mut ResExi
     ec.exit_code = EC_ERR_FETCH_WITH_CHAIN;
 }
 
-/// Error: the content of some entries did not arrive.
+/// Error: the content of some targets did not arrive.
 #[derive(Grouped)]
 pub struct ErrorFetchWithIncomplete {
-    /// The entries still missing content.
+    /// The targets still missing content.
     entries: Vec<FetchWithMissing>,
 }
 
@@ -563,7 +611,7 @@ impl Failure for ErrorFetchWithIncomplete {
         let entries: Vec<String> = self
             .entries
             .iter()
-            .map(|entry| format!("{} ({})", entry.uuid, entry.path))
+            .map(|entry| format!("{} ({})", entry.target, entry.path))
             .collect();
 
         t!("fetch.with_incomplete", entries = entries.join(", "))

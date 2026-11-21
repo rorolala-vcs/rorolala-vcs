@@ -6,7 +6,7 @@ cmd_fetch:
       # Bring back a read-only copy of the Vault's Layout
       **Usage**: rola [[GREEN]]__fetch__[[/]] [VAULT] [--with <ANY>...] [--layout <LAYOUT>] [--recursive | --shallow] [--no-ignore-rules] [--offline] [--concurrency <N>]
       **Flags**:
-           __--with__ <ANY>...      Bring the content of the entries these paths, directories or UUIDs name
+           __--with__ <ANY>...      Bring the content of the entries, variants or versions these paths, UUIDs or hashes name
            __--layout__ <LAYOUT>    Read the words in this Layout, `truth@VAULT` being the copy a fetch left
            __--recursive__          Follow each version back to its root and bring the whole chain
            __--shallow__            Bring only the version each entry names, which is the default
@@ -18,7 +18,7 @@ cmd_fetch:
       # 取回保险库的布局只读副本
       **用法**：rola [[GREEN]]__fetch__[[/]] [保险库] [--with <ANY>...] [--layout <LAYOUT>] [--recursive | --shallow] [--no-ignore-rules] [--offline] [--concurrency <N>]
       **标识**：
-           __--with__ <ANY>...      取回这些路径、目录或 UUID 所命中的条目的内容
+           __--with__ <ANY>...      取回这些路径、UUID 或哈希所命名的条目、变体或版本的内容
            __--layout__ <LAYOUT>    在这些布局中读取上面的词，`truth@保险库` 是取回的副本
            __--recursive__          把每个版本回溯到根，连同整条链一起取回
            __--shallow__            只取回每个条目命中的版本，默认如此

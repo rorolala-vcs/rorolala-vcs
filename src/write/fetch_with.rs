@@ -1,37 +1,48 @@
-//! `fetch --with`: bringing the content of the entries a Layout names.
+//! `fetch --with`: bringing the content of the entries, variants and versions a Layout names.
 //!
 //! A fetch brings a Vault's Layout here, and that copy names versions: which path names which
-//! `Uuid`, and what version each entry is at. What a version means is content, and the content is
-//! in a store, which may be elsewhere. This is the fetch that closes that gap: it takes the words a
-//! run names, reads them as entries of a Layout, and brings the content of the versions those
-//! entries are at, so each one can be produced here.
+//! `Uuid`, and what version each entry is at. What a version means is content, and the content is in
+//! a store, which may be elsewhere. This is the fetch that closes that gap: it takes the words a run
+//! names, reads them as entries of a Layout or as objects of the index, and brings the content they
+//! are made of, so each one can be produced here.
 //!
-//! What it does not do is fetch the Layout. A copy is what a run reads words from, and it is the one
-//! `rola fetch` or `rola layout fetch` has just written: a caller outside the command line, the C
-//! ABI among them, fetches the copy first and calls this after it.
+//! A word comes in four shapes:
 //!
-//! The index is what turns a version into content, so it is what is read before anything is asked
-//! for. It is light, and it is moved whole only when a version the words name is not in the local
-//! one, which is the usual state right after a fetch of a Layout whose versions this side never had.
+//! 1. a path or a directory of the Layout, which names the entries there;
+//! 2. a `Uuid`, which names the entry it is at;
+//! 3. a variant's hash, whole or the head of one, which names the content its `storage` field
+//!    points at;
+//! 4. a version's hash, whole or the head of one, which names the content of the variant it fixes.
 //!
-//! How far a version goes is the run's choice. A shallow fetch brings the version each entry is at,
-//! which is what producing it needs. A recursive fetch follows each version back to its root and
-//! brings the whole chain, which is what a run that may move a pointer back needs. The line walked
-//! is the one `base_version` draws, the same one an upload walks, and a merge's joined side is not
-//! part of it.
+//! A hash is resolved among the objects the index holds, and the index is moved whole when one is
+//! not here, which is the same exchange the versions of a path need. A word that reads as a hash and
+//! names no variant or version is a refusal rather than a word passed over: a path may name nothing
+//! yet, since a directory holds files that were never recorded, but a hash was meant for an object.
+//!
+//! How far a target goes is the run's choice. On an entry or a version, a shallow fetch brings the
+//! content of the version named, and a recursive one the whole chain that version stands on. On a
+//! variant, a shallow fetch brings the content the variant points at, and a recursive one also the
+//! chain of the version it is based on: the variant itself is the top of what it stands on, so
+//! nothing above it comes. The line walked is the one `base_version` draws, the same one an upload
+//! walks, and a merge's joined side is not part of it.
 //!
 //! A tree's version names a structure rather than bytes, and the structure is what says what the
-//! inside is made of. So a shallow fetch of a tree is two exchanges: the structure, and then what
-//! its entries hold. That is the same order `bring` reads one in, and for the same reason.
+//! inside is made of. So a fetch of a tree is two exchanges: the structure, and then what its
+//! entries hold. An entry says which kind it is, so a file's bytes are never read as a structure;
+//! a version or a variant says nothing of the kind, and what it names is tried instead, which is
+//! what the status reading does for the same targets.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::str::FromStr as _;
 
-use rorolala_layout::{Layout, LayoutPath};
-use rorolala_storage::StorageBackend as _;
+use rorolala_errors::Failure as _;
+use rorolala_layout::{EntryKind, Layout, LayoutPath};
+use rorolala_storage::{Resolved, ShortHash, StorageBackend as _};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_utils_progress::Progress;
+use rorolala_vcs::{ComputeBlake3 as _, VCSIndex, VCSIndexKind, VCSIndexObject};
 use rorolala_workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -40,19 +51,18 @@ use crate::daemon::action_sync_index_all_async;
 use crate::fetch::Sources;
 use crate::layout_read::{self, LayoutReadError};
 use crate::protocol::ActionError;
-use crate::storage::Key;
+use crate::storage::{Key, StorageSet};
 use crate::tree::TreeStructure;
 use crate::write::progress::{WriteProgress, watching};
 use crate::write::request::Common;
 use crate::write::sync::{chain_store_keys, store_of};
 use crate::write::{Cancellation, WriteError};
 
-/// What a fetch of named entries' content is asked for.
+/// What a fetch of named content is asked for.
 ///
-/// The words are read in the Layout `layout` names: empty or `main` is the one the Workspace works
-/// in, `truth` a Vault's own, and `NAME@VAULT` the copy a fetch left. A name with an `@` in it is
-/// read as paths of that Layout and never as paths on disk, since what it names is elsewhere and may
-/// be nowhere in this tree.
+/// The words are read in the Layout `layout` names when they are paths: empty or `main` is the one
+/// the Workspace works in, `truth` a Vault's own, and `NAME@VAULT` the copy a fetch left. A hashed
+/// word needs no Layout, so a run that names only hashes reads none.
 #[derive(Debug, Deserialize)]
 pub struct FetchWithRequest {
     /// The fields every write request carries.
@@ -61,31 +71,31 @@ pub struct FetchWithRequest {
     /// The Layout the words are read in, empty for the one being worked in.
     #[serde(default)]
     pub layout: String,
-    /// The paths, directories or `Uuid`s whose entries come.
+    /// The paths, directories, `Uuid`s and hashes whose content comes.
     #[serde(default)]
     pub words: Vec<String>,
-    /// Whether each version comes with its whole chain or alone.
+    /// Whether each target comes with the chain behind it or alone.
     #[serde(default)]
     pub recursive: bool,
 }
 
-/// One entry whose content was fetched.
+/// One target whose content was fetched.
 #[derive(Debug, Serialize)]
 pub struct FetchWithEntry {
-    /// The `Uuid` it is known by.
-    pub uuid: String,
-    /// The path it is at, `.` when it is at none.
+    /// What it was fetched by: a `Uuid`, a variant's hash, or a version's hash.
+    pub target: String,
+    /// The path it is at, `.` when it is at none or is not an entry.
     pub path: String,
-    /// The version it is at, as hex.
+    /// The version the content is of, as hex.
     pub version: String,
 }
 
-/// One entry whose content is still not here.
+/// One target whose content is still not here.
 #[derive(Debug, Clone, Serialize)]
 pub struct FetchWithMissing {
-    /// The `Uuid` it is known by.
-    pub uuid: String,
-    /// The path it is at, `.` when it is at none.
+    /// What it was fetched by.
+    pub target: String,
+    /// The path it is at, `.` when it is at none or is not an entry.
     pub path: String,
 }
 
@@ -101,10 +111,19 @@ pub struct FetchWithSource {
 /// What a fetch of content came to.
 #[derive(Debug, Serialize)]
 pub struct FetchWithReport {
-    /// The entries whose content was fetched, in path order.
+    /// The targets whose content was fetched, in the order they were named.
     pub entries: Vec<FetchWithEntry>,
     /// Each Vault that handed something over.
     pub brought: Vec<FetchWithSource>,
+}
+
+/// Why a word written as a hash named no one object.
+#[derive(Debug)]
+pub enum HashMiss {
+    /// Nothing the index holds starts with the digits, or the key is no object it holds.
+    Unknown,
+    /// More than one object does.
+    Ambiguous(Vec<String>),
 }
 
 /// Why a fetch of content could not be made.
@@ -128,16 +147,23 @@ pub enum FetchWithRefusal {
         /// Why it could not be read.
         reason: String,
     },
-    /// The index holds no chain for an entry the words name.
+    /// A word written as a hash names no one variant or version the index holds.
+    Hash {
+        /// The word, as it was written.
+        hash: String,
+        /// Why it named no one object.
+        miss: HashMiss,
+    },
+    /// The index holds no chain for a target the words name.
     Chain {
-        /// The entry the chain was wanted for.
-        uuid: String,
+        /// The target the chain was wanted for.
+        target: String,
         /// Why no chain could be read.
         reason: String,
     },
-    /// The content of these entries is still not here.
+    /// The content of these targets is still not here.
     Incomplete {
-        /// The entries still missing content.
+        /// The targets still missing content.
         entries: Vec<FetchWithMissing>,
     },
     /// The exchange with the Vault failed.
@@ -147,13 +173,13 @@ pub enum FetchWithRefusal {
 }
 
 impl FetchWithRequest {
-    /// Brings the content of the entries `words` name out of the Vaults, so each version can be
-    /// produced here.
+    /// Brings the content the words name out of the Vaults, so each target can be produced here.
     ///
-    /// The Layout named is read where it is, the index is moved whole when a version it must name is
-    /// not here, and the content is asked of whichever Vaults hold it. A word that names no entry
-    /// and no directory holding one is passed over: a directory may hold files that were never
-    /// recorded, and those are exactly the words that name nothing yet.
+    /// The Layout named is read where it is when a word is a path, the index is moved whole when a
+    /// version or a hash it must name is not here, and the content is asked of whichever Vaults hold
+    /// it. A path word that names no entry and no directory holding one is passed over: a directory
+    /// may hold files that were never recorded, and those are exactly the words that name nothing
+    /// yet. A hashed word that names no object is refused, since a hash is meant for one.
     ///
     /// `progress` is what the exchanges say themselves to, and `cancellation` is checked before the
     /// run begins, after the index is asked for, and after the content is.
@@ -164,14 +190,15 @@ impl FetchWithRequest {
     /// [`FetchWithRefusal::Failed`] around [`WriteError::Offline`] when the run may reach no Vault,
     /// [`FetchWithRefusal::NoLayout`], [`FetchWithRefusal::NotCached`],
     /// [`FetchWithRefusal::LayoutName`] or [`FetchWithRefusal::LayoutFailed`] when the Layout named
-    /// cannot be read, [`FetchWithRefusal::Chain`] when the index holds no chain for an entry,
+    /// cannot be read, [`FetchWithRefusal::Hash`] when a hashed word names no one object,
+    /// [`FetchWithRefusal::Chain`] when the index holds no chain for a target,
     /// [`FetchWithRefusal::Action`] when moving the index failed,
-    /// [`FetchWithRefusal::Incomplete`] when the content of an entry did not arrive, and
+    /// [`FetchWithRefusal::Incomplete`] when the content of a target did not arrive, and
     /// [`FetchWithRefusal::Failed`] for a Workspace, a store, an index or a configuration that
     /// failed otherwise.
     #[allow(
         clippy::too_many_lines,
-        reason = "the run reads a Layout, moves an index, gathers keys, fetches them in two exchanges and checks every entry, in one order a caller has to be able to follow"
+        reason = "the run reads a Layout, resolves hashes, moves an index, gathers keys, fetches them in two exchanges and checks every target, in one order a caller has to be able to follow"
     )]
     pub fn fetch_with(
         &self,
@@ -188,7 +215,6 @@ impl FetchWithRequest {
         }
 
         let workspace = self.common.workspace().map_err(FetchWithRefusal::Failed)?;
-        let layout = self.layout_of(&workspace)?;
         let store = self
             .common
             .store(&workspace)
@@ -211,34 +237,60 @@ impl FetchWithRequest {
             })
         })?;
 
-        // A name that reads against where the run was made is the reading a person wrote it for; a
-        // process with no directory of its own reads the words as paths of the Layout instead.
+        // A hash is an object of the index, and every other word is a path of a Layout. The split is
+        // what lets a run of hashes read no Layout at all.
+        let mut named_words: Vec<String> = Vec::new();
+        let mut hashed_words: Vec<String> = Vec::new();
+        for word in &self.words {
+            if reads_as_hash(word) {
+                hashed_words.push(word.clone());
+            } else {
+                named_words.push(word.clone());
+            }
+        }
+
         let root = workspace.get_root();
         let cwd = std::env::current_dir().unwrap_or_else(|_| root.to_path_buf());
-        let resolved = resolve_words(&layout, root, &cwd, is_remote(&self.layout), &self.words);
+        let layout = if named_words.is_empty() {
+            None
+        } else {
+            Some(self.layout_of(&workspace)?)
+        };
+
+        let mut named = layout.as_ref().map_or_else(Vec::new, |layout| {
+            resolve_words(layout, root, &cwd, is_remote(&self.layout), &named_words)
+        });
 
         // Nothing named is nothing to fetch: a run that named only files never recorded is the same
         // as a run that named none at all.
-        if resolved.is_empty() {
+        if named.is_empty() && hashed_words.is_empty() {
             return Ok(FetchWithReport {
                 entries: Vec::new(),
                 brought: Vec::new(),
             });
         }
 
-        // A version is a name until the index says what it stored, so the versions the words name
-        // have to be here before anything is asked for. The index is light, so moving it whole is
-        // cheaper than the round of questions asking for one object at a time would cost.
-        let versions: Vec<Key> = resolved
-            .iter()
-            .map(|(_, _, version)| Key::new(*version))
-            .collect();
+        // What the index must say before a target can be turned into content: the versions the path
+        // words name, and the objects the hashed words name. One exchange covers both, and it is
+        // made only when something is not here.
+        let mut absent = absent_versions(&index, &runtime, &named)?;
+        let mut resolved = Vec::with_capacity(hashed_words.len());
+        let mut first_miss: Option<(String, HashMiss)> = None;
+        for word in &hashed_words {
+            match resolve_hash(&index, &runtime, word) {
+                Ok(target) => resolved.push(target),
+                Err(FetchWithRefusal::Hash { hash, miss }) => {
+                    absent = true;
 
-        let presence = runtime
-            .block_on(index.contains_keys(&versions))
-            .map_err(|error| index_unread(&error))?;
+                    if first_miss.is_none() {
+                        first_miss = Some((hash, miss));
+                    }
+                }
+                Err(other) => return Err(other),
+            }
+        }
 
-        if !(0..versions.len()).all(|at| presence.held(at)) {
+        if absent {
             runtime
                 .block_on(action_sync_index_all_async(
                     &workspace,
@@ -249,53 +301,97 @@ impl FetchWithRequest {
                 ))
                 .map_err(FetchWithRefusal::Action)?;
 
-            let after = runtime
-                .block_on(index.contains_keys(&versions))
-                .map_err(|error| index_unread(&error))?;
+            if cancellation.is_cancelled() {
+                return Err(FetchWithRefusal::Cancelled);
+            }
 
-            for (at, (id, _, _)) in resolved.iter().enumerate() {
-                if !after.held(at) {
+            // The versions are asked about again, and so is every hashed word: a short head that
+            // named nothing here may name one object once the Vault's index has arrived.
+            for target in &named {
+                if !version_held(&index, &runtime, target)? {
                     return Err(FetchWithRefusal::Chain {
-                        uuid: id.to_string(),
-                        reason: "the index holds no version for this entry".to_owned(),
+                        target: target_name(target),
+                        reason: "the index holds no version for it".to_owned(),
                     });
                 }
             }
+
+            resolved.clear();
+            first_miss = None;
+            for word in &hashed_words {
+                match resolve_hash(&index, &runtime, word) {
+                    Ok(target) => resolved.push(target),
+                    Err(FetchWithRefusal::Hash { hash, miss }) => {
+                        if first_miss.is_none() {
+                            first_miss = Some((hash, miss));
+                        }
+                    }
+                    Err(other) => return Err(other),
+                }
+            }
         }
+
+        if let Some((hash, miss)) = first_miss {
+            return Err(FetchWithRefusal::Hash { hash, miss });
+        }
+
+        named.extend(resolved);
 
         if cancellation.is_cancelled() {
             return Err(FetchWithRefusal::Cancelled);
         }
 
-        // What each entry's version names, and for a recursive run the whole line it stands on.
-        let mut per_entry: Vec<Vec<Key>> = Vec::with_capacity(resolved.len());
-        for (id, _, version) in &resolved {
-            let keys = if self.recursive {
-                runtime
-                    .block_on(chain_store_keys(&index, version, None, false))
-                    .map_err(|reason| FetchWithRefusal::Chain {
-                        uuid: id.to_string(),
-                        reason,
+        // What each target is made of, and for a recursive run the whole line it stands on.
+        let mut wanted: Vec<Wanted> = Vec::with_capacity(named.len());
+        for target in named {
+            let name = target_name(&target);
+            let keys = match &target {
+                Named::Entry { version, .. } => {
+                    version_keys(&index, &runtime, version, self.recursive).map_err(|reason| {
+                        FetchWithRefusal::Chain {
+                            target: name.clone(),
+                            reason,
+                        }
                     })?
-            } else {
-                runtime
-                    .block_on(store_of(&index, version))
-                    .map_err(|reason| FetchWithRefusal::Chain {
-                        uuid: id.to_string(),
-                        reason,
-                    })?
-                    .into_iter()
-                    .collect()
+                }
+                Named::Version { key } => {
+                    version_keys(&index, &runtime, key.digest(), self.recursive).map_err(
+                        |reason| FetchWithRefusal::Chain {
+                            target: name.clone(),
+                            reason,
+                        },
+                    )?
+                }
+                Named::Variant { storage, base, .. } => {
+                    let mut keys = vec![*storage];
+
+                    if self.recursive {
+                        keys.extend(
+                            runtime
+                                .block_on(chain_store_keys(&index, base, None, false))
+                                .map_err(|reason| FetchWithRefusal::Chain {
+                                    target: name.clone(),
+                                    reason,
+                                })?,
+                        );
+                    }
+
+                    keys
+                }
             };
 
             if keys.is_empty() {
                 return Err(FetchWithRefusal::Chain {
-                    uuid: id.to_string(),
-                    reason: "the index holds no content for this entry".to_owned(),
+                    target: name,
+                    reason: "the index holds no content for it".to_owned(),
                 });
             }
 
-            per_entry.push(keys);
+            wanted.push(Wanted {
+                expand: expands(&target),
+                target,
+                keys,
+            });
         }
 
         let candidates = self
@@ -314,48 +410,35 @@ impl FetchWithRequest {
             .with_concurrency(self.common.concurrency)
             .reporting(progress.clone());
 
-        // The first exchange brings every version's own content. What a key names is expanded by the
+        // The first exchange brings every target's own content. What a key names is expanded by the
         // side holding it, so a content kept as chunks crosses with its manifest in one pass.
-        let mut wanted: Vec<Key> = per_entry.iter().flatten().copied().collect();
-        sort_dedup(&mut wanted);
-        let _ = sources.bring(&store, &wanted);
+        let mut wanted_keys: Vec<Key> = wanted
+            .iter()
+            .flat_map(|wanted| wanted.keys.iter().copied())
+            .collect();
+        sort_dedup(&mut wanted_keys);
+        let _ = sources.bring(&store, &wanted_keys);
 
         if cancellation.is_cancelled() {
             return Err(FetchWithRefusal::Cancelled);
         }
 
         // A structure is one version's inside, and what its entries hold is a second ask because
-        // the structure is what names them. A key that is not a structure is a file's bytes, and
-        // decode refuses it, so the walk leaves it alone.
+        // the structure is what names them. Only a target whose content may be a structure is read
+        // as one: a file entry's kind is written down, so its bytes are never mistaken for one.
         let mut contents: Vec<Key> = Vec::new();
-        for key in &wanted {
-            let Ok(bytes) = runtime.block_on(store.read_object(key)) else {
-                continue;
-            };
-            let Ok(structure) = TreeStructure::decode(&bytes) else {
-                continue;
-            };
-
-            contents.extend(structure.content_keys());
+        for target in &wanted {
+            contents.extend(structure_keys(&store, &runtime, target));
         }
         sort_dedup(&mut contents);
         let _ = sources.bring(&store, &contents);
 
-        // What did not arrive is said per entry rather than per key: a caller branches on the entry
+        // What did not arrive is said per target rather than per key: a caller branches on the thing
         // it asked for, and the keys behind it are this side's business.
         let mut missing: Vec<FetchWithMissing> = Vec::new();
-        for (at, (id, path, _)) in resolved.iter().enumerate() {
-            let mut keys = per_entry[at].clone();
-            for key in &per_entry[at] {
-                let Ok(bytes) = runtime.block_on(store.read_object(key)) else {
-                    continue;
-                };
-                let Ok(structure) = TreeStructure::decode(&bytes) else {
-                    continue;
-                };
-
-                keys.extend(structure.content_keys());
-            }
+        for target in &wanted {
+            let mut keys = target.keys.clone();
+            keys.extend(structure_keys(&store, &runtime, target));
             sort_dedup(&mut keys);
 
             // A store that cannot answer is read as holding nothing, the way the fetch itself reads
@@ -366,8 +449,8 @@ impl FetchWithRequest {
 
             if !held {
                 missing.push(FetchWithMissing {
-                    uuid: id.to_string(),
-                    path: shown_path(path.as_ref()),
+                    target: target_name(&target.target),
+                    path: shown_path(&target.target),
                 });
             }
         }
@@ -376,12 +459,12 @@ impl FetchWithRequest {
             return Err(FetchWithRefusal::Incomplete { entries: missing });
         }
 
-        let entries = resolved
+        let entries = wanted
             .iter()
-            .map(|(id, path, version)| FetchWithEntry {
-                uuid: id.to_string(),
-                path: shown_path(path.as_ref()),
-                version: Key::new(*version).hex(),
+            .map(|wanted| FetchWithEntry {
+                target: target_name(&wanted.target),
+                path: shown_path(&wanted.target),
+                version: target_version(&wanted.target),
             })
             .collect();
 
@@ -433,15 +516,18 @@ impl FetchWithRequest {
 /// `rola_progress_next_json`, and `cancellation` is the flag it sets with
 /// `rola_cancellation_cancel`.
 ///
-/// The answer is `{"entries":[{"uuid","path","version"}],"brought":[{"vault","count"}]}`: the
-/// entries whose content is here, in path order, and how many objects each Vault handed over. Its
+/// The answer is `{"entries":[{"target","path","version"}],"brought":[{"vault","count"}]}`: the
+/// targets whose content is here, in the order they were named, and how many objects each Vault
+/// handed over. `target` is the `Uuid` an entry is known by, a variant's hash, or a version's hash;
+/// `path` is `.` for anything that is not an entry; `version` is the version the content is of. Its
 /// document is the fields every write request carries (`workspace`, `account`, `target`, `offline`,
 /// `force`, `concurrency` and `labels`) at the top level, `target` written the way the other write
 /// requests write one, `layout` as the name `rola layout` commands take, `words` as an array of
 /// strings, and `recursive` as a bool.
 ///
-/// The copy of a Vault's Layout a name reads is the one a fetch left, so a caller outside the
-/// command line fetches that copy first, with `do_action_fetch_layout`, and calls this after it.
+/// The copy of a Vault's Layout a path word reads is the one a fetch left, so a caller outside the
+/// command line fetches that copy first, with `do_action_fetch_layout`, and calls this after it. A
+/// run that names only hashes reads no Layout.
 ///
 /// # Errors
 ///
@@ -482,13 +568,22 @@ impl From<FetchWithRefusal> for WriteError {
                 reason: "no Layout is known under that name".to_owned(),
             },
             FetchWithRefusal::LayoutFailed { reason } => Self::Layout { reason },
-            FetchWithRefusal::Chain { uuid, reason } => Self::Index {
-                reason: format!("{uuid}: {reason}"),
+            FetchWithRefusal::Hash { hash, miss } => Self::Precondition {
+                what: format!("the hash `{hash}`"),
+                reason: match miss {
+                    HashMiss::Unknown => "it names no variant or version".to_owned(),
+                    HashMiss::Ambiguous(candidates) => {
+                        format!("it names more than one object: {}", candidates.join(", "))
+                    }
+                },
+            },
+            FetchWithRefusal::Chain { target, reason } => Self::Index {
+                reason: format!("{target}: {reason}"),
             },
             FetchWithRefusal::Incomplete { entries } => Self::NotFound {
                 what: entries
                     .iter()
-                    .map(|entry| entry.uuid.clone())
+                    .map(|entry| entry.target.clone())
                     .collect::<Vec<String>>()
                     .join(", "),
             },
@@ -500,15 +595,56 @@ impl From<FetchWithRefusal> for WriteError {
     }
 }
 
-/// An index that could not be read, in the words a caller reads.
-fn index_unread(error: &rorolala_vcs::VCSIndexError) -> FetchWithRefusal {
-    FetchWithRefusal::Failed(WriteError::Index {
-        reason: error.to_string(),
-    })
+/// What one word of the request named, once it is resolved.
+#[derive(Debug)]
+enum Named {
+    /// A Layout entry, at the version it records.
+    Entry {
+        /// The `Uuid` it is known by.
+        id: Uuid,
+        /// The path it is at.
+        path: Option<LayoutPath>,
+        /// The version it records.
+        version: [u8; 32],
+        /// Whether it names a file or a tree.
+        kind: EntryKind,
+    },
+    /// A version, named by its hash.
+    Version {
+        /// The version's key.
+        key: Key,
+    },
+    /// A variant, named by its hash, and what it points at.
+    Variant {
+        /// The variant's key.
+        key: Key,
+        /// The content its `storage` field names.
+        storage: Key,
+        /// The version that fixes it, whether or not that version was written.
+        version: Key,
+        /// The version it is based on, which is what a recursive run walks back.
+        base: [u8; 32],
+    },
 }
 
-/// An entry the words named: the `Uuid`, where it is, and the version it is at.
-type Resolved = (Uuid, Option<LayoutPath>, [u8; 32]);
+/// One target and the store keys its content is made of.
+struct Wanted {
+    /// What was named.
+    target: Named,
+    /// The keys to fetch.
+    keys: Vec<Key>,
+    /// Whether its content may be a tree structure, which is what a second exchange is for.
+    expand: bool,
+}
+
+/// Whether `word` reads as an index object's name rather than as a path of a Layout.
+///
+/// A whole key and the head of one are both hashes; a path spelled entirely in hex digits of the
+/// right length is read as a hash, which is the price of one argument list carrying both, the same
+/// price `rola vcs-index` pays.
+fn reads_as_hash(word: &str) -> bool {
+    Key::from_str(word).is_ok() || ShortHash::new(word).is_ok()
+}
 
 /// The entries `words` name, in path order, each with the version it is at.
 ///
@@ -525,15 +661,23 @@ fn resolve_words(
     cwd: &Path,
     remote: bool,
     words: &[String],
-) -> Vec<Resolved> {
-    let mut found: BTreeMap<(String, Uuid), Resolved> = BTreeMap::new();
+) -> Vec<Named> {
+    let mut found: BTreeMap<(String, Uuid), Named> = BTreeMap::new();
 
     for word in words {
         if let Ok(id) = Uuid::parse_str(word.trim())
             && let Some(data) = layout.entry(id)
         {
             let path = layout.path_of(id);
-            found.insert((shown_path(path.as_ref()), id), (id, path, data.version()));
+            found.insert(
+                (shown_path_of(path.as_ref()), id),
+                Named::Entry {
+                    id,
+                    path,
+                    version: data.version(),
+                    kind: data.kind(),
+                },
+            );
 
             continue;
         }
@@ -556,8 +700,13 @@ fn resolve_words(
             {
                 let shown = layout.path_of(id);
                 found.insert(
-                    (shown_path(shown.as_ref()), id),
-                    (id, shown, data.version()),
+                    (shown_path_of(shown.as_ref()), id),
+                    Named::Entry {
+                        id,
+                        path: shown,
+                        version: data.version(),
+                        kind: data.kind(),
+                    },
                 );
             }
 
@@ -567,7 +716,12 @@ fn resolve_words(
                 {
                     found.insert(
                         (entry_path.as_str().to_owned(), id),
-                        (id, Some(entry_path), data.version()),
+                        Named::Entry {
+                            id,
+                            path: Some(entry_path),
+                            version: data.version(),
+                            kind: data.kind(),
+                        },
                     );
                 }
             }
@@ -575,6 +729,240 @@ fn resolve_words(
     }
 
     found.into_values().collect()
+}
+
+/// The object `word` names, when it is a whole key or the head of one.
+///
+/// A whole key is classified by what the index holds under it; the head of one is resolved among
+/// the variants and versions the index holds, which is the set a graph and a retrack name.
+fn resolve_hash(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    word: &str,
+) -> Result<Named, FetchWithRefusal> {
+    let key = if let Ok(key) = Key::from_str(word) {
+        key
+    } else {
+        let miss = || FetchWithRefusal::Hash {
+            hash: word.to_owned(),
+            miss: HashMiss::Unknown,
+        };
+        let head = ShortHash::new(word).map_err(|_| miss())?;
+        let keys = chain_keys(index, runtime)?;
+
+        match head.resolve(keys.iter()) {
+            Resolved::ExactlyOne(key) => key,
+            Resolved::NoMatch => return Err(miss()),
+            Resolved::Ambiguous(keys) => {
+                return Err(FetchWithRefusal::Hash {
+                    hash: word.to_owned(),
+                    miss: HashMiss::Ambiguous(keys.iter().map(Key::hex).collect()),
+                });
+            }
+        }
+    };
+
+    let kind = runtime.block_on(index.kind_of(&key)).map_err(|error| {
+        FetchWithRefusal::Failed(WriteError::Index {
+            reason: error.to_string(),
+        })
+    })?;
+
+    match kind {
+        Some(VCSIndexKind::Variant) => {
+            let object = runtime.block_on(index.read(key)).map_err(|error| {
+                FetchWithRefusal::Failed(WriteError::Index {
+                    reason: error.reason(),
+                })
+            })?;
+            let VCSIndexObject::Variant(variant) = object else {
+                return Err(FetchWithRefusal::Hash {
+                    hash: word.to_owned(),
+                    miss: HashMiss::Unknown,
+                });
+            };
+
+            Ok(Named::Variant {
+                key,
+                storage: Key::new(*variant.storage_hash()),
+                version: Key::new(variant.new_version().compute_blake3()),
+                base: *variant.base_version(),
+            })
+        }
+        Some(VCSIndexKind::Version) => Ok(Named::Version { key }),
+        _ => Err(FetchWithRefusal::Hash {
+            hash: word.to_owned(),
+            miss: HashMiss::Unknown,
+        }),
+    }
+}
+
+/// The keys of the variants and versions the index holds, which is what a head is resolved among.
+fn chain_keys(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<Vec<Key>, FetchWithRefusal> {
+    let objects = runtime.block_on(index.read_objects()).map_err(|error| {
+        FetchWithRefusal::Failed(WriteError::Index {
+            reason: error.reason(),
+        })
+    })?;
+
+    Ok(objects
+        .into_iter()
+        .filter(|(_, object)| {
+            matches!(
+                object,
+                VCSIndexObject::Variant(_) | VCSIndexObject::Version(_)
+            )
+        })
+        .map(|(key, _)| key)
+        .collect())
+}
+
+/// Whether any version the path words name is not in the index.
+fn absent_versions(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    named: &[Named],
+) -> Result<bool, FetchWithRefusal> {
+    let versions: Vec<Key> = named
+        .iter()
+        .filter_map(|target| match target {
+            Named::Entry { version, .. } => Some(Key::new(*version)),
+            Named::Version { key } => Some(*key),
+            Named::Variant { .. } => None,
+        })
+        .collect();
+
+    if versions.is_empty() {
+        return Ok(false);
+    }
+
+    let presence = runtime
+        .block_on(index.contains_keys(&versions))
+        .map_err(|error| {
+            FetchWithRefusal::Failed(WriteError::Index {
+                reason: error.to_string(),
+            })
+        })?;
+
+    Ok((0..versions.len()).any(|at| !presence.held(at)))
+}
+
+/// Whether the version an entry or a version target names is in the index.
+fn version_held(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    target: &Named,
+) -> Result<bool, FetchWithRefusal> {
+    let version = match target {
+        Named::Entry { version, .. } => Key::new(*version),
+        Named::Version { key } => *key,
+        Named::Variant { .. } => return Ok(true),
+    };
+
+    let presence = runtime
+        .block_on(index.contains_keys(&[version]))
+        .map_err(|error| {
+            FetchWithRefusal::Failed(WriteError::Index {
+                reason: error.to_string(),
+            })
+        })?;
+
+    Ok(presence.held(0))
+}
+
+/// The store keys the version `version` names, and for a recursive run the chain it stands on.
+fn version_keys(
+    index: &VCSIndex,
+    runtime: &tokio::runtime::Runtime,
+    version: &[u8; 32],
+    recursive: bool,
+) -> Result<Vec<Key>, String> {
+    if recursive {
+        runtime.block_on(chain_store_keys(index, version, None, false))
+    } else {
+        Ok(runtime
+            .block_on(store_of(index, version))?
+            .into_iter()
+            .collect())
+    }
+}
+
+/// Whether a target's content may be a tree structure.
+///
+/// An entry says which kind it is, so a file is never read as one. A version or a variant says
+/// nothing of the kind, and what it names is tried, which is what the status reading does too.
+fn expands(target: &Named) -> bool {
+    match target {
+        Named::Entry { kind, .. } => *kind == EntryKind::Tree,
+        Named::Version { .. } | Named::Variant { .. } => true,
+    }
+}
+
+/// What `target`'s content names, when it is a structure the store holds.
+fn structure_keys(
+    store: &StorageSet,
+    runtime: &tokio::runtime::Runtime,
+    target: &Wanted,
+) -> Vec<Key> {
+    if !target.expand {
+        return Vec::new();
+    }
+
+    let mut keys = Vec::new();
+    for key in &target.keys {
+        let Ok(bytes) = runtime.block_on(store.read_object(key)) else {
+            continue;
+        };
+        let Ok(structure) = TreeStructure::decode(&bytes) else {
+            continue;
+        };
+
+        keys.extend(structure.content_keys());
+    }
+
+    keys
+}
+
+/// What a target is named by, for a report and a failure.
+fn target_name(target: &Named) -> String {
+    match target {
+        Named::Entry { id, .. } => id.to_string(),
+        Named::Version { key } | Named::Variant { key, .. } => key.hex(),
+    }
+}
+
+/// The version a target's content is of, as hex.
+fn target_version(target: &Named) -> String {
+    match target {
+        Named::Entry { version, .. } => Key::new(*version).hex(),
+        Named::Version { key } => key.hex(),
+        Named::Variant { version, .. } => version.hex(),
+    }
+}
+
+/// The path a target is at, `.` being a target at none.
+fn shown_path(target: &Named) -> String {
+    match target {
+        Named::Entry { path, .. } => shown_path_of(path.as_ref()),
+        Named::Version { .. } | Named::Variant { .. } => ".".to_owned(),
+    }
+}
+
+/// The path an entry is shown at, `.` being an entry at none.
+fn shown_path_of(path: Option<&LayoutPath>) -> String {
+    path.map_or_else(
+        || ".".to_owned(),
+        |path| {
+            if path.is_root() {
+                ".".to_owned()
+            } else {
+                path.as_str().to_owned()
+            }
+        },
+    )
 }
 
 /// The path `word` names on disk, as a path of the Layout, when it is inside the Workspace.
@@ -611,20 +999,6 @@ fn under(prefix: &str, path: &LayoutPath) -> bool {
             .is_some_and(|rest| rest.starts_with('/'))
 }
 
-/// The path an entry is shown at, `.` being an entry at none.
-fn shown_path(path: Option<&LayoutPath>) -> String {
-    path.map_or_else(
-        || ".".to_owned(),
-        |path| {
-            if path.is_root() {
-                ".".to_owned()
-            } else {
-                path.as_str().to_owned()
-            }
-        },
-    )
-}
-
 /// `keys` in one order with each key once, which is what a transfer is given.
 fn sort_dedup(keys: &mut Vec<Key>) {
     keys.sort_unstable();
@@ -636,10 +1010,10 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
 
-    use rorolala_layout::{Layout, LayoutPath, MutableData};
+    use rorolala_layout::{EntryKind, Layout, LayoutPath, MutableData};
     use uuid::Uuid;
 
-    use super::resolve_words;
+    use super::{reads_as_hash, resolve_words};
 
     /// The `Uuid`s of the entries the tests lay down.
     const FIRST: Uuid = Uuid::from_u128(0x11);
@@ -671,7 +1045,10 @@ mod tests {
                 .expect("a path");
         }
         layout
-            .create_entry(TREE, MutableData::new(None, [8; 32], String::new()))
+            .create_entry(
+                TREE,
+                MutableData::new(None, [8; 32], String::new()).with_kind(EntryKind::Tree),
+            )
             .expect("a tree entry");
         layout
             .create_path(&LayoutPath::new("assets").unwrap(), TREE)
@@ -685,7 +1062,12 @@ mod tests {
         let words: Vec<String> = words.iter().map(|word| (*word).to_owned()).collect();
         let mut ids: Vec<Uuid> = resolve_words(layout, root, root, remote, &words)
             .into_iter()
-            .map(|(id, _, _)| id)
+            .map(|target| match target {
+                super::Named::Entry { id, .. } => id,
+                super::Named::Version { .. } | super::Named::Variant { .. } => {
+                    panic!("a path never resolves to a hash")
+                }
+            })
             .collect();
         ids.sort_unstable();
 
@@ -756,6 +1138,38 @@ mod tests {
         // refuses a step past its root.
         assert_eq!(ids(&layout, &dir, true, &["../outside"]).len(), 0);
         assert_eq!(ids(&layout, &dir, true, &["assets"]), wanted);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_hash_is_a_whole_key_or_the_head_of_one() {
+        let key = "0f".repeat(32);
+
+        assert!(reads_as_hash(&key));
+        assert!(reads_as_hash(&format!("blake3:{key}")));
+        assert!(reads_as_hash(&key[..7]));
+        assert!(!reads_as_hash("a.psd"));
+        assert!(!reads_as_hash("not-there.psd"));
+    }
+
+    #[test]
+    fn a_tree_entry_is_marked_as_a_tree() {
+        let (dir, layout) = scratch();
+        let words = vec!["assets".to_owned()];
+
+        let tree = resolve_words(&layout, &dir, &dir, false, &words)
+            .into_iter()
+            .find(|target| matches!(target, super::Named::Entry { id, .. } if *id == TREE))
+            .expect("the tree entry");
+
+        assert!(matches!(
+            tree,
+            super::Named::Entry {
+                kind: EntryKind::Tree,
+                ..
+            }
+        ));
 
         let _ = fs::remove_dir_all(&dir);
     }

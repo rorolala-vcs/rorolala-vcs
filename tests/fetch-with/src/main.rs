@@ -59,6 +59,9 @@ const INCOMPLETE: i32 = 243;
 /// The exit code a run whose index holds no chain ends with.
 const NO_CHAIN: i32 = 242;
 
+/// The exit code a hashed word that names nothing ends with.
+const HASH_MISS: i32 = 245;
+
 #[tokio::main]
 async fn main() {
     let sandbox = Guard::new("fetch-with");
@@ -126,6 +129,35 @@ async fn main() {
     ))
     .expect_success();
 
+    // A file and a tree that only the hash words reach, so what a version below the top and a
+    // structure's files come to is not answered by a path fetch made earlier.
+    fs::write(first.join("hashed.psd"), b"hashed one").expect("the first hashed save");
+    run(&mut client(
+        &first,
+        &data,
+        &["track", "hashed.psd", "--message", "1"],
+    ))
+    .expect_success();
+    fs::write(first.join("hashed.psd"), b"hashed two").expect("the second hashed save");
+    run(&mut client(
+        &first,
+        &data,
+        &["track", "hashed.psd", "--message", "2"],
+    ))
+    .expect_success();
+
+    fs::create_dir_all(first.join("hashed-tree")).expect("a directory to make a tree of");
+    fs::write(first.join("hashed-tree").join("x.psd"), b"hash tree x").expect("a tree file");
+    fs::write(first.join("hashed-tree").join("y.psd"), b"hash tree y").expect("another tree file");
+    run(&mut client(&first, &data, &["tree", "init", "hashed-tree"])).expect_success();
+    run(&mut client(&first, &data, &["tree", "add", "hashed-tree"])).expect_success();
+    run(&mut client(
+        &first,
+        &data,
+        &["track", "hashed-tree", "--message", "tree"],
+    ))
+    .expect_success();
+
     mirror_versions(&mirror).await;
 
     register(&data, ORIGIN, &root);
@@ -161,6 +193,30 @@ async fn main() {
         .expect("the tree's structure");
     let tree_contents = structure.content_keys();
 
+    // The hashed file's chain, its variants, and the tree only the hash words reach.
+    let (_, hashed_version) = entry(&vault_layout, "hashed.psd");
+    let hashed_versions = versions(&vault_index, hashed_version).await;
+    assert_eq!(
+        hashed_versions.len(),
+        2,
+        "the hashed file is recorded twice, which is a chain of two"
+    );
+    let hashed_head = storage_of(&vault_index, hashed_versions[0]).await;
+    let hashed_older = storage_of(&vault_index, hashed_versions[1]).await;
+    let hashed_head_variant = variant_of(&vault_index, hashed_versions[0]).await;
+    let hashed_older_variant = variant_of(&vault_index, hashed_versions[1]).await;
+    let hashed_older_short = hashed_older_variant.hex()[..7].to_owned();
+
+    let (_, hashed_tree_version) = entry(&vault_layout, "hashed-tree");
+    let hashed_tree_variant = variant_of(&vault_index, hashed_tree_version).await;
+    let hashed_tree_key = storage_of(&vault_index, hashed_tree_version).await;
+    let hashed_structure = vault_store
+        .read_object(&hashed_tree_key)
+        .await
+        .map(|bytes| TreeStructure::decode(&bytes).expect("a tree structure"))
+        .expect("the hashed tree's structure");
+    let hashed_tree_contents = hashed_structure.content_keys();
+
     // The second Workspace acts as the same member, so the Vault admits it, and reaches both Vaults
     // by name.
     copy_identity(&auth, &second.join(".rola").join("auth"));
@@ -177,6 +233,203 @@ async fn main() {
         ],
     ))
     .expect_success();
+
+    // A hash names an object of the index: a variant names the content it points at, and a version
+    // the variant it fixes. The local check says whether that content is here, before and after.
+    let said = run(&mut client(
+        &second,
+        &data,
+        &[
+            "vcs-index",
+            "can-retrack-offline",
+            &hashed_older_variant.hex(),
+        ],
+    ));
+    checked.wants(
+        "a variant's content is not here before it is fetched",
+        said.success() && said.stdout.trim().ends_with("no"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    let older_version = Key::new(hashed_versions[1]).hex();
+    let said = run(&mut client(
+        &second,
+        &data,
+        &["vcs-index", "can-retrack-offline", &older_version],
+    ));
+    checked.wants(
+        "a version's content is not here before it is fetched",
+        said.success() && said.stdout.trim().ends_with("no"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    let said = run(&mut client(
+        &second,
+        &data,
+        &["fetch", "--with", &hashed_older_variant.hex(), "--shallow"],
+    ));
+    checked.wants(
+        "a fetch of a variant's hash succeeds",
+        said.success(),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let presence = held(&second, &[hashed_older, hashed_head]).await;
+    checked.wants(
+        "the content the variant points at is here",
+        presence[0],
+        "the variant's content is not in the second Workspace's store",
+    );
+    checked.wants(
+        "a shallow fetch of a variant brings nothing above it",
+        !presence[1],
+        "a shallow fetch of a variant brought the version above it",
+    );
+
+    let said = run(&mut client(
+        &second,
+        &data,
+        &["vcs-index", "can-retrack-offline", &older_version],
+    ));
+    checked.wants(
+        "a version is usable offline once its content is here",
+        said.success() && said.stdout.trim().ends_with("yes"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    // The whole chain is what a recursive fetch from the head variant carries: the variant's own
+    // content, then the version it points at and every version that one stands on.
+    let said = run(&mut client(
+        &second,
+        &data,
+        &["fetch", "--with", &hashed_head_variant.hex(), "--recursive"],
+    ));
+    checked.wants(
+        "a recursive fetch of a variant succeeds",
+        said.success(),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let presence = held(&second, &[hashed_head, hashed_older]).await;
+    checked.wants(
+        "a recursive fetch brings the chain behind the version it points at",
+        presence.iter().all(|held| *held),
+        "a version of the chain is missing from the second Workspace's store",
+    );
+
+    // A version's hash names the variant it fixes, so the same content is reachable by either name.
+    let head_version = Key::new(hashed_versions[0]).hex();
+    let said = run(&mut client(
+        &second,
+        &data,
+        &["fetch", "--with", &head_version, "--shallow"],
+    ));
+    checked.wants(
+        "a fetch of a version's hash succeeds",
+        said.success() && said.stdout.contains("Fetched the content of 1 entries"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    // A tree's variant is a structure, and the files it names are the second ask.
+    let said = run(&mut client(
+        &second,
+        &data,
+        &[
+            "vcs-index",
+            "can-retrack-offline",
+            &hashed_tree_variant.hex(),
+        ],
+    ));
+    checked.wants(
+        "a tree's content is not here before it is fetched",
+        said.success() && said.stdout.trim().ends_with("no"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    let said = run(&mut client(
+        &second,
+        &data,
+        &["fetch", "--with", &hashed_tree_variant.hex(), "--shallow"],
+    ));
+    checked.wants(
+        "a fetch of a tree's variant succeeds",
+        said.success(),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    let mut hashed_tree_keys = vec![hashed_tree_key];
+    hashed_tree_keys.extend(hashed_tree_contents.iter().copied());
+    let presence = held(&second, &hashed_tree_keys).await;
+    checked.wants(
+        "the tree's structure and the files it names are here",
+        presence.iter().all(|held| *held),
+        "the tree's structure or one of its files is missing from the second Workspace's store",
+    );
+
+    let said = run(&mut client(
+        &second,
+        &data,
+        &[
+            "vcs-index",
+            "can-retrack-offline",
+            &hashed_tree_variant.hex(),
+        ],
+    ));
+    checked.wants(
+        "a tree is usable offline once its files are here",
+        said.success() && said.stdout.trim().ends_with("yes"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    // The head of a hash names the same object as the whole one.
+    let said = run(&mut client(
+        &second,
+        &data,
+        &["fetch", "--with", &hashed_older_short],
+    ));
+    checked.wants(
+        "the head of a hash names its object",
+        said.success() && said.stdout.contains("Fetched the content of 1 entries"),
+        &format!(
+            "it ended with {:?} and said {:?}",
+            said.code,
+            said.stdout.trim()
+        ),
+    );
+
+    // A hash that names nothing is refused rather than passed over, which is the difference between
+    // a hash and a path.
+    let unknown = "ab".repeat(32);
+    let said = run(&mut client(&second, &data, &["fetch", "--with", &unknown]));
+    checked.wants(
+        "a hash naming nothing is refused",
+        said.code == Some(HASH_MISS),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
 
     // A shallow fetch brings the version the entry is at, and not the one below it.
     let said = run(&mut client(
@@ -474,6 +727,47 @@ async fn chain(index: &VCSIndex, head: [u8; 32]) -> Vec<Key> {
     }
 
     keys
+}
+
+/// The versions the chain from `head` back to its root names, head first.
+async fn versions(index: &VCSIndex, head: [u8; 32]) -> Vec<[u8; 32]> {
+    let mut chain = Vec::new();
+    let mut at = head;
+
+    loop {
+        let object = index.read(Key::new(at)).await.expect("the version");
+        let VCSIndexObject::Version(version) = object else {
+            break;
+        };
+        // The root is the version every chain ends at rather than one of its own.
+        if version.is_root() {
+            break;
+        }
+
+        chain.push(at);
+
+        let object = index
+            .read(Key::new(*version.variant()))
+            .await
+            .expect("the variant");
+        let VCSIndexObject::Variant(variant) = object else {
+            break;
+        };
+
+        at = *variant.base_version();
+    }
+
+    chain
+}
+
+/// The variant a version fixes, as its key.
+async fn variant_of(index: &VCSIndex, version: [u8; 32]) -> Key {
+    let object = index.read(Key::new(version)).await.expect("the version");
+    let VCSIndexObject::Version(version) = object else {
+        panic!("the index holds no version under the key the Layout names");
+    };
+
+    Key::new(*version.variant())
 }
 
 /// Which of `keys` the store of `workspace` holds.

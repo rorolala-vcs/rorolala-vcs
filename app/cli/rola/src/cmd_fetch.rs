@@ -99,8 +99,10 @@ pub fn complete_fetch(
 /// and `--shallow` are both given,
 /// [`ErrorFetchWithVault`](crate::layout::cmd_layout_fetch::ErrorFetchWithVault) when the Layout's
 /// Vault and the one named are two answers,
+/// [`ErrorFetchWithHash`](crate::layout::cmd_layout_fetch::ErrorFetchWithHash) when a hash names no
+/// variant or version,
 /// [`ErrorFetchWithChain`](crate::layout::cmd_layout_fetch::ErrorFetchWithChain) when the index
-/// holds no chain for an entry,
+/// holds no chain for a target,
 /// [`ErrorFetchWithIncomplete`](crate::layout::cmd_layout_fetch::ErrorFetchWithIncomplete) when the
 /// content did not all arrive, and
 /// [`ErrorFetchWithFailed`](crate::layout::cmd_layout_fetch::ErrorFetchWithFailed) for the rest.

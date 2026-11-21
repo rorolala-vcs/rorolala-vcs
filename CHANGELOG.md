@@ -19,7 +19,7 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 1. [`app`] [`rola`] Draw the unjoined variants in the chain behind --show-unjoined-variants. [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-draw-the-unjoined-variants-in-the-chain-behind---show-unjoined-variants)
 2. [`app`] [`rola`] Draw the version chain as one row per variant. [See details](dev/CHANGELOG-DETAILS.md#2-app-rola-draw-the-version-chain-as-one-row-per-variant)
 3. [`app`] [`rola`] Stop a running write with Ctrl+C. [See details](dev/CHANGELOG-DETAILS.md#3-app-rola-stop-a-running-write-with-ctrlc)
-4. [`app`] [`rola`] [`fetch`] Fetch the content of named entries with rola fetch --with. [See details](dev/CHANGELOG-DETAILS.md#4-app-rola-fetch-fetch-the-content-of-named-entries-with-rola-fetch---with)
+4. [`app`] [`rola`] [`fetch`] Fetch the content of entries, variants and versions with rola fetch --with. [See details](dev/CHANGELOG-DETAILS.md#4-app-rola-fetch-fetch-the-content-of-entries-variants-and-versions-with-rola-fetch---with)
 5. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-docking-dock-a-panel-against-the-windows-own-edge)
 6. [`app`] [`RorolalaDesktop`] [`font`] Draw the desktop programs in Noto Sans. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-font-draw-the-desktop-programs-in-noto-sans)
 7. [`app`] [`RorolalaDesktop`] [`menu`] Show the layout presets as tabs in the title row. [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolaladesktop-menu-show-the-layout-presets-as-tabs-in-the-title-row)

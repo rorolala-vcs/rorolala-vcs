@@ -3,46 +3,49 @@ using RorolalaVCSPlugin;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// What a content fetch is asked to do: the command it runs, and which versions of a lane it names.
+/// What a content fetch is asked to do: the command it runs, and when its two items may be pressed.
 /// </summary>
 public sealed class BlobFetchTests
 {
     /// <summary>
-    /// A fetch names the store's sync-hashes command and then the keys, after the theme every run of
-    /// the window's is asked for.
+    /// A fetch names the theme every run of the window's is asked for, then the node's variant as the
+    /// word of `--with`, and `--recursive` when the versions it stands on come with it.
     /// </summary>
     [Fact]
-    public void AFetchNamesTheStoreAndItsKeys()
+    public void AFetchNamesTheWordAndTheDepth()
     {
         Assert.Equal(
-            new[]
-            {
-                "--theme-choice=desktop-friendly",
-                "storage",
-                "sync-hashes",
-                "one",
-                "two",
-            },
-            BlobFetch.Arguments(["one", "two"])
+            new[] { "--theme-choice=desktop-friendly", "fetch", "--with", "abc" },
+            BlobFetch.Arguments("abc", recursive: false)
+        );
+        Assert.Equal(
+            new[] { "--theme-choice=desktop-friendly", "fetch", "--recursive", "--with", "abc" },
+            BlobFetch.Arguments("abc", recursive: true)
         );
     }
 
     /// <summary>
-    /// A lane is one file's chain, so only its versions come, only the ones whose content is not all
-    /// here, and each key once.
+    /// A recursive fetch of a node carries something when the node or any version below it is missing
+    /// content, and nothing when the whole chain is here.
     /// </summary>
     [Fact]
-    public void OnlyTheVersionsOfTheLaneThatAreNotAllHereCome()
+    public void AChainIsMissingWhenAnyVersionOfItIs()
     {
-        (int Lane, string Storage, bool Offline)[] versions =
-        [
-            (0, "here", true),
-            (0, "missing", false),
-            (1, "elsewhere", false),
-            (0, "missing", false),
-            (0, string.Empty, false),
-        ];
+        var chain = new Dictionary<string, (string? Base, bool Offline)>(StringComparer.Ordinal)
+        {
+            ["top"] = ("mid", true),
+            ["mid"] = ("old", false),
+            ["old"] = (null, true),
+        };
 
-        Assert.Equal(new[] { "missing" }, BlobFetch.MissingInLane(versions, 0));
+        Assert.True(BlobFetch.AnyMissing(chain, "top"));
+
+        var here = new Dictionary<string, (string? Base, bool Offline)>(StringComparer.Ordinal)
+        {
+            ["top"] = ("old", true),
+            ["old"] = (null, true),
+        };
+
+        Assert.False(BlobFetch.AnyMissing(here, "top"));
     }
 }

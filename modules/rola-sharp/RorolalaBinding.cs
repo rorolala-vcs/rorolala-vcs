@@ -2964,15 +2964,18 @@ internal static partial class RorolalaBinding
     /// `rola_progress_next_json`, and `cancellation` is the flag it sets with
     /// `rola_cancellation_cancel`.
     ///
-    /// The answer is `{"entries":[{"uuid","path","version"}],"brought":[{"vault","count"}]}`: the
-    /// entries whose content is here, in path order, and how many objects each Vault handed over. Its
+    /// The answer is `{"entries":[{"target","path","version"}],"brought":[{"vault","count"}]}`: the
+    /// targets whose content is here, in the order they were named, and how many objects each Vault
+    /// handed over. `target` is the `Uuid` an entry is known by, a variant's hash, or a version's hash;
+    /// `path` is `.` for anything that is not an entry; `version` is the version the content is of. Its
     /// document is the fields every write request carries (`workspace`, `account`, `target`, `offline`,
     /// `force`, `concurrency` and `labels`) at the top level, `target` written the way the other write
     /// requests write one, `layout` as the name `rola layout` commands take, `words` as an array of
     /// strings, and `recursive` as a bool.
     ///
-    /// The copy of a Vault's Layout a name reads is the one a fetch left, so a caller outside the
-    /// command line fetches that copy first, with `do_action_fetch_layout`, and calls this after it.
+    /// The copy of a Vault's Layout a path word reads is the one a fetch left, so a caller outside the
+    /// command line fetches that copy first, with `do_action_fetch_layout`, and calls this after it. A
+    /// run that names only hashes reads no Layout.
     ///
     /// Returns a result:
     /// - `Ok`: `char *`, owned; release it with `free_string`

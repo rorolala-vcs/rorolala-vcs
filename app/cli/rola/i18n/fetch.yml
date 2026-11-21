@@ -7,8 +7,8 @@ fetch:
 
   complete:
     with:
-      en: The paths, directories or UUIDs whose content comes with the Layout
-      zh-CN: 随布局一起取回内容的路径、目录或 UUID
+      en: The paths, directories, UUIDs or hashes whose content comes with the Layout
+      zh-CN: 随布局一起取回内容的路径、目录、UUID 或哈希
     layout:
       en: The Layout the words are read in
       zh-CN: 读取这些词的布局
@@ -35,8 +35,16 @@ fetch:
     zh-CN: 能连上持有它们的保险库时，再运行一次取回
 
   with_chain:
-    en: "The index holds no chain for `%{uuid}`: %{reason}"
-    zh-CN: "索引中没有 `%{uuid}` 的版本链：%{reason}"
+    en: "The index holds no chain for `%{target}`: %{reason}"
+    zh-CN: "索引中没有 `%{target}` 的版本链：%{reason}"
+
+  with_hash:
+    en: "`%{hash}` names no variant or version"
+    zh-CN: "`%{hash}` 没有指向任何变体或版本"
+
+  with_hash_help:
+    en: A hash is written as hex, or with `blake3:` in front of it, and its head is enough
+    zh-CN: 哈希写成十六进制，或前面加 `blake3:`，给出开头的一段就够
 
   with_mode:
     en: "`--recursive` and `--shallow` cannot be given together"

@@ -401,6 +401,9 @@ pub const EC_ERR_FETCH_WITH_INCOMPLETE: i32 = 243;
 /// `exit_codes.fetch_with_failed`
 pub const EC_ERR_FETCH_WITH_FAILED: i32 = 244;
 
+/// `exit_codes.fetch_with_hash`
+pub const EC_ERR_FETCH_WITH_HASH: i32 = 245;
+
 // Retracking, moving a file's version pointer back
 
 /// `exit_codes.retrack`

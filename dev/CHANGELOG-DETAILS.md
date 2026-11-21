@@ -67,11 +67,11 @@ lines in place.
 
 `rola bring`, `rola track`, `rola align`, `rola retrack`, `rola hold` and `rola giveup` stop when Ctrl+C is pressed. The signal only sets a flag, so the step in hand finishes, the write returns after it, and what was already written stays: the caller reads where the run stopped instead of assuming nothing happened. A handler that cannot be installed leaves the run uncancellable rather than failing the command.
 
-### 4. [`app`] [`rola`] [`fetch`] Fetch the content of named entries with rola fetch --with
+### 4. [`app`] [`rola`] [`fetch`] Fetch the content of entries, variants and versions with rola fetch --with
 
-`rola fetch --with <ANY>...` brings the content of the entries a path, a directory or a `Uuid` names, so the versions they are at can be produced here. `--shallow`, the default, brings the one version each entry names; `--recursive` follows every version back to its root and brings the whole chain. A word that names no entry is skipped, which leaves new files that were never recorded out of the fetch.
+`rola fetch --with <ANY>...` brings the content its words name, so each can be produced here. A word is a path or a directory of the Layout, a `Uuid`, a variant's hash, or a version's hash, the last two whole or as the head of one; a hash is resolved among the objects the index holds, and one that names no variant or version ends the run rather than being passed over. `--shallow`, the default, brings the one version an entry is at or the content a variant points at; `--recursive` brings the whole chain behind either, so a variant's chain starts at the version it is based on. A path that names no entry is skipped, which leaves new files that were never recorded out of the fetch.
 
-`--layout` chooses where the words and the versions are read, `truth@VAULT` naming the copy a fetch left, and a run that names it in `--layout` need not name the Vault again. Both flags are also taken by `rola layout fetch`, which is the same command.
+`--layout` chooses where the path words are read, `truth@VAULT` naming the copy a fetch left, and a run that names only hashes reads no Layout at all. Both flags are also taken by `rola layout fetch`, which is the same command.
 
 ### 5. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge
 
@@ -116,9 +116,9 @@ is being typed.
 
 ### 10. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Fetch a version's content from the Version Graph's node menu
 
-A right-click on a node of the Version Graph now offers the content the node is made of, under the Fetch category: `This version's blobs` brings the content one version names, and `All versions' blobs` brings every version of that file's chain whose content is not all here. Both items wear the download picture, and an item whose content is already here is not pressable, since a fetch of it would carry nothing.
+A right-click on a node of the Version Graph now offers the content the node is made of, under the Fetch category: `This version's blobs` brings the content the node's variant points at, and `All versions' blobs` also the chain of the version it is based on. Both items wear the download picture, and an item whose content is already here is not pressable, since a fetch of it would carry nothing.
 
-The run is the store's own `sync-hashes`, asked for the content keys the graph already holds, so a node below the top is fetched exactly as it is rather than as the version its entry is at now. Nothing is written into the work: what follows a run is the graph read again with those versions' content marked as held here.
+The run is `rola fetch --with` with the node's variant as its word, so a node below the top is fetched exactly as it is rather than as the version its entry is at now, and a tree comes with the files its structure names. Nothing is written into the work: what follows a run is the graph read again with those versions' content marked as held here, including when the graph stands on the whole work.
 
 ### 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner
 
@@ -553,11 +553,12 @@ statuses that go with them, so an unknown command, a pathspec that matched nothi
 that could not be put back end with 1, a command that cannot be made with 128, and a line the
 program cannot read with 129. `-h` inside a command is that command's usage with 129, `--help` as
 its first word is the same usage with 0, `--` ends the flags, and a bare run prints the usage with
+
 1. The language is gettext's: `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` and `LANG`, with `C` untranslated.
-A pager is chosen the way git chooses one, through `pager.rola` and `git var GIT_PAGER`, and both
-streams are written through it. `check` writes paths with git's quoting and `core.quotePath`, and
-`restore` reads pathspec wildcards under the four `GIT_*_PATHSPECS` variables. `help` and `version`
-are commands of their own.
+   A pager is chosen the way git chooses one, through `pager.rola` and `git var GIT_PAGER`, and both
+   streams are written through it. `check` writes paths with git's quoting and `core.quotePath`, and
+   `restore` reads pathspec wildcards under the four `GIT_*_PATHSPECS` variables. `help` and `version`
+   are commands of their own.
 
 Callers that named the program's own flags must stop: `--lang`/`-l`, `ROLA_LANG`, `APP_LANG`,
 `--json`, `--renderer`, `-q`/`--quiet`, `-C`/`--confirm` and `-V`/`--verbose` are gone, and the
@@ -1803,20 +1804,20 @@ must not be able to make another's materials visible to git.
 This change adds the Rorolala VCS 0.1.0 suite, as follows:
 
 - Added the complete VCS subcommands to the `rola` CLI, including:
-    - VCS subcommands track, retrack, checkin, fetch, sync, pack, status, entries, align, etc. (`app/cli/rola/src/`)
-    - Commands related to `vcs-index`, `storage`, `layout`, and `ownership` (`app/cli/rola/src/vcs_index/`, `app/cli/rola/src/storage/`, `app/cli/rola/src/layout/`, `app/cli/rola/src/cmd_ownership.rs`)
+  - VCS subcommands track, retrack, checkin, fetch, sync, pack, status, entries, align, etc. (`app/cli/rola/src/`)
+  - Commands related to `vcs-index`, `storage`, `layout`, and `ownership` (`app/cli/rola/src/vcs_index/`, `app/cli/rola/src/storage/`, `app/cli/rola/src/layout/`, `app/cli/rola/src/cmd_ownership.rs`)
 - Added new Rust modules, including:
-    - `modules/vcs` (versions, variants, creators, messages, index, and lookback) (`modules/vcs/`)
-    - `modules/status` (status, version graph, merging, and ownership) (`modules/status/`)
-    - `modules/tree-analyze` (scanning, fingerprints, tree diffs, and caching) (`modules/tree-analyze/`)
-    - `modules/chunking` (chunking strategy registry, including the `blend-basic` and `psd-basic` corpora) (`modules/chunking/`)
+  - `modules/vcs` (versions, variants, creators, messages, index, and lookback) (`modules/vcs/`)
+  - `modules/status` (status, version graph, merging, and ownership) (`modules/status/`)
+  - `modules/tree-analyze` (scanning, fingerprints, tree diffs, and caching) (`modules/tree-analyze/`)
+  - `modules/chunking` (chunking strategy registry, including the `blend-basic` and `psd-basic` corpora) (`modules/chunking/`)
 - Added VCS-related remote actions to the daemon, including:
-    - Creating/writing remote entries, fetching layouts, requesting/abandoning ownership, syncing storage and indexes, etc. (`modules/daemon/src/actions/`)
+  - Creating/writing remote entries, fetching layouts, requesting/abandoning ownership, syncing storage and indexes, etc. (`modules/daemon/src/actions/`)
 - Added the desktop-side `RorolalaVCSPlugin`, including:
-    - Commands such as checkin/fetch/sync/track (`app/desktop/Plugins/RorolalaVCSPlugin/CheckinCommand.cs`, `Fetch.cs`, `Sync.cs`, `TrackCommand.cs`, etc.)
-    - Account and ownership operations (`app/desktop/Plugins/RorolalaVCSPlugin/AccountActions.cs`, `OwnershipActions.cs`)
-    - Version graph view, progress panel, and report view (`app/desktop/Plugins/RorolalaVCSPlugin/VersionGraphView.cs`, `ProgressPanel.cs`, `ReportView.cs`)
-    - Sync watching and status badge (`app/desktop/Plugins/RorolalaVCSPlugin/SyncWatcher.cs`, `RorolalaStandingBadge.cs`)
+  - Commands such as checkin/fetch/sync/track (`app/desktop/Plugins/RorolalaVCSPlugin/CheckinCommand.cs`, `Fetch.cs`, `Sync.cs`, `TrackCommand.cs`, etc.)
+  - Account and ownership operations (`app/desktop/Plugins/RorolalaVCSPlugin/AccountActions.cs`, `OwnershipActions.cs`)
+  - Version graph view, progress panel, and report view (`app/desktop/Plugins/RorolalaVCSPlugin/VersionGraphView.cs`, `ProgressPanel.cs`, `ReportView.cs`)
+  - Sync watching and status badge (`app/desktop/Plugins/RorolalaVCSPlugin/SyncWatcher.cs`, `RorolalaStandingBadge.cs`)
 - Added accompanying test projects and i18n resources, including:
-    - Test cases for checkin/fetch/retrack/variants in the test projects `tests/vcs-index`, `tests/vcs-index-remote`, `tests/vcs-index-sync`, `tests/sync-chain`, and `tests/desktop-host` (`tests/`)
-    - i18n resources `cmd_vcs_index*.yml` and `rorolala_vcs/strings.yml` (`app/cli/rola/i18n/`, `app/desktop/Plugins/RorolalaVCSPlugin/i18n/rorolala_vcs/strings.yml`)
+  - Test cases for checkin/fetch/retrack/variants in the test projects `tests/vcs-index`, `tests/vcs-index-remote`, `tests/vcs-index-sync`, `tests/sync-chain`, and `tests/desktop-host` (`tests/`)
+  - i18n resources `cmd_vcs_index*.yml` and `rorolala_vcs/strings.yml` (`app/cli/rola/i18n/`, `app/desktop/Plugins/RorolalaVCSPlugin/i18n/rorolala_vcs/strings.yml`)

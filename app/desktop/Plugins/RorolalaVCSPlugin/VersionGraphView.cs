@@ -813,13 +813,17 @@ internal sealed partial class VersionGraphView : Control
         // still the graph the reader was looking at, and it stays while the emphasis goes. A read that was
         // already in flight is overtaken here, so it cannot put another graph up after the choice is gone.
         // The corner's show-all is the one press that means the whole work instead.
+        //
+        // Only a drawing that a choice was taken away from is held. A graph that never had a choice is
+        // the whole work, and a reading that says the work changed is what it is read again for: holding
+        // it there left a node whose content had arrived wearing the mark the store gave it the first
+        // time.
         if (
             !_everything
             && _drawing is not null
-            && (
-                (_retained && ChosenFiles.Current.Count == 0)
-                || (entries.Count == 0 && ChosenFiles.Current.Count == 0)
-            )
+            && _retained
+            && entries.Count == 0
+            && ChosenFiles.Current.Count == 0
         )
         {
             HoldDrawing();

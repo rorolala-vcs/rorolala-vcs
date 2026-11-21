@@ -409,6 +409,10 @@ exit_codes:
     en: The content fetch failed
     zh-CN: 取回内容的操作失败
 
+  fetch_with_hash:
+    en: A hash the fetch was given names no one variant or version
+    zh-CN: 取回所指定的哈希没有指向唯一的变体或版本
+
   retrack:
     en: A file's version pointer could not be moved back
     zh-CN: 无法回退文件的版本指针
