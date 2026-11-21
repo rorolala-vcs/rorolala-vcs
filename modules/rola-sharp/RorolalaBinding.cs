@@ -2957,6 +2957,31 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_collect_apply(nint directory, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index, ulong grace);
 
     /// <summary>
+    /// The content fetch a JSON request asks for.
+    ///
+    /// An owned JSON string the caller releases with `free_string`, or a `RolaWriteError *` the caller
+    /// releases with `free_rola_write_error`. `progress` is the handle the caller polls with
+    /// `rola_progress_next_json`, and `cancellation` is the flag it sets with
+    /// `rola_cancellation_cancel`.
+    ///
+    /// The answer is `{"entries":[{"uuid","path","version"}],"brought":[{"vault","count"}]}`: the
+    /// entries whose content is here, in path order, and how many objects each Vault handed over. Its
+    /// document is the fields every write request carries (`workspace`, `account`, `target`, `offline`,
+    /// `force`, `concurrency` and `labels`) at the top level, `target` written the way the other write
+    /// requests write one, `layout` as the name `rola layout` commands take, `words` as an array of
+    /// strings, and `recursive` as a bool.
+    ///
+    /// The copy of a Vault's Layout a name reads is the one a fetch left, so a caller outside the
+    /// command line fetches that copy first, with `do_action_fetch_layout`, and calls this after it.
+    ///
+    /// Returns a result:
+    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_fetch_with(nint request, nint progress, nint cancellation);
+
+    /// <summary>
     /// Records a file's content as a variant and a version in the index a directory is in.
     ///
     /// An owned JSON string the caller releases with `free_string`,

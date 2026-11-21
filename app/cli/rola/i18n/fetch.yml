@@ -4,3 +4,48 @@ fetch:
   brought:
     en: "Brought %{count} objects from the Vaults: %{vaults}"
     zh-CN: "已从保险库取回 %{count} 个对象：%{vaults}"
+
+  complete:
+    with:
+      en: The paths, directories or UUIDs whose content comes with the Layout
+      zh-CN: 随布局一起取回内容的路径、目录或 UUID
+    layout:
+      en: The Layout the words are read in
+      zh-CN: 读取这些词的布局
+    recursive:
+      en: Follow each version back to its root
+      zh-CN: 把每个版本回溯到根
+    shallow:
+      en: Bring only the version each entry names
+      zh-CN: 只取回每个条目命中的版本
+    no_ignore_rules:
+      en: Fetch only the Layout, leaving the Vault's ignore rules unfetched
+      zh-CN: 只取回布局，不取保险库的忽略规则
+
+  with_result:
+    en: "Fetched the content of %{count} entries"
+    zh-CN: "已取回 %{count} 个条目的内容"
+
+  with_incomplete:
+    en: "The content of these entries is still not here: %{entries}"
+    zh-CN: "以下条目的内容仍未取回：%{entries}"
+
+  with_incomplete_help:
+    en: Run the fetch again when a Vault holding them can be reached
+    zh-CN: 能连上持有它们的保险库时，再运行一次取回
+
+  with_chain:
+    en: "The index holds no chain for `%{uuid}`: %{reason}"
+    zh-CN: "索引中没有 `%{uuid}` 的版本链：%{reason}"
+
+  with_mode:
+    en: "`--recursive` and `--shallow` cannot be given together"
+    zh-CN: "`--recursive` 与 `--shallow` 不能同时给出"
+
+  with_vault:
+    en: "The Layout `%{layout}` is of the Vault `%{layout_vault}`, and the Vault named is `%{named}`"
+    zh-CN: "布局 `%{layout}` 属于保险库 `%{layout_vault}`，被指名的保险库是 `%{named}`"
+
+  cancelled:
+    en: The fetch stopped before the content was all here
+    zh-CN: 取回在内容全部到位前停止

@@ -291,7 +291,45 @@ internal sealed partial class VersionGraphView
             leaves.Add(RetrackItem(target, card.VersionHash!, VariantGraphDrawing.VersionLabel(card), onlyIndex: false));
             leaves.Add(RetrackItem(target, card.VersionHash!, VariantGraphDrawing.VersionLabel(card), onlyIndex: true));
         }
+
+        // What a node is made of is brought here without writing it anywhere, which is what a reader
+        // who wants a version's content before moving the record to it is owed. The two items are the
+        // one version and the whole chain the file's lane holds; a version whose objects are all here
+        // has nothing to fetch, so its item is not pressable.
+        if (card.Storage.Length > 0)
+        {
+            leaves.Add(
+                Leaf(
+                    ["menu.entry.fetch", "menu.entry.version_blobs"],
+                    Icons.Download,
+                    () => BeginFetchBlobs([card.Storage]),
+                    enabled: !card.Offline
+                )
+            );
+        }
+
+        if (MissingInLane(card) is { Count: > 0 } missing)
+        {
+            leaves.Add(
+                Leaf(
+                    ["menu.entry.fetch", "menu.entry.all_blobs"],
+                    Icons.Download,
+                    () => BeginFetchBlobs(missing)
+                )
+            );
+        }
     }
+
+    /// <summary>The content keys of the versions in a card's lane that are not all here.</summary>
+    /// <param name="card">The card whose lane the menu was opened on.</param>
+    /// <returns>The keys the whole chain still needs.</returns>
+    private IReadOnlyList<string> MissingInLane(GraphCard card) =>
+        BlobFetch.MissingInLane(
+            (_drawing?.Cards ?? Array.Empty<GraphCard>()).Select(other =>
+                (other.Lane, other.Storage, other.Offline)
+            ),
+            card.Lane
+        );
 
     /// <summary>One entry of this view's menu, at the end of the path that names it.</summary>
     /// <param name="keys">The path, from the category to the entry itself.</param>
@@ -904,6 +942,60 @@ internal sealed partial class VersionGraphView
                 // A sync writes the copy a fetch brings, so the copy read here is marked behind rather than
                 // fetched beside the run: the loop's next fetch brings it over and reads the graph again.
                 _fetch.MarkDirty(directory, Refresh);
+            });
+        });
+    }
+
+    /// <summary>Brings the content of one or more versions here, and reads the graph again once it is over.</summary>
+    /// <remarks>
+    /// The exchange is the command line's, because the store is: what a version is made of is named by
+    /// the key the graph already holds, and the run makes both ends hold it. Nothing is written into the
+    /// work, so what follows a run is a reading rather than a write.
+    /// </remarks>
+    /// <param name="keys">The store keys to fetch.</param>
+    private void BeginFetchBlobs(IReadOnlyList<string> keys)
+    {
+        if (keys.Count == 0 || _root is not { Length: > 0 } root)
+        {
+            return;
+        }
+
+        if (Environment.GetEnvironmentVariable(Sync.Program) is not { Length: > 0 } program)
+        {
+            FailureNotice.Show(
+                _dialogs,
+                _icons,
+                RolaI18N.Get("rorolala_vcs.version_graph.fetch_failed"),
+                RolaI18N.Get("rorolala_vcs.ownership_unknown")
+            );
+
+            return;
+        }
+
+        var run = _hub.Begin("rorolala_vcs.progress.fetch_content");
+
+        _ = Task.Run(() =>
+        {
+            var (done, said) = BlobFetch.Run(program, root, keys);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _hub.End(run);
+                _files.Touch();
+
+                if (!done)
+                {
+                    FailureNotice.Show(
+                        _dialogs,
+                        _icons,
+                        RolaI18N.Get("rorolala_vcs.version_graph.fetch_failed"),
+                        said
+                    );
+
+                    return;
+                }
+
+                Refresh();
             });
         });
     }

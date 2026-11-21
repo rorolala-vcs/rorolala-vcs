@@ -226,7 +226,11 @@ pub fn layout_entries_json(directory: &Path, layout: &str) -> Result<String, Lay
 }
 
 /// The Layout `name` resolves to in the place holding `directory`.
-fn chosen(directory: &Path, name: &str) -> Result<Layout, LayoutReadError> {
+///
+/// It is the one reading of a Layout's name: a Layout command reaches a copy through it, and so
+/// does the content fetch that reads its words, see [`crate::write::fetch_with`]. A second reading
+/// would be a second set of names to keep right.
+pub(crate) fn chosen(directory: &Path, name: &str) -> Result<Layout, LayoutReadError> {
     if let Some((layout, vault)) = remote_spec(name) {
         let workspace = Workspace::locate(directory).ok_or(LayoutReadError::NoWorkspace)?;
         let Some(copy) = workspace.readonly_layout_copy(vault, layout) else {
@@ -267,7 +271,7 @@ fn chosen(directory: &Path, name: &str) -> Result<Layout, LayoutReadError> {
 
 /// The Vault and the Layout a name written `NAME@VAULT` names, when it is written that way with two
 /// names a Layout can have.
-fn remote_spec(name: &str) -> Option<(&str, &str)> {
+pub(crate) fn remote_spec(name: &str) -> Option<(&str, &str)> {
     let (layout, vault) = name.split_once('@')?;
 
     (is_plain_name(layout) && is_plain_name(vault)).then_some((layout, vault))

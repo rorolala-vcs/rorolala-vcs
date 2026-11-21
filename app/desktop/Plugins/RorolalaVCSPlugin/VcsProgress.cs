@@ -33,6 +33,7 @@ internal static class VcsProgress
         "rorolala_vcs.progress.track" => Icons.Add,
         "rorolala_vcs.progress.retrack" => Icons.AltRoute,
         "rorolala_vcs.progress.join" => Icons.Merge,
+        "rorolala_vcs.progress.fetch_content" => Icons.Download,
         "rorolala_vcs.progress.restore" => Icons.Download,
         "rorolala_vcs.progress.unmerge" => Icons.CallSplit,
         "rorolala_vcs.progress.path_move" => Icons.ArrowRightAlt,

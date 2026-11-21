@@ -1064,6 +1064,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-fetch-with"
+version = "0.1.0"
+dependencies = [
+ "librorolala",
+ "rorolala-utils-sandbox",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "it-ffi-c"
 version = "0.1.0"
 dependencies = [

@@ -279,6 +279,13 @@ rorolala_vcs:
       en: The file could not be retracked
       zh-CN: 未能重新追踪该文件
 
+    # What a right-click on a node offers beside moving the record: bringing the content the node
+    # is made of here, either the one version or every version of the file's chain, without writing
+    # anything into the work.
+    fetch_failed:
+      en: The content could not be fetched
+      zh-CN: 未能取回内容
+
     # What the row under the graph offers: a message for the version an unrecorded edit would make,
     # and the button that records it. The field is always there; the button is pressable only while
     # the file on screen has an edit and something was written for it. A graph whose work and Vault
@@ -1065,6 +1072,9 @@ rorolala_vcs:
     fetch:
       en: Fetching the Layout
       zh-CN: 取回布局
+    fetch_content:
+      en: Fetching content
+      zh-CN: 取回内容
     hold:
       en: Taking ownership
       zh-CN: 正在获取所有权
@@ -1429,6 +1439,12 @@ menu:
     read_again:
       en: Read again
       zh-CN: 重新读取
+    version_blobs:
+      en: This version's blobs
+      zh-CN: 该版本的块
+    all_blobs:
+      en: All versions' blobs
+      zh-CN: 所有版本的块
     upstream:
       en: Upstream
       zh-CN: 上游

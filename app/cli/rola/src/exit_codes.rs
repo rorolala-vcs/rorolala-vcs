@@ -388,6 +388,19 @@ pub const EC_ERR_BRING: i32 = 240;
 /// `exit_codes.bring_argument`
 pub const EC_ERR_BRING_ARGUMENT: i32 = 241;
 
+// The content a fetch brings is the same traffic as a bring, in the other direction, so these sit
+// in that block: 242 was meant for a word that named no entry, which a fetch passes over, and the
+// index having no chain for one is what a caller branches on instead.
+
+/// `exit_codes.fetch_with_chain`
+pub const EC_ERR_FETCH_WITH_CHAIN: i32 = 242;
+
+/// `exit_codes.fetch_with_incomplete`
+pub const EC_ERR_FETCH_WITH_INCOMPLETE: i32 = 243;
+
+/// `exit_codes.fetch_with_failed`
+pub const EC_ERR_FETCH_WITH_FAILED: i32 = 244;
+
 // Retracking, moving a file's version pointer back
 
 /// `exit_codes.retrack`

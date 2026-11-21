@@ -11,6 +11,7 @@ pub mod cancel;
 pub mod checkout;
 pub mod collect;
 pub mod error;
+pub mod fetch_with;
 pub mod index;
 pub mod labels;
 pub mod layout;

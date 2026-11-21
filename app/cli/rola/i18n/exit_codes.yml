@@ -397,6 +397,18 @@ exit_codes:
     en: "`rola bring` was given arguments it cannot use"
     zh-CN: "`rola bring` 收到了无法使用的参数"
 
+  fetch_with_chain:
+    en: The index holds no chain for an entry the words name
+    zh-CN: 索引中没有这些词所指条目的版本链
+
+  fetch_with_incomplete:
+    en: The content of the entries could not all be fetched
+    zh-CN: 这些条目的内容未能全部取回
+
+  fetch_with_failed:
+    en: The content fetch failed
+    zh-CN: 取回内容的操作失败
+
   retrack:
     en: A file's version pointer could not be moved back
     zh-CN: 无法回退文件的版本指针
