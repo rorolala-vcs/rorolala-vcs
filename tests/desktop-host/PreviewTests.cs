@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FileSystemPlugin;
@@ -145,6 +146,51 @@ public sealed class PreviewTests
         }
 
         Assert.NotNull(image.Source);
+    }
+
+    /// <summary>A thumbnail is cut round, and the type icon shrinks to the bottom right corner over it.</summary>
+    /// <remarks>
+    /// The two are checked as the tile's own children, in the order the tile adds them: the frame, the whole
+    /// icon, the type badge. Four tenths of a sixty-four pixel tile is twenty-six pixels, and the corner is
+    /// eight, which is what the tile states rather than what a renderer leaves.
+    /// </remarks>
+    [Fact]
+    public void AThumbnailIsCutRoundAndTheTypeTakesTheCorner()
+    {
+        var services = Host.Services();
+        var source = new FakeSource("it.corner", cares: true, Picture(PreviewOrigin.Plugin));
+        var previews = new PreviewService(services.Log.For("it.previews"), services.Progress, source);
+        var directory = Scratch.New("preview-corner");
+        var path = Path.Combine(directory, "hero.psd");
+
+        File.WriteAllText(path, "x");
+
+        var tile = new PreviewTile(previews, new Entry(path, EntryKind.File), 64, []);
+        var window = new Window { Width = 300, Height = 300, Content = tile };
+
+        window.Show();
+
+        try
+        {
+            var badge = Until(
+                window,
+                () => tile.Children[2].IsVisible ? (Border)tile.Children[2] : null
+            );
+            var frame = Assert.IsType<Border>(tile.Children[0]);
+
+            Assert.True(frame.IsVisible);
+            Assert.True(frame.ClipToBounds);
+            Assert.Equal(8.0, frame.CornerRadius.TopLeft);
+            Assert.False(tile.Children[1].IsVisible);
+            Assert.Equal(26.0, badge.Width);
+            Assert.Equal(26.0, badge.Height);
+            Assert.Equal(HorizontalAlignment.Right, badge.HorizontalAlignment);
+            Assert.Equal(VerticalAlignment.Bottom, badge.VerticalAlignment);
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     /// <summary>A fixed request.</summary>

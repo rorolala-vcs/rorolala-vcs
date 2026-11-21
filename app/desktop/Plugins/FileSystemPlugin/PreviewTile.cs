@@ -9,12 +9,15 @@ using RorolalaDesktop.Contract;
 namespace FileSystemPlugin;
 
 /// <summary>
-/// A grid tile's picture: the system's thumbnail where there is one, and the entry's type icon where there is not.
+/// A grid tile's picture: the system's thumbnail in a rounded frame where there is one, and the entry's type
+/// icon where there is not.
 /// </summary>
 /// <remarks>
 /// The preview is asked for when the tile is attached to a window and cancelled when it leaves: a grid recycles its
-/// tiles, and a request made once for one entry would otherwise be a request a different entry inherits. The badges
-/// stay above both pictures, in the same arc they are drawn on anywhere else.
+/// tiles, and a request made once for one entry would otherwise be a request a different entry inherits. The
+/// contribution badges stay above both pictures, in the same arc they are drawn on anywhere else, and the type
+/// icon takes their opposite corner at four tenths of the tile once a thumbnail is there: the thumbnail is what is
+/// read first, and the type is what is found at its corner when it is looked for.
 /// <para>
 /// The pixels are copied to a bitmap here, on the window's thread, because a bitmap belongs to the renderer: a
 /// source makes bytes, and this is the one place the bytes become something a window can draw.
@@ -22,14 +25,32 @@ namespace FileSystemPlugin;
 /// </remarks>
 internal sealed class PreviewTile : Grid
 {
+    /// <summary>How round a thumbnail's corners are, as a share of the tile.</summary>
+    private const double CornerShare = 0.12;
+
+    /// <summary>How large the type badge is, as a share of the tile.</summary>
+    private const double BadgeShare = 0.4;
+
     /// <summary>The entry the tile is for.</summary>
     private readonly Entry _entry;
 
-    /// <summary>The type icon, which is drawn until a preview arrives and stays if none does.</summary>
+    /// <summary>The type icon, which is drawn at the whole tile until a preview arrives.</summary>
     private readonly Control _icon;
 
-    /// <summary>The preview, hidden until there is one.</summary>
+    /// <summary>The preview's own picture, inside the frame.</summary>
     private readonly Image _picture;
+
+    /// <summary>The frame the preview is drawn in, hidden until there is one.</summary>
+    private readonly Border _frame;
+
+    /// <summary>The type icon's badge, worn at the bottom right of a preview.</summary>
+    private readonly Border _type;
+
+    /// <summary>How wide and tall the type badge is.</summary>
+    private readonly int _badge;
+
+    /// <summary>How much of a virtual entry's icon its ring covers.</summary>
+    private readonly double _mark;
 
     /// <summary>What the preview is asked of.</summary>
     private readonly IPreviewService _previews;
@@ -53,12 +74,30 @@ internal sealed class PreviewTile : Grid
     {
         _previews = previews;
         _entry = entry;
+        _mark = mark;
+        _badge = Badge(size);
         _icon = Icons.For(entry, size, mark);
         _picture = new Image
         {
             Width = size,
             Height = size,
             Stretch = Stretch.UniformToFill,
+        };
+        _frame = new Border
+        {
+            Width = size,
+            Height = size,
+            CornerRadius = new CornerRadius(Corner(size)),
+            ClipToBounds = true,
+            Child = _picture,
+            IsVisible = false,
+        };
+        _type = new Border
+        {
+            Width = _badge,
+            Height = _badge,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom,
             IsVisible = false,
         };
 
@@ -66,9 +105,11 @@ internal sealed class PreviewTile : Grid
         Height = size;
 
         // The tile is not clipped: its badges stand on the arc around the icon's corner and reach a little past
-        // it, and a clip at the tile's own edge cuts them in half. The picture is already the tile's size.
-        Children.Add(_picture);
+        // it, and a clip at the tile's own edge cuts them in half. The thumbnail is clipped by its own frame,
+        // and the type badge sits inside the tile's own bottom right corner.
+        Children.Add(_frame);
         Children.Add(_icon);
+        Children.Add(_type);
 
         if (badges.Count > 0)
         {
@@ -123,7 +164,9 @@ internal sealed class PreviewTile : Grid
             }
 
             _picture.Source = Bitmap(image);
-            _picture.IsVisible = true;
+            _frame.IsVisible = true;
+            _type.Child ??= Icons.For(_entry, _badge, _mark);
+            _type.IsVisible = true;
             _icon.IsVisible = false;
         }
         catch (OperationCanceledException)
@@ -168,4 +211,16 @@ internal sealed class PreviewTile : Grid
         _asking?.Dispose();
         _asking = null;
     }
+
+    /// <summary>How round a thumbnail's corners are at a tile of `size`.</summary>
+    /// <param name="size">How many pixels wide and tall the tile is.</param>
+    /// <returns>The corner radius, at least two pixels.</returns>
+    private static double Corner(double size) =>
+        Math.Max(2, Math.Round(size * CornerShare, MidpointRounding.AwayFromZero));
+
+    /// <summary>How wide and tall the type badge is at a tile of `size`.</summary>
+    /// <param name="size">How many pixels wide and tall the tile is.</param>
+    /// <returns>The badge's size, four tenths of the tile, at least one pixel.</returns>
+    private static int Badge(int size) =>
+        Math.Max(1, (int)Math.Round(size * BadgeShare, MidpointRounding.AwayFromZero));
 }
