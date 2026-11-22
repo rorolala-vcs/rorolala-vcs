@@ -732,6 +732,12 @@ internal sealed class DirectoryControl : UserControl
         );
 
         _show.Classes.Add("tool");
+
+        // The switch says what it says in its picture alone: a tool that is on is filled with the primary, and a
+        // switch has no business painting the colour a chosen thing takes, since its two pictures are already the
+        // two answers. The ink is the program's own rather than a tool's quieter one, so that the one thing the
+        // tool changes is the eye.
+        _show[!TemplatedControl.ForegroundProperty] = new DynamicResourceExtension(PaletteKeys.Front);
         _show.VerticalAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(_show, RolaI18N.Get("rorolala_file_system.hidden"));
         _showGlyph = Icons.Inked(_eyes.Value.Shown, Icons.Tool);
@@ -751,8 +757,7 @@ internal sealed class DirectoryControl : UserControl
     }
 
     /// <summary>
-    /// Says on the switch what it shows: the eye that is open or struck through, the ink that goes with it, and
-    /// the fill the look gives a tool that is on.
+    /// Says on the switch what it shows: the eye that is open or struck through, which is the whole of the answer.
     /// </summary>
     /// <param name="shown">Whether what the rules hide is being shown.</param>
     private void Show(bool shown)
@@ -774,9 +779,6 @@ internal sealed class DirectoryControl : UserControl
             _showGlyph,
             Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality
         );
-
-        // The look's class for a tool that is on, which is the same word for every tool the program draws.
-        _show.Classes.Set("on", shown);
     }
 
     /// <summary>Builds the rows the dropdown holds, one per provider.</summary>
@@ -923,6 +925,11 @@ internal sealed class DirectoryControl : UserControl
         );
 
         _sync.Classes.Add("tool");
+
+        // The picture is the whole of what the switch says, and the ink is the program's own: a tool that is on is
+        // filled with the primary, and this one would otherwise be the only thing in the dock painted with a choice
+        // it did not make.
+        _sync[!TemplatedControl.ForegroundProperty] = new DynamicResourceExtension(PaletteKeys.Front);
         _sync.VerticalAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(_sync, RolaI18N.Get("rorolala_file_system.sync"));
         _syncGlyph = Icons.Inked(_links.Value.Closed, Icons.Tool);
@@ -956,8 +963,8 @@ internal sealed class DirectoryControl : UserControl
     }
 
     /// <summary>
-    /// Says on the switch whether this dock follows the whole: the link that is closed or broken, the ink that
-    /// goes with it, and the fill the look gives a tool that is on.
+    /// Says on the switch whether this dock follows the whole: the link that is closed or broken, which is the
+    /// whole of the answer.
     /// </summary>
     /// <param name="inStep">Whether this dock follows the whole.</param>
     private void Follows(bool inStep)
@@ -978,8 +985,6 @@ internal sealed class DirectoryControl : UserControl
             _syncGlyph,
             Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality
         );
-
-        _sync.Classes.Set("on", inStep);
     }
 
     /// <summary>
