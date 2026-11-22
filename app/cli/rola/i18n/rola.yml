@@ -7,98 +7,102 @@ rola:
 
       Run `rola -h` to see the available commands
     zh-CN: |
-        欢迎使用 Rorolala CLI
+      欢迎使用 Rorolala CLI
 
-        使用 `rola -h` 查看可用的命令
+      使用 `rola -h` 查看可用的命令
   help:
     en: |
-        **Usage**: rola <COMMAND> [ARGS]
+      **Usage**: rola <COMMAND> [ARGS]
 
-        **Global Flags**:
-            [-v | --vault] [--rebuild] [--no-color] [--no-progress]
-            [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
-            [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
-            [--offline] [--force] [--no-pager]
-            [-V | --version] [-h | --help]
+      **Global Flags**:
+          [-v | --vault] [--rebuild] [--no-color] [--no-progress]
+          [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
+          [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
+          [--offline] [--force] [--no-pager]
+          [-V | --version] [-h | --help]
 
-        **Initialization**
-            init                       Create a Workspace or Vault in the current directory
-            create <PATH>              Create a Workspace at PATH, or a Vault with `--vault`
+      **Initialization**
+          init                       Create a Workspace or Vault in the current directory
+          create <PATH>              Create a Workspace at PATH, or a Vault with `--vault`
 
-        **Identity**
-            account <ACCOUNT>          Query or switch the accounts available on this machine
-            key [--pem]                List the keys Rorolala can use, or generate a pair
+      **Identity**
+          account <ACCOUNT>          Query or switch the accounts available on this machine
+          key [--pem]                List the keys Rorolala can use, or generate a pair
 
-        **Everyday**
-            status                     Show the difference between the Workspace's file structure and the record
-            bind <LINK> [NAME]         Bind a Vault address as NAME and start a Layout on it
-            align <PATH>               Keep the Workspace's file structure and the record in agreement
-            fetch [VAULT]              Bring a Vault's Layout here as a read-only copy
-            bring <UPSTREAM> [PATH]    Bring the upstream Layout's entries into the local Layout
-            track <FILE>               Record the file into the current Layout
-            retrack <FILE>             Move a file's recorded version back
-            sync                       Bring this Layout and the Vault it tracks into agreement
-            tree                       Operate and manage the Workspace's tree
-            pack                       Organize the objects in the store and the index into packs
+      **Everyday**
+          status                     Show the difference between the Workspace's file structure and the record
+          bind <LINK> [NAME]         Bind a Vault address as NAME and start a Layout on it
+          align <PATH>               Keep the Workspace's file structure and the record in agreement
+          fetch [VAULT]              Bring a Vault's Layout here as a read-only copy
+          bring <UPSTREAM> [PATH]    Bring the upstream Layout's entries into the local Layout
+          track <FILE>               Record the file into the current Layout
+          retrack <FILE>             Move a file's recorded version back
+          hold <PATH>                Hold entries for your account
+          giveup <PATH>              Let go of entries your account holds
+          sync                       Bring this Layout and the Vault it tracks into agreement
+          tree                       Operate and manage the Workspace's tree
+          pack                       Organize the objects in the store and the index into packs
 
-        **Help**
-            docs <TEXT> [--search]     Read or search an article
-            explain                    Explain what a number or a name the program left behind means
+      **Help**
+          docs <TEXT> [--search]     Read or search an article
+          explain                    Explain what a number or a name the program left behind means
 
-        **Low-level**
-            storage                    Read and write the content a store holds
-            vcs-index                  Read and write the version control index
-            inv-idx                    Build and query the inverse index
-            layout                     Work with the Layout a run keeps
+      **Low-level**
+          storage                    Read and write the content a store holds
+          vcs-index                  Read and write the version control index
+          inv-idx                    Build and query the inverse index
+          layout                     Work with the Layout a run keeps
 
-        **Other**
-            vault                      Query and work with the Vaults this Workspace knows
-            desktop                    Open `rola`'s desktop program
-            fs-ops                     Move, copy or remove a path
+      **Other**
+          vault                      Query and work with the Vaults this Workspace knows
+          desktop                    Open `rola`'s desktop program
+          fs-ops                     Move, copy or remove a path
     zh-CN: |
-        **用法**：rola <命令> [参数]
+      **用法**：rola <命令> [参数]
 
-        **全局标识**：
-            [-v | --vault] [--rebuild] [--no-color] [--no-progress]
-            [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
-            [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
-            [--offline] [--force] [--no-pager]
-            [-V | --version] [-h | --help]
+      **全局标识**：
+          [-v | --vault] [--rebuild] [--no-color] [--no-progress]
+          [--json | --json-pretty] [--format <TEMPLATE>] [--workspace-dir <PATH>]
+          [--vault-dir <PATH>] [--theme-choice <NAME>] [--lang <LOCALE>]
+          [--offline] [--force] [--no-pager]
+          [-V | --version] [-h | --help]
 
-        **初始化**
-            init                      在当前目录创建工作区或保险库
-            create <路径>             在指定路径创建工作区，加 `--vault` 则创建保险库
+      **初始化**
+          init                      在当前目录创建工作区或保险库
+          create <路径>             在指定路径创建工作区，加 `--vault` 则创建保险库
 
-        **身份**
-            account <账户名>          查询或切换本机的可用账户
-            key [--pem]               列出 Rorolala 可用的密钥，或生成一对
+      **身份**
+          account <账户名>          查询或切换本机的可用账户
+          key [--pem]               列出 Rorolala 可用的密钥，或生成一对
 
-        **日常使用**
-            status                    展示工作区文件结构与记录之间的差异
-            bind <链接> [名字]        将保险库地址绑定为名字，并在其上建立布局
-            align <路径>              让工作区下的文件结构与记录的保持一致
-            fetch [保险库名]          将保险库的布局取回为只读副本
-            bring <上游> [路径]       将上游布局的条目带入本地布局中
-            track <文件>              将文件记入当前布局
-            retrack <文件>            回退文件已记录的版本
-            sync                      让当前布局与它追踪的保险库重新一致
-            tree                      操作和管理工作区的树
-            pack                      将仓库与索引中的对象整理进 pack
+      **日常使用**
+          status                    展示工作区文件结构与记录之间的差异
+          bind <链接> [名字]        将保险库地址绑定为名字，并在其上建立布局
+          align <路径>              让工作区下的文件结构与记录的保持一致
+          fetch [保险库名]          将保险库的布局取回为只读副本
+          bring <上游> [路径]       将上游布局的条目带入本地布局中
+          track <文件>              将文件记入当前布局
+          retrack <文件>            回退文件已记录的版本
+          hold <路径>               为本机账户持有条目
+          giveup <路径>             放弃本机账户持有的条目
+          sync                      让当前布局与它追踪的保险库重新一致
+          tree                      操作和管理工作区的树
+          pack                      将仓库与索引中的对象整理进 pack
 
-        **帮助**
-            docs <文本> [--search]    阅读或搜索一篇文章
-            explain                   解释程序留下的数字或名字的含义
+      **帮助**
+          docs <文本> [--search]    阅读或搜索一篇文章
+          explain                   解释程序留下的数字或名字的含义
 
-        **底层操作**
-            storage                   读写仓库持有的内容
-            vcs-index                 读写版本控制索引
-            inv-idx                   建立并查询反向索引
-            layout                    操作本次运行所持有的布局
+      **底层操作**
+          storage                   读写仓库持有的内容
+          vcs-index                 读写版本控制索引
+          inv-idx                   建立并查询反向索引
+          layout                    操作本次运行所持有的布局
 
-        **其他**
-            vault                     查询和操作当前工作区已知的保险库
-            desktop                   打开 `rola` 的桌面端程序
-            fs-ops                    移动、复制或删除一个路径
+      **其他**
+          vault                     查询和操作当前工作区已知的保险库
+          desktop                   打开 `rola` 的桌面端程序
+          fs-ops                    移动、复制或删除一个路径
   err_unknown_command:
     en: Unknown command `%{command}`
     zh-CN: 未知命令 `%{command}`

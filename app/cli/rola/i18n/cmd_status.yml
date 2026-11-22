@@ -294,6 +294,18 @@ status:
     en: "If they really must be recorded, use `rola track --force` to force it"
     zh-CN: "确需记录请使用 `rola track --force` 强制记录"
 
+  header_unclaimed:
+    en: "Note: your workspace has %{count} content changes nobody holds!"
+    zh-CN: "注意，你的工作区存在 %{count} 项无人持有的内容变更！"
+
+  body_unclaimed:
+    en: "These files are held by nobody, and have to be claimed before they can be recorded:"
+    zh-CN: "这些文件无人持有，需要先持有才能记录："
+
+  help_unclaimed:
+    en: "Claim them with `rola hold <PATH>`"
+    zh-CN: "请用 `rola hold <路径>` 持有它们"
+
   header_structural:
     en: "Your workspace has %{count} structural changes to confirm:"
     zh-CN: "你的工作区存在 %{count} 项结构性变更，需要确认："

@@ -339,6 +339,7 @@ pub fn handle_status(
             })
             .collect(),
         unowned: status.unowned,
+        unclaimed: status.unclaimed,
         merging: status
             .merging
             .into_iter()
@@ -1279,6 +1280,8 @@ pub struct ResultStatus {
     renamed: Vec<RenameItem>,
     /// Paths the fetched copy of the Vault's Layout says another account holds.
     unowned: Vec<String>,
+    /// Paths the fetched copy leaves unheld, which changed here and are this account's to claim first.
+    unclaimed: Vec<String>,
     /// Trees the Layout and the work disagree about structurally, one line each.
     trees_structural: Vec<TreeStructuralLine>,
     /// Trees whose own reading finds work to record, one line each.
@@ -1430,6 +1433,7 @@ pub fn render_result_status(result: ResultStatus) {
     let local = structural > 0
         || content > 0
         || !result.unowned.is_empty()
+        || !result.unclaimed.is_empty()
         || !result.merging.is_empty()
         || !result.broken.is_empty();
 
@@ -1441,6 +1445,7 @@ pub fn render_result_status(result: ResultStatus) {
         }
         let mark = t!("status.mark_modified");
         let unowned = !result.unowned.is_empty();
+        let unclaimed = !result.unclaimed.is_empty();
         let merging = !result.merging.is_empty() || !result.broken.is_empty();
 
         // What is being merged is said first: it is work already under way, and what the next
@@ -1517,9 +1522,32 @@ pub fn render_result_status(result: ResultStatus) {
             }
         }
 
+        // What changed and is nobody's is the same refusal with a different way out: the run claims it
+        // rather than asking whoever holds it, since nobody does.
+        if unclaimed {
+            if unowned || merging {
+                r_println!("");
+            }
+
+            r_println!(
+                "{}",
+                trd!(t!(
+                    "status.header_unclaimed",
+                    count = result.unclaimed.len()
+                ))
+                .trim()
+            );
+            r_println!("{}", trd!(t!("status.body_unclaimed")).trim());
+            r_println!("");
+
+            for path in &result.unclaimed {
+                r_println!("{}", trd!(format!("  {path} {mark}")));
+            }
+        }
+
         if structural > 0 {
             // A blank line separates the blocks; the first block has none before it.
-            if unowned || merging {
+            if unowned || unclaimed || merging {
                 r_println!("");
             }
 
@@ -1701,6 +1729,9 @@ pub fn render_result_status(result: ResultStatus) {
 
         if !result.unowned.is_empty() {
             r_println!("{}", help_line!(t!("status.help_unowned").trim()));
+        }
+        if !result.unclaimed.is_empty() {
+            r_println!("{}", help_line!(t!("status.help_unclaimed").trim()));
         }
         if merging {
             if result.merging.iter().any(|item| item.moved.is_some()) {

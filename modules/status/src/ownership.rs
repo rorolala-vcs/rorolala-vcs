@@ -35,6 +35,20 @@ pub fn vault_copy(workspace: &Workspace) -> Option<Layout> {
     Layout::open(&dir).ok()
 }
 
+/// The content changes that are not `me`'s to record, split by who stands in the way.
+///
+/// An entry another account holds is one this side cannot record, and the two sides have to agree
+/// before it can be. An entry nobody holds is one this side may have, once it is claimed: saying the
+/// two are the same thing would tell a reader to ask somebody when there is nobody to ask.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Unowned {
+    /// Paths the fetched copy says another account holds.
+    pub held: Vec<String>,
+
+    /// Paths the fetched copy leaves unheld, which this account would have to claim first.
+    pub unclaimed: Vec<String>,
+}
+
 /// The paths among the tree's content changes that the fetched copy says are not `me`'s to make.
 ///
 /// The changes counted are the ones the Layout names: a path that changed where it was, and the
@@ -54,12 +68,34 @@ pub fn unowned(
     me: Option<&str>,
     diff: &TreeDiff,
 ) -> Result<Vec<String>, LayoutError> {
+    let split = split(workspace, local, vault, me, diff)?;
+    let mut all = split.held;
+
+    all.extend(split.unclaimed);
+
+    Ok(all)
+}
+
+/// The paths among the tree's content changes that are not `me`'s to make, and who stands in the way.
+///
+/// See [`unowned`] for what a path counts as, and [`Unowned`] for why the two reasons are told apart.
+///
+/// # Errors
+///
+/// Returns [`LayoutError`] when a copy that is there cannot be read.
+pub fn split(
+    workspace: &Workspace,
+    local: &Layout,
+    vault: Option<&str>,
+    me: Option<&str>,
+    diff: &TreeDiff,
+) -> Result<Unowned, LayoutError> {
     let (Some(vault), Some(me)) = (vault, me) else {
-        return Ok(Vec::new());
+        return Ok(Unowned::default());
     };
 
     let Some(dir) = workspace.readonly_layout_copy(vault, VAULT_LAYOUT_NAME) else {
-        return Ok(Vec::new());
+        return Ok(Unowned::default());
     };
 
     let copy = Layout::open(&dir)?;
@@ -69,7 +105,7 @@ pub fn unowned(
         .map(|rename| (rename.to.as_str(), &rename.from))
         .collect();
 
-    let mut unowned = Vec::new();
+    let mut split = Unowned::default();
 
     for path in &diff.modified {
         let named = moved_from.get(path.as_str()).copied().unwrap_or(path);
@@ -80,10 +116,12 @@ pub fn unowned(
             continue;
         };
 
-        if data.owner() != Some(me) {
-            unowned.push(path.as_str().to_owned());
+        match data.owner() {
+            Some(owner) if owner == me => {}
+            Some(_) => split.held.push(path.as_str().to_owned()),
+            None => split.unclaimed.push(path.as_str().to_owned()),
         }
     }
 
-    Ok(unowned)
+    Ok(split)
 }

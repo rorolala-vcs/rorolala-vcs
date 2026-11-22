@@ -25,7 +25,7 @@ use rorolala_workspace_analyze::{TreeDiffError, entry_of, tree_diff};
 
 use crate::base;
 use crate::base::Relation;
-use crate::{tracked_vault, unowned, variant_moves, vault_copy};
+use crate::{split, tracked_vault, variant_moves, vault_copy};
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
 const DEFAULT_ALIKE: f32 = 0.6;
@@ -226,6 +226,14 @@ pub struct Status {
     /// Paths the fetched copy of the Vault's Layout says another account holds.
     pub unowned: Vec<String>,
 
+    /// Paths the fetched copy of the Vault's Layout leaves unheld, which changed here.
+    ///
+    /// They are the changes this side may have once it claims them, so the thing to do about one is
+    /// `rola hold` rather than asking whoever holds it: nobody does. They are kept out of
+    /// [`modified`](Self::modified) for the same reason [`unowned`](Self::unowned) is, since what is
+    /// recorded before the claim would be recorded by an account the entry is not held for.
+    pub unclaimed: Vec<String>,
+
     /// Files a variant is waiting to be joined into, and the variant waiting.
     pub merging: Vec<Merge>,
 
@@ -291,13 +299,18 @@ impl Status {
         // content changes: a reader that took them as its own work would be reading past the one
         // thing it is not to do.
         let tracked = tracked_vault(workspace);
-        let unowned = unowned(workspace, layout, tracked.as_deref(), me, &diff)?;
-        let not_mine: BTreeSet<&str> = unowned.iter().map(String::as_str).collect();
+        let not_mine = split(workspace, layout, tracked.as_deref(), me, &diff)?;
+        let kept_out: BTreeSet<&str> = not_mine
+            .held
+            .iter()
+            .chain(&not_mine.unclaimed)
+            .map(String::as_str)
+            .collect();
 
         let modified: Vec<LayoutPath> = diff
             .modified
             .iter()
-            .filter(|path| !not_mine.contains(path.as_str()))
+            .filter(|path| !kept_out.contains(path.as_str()))
             .cloned()
             .collect();
 
@@ -377,7 +390,8 @@ impl Status {
                     strong: rename.strong,
                 })
                 .collect(),
-            unowned,
+            unowned: not_mine.held,
+            unclaimed: not_mine.unclaimed,
             merging,
             broken,
             wrong_base: wrong_base(workspace, layout, index, runtime.as_ref(), &modified),
@@ -441,6 +455,7 @@ impl Status {
         let at = at.as_str();
 
         if self.unowned.iter().any(|path| path == at)
+            || self.unclaimed.iter().any(|path| path == at)
             || self.wrong_base.iter().any(|path| path == at)
         {
             return PathState::Wrong;
@@ -996,6 +1011,47 @@ mod tests {
         .unwrap();
 
         assert_eq!(status.unowned, vec!["hero.psd".to_owned()], "{status:?}");
+        assert_eq!(status.modified, Vec::<String>::new(), "{status:?}");
+        assert_eq!(status.state_of(&dir.join("hero.psd")), PathState::Wrong);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A path nobody holds is wrong as well, and is kept apart from one another account holds.
+    #[test]
+    fn a_path_nobody_holds_is_unclaimed_and_not_another_accounts() {
+        let (dir, workspace) = workspace("states-unclaimed");
+        track(&workspace, 1, "hero.psd");
+        workspace.set_layout_track("vault").unwrap();
+
+        // The copy names the entry and leaves it unheld, which is a change to claim rather than one to
+        // ask somebody about.
+        let copy_dir = workspace.readonly_layouts_dir("vault", VAULT_LAYOUT_NAME);
+        fs::create_dir_all(&copy_dir).unwrap();
+        let copy = Layout::open(&copy_dir).unwrap();
+        copy.create_entry(
+            Uuid::from_u128(1),
+            MutableData::new(None, [1; 32], String::new()),
+        )
+        .unwrap();
+
+        fs::write(dir.join("hero.psd"), b"before\n").unwrap();
+        remember(&workspace);
+
+        sleep(Duration::from_millis(20));
+        fs::write(dir.join("hero.psd"), b"after\n").unwrap();
+
+        let status = Status::read(
+            &workspace,
+            &working(&workspace),
+            Some("bob"),
+            None,
+            &IgnoreRuleSet::empty(),
+        )
+        .unwrap();
+
+        assert_eq!(status.unclaimed, vec!["hero.psd".to_owned()], "{status:?}");
+        assert_eq!(status.unowned, Vec::<String>::new(), "{status:?}");
         assert_eq!(status.modified, Vec::<String>::new(), "{status:?}");
         assert_eq!(status.state_of(&dir.join("hero.psd")), PathState::Wrong);
 
