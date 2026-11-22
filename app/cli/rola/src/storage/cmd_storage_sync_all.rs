@@ -8,7 +8,10 @@
 // `#[chain]` copies the attributes of the function it is given onto the struct it generates,
 // so a lint allowed on the handler below is reported as defined twice. The allow lives here,
 // where it covers the one signature that needs it.
-#![allow(clippy::trivially_copy_pass_by_ref)]
+//
+// The handler's parameters are the resources the framework injects, so how many of them there are is
+// what the command needs of the run rather than a signature this program shaped.
+#![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
 use librorolala::daemon::action_sync_all_async;
 use librorolala::protocol::ActionError;
@@ -24,7 +27,9 @@ use mingling::{
     picker::EntryPicker,
     res::{ResConfirm, ResExitCode},
 };
-use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResWorkspace};
+use rorolala_cli_setups::{
+    ResConcurrency, ResCurrentRemoteVault, ResOffline, ResProgressSetting, ResWorkspace,
+};
 use rorolala_utils_cli_theme::{help_line, trd};
 use rust_i18n::t;
 
@@ -124,6 +129,7 @@ pub fn handle_storage_sync_all(
     confirm: &ResConfirm,
     progress: &ResProgressSetting,
     offline: &ResOffline,
+    concurrency: &ResConcurrency,
 ) -> Next {
     // The two stores are made to agree by speaking to the Vault, which is the whole of this
     // command and the one thing an offline run may not do.
@@ -155,7 +161,8 @@ pub fn handle_storage_sync_all(
     }
 
     // What to sync is not named here: a full sync is everything either end holds, and the two ends
-    // work that out between them. What the input carries is nothing, and the action reads none of it.
+    // work that out between them. What the input carries is how many reads the sending side keeps in
+    // flight, which the action hands to the Vault before the two lists cross.
     //
     // The exchange is asynchronous and a command is not, so the two meet here: a runtime of this
     // run's own is what waits for it, and the run's progress is said to a reader on a thread of its
@@ -168,7 +175,7 @@ pub fn handle_storage_sync_all(
         held,
         &account,
         target.to_string(),
-        String::new(),
+        format!("c:{n}", n = **concurrency),
         reporting.progress(),
     ));
     reporting.finish();

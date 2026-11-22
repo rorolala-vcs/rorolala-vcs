@@ -537,6 +537,12 @@ impl RorolalaStorage {
     /// `keys` names content, not chunks: a chunk named by a manifest is carried with it, and naming
     /// one on its own carries that chunk's bytes as an object.
     ///
+    /// What has to cross is worked out before a byte of it is read, and then read through one batch
+    /// of the source and written through one batch of this store: a content of ten thousand chunks
+    /// is a handful of files opened per store and two packs, rather than a walk of every pack per
+    /// chunk and ten thousand loose files. The manifest is written loose, after the chunks it names
+    /// are published, so a manifest a reader can find is one whose content can be put together.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::NotFound`] when `source` cannot produce a key or a chunk it names,
@@ -547,74 +553,109 @@ impl RorolalaStorage {
         let mut objects = BTreeSet::new();
         let mut manifests = BTreeSet::new();
 
+        // What has to cross, decided without reading a byte of it. A key is looked up once against
+        // this store's packs, which is what a publish of many chunks spends its time in otherwise.
+        let state = self.root_state();
+        let mut plans: Vec<Planned> = Vec::new();
+
         for key in keys {
-            self.publish_one(source, key, &mut objects, &mut manifests, &mut report)
-                .await?;
+            let mut entries = Vec::new();
+
+            if let Some(manifest) = source.read_manifest(key).await? {
+                for chunk in manifest.chunks() {
+                    let chunk_key = chunk.key();
+                    if !objects.insert(chunk_key) {
+                        continue;
+                    }
+
+                    if !self.holds_object_in(&state, &chunk_key).await? {
+                        entries.push(chunk_key);
+                    }
+                }
+
+                plans.push(Planned {
+                    key: *key,
+                    manifest: Some(manifest),
+                    entries,
+                });
+            } else {
+                if objects.insert(*key) && !self.holds_object_in(&state, key).await? {
+                    entries.push(*key);
+                }
+
+                plans.push(Planned {
+                    key: *key,
+                    manifest: None,
+                    entries,
+                });
+            }
+        }
+
+        // One batch of the source for every entry that is to cross, and one batch here for what
+        // arrives: each store's packs are opened once, and the entries are laid down in the order the
+        // manifests name them.
+        let needed: Vec<Key> = plans
+            .iter()
+            .flat_map(|plan| plan.entries.iter().copied())
+            .collect();
+        let reads = if needed.is_empty() {
+            None
+        } else {
+            Some(source.open_objects(&needed).await?)
+        };
+        let mut write = self.begin_batch_with_codec(self.codec).await;
+        let mut broken: BTreeSet<Key> = BTreeSet::new();
+
+        if let Some(reads) = &reads {
+            for plan in &plans {
+                for entry in &plan.entries {
+                    match reads.read(entry).await {
+                        Ok(bytes) => {
+                            write.add(entry, &bytes).await?;
+                            report.written += 1;
+                        }
+                        // A chunk that is not there is the manifest not making a content, which the
+                        // object beside it may still do: the same answer a read takes.
+                        Err(Error::NotFound(_)) => {
+                            broken.insert(plan.key);
+                        }
+                        Err(error) => return Err(error),
+                    }
+                }
+            }
+        }
+
+        write.publish().await?;
+
+        for plan in &plans {
+            let Some(manifest) = &plan.manifest else {
+                continue;
+            };
+
+            if !broken.contains(&plan.key) {
+                if manifests.insert(plan.key) && !self.holds_manifest(&plan.key).await? {
+                    self.put_manifest(&plan.key, manifest).await?;
+                    report.written += 1;
+                }
+
+                continue;
+            }
+
+            // The manifest does not make a content: the object under the key may still be the
+            // content, and it is asked for only here, on the path where the chunks did not come.
+            if !objects.insert(plan.key) || self.holds_object_in(&state, &plan.key).await? {
+                continue;
+            }
+
+            let bytes = source.read_object(&plan.key).await?;
+            self.write_object(&bytes, self.codec).await?;
+            report.written += 1;
         }
 
         report.objects = u64::try_from(objects.len()).unwrap_or(u64::MAX);
         report.manifests = u64::try_from(manifests.len()).unwrap_or(u64::MAX);
 
         Ok(report)
-    }
-
-    /// Carries one key, and the chunks of a manifest that is kept under it.
-    async fn publish_one(
-        &self,
-        source: &Self,
-        key: &Key,
-        objects: &mut BTreeSet<Key>,
-        manifests: &mut BTreeSet<Key>,
-        report: &mut PublishReport,
-    ) -> Result<(), Error> {
-        // A chunked content first: the manifest is what a reader looks for, and the chunks it names
-        // are what a read falls back to only when the manifest is missing.
-        if let Some(manifest) = source.read_manifest(key).await? {
-            let mut whole = true;
-
-            for chunk in manifest.chunks() {
-                let chunk_key = chunk.key();
-                if !objects.insert(chunk_key) {
-                    continue;
-                }
-
-                match source.read_object(&chunk_key).await {
-                    Ok(bytes) => {
-                        if !self.holds_object(&chunk_key).await? {
-                            self.write_object(&bytes, self.codec).await?;
-                            report.written += 1;
-                        }
-                    }
-                    Err(Error::NotFound(_)) => whole = false,
-                    Err(error) => return Err(error),
-                }
-            }
-
-            if whole {
-                if manifests.insert(*key) && !self.holds_manifest(key).await? {
-                    self.put_manifest(key, &manifest).await?;
-                    report.written += 1;
-                }
-
-                return Ok(());
-            }
-        }
-
-        // A whole content, or the object a chunked one also left behind. A key already under this
-        // store is not read from the source at all.
-        if !objects.insert(*key) {
-            return Ok(());
-        }
-
-        if self.holds_object(key).await? {
-            return Ok(());
-        }
-
-        let bytes = source.read_object(key).await?;
-        self.write_object(&bytes, self.codec).await?;
-        report.written += 1;
-
-        Ok(())
     }
 
     /// How many bytes the content stored under `key` is carried to another store as, read without
@@ -867,6 +908,22 @@ impl RorolalaStorage {
 
         Ok(keys.into_iter().collect())
     }
+}
+
+/// One key's share of a publish, as it was worked out before any byte was read.
+///
+/// See [`RorolalaStorage::publish_from`], which reads the manifest of every key once, plans the
+/// entries that have to cross, and then reads and writes them as two batches rather than a file at a
+/// time.
+struct Planned {
+    /// The key being carried.
+    key: Key,
+    /// How the source keeps it cut, when it keeps it cut at all.
+    manifest: Option<Manifest>,
+    /// The entries to read from the source and write here, in the manifest's order.
+    ///
+    /// Empty is every entry already held: a key this store holds is not read at all.
+    entries: Vec<Key>,
 }
 
 /// Where one object's bytes are, as [`RorolalaStorage::open_objects`] planned them.

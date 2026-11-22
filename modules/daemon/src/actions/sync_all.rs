@@ -7,7 +7,7 @@
 use rorolala_protocol::{Action, ActionContext, ActionError, Both, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{Blake3Hash, Key, StorageSet};
 
-use super::sync_storage::{Side, carry_blob, sync_storage};
+use super::sync_storage::{DEFAULT_WINDOW, Side, carry_blob, grant, split_ask, sync_storage};
 
 /// An Action that makes the Workspace's store and the Vault's hold the same keys.
 ///
@@ -21,9 +21,11 @@ use super::sync_storage::{Side, carry_blob, sync_storage};
 ///
 /// # Input
 ///
-/// The trait names an input and this action reads none: what to sync is not the caller's to say,
-/// since a full sync is everything either side holds. What crosses is the empty string, and nothing
-/// of it is read.
+/// The trait names an input and what to sync is not the caller's to say, since a full sync is
+/// everything either side holds. What it carries is the ask for how much the sending side reads at
+/// once, `c:<n>`, the same token [`sync-hashes`](crate::ActionSyncHashes) reads: the ask belongs to
+/// the Workspace, so it crosses to the Vault first, and both ends work the window out from it.
+/// Nothing else in it is read.
 ///
 /// # Output
 ///
@@ -46,11 +48,23 @@ impl Action for ActionSyncAll {
     /// Vault to work on, and whatever the exchange fails with, see
     /// [`sync_storage`](crate::sync_storage).
     async fn process(
-        _: OnlyWorkspace<Self::Input>,
+        input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
     ) -> Result<Self::Output, ActionError> {
         // The store this side has: the Workspace's on the Workspace, the Vault's on the Vault.
         let local = local_stores(&ctx)?;
+
+        // How much the caller wants read at once is its own word, so it crosses to the Vault first:
+        // the window is the sending side's number, and each side sends one direction of a full sync.
+        let here = input.into_inner();
+        let to_vault = here.clone().map(String::into_bytes);
+        let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;
+        let text = arrived
+            .or(to_vault)
+            .map_or_default(|bytes| String::from_utf8_lossy(&bytes).into_owned());
+        let (asked, _) = split_ask(&text);
+        let granted = grant(&mut ctx, asked).await?;
+        let window = usize::try_from(granted).unwrap_or(DEFAULT_WINDOW);
 
         // What this side holds, as one run of digests: what crosses is that run, said to the other
         // side and read back, so that both ends know what the two of them hold between them. The run
@@ -101,7 +115,7 @@ impl Action for ActionSyncAll {
         let workspace = OnlyWorkspace::new(&ctx, || local.clone());
         let vault = OnlyVault::new(&ctx, || local.clone());
 
-        sync_storage(&mut ctx, workspace, vault, Both::new(required)).await
+        sync_storage(&mut ctx, workspace, vault, Both::new(required), window).await
     }
 }
 

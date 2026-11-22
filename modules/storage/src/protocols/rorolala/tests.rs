@@ -1227,6 +1227,78 @@ async fn publishing_from_another_store_carries_objects_and_manifests() {
     let _ = fs::remove_dir_all(&target_parent);
 }
 
+#[tokio::test]
+async fn a_published_content_lands_in_packs() {
+    let (source_parent, source) = store("publish-packs-source");
+    let (target_parent, target) = store("publish-packs-target");
+
+    let file = source_parent.join("file");
+    let content: Vec<u8> = (0..4096_u32).map(|value| (value % 251) as u8).collect();
+    fs::write(&file, &content).unwrap();
+    let cut = source
+        .clone()
+        .with_forced_cut(Chunking::Fixed { size: 512 });
+    let chunked = store_file(&cut, &file).await.unwrap();
+
+    let manifest = source.manifest_of(&chunked).await.unwrap().unwrap();
+    assert_eq!(manifest.chunks().len(), 8);
+
+    target.publish_from(&source, &[chunked]).await.unwrap();
+
+    // Every chunk is in a pack rather than in a file of its own: a content of thousands of chunks
+    // is two packs to publish rather than a file apiece to create and rename.
+    for chunk in manifest.chunks() {
+        assert!(!target.object_path(&chunk.key()).exists());
+    }
+
+    let packs = fs::read_dir(target.get_root().join(PACKED_DIR))
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "pack"))
+        .count();
+    assert!(packs >= 1, "a published content lands in a pack");
+
+    let out = target_parent.join("out");
+    target.extract_file(&chunked, &out).await.unwrap();
+    assert_eq!(fs::read(&out).unwrap(), content);
+
+    let _ = fs::remove_dir_all(&source_parent);
+    let _ = fs::remove_dir_all(&target_parent);
+}
+
+#[tokio::test]
+async fn a_manifest_whose_chunk_is_gone_publishes_the_object_beside_it() {
+    let (source_parent, source) = store("publish-fallback-source");
+    let (target_parent, target) = store("publish-fallback-target");
+
+    let file = source_parent.join("file");
+    let content: Vec<u8> = (0..4096_u32).map(|value| (value % 251) as u8).collect();
+    fs::write(&file, &content).unwrap();
+    let cut = source
+        .clone()
+        .with_forced_cut(Chunking::Fixed { size: 512 });
+    let chunked = store_file(&cut, &file).await.unwrap();
+    assert_eq!(key_of(&content), chunked);
+
+    // The content kept whole under the same key is what a read falls back to when the manifest does
+    // not make it. The cut write leaves only the chunks, so it is written here.
+    let whole = source.write_object(&content, Codec::Raw).await.unwrap();
+    assert_eq!(whole, chunked);
+
+    let manifest = source.manifest_of(&chunked).await.unwrap().unwrap();
+    source.remove(&manifest.chunks()[0].key()).await.unwrap();
+
+    let report = target.publish_from(&source, &[chunked]).await.unwrap();
+    assert_eq!(report.manifests, 0);
+
+    let out = target_parent.join("out");
+    target.extract_file(&chunked, &out).await.unwrap();
+    assert_eq!(fs::read(&out).unwrap(), content);
+
+    let _ = fs::remove_dir_all(&source_parent);
+    let _ = fs::remove_dir_all(&target_parent);
+}
+
 /// Moves the loose object of `key` back in time, so a collecting run counts it as stale.
 ///
 /// The grace is measured from the entry file's modification time, so a test that wants an entry

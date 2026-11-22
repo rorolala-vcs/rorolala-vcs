@@ -50,7 +50,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use rorolala_auth::{Account, Member};
-use rorolala_daemon::sync_storage;
+use rorolala_daemon::{DEFAULT_WINDOW, sync_storage};
 use rorolala_protocol::{ActionContext, Both, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{
     Key, Lockable as _, RorolalaStorage, StorageBackend as _, StorageSet, TransferableBackend as _,
@@ -279,8 +279,15 @@ async fn rounds(source: &RorolalaStorage, keys: &[Key], setting: &Setting) -> La
                 workspace_local,
                 workspace_other,
                 Both::new(asked),
+                DEFAULT_WINDOW,
             ),
-            sync_storage(&mut vault, vault_other, vault_local, Both::new(also_asked)),
+            sync_storage(
+                &mut vault,
+                vault_other,
+                vault_local,
+                Both::new(also_asked),
+                DEFAULT_WINDOW,
+            ),
         );
         let elapsed = phase.started.elapsed();
         let allocs = phase.allocs.since();
@@ -362,12 +369,14 @@ async fn again(
             workspace_local,
             workspace_other,
             Both::new(keys.to_vec()),
+            DEFAULT_WINDOW,
         ),
         sync_storage(
             &mut last.vault,
             vault_other,
             vault_local,
             Both::new(keys.to_vec()),
+            DEFAULT_WINDOW,
         ),
     );
 

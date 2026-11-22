@@ -17,8 +17,8 @@ use std::sync::OnceLock;
 use rorolala_utils_location::{Locate as _, normalize};
 
 use crate::{
-    Chunking, Codec, Error, Key, Manifest, Presence, RorolalaStorage, StorageBackend as _,
-    TransferableBackend, store_file,
+    Chunking, Codec, Error, Key, Manifest, ObjectBatch, Presence, RorolalaStorage,
+    StorageBackend as _, TransferableBackend, store_file,
 };
 
 /// The store a set falls back on, opened when first needed.
@@ -449,6 +449,60 @@ impl StorageSet {
         Err(first_error.unwrap_or(Error::NotFound(*key)))
     }
 
+    /// Reads the object stored under `key` from the first store that answers, without checking it
+    /// against its key.
+    ///
+    /// It is [`read_object`](Self::read_object) for a caller that checks the content elsewhere: the
+    /// sending side of a transfer, whose peer refuses an entry that does not hash to the key it
+    /// arrived under. What that saves is a second pass over every byte that crosses; a local read is
+    /// `read_object`, which checks.
+    ///
+    /// # Errors
+    ///
+    /// As [`read_object`](Self::read_object), except [`Corrupt`](Error::Corrupt).
+    pub async fn read_object_unchecked(&self, key: &Key) -> Result<Vec<u8>, Error> {
+        self.open_objects(std::slice::from_ref(key))
+            .await?
+            .read_unchecked(key)
+            .await
+    }
+
+    /// Plans a run of object reads as one batch, with every store's packs opened once.
+    ///
+    /// It is [`RorolalaStorage::open_objects`] for a set: each store is asked to plan every key up
+    /// front, so a content of many chunks is a handful of files opened per store rather than every
+    /// store walked and its packs opened again for each chunk.
+    ///
+    /// A store that cannot plan is passed over and its failure kept, the way
+    /// [`list_exist_keys`](Self::list_exist_keys) treats one: the batch answers with what the stores
+    /// that could be read hold. A set none of them could plan is the failure.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first failure when no store could be planned. A key a planned store does not
+    /// hold is not one: it is answered for by [`SetBatch::read`].
+    pub async fn open_objects(&self, keys: &[Key]) -> Result<SetBatch, Error> {
+        let mut plans = Vec::new();
+        let mut first_error = None;
+
+        for store in self.stores() {
+            match store.open_objects(keys).await {
+                Ok(plan) => plans.push(plan),
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+
+        if let Some(error) = first_error
+            && plans.is_empty()
+        {
+            return Err(error);
+        }
+
+        Ok(SetBatch { plans })
+    }
+
     /// Reads the manifest kept under `key`, from the first store that has one.
     ///
     /// # Errors
@@ -810,6 +864,63 @@ impl StorageSet {
             writable: false,
             reason: Some(reason.to_owned()),
         });
+    }
+}
+
+/// A run of object reads planned as one batch, across every store a [`StorageSet`] reads.
+///
+/// It is [`ObjectBatch`] over a set: each store's packs are opened once when the batch is made, and
+/// a read asks the stores in the order the set reads them, answering with the first that holds the
+/// key. See [`StorageSet::open_objects`].
+pub struct SetBatch {
+    /// One plan per store, in the order the set reads them.
+    plans: Vec<ObjectBatch>,
+}
+
+impl SetBatch {
+    /// The content stored under `key`, from the first store that answers.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first hard failure when no store answers with the object, and
+    /// [`Error::NotFound`] when every store says it does not hold it.
+    pub async fn read(&self, key: &Key) -> Result<Vec<u8>, Error> {
+        self.read_where(key, true).await
+    }
+
+    /// As [`read`](Self::read), without checking the content against its key.
+    ///
+    /// # Errors
+    ///
+    /// As [`read`](Self::read), except [`Corrupt`](Error::Corrupt).
+    pub async fn read_unchecked(&self, key: &Key) -> Result<Vec<u8>, Error> {
+        self.read_where(key, false).await
+    }
+
+    /// Reads `key` from the stores in order, checking it against its key when `check` says to.
+    ///
+    /// A store that answers with nothing is one more that was asked, while a store that failed is
+    /// the account kept in case none answers: the same rule [`StorageSet::read_object`] reads.
+    async fn read_where(&self, key: &Key, check: bool) -> Result<Vec<u8>, Error> {
+        let mut first_error = None;
+
+        for plan in &self.plans {
+            let answer = if check {
+                plan.read(key).await
+            } else {
+                plan.read_unchecked(key).await
+            };
+
+            match answer {
+                Ok(bytes) => return Ok(bytes),
+                Err(Error::NotFound(_)) => {}
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+
+        Err(first_error.unwrap_or(Error::NotFound(*key)))
     }
 }
 
@@ -1212,6 +1323,59 @@ mod tests {
             .map(|store| store.get_root().to_path_buf())
             .collect();
         assert_eq!(roots, [first, own_root]);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn a_batch_finds_a_key_in_the_store_that_holds_it() {
+        let dir = scratch("batch-order");
+        let first = dir.join("first");
+        let second = dir.join("second");
+        let first_store = store_at(&first);
+        let second_store = store_at(&second);
+        let key = second_store
+            .write_object(b"found in the second", Codec::Raw)
+            .await
+            .unwrap();
+
+        let set = set_of(
+            Some(first_store),
+            &first,
+            &[first.to_str().unwrap(), second.to_str().unwrap()],
+        );
+        let batch = set.open_objects(&[key]).await.unwrap();
+
+        // The first store holds nothing under the key, so the second is the one that answers. The
+        // plan is made once for both, which is what makes a content of many chunks one open per
+        // store rather than one per chunk.
+        assert_eq!(batch.read(&key).await.unwrap(), b"found in the second");
+        assert_eq!(
+            batch.read_unchecked(&key).await.unwrap(),
+            b"found in the second"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn a_batch_answers_bytes_a_key_does_not_cover_when_it_is_not_asked_to_check() {
+        let dir = scratch("batch-unchecked");
+        let root = dir.join("store");
+        let store = store_at(&root);
+
+        let one = store.write_object(b"one", Codec::Raw).await.unwrap();
+        let other = store.write_object(b"other", Codec::Raw).await.unwrap();
+
+        // The entry under `one` now holds `other`'s bytes: a frame that reads, whose payload is not
+        // the content the key names.
+        fs::copy(store.object_path(&other), store.object_path(&one)).unwrap();
+
+        let set = set_of(Some(store), &root, &[]);
+        let batch = set.open_objects(&[one]).await.unwrap();
+
+        assert!(matches!(batch.read(&one).await, Err(Error::Corrupt(_))));
+        assert_eq!(batch.read_unchecked(&one).await.unwrap(), b"other");
 
         let _ = fs::remove_dir_all(&dir);
     }

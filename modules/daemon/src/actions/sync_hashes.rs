@@ -11,7 +11,9 @@ use rorolala_protocol::{Action, ActionContext, ActionError, Both, OnlyVault, Onl
 use rorolala_storage::Key;
 
 use super::sync_all::local_stores;
-use super::sync_storage::{DEFAULT_WINDOW, Side, Unit, UnitKind, carry_blob, sync_units};
+use super::sync_storage::{
+    DEFAULT_WINDOW, Side, Unit, UnitKind, carry_blob, grant, split_ask, sync_units,
+};
 
 /// An Action that makes the two stores hold the units it is given, and answers how many reads it was
 /// granted at once.
@@ -80,65 +82,6 @@ impl Action for ActionSyncHashes {
     }
 }
 
-/// The reads the caller asks for at once, and the units it names.
-///
-/// A token `c:<n>` is the ask and is taken out of the text; a caller that names none asks for the
-/// number this primitive reads at once by default, see [`DEFAULT_WINDOW`], which is what a plain
-/// listing of keys has always meant.
-fn split_ask(text: &str) -> (u32, String) {
-    let mut asked = u32::try_from(DEFAULT_WINDOW).unwrap_or(1);
-    let mut units = String::new();
-
-    for token in text.split_whitespace() {
-        if let Some(count) = token.strip_prefix("c:") {
-            asked = count.parse().unwrap_or(asked);
-
-            continue;
-        }
-
-        if !units.is_empty() {
-            units.push(' ');
-        }
-        units.push_str(token);
-    }
-
-    (asked, units)
-}
-
-/// Asks the Vault for `asked` reads at once and answers what it grants.
-///
-/// The ask goes to the Vault, which holds it to what it is set to serve, the configuration's
-/// `max_concurrency`, and the grant comes back to the Workspace, which is the side that asks with
-/// it. A Vault that is set to no number serves what is asked for.
-async fn grant(ctx: &mut ActionContext<'_>, asked: u32) -> Result<u32, ActionError> {
-    let ask: OnlyWorkspace<u32> = ctx.only_workspace(|| asked);
-    let arrived: OnlyVault<u32> = ctx.transfer(ask).await?;
-
-    let answer: OnlyVault<u32> = ctx.only_vault_with_context(|vault_ctx| {
-        let cap = vault_ctx
-            .current_vault_config()
-            .into_inner()
-            .map_or(u32::MAX, |config| {
-                u32::from(config.daemon_config().max_concurrency())
-            });
-
-        granted(arrived.into_inner().unwrap_or(1), cap)
-    });
-
-    let granted: OnlyWorkspace<u32> = ctx.transfer(answer).await?;
-
-    Ok(granted.into_inner().unwrap_or(1))
-}
-
-/// What a Vault with a cap of `cap` grants a caller that asked for `asked`.
-///
-/// Never fewer than one, and never more than the Vault serves: the two bounds are what make a
-/// caller that asked for none still a caller that reads one at a time, and a caller that asked for
-/// the world still one the Vault can answer.
-fn granted(asked: u32, cap: u32) -> u32 {
-    asked.clamp(1, cap.max(1))
-}
-
 /// The unit a token names.
 ///
 /// `m:<key>` carries only the manifest a content was cut into, `o:<key>` only the object, and
@@ -171,7 +114,7 @@ mod tests {
 
     use rorolala_storage::Key;
 
-    use super::{DEFAULT_WINDOW, UnitKind, granted, split_ask, unit_of};
+    use super::{UnitKind, unit_of};
 
     /// A token names a key and how much of it is carried: `m:` a manifest, `o:` an object, a bare
     /// key the whole.
@@ -199,27 +142,5 @@ mod tests {
 
         // A token that names no key is passed over rather than refused, as a listing's noise is.
         assert!(unit_of("not-a-key").is_none());
-    }
-
-    /// The ask is what the caller wants and the units are what it names, and a caller that asks for
-    /// nothing gets what the primitive reads at once by default.
-    #[test]
-    fn the_ask_is_taken_out_of_the_units() {
-        let by_default = u32::try_from(DEFAULT_WINDOW).unwrap();
-
-        assert_eq!(split_ask("c:8 abc def"), (8, "abc def".to_string()));
-        assert_eq!(split_ask("abc def"), (by_default, "abc def".to_string()));
-        assert_eq!(split_ask("c:4"), (4, String::new()));
-        assert_eq!(split_ask(""), (by_default, String::new()));
-    }
-
-    /// A Vault grants no more than it serves and never fewer than one read at a time.
-    #[test]
-    fn a_grant_is_held_to_what_the_vault_serves() {
-        assert_eq!(granted(4, 16), 4);
-        assert_eq!(granted(64, 16), 16);
-        assert_eq!(granted(0, 16), 1);
-        assert_eq!(granted(8, 0), 1);
-        assert_eq!(granted(8, u32::MAX), 8);
     }
 }
