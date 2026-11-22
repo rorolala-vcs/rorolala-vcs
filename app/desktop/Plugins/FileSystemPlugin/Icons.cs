@@ -149,9 +149,26 @@ internal static partial class Icons
         // What a virtual entry is drawn as is the same picture with one of two answers over it. It is done
         // here rather than at each call site so that a row, a tile, a tree step and the card a drag carries
         // all say the same thing about one entry.
-        return VirtualEntries.Find(entry.Path) is { } virtualEntry
-            ? Virtual(drawn, picture, virtualEntry, size, mark)
-            : drawn;
+        if (VirtualEntries.Find(entry.Path) is { } virtualEntry)
+        {
+            return Virtual(drawn, picture, virtualEntry, size, mark);
+        }
+
+        // A directory a provider marks carries the colour on its own picture: the hue of that colour over the
+        // set's or the system's picture, the same blend a lost entry takes its red from. A row that only
+        // inherits a colour is not tinted, since the colour is the marked entry's own answer rather than a
+        // second one about everything under it.
+        if (picture is not null && FolderColours.Mark(entry) is { } tint)
+        {
+            var ringed = new Grid { Width = size, Height = size };
+
+            ringed.Children.Add(drawn);
+            ringed.Children.Add(Hue(picture, tint, size));
+
+            return ringed;
+        }
+
+        return drawn;
     }
 
     /// <summary>How much of an icon the directory dock's virtual ring covers.</summary>
@@ -200,7 +217,7 @@ internal static partial class Icons
 
             if (picture is not null)
             {
-                lost.Children.Add(Hue(picture, size));
+                lost.Children.Add(Hue(picture, LostHue, size));
             }
             else if (drawn is Border fallback)
             {
@@ -230,25 +247,29 @@ internal static partial class Icons
         return ring;
     }
 
-    /// <summary>The red silhouettes already cut from pictures, so one picture is read once.</summary>
-    private static readonly Dictionary<Bitmap, Bitmap> Silhouettes = [];
+    /// <summary>The hue a lost entry is stamped with.</summary>
+    private static readonly Color LostHue = Color.FromRgb(0xFF, 0x00, 0x00);
 
-    /// <summary>A lost entry's picture with the red hue over it.</summary>
+    /// <summary>The silhouettes already cut from pictures, so one picture is read once for one hue.</summary>
+    private static readonly Dictionary<(Bitmap Picture, Color Hue), Bitmap> Silhouettes = [];
+
+    /// <summary>A picture with one colour's hue over it.</summary>
     /// <remarks>
-    /// The picture is the blend's backdrop and a red silhouette is its source, which is the order the hue
-    /// blend is defined in: the source supplies the hue and the backdrop the lightness and saturation.
-    /// The silhouette carries the picture's own alpha rather than being cut by an opacity mask: a mask
-    /// is a layer of its own, and what the image is blended with inside that layer is nothing, so the
-    /// hue would be a plain red wash laid over the picture instead of a hue taken from it.
+    /// The picture is the blend's backdrop and a silhouette of the colour is its source, which is the order the hue
+    /// blend is defined in: the source supplies the hue and the backdrop the lightness and saturation. The
+    /// silhouette carries the picture's own alpha rather than being cut by an opacity mask: a mask is a layer of
+    /// its own, and what the image is blended with inside that layer is nothing, so the hue would be a plain wash
+    /// laid over the picture instead of a hue taken from it.
     /// </remarks>
     /// <param name="picture">The picture to draw the hue over.</param>
+    /// <param name="hue">The colour whose hue is taken.</param>
     /// <param name="size">How many pixels wide and tall the picture is.</param>
     /// <returns>What to draw over the picture.</returns>
-    private static Control Hue(Bitmap picture, int size)
+    private static Control Hue(Bitmap picture, Color hue, int size)
     {
         var stamp = new Image
         {
-            Source = Silhouette(picture),
+            Source = Silhouette(picture, hue),
             Width = size,
             Height = size,
             Stretch = Stretch.Uniform,
@@ -262,19 +283,19 @@ internal static partial class Icons
         return stamp;
     }
 
-    /// <summary>The picture as a red silhouette, keeping only how opaque each pixel is.</summary>
+    /// <summary>The picture as a silhouette in one hue, keeping only how opaque each pixel is.</summary>
     /// <remarks>
-    /// The hue blend asks the source for its hue and the backdrop for everything else, so the source's
-    /// own colour is only there to be read as a hue: pure red gives the red of what has gone, and the
-    /// picture's alpha keeps the shape. What is written is premultiplied, as the bitmap it is written
-    /// into states, so the red of an edge is the red of its own coverage rather than full red at a
-    /// fraction of the alpha.
+    /// The hue blend asks the source for its hue and the backdrop for everything else, so the source's own
+    /// saturation and lightness are only there to carry the hue: the picture's alpha keeps the shape. What is
+    /// written is premultiplied, as the bitmap it is written into states, so the colour of an edge is that
+    /// colour at its own coverage rather than full colour at a fraction of the alpha.
     /// </remarks>
     /// <param name="picture">The picture to cut the silhouette from.</param>
-    /// <returns>The silhouette, kept for the next entry drawn with the same picture.</returns>
-    private static Bitmap Silhouette(Bitmap picture)
+    /// <param name="hue">The colour the silhouette is written in.</param>
+    /// <returns>The silhouette, kept for the next entry drawn with the same picture and hue.</returns>
+    private static Bitmap Silhouette(Bitmap picture, Color hue)
     {
-        if (Silhouettes.TryGetValue(picture, out var known))
+        if (Silhouettes.TryGetValue((picture, hue), out var known))
         {
             return known;
         }
@@ -298,15 +319,15 @@ internal static partial class Icons
             {
                 var alpha = pixels[at + 3];
 
-                pixels[at] = 0x00;
-                pixels[at + 1] = 0x00;
-                pixels[at + 2] = alpha;
+                pixels[at] = (byte)((hue.B * alpha) / 255);
+                pixels[at + 1] = (byte)((hue.G * alpha) / 255);
+                pixels[at + 2] = (byte)((hue.R * alpha) / 255);
             }
 
             Marshal.Copy(pixels, 0, frame.Address, pixels.Length);
         }
 
-        Silhouettes[picture] = silhouette;
+        Silhouettes[(picture, hue)] = silhouette;
 
         return silhouette;
     }

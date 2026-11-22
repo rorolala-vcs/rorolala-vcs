@@ -650,6 +650,17 @@ internal sealed class NavigationBar : UserControl
             crumb[!TemplatedControl.ForegroundProperty] = new DynamicResourceExtension(PaletteKeys.Muted);
         }
 
+        // The step a colour is marked at wears a faint fill and a thin edge of that colour, and only the step
+        // itself: the places above and below it are not the answer the colour gives. The edge and the padding
+        // are one pixel each way from the quiet button's, so the box is the size the pointer's own box is.
+        if (path.Length > 0 && FolderColours.Mark(new Entry(path, EntryKind.Directory)) is { } colour)
+        {
+            crumb.Background = new SolidColorBrush(colour, 0.12);
+            crumb.BorderBrush = new SolidColorBrush(colour, 0.42);
+            crumb.BorderThickness = new Thickness(1);
+            crumb.Padding = new Thickness(5, 1);
+        }
+
         crumb.Click += (_, _) =>
         {
             if (current)

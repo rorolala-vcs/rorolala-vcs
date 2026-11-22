@@ -421,16 +421,14 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>The tree itself, which the open steps are gathered from when it is built again.</summary>
     private readonly TreeView _tree;
 
-    /// <summary>The layer the marked directories' lines are drawn in, over the rows.</summary>
+    /// <summary>The layer the coloured rows are washed in, behind the tree.</summary>
     /// <remarks>
-    /// The line belongs to the indent beside a marked step, which a row's hover or choice wash also covers:
-    /// drawn behind the rows, it would disappear from the row the pointer is on. The layer therefore stands over
-    /// the tree and holds only the line, which is why it takes no press and lets the row's own content show
-    /// through everywhere else.
+    /// A wash is the row's ground rather than a mark over it, so it stands under the rows: over them it would tint
+    /// the pictures and the names as well as the ground, and a row's hover and choice would fight it.
     /// </remarks>
-    private readonly Canvas _blocks = new()
+    private readonly Canvas _washes = new()
     {
-        Name = "TreeBlocks",
+        Name = "TreeWashes",
         IsHitTestVisible = false,
         ClipToBounds = true,
     };
@@ -450,14 +448,13 @@ internal sealed class TreeBrowser : UserControl
     private bool _blocksPosted;
 
     /// <summary>Whether a guide refresh is already posted, so a resize posts one rather than one per row.</summary>
-    private bool _guidesPosted;
 
-    /// <summary>One marked block: the directory it belongs to, its depth, where it is, and its colour.</summary>
+    /// <summary>One washed block: the directory it belongs to, its depth, its row, and its colour.</summary>
     /// <param name="Path">The directory's path, which says what is inside it.</param>
     /// <param name="Level">How deep the directory is in the tree.</param>
-    /// <param name="Rect">The block, in the block layer's own coordinates.</param>
-    /// <param name="Colour">The colour the block is filled with.</param>
-    private readonly record struct TreeBlock(string Path, int Level, Rect Rect, Color Colour);
+    /// <param name="Row">The step's own line, which is what the wash covers.</param>
+    /// <param name="Wash">The wash behind the row, which is what the row is read on.</param>
+    private readonly record struct TreeBlock(string Path, int Level, Rect Row, Color Wash);
 
     /// <summary>
     /// What says that a step was opened or closed, which is what the tree is remembered by.
@@ -732,8 +729,8 @@ internal sealed class TreeBrowser : UserControl
         _ghost = new Ghost(over);
 
         var grid = new Grid();
+        grid.Children.Add(_washes);
         grid.Children.Add(tree);
-        grid.Children.Add(_blocks);
         grid.Children.Add(over);
 
         Content = grid;
@@ -1403,14 +1400,11 @@ internal sealed class TreeBrowser : UserControl
         });
     }
 
-    /// <summary>
-    /// Draws one coloured line beside every marked step, through the height it covers.
-    /// </summary>
+    /// <summary>Draws a wash behind every row a colour reaches.</summary>
     /// <remarks>
-    /// The line stands at the step's own indent, where the tree already reads its depth, and runs the whole
-    /// height of the step and what it holds while open. A marked step inside another draws its line at its own
-    /// deeper indent, so the two colours stand side by side rather than one replacing the other. No fill is laid
-    /// behind a row, which leaves the picture and the name on the dock's own ground.
+    /// A step the colour is its own is washed more strongly than one that only inherits it, so that the folder
+    /// reads as the place the colour belongs to and the rows under it as being inside that place. The wash is the
+    /// ground rather than a mark over the row, which is why it is drawn under the tree.
     /// </remarks>
     private void PaintBlocks()
     {
@@ -1437,28 +1431,45 @@ internal sealed class TreeBrowser : UserControl
                     continue;
                 }
 
-                if (item.TranslatePoint(new Point(0, 0), _blocks) is not { } at)
+                if (item.TranslatePoint(new Point(0, 0), _washes) is not { } at)
                 {
-                    // A row with a size but no place on the layer is still being laid out: keeping the lines
-                    // that are there is better than clearing them for a place that is about to be answered.
+                    // A row with a size but no place on the layer is still being laid out: keeping what is
+                    // there is better than clearing it for a place that is about to be answered.
                     incomplete = true;
 
                     continue;
                 }
 
                 var kind = _kinds.GetValueOrDefault(path, EntryKind.Directory);
+                var entry = new Entry(path, kind);
 
-                if (FolderColours.Mark(new Entry(path, kind)) is not { } colour)
+                if (FolderColours.Band(entry) is not { } band)
                 {
                     continue;
                 }
+
+                // The step's own colour is the one it was given; a row that only inherits one is washed more
+                // lightly, which is what makes the marked folder read as where the colour belongs.
+                var own = FolderColours.Mark(entry) is not null;
+
+                // The wash is the row's own line rather than the whole step: a step's bounds include the
+                // steps under it while open, and a wash over those would be the colour of the folder repeated
+                // over everything in it instead of the ground each row is read on.
+                var header = item
+                    .GetVisualDescendants()
+                    .OfType<Border>()
+                    .FirstOrDefault(one => one.Name == "SelectionBorder");
+                var row =
+                    header is not null && header.TranslatePoint(new Point(0, 0), _washes) is { } top
+                        ? new Rect(top, header.Bounds.Size)
+                        : new Rect(at, new Size(item.Bounds.Width, item.Bounds.Height));
 
                 blocks.Add(
                     new TreeBlock(
                         path,
                         item.Level,
-                        new Rect(at, new Size(item.Bounds.Width, item.Bounds.Height)),
-                        colour
+                        row,
+                        WithAlpha(band, own ? OwnWash : InheritedWash)
                     )
                 );
             }
@@ -1473,36 +1484,23 @@ internal sealed class TreeBrowser : UserControl
                 return;
             }
 
-            // A resize moves the rows but does not change which ones are marked. Moving the lines already
-            // drawn keeps the layer whole for the frame, where clearing it and putting the same number back
-            // is a blank the eye catches even when both happen in one pass.
-            if (Reusable(blocks, _drawnBlocks))
-            {
-                for (var at = 0; at < blocks.Count; at++)
-                {
-                    Wear((Border)_blocks.Children[at], blocks[at]);
-                }
-
-                _drawnBlocks = blocks;
-                RepaintGuides();
-
-                return;
-            }
-
             _drawnBlocks = blocks;
-            _blocks.Children.Clear();
+            _washes.Children.Clear();
 
             foreach (var block in blocks)
             {
-                // The mark is the vertical line at the block's indent, not a fill behind the rows: the
-                // line is where the tree already reads its depth, and it runs the block's whole height.
-                var line = new Border { IsHitTestVisible = false };
+                var ground = new Border
+                {
+                    IsHitTestVisible = false,
+                    Width = block.Row.Width,
+                    Height = block.Row.Height,
+                    Background = new SolidColorBrush(block.Wash),
+                };
 
-                Wear(line, block);
-                _blocks.Children.Add(line);
+                Canvas.SetLeft(ground, block.Row.X);
+                Canvas.SetTop(ground, block.Row.Y);
+                _washes.Children.Add(ground);
             }
-
-            RepaintGuides();
         }
         finally
         {
@@ -1510,88 +1508,17 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
-    /// <summary>Rebuilds the guide layer of every row, which is where a coloured line replaces a grey one.</summary>
-    /// <remarks>
-    /// It is posted rather than drawn where it is called: the call comes from a layout pass, and changing the
-    /// children of the rows' header grids while they are being arranged is what a resize must not do. What the
-    /// posted pass changes is only whether each existing line is shown, so it does not rebuild the rows.
-    /// </remarks>
-    private void RepaintGuides()
-    {
-        if (_guidesPosted)
-        {
-            return;
-        }
-
-        _guidesPosted = true;
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            _guidesPosted = false;
-
-            foreach (var item in VisibleRows())
-            {
-                DrawGuides(item);
-            }
-        });
-    }
-
-    /// <summary>Whether the lines already drawn can be moved to the new blocks rather than made again.</summary>
-    /// <remarks>
-    /// The same marked steps in the same order are the same lines: what a resize changes is where they stand,
-    /// which is a property of the border rather than of the layer's children. A colour is reusable too, since
-    /// it is the border's brush; a mark appearing or going is not.
-    /// </remarks>
-    /// <param name="blocks">What is to be drawn.</param>
-    /// <param name="drawn">What is drawn.</param>
-    /// <returns>Whether every line can be moved to its block.</returns>
-    private bool Reusable(IReadOnlyList<TreeBlock> blocks, IReadOnlyList<TreeBlock> drawn)
-    {
-        if (blocks.Count != drawn.Count || _blocks.Children.Count != blocks.Count)
-        {
-            return false;
-        }
-
-        for (var at = 0; at < blocks.Count; at++)
-        {
-            if (
-                !string.Equals(blocks[at].Path, drawn[at].Path, StringComparison.Ordinal)
-                || blocks[at].Level != drawn[at].Level
-            )
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>Puts one line where a block is, reusing its brush when the colour has not changed.</summary>
-    /// <param name="line">The line.</param>
-    /// <param name="block">The block it stands for.</param>
-    private static void Wear(Border line, TreeBlock block)
-    {
-        line.Width = BandWidth;
-        line.Height = block.Rect.Height;
-
-        if (line.Background is not ISolidColorBrush brush || brush.Color != block.Colour)
-        {
-            line.Background = new SolidColorBrush(block.Colour);
-        }
-
-        Canvas.SetLeft(
-            line,
-            Math.Max(
-                0,
-                block.Rect.X
-                    + Lead
-                    + (block.Level * Indent)
-                    - (Indent / 2)
-                    - (BandWidth / 2)
-            )
+    /// <summary>A colour at a share of its strength, which is how a wash is made from it.</summary>
+    /// <param name="colour">The colour.</param>
+    /// <param name="alpha">How much of it shows, from nothing to all of it.</param>
+    /// <returns>The colour with that alpha.</returns>
+    private static Color WithAlpha(Color colour, double alpha) =>
+        Color.FromArgb(
+            (byte)Math.Round(Math.Clamp(alpha, 0, 1) * 255),
+            colour.R,
+            colour.G,
+            colour.B
         );
-        Canvas.SetTop(line, block.Rect.Y);
-    }
 
     /// <summary>Whether two sets of blocks are the same answer.</summary>
     /// <param name="left">One set.</param>
@@ -1609,11 +1536,11 @@ internal sealed class TreeBrowser : UserControl
             if (
                 !string.Equals(left[at].Path, right[at].Path, StringComparison.Ordinal)
                 || left[at].Level != right[at].Level
-                || left[at].Colour != right[at].Colour
-                || Math.Abs(left[at].Rect.X - right[at].Rect.X) > 0.5
-                || Math.Abs(left[at].Rect.Y - right[at].Rect.Y) > 0.5
-                || Math.Abs(left[at].Rect.Width - right[at].Rect.Width) > 0.5
-                || Math.Abs(left[at].Rect.Height - right[at].Rect.Height) > 0.5
+                || left[at].Wash != right[at].Wash
+                || Math.Abs(left[at].Row.X - right[at].Row.X) > 0.5
+                || Math.Abs(left[at].Row.Y - right[at].Row.Y) > 0.5
+                || Math.Abs(left[at].Row.Width - right[at].Row.Width) > 0.5
+                || Math.Abs(left[at].Row.Height - right[at].Row.Height) > 0.5
             )
             {
                 return false;
@@ -2770,8 +2697,11 @@ internal sealed class TreeBrowser : UserControl
     /// </remarks>
     private const double Lead = 8.0;
 
-    /// <summary>How wide the coloured line beside a marked step is.</summary>
-    private const double BandWidth = 4.0;
+    /// <summary>How much of its colour the row a mark belongs to is washed with.</summary>
+    private const double OwnWash = 0.16;
+
+    /// <summary>How much of the colour a row that only inherits it is washed with.</summary>
+    private const double InheritedWash = 0.08;
 
     /// <summary>How strong a guide line is against the row it stands in.</summary>
     private const double Guide = 0.65;
@@ -2879,7 +2809,6 @@ internal sealed class TreeBrowser : UserControl
             return;
         }
 
-        var path = item.Tag as string;
         var existing = header
             .Children.OfType<Panel>()
             .FirstOrDefault(one => one.Name == GuideName);
@@ -2894,7 +2823,7 @@ internal sealed class TreeBrowser : UserControl
         if (existing is not null)
         {
             existing.Margin = margin;
-            WearGuides(existing, depth, path);
+            WearGuides(existing, depth);
 
             return;
         }
@@ -2924,7 +2853,7 @@ internal sealed class TreeBrowser : UserControl
                 IsHitTestVisible = false,
             };
 
-            WearGuide(line, Covered(level, path));
+            WearGuide(line);
             guides.Children.Add(line);
         }
 
@@ -2935,60 +2864,31 @@ internal sealed class TreeBrowser : UserControl
         header.Children.Insert(0, guides);
     }
 
-    /// <summary>Shows or hides the existing lines of a guide layer for what now covers them.</summary>
+    /// <summary>Puts the look's grey on the existing lines of a guide layer.</summary>
     /// <param name="guides">The layer.</param>
     /// <param name="depth">How many lines it holds.</param>
-    /// <param name="path">The row's path, or nothing when it has none.</param>
-    private void WearGuides(Panel guides, int depth, string? path)
+    private static void WearGuides(Panel guides, int depth)
     {
         for (var level = 1; level <= depth && level <= guides.Children.Count; level++)
         {
             if (guides.Children[level - 1] is Border line)
             {
-                WearGuide(line, Covered(level, path));
+                WearGuide(line);
             }
         }
     }
 
-    /// <summary>Whether a coloured line already stands at a row's level.</summary>
-    /// <param name="level">The tree level.</param>
-    /// <param name="path">The row's path, or nothing when it has none.</param>
-    /// <returns>Whether the colour replaces the look's guide there.</returns>
-    private bool Covered(int level, string? path) =>
-        path is not null
-        && _drawnBlocks.Any(block => block.Level == level && Covers(block.Path, path));
-
-    /// <summary>Paints one guide line as shown in the look's grey or hidden under a coloured line.</summary>
+    /// <summary>Paints one guide line in the look's own grey.</summary>
+    /// <remarks>
+    /// A colour a step is marked with is a wash behind the row, not a line beside the indent, so the guide line
+    /// the tree draws for every level is left as it is.
+    /// </remarks>
     /// <param name="line">The line.</param>
-    /// <param name="covered">Whether a coloured line stands there instead.</param>
-    private static void WearGuide(Border line, bool covered)
+    private static void WearGuide(Border line)
     {
-        line.IsVisible = !covered;
-
-        if (covered)
-        {
-            line.Opacity = 0;
-
-            return;
-        }
-
+        line.IsVisible = true;
         line[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
         line.Opacity = Guide;
-    }
-
-    /// <summary>Whether a path names a tree or something under it.</summary>
-    /// <param name="tree">The marked step's path.</param>
-    /// <param name="path">The row's path.</param>
-    /// <returns>Whether the row is inside the marked step.</returns>
-    private static bool Covers(string tree, string path)
-    {
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-        var prefix = Path.TrimEndingDirectorySeparator(tree) + Path.DirectorySeparatorChar;
-
-        return string.Equals(tree, path, comparison)
-            || path.StartsWith(prefix, comparison);
     }
 
     /// <summary>Whether a path is a directory or a file, as the tree knows it when asked.</summary>

@@ -3566,19 +3566,8 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
             name[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(ink);
         }
 
-        if (Source.Band(item) is not { } colour)
-        {
-            return name;
-        }
-
-        // The mark is the line under the name rather than a fill behind it: the picture, the name and the
-        // colour read as one caption instead of as a coloured card holding a picture.
-        return new Border
-        {
-            Child = name,
-            BorderBrush = new SolidColorBrush(colour),
-            BorderThickness = new Thickness(0, 0, 0, 3),
-            HorizontalAlignment = HorizontalAlignment.Center,
-        };
+        // The name carries no line of its own: a colour a tile's entry is marked with is drawn on the picture
+        // (see `Icons.For`), and a line under the name read as an underline on every level of a marked tree.
+        return name;
     }
 }

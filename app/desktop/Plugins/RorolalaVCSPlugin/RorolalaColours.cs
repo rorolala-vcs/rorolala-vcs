@@ -69,6 +69,14 @@ internal static class RorolalaColours
     /// <summary>What is in the tree and not in the Layout yet.</summary>
     public static Color Untagged => Success;
 
+    /// <summary>The ground the window is drawn on, which a tree's own badge is worn in.</summary>
+    /// <remarks>
+    /// A tree's colour is the hue of its id, and that belongs to the rows the tree marks rather than to the park
+    /// that says the folder is one: the park stands on the look's own ground so that it reads as a mark of the
+    /// program rather than as a second statement of the tree's colour.
+    /// </remarks>
+    public static Color Mid => _palette?.Mid ?? ThemePalette.DefaultDark.Mid;
+
     /// <summary>What changed, and is this side's to record.</summary>
     public static Color UnderWay => Modify;
 

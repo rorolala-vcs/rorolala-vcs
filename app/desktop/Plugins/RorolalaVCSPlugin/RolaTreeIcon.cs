@@ -4,13 +4,14 @@ using RorolalaDesktop.Contract;
 namespace RorolalaVCSPlugin;
 
 /// <summary>
-/// The park a rola-tree wears: one tree, drawn in the colour the tree's own id names.
+/// The park a rola-tree wears: one tree, drawn in the look's own ground.
 /// </summary>
 /// <remarks>
 /// A rola-tree is a directory whose contents are one version rather than a set of loose entries, and the
 /// mark says so wherever a mark is read: in the badge column at a tree row's right, and on the folder's
-/// corner in a directory listing. It is the same colour as the block the tree's rows are drawn on, so the
-/// picture and the place it stands for are one answer rather than two.
+/// corner in a directory listing. The colour a tree's id names belongs to the rows and the line the tree
+/// marks, so the park is drawn in the look's Mid instead: it says what the folder is, and the colour says
+/// where the tree reaches.
 /// </remarks>
 internal sealed class RolaTreeIcon : IEntryMarkProvider
 {
@@ -33,10 +34,10 @@ internal sealed class RolaTreeIcon : IEntryMarkProvider
 
     /// <inheritdoc />
     public EntryMark Mark(Entry entry) =>
-        _colours.Colour(entry) is { } colour
+        _colours.Colour(entry) is not null
             ? new EntryMark(
                 IconKey: Icons.Park,
-                Colour: colour,
+                Colour: RorolalaColours.Mid,
                 Tagged: true,
                 HoverKey: "rorolala_vcs.tree_badge"
             )
