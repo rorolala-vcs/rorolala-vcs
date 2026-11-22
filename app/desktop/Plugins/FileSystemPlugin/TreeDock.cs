@@ -491,6 +491,14 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>What each row made is, so that a block does not have to ask the filesystem again.</summary>
     private readonly Dictionary<string, EntryKind> _kinds = new(StringComparer.Ordinal);
 
+    /// <summary>What each level's line does on each row, worked out once for the rows the tree shows.</summary>
+    /// <remarks>
+    /// Held rather than asked per row, because the answer about one row is a fact about the rows around it: a tree
+    /// of a hundred rows would otherwise be walked a hundred times to draw it once. It is let go when the rows
+    /// change, which is when it stops being the answer.
+    /// </remarks>
+    private Dictionary<TreeViewItem, GuideShape[]>? _shapes;
+
     /// <summary>Every step on screen, so that the one a drag is over can be lit.</summary>
     /// <remarks>
     /// A step is recorded when it is made and never taken out: a tree read a step at a time keeps the ones it
@@ -2225,6 +2233,9 @@ internal sealed class TreeBrowser : UserControl
 
         item.Expanded += (_, _) =>
         {
+            // Rows appear under the step, so what each level does is not the answer it was.
+            _shapes = null;
+
             // The directory a step holds is drawn from the moment it is open, so it is watched from then: what
             // another program puts in it is a change the rows under it have to be read again for.
             Watching(path);
@@ -2271,6 +2282,7 @@ internal sealed class TreeBrowser : UserControl
 
         item.Collapsed += (_, _) =>
         {
+            _shapes = null;
             Unwatching(path);
             StepChanged?.Invoke(this, new StepEventArgs(path, open: false));
         };
@@ -2326,6 +2338,9 @@ internal sealed class TreeBrowser : UserControl
     private void Read(TreeViewItem item, string path)
     {
         item.Items.Clear();
+
+        // Every row under the step is about to be another row, so what each level does is worked out again.
+        _shapes = null;
 
         foreach (var child in Children(path))
         {
@@ -2718,6 +2733,10 @@ internal sealed class TreeBrowser : UserControl
         {
             _guidesPosted = false;
 
+            // A repaint is asked for after something that may have changed the rows, so the shape worked out
+            // before that is no longer the answer.
+            _shapes = null;
+
             foreach (var item in VisibleRows())
             {
                 DrawGuides(item);
@@ -2845,9 +2864,14 @@ internal sealed class TreeBrowser : UserControl
     /// part of the row's content and do not take a press. A row at level n draws n lines, each at the middle
     /// of an indent step; the rows above and below it draw the same lines, which is what makes them read as
     /// one line down a level rather than as a mark on each row.
+    /// <para>
+    /// A level ends where its last row does: the row that closes a level turns its line in towards the content
+    /// rather than running it on, and the rows under it draw nothing at that level. The indent is then the shape
+    /// of the tree rather than a set of columns that all reach the foot of it.
+    /// </para>
     /// </remarks>
     /// <param name="item">The row.</param>
-    private static void Guides(TreeViewItem item)
+    private void Guides(TreeViewItem item)
     {
         // The template's first column is sixteen pixels, which is the arrow's picture and one of the
         // two margins around it. The row asks for the wider column after the template is applied, so
@@ -2873,7 +2897,7 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>Widens the arrow's column and draws the row's guides once the template is there.</summary>
     /// <param name="item">The row.</param>
-    private static void Shape(TreeViewItem item)
+    private void Shape(TreeViewItem item)
     {
         if (
             item.GetVisualDescendants()
@@ -2900,26 +2924,29 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>Puts the guide lines in a row's template once it has one.</summary>
     /// <param name="item">The row.</param>
-    private static void DrawGuides(TreeViewItem item)
+    private void DrawGuides(TreeViewItem item)
     {
-        // The template's own margin reads Level, which is set when the row joins a tree; the ancestors
-        // answer the same question even when the event that asks is earlier than that, and the larger of
-        // the two is what the row will be drawn at.
-        var depth = Math.Max(
-            item.Level,
-            item.GetLogicalAncestors().OfType<TreeViewItem>().Count()
-        );
+        // What each level does on this row, read from the rows the tree shows rather than from the row's own
+        // children: a step is the last of its level when no row at that level follows it before a shallower one,
+        // and the rows themselves are the only place that answer is whole.
+        var shapes = ShapesOf(item);
 
-        if (depth <= 0)
+        // A step at the top level draws nothing, and neither does a row the tree is not showing yet: the lines
+        // are the depth of a row, and a root has none.
+        if (shapes.Length <= 1)
         {
             return;
         }
+
+        var depth = shapes.Length - 1;
 
         var border = item
             .GetVisualDescendants()
             .OfType<Border>()
             .FirstOrDefault(one => one.Name == "SelectionBorder");
 
+        // A header that has not been arranged yet has no middle to turn at, so the row is drawn again as soon as
+        // its header has one (see the rebuild below).
         if (border?.Child is not Grid header)
         {
             return;
@@ -2945,14 +2972,27 @@ internal sealed class TreeBrowser : UserControl
         var above = Math.Max(0, border.TranslatePoint(new Point(0, 0), item)?.Y ?? 0);
         var margin = new Thickness((-depth * Indent) + Lead, -above, 0, -overhang);
 
-        if (existing is not null)
+        // Where the row's own line turns in: the middle of the row's line rather than the middle of the layer,
+        // which for a step holding other steps is the middle of the whole subtree.
+        var middle = above + (border.Bounds.Height / 2);
+
+        if (existing is not null && existing.Tag is double was && Math.Abs(was - middle) < 0.5)
         {
             existing.Margin = margin;
-            WearGuides(existing, depth, tint);
+            WearGuides(existing, tint);
 
             return;
         }
 
+        // The middle the last drawing turned at is not the one this row has now - a header arranged since, or a
+        // row moved by a zoom - so the layer is made again rather than recoloured where it stands.
+        if (existing is not null)
+        {
+            header.Children.Remove(existing);
+        }
+
+        // What each level's line does on this row: a level runs through the row while the step it belongs to has
+        // a row after it, and the row's own level closes where the row is the last of its siblings.
         var guides = new Panel
         {
             Name = GuideName,
@@ -2965,21 +3005,25 @@ internal sealed class TreeBrowser : UserControl
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Stretch,
             IsHitTestVisible = false,
+            Tag = middle,
         };
 
         for (var level = 1; level <= depth; level++)
         {
-            var line = new Border
-            {
-                Width = 1,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                Margin = new Thickness((level * Indent) - (Indent / 2), 0, 0, 0),
-                IsHitTestVisible = false,
-            };
+            var x = (level * Indent) - (Indent / 2);
 
-            WearGuide(line, tint);
-            guides.Children.Add(line);
+            if (shapes[level] is GuideShape.Continues)
+            {
+                guides.Children.Add(Line(x, tint));
+
+                continue;
+            }
+
+            if (shapes[level] is GuideShape.Closes)
+            {
+                guides.Children.Add(Line(x, tint, middle));
+                guides.Children.Add(Turn(x, tint, middle));
+            }
         }
 
         // The guide layer is a child of the header grid and reaches left over the indent the grid's own
@@ -2991,17 +3035,85 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>Puts the look's grey, or the colour of the part a line is in, on a guide layer.</summary>
     /// <param name="guides">The layer.</param>
-    /// <param name="depth">How many lines it holds.</param>
     /// <param name="tint">The colour of the part the row stands in, or nothing for the look's own grey.</param>
-    private static void WearGuides(Panel guides, int depth, Color? tint)
+    private static void WearGuides(Panel guides, Color? tint)
     {
-        for (var level = 1; level <= depth && level <= guides.Children.Count; level++)
+        foreach (var line in guides.Children.OfType<Border>())
         {
-            if (guides.Children[level - 1] is Border line)
-            {
-                WearGuide(line, tint);
-            }
+            WearGuide(line, tint);
         }
+    }
+
+    /// <summary>One level's vertical line, as tall as the whole layer.</summary>
+    /// <remarks>
+    /// The layer of a step that holds other steps is as tall as the whole subtree, which is what makes the column
+    /// of a level one run from the step it belongs to down to the row after that subtree.
+    /// </remarks>
+    /// <param name="x">How far the line stands from the layer's left edge.</param>
+    /// <param name="tint">The colour of the part the row stands in, or nothing for the look's own grey.</param>
+    /// <returns>The line.</returns>
+    private static Border Line(double x, Color? tint)
+    {
+        var line = new Border
+        {
+            Width = 1,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Margin = new Thickness(x, 0, 0, 0),
+            IsHitTestVisible = false,
+        };
+
+        WearGuide(line, tint);
+
+        return line;
+    }
+
+    /// <summary>One level's vertical line, ending where the row it belongs to turns in.</summary>
+    /// <param name="x">How far the line stands from the layer's left edge.</param>
+    /// <param name="tint">The colour of the part the row stands in, or nothing for the look's own grey.</param>
+    /// <param name="height">How tall the line is, which is half of the row.</param>
+    /// <returns>The line.</returns>
+    private static Border Line(double x, Color? tint, double height)
+    {
+        var line = new Border
+        {
+            Width = 1,
+            Height = height,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(x, 0, 0, 0),
+            IsHitTestVisible = false,
+        };
+
+        WearGuide(line, tint);
+
+        return line;
+    }
+
+    /// <summary>The turn a level makes into its last row: a foot running in towards the row's own content.</summary>
+    /// <remarks>
+    /// It runs exactly half an indent, which is the room between the middle of a level's column and the start of
+    /// the content of the row below it, so the turn ends where the row it belongs to begins.
+    /// </remarks>
+    /// <param name="x">How far the turn stands from the layer's left edge.</param>
+    /// <param name="tint">The colour of the part the row stands in, or nothing for the look's own grey.</param>
+    /// <param name="top">How far down the layer the turn is drawn, which is the middle of the row.</param>
+    /// <returns>The foot.</returns>
+    private static Border Turn(double x, Color? tint, double top)
+    {
+        var turn = new Border
+        {
+            Height = 1,
+            Width = Indent / 2,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(x, top, 0, 0),
+            IsHitTestVisible = false,
+        };
+
+        WearGuide(turn, tint);
+
+        return turn;
     }
 
     /// <summary>Paints one guide line in the look's grey, or in the colour of the part it stands in.</summary>
@@ -3075,6 +3187,124 @@ internal sealed class TreeBrowser : UserControl
         }
 
         return null;
+    }
+
+    /// <summary>What one level's line does on a row.</summary>
+    private enum GuideShape
+    {
+        /// <summary>Nothing runs at this level on this row, since the step it belongs to has nothing under it.</summary>
+        None,
+
+        /// <summary>The level has a row after this one, so its line goes on through the row.</summary>
+        Continues,
+
+        /// <summary>This row is the last of the level, so its line turns in rather than going on.</summary>
+        Closes,
+    }
+
+    /// <summary>What each level's line does on a row, from the first level to the row's own.</summary>
+    /// <param name="item">The row.</param>
+    /// <returns>What each level does, indexed by level, or nothing but the row's own place for a row not shown.</returns>
+    private GuideShape[] ShapesOf(TreeViewItem item)
+    {
+        if (_shapes is null || !_shapes.TryGetValue(item, out var shapes))
+        {
+            _shapes = WorkOutShapes();
+            shapes = _shapes.GetValueOrDefault(item) ?? new GuideShape[1];
+        }
+
+        return shapes;
+    }
+
+    /// <summary>Works out what each level's line does on every row the tree shows.</summary>
+    /// <remarks>
+    /// Read from the rows in the order they are drawn rather than from each row's own children, since what tells a
+    /// last row from the others is the next row at the same level before a shallower one: a row that has just been
+    /// read, or one whose children are not drawn yet, cannot answer that about itself.
+    /// <para>
+    /// A level runs through a row while the step it belongs to has a row after it, and closes on the row that is
+    /// the last of that step's children. A column of lines that all reached the foot of the tree would say every
+    /// row had something after it, and the shape of a tree is what its indent is read for.
+    /// </para>
+    /// </remarks>
+    /// <returns>What each level does on each row.</returns>
+    private Dictionary<TreeViewItem, GuideShape[]> WorkOutShapes()
+    {
+        var rows = new List<(TreeViewItem Row, int Level)>();
+
+        if (_tree.Items.OfType<TreeViewItem>().FirstOrDefault() is { } root)
+        {
+            Flatten(root, 0, rows);
+        }
+
+        // Whether a row is the last of its level, read from the row after it: the first row at its level or above
+        // is either the sibling it is followed by or the shallower row that ends its parent.
+        var last = new bool[rows.Count];
+        var stack = new Stack<int>();
+
+        for (var at = rows.Count - 1; at >= 0; at--)
+        {
+            while (stack.Count > 0 && rows[stack.Peek()].Level > rows[at].Level)
+            {
+                stack.Pop();
+            }
+
+            last[at] =
+                stack.Count == 0
+                || rows[stack.Peek()].Level < rows[at].Level;
+            stack.Push(at);
+        }
+
+        var shapes = new Dictionary<TreeViewItem, GuideShape[]>(rows.Count);
+        var open = new List<int>();
+
+        for (var at = 0; at < rows.Count; at++)
+        {
+            var (row, level) = rows[at];
+
+            // The rows above the one being read are the steps whose lines it draws, so the list is cut back to
+            // them before its own shape is written.
+            while (open.Count > level)
+            {
+                open.RemoveAt(open.Count - 1);
+            }
+
+            var shape = new GuideShape[level + 1];
+
+            for (var above = 1; above < level; above++)
+            {
+                shape[above] = last[open[above]] ? GuideShape.None : GuideShape.Continues;
+            }
+
+            if (level > 0)
+            {
+                shape[level] = last[at] ? GuideShape.Closes : GuideShape.Continues;
+            }
+
+            open.Add(at);
+            shapes[row] = shape;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>Gathers a row and, where it is open, the rows under it, saying how deep each one is.</summary>
+    /// <param name="item">The row to gather.</param>
+    /// <param name="level">How deep it is.</param>
+    /// <param name="rows">Where the rows are gathered.</param>
+    private static void Flatten(TreeViewItem item, int level, List<(TreeViewItem Row, int Level)> rows)
+    {
+        rows.Add((item, level));
+
+        if (!item.IsExpanded)
+        {
+            return;
+        }
+
+        foreach (var under in item.Items.OfType<TreeViewItem>())
+        {
+            Flatten(under, level + 1, rows);
+        }
     }
 
     /// <summary>Whether a path is a directory or a file, as the tree knows it when asked.</summary>
