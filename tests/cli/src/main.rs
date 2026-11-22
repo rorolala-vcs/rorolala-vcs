@@ -1271,7 +1271,10 @@ fn foreign_storage(rola: &Rola, root: &Path, checked: &mut Checked) {
     let ran = rola.run(&ws, &["bind", &text(&ws.join(".rola").join("storage"))]);
     checked.exits("binding the Workspace's own store is refused", &ran, 93);
 
-    let ran = rola.run(root, &["create", &text(&root.join("both")), "--storage", "--vault"]);
+    let ran = rola.run(
+        root,
+        &["create", &text(&root.join("both")), "--storage", "--vault"],
+    );
     checked.exits("a store and a Vault at once is refused", &ran, 22);
 
     let ran = rola.run(&init, &["init", "--storage"]);
@@ -1464,7 +1467,10 @@ fn collecting_a_store(rola: &Rola, empty: &Path, checked: &mut Checked) {
     let ran = rola.run(&store, &["storage", "write-file", &text(&source)]);
     checked.exits("the store holds a file nothing references", &ran, 0);
 
-    let ran = rola.run(&store, &["pack", "--garbage-collect", "--grace", "0", "--force"]);
+    let ran = rola.run(
+        &store,
+        &["pack", "--garbage-collect", "--grace", "0", "--force"],
+    );
     checked.exits(
         "a store that records no place is refused, even with --force",
         &ran,
@@ -2423,7 +2429,10 @@ fn ignore_rules(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     // A write records what the file holds, so the move is told by the content next time. A read no
     // longer writes the cache: the strict reading only answers with what is already recorded.
-    let ran = rola.run(dir, &["track", "hero.psd", "--message", "first", "--no-editor"]);
+    let ran = rola.run(
+        dir,
+        &["track", "hero.psd", "--message", "first", "--no-editor"],
+    );
     checked.exits("the tree is recorded before the move", &ran, 0);
 
     fs::rename(dir.join("hero.psd"), dir.join("hero.mb")).expect("a move the rules match");

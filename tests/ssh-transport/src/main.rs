@@ -88,7 +88,10 @@ fn checks() {
     let auth = workspace.join(".rola").join("auth");
     pair(&auth, CLIENT);
     publish(&auth, &root, CLIENT);
-    pair(&librorolala::location::user_data_dir_in(&data).join("keys"), "daemon");
+    pair(
+        &librorolala::location::user_data_dir_in(&data).join("keys"),
+        "daemon",
+    );
 
     run(&mut client(
         &workspace,
@@ -137,7 +140,9 @@ fn checks() {
 
     // Nothing had written this machine's preferences yet, and the session asked them what it may do:
     // what a machine that has said nothing means is now the file it can be changed in.
-    let preferences = librorolala::location::user_data_dir_in(&data).join("daemon").join("preference.toml");
+    let preferences = librorolala::location::user_data_dir_in(&data)
+        .join("daemon")
+        .join("preference.toml");
     checked.wants(
         "a machine that has said nothing has its preferences written down by the first session",
         fs::read_to_string(&preferences).is_ok_and(|said| {

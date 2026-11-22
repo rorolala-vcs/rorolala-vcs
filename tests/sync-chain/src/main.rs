@@ -471,7 +471,9 @@ fn serve_vault(data: &Path, dir: &Path) -> Serving {
 
 /// Writes the table naming `dir` as [`NAMESPACE`], and gives the daemon an account of its own.
 fn register(data: &Path, dir: &Path) {
-    let registry = librorolala::location::user_data_dir_in(&data).join("daemon").join("registry.toml");
+    let registry = librorolala::location::user_data_dir_in(&data)
+        .join("daemon")
+        .join("registry.toml");
 
     fs::create_dir_all(registry.parent().expect("the daemon's directory"))
         .expect("the daemon's directory");

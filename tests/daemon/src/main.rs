@@ -179,7 +179,10 @@ fn make_vault(dir: &Path) {
 /// A command running the daemon against the sandbox's own data directory.
 fn daemon(data: &Path, args: &[&str]) -> Command {
     let mut command = command("rola-daemon");
-    command.env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data).args(args);
+    command
+        .env("XDG_DATA_HOME", data)
+        .env("ROLA_DATA_HOME", data)
+        .args(args);
     command
 }
 

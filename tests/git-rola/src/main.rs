@@ -136,7 +136,11 @@ fn binding(run: &Run, root: &Path, checked: &mut Checked) {
     );
 
     let ran = run.rola(&project, &["bind", &text(&project.join(".rola"))]);
-    checked.exits("binding the project's own data directory is refused", &ran, 128);
+    checked.exits(
+        "binding the project's own data directory is refused",
+        &ran,
+        128,
+    );
 }
 
 /// What the program says about itself: the version, the usage, and the language both are said in.
@@ -203,7 +207,10 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
             "See 'git rola <command>'",
         );
 
-        for command in ["init", "hook", "check", "entries", "bring", "upstream", "restore", "refresh", "update", "help", "version"] {
+        for command in [
+            "init", "hook", "check", "entries", "bring", "upstream", "restore", "refresh",
+            "update", "help", "version",
+        ] {
             checked.stdout_has(&format!("the usage lists `{command}`"), &help, command);
         }
 
@@ -229,7 +236,10 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     );
 
     // Each command writes down its own use, and `--help` as its first word asks for it with success.
-    for command in ["init", "hook", "check", "entries", "bring", "upstream", "restore", "refresh", "update", "help", "version"] {
+    for command in [
+        "init", "hook", "check", "entries", "bring", "upstream", "restore", "refresh", "update",
+        "help", "version",
+    ] {
         let help = run.rola(elsewhere, &[command, "--help"]);
         checked.exits(&format!("`{command} --help` ends successfully"), &help, 0);
         checked.stdout_has(
@@ -245,7 +255,10 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     }
 
     // `-h` is git's usage request inside a command: the same text, on stdout, with 129.
-    for command in ["init", "hook", "check", "entries", "bring", "upstream", "restore", "refresh", "update", "help", "version"] {
+    for command in [
+        "init", "hook", "check", "entries", "bring", "upstream", "restore", "refresh", "update",
+        "help", "version",
+    ] {
         let usage = run.rola(elsewhere, &[command, "-h"]);
         checked.exits(&format!("`{command} -h` is a usage request"), &usage, 129);
         checked.stdout_has(
@@ -288,8 +301,16 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     checked.stdout_empty("the refusal is not a result", &flag);
 
     let short = run.rola(elsewhere, &["check", "-C"]);
-    checked.exits("a short flag a command does not have is refused", &short, 129);
-    checked.stderr_has("the short flag is a switch", &short, "error: unknown switch `C'");
+    checked.exits(
+        "a short flag a command does not have is refused",
+        &short,
+        129,
+    );
+    checked.stderr_has(
+        "the short flag is a switch",
+        &short,
+        "error: unknown switch `C'",
+    );
 
     let value = run.rola(elsewhere, &["bring", "--vault"]);
     checked.exits("a flag with no value is refused", &value, 129);
@@ -342,8 +363,16 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     for (typed, offered) in [("nosuch", None), ("chek", Some("check"))] {
         let unknown = run.rola(elsewhere, &[typed]);
         checked.exits("a word that names no command is refused", &unknown, 1);
-        checked.stderr_has("the refusal has git's sentence", &unknown, "is not a rola command");
-        checked.stderr_has("the refusal points at the usage", &unknown, "git rola --help");
+        checked.stderr_has(
+            "the refusal has git's sentence",
+            &unknown,
+            "is not a rola command",
+        );
+        checked.stderr_has(
+            "the refusal points at the usage",
+            &unknown,
+            "git rola --help",
+        );
         checked.stdout_empty("the refusal is not a result", &unknown);
 
         if let Some(offered) = offered {
@@ -366,10 +395,7 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
         "usage: git rola <command>",
     );
 
-    for words in [
-        &["help", "check"][..],
-        &["help", "check", "extra"][..],
-    ] {
+    for words in [&["help", "check"][..], &["help", "check", "extra"][..]] {
         let help = run.rola(elsewhere, words);
         let question = words.join(" ");
 
@@ -388,7 +414,11 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     // `LANGUAGE` read only when the locale is a language.
     let chinese = run.rola_with(elsewhere, &[("LC_ALL", "zh_CN.UTF-8")], &["--help"]);
     checked.exits("a Chinese locale ends successfully", &chinese, 0);
-    checked.stdout_has("the usage is said in the locale's language", &chinese, "用法：");
+    checked.stdout_has(
+        "the usage is said in the locale's language",
+        &chinese,
+        "用法：",
+    );
     checked.wants(
         "the usage is not also said in English",
         !chinese.stdout.contains("usage:"),
@@ -401,7 +431,11 @@ fn surface(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
         &["--help"],
     );
     checked.exits("the C locale ends successfully", &english, 0);
-    checked.stdout_has("the C locale is not translated", &english, "usage: git rola");
+    checked.stdout_has(
+        "the C locale is not translated",
+        &english,
+        "usage: git rola",
+    );
     checked.wants(
         "the C locale does not read LANGUAGE",
         !english.stdout.contains("用法："),
@@ -491,7 +525,11 @@ fn refusals(run: &Run, repo: &Path, plain: &Path, elsewhere: &Path, checked: &mu
     // A bare run is git's bare `git`: the usage, on stdout, with 1.
     let bare = run.rola(elsewhere, &[]);
     checked.exits("a run that names nothing asks for the usage", &bare, 1);
-    checked.stdout_has("the usage is what it says", &bare, "usage: git rola <command>");
+    checked.stdout_has(
+        "the usage is what it says",
+        &bare,
+        "usage: git rola <command>",
+    );
     checked.wants(
         "the usage is not a failure",
         bare.stderr.trim().is_empty(),
@@ -521,11 +559,7 @@ fn refusals(run: &Run, repo: &Path, plain: &Path, elsewhere: &Path, checked: &mu
     // put the hooks, so it says that rather than pretending to have set anything up.
     let init = run.rola(plain, &["init"]);
     checked.exits("setting up inside no work tree is refused", &init, 128);
-    checked.stderr_has(
-        "the refusal says there is no work tree",
-        &init,
-        "fatal: ",
-    );
+    checked.stderr_has("the refusal says there is no work tree", &init, "fatal: ");
     checked.stderr_has(
         "the refusal says there is no work tree",
         &init,
@@ -856,7 +890,11 @@ fn checking(run: &Run, repo: &Path, checked: &mut Checked) {
     // A flag the command does not have is a line it cannot read, not a different way of writing
     // the answer: `--json` and `--renderer` were the program's own, not git's.
     let unreadable = run.rola(repo, &["check", "--json"]);
-    checked.exits("a flag the command does not have is refused", &unreadable, 129);
+    checked.exits(
+        "a flag the command does not have is refused",
+        &unreadable,
+        129,
+    );
     checked.stderr_has(
         "the refusal names the flag",
         &unreadable,
@@ -1032,12 +1070,20 @@ fn bringing(run: &Run, repo: &Path, elsewhere: &Path, checked: &mut Checked) {
     // Nothing to bring in is a line the command cannot read.
     let bare = run.rola(elsewhere, &["bring"]);
     checked.exits("a bring that names nothing is refused", &bare, 129);
-    checked.stderr_has("the refusal is the command's use", &bare, "usage: git rola bring");
+    checked.stderr_has(
+        "the refusal is the command's use",
+        &bare,
+        "usage: git rola bring",
+    );
     checked.stdout_empty("the refusal is not a result", &bare);
 
     // A Vault the project does not declare is refused before an account is looked for.
     let undeclared = run.rola(repo, &["bring", "--vault", "nosuch", "Assets/*"]);
-    checked.exits("a Vault the project does not declare is refused", &undeclared, 128);
+    checked.exits(
+        "a Vault the project does not declare is refused",
+        &undeclared,
+        128,
+    );
     checked.stderr_has(
         "the refusal names the Vault",
         &undeclared,
@@ -1432,7 +1478,10 @@ fn quoting(run: &Run, sandbox: &Path, checked: &mut Checked) {
     );
 
     // The setting is the sandbox's, so it is put back for the checks that follow.
-    let unset = run.git(&project, &["config", "--global", "--unset", "core.quotePath"]);
+    let unset = run.git(
+        &project,
+        &["config", "--global", "--unset", "core.quotePath"],
+    );
     checked.exits("the setting is put back", &unset, 0);
 }
 
@@ -1819,7 +1868,11 @@ fn worktrees(run: &Run, repo: &Path, checked: &mut Checked) {
     checked.exits("a restore in a linked work tree is refused", &restore, 128);
 
     let refreshed = run.rola(&linked, &["refresh"]);
-    checked.exits("a refresh in a linked work tree is refused", &refreshed, 128);
+    checked.exits(
+        "a refresh in a linked work tree is refused",
+        &refreshed,
+        128,
+    );
     checked.stderr_has(
         "the refusal says the work tree is a linked one",
         &refreshed,

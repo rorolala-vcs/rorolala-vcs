@@ -11,9 +11,7 @@
 
 use librorolala::inverse_index::{GraphEdgeKind, GraphRequest, InverseIndex, RebuildMode};
 use librorolala::storage::Key;
-use librorolala::vcs::{
-    Progress, ROOT_VERSION, VCSIndex, VCSWrite as _, Variant, Version,
-};
+use librorolala::vcs::{Progress, ROOT_VERSION, VCSIndex, VCSWrite as _, Variant, Version};
 use rorolala_utils_sandbox::{Guard, Sandbox};
 
 #[tokio::main]
@@ -580,7 +578,10 @@ async fn a_pack_does_not_change_what_is_answered(sandbox: &Sandbox, checked: &mu
     let inverse = inverse(&index);
     inverse.rebuild().await.expect("the inverse index is built");
 
-    index.repack(&Progress::silent()).await.expect("the index is packed");
+    index
+        .repack(&Progress::silent())
+        .await
+        .expect("the index is packed");
 
     checked.wants(
         "an answer from the records survives packing",

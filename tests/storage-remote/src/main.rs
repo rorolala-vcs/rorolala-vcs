@@ -309,7 +309,8 @@ fn client(workspace: &Path, data: &Path, args: &[&str]) -> Command {
 
     command
         .current_dir(workspace)
-        .env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data)
+        .env("XDG_DATA_HOME", data)
+        .env("ROLA_DATA_HOME", data)
         .args(args);
 
     command
@@ -415,7 +416,8 @@ fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
         command("rola-daemon")
             .arg("--port")
             .arg(port.to_string())
-            .env("XDG_DATA_HOME", data).env("ROLA_DATA_HOME", data),
+            .env("XDG_DATA_HOME", data)
+            .env("ROLA_DATA_HOME", data),
         ("127.0.0.1", port),
         STARTUP,
     )
@@ -423,7 +425,9 @@ fn serve_vault(data: &Path, dir: &Path, port: u16) -> Serving {
 
 /// Writes the table naming `dir` as [`NAMESPACE`], and gives the daemon an account of its own.
 fn register(data: &Path, dir: &Path) {
-    let registry = librorolala::location::user_data_dir_in(&data).join("daemon").join("registry.toml");
+    let registry = librorolala::location::user_data_dir_in(&data)
+        .join("daemon")
+        .join("registry.toml");
 
     fs::create_dir_all(registry.parent().expect("the daemon's directory"))
         .expect("the daemon's directory");
