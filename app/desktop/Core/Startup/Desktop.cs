@@ -299,7 +299,6 @@ internal sealed class Desktop
         var warned = log.For(Core.Source);
         var dockMenus = new DockMenuRegistry(warned.Warn);
         var icons = new IconLibrary();
-        var refocus = new Refocus();
         var openHooks = new OpenHookRegistry();
 
         var progress = new ProgressHub();
@@ -336,7 +335,6 @@ internal sealed class Desktop
             Docks = docks,
             OpenHooks = openHooks,
             OpenPipeline = new OpenPipeline(openHooks, warned),
-            Refocus = refocus,
             FileChanges = new FileChanges(),
             Dialogs = dialogs,
             IconBadges = new IconBadgeRegistry(),
@@ -347,7 +345,7 @@ internal sealed class Desktop
             // written onto it here: what a window is drawn from is this object, which does not exist until
             // this line is done. The shell is named by the set itself, which is the one that hears a window
             // close and can move the name to one that is still up.
-            Windows = new DockWindows(docks, i18n, refocus, log, icons, dockMenus, shell, icon),
+            Windows = new DockWindows(docks, i18n, log, icons, dockMenus, shell, icon),
         };
 
         services.Windows.Make = (key, dock) =>
@@ -356,11 +354,6 @@ internal sealed class Desktop
             // after it, the main window closed and asked for again from the Window menu, is a window over a
             // host that is already assembled, and covering it would be covering work that has been done.
             var window = new MainWindow(services, key, dock, loading: key is null && !_assembled);
-
-            // Every window of the host's, and not only the main one: a dock in a window of its own is come
-            // back to as much as the main window is, and a plugin's reading of the world outside is the same
-            // question either way.
-            window.Activated += (_, _) => refocus.Regain();
 
             // Told before the window is shown, because the showing is what is being told about: a listener
             // added after it has already missed it. Only the main window is spoken of, since opening a window

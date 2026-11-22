@@ -45,7 +45,20 @@ refusal now counts entries rather than files.
 
 ## Optimized
 
-### 1. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event
+### 1. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] Stop reading and drawing every view when a window comes back
+
+Coming back to one of the program's windows read every listing's directory again, drew every listing
+with its tiles, and asked the Overview and the Version Graph to read the work again: one activation cost
+a walk of the tree and a rebuild of every row and every tile. The main window was also told about it
+twice, because both the window and the shell subscribed to the same activation. Nothing is read or drawn
+for an activation any more, and the interface that carried it, `IPluginHost.Refocus`, is gone.
+
+A plugin that read something outside the program when a window came back has no such moment to wait
+for: it reads when it is opened, when the files change, and when the program says the files may have
+changed through `IFileChanges`. What another program does to the files is picked up by the next read the
+program is asked for, and the Overview's own timer goes on reading the work while it is on screen.
+
+### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event
 
 The File System plugin's directory dock and folder tree hand what a change asks for to one queue,
 `Frame`, which runs it once at the end of the turn. Several events raised by one step, one read or
@@ -58,7 +71,7 @@ to. What an eye, a hide rule or a badge strip says is redrawn only when the answ
 
 The navigation bar asks for one toolbar update per turn as well.
 
-### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing
 
 A background fetch that brings the Vault's Layout already here no longer tells the listing and the readings that the files changed. The run fingerprints the copy's generation pointer and the fetched ignore rules before and after the exchange; when both are the same, the view is left as it is. A foreground change still reads once its next fetch ends, and a refresh the user asked for still reads when it finishes.
 

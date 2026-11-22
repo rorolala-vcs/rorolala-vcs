@@ -39,7 +39,7 @@ internal sealed class VersionGraphDock : IDockView
     /// <summary>Makes the dock.</summary>
     /// <param name="host">
     /// The host, whose log says a reading that failed, whose files say when to read again, whose
-    /// icons the node menu is drawn with, and whose windows being come back to is a reading too.
+    /// icons the node menu is drawn with, and whose windows a press on an entry asks to show its file.
     /// </param>
     /// <param name="statuses">What the work says about the files, for the drafts it may stand at.</param>
     /// <param name="sync">What a sync would carry, which a fetch is not made over.</param>
@@ -61,7 +61,6 @@ internal sealed class VersionGraphDock : IDockView
             host.Icons,
             host.Palette,
             statuses,
-            host.Refocus,
             sync,
             fetch,
             host.Dialogs,
@@ -276,9 +275,6 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>What the work says about the files, for the drafts it may stand at.</summary>
     private readonly StatusReadings _statuses;
 
-    /// <summary>The host's windows being come back to, which the graph is read again for.</summary>
-    private readonly IRefocus _refocus;
-
     /// <summary>What a sync would carry, which is the run a fetch would wait for.</summary>
     private readonly SyncWatcher _sync;
 
@@ -423,7 +419,6 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="icons">The pictures a node's menu is drawn with.</param>
     /// <param name="palette">The colours the program is drawn in.</param>
     /// <param name="statuses">What the work says about the files.</param>
-    /// <param name="refocus">The host's windows being come back to.</param>
     /// <param name="sync">What a sync would carry.</param>
     /// <param name="fetch">The one fetch of the Vault's Layout.</param>
     /// <param name="dialogs">Where a question is put to the user, and a failure reported.</param>
@@ -435,7 +430,6 @@ internal sealed partial class VersionGraphView : Control
         IIconLibrary icons,
         IPalette palette,
         StatusReadings statuses,
-        IRefocus refocus,
         SyncWatcher sync,
         VaultFetch fetch,
         IDialogs dialogs,
@@ -448,7 +442,6 @@ internal sealed partial class VersionGraphView : Control
         ArgumentNullException.ThrowIfNull(icons);
         ArgumentNullException.ThrowIfNull(palette);
         ArgumentNullException.ThrowIfNull(statuses);
-        ArgumentNullException.ThrowIfNull(refocus);
         ArgumentNullException.ThrowIfNull(sync);
         ArgumentNullException.ThrowIfNull(fetch);
         ArgumentNullException.ThrowIfNull(dialogs);
@@ -460,7 +453,6 @@ internal sealed partial class VersionGraphView : Control
         _icons = icons;
         _palette = palette;
         _statuses = statuses;
-        _refocus = refocus;
         _sync = sync;
         _fetch = fetch;
         _dialogs = dialogs;
@@ -535,7 +527,6 @@ internal sealed partial class VersionGraphView : Control
         // thread, so the first drawing of a file can find them not yet there, and this is what draws it
         // again.
         _files.Redrawn += Refresh;
-        _refocus.Regained += Refresh;
         ResourcesChanged += ResourcesChangedHandler;
         ActualThemeVariantChanged += ThemeVariantChangedHandler;
         Refresh();
@@ -550,7 +541,6 @@ internal sealed partial class VersionGraphView : Control
         BaseDirectory.Changed -= Refresh;
         _files.Changed -= Refresh;
         _files.Redrawn -= Refresh;
-        _refocus.Regained -= Refresh;
         ResourcesChanged -= ResourcesChangedHandler;
         ActualThemeVariantChanged -= ThemeVariantChangedHandler;
 

@@ -40,7 +40,6 @@ internal sealed class OverviewDock : IDockView
     /// <param name="host">The host, which is what a row's buttons reach to run and to report.</param>
     /// <param name="log">Where a reading that could not be made is said.</param>
     /// <param name="files">What the files may have done, which the reading is made again for.</param>
-    /// <param name="refocus">The host's windows being come back to, which the reading is made again for too.</param>
     /// <param name="hub">What every command this plugin runs reports itself to.</param>
     /// <param name="sync">What a sync would carry, shared with the Version Graph.</param>
     /// <param name="fetch">The one fetch of the Vault's Layout, shared with the Version Graph.</param>
@@ -48,11 +47,10 @@ internal sealed class OverviewDock : IDockView
         IPluginHost host,
         ILog log,
         IFileChanges files,
-        IRefocus refocus,
         IProgressHub hub,
         SyncWatcher sync,
         VaultFetch fetch
-    ) => _view = new OverviewView(host, log, files, refocus, hub, sync, fetch);
+    ) => _view = new OverviewView(host, log, files, hub, sync, fetch);
 
     /// <inheritdoc />
     public Control View => _view;
@@ -391,9 +389,6 @@ internal sealed class OverviewView : UserControl
     /// <summary>What the files may have done, which a reading is made again for.</summary>
     private readonly IFileChanges _files;
 
-    /// <summary>The host's windows being come back to, which a reading is made again for too.</summary>
-    private readonly IRefocus _refocus;
-
     /// <summary>What asks for a reading while nothing else does: a file changed by another program.</summary>
     private readonly DispatcherTimer _again;
 
@@ -494,7 +489,6 @@ internal sealed class OverviewView : UserControl
     /// <param name="host">The host, which is what a row's buttons reach to run and to report.</param>
     /// <param name="log">Where a reading that could not be made is said.</param>
     /// <param name="files">What the files may have done.</param>
-    /// <param name="refocus">The host's windows being come back to.</param>
     /// <param name="hub">What every command this plugin runs reports itself to.</param>
     /// <param name="sync">What a sync would carry, shared with the Version Graph.</param>
     /// <param name="fetch">The one fetch of the Vault's Layout, shared with the Version Graph.</param>
@@ -502,7 +496,6 @@ internal sealed class OverviewView : UserControl
         IPluginHost host,
         ILog log,
         IFileChanges files,
-        IRefocus refocus,
         IProgressHub hub,
         SyncWatcher sync,
         VaultFetch fetch
@@ -515,7 +508,6 @@ internal sealed class OverviewView : UserControl
         _host = host;
         _log = log;
         _files = files;
-        _refocus = refocus;
         _hub = hub;
         _sync = sync;
         _fetch = fetch;
@@ -1535,7 +1527,6 @@ internal sealed class OverviewView : UserControl
             BaseDirectory.Changed += Touched;
             _files.Changed += Touched;
             _files.Redrawn += Redraw;
-            _refocus.Regained += Touched;
             _again.Start();
         }
         else
@@ -1543,7 +1534,6 @@ internal sealed class OverviewView : UserControl
             BaseDirectory.Changed -= Touched;
             _files.Changed -= Touched;
             _files.Redrawn -= Redraw;
-            _refocus.Regained -= Touched;
             _again.Stop();
         }
 

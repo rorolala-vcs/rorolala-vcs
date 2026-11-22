@@ -129,9 +129,6 @@ internal sealed class HostServices
     /// <summary>What plugins take a place's entry dropped on a directory for.</summary>
     public required DropTargetRegistry Drops { get; init; }
 
-    /// <summary>When one of the host's windows is come back to.</summary>
-    public required Refocus Refocus { get; init; }
-
     /// <summary>What a plugin says when the files may have changed.</summary>
     public required FileChanges FileChanges { get; init; }
 
@@ -253,9 +250,6 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     public IDropTargetRegistry Drops => this;
-
-    /// <inheritdoc />
-    public IRefocus Refocus => _services.Refocus;
 
     /// <inheritdoc />
     public IDialogs Dialogs => _services.Dialogs;

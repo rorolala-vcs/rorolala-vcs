@@ -47,7 +47,6 @@ internal static class Host
         var docks = new DockManager(new DockRegistry(), i18n, log, popups);
         var dockMenus = new DockMenuRegistry();
         var icons = new IconLibrary();
-        var refocus = new Refocus();
 
         // There is no application here, so the look is never applied; the service is what the
         // preference panel reads and writes, which is all a headless test has any use for.
@@ -87,8 +86,6 @@ internal static class Host
             // Nothing takes a drag of a place's entries here either: a directory takes files, and a test of
             // the drag protocol adds its own target.
             Drops = new DropTargetRegistry(),
-            // Nothing activates a window in a headless test, so nothing is ever raised on it.
-            Refocus = refocus,
             // A dialog needs a window to be shown on, and a headless test has none: nothing is ever shown.
             Dialogs = dialogs,
             // What a plugin says when the files may have changed: nothing changes them, so nothing is said.
@@ -96,7 +93,7 @@ internal static class Host
             // A headless test has no platform and no window, so nothing here makes one: a request to open a
             // window is answered as nothing having been asked for, which is what the bookkeeping under it is
             // checked through.
-            Windows = new DockWindows(docks, i18n, refocus, log, icons, dockMenus, shell, icon),
+            Windows = new DockWindows(docks, i18n, log, icons, dockMenus, shell, icon),
         };
     }
 }

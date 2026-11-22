@@ -106,7 +106,7 @@ internal static class RorolalaDocks
             OverviewNameId,
             OverviewKey,
             Icons.TaskAlt,
-            () => new OverviewDock(host, host.Log, host.Files, host.Refocus, hub, sync, fetch)
+            () => new OverviewDock(host, host.Log, host.Files, hub, sync, fetch)
         );
         Add(host, owner, WorkspaceNameId, WorkspaceKey, Icons.Work, () => new RorolalaDock(host.Log));
         Add(

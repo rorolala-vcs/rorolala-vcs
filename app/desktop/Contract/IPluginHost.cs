@@ -93,9 +93,6 @@ public interface IPluginHost
     /// <summary>Where the plugin offers what it takes a place's entry dropped on a directory for.</summary>
     IDropTargetRegistry Drops { get; }
 
-    /// <summary>When one of the host's windows is come back to.</summary>
-    IRefocus Refocus { get; }
-
     /// <summary>Where a plugin says that what it did changed the files, and hears another say so.</summary>
     IFileChanges Files { get; }
 

@@ -365,10 +365,6 @@ public partial class MainWindow : Window
         // dock moved by hand is remembered from then on, not only if the run ends tidily.
         _services.Docks.Changed += DocksChanged;
 
-        // Coming back to the window is when something outside the program is most likely to have changed what
-        // a plugin reads, so what the host is told about it is said on to the plugins here.
-        Activated += (_, _) => _services.Refocus.Regain();
-
         Opened += (_, _) =>
         {
             ShowPopups();

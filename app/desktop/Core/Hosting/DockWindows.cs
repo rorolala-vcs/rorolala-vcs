@@ -33,9 +33,6 @@ internal sealed class DockWindows : IWindows
     /// <summary>The host's translations.</summary>
     private readonly I18nService _i18n;
 
-    /// <summary>What the host tells the plugins when one of its windows is come back to.</summary>
-    private readonly Refocus _refocus;
-
     /// <summary>Where a failure to open a window is reported.</summary>
     private readonly LogService _log;
 
@@ -121,7 +118,6 @@ internal sealed class DockWindows : IWindows
     /// <summary>Makes the set of windows over what a window is drawn from.</summary>
     /// <param name="docks">The docks and where they are.</param>
     /// <param name="i18n">The host's translations.</param>
-    /// <param name="refocus">What a window being come back to is said through.</param>
     /// <param name="log">Where a failure to open a window is reported.</param>
     /// <param name="icons">The pictures a tab menu's marks are read from.</param>
     /// <param name="menus">What a dock's own menus were registered with.</param>
@@ -130,7 +126,6 @@ internal sealed class DockWindows : IWindows
     public DockWindows(
         DockManager docks,
         I18nService i18n,
-        Refocus refocus,
         LogService log,
         IIconLibrary icons,
         DockMenuRegistry menus,
@@ -140,7 +135,6 @@ internal sealed class DockWindows : IWindows
     {
         _docks = docks;
         _i18n = i18n;
-        _refocus = refocus;
         _log = log;
         _icons = icons;
         _menus = menus;
