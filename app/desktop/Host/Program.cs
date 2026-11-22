@@ -332,7 +332,7 @@ internal sealed class CrashWindow : Window
         var body = new Border
         {
             Background = new SolidColorBrush(Color.Parse("#121318")),
-            BorderBrush = new SolidColorBrush(Color.Parse("#34363E")),
+            BorderBrush = new SolidColorBrush(Color.Parse("#2D2F37")),
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 0, 0, 12),
             Child = new ScrollViewer
@@ -359,7 +359,7 @@ internal sealed class CrashWindow : Window
             Content = "Copy report",
             Foreground = new SolidColorBrush(Color.Parse("#E8E9EC")),
             Background = new SolidColorBrush(Color.Parse("#121318")),
-            BorderBrush = new SolidColorBrush(Color.Parse("#34363E")),
+            BorderBrush = new SolidColorBrush(Color.Parse("#2D2F37")),
         };
 
         copy.Click += async (_, _) =>
@@ -375,7 +375,7 @@ internal sealed class CrashWindow : Window
             Content = "Close",
             Foreground = new SolidColorBrush(Color.Parse("#E8E9EC")),
             Background = new SolidColorBrush(Color.Parse("#121318")),
-            BorderBrush = new SolidColorBrush(Color.Parse("#34363E")),
+            BorderBrush = new SolidColorBrush(Color.Parse("#2D2F37")),
         };
 
         close.Click += (_, _) => Close();

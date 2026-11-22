@@ -56,15 +56,15 @@ public sealed class ConfigurationTests
 
         // The ten a look is made of, in the spellings the panel shows and the reader reads.
         Assert.Contains("\"Theme/Dark/Bright\": \"#1A1B20\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Dark/Mid\": \"#0D0E11\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Mid\": \"#17181B\"", written, StringComparison.Ordinal);
         Assert.Contains("\"Theme/Dark/Dark\": \"#121318\"", written, StringComparison.Ordinal);
         Assert.Contains("\"Theme/Dark/Front\": \"#E8E9EC\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Dark/Splitter\": \"#34363E\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Dark/Splitter\": \"#2D2F37\"", written, StringComparison.Ordinal);
         Assert.Contains("\"Theme/Light/Bright\": \"#FFFFFF\"", written, StringComparison.Ordinal);
         Assert.Contains("\"Theme/Light/Mid\": \"#E9EAEE\"", written, StringComparison.Ordinal);
         Assert.Contains("\"Theme/Light/Dark\": \"#F3F4F7\"", written, StringComparison.Ordinal);
         Assert.Contains("\"Theme/Light/Front\": \"#1B1C1F\"", written, StringComparison.Ordinal);
-        Assert.Contains("\"Theme/Light/Splitter\": \"#C9CCD3\"", written, StringComparison.Ordinal);
+        Assert.Contains("\"Theme/Light/Splitter\": \"#E3E5E7\"", written, StringComparison.Ordinal);
 
         // The semantic states are stated per variant, so that a user may state the two looks apart, and a file
         // that names none is drawn in the one bright set both looks ship.

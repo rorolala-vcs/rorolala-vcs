@@ -65,7 +65,7 @@ public readonly record struct ThemePalette
             // step into the panel rather than at its face or at the window's own edge.
             Dark = Color.FromRgb(0xF3, 0xF4, 0xF7),
             Front = Color.FromRgb(0x1B, 0x1C, 0x1F),
-            Splitter = Color.FromRgb(0xC9, 0xCC, 0xD3),
+            Splitter = Color.FromRgb(0xE3, 0xE5, 0xE7),
             Primary = DefaultPrimary,
             Accent = DefaultAccent,
             Semantic = SemanticPalette.Light,
@@ -76,10 +76,10 @@ public readonly record struct ThemePalette
         new()
         {
             Bright = Color.FromRgb(0x1A, 0x1B, 0x20),
-            Mid = Color.FromRgb(0x0D, 0x0E, 0x11),
+            Mid = Color.FromRgb(0x17, 0x18, 0x1B),
             Dark = Color.FromRgb(0x12, 0x13, 0x18),
             Front = Color.FromRgb(0xE8, 0xE9, 0xEC),
-            Splitter = Color.FromRgb(0x34, 0x36, 0x3E),
+            Splitter = Color.FromRgb(0x2D, 0x2F, 0x37),
             Primary = DefaultPrimary,
             Accent = DefaultAccent,
             Semantic = SemanticPalette.Dark,
