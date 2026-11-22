@@ -108,6 +108,9 @@ internal sealed class Files : Listing<Entry>
     public override object Key(Entry item) => item.Path;
 
     /// <inheritdoc />
+    public override Entry Renew(Entry item) => new(item.Path, item.Kind);
+
+    /// <inheritdoc />
     public override string Name(Entry item) => Names.Show(item);
 
     /// <inheritdoc />

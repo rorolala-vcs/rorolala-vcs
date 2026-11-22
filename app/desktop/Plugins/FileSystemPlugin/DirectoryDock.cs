@@ -1398,6 +1398,11 @@ internal sealed class DirectoryControl : UserControl
             {
                 grid.Assign(files);
                 grid.Apply(Location.TakeDirty());
+
+                // What a row wears is read as the row is made, and a read of the directory is what follows the
+                // answers behind it being let go of: the rows that are kept are asked again, so that what they show
+                // is the read that just happened rather than the one before it.
+                grid.RenewAll();
             }
             else
             {
@@ -1412,6 +1417,10 @@ internal sealed class DirectoryControl : UserControl
             {
                 list.Assign(files);
                 list.Apply(Location.TakeDirty());
+
+                // The same reason a grid's rows are asked again: what a row wears is not in the entry, so a row kept
+                // across a read still says what the answers said before it.
+                list.RenewAll();
             }
             else
             {
@@ -1441,6 +1450,7 @@ internal sealed class DirectoryControl : UserControl
         }
 
         drawn.Choose(chosen);
+        drawn.RestoreScroll();
 
         // A place this dock was told to show is shown by its directory with the row chosen: what asked for it wanted
         // the file, and a dock that stopped at the directory would leave the user to find it again among the rows.

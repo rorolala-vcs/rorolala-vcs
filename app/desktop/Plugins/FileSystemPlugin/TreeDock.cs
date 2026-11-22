@@ -2495,12 +2495,16 @@ internal sealed class TreeBrowser : UserControl
         // A tree row is as wide as the tree, so what speaks for an entry is worn at the row's right rather than
         // on the icon's corner: a tree is a list of names, and a badge drawn over a picture in it would be a mark
         // on the picture rather than an answer about the entry.
+        // The strip already standing for this row is given up before the new one is made, because what a strip
+        // wears is compared against what was worn for the row: a new strip compared against the old answer would be
+        // taken for one that already says it, and stay empty until something asked the row again.
+        _worn.RemoveAll(one => string.Equals(one.Path, path, StringComparison.Ordinal));
+        _wornBadges.Remove(path);
+
         var badges = Worn(entry);
         badges.Name = "entry-badges";
         badges.Margin = new Thickness(0, 0, 6, 0);
 
-        _worn.RemoveAll(one => string.Equals(one.Path, path, StringComparison.Ordinal));
-        _wornBadges.Remove(path);
         _worn.Add((path, badges));
 
         // A directory is the thing a tree is made of, so its step is its name: a folder picture beside every

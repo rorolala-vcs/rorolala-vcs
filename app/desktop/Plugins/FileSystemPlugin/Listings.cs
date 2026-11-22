@@ -346,6 +346,19 @@ internal abstract class Listing<TItem>
     /// <returns>What says which one it is.</returns>
     public abstract object Key(TItem item);
 
+    /// <summary>
+    /// A copy of an item whose row the view has to make again.
+    /// </summary>
+    /// <remarks>
+    /// A row is built from the template the list gives it, and a toolkit handed the item already in place is one
+    /// that may take it as no change and keep the row: a fresh copy is what makes it build the row again. What a
+    /// copy is differs by listing, and an item with nothing to copy answers itself, which is what a row that needs
+    /// no making again costs.
+    /// </remarks>
+    /// <param name="item">The item.</param>
+    /// <returns>A copy of it, or the item itself.</returns>
+    public virtual TItem Renew(TItem item) => item;
+
     /// <summary>What one item is called.</summary>
     /// <param name="item">The item.</param>
     /// <returns>The name to show.</returns>
@@ -1021,8 +1034,6 @@ internal abstract class EntryView<TItem> : EntryView
 
         // What is new, and what moved, and what the watcher named: the listing is in the order it is shown, so
         // walking it puts each entry where it belongs and leaves every entry that is already there where it is.
-        var made = new List<TItem>();
-
         for (var at = 0; at < wanted.Count; at++)
         {
             var item = wanted[at];
@@ -1032,8 +1043,7 @@ internal abstract class EntryView<TItem> : EntryView
             {
                 if (IsDirty(key, dirty))
                 {
-                    _listed[at] = item;
-                    made.Add(item);
+                    _listed[at] = Source.Renew(item);
                 }
 
                 continue;
@@ -1052,13 +1062,6 @@ internal abstract class EntryView<TItem> : EntryView
             _listed.Insert(at, item);
         }
 
-        // The row of an entry the watcher named is the one thing about it that is not in the entry: the entry is
-        // where it was and is called what it was, and what changed is what a row asks as it draws.
-        foreach (var item in made)
-        {
-            Renew(item);
-        }
-
         _lead = -1;
         _anchor = -1;
 
@@ -1070,24 +1073,64 @@ internal abstract class EntryView<TItem> : EntryView
     /// <returns>Its key.</returns>
     private object KeyOf(TItem item) => Source.Key(item);
 
-    /// <summary>Makes the row of one entry again, and leaves every other row as it is.</summary>
+    /// <summary>
+    /// Makes every row again, for answers behind it that were let go of and read again.
+    /// </summary>
     /// <remarks>
-    /// What the list holds a row in is its container, and the row is built from the template the container is
-    /// given: handing a container the entry it already has is a change the toolkit may not see, so it is emptied
-    /// first. A container not realized is a row nobody is looking at, and it is made from the template when it is.
+    /// What a row wears is read as the row is made, so a row kept across a read is a row still saying what the
+    /// answers said before it: a listing read again after a command or a watcher dropped them has to ask every row
+    /// it draws, or what it shows is the answer of the read before. What is put in place of each item is a fresh
+    /// copy of it, because a toolkit handed the same item over itself is one that may not make the row again.
     /// </remarks>
-    /// <param name="item">The entry whose row is made again.</param>
-    private void Renew(TItem item)
+    public void RenewAll()
     {
-        if (List.ContainerFromItem(item) is not ContentControl container)
+        var scroll = List.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+
+        // Kept until the restore has run rather than read again by the next renewal: a reading that lands a turn
+        // after the touch renews the rows a second time, and by then the scroller has already been put back at the
+        // top. The first place the reader was at is the one all of them put back.
+        _scrollToKeep ??= scroll?.Offset;
+
+        // Only the rows on screen are made again: a row not realized is built from the template when it is scrolled
+        // into view, and making every item of a directory of a thousand again is a churn of the scroller for rows
+        // nobody is looking at.
+        foreach (var item in _rows.Select(one => one.Item).ToArray())
+        {
+            var at = Index(item);
+
+            if (at >= 0)
+            {
+                _listed[at] = Source.Renew(_listed[at]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Puts the reader back where they were scrolled to, once the rows made again have been laid out.
+    /// </summary>
+    /// <remarks>
+    /// Said after the choice has been put back, because choosing a row is a list bringing it into view: a place
+    /// said before that would be a place the choice then scrolled away from.
+    /// </remarks>
+    public void RestoreScroll()
+    {
+        if (_scrollToKeep is not { } kept)
         {
             return;
         }
 
-        var content = container.Content;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (List.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } now)
+                {
+                    now.Offset = kept;
+                }
 
-        container.Content = null;
-        container.Content = content;
+                _scrollToKeep = null;
+            },
+            DispatcherPriority.Background
+        );
     }
 
     /// <summary>Whether the watcher named an entry as one that may be drawn differently.</summary>
