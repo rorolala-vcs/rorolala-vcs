@@ -531,7 +531,7 @@ internal static partial class Icons
                 ),
             };
             Painted(worn, Border.BackgroundProperty, own, role);
-            glyph.Background = new SolidColorBrush(LightInk);
+            glyph.Background = new SolidColorBrush(badge.Mark.Glyph ?? LightInk);
 
             // The ink the badge is drawn in is the dark look's, whatever the program is drawn on: the picture
             // is the light ink, and the fill is the look's role read in the dark palette, so the bead reads the

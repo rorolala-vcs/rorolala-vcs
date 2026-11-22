@@ -9,9 +9,9 @@ namespace RorolalaVCSPlugin;
 /// <remarks>
 /// A rola-tree is a directory whose contents are one version rather than a set of loose entries, and the
 /// mark says so wherever a mark is read: in the badge column at a tree row's right, and on the folder's
-/// corner in a directory listing. The colour a tree's id names belongs to the rows and the line the tree
-/// marks, so the park is drawn in the look's Mid instead: it says what the folder is, and the colour says
-/// where the tree reaches.
+/// corner in a directory listing. The colour a tree's id names belongs to the rows the tree marks, so the
+/// park stands on the look's Mid and draws its picture in Front: it says what the folder is, and the colour
+/// says where the tree reaches.
 /// </remarks>
 internal sealed class RolaTreeIcon : IEntryMarkProvider
 {
@@ -38,6 +38,7 @@ internal sealed class RolaTreeIcon : IEntryMarkProvider
             ? new EntryMark(
                 IconKey: Icons.Park,
                 Colour: RorolalaColours.Mid,
+                Glyph: RorolalaColours.Front,
                 Tagged: true,
                 HoverKey: "rorolala_vcs.tree_badge"
             )

@@ -242,8 +242,8 @@ virtual entry takes its red from; an entry that only inherits the colour is left
 the one crumb a colour is given to a faint fill and a thin edge in that colour, the size of the box the pointer
 draws, and the words keep their own ink.
 
-The park a rola-tree wears is drawn in the look's Mid rather than in the tree's own colour: the colour belongs to
-the rows the tree marks, and the park says what the folder is.
+The park a rola-tree wears stands on the look's Mid and draws its picture in the look's Front rather than in the
+tree's own colour: the colour belongs to the rows the tree marks, and the park says what the folder is.
 
 ### 16. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Watch the directories on screen and refresh only what a change reached
 

@@ -77,6 +77,9 @@ internal static class RorolalaColours
     /// </remarks>
     public static Color Mid => _palette?.Mid ?? ThemePalette.DefaultDark.Mid;
 
+    /// <summary>The ink things are written in, which the park's own picture is drawn in.</summary>
+    public static Color Front => _palette?.Front ?? ThemePalette.DefaultDark.Front;
+
     /// <summary>What changed, and is this side's to record.</summary>
     public static Color UnderWay => Modify;
 

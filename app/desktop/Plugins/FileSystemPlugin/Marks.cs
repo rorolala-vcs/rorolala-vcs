@@ -46,6 +46,11 @@ namespace FileSystemPlugin;
 /// palette of its own says what its marks are coloured rather than which of the look's roles they wear. It wins
 /// over <paramref name="Ink"/>, and nothing means the role is what is drawn.
 /// </param>
+/// <param name="Glyph">
+/// The colour a filled badge's picture is drawn in, where the light ink is not wanted. The fill itself is
+/// <paramref name="Colour"/>; this is the picture standing on it, which a contribution that wants its mark read
+/// as ink on a bead gives a colour of its own. Nothing means the light ink a filled badge already draws with.
+/// </param>
 public sealed record EntryMark(
     string? TextKey = null,
     string? Text = null,
@@ -54,7 +59,8 @@ public sealed record EntryMark(
     MarkInk TextInk = MarkInk.Quiet,
     bool Tagged = false,
     string? HoverKey = null,
-    Color? Colour = null
+    Color? Colour = null,
+    Color? Glyph = null
 )
 {
     /// <summary>

@@ -215,6 +215,16 @@ public sealed class FolderColourTests
                 );
 
             Assert.NotNull(fill);
+
+            // The bead is the look's ground, and the park itself is the look's ink: the colour marks where the
+            // tree reaches, and the badge says what the folder is.
+            Assert.Contains(
+                badge.GetVisualDescendants().OfType<Border>(),
+                border =>
+                    border.Background is ISolidColorBrush brush
+                    && brush.Color == RorolalaColours.Front
+            );
+
             Assert.DoesNotContain(
                 badge.GetVisualDescendants().OfType<Border>(),
                 border => border.BorderThickness.Left > 0
