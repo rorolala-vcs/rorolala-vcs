@@ -14,7 +14,8 @@
     <!-- The program as a file: the icon a file list draws and a pinned program keeps. It is the same
          picture the Desktop program carries, because the two are one product to whoever pins either. -->
     <ApplicationIcon>../../res/icons/yizi.ico</ApplicationIcon>
-    <AvaloniaIncludeApplicationIconAsWindowIcon>false</AvaloniaIncludeApplicationIconAsWindowIcon>
+    <AvaloniaIncludeApplicationIconAsWindowIcon
+        >false</AvaloniaIncludeApplicationIconAsWindowIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,11 +28,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../desktop/Contract/RorolalaDesktop.Contract.csproj" />
-    <ProjectReference Include="../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <ProjectReference
+            Include="../desktop/Contract/RorolalaDesktop.Contract.csproj"
+        />
+    <ProjectReference
+            Include="../../utils/desktop-i18n/RorolalaDesktopI18n.csproj"
+        />
     <!-- The face every word is set in, embedded in the assembly the Desktop program also carries: the
          two programs are drawn with one font, and this one asks nobody's machine for it. -->
-    <ProjectReference Include="../../utils/desktop-fonts/RorolalaDesktopFonts.csproj" />
+    <ProjectReference
+            Include="../../utils/desktop-fonts/RorolalaDesktopFonts.csproj"
+        />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,16 +46,41 @@
          statements, and they are shared rather than restated: the same sources are compiled here, so
          there is one reading of `theme.json` and one set of names in the product. A copy would be a
          second statement of the same file that could drift from the first. -->
-    <Compile Include="../desktop/Core/Configuration/Configuration.cs" Link="Shared/Configuration.cs" />
-    <Compile Include="../desktop/Core/Configuration/ConfigPaths.cs" Link="Shared/ConfigPaths.cs" />
-  <Compile Include="../../modules/rola-sharp/UserDataPaths.cs" Link="Shared/UserDataPaths.cs" />
-    <Compile Include="../desktop/Core/Configuration/ConfigurationLoader.cs" Link="Shared/ConfigurationLoader.cs" />
-    <Compile Include="../desktop/Core/Configuration/Failure.cs" Link="Shared/Failure.cs" />
-    <Compile Include="../desktop/Core/Theming/WindowStyle.cs" Link="Shared/WindowStyle.cs" />
+    <Compile
+            Include="../desktop/Core/Configuration/Configuration.cs"
+            Link="Shared/Configuration.cs"
+        />
+    <Compile
+            Include="../desktop/Core/Configuration/ConfigPaths.cs"
+            Link="Shared/ConfigPaths.cs"
+        />
+  <Compile
+            Include="../../modules/rola-sharp/UserDataPaths.cs"
+            Link="Shared/UserDataPaths.cs"
+        />
+    <Compile
+            Include="../desktop/Core/Configuration/ConfigurationLoader.cs"
+            Link="Shared/ConfigurationLoader.cs"
+        />
+    <Compile
+            Include="../desktop/Core/Configuration/ThemeFileWatch.cs"
+            Link="Shared/ThemeFileWatch.cs"
+        />
+    <Compile
+            Include="../desktop/Core/Configuration/Failure.cs"
+            Link="Shared/Failure.cs"
+        />
+    <Compile
+            Include="../desktop/Core/Theming/WindowStyle.cs"
+            Link="Shared/WindowStyle.cs"
+        />
     <!-- The mark that turns while something is waited for is the same mark in both programs: this window shows
          one over a Workspace whose window is being opened, and the Desktop program shows one over itself while
          it assembles. One drawing, then, rather than two that could turn differently. -->
-    <Compile Include="../desktop/Core/Hosting/TurningMark.cs" Link="Shared/TurningMark.cs" />
+    <Compile
+            Include="../desktop/Core/Hosting/TurningMark.cs"
+            Link="Shared/TurningMark.cs"
+        />
   </ItemGroup>
 
   <ItemGroup>
@@ -63,17 +95,44 @@
          the two marks a window's frame carries, which are the Desktop program's own files, the frames the
          two programs draw are one frame, so the marks on them are one set. The Desktop's are linked rather
          than copied, so the tree keeps one place a picture lives. -->
-    <EmbeddedResource Include="icons/account_circle.png" LogicalName="RorolalaLauncher.icons.account_circle.png" />
-    <EmbeddedResource Include="icons/add_circle.png" LogicalName="RorolalaLauncher.icons.add_circle.png" />
-    <EmbeddedResource Include="icons/folder_open.png" LogicalName="RorolalaLauncher.icons.folder_open.png" />
-    <EmbeddedResource Include="icons/language.png" LogicalName="RorolalaLauncher.icons.language.png" />
+    <EmbeddedResource
+            Include="icons/account_circle.png"
+            LogicalName="RorolalaLauncher.icons.account_circle.png"
+        />
+    <EmbeddedResource
+            Include="icons/add_circle.png"
+            LogicalName="RorolalaLauncher.icons.add_circle.png"
+        />
+    <EmbeddedResource
+            Include="icons/folder_open.png"
+            LogicalName="RorolalaLauncher.icons.folder_open.png"
+        />
+    <EmbeddedResource
+            Include="icons/language.png"
+            LogicalName="RorolalaLauncher.icons.language.png"
+        />
     <!-- The Git logomark a git-rola Workspace wears. It is a copy in this project's own icon area rather
          than a file of the Git plugin, because a plugin may not be installed and the launcher still has
          to open on a machine without it. -->
-    <EmbeddedResource Include="icons/git.png" LogicalName="RorolalaLauncher.icons.git.png" />
-    <EmbeddedResource Include="../desktop/Core/icons/close.png" Link="icons/close.png" LogicalName="RorolalaLauncher.icons.close.png" />
-    <EmbeddedResource Include="../desktop/Core/icons/minimize.png" Link="icons/minimize.png" LogicalName="RorolalaLauncher.icons.minimize.png" />
-    <EmbeddedResource Include="../desktop/Core/icons/settings.png" Link="icons/settings.png" LogicalName="RorolalaLauncher.icons.settings.png" />
+    <EmbeddedResource
+            Include="icons/git.png"
+            LogicalName="RorolalaLauncher.icons.git.png"
+        />
+    <EmbeddedResource
+            Include="../desktop/Core/icons/close.png"
+            Link="icons/close.png"
+            LogicalName="RorolalaLauncher.icons.close.png"
+        />
+    <EmbeddedResource
+            Include="../desktop/Core/icons/minimize.png"
+            Link="icons/minimize.png"
+            LogicalName="RorolalaLauncher.icons.minimize.png"
+        />
+    <EmbeddedResource
+            Include="../desktop/Core/icons/settings.png"
+            Link="icons/settings.png"
+            LogicalName="RorolalaLauncher.icons.settings.png"
+        />
   </ItemGroup>
 
   <ItemGroup>

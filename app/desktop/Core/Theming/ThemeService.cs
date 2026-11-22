@@ -26,7 +26,7 @@ namespace RorolalaDesktop.Theming;
 /// changed while the program runs replaces a <em>resource</em> rather than a style.
 /// </para>
 /// </remarks>
-internal sealed class ThemeService
+internal sealed class ThemeService : IDisposable
 {
     /// <summary>The application whose styles and variant are set, or nothing where there is none.</summary>
     /// <remarks>
@@ -42,6 +42,16 @@ internal sealed class ThemeService
 
     /// <summary>The look that is attached, once one is: what a later colour replaces the palette of.</summary>
     private RorolalaTheme? _look;
+
+    /// <summary>
+    /// Who follows the look's file while the program runs, so a choice made beside it is seen here.
+    /// </summary>
+    /// <remarks>
+    /// Made by the first <see cref="Apply"/>, which is the first moment there is an application to dress and so a
+    /// window loop to post to. A service made without one is a test that only reads what a panel shows, and it has
+    /// no file to follow.
+    /// </remarks>
+    private ThemeFileWatch? _watch;
 
     /// <summary>Makes the service over what the user chose.</summary>
     /// <param name="application">The application to dress, or nothing where there is none.</param>
@@ -110,6 +120,8 @@ internal sealed class ThemeService
             return;
         }
 
+        _watch ??= new ThemeFileWatch(ConfigPaths.Root, "theme.json", Reload);
+
         // Set on the application rather than named by the overlay: which of the two variants is being
         // drawn is every colour the base theme owns, and `System` is a variant that goes on following
         // the desktop as the desktop changes.
@@ -154,6 +166,47 @@ internal sealed class ThemeService
         ConfigurationLoader.WriteTheme(_theme);
         Apply();
         Settled?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Reads the file again, which is what a choice made in the other program looks like.
+    /// </summary>
+    /// <remarks>
+    /// The two programs are drawn from one file, and each reads it when it starts: a colour changed in one while
+    /// the other is open is said here by the watch over the file. What is read is put into the object already
+    /// held rather than in place of it, because that object is what the preference panel edits and what the
+    /// palette answers from, and a second instance would be a second statement of the same choice.
+    /// <para>
+    /// A file caught while it is being written is not a choice, so a read that fails is left for the next write.
+    /// What settled is drawn again, the same as a choice made here: what stands on a filled surface and the marks
+    /// built from a colour value are told, since they do not follow a replaced resource themselves.
+    /// </para>
+    /// </remarks>
+    public void Reload()
+    {
+        ThemeConfiguration latest;
+
+        try
+        {
+            latest = ConfigurationLoader.LoadTheme();
+        }
+        catch (ConfigurationFailure)
+        {
+            return;
+        }
+
+        _theme.CopyFrom(latest);
+        Apply();
+        Settled?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Stops following the look's file.</summary>
+    public void Dispose()
+    {
+        _watch?.Dispose();
+        _watch = null;
+
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>

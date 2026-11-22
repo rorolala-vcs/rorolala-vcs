@@ -210,6 +210,62 @@ internal sealed class ThemeConfiguration
     /// <summary>The accent in force, which is the default when the file names none.</summary>
     public Color AccentOrDefault => Accent ?? ThemePalette.DefaultAccent;
 
+    /// <summary>
+    /// Takes the choices of another reading of the file, in place.
+    /// </summary>
+    /// <remarks>
+    /// In place rather than by replacing this object: this one is what was handed to the look and to the panel
+    /// that edits it, and a change made in the other program has to reach the same instance. A field the other
+    /// reading leaves unset is unset here too, since the file holds only what was chosen.
+    /// </remarks>
+    /// <param name="other">What the file states now.</param>
+    public void CopyFrom(ThemeConfiguration other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        Mode = other.Mode;
+        Primary = other.Primary;
+        PrimaryText = other.PrimaryText;
+        Accent = other.Accent;
+
+        ThemeDarkBright = other.ThemeDarkBright;
+        ThemeDarkMid = other.ThemeDarkMid;
+        ThemeDarkDark = other.ThemeDarkDark;
+        ThemeDarkFront = other.ThemeDarkFront;
+        ThemeDarkSplitter = other.ThemeDarkSplitter;
+        ThemeLightBright = other.ThemeLightBright;
+        ThemeLightMid = other.ThemeLightMid;
+        ThemeLightDark = other.ThemeLightDark;
+        ThemeLightFront = other.ThemeLightFront;
+        ThemeLightSplitter = other.ThemeLightSplitter;
+
+        ThemeDarkDisabled = other.ThemeDarkDisabled;
+        ThemeDarkModify = other.ThemeDarkModify;
+        ThemeDarkWarning = other.ThemeDarkWarning;
+        ThemeDarkError = other.ThemeDarkError;
+        ThemeDarkFail = other.ThemeDarkFail;
+        ThemeDarkSuccess = other.ThemeDarkSuccess;
+        ThemeDarkAllow = other.ThemeDarkAllow;
+        ThemeDarkDisallow = other.ThemeDarkDisallow;
+        ThemeDarkForce = other.ThemeDarkForce;
+        ThemeDarkStatusAlpha = other.ThemeDarkStatusAlpha;
+        ThemeDarkStatusBeta = other.ThemeDarkStatusBeta;
+        ThemeDarkStatusDelta = other.ThemeDarkStatusDelta;
+
+        ThemeLightDisabled = other.ThemeLightDisabled;
+        ThemeLightModify = other.ThemeLightModify;
+        ThemeLightWarning = other.ThemeLightWarning;
+        ThemeLightError = other.ThemeLightError;
+        ThemeLightFail = other.ThemeLightFail;
+        ThemeLightSuccess = other.ThemeLightSuccess;
+        ThemeLightAllow = other.ThemeLightAllow;
+        ThemeLightDisallow = other.ThemeLightDisallow;
+        ThemeLightForce = other.ThemeLightForce;
+        ThemeLightStatusAlpha = other.ThemeLightStatusAlpha;
+        ThemeLightStatusBeta = other.ThemeLightStatusBeta;
+        ThemeLightStatusDelta = other.ThemeLightStatusDelta;
+    }
+
     /// <summary>The dark variant's semantic colours, with every default filled in.</summary>
     private SemanticPalette DarkSemantic
     {
