@@ -80,6 +80,13 @@ public sealed class RorolalaVCSPlugin : IRolaPlugin
         // answer read off the window's thread (see OwnershipReadings).
         var ownership = new OwnershipReadings(host.Log, host.Files);
 
+        // A change another program makes is said per directory, and each reading is kept per directory too, so only
+        // what the change can sour is let go of: a reading of another directory is not made wrong by it, and asking
+        // every directory on screen to be read again would cost what watching one was meant to save.
+        host.Files.ChangedIn += statuses.Forget;
+        host.Files.ChangedIn += trees.Forget;
+        host.Files.ChangedIn += ownership.Forget;
+
         RorolalaLocks.Declare(host, statuses, ownership, trees);
         RorolalaTreeColumns.Declare(trees);
 

@@ -16,7 +16,7 @@ namespace RorolalaVCSPlugin;
 /// Like the Work's own status, it is not read on the window's thread. The read is started on a thread of
 /// its own, what asks in the meantime has no answer, and what lands is drawn again through
 /// <see cref="IFileChanges.Redraw"/>. A file change makes every kept answer stale, which is what
-/// <see cref="Forget"/> is for.
+/// <see cref="Forget()"/> is for.
 /// </para>
 /// </remarks>
 internal sealed class TreeReadings
@@ -97,14 +97,47 @@ internal sealed class TreeReadings
     /// <summary>Lets go of what was read, so the next answer is read from the tree as it is now.</summary>
     public void Forget()
     {
+        Forget(_ => true);
+    }
+
+    /// <summary>
+    /// Lets go of what was read for the trees a change in one directory can sour.
+    /// </summary>
+    /// <remarks>
+    /// A tree's reading holds what its directory holds, so a change anywhere under it makes it stale. A tree
+    /// beside the directory that changed is not made wrong by it and is kept.
+    /// </remarks>
+    /// <param name="directory">The directory whose files may have changed.</param>
+    public void Forget(string directory)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+
+        Forget(one => Subtree.Holds(one, directory));
+    }
+
+    /// <summary>Lets go of the readings a change can sour.</summary>
+    /// <param name="stale">Which reading the change makes stale.</param>
+    private void Forget(Func<string, bool> stale)
+    {
         HashSet<string>[] lost;
 
         lock (_gate)
         {
+            var at = _readings.Keys.Union(_lost.Keys).Where(stale).ToArray();
+
+            if (at.Length == 0)
+            {
+                return;
+            }
+
             _version++;
-            lost = [.. _lost.Values];
-            _readings.Clear();
-            _lost.Clear();
+            lost = [.. at.Where(_lost.ContainsKey).Select(one => _lost[one])];
+
+            foreach (var one in at)
+            {
+                _readings.Remove(one);
+                _lost.Remove(one);
+            }
         }
 
         // What was shown as deleted is taken away before what it was read from is let go of: the next reading

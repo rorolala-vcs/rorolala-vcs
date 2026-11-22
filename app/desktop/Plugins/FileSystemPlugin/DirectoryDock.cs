@@ -1275,7 +1275,18 @@ internal sealed class DirectoryControl : UserControl
 
         if (ReferenceEquals(_drawn, Location.Shown))
         {
-            _view?.Repaint();
+            // The entries are the ones drawn, but one of them may have changed on disk: that entry is drawn again
+            // and the rest are left as they are, which is what a file another program wrote costs.
+            var dirty = Location.TakeDirty();
+
+            if (dirty.Count > 0)
+            {
+                _view?.Apply(dirty);
+            }
+            else
+            {
+                _view?.Repaint();
+            }
 
             return;
         }
@@ -1380,12 +1391,33 @@ internal sealed class DirectoryControl : UserControl
 
         if (Zoom > GridAbove && _view is GridBrowser<Entry> grid && grid.IconSize == icon)
         {
-            grid.Retarget(files, sameDirectory);
+            // A read of the directory this view already draws is the same rows again: what it holds is brought
+            // to the listing in place, so a file added or changed is one row made again rather than a grid of
+            // them. A step to another directory is another listing, and every row of it is new.
+            if (sameDirectory)
+            {
+                grid.Assign(files);
+                grid.Apply(Location.TakeDirty());
+            }
+            else
+            {
+                grid.Retarget(files, keepScroll: false);
+            }
+
             drawn = grid;
         }
         else if (Zoom <= GridAbove && _view is ListBrowser<Entry> list)
         {
-            list.Retarget(files, sameDirectory);
+            if (sameDirectory)
+            {
+                list.Assign(files);
+                list.Apply(Location.TakeDirty());
+            }
+            else
+            {
+                list.Retarget(files, keepScroll: false);
+            }
+
             drawn = list;
         }
         else if (Zoom > GridAbove)

@@ -123,6 +123,7 @@ internal sealed class TreeControl : UserControl
         {
             _browser.Changed += UpdateOwed;
             _browser.Reread += AgainOwed;
+            _browser.Shared.TouchedIn += ChangedIn;
 
             // The constructor has already built the tree once. Building it again on the way into the
             // window would replace the rows the reader is about to see for the same rows, which is a
@@ -136,6 +137,7 @@ internal sealed class TreeControl : UserControl
         {
             _browser.Changed -= UpdateOwed;
             _browser.Reread -= AgainOwed;
+            _browser.Shared.TouchedIn -= ChangedIn;
         };
 
         // Taken on the way down, like the keys a listing answers: F5 is a key the dock answers wherever in it the
@@ -175,6 +177,23 @@ internal sealed class TreeControl : UserControl
 
     /// <summary>Says that the files behind the tree may have changed, once for the frame.</summary>
     private void AgainOwed() => Frame.Post(Again);
+
+    /// <summary>
+    /// Says that the files of one directory changed, which the step over it is read again for.
+    /// </summary>
+    /// <remarks>
+    /// The step is read again rather than the tree: a directory another program wrote to is one step of the tree
+    /// that is wrong, and reading the tree whole for it would make every row on screen again.
+    /// </remarks>
+    /// <param name="directory">The directory that changed.</param>
+    private void ChangedIn(string directory) =>
+        Frame.Post(() =>
+        {
+            if (_content.Content is TreeBrowser tree)
+            {
+                tree.Again(directory);
+            }
+        });
 
     /// <summary>Roots the tree again when the base or the hiding is not what it was read against.</summary>
     private void Update()
@@ -529,6 +548,9 @@ internal sealed class TreeBrowser : UserControl
     /// </remarks>
     private readonly HashSet<string> _stale = new(StringComparer.Ordinal);
 
+    /// <summary>The directories this tree has shown to the watch, so that none is shown twice or left showing.</summary>
+    private readonly HashSet<string> _watched = new(StringComparer.Ordinal);
+
     /// <summary>
     /// The newest reading claimed for each step, so that a reading another has superseded does not land.
     /// </summary>
@@ -701,6 +723,9 @@ internal sealed class TreeBrowser : UserControl
         {
             _clip.Changed -= Repaint;
             _actions.Naming -= Named;
+
+            // A tree going away is every step it drew no longer on screen, and the watch is what says so.
+            UnwatchingAll();
         };
 
         var over = new Canvas { IsHitTestVisible = false };
@@ -1153,6 +1178,7 @@ internal sealed class TreeBrowser : UserControl
         }
 
         _stale.Clear();
+        UnwatchingAll();
         _refreshing = true;
 
         try
@@ -1197,6 +1223,75 @@ internal sealed class TreeBrowser : UserControl
                 },
                 DispatcherPriority.Render
             );
+        }
+    }
+
+    /// <summary>
+    /// Reads one step again, when the files in it have changed on disk.
+    /// </summary>
+    /// <remarks>
+    /// What is read is the directory the step stands for, and the steps that were open under it: a tree read
+    /// whole for a change in one directory is every step on screen made again, and the reader's place in it
+    /// made again with the rows.
+    /// <para>
+    /// A directory that is not on screen is not read at all. A step that is not drawn reads its directory when it
+    /// is opened, which is after the change, so nothing is owed to it.
+    /// </para>
+    /// </remarks>
+    /// <param name="directory">The directory that changed.</param>
+    public void Again(string directory)
+    {
+        if (Find(_tree.Items, directory) is not { } step)
+        {
+            return;
+        }
+
+        var opened = Opened()
+            .Where(one => Pathing.Same(one, directory) || Pathing.Inside(one, directory))
+            .ToArray();
+        var chosen = Chosen();
+
+        foreach (var one in opened)
+        {
+            Unwatching(one);
+        }
+
+        Unwatching(directory);
+
+        // Named as stale as well as read now, so a step that is closed and opened again before the next change
+        // reads the directory rather than what it held when this ran.
+        _stale.Add(directory);
+
+        Read(step, directory);
+        Reopen(opened, chosen);
+    }
+
+    /// <summary>Shows a step's directory to the watch, from the moment it is open.</summary>
+    /// <param name="path">The directory the step stands for.</param>
+    private void Watching(string path)
+    {
+        if (_watched.Add(path))
+        {
+            _browser.Shared.Showing(path);
+        }
+    }
+
+    /// <summary>Stops showing a step's directory, which is no longer drawn.</summary>
+    /// <param name="path">The directory the step stood for.</param>
+    private void Unwatching(string path)
+    {
+        if (_watched.Remove(path))
+        {
+            _browser.Shared.Hiding(path);
+        }
+    }
+
+    /// <summary>Stops showing every directory this tree showed, which is a tree going away or read whole.</summary>
+    private void UnwatchingAll()
+    {
+        foreach (var path in _watched.ToArray())
+        {
+            Unwatching(path);
         }
     }
 
@@ -2167,6 +2262,10 @@ internal sealed class TreeBrowser : UserControl
 
         item.Expanded += (_, _) =>
         {
+            // The directory a step holds is drawn from the moment it is open, so it is watched from then: what
+            // another program puts in it is a change the rows under it have to be read again for.
+            Watching(path);
+
             // Said before the reading: whether a step is open is what the next run opens again, and that is
             // true of a step that is opened and read later as much as of one read now.
             StepChanged?.Invoke(this, new StepEventArgs(path, open: true));
@@ -2207,7 +2306,11 @@ internal sealed class TreeBrowser : UserControl
             });
         };
 
-        item.Collapsed += (_, _) => StepChanged?.Invoke(this, new StepEventArgs(path, open: false));
+        item.Collapsed += (_, _) =>
+        {
+            Unwatching(path);
+            StepChanged?.Invoke(this, new StepEventArgs(path, open: false));
+        };
 
         return item;
     }

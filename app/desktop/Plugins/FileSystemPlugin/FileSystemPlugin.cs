@@ -160,6 +160,17 @@ public sealed class FileSystemPlugin : IRolaPlugin
         // clipboard is shared the same way: a copy made in one directory dock is a copy the other can paste.
         var at = Start();
         var shared = new Shared(at, hides, host.Config, host.Files);
+
+        // The directories on screen are watched for what another program does to them. A change of one
+        // directory's entries is a reading of that directory, and a change of one entry is that entry drawn
+        // again, rather than every view reading everything for a change most of them cannot see. A burst the
+        // watcher could not name is answered with the change across the board, and a directory it could not
+        // watch is said in the log.
+        shared.Watch.Set += shared.DirectoryChanged;
+        shared.Watch.Entry += shared.EntryChanged;
+        shared.Watch.Overflowed += host.Files.Touch;
+        shared.Watch.Unwatchable += host.Log.Info;
+
         var browser = new Browser(host.Log, shared, at, host.LogicalViews);
         var clip = new Clip(host.Log);
 

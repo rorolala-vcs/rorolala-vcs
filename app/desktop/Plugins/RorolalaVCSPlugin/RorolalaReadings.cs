@@ -100,13 +100,49 @@ internal sealed class OwnershipReadings
     /// </remarks>
     public void Forget()
     {
+        Forget(_ => true);
+    }
+
+    /// <summary>
+    /// Lets go of what was read for one directory and for every directory holding it.
+    /// </summary>
+    /// <remarks>
+    /// What is read for a directory is the ownership under it, so a change anywhere under it makes it stale, and so
+    /// does a change under any directory holding it. A directory beside it is not made wrong by the change and its
+    /// reading is kept, which is what keeps a change in one place from opening the whole work again.
+    /// </remarks>
+    /// <param name="directory">The directory whose files may have changed.</param>
+    public void Forget(string directory)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+
+        Forget(one => Subtree.Holds(one, directory));
+    }
+
+    /// <summary>Lets go of the readings a change can sour.</summary>
+    /// <param name="stale">Which reading the change makes stale.</param>
+    private void Forget(Func<string, bool> stale)
+    {
         OwnershipScope?[] ownerships;
 
         lock (_gate)
         {
+            var at = _known.Keys.Where(stale).ToArray();
+
+            // Nothing was read that the change can sour, which is the ordinary case for a directory no reader has
+            // asked about yet, and no handle is given back for it.
+            if (at.Length == 0)
+            {
+                return;
+            }
+
             _version++;
-            ownerships = [.. _known.Values];
-            _known.Clear();
+            ownerships = [.. at.Select(one => _known[one])];
+
+            foreach (var one in at)
+            {
+                _known.Remove(one);
+            }
         }
 
         foreach (var ownership in ownerships)

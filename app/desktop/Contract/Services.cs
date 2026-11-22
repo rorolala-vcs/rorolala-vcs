@@ -259,8 +259,22 @@ public interface IFileChanges
     /// </remarks>
     event Action? Redrawn;
 
+    /// <summary>
+    /// Raised when the files of one directory may have changed, so what draws that directory reads it again.
+    /// </summary>
+    /// <remarks>
+    /// The narrow half of <see cref="Changed"/>. A change is a fact about one directory, and what a plugin keeps
+    /// about the work is kept per directory: a reading for another directory is not made wrong by it, and
+    /// dropping every reading for a change in one place is a walk of the work for nothing.
+    /// </remarks>
+    event Action<string>? ChangedIn;
+
     /// <summary>Says that what this plugin has just done may have changed the files.</summary>
     void Touch();
+
+    /// <summary>Says that what this plugin has just done may have changed the files of one directory.</summary>
+    /// <param name="directory">The directory whose entries may differ.</param>
+    void TouchIn(string directory);
 
     /// <summary>Says that an answer this plugin has been reading is at hand, so what shows it is drawn again.</summary>
     void Redraw();

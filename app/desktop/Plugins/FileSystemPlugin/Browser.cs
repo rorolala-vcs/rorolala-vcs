@@ -104,6 +104,15 @@ internal sealed class Browser : IDisposable
     /// </remarks>
     private readonly HashSet<string> _asked = new(StringComparer.Ordinal);
 
+    /// <summary>The entries of this location that may have changed on disk since they were last drawn.</summary>
+    private readonly HashSet<string> _dirty = new(StringComparer.Ordinal);
+
+    /// <summary>The directory shown to the watch, or nothing while this location shows none.</summary>
+    private string? _watchedAt;
+
+    /// <summary>The directory holding the one shown to the watch, or nothing at the top of the platform.</summary>
+    private string? _watchedParent;
+
     /// <summary>Makes a location onto a directory, or onto a place.</summary>
     /// <param name="log">Where a read of the directory is said.</param>
     /// <param name="shared">The answers every location shares.</param>
@@ -139,7 +148,13 @@ internal sealed class Browser : IDisposable
         _shared.Changed += Restage;
         _shared.Touched += Refresh;
         _shared.Redrawn += Redraw;
+        _shared.TouchedIn += RefreshIn;
+        _shared.EntryIn += EntryIn;
+        Watching();
     }
+
+    /// <summary>The shared answers, for the tree, which reaches the watch and a change through the browser it holds.</summary>
+    internal Shared Shared => _shared;
 
     /// <summary>
     /// The top a platform has.
@@ -596,18 +611,144 @@ internal sealed class Browser : IDisposable
     public void Touch() => _shared.Touch();
 
     /// <summary>
+    /// The entries of this location a view has to draw again, and nothing after this asks again.
+    /// </summary>
+    /// <remarks>
+    /// Kept here rather than in the view, because what changed is what the watcher saw of this location's
+    /// directory and the view that draws it is made and thrown away by the dock. A path is taken out by the draw
+    /// that answers for it, so one change is one entry drawn again.
+    /// </remarks>
+    /// <returns>The paths, which is nothing when no entry changed.</returns>
+    public IReadOnlyList<string> TakeDirty()
+    {
+        if (_dirty.Count == 0)
+        {
+            return [];
+        }
+
+        var taken = _dirty.ToArray();
+
+        _dirty.Clear();
+
+        return taken;
+    }
+
+    /// <summary>
     /// Lets go of the shared answers.
     /// </summary>
     /// <remarks>
     /// A location made for a dock that was taken out of step is thrown away when that dock goes back in, and
     /// what it holds of the plugin's has to be let go of with it: a subscription left behind would keep an
-    /// abandoned location reading directories nobody looks at, once per toggle.
+    /// abandoned location reading directories nobody looks at, once per toggle. The directories it showed the
+    /// watch are hidden with it, for the same reason.
     /// </remarks>
     public void Dispose()
     {
         _shared.Changed -= Restage;
         _shared.Touched -= Refresh;
         _shared.Redrawn -= Redraw;
+        _shared.TouchedIn -= RefreshIn;
+        _shared.EntryIn -= EntryIn;
+
+        Unwatching();
+    }
+
+    /// <summary>
+    /// Says that the files of one directory may have changed, which this location reads again only when it shows
+    /// that directory.
+    /// </summary>
+    /// <remarks>
+    /// The directory's parent counts as well: a directory renamed or removed from outside is an event in the
+    /// directory holding it, and this location showing the renamed one would otherwise keep what it read.
+    /// </remarks>
+    /// <param name="directory">The directory that changed.</param>
+    private void RefreshIn(string directory)
+    {
+        if (_logical is not null || IsComputer(_current))
+        {
+            return;
+        }
+
+        var parent = ParentOf(_current);
+
+        if (!Pathing.Same(directory, _current) && (parent is null || !Pathing.Same(directory, parent)))
+        {
+            return;
+        }
+
+        Refresh();
+    }
+
+    /// <summary>
+    /// Says that one entry may have changed content or time, which this location draws again when it shows it.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is read: the entry is where it was, and what changed about it is what a view asks for as it draws
+    /// it. Said as a change rather than as a redraw, so that the dock answers it with that entry drawn again
+    /// instead of with the rows it already has painted again.
+    /// </remarks>
+    /// <param name="path">The entry that changed.</param>
+    private void EntryIn(string path)
+    {
+        if (_logical is not null || IsComputer(_current) || !Pathing.Inside(path, _current))
+        {
+            return;
+        }
+
+        _dirty.Add(path);
+        Changed?.Invoke();
+    }
+
+    /// <summary>Shows the directory this location draws, and the one holding it, to the watch.</summary>
+    private void Watching()
+    {
+        // The computer is not a directory to watch: its entries are the drives, which the listing reads rather
+        // than the filesystem watching them, so it is shown to nothing and what was shown is hidden.
+        if (_logical is not null || IsComputer(_current))
+        {
+            Unwatching();
+
+            return;
+        }
+
+        var parent = ParentOf(_current);
+
+        if (
+            _watchedAt is not null
+            && Pathing.Same(_watchedAt, _current)
+            && (parent is null || (_watchedParent is not null && Pathing.Same(_watchedParent, parent)))
+        )
+        {
+            return;
+        }
+
+        Unwatching();
+
+        _watchedAt = _current;
+        _shared.Showing(_current);
+
+        if (parent is not null)
+        {
+            _watchedParent = parent;
+            _shared.Showing(parent);
+        }
+    }
+
+    /// <summary>Stops showing the directories this location showed to the watch, if it showed any.</summary>
+    private void Unwatching()
+    {
+        if (_watchedAt is not null)
+        {
+            _shared.Hiding(_watchedAt);
+        }
+
+        if (_watchedParent is not null)
+        {
+            _shared.Hiding(_watchedParent);
+        }
+
+        _watchedAt = null;
+        _watchedParent = null;
     }
 
     /// <summary>Moves without touching the history, for back, forward and up.</summary>
@@ -629,6 +770,7 @@ internal sealed class Browser : IDisposable
         // it, and the address is what says where the browser actually is. The computer is not a path
         // and is held as it is.
         _current = IsComputer(directory) ? directory : Path.GetFullPath(directory);
+        Watching();
         _entries = Read(_current);
         _shown = Stage(_current, _entries);
         Changed?.Invoke();
@@ -648,6 +790,7 @@ internal sealed class Browser : IDisposable
         _logical = Logical.Find(written, _views);
         _entries = [];
         _shown = [];
+        Watching();
         Changed?.Invoke();
     }
 

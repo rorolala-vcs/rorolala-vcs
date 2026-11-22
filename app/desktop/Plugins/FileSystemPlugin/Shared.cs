@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 
@@ -19,13 +20,27 @@ namespace FileSystemPlugin;
 /// something they read has moved on.
 /// </para>
 /// </remarks>
+[SuppressMessage(
+    "Design",
+    "CA1001:Types that own disposable fields should be disposable",
+    Justification = "the watch lives as long as the program does: there is one of these per plugin, and nothing closes a plugin"
+)]
 internal sealed class Shared
 {
+    /// <summary>How long a burst of filesystem changes is gathered before a view is told about it.</summary>
+    private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(250);
+
     /// <summary>The setting the choice about showing what is hidden is kept under.</summary>
     public const string ShowSetting = "Hides/show";
 
     /// <summary>Whether a read has been asked for and is waiting for the turn to end.</summary>
     private bool _asked;
+
+    /// <summary>The directories a change has been said of in this turn, so that one turn says it once.</summary>
+    private readonly HashSet<string> _asking = new(StringComparer.Ordinal);
+
+    /// <summary>The entries a change has been said of in this turn, so that one turn says it once.</summary>
+    private readonly HashSet<string> _askingEntry = new(StringComparer.Ordinal);
 
     /// <summary>The directory the tree is rooted at.</summary>
     private string _base;
@@ -45,6 +60,12 @@ internal sealed class Shared
     /// <summary>Whether a touch is being handed to the host, so that the host's answer does not come back as one.</summary>
     private bool _telling;
 
+    /// <summary>The directories on screen, watched for what another program does to them.</summary>
+    private readonly WatchService _watch;
+
+    /// <summary>What is watched, for the caller that wires what a change is said through.</summary>
+    internal WatchService Watch => _watch;
+
     /// <summary>Makes the shared answers, with the tree rooted at a directory.</summary>
     /// <param name="baseDir">The directory to root the tree at.</param>
     /// <param name="hides">The hide providers, and the choice of which are in force.</param>
@@ -57,6 +78,7 @@ internal sealed class Shared
         _config = config;
         _files = files;
         _shown = config.ReadKeyAs(ShowSetting, false);
+        _watch = new WatchService(Settle);
 
         // A read that some other plugin worked out is drawn again rather than read again: the two are the halves of one
         // channel, and taking the other one would empty every reader's answers for a reading that changed nothing.
@@ -89,6 +111,25 @@ internal sealed class Shared
     /// only that dock is looking at.
     /// </remarks>
     public event Action? Touched;
+
+    /// <summary>
+    /// Raised when the files of one directory may have changed, so that what draws it reads it again.
+    /// </summary>
+    /// <remarks>
+    /// The narrow half of <see cref="Touched"/>: a change another program makes is a fact about one directory,
+    /// and a location over another directory has nothing to read for it. What is read is the location's own
+    /// directory, and only a location showing that one reads at all.
+    /// </remarks>
+    public event Action<string>? TouchedIn;
+
+    /// <summary>
+    /// Raised when one entry may have changed content or time, so that what draws it asks for it again.
+    /// </summary>
+    /// <remarks>
+    /// The entry has not moved in its directory, so nothing is read: what draws it draws that entry again, which
+    /// is where its picture, its marks and its columns are asked for afresh.
+    /// </remarks>
+    public event Action<string>? EntryIn;
 
     /// <summary>
     /// Raised when an answer a plugin worked out is at hand, so that every location draws again without reading.
@@ -133,6 +174,76 @@ internal sealed class Shared
         });
     }
 
+    /// <summary>A directory that is now on screen, which is watched until it is hidden as many times.</summary>
+    /// <param name="directory">The directory.</param>
+    public void Showing(string directory) => _watch.Show(directory);
+
+    /// <summary>A directory that is no longer on screen.</summary>
+    /// <param name="directory">The directory.</param>
+    public void Hiding(string directory) => _watch.Hide(directory);
+
+    /// <summary>
+    /// Says that what one directory holds may have changed, which what draws it reads again for.
+    /// </summary>
+    /// <remarks>
+    /// Said per directory rather than across the board, because that is what is known: a file appeared, went or
+    /// was renamed in one place, and a location drawing another place has nothing to read for it. Deferred to the
+    /// end of the turn and said at most once per directory in it, for the reason <see cref="Touch"/> is.
+    /// </remarks>
+    /// <param name="directory">The directory whose entries may differ.</param>
+    public void DirectoryChanged(string directory)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(directory);
+
+        Forget();
+
+        // The next plugin's readers are told the same thing, and told what it is about: what they keep is kept per
+        // directory, and a reading for another directory is not made wrong by a change in this one.
+        _files.TouchIn(directory);
+
+        if (!_asking.Add(directory))
+        {
+            return;
+        }
+
+        Frame.Post(() =>
+        {
+            _asking.Remove(directory);
+            TouchedIn?.Invoke(directory);
+        });
+    }
+
+    /// <summary>
+    /// Says that one entry may have changed content or time, which what draws it asks for again.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is read: where the entry is and what it is called have not moved, and what a view draws of it is
+    /// the one thing that has to be worked out again. Deferred and said once per entry in a turn, as a change is.
+    /// </remarks>
+    /// <param name="path">The entry.</param>
+    public void EntryChanged(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+
+        Forget();
+
+        if (Path.GetDirectoryName(path) is { Length: > 0 } directory)
+        {
+            _files.TouchIn(directory);
+        }
+
+        if (!_askingEntry.Add(path))
+        {
+            return;
+        }
+
+        Frame.Post(() =>
+        {
+            _askingEntry.Remove(path);
+            EntryIn?.Invoke(path);
+        });
+    }
+
     /// <summary>
     /// What a touch comes to: what the providers answered is let go of, and every location is told to read
     /// its directory again.
@@ -147,16 +258,23 @@ internal sealed class Shared
     /// </remarks>
     public void FilesChanged()
     {
-        // Said to the catalogue rather than to this reading of the settings: what a provider answered is worth
-        // letting go of whether or not it is in force, and what is in force is not what decides it. The name is
-        // the class's, since the property of the same name is what answers the rest.
+        Forget();
+
+        Touched?.Invoke();
+    }
+
+    /// <summary>Lets go of what the readers answered, since what they read may have moved on.</summary>
+    /// <remarks>
+    /// Said to the catalogue rather than to this reading of the settings: what a provider answered is worth
+    /// letting go of whether or not it is in force, and what is in force is not what decides it.
+    /// </remarks>
+    private static void Forget()
+    {
         global::FileSystemPlugin.HideRegistry.Forget();
         EntryLockProviders.Forget();
         EntryMarkProviders.Forget();
         EntryColourProviders.Forget();
         EntryColumns.Forget();
-
-        Touched?.Invoke();
     }
 
     /// <summary>

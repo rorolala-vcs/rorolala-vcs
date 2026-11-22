@@ -18,7 +18,7 @@ namespace RorolalaVCSPlugin;
 /// A directory both providers were asked about is read the first time and the same reading is handed over
 /// after that, which is what makes the sharing worth having. Nothing is reached for: a reading is a snapshot
 /// of what the tree held at one moment, and a snapshot is what a file operation makes stale, which is what
-/// <see cref="Forget"/> is for.
+/// <see cref="Forget()"/> is for.
 /// </para>
 /// <para>
 /// It is not read on the window's thread. A reading is a walk of the whole tree, and a listing asks about a
@@ -153,16 +153,52 @@ internal sealed class StatusReadings
     /// </remarks>
     public void Forget()
     {
+        Forget(_ => true);
+    }
+
+    /// <summary>
+    /// Lets go of what was read for one directory and for every directory that holds it.
+    /// </summary>
+    /// <remarks>
+    /// What a reading of a directory holds is the work under it, so a change anywhere under it makes it stale,
+    /// and so does a change under any directory holding it. A reading of a directory beside it is not made wrong
+    /// by the change and is kept, which is what keeps a change in one place from reading the whole work again.
+    /// </remarks>
+    /// <param name="directory">The directory whose files may have changed.</param>
+    public void Forget(string directory)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+
+        Forget(one => Subtree.Holds(one, directory));
+    }
+
+    /// <summary>Lets go of the readings a change can sour.</summary>
+    /// <param name="stale">Which reading the change makes stale.</param>
+    private void Forget(Func<string, bool> stale)
+    {
         StatusReading?[] statuses;
         HashSet<string>[] lost;
 
         lock (_gate)
         {
+            var at = _readings.Keys.Union(_lost.Keys).Where(stale).ToArray();
+
+            // Nothing was read that the change can sour, which is the ordinary case for a directory no reader
+            // has asked about yet, and nothing is given back for it.
+            if (at.Length == 0)
+            {
+                return;
+            }
+
             _version++;
-            statuses = [.. _readings.Values];
-            lost = [.. _lost.Values];
-            _readings.Clear();
-            _lost.Clear();
+            statuses = [.. at.Where(_readings.ContainsKey).Select(one => _readings[one])];
+            lost = [.. at.Where(_lost.ContainsKey).Select(one => _lost[one])];
+
+            foreach (var one in at)
+            {
+                _readings.Remove(one);
+                _lost.Remove(one);
+            }
         }
 
         // What was shown as lost is taken away before what it was read from is let go of: the next reading

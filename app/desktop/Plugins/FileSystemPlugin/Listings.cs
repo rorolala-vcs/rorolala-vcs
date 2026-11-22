@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -642,6 +643,16 @@ internal abstract class EntryView<TItem> : EntryView
     /// <summary>Every row on screen, so that a faded cut and a moved column reach all of them.</summary>
     private readonly List<(TItem Item, Control Row)> _rows = [];
 
+    /// <summary>
+    /// What the list holds, owned here rather than taken from the listing.
+    /// </summary>
+    /// <remarks>
+    /// A listing is made afresh by every read of a directory, and a list handed a new source makes every row
+    /// again. What is drawn here is brought to the listing in place instead (<see cref="Apply"/>), so that a
+    /// change of one entry is one row made again.
+    /// </remarks>
+    private readonly ObservableCollection<TItem> _listed = [];
+
     /// <summary>Where the pointer or the keyboard last landed, which is what a range and an open begin at.</summary>
     private int _lead = -1;
 
@@ -767,11 +778,16 @@ internal abstract class EntryView<TItem> : EntryView
         Source = source;
         Source.Marking = Mark;
 
+        foreach (var item in source.Items)
+        {
+            _listed.Add(item);
+        }
+
         _ghost = new Ghost(_over);
 
         List = new ListBox
         {
-            ItemsSource = source.Items,
+            ItemsSource = _listed,
             SelectionMode = SelectionMode.Multiple,
             Background = Brushes.Transparent,
             ItemTemplate = new FuncDataTemplate<TItem>((item, _) => Item(item), true),
@@ -915,7 +931,14 @@ internal abstract class EntryView<TItem> : EntryView
         _typed = string.Empty;
 
         List.SelectedItems?.Clear();
-        List.ItemsSource = source.Items;
+
+        // Every row is made again: what the list holds is emptied and filled from the listing it now answers.
+        _listed.Clear();
+
+        foreach (var item in Source.Items)
+        {
+            _listed.Add(item);
+        }
 
         if (_scrollToKeep is { } offset)
         {
@@ -945,6 +968,138 @@ internal abstract class EntryView<TItem> : EntryView
         // exactly the name that arrives with the new listing.
         Naming();
     }
+
+    /// <summary>
+    /// Points the view at another listing of the same arrangement, keeping every row it draws.
+    /// </summary>
+    /// <remarks>
+    /// A read of the same directory is another listing of the same rows: the one the watcher said changed, and
+    /// the one that holds a file the user just made. What is drawn is brought to it by <see cref="Apply"/>, so
+    /// that the rows are the ones already on screen rather than a list made again for a change of one entry.
+    /// </remarks>
+    /// <param name="source">The listing the view is to read now.</param>
+    public void Assign(Listing<TItem> source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        Source = source;
+        Source.Marking = Mark;
+        List.ContextMenu = source.Space(this);
+
+        // A read of the same directory may be the one that holds a folder just made, and the name it is waiting to
+        // be given is claimed here for the reason it is claimed by a step: the row is drawn by this read.
+        Naming();
+    }
+
+    /// <summary>
+    /// Brings what the view draws to what its listing holds, making again only what differs.
+    /// </summary>
+    /// <remarks>
+    /// The keys are the entries, and most changes leave most of them where they were: a file another program
+    /// wrote is one entry drawn again rather than a directory of them made again for it. An entry the watcher
+    /// named is drawn again whatever the listing says, because what changed about it is not in the entry.
+    /// <para>
+    /// What was chosen is chosen again by key, since the entries a read answers with are new objects: a change
+    /// on disk is not a reason to stop working with the entries that are still there.
+    /// </para>
+    /// </remarks>
+    /// <param name="dirty">The keys that may be drawn differently, or nothing when none is.</param>
+    public void Apply(IReadOnlyList<string>? dirty = null)
+    {
+        var chosen = Chosen().Select(KeyOf).ToHashSet();
+        var wanted = Source.Items;
+        var wantedKeys = wanted.Select(KeyOf).ToHashSet();
+
+        // What is gone, from the end, because a removal moves everything after it down.
+        for (var at = _listed.Count - 1; at >= 0; at--)
+        {
+            if (!wantedKeys.Contains(KeyOf(_listed[at])))
+            {
+                _listed.RemoveAt(at);
+            }
+        }
+
+        // What is new, and what moved, and what the watcher named: the listing is in the order it is shown, so
+        // walking it puts each entry where it belongs and leaves every entry that is already there where it is.
+        var made = new List<TItem>();
+
+        for (var at = 0; at < wanted.Count; at++)
+        {
+            var item = wanted[at];
+            var key = KeyOf(item);
+
+            if (at < _listed.Count && Equals(KeyOf(_listed[at]), key))
+            {
+                if (IsDirty(key, dirty))
+                {
+                    _listed[at] = item;
+                    made.Add(item);
+                }
+
+                continue;
+            }
+
+            for (var other = at + 1; other < _listed.Count; other++)
+            {
+                if (Equals(KeyOf(_listed[other]), key))
+                {
+                    _listed.RemoveAt(other);
+
+                    break;
+                }
+            }
+
+            _listed.Insert(at, item);
+        }
+
+        // The row of an entry the watcher named is the one thing about it that is not in the entry: the entry is
+        // where it was and is called what it was, and what changed is what a row asks as it draws.
+        foreach (var item in made)
+        {
+            Renew(item);
+        }
+
+        _lead = -1;
+        _anchor = -1;
+
+        Choose([.. _listed.Where(item => chosen.Contains(KeyOf(item)))]);
+    }
+
+    /// <summary>What says which entry an item is, as the listing says it.</summary>
+    /// <param name="item">The item.</param>
+    /// <returns>Its key.</returns>
+    private object KeyOf(TItem item) => Source.Key(item);
+
+    /// <summary>Makes the row of one entry again, and leaves every other row as it is.</summary>
+    /// <remarks>
+    /// What the list holds a row in is its container, and the row is built from the template the container is
+    /// given: handing a container the entry it already has is a change the toolkit may not see, so it is emptied
+    /// first. A container not realized is a row nobody is looking at, and it is made from the template when it is.
+    /// </remarks>
+    /// <param name="item">The entry whose row is made again.</param>
+    private void Renew(TItem item)
+    {
+        if (List.ContainerFromItem(item) is not ContentControl container)
+        {
+            return;
+        }
+
+        var content = container.Content;
+
+        container.Content = null;
+        container.Content = content;
+    }
+
+    /// <summary>Whether the watcher named an entry as one that may be drawn differently.</summary>
+    /// <remarks>
+    /// A key is a path only for a directory's listing: an entry of a place is a thing a plugin answers for, and
+    /// nothing watches it, so nothing names it.
+    /// </remarks>
+    /// <param name="key">What says which entry it is.</param>
+    /// <param name="dirty">The paths the watcher named, or nothing.</param>
+    /// <returns>Whether the entry is one of them.</returns>
+    private static bool IsDirty(object key, IReadOnlyList<string>? dirty) =>
+        key is string path && dirty is not null && dirty.Any(one => Pathing.Same(one, path));
 
     /// <summary>What is in the listing, in the order it is shown.</summary>
     protected IReadOnlyList<TItem> Items => Source.Items;
