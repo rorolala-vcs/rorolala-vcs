@@ -242,6 +242,33 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <inheritdoc />
     public override Control Icon(LogicalEntry item, int size) => Picture(item, size);
 
+    /// <summary>
+    /// A place's tile: the same plate a file's icon stands on, with the picture the place draws and the badges it
+    /// wears.
+    /// </summary>
+    /// <remarks>
+    /// The plate is the tile's own size and the picture stands inside it, exactly as a file's does, so that a grid
+    /// of places and a grid of files read as one grid rather than as two. What a place has none of is a preview,
+    /// and so none of the type icon a file's tile takes at its corner once a thumbnail is there: the picture a
+    /// place draws <em>is</em> what the entry is.
+    /// </remarks>
+    /// <param name="item">The entry to draw.</param>
+    /// <param name="size">How many pixels wide and tall the tile is.</param>
+    /// <returns>What to draw in the tile.</returns>
+    public override Control Marked(LogicalEntry item, int size)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        var icon = Bare(item, Plate.Content(size));
+        icon.HorizontalAlignment = HorizontalAlignment.Center;
+        icon.VerticalAlignment = VerticalAlignment.Center;
+
+        var plate = Plate.Frame(size, new Grid { Children = { icon } });
+        var worn = Worn(item);
+
+        return worn.Count == 0 ? plate : Icons.Marked(plate, worn, size);
+    }
+
     /// <summary>Whether an entry leads somewhere, which is what its name reads heavier for.</summary>
     /// <param name="item">The entry.</param>
     /// <returns>Whether it opens.</returns>
@@ -622,15 +649,35 @@ internal sealed class Places : Listing<LogicalEntry>
     /// <returns>What to draw where the picture goes.</returns>
     private Control Picture(LogicalEntry item, int size)
     {
-        var icon = item.Picture is { } make
+        var icon = Bare(item, size);
+        var worn = Worn(item);
+
+        return worn.Count == 0 ? icon : Icons.Marked(icon, worn, size);
+    }
+
+    /// <summary>The picture alone, without the badges it wears.</summary>
+    /// <remarks>
+    /// Told apart from <see cref="Picture"/> because a grid tile draws its picture on the plate and its badges on
+    /// the plate's corner, and a picture that already carried them would wear them twice.
+    /// </remarks>
+    /// <param name="item">The entry to draw.</param>
+    /// <param name="size">How many pixels wide and tall.</param>
+    /// <returns>What to draw where the picture goes.</returns>
+    private Control Bare(LogicalEntry item, int size) =>
+        item.Picture is { } make
             ? make(size)
             : item.IconKey is { Length: > 0 } key && Host.Icons.Find(key) is { } picture
                 ? Icons.Glyph(picture, Icons.PlainInk, size)
                 : EntryIcons.Folder(size);
 
+    /// <summary>The badges an entry of a place wears, as the badges a tile draws.</summary>
+    /// <param name="item">The entry to ask.</param>
+    /// <returns>The badges, in the order the place offered them.</returns>
+    private List<EntryBadge> Worn(LogicalEntry item)
+    {
         if (item.Badges is not { Count: > 0 } badges)
         {
-            return icon;
+            return [];
         }
 
         var worn = new List<EntryBadge>(badges.Count);
@@ -658,7 +705,7 @@ internal sealed class Places : Listing<LogicalEntry>
             );
         }
 
-        return worn.Count == 0 ? icon : Icons.Marked(icon, worn, size);
+        return worn;
     }
 
     /// <summary>One contributed menu item, as a leaf of the menu.</summary>

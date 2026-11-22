@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -10,15 +9,14 @@ using RorolalaDesktop.Contract;
 namespace FileSystemPlugin;
 
 /// <summary>
-/// A grid tile's picture: the entry's icon or its thumbnail inside a rounded plate, with the type icon at the
-/// bottom right once a thumbnail is there.
+/// A grid tile's picture: the entry's icon or its thumbnail inside the plate, with the type icon at the bottom
+/// right once a thumbnail is there.
 /// </summary>
 /// <remarks>
-/// The plate is the tile: a Mid-coloured rounded rectangle with a Splitter line, which is what the icon stands
-/// in and what the contribution badges sit on the edge of. The preview is inside the plate with a margin, so the
-/// plate reads as its frame; the entry's type icon takes the plate's bottom right corner at four tenths of the
-/// tile once a preview is there. The contribution badges stay above both pictures, in the same arc they are
-/// drawn on anywhere else.
+/// The plate is the same one a place's picture stands on (see <see cref="Plate"/>), so a grid of files and a grid
+/// of places read as one grid: what this adds is the thumbnail, and the entry's own type icon at four tenths of
+/// the tile once the thumbnail has taken the whole of it. The contribution badges stay above both pictures, in
+/// the same arc they are drawn on anywhere else.
 /// <para>
 /// The preview is asked for when the tile is attached to a window and cancelled when it leaves: a grid recycles
 /// its tiles, and a request made once for one entry would otherwise be a request a different entry inherits.
@@ -30,12 +28,6 @@ namespace FileSystemPlugin;
 /// </remarks>
 internal sealed class PreviewTile : Grid
 {
-    /// <summary>How round the plate's corners are, as a share of the tile.</summary>
-    private const double CornerShare = 0.14;
-
-    /// <summary>How much of the tile is left around the icon and the preview, as a share of it.</summary>
-    private const double InsetShare = 0.07;
-
     /// <summary>How large the type badge is, as a share of the tile.</summary>
     private const double BadgeShare = 0.4;
 
@@ -93,7 +85,7 @@ internal sealed class PreviewTile : Grid
         _entry = entry;
         _mark = mark;
         _badge = Badge(size);
-        _content = Content(size);
+        _content = Plate.Content(size);
         _icon = Icons.For(entry, _content, mark);
         _icon.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         _icon.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
@@ -107,7 +99,7 @@ internal sealed class PreviewTile : Grid
         {
             Width = _content,
             Height = _content,
-            CornerRadius = new CornerRadius(Inner(size)),
+            CornerRadius = new CornerRadius(Plate.Inner(size)),
             ClipToBounds = true,
             Child = _picture,
             IsVisible = false,
@@ -117,17 +109,7 @@ internal sealed class PreviewTile : Grid
         _inner = new Grid();
         _inner.Children.Add(_icon);
         _inner.Children.Add(_frame);
-        _plate = new Border
-        {
-            Width = size,
-            Height = size,
-            CornerRadius = new CornerRadius(Corner(size)),
-            BorderThickness = new Thickness(1),
-            ClipToBounds = true,
-            Child = _inner,
-        };
-        _plate[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Mid);
-        _plate[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
+        _plate = Plate.Frame(size, _inner);
         _type = new Border
         {
             Width = _badge,
@@ -245,24 +227,6 @@ internal sealed class PreviewTile : Grid
         _asking?.Dispose();
         _asking = null;
     }
-
-    /// <summary>How round the plate's corners are at a tile of `size`.</summary>
-    /// <param name="size">How many pixels wide and tall the tile is.</param>
-    /// <returns>The corner radius, at least two pixels.</returns>
-    private static double Corner(double size) =>
-        Math.Max(2, Math.Round(size * CornerShare, MidpointRounding.AwayFromZero));
-
-    /// <summary>How round the preview's corners are inside the plate.</summary>
-    /// <param name="size">How many pixels wide and tall the tile is.</param>
-    /// <returns>The inner corner radius, at least two pixels.</returns>
-    private static double Inner(double size) =>
-        Math.Max(2, Corner(size) - (size * InsetShare));
-
-    /// <summary>How wide and tall the plate's content is at a tile of `size`.</summary>
-    /// <param name="size">How many pixels wide and tall the tile is.</param>
-    /// <returns>The content's size, the tile less the margin on both sides.</returns>
-    private static int Content(int size) =>
-        Math.Max(1, (int)Math.Round(size * (1 - (2 * InsetShare)), MidpointRounding.AwayFromZero));
 
     /// <summary>How wide and tall the type badge is at a tile of `size`.</summary>
     /// <param name="size">How many pixels wide and tall the tile is.</param>

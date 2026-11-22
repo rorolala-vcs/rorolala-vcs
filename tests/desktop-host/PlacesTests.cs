@@ -120,6 +120,40 @@ public sealed class PlacesTests
         Assert.Contains(headers, header => header.StartsWith("Copy Selected text", StringComparison.Ordinal));
     }
 
+    /// <summary>A place's tile stands on the same plate a file's icon stands on.</summary>
+    /// <remarks>
+    /// A grid draws files and places alike, and a place whose picture floated where a file's stood on a plate would
+    /// be a grid of two kinds of tile. What is checked is the plate a place's tile is: the tile's own size, a rounded
+    /// corner, the one-pixel line, and the picture inset inside it rather than filling it.
+    /// </remarks>
+    [Fact]
+    public void APlacesTileStandsOnThePlateAFileDoes()
+    {
+        var (host, browser, provider, address) = Setup();
+
+        provider.Suggest("Photos");
+
+        var listing = new Places(host, browser, Place(provider, address));
+        var item = Assert.Single(listing.Items);
+
+        // Nothing was contributed for this place, so the tile is the plate itself rather than a plate and an arc.
+        var plate = Assert.IsType<Border>(listing.Marked(item, 64));
+
+        Assert.Equal(64.0, plate.Width);
+        Assert.Equal(64.0, plate.Height);
+        Assert.True(plate.CornerRadius.TopLeft > 0, "the plate has square corners");
+        Assert.Equal(1.0, plate.BorderThickness.Left);
+        Assert.True(plate.ClipToBounds, "the plate does not cut its picture to its corner");
+
+        // The picture is inset, which is what makes the plate read as its frame rather than as a wash behind it.
+        var held = Assert.IsType<Grid>(plate.Child);
+        var icon = Assert.Single(held.Children);
+
+        Assert.Equal((double)Plate.Content(64), icon.Width);
+        Assert.Equal((double)Plate.Content(64), icon.Height);
+        Assert.True(icon.Width < 64, "the picture fills the plate");
+    }
+
     /// <summary>The listing of a place, and the place answering it, over a scratch directory.</summary>
     /// <returns>The host, the location, the place's answer, and the address it is read at.</returns>
     private static (IPluginHost Host, Browser Browser, VirtualPlace Provider, LogicalAddress Address) Setup()

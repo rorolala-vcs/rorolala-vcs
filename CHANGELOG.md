@@ -8,10 +8,11 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 1. [`app`] [`rola`] [`retrack`] Answer a retrack with no earlier version instead of panicking. [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-retrack-answer-a-retrack-with-no-earlier-version-instead-of-panicking)
 2. [`app`] [`RorolalaDesktop`] [`docking`] Give a dock's header strip back when the dock leaves its group. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-docking-give-a-docks-header-strip-back-when-the-dock-leaves-its-group)
-3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Give a tile the room its badges stand in. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-file-system-icons-give-a-tile-the-room-its-badges-stand-in)
-4. [`librorolala`] [`write`] [`sync`] Write a tree's work when a sync pulls its version. [See details](dev/CHANGELOG-DETAILS.md#4-librorolala-write-sync-write-a-trees-work-when-a-sync-pulls-its-version)
-5. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused. [See details](dev/CHANGELOG-DETAILS.md#5-librorolala-write-track-refuse-a-tree-another-account-holds-as-a-file-is-refused)
-6. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault. [See details](dev/CHANGELOG-DETAILS.md#6-modules-rola-sharp-locate-accounts-and-members-without-a-vault)
+3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Stand a place's tile on the plate a file's stands on. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-file-system-stand-a-places-tile-on-the-plate-a-files-stands-on)
+4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Give a tile the room its badges stand in. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-file-system-icons-give-a-tile-the-room-its-badges-stand-in)
+5. [`librorolala`] [`write`] [`sync`] Write a tree's work when a sync pulls its version. [See details](dev/CHANGELOG-DETAILS.md#5-librorolala-write-sync-write-a-trees-work-when-a-sync-pulls-its-version)
+6. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused. [See details](dev/CHANGELOG-DETAILS.md#6-librorolala-write-track-refuse-a-tree-another-account-holds-as-a-file-is-refused)
+7. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault. [See details](dev/CHANGELOG-DETAILS.md#7-modules-rola-sharp-locate-accounts-and-members-without-a-vault)
 
 ## Optimized
 
