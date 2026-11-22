@@ -447,7 +447,8 @@ internal sealed class TreeBrowser : UserControl
     /// </remarks>
     private bool _blocksPosted;
 
-    /// <summary>Whether a guide refresh is already posted, so a resize posts one rather than one per row.</summary>
+    /// <summary>Whether a guide repaint is already posted, so a colour change repaints the guides once.</summary>
+    private bool _guidesPosted;
 
     /// <summary>One washed block: the directory it belongs to, its depth, its row, and its colour.</summary>
     /// <param name="Path">The directory's path, which says what is inside it.</param>
@@ -2659,12 +2660,38 @@ internal sealed class TreeBrowser : UserControl
         }
     }
 
-    /// <summary>Draws the blocks behind the rows again, without reading anything again.</summary>
+    /// <summary>Draws the coloured rows and the guides again, without reading anything again.</summary>
     /// <remarks>
     /// A provider's answer is read when a block is drawn, so a rule that appeared since the last drawing is one
-    /// this asks for: the rows themselves are unchanged, and only what is behind them is not.
+    /// this asks for: the rows themselves are unchanged, and only what is behind them and the lines beside them
+    /// are not.
     /// </remarks>
-    public void RepaintColours() => PostPaintBlocks();
+    public void RepaintColours()
+    {
+        PostPaintBlocks();
+        PostPaintGuides();
+    }
+
+    /// <summary>Schedules the guide layer's colours for after the layout that moved the rows.</summary>
+    private void PostPaintGuides()
+    {
+        if (_guidesPosted)
+        {
+            return;
+        }
+
+        _guidesPosted = true;
+
+        Frame.Post(() =>
+        {
+            _guidesPosted = false;
+
+            foreach (var item in VisibleRows())
+            {
+                DrawGuides(item);
+            }
+        });
+    }
 
     /// <summary>A row for a file, which opens onto nothing.</summary>
     /// <param name="entry">The file the row names.</param>
@@ -2813,6 +2840,11 @@ internal sealed class TreeBrowser : UserControl
             .Children.OfType<Panel>()
             .FirstOrDefault(one => one.Name == GuideName);
 
+        // The nearest step above the row that carries a colour of its own, and how deep it is: the guides from
+        // that level down are inside the colour's part of the tree and are drawn in it. The lines above it are
+        // outside the colour and stay the look's own.
+        var mark = Coloured(item, depth);
+
         // The line stands in the header, which is shorter than the step: the room below the line is
         // the step's, and a line that stopped at the header would leave a gap at every row. The
         // overhang is read from the two heights rather than written as a number, so a row that grows
@@ -2823,7 +2855,7 @@ internal sealed class TreeBrowser : UserControl
         if (existing is not null)
         {
             existing.Margin = margin;
-            WearGuides(existing, depth);
+            WearGuides(existing, depth, mark);
 
             return;
         }
@@ -2853,7 +2885,7 @@ internal sealed class TreeBrowser : UserControl
                 IsHitTestVisible = false,
             };
 
-            WearGuide(line);
+            WearGuide(line, mark is { } tint && level >= tint.Level ? tint.Colour : null);
             guides.Children.Add(line);
         }
 
@@ -2864,31 +2896,83 @@ internal sealed class TreeBrowser : UserControl
         header.Children.Insert(0, guides);
     }
 
-    /// <summary>Puts the look's grey on the existing lines of a guide layer.</summary>
+    /// <summary>Puts the look's grey, or the colour of the part a line is in, on a guide layer.</summary>
     /// <param name="guides">The layer.</param>
     /// <param name="depth">How many lines it holds.</param>
-    private static void WearGuides(Panel guides, int depth)
+    /// <param name="mark">The nearest coloured step above the row, and how deep it is.</param>
+    private static void WearGuides(Panel guides, int depth, (int Level, Color Colour)? mark)
     {
         for (var level = 1; level <= depth && level <= guides.Children.Count; level++)
         {
             if (guides.Children[level - 1] is Border line)
             {
-                WearGuide(line);
+                WearGuide(line, mark is { } tint && level >= tint.Level ? tint.Colour : null);
             }
         }
     }
 
-    /// <summary>Paints one guide line in the look's own grey.</summary>
+    /// <summary>Paints one guide line in the look's grey, or in the colour of the part it stands in.</summary>
     /// <remarks>
-    /// A colour a step is marked with is a wash behind the row, not a line beside the indent, so the guide line
-    /// the tree draws for every level is left as it is.
+    /// A colour is a wash behind the row, and the lines the tree indents by follow it: a reader inside a marked
+    /// tree reads its depth in the tree's colour rather than in the look's grey, level by level, so where the
+    /// colour reaches is where its lines reach.
     /// </remarks>
     /// <param name="line">The line.</param>
-    private static void WearGuide(Border line)
+    /// <param name="tint">The colour of the part it stands in, or nothing for the look's own grey.</param>
+    private static void WearGuide(Border line, Color? tint)
     {
         line.IsVisible = true;
+
+        if (tint is { } colour)
+        {
+            line.Background = new SolidColorBrush(colour);
+            line.Opacity = Guide;
+
+            return;
+        }
+
         line[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
         line.Opacity = Guide;
+    }
+
+    /// <summary>The nearest step above a row that carries a colour of its own, and how deep it is.</summary>
+    /// <remarks>
+    /// The row itself is asked first when it is a directory, since a marked folder is inside its own colour. A
+    /// file is inside the colour of the directory holding it, which is one level up. A row no step above it marks
+    /// is in none of it, and answers nothing.
+    /// </remarks>
+    /// <param name="item">The row.</param>
+    /// <param name="depth">How deep the row is.</param>
+    /// <returns>The level of the nearest mark and its colour, or nothing when the row is in none.</returns>
+    private static (int Level, Color Colour)? Coloured(TreeViewItem item, int depth)
+    {
+        if (item.Tag is not string path)
+        {
+            return null;
+        }
+
+        var directory = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+        var level = Directory.Exists(path) ? depth : depth - 1;
+
+        while (directory is { Length: > 0 } && level >= 1)
+        {
+            if (FolderColours.Mark(new Entry(directory, EntryKind.Directory)) is { } colour)
+            {
+                return (level, colour);
+            }
+
+            var parent = Path.GetDirectoryName(directory);
+
+            if (parent is not { Length: > 0 } || string.Equals(parent, directory, StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            directory = parent;
+            level--;
+        }
+
+        return null;
     }
 
     /// <summary>Whether a path is a directory or a file, as the tree knows it when asked.</summary>

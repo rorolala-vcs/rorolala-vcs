@@ -467,6 +467,11 @@ public sealed class TreeRowTests
 
             Assert.NotNull(guides);
             Assert.All(guides!.Children.OfType<Border>(), line => Assert.True(line.IsVisible));
+
+            // The guides inside the colour follow it rather than staying the look's grey; the marked folder is
+            // one level down, so its own line stands at that level and wears the colour.
+            var ownGuide = Assert.Single(guides.Children.OfType<Border>());
+            Assert.Equal(Colors.Red.R, Assert.IsType<SolidColorBrush>(ownGuide.Background).Color.R);
         }
         finally
         {

@@ -234,7 +234,8 @@ is being typed.
 A colour a plugin gives a directory is now a ground rather than a line. The Folder Tree washes each row the
 colour reaches: the folder it was given to at one strength, and the rows under it more lightly, so a marked
 folder reads as the place the colour belongs to. The coloured vertical line beside marked steps is gone, and the
-tree's own grey guides are drawn through a marked subtree as they are everywhere else.
+tree's own guide lines are drawn through a marked subtree in that colour rather than in the look's grey, level by
+level, so where the colour reaches is where its lines reach.
 
 A listing no longer draws a line under a name, which read as an underline on every level of a marked tree. An
 entry the colour was given to wears it on its own icon instead, as the hue of the picture, the same blend a lost
