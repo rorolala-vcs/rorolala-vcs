@@ -479,9 +479,9 @@ public partial class MainWindow : Window
                 VerticalContentAlignment = VerticalAlignment.Center,
             };
 
-            // The edge a tab carries is the one on its left, so the first has none and the last carries the one
-            // that closes the strip.
-            tab.Classes.Set(DockArea.LeadingClass, at == 0);
+            // The edge a tab carries is the one on its left, and a strip closed on both ends is what the row
+            // reads as: the first tab keeps its line, so the strip has an edge where it starts rather than
+            // running into the row it stands in.
             tab.Classes.Set(DockArea.TrailingClass, at == presets.Count - 1);
             tab.Click += (_, _) => SwitchTo(preset, tab);
             AutomationProperties.SetName(tab, preset.Name);

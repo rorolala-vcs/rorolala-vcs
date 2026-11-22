@@ -1540,6 +1540,22 @@ internal sealed class TreeBrowser : UserControl
             colour.B
         );
 
+    /// <summary>One colour taken a share of the way towards another.</summary>
+    /// <param name="from">The colour that stays.</param>
+    /// <param name="towards">The colour it is pulled towards.</param>
+    /// <param name="share">How far, from none of it to all of it.</param>
+    /// <returns>The mixed colour, fully opaque.</returns>
+    private static Color Mix(Color from, Color towards, double share)
+    {
+        var at = Math.Clamp(share, 0, 1);
+
+        return Color.FromRgb(
+            (byte)Math.Round((from.R * (1 - at)) + (towards.R * at)),
+            (byte)Math.Round((from.G * (1 - at)) + (towards.G * at)),
+            (byte)Math.Round((from.B * (1 - at)) + (towards.B * at))
+        );
+    }
+
     /// <summary>Whether two sets of blocks are the same answer.</summary>
     /// <param name="left">One set.</param>
     /// <param name="right">The other.</param>
@@ -2476,10 +2492,7 @@ internal sealed class TreeBrowser : UserControl
             ClipToBounds = true,
         };
 
-        if (_listing.NameInk(entry) is { Length: > 0 } ink)
-        {
-            label[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(ink);
-        }
+        WearName(entry, label);
 
         // The name column is the one that gives way, and a TextBlock in a DockPanel's last-child fill can
         // draw past the width it was arranged in and cover the badges. The badges are measured before the
@@ -2708,8 +2721,55 @@ internal sealed class TreeBrowser : UserControl
             foreach (var item in VisibleRows())
             {
                 DrawGuides(item);
+
+                // The name leans towards the colour the row stands in, which is asked of the providers, so it is
+                // painted here beside the lines rather than only where the row was built: a colour that arrived
+                // since then reaches the words as well as the ground behind them.
+                if (item.Tag is string path && NameOf(item) is { } written)
+                {
+                    WearName(
+                        new Entry(path, _kinds.GetValueOrDefault(path, EntryKind.Directory)),
+                        written
+                    );
+                }
             }
         });
+    }
+
+    /// <summary>The label a row's name is written in, or nothing while the row has no header yet.</summary>
+    /// <param name="item">The row.</param>
+    /// <returns>The name label.</returns>
+    private static TextBlock? NameOf(TreeViewItem item) =>
+        item.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .FirstOrDefault(one => string.Equals(one.Name, "entry-name", StringComparison.Ordinal));
+
+    /// <summary>Paints a row's name in the ink it is read in.</summary>
+    /// <remarks>
+    /// A name inside a coloured part of the tree leans towards that colour without leaving the ink: the tree is
+    /// read at a glance, and a row whose colour only stood behind the words would still be a grey line of text
+    /// under a folder that is not. An ink the listing names for the entry wins, since that ink is about the entry
+    /// rather than about where it stands.
+    /// </remarks>
+    /// <param name="entry">The entry the name belongs to.</param>
+    /// <param name="label">The label the name is written in.</param>
+    private void WearName(Entry entry, TextBlock label)
+    {
+        if (_listing.NameInk(entry) is { Length: > 0 } ink)
+        {
+            label[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(ink);
+
+            return;
+        }
+
+        if (BandOf(entry.Path) is { } band)
+        {
+            label.Foreground = new SolidColorBrush(Mix(_host.Palette.Front, band, TintedName));
+
+            return;
+        }
+
+        label[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(PaletteKeys.Front);
     }
 
     /// <summary>A row for a file, which opens onto nothing.</summary>
@@ -2752,8 +2812,15 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>How strong a guide line is against the row it stands in.</summary>
     private const double Guide = 0.65;
 
-    /// <summary>How strong a guide line in a colour is, which is quieter than the look's own grey.</summary>
-    private const double TintedGuide = 0.38;
+    /// <summary>How strong a guide line in a colour is.</summary>
+    /// <remarks>
+    /// Only a little above the wash behind the row, because a line is a direction rather than a mark: it has to
+    /// be read as the colour's, and it must not become the thing the eye finds first.
+    /// </remarks>
+    private const double TintedGuide = 0.24;
+
+    /// <summary>How far a name leans towards the colour of the part of the tree it stands in.</summary>
+    private const double TintedName = 0.15;
 
     /// <summary>The name the layer of guide lines carries, which a test reads.</summary>
     private const string GuideName = "TreeGuides";
@@ -2862,10 +2929,9 @@ internal sealed class TreeBrowser : UserControl
             .Children.OfType<Panel>()
             .FirstOrDefault(one => one.Name == GuideName);
 
-        // The nearest step above the row that carries a colour of its own, and how deep it is: the guides from
-        // that level down are inside the colour's part of the tree and are drawn in it. The lines above it are
-        // outside the colour and stay the look's own.
-        var mark = Coloured(item, depth);
+        // The colour of the part of the tree the row stands in: every line of the row wears it, whatever its
+        // level, so the indent reads as one coloured column rather than as a coloured segment at its foot.
+        var tint = Band(item);
 
         // The line stands in the header, which is shorter than the step: the room below the line is
         // the step's, and a line that stopped at the header would leave a gap at every row. The
@@ -2882,7 +2948,7 @@ internal sealed class TreeBrowser : UserControl
         if (existing is not null)
         {
             existing.Margin = margin;
-            WearGuides(existing, depth, mark);
+            WearGuides(existing, depth, tint);
 
             return;
         }
@@ -2912,7 +2978,7 @@ internal sealed class TreeBrowser : UserControl
                 IsHitTestVisible = false,
             };
 
-            WearGuide(line, mark is { } tint && level >= tint.Level ? tint.Colour : null);
+            WearGuide(line, tint);
             guides.Children.Add(line);
         }
 
@@ -2926,14 +2992,14 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Puts the look's grey, or the colour of the part a line is in, on a guide layer.</summary>
     /// <param name="guides">The layer.</param>
     /// <param name="depth">How many lines it holds.</param>
-    /// <param name="mark">The nearest coloured step above the row, and how deep it is.</param>
-    private static void WearGuides(Panel guides, int depth, (int Level, Color Colour)? mark)
+    /// <param name="tint">The colour of the part the row stands in, or nothing for the look's own grey.</param>
+    private static void WearGuides(Panel guides, int depth, Color? tint)
     {
         for (var level = 1; level <= depth && level <= guides.Children.Count; level++)
         {
             if (guides.Children[level - 1] is Border line)
             {
-                WearGuide(line, mark is { } tint && level >= tint.Level ? tint.Colour : null);
+                WearGuide(line, tint);
             }
         }
     }
@@ -2941,8 +3007,7 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>Paints one guide line in the look's grey, or in the colour of the part it stands in.</summary>
     /// <remarks>
     /// A colour is a wash behind the row, and the lines the tree indents by follow it: a reader inside a marked
-    /// tree reads its depth in the tree's colour rather than in the look's grey, level by level, so where the
-    /// colour reaches is where its lines reach.
+    /// tree reads its depth in the tree's colour rather than in the look's grey, at every level the row draws.
     /// </remarks>
     /// <param name="line">The line.</param>
     /// <param name="tint">The colour of the part it stands in, or nothing for the look's own grey.</param>
@@ -2962,30 +3027,41 @@ internal sealed class TreeBrowser : UserControl
         line.Opacity = Guide;
     }
 
-    /// <summary>The nearest step above a row that carries a colour of its own, and how deep it is.</summary>
+    /// <summary>The colour of the part of the tree a row stands in.</summary>
     /// <remarks>
     /// The row itself is asked first when it is a directory, since a marked folder is inside its own colour. A
     /// file is inside the colour of the directory holding it, which is one level up. A row no step above it marks
     /// is in none of it, and answers nothing.
+    /// <para>
+    /// The colour is the mark's own rather than the darker shade an inherited row is washed with: the lines and
+    /// the name wear the colour the folder was given, and the wash is what tells the two apart.
+    /// </para>
     /// </remarks>
     /// <param name="item">The row.</param>
-    /// <param name="depth">How deep the row is.</param>
-    /// <returns>The level of the nearest mark and its colour, or nothing when the row is in none.</returns>
-    private static (int Level, Color Colour)? Coloured(TreeViewItem item, int depth)
+    /// <returns>The colour of the part the row stands in, or nothing when it is in none.</returns>
+    private static Color? Band(TreeViewItem item) => item.Tag is string path ? BandOf(path) : null;
+
+    /// <summary>The colour of the part of the tree a path stands in.</summary>
+    /// <remarks>
+    /// The path itself is asked first when it is a directory, since a marked folder is inside its own colour. A
+    /// file is inside the colour of the directory holding it, which is one level up. A path no directory above it
+    /// marks is in none of it, and answers nothing.
+    /// <para>
+    /// The colour is the mark's own rather than the darker shade an inherited row is washed with: the lines and
+    /// the name wear the colour the folder was given, and the wash is what tells the two apart.
+    /// </para>
+    /// </remarks>
+    /// <param name="path">The path.</param>
+    /// <returns>The colour of the part the path stands in, or nothing when it is in none.</returns>
+    private static Color? BandOf(string path)
     {
-        if (item.Tag is not string path)
-        {
-            return null;
-        }
-
         var directory = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
-        var level = Directory.Exists(path) ? depth : depth - 1;
 
-        while (directory is { Length: > 0 } && level >= 1)
+        while (directory is { Length: > 0 })
         {
             if (FolderColours.Mark(new Entry(directory, EntryKind.Directory)) is { } colour)
             {
-                return (level, colour);
+                return colour;
             }
 
             var parent = Path.GetDirectoryName(directory);
@@ -2996,7 +3072,6 @@ internal sealed class TreeBrowser : UserControl
             }
 
             directory = parent;
-            level--;
         }
 
         return null;

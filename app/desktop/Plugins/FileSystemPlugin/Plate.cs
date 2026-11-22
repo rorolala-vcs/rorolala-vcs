@@ -9,7 +9,7 @@ namespace FileSystemPlugin;
 /// The rounded rectangle a grid's picture stands on, whatever the listing is of.
 /// </summary>
 /// <remarks>
-/// A file's icon and a place's icon stand on the same plate: the <c>Mid</c> ground with a <c>Splitter</c> line,
+/// A file's icon and a place's icon stand on the same plate: the <c>Bright</c> ground with a <c>Splitter</c> line,
 /// and the picture inset so that the plate reads as its frame. What the plate is made of is stated here rather
 /// than where a tile is drawn, because a grid draws two kinds of entry and a plate drawn twice would be two
 /// plates that disagree the first time either was changed.
@@ -68,7 +68,7 @@ internal static class Plate
             Child = content,
         };
 
-        plate[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Mid);
+        plate[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Bright);
         plate[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
 
         return plate;
