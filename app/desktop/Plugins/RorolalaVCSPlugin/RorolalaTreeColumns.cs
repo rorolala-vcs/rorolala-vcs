@@ -1,5 +1,6 @@
 using FileSystemPlugin;
 using RorolalaDesktop.Contract;
+using RorolalaDesktop.I18n;
 
 namespace RorolalaVCSPlugin;
 
@@ -24,6 +25,9 @@ internal static class RorolalaTreeColumns
         var status = new RorolalaTreeStatusColumn(readings);
         var staged = new RorolalaTreeStagedColumn(readings);
 
+        // The lamp is registered first so that it stands before the two columns of words: the columns a listing
+        // keeps at its left are drawn in the order they were offered, and the colour is read before either.
+        EntryColumns.Register(new RorolalaTreeLamp(readings));
         EntryColumns.Register(status);
         EntryColumns.Register(staged);
         EntryMarkProviders.Register(status);
@@ -266,4 +270,126 @@ internal sealed class RorolalaTreeStagedColumn : RorolalaTreeColumn
             TreeWorkStage.Partial => RorolalaColours.UnderWay,
             _ => null,
         };
+}
+
+/// <summary>
+/// The lamp a directory inside a tree shows at the left of every row: what happened to the path, in a colour.
+/// </summary>
+/// <remarks>
+/// The two columns beside it say the same thing in words, and a reader of a list of a few dozen rows reads the
+/// colour of them before any word of them: this is the mark column a listing has of its own, drawn for the paths of
+/// a tree, where the columns about an entry of the Layout have nothing to say.
+/// <para>
+/// Four colours and one dot rather than a colour and a word, because what a row is, is one of four things: new,
+/// changed, named elsewhere by the record, or named by the record and not there. A path that changed and one that
+/// holds work the staging area only partly has are both yellow, since the second is a degree of the first rather
+/// than a state of its own.
+/// </para>
+/// </remarks>
+internal sealed class RorolalaTreeLamp : IEntryColumnProvider
+{
+    /// <summary>How wide the column starts, which is room for a dot and the room around it.</summary>
+    private const double ColumnWidth = 18;
+
+    /// <summary>The tree statuses the lamp reads.</summary>
+    private readonly TreeReadings _readings;
+
+    /// <summary>Makes the lamp over the tree readings.</summary>
+    /// <param name="readings">The tree statuses the lamp reads.</param>
+    public RorolalaTreeLamp(TreeReadings readings) => _readings = readings;
+
+    /// <inheritdoc />
+    public string Id => "rorolala.tree.lamp";
+
+    /// <summary>No key at all, since there is no word that would fit over a column of dots.</summary>
+    /// <remarks>
+    /// The listing heads a column by the key it names, and a column that names none is headed by nothing, the same
+    /// way the listing heads its own picture column. What a dot means is said on the dot itself, which is where a
+    /// reader looking at one is looking.
+    /// </remarks>
+    public string ColumnKey => string.Empty;
+
+    /// <inheritdoc />
+    public double Width => ColumnWidth;
+
+    /// <summary>The column stands before everything, the picture included.</summary>
+    public ColumnPlacement Placement => ColumnPlacement.Leftmost;
+
+    /// <summary>The column is one of marks: what it says about a path is a colour.</summary>
+    public bool Marks => true;
+
+    /// <summary>Whether the column is shown, which is for a directory inside a tree and nowhere else.</summary>
+    /// <param name="directory">The directory being listed.</param>
+    /// <returns>Whether the column is shown.</returns>
+    public bool Applies(string directory) => RolaTrees.RootOf(directory) is not null;
+
+    /// <inheritdoc />
+    public EntryColumnMark Value(Entry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        // A path the record names and the work does not hold has a row of its own only as a virtual entry, and the
+        // tree's status says nothing about it: the status is a reading of the work, and the work does not hold it.
+        if (VirtualEntries.Find(entry.Path) is { State: VirtualEntryState.Lost })
+        {
+            return Dot(RorolalaColours.Wrong, RolaI18N.Get("rorolala_vcs.status.kind_lost"));
+        }
+
+        if (RolaTrees.RootOf(entry.Path) is not { } tree || _readings.Reading(tree) is not { } status)
+        {
+            return new EntryColumnMark();
+        }
+
+        return RolaTreeWork.Of(status, tree, entry) is { } work ? Say(work) : new EntryColumnMark();
+    }
+
+    /// <inheritdoc />
+    public void Forget() => _readings.Forget();
+
+    /// <summary>What a path of a tree is drawn as: a dot in the colour of what happened to it.</summary>
+    /// <remarks>
+    /// The words are the columns' own, said on the mark: a reader who has stopped at a colour is asking what it
+    /// means, and the answer is the sentence the Status column would have written about the same path.
+    /// </remarks>
+    /// <param name="work">What the tree says about the path.</param>
+    /// <returns>The dot and what it is hovered for.</returns>
+    private static EntryColumnMark Say(TreeWork work) =>
+        Dot(
+            work.Status is TreeWorkStatus.Wrong || work.Shape is TreeWorkShape.Removed
+                ? RorolalaColours.Wrong
+                : work.Shape is TreeWorkShape.Moved
+                    ? RorolalaColours.Moved
+                    : work.Stage is TreeWorkStage.Partial
+                        ? RorolalaColours.UnderWay
+                        : work.Shape is TreeWorkShape.Added
+                            ? RorolalaColours.Untagged
+                            : RorolalaColours.UnderWay,
+            Hover(work)
+        );
+
+    /// <summary>What the dot is hovered for.</summary>
+    /// <param name="work">What the tree says about the path.</param>
+    /// <returns>The sentence the colour is read through.</returns>
+    private static string Hover(TreeWork work) =>
+        RolaI18N.Get(
+            work.Status is TreeWorkStatus.Wrong ? "rorolala_vcs.tree_work.wrong_hover"
+            : work.Shape is TreeWorkShape.Removed ? "rorolala_vcs.tree_work.removed_hover"
+            : work.Shape is TreeWorkShape.Moved ? "rorolala_vcs.tree_work.moved_hover"
+            : work.Stage is TreeWorkStage.Partial ? "rorolala_vcs.tree_staged.partial_hover"
+            : work.Shape is TreeWorkShape.Added ? "rorolala_vcs.tree_work.added_hover"
+            : "rorolala_vcs.tree_work.modified_hover"
+        );
+
+    /// <summary>One state, as the dot it wears.</summary>
+    /// <param name="colour">What the state is coloured.</param>
+    /// <param name="said">What it is called, which is what the dot is hovered for.</param>
+    /// <returns>The mark.</returns>
+    private static EntryColumnMark Dot(Avalonia.Media.Color colour, string said) =>
+        new(
+            Ink: MarkInk.Quiet,
+            Dot: true,
+            Hint: said,
+            Colour: colour,
+            Edge: RorolalaColours.Edge(colour)
+        );
 }

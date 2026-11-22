@@ -613,6 +613,22 @@ rorolala_vcs:
       en: "This tree is a wrong change: another account holds it, or the version it is based on is behind upstream."
       zh-CN: 该树是错误的修改：它由其他账户持有，或其基准版本落后于上游。
 
+    # The two shapes a change can have that the Status column's three words do not name on their own: a path the
+    # record names somewhere else, and a path the record names and the work no longer holds. They are what the lamp
+    # at the left of a row is coloured for, so what is held here is what that colour means.
+    moved:
+      en: Moved
+      zh-CN: 移动
+    moved_hover:
+      en: The record names this path somewhere else, so this is where it was moved to.
+      zh-CN: 记录中它位于另一个路径，这里是它移动到的位置。
+    removed:
+      en: Removed
+      zh-CN: 移除
+    removed_hover:
+      en: The record names it and the work no longer holds it.
+      zh-CN: 记录中仍然有它，工作目录中已经没有它。
+
   # What the Staged column says about a path in a tree, and what its badge is hovered for.
   tree_staged:
     all:
