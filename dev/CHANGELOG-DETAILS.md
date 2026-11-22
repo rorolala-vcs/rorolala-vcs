@@ -165,7 +165,17 @@ lines in place.
 
 `--layout` chooses where the path words are read, `truth@VAULT` naming the copy a fetch left, and a run that names only hashes reads no Layout at all. Both flags are also taken by `rola layout fetch`, which is the same command.
 
-### 5. [`app`] [`rola`] [`status`] Show how many entries are ahead, behind or apart in status
+### 5. [`app`] [`rola`] [`fsck`] Add fsck to check that the store holds together
+
+`rola fsck` checks the content store a run stands in and changes nothing. By
+default it names the packs whose index does not read, the packs whose index
+reads but whose file is gone, the manifests that do not read, and the contents
+whose manifests name chunks that are gone. With `--full` it reads every key and
+checks the content against its key. Findings go to standard output, one line
+each, and the run exits 246 when there are any, 247 outside any store and 248
+when a store could not be checked.
+
+### 6. [`app`] [`rola`] [`status`] Show how many entries are ahead, behind or apart in status
 
 `rola status` now closes with how this side stands beside upstream: a sentence saying how many
 entries differ and how many of those have diverged, a blank line, then one line per entry, the
@@ -175,7 +185,7 @@ out, and a run whose fetched copy is not here says nothing about the two sides. 
 stay at the end, and a divergence adds the `rola retrack` hint. The JSON output carries the three
 lists under `vault`.
 
-### 6. [`app`] [`rola`] [`status`] Tell a change nobody holds from one another account holds
+### 7. [`app`] [`rola`] [`status`] Tell a change nobody holds from one another account holds
 
 `rola status` used to count every content change it could not record in one number, whether another account
 held the entry or nobody did, and told the reader to ask whoever held it. The two are now said apart: a path
@@ -186,7 +196,7 @@ another account holds is listed as before, and one nobody holds is listed under 
 The `Everyday` list in `rola -h` now names `hold` and `giveup`, which the program has had but the help did not
 mention.
 
-### 7. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge
+### 8. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge
 
 Dragging a dock near the outer edge of the pane now offers that side of the whole arrangement rather
 than the side of the group under the pointer. A drop there wraps the entire layout tree in a new group
@@ -194,15 +204,15 @@ on that side, so a dock reaches the edge of the window however the tree happens 
 offer appears only as the pointer comes near the edge, and the points a group shows inside the pane
 are as they were.
 
-### 8. [`app`] [`RorolalaDesktop`] [`font`] Draw the desktop programs in Noto Sans
+### 9. [`app`] [`RorolalaDesktop`] [`font`] Draw the desktop programs in Noto Sans
 
 The Desktop program, the launcher and the crash window are set in Noto Sans, which travels with them rather than being taken from the machine. `cargo dev fonts` fetches the pinned set into `THIRD_PARTY/Fonts/NotoSans`, and an export lays the same directory under `build/bin/desktop/THIRD_PARTY/Fonts/NotoSans` with the SIL Open Font License, so a package carries the face and its terms. The Version Graph's own drawing reads the same family.
 
-### 9. [`app`] [`RorolalaDesktop`] [`menu`] Show the layout presets as tabs in the title row
+### 10. [`app`] [`RorolalaDesktop`] [`menu`] Show the layout presets as tabs in the title row
 
 The title row carries one tab per layout preset, and a press switches the arrangement and marks that tab as current. The presets ship as `File`, `VCS`, `Git`, `Settings` and `Terminal` in that order: `VCS` keeps the second version control arrangement, and the first is removed. The `Layout` menu and the `Rorolala` name with the starting directory are no longer drawn. The menu button now stands at the right under macOS and a tiling window manager, and the `Window` menu and the plugins' menus stay in its flyout.
 
-### 10. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost
+### 11. [`app`] [`RorolalaDesktop`] [`plugins`] Show entries that are not on disk as pending, in progress or lost
 
 The File System plugin keeps a catalogue of virtual entries: a path that is not on disk but is shown
 in its directory, in the list, the grid and the folder tree. A pending entry is drawn faded under an
@@ -216,21 +226,21 @@ with the proportion the run's progress capsule shows while it carries content, a
 every path `layout tree-diff` reports as lost and on every unstaged deletion inside a rola-tree. A
 reading keeps them in step: a file that comes back, or a bring that finishes, puts its row away.
 
-### 11. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Draw file icons on a plate with solid corner badges
+### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Draw file icons on a plate with solid corner badges
 
 A file's icon now stands on a rounded plate: the `Mid` ground with a `Splitter` line, the icon inset so the plate reads as its frame, and a preview embedded inside it when there is one. The entry's type icon takes the plate's bottom right at four tenths of the tile once a preview is there.
 
 A tagged contribution is a filled bead in its own colour: the picture is always the light ink, and the bead carries a shadow of its own hue, darker on the light look and lighter on the dark one. A state is the same bright bead whichever look the window is in, since both looks ship one semantic set. A single badge still sits on the top right diagonal, up to five share the same quarter arc, and the listing's larger selected frame is unchanged.
 
-### 12. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Draw the file listing with the Adwaita icon set by default
+### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Draw the file listing with the Adwaita icon set by default
 
 A configuration that has never chosen an icon set now draws entries with GNOME's Adwaita theme. The set travels beside the program with `pure-style`, and `cargo dev adwaita` fetches its pictures at release 51.0 before an export. The repository carries the set's own `icon-theme.toml` and not the pictures: the SVGs, the GNU LGPL v3 text and the release stamp are fetched with it. A configuration that already names a set keeps it, the system's own icons remain an option, and `pure-style` is unchanged.
 
-### 13. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Round a thumbnail's corners and keep its type at the corner
+### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Round a thumbnail's corners and keep its type at the corner
 
 A grid tile that shows a file's own preview now cuts the thumbnail's corners round and draws the entry's type icon at its bottom right, at four tenths of the tile. A tile with no preview keeps the type icon at the whole tile, and the contribution badges keep their arc at the top right.
 
-### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Type a name in a bubble under its row
+### 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Type a name in a bubble under its row
 
 Renaming a row in a directory listing or in the folder tree opens a field in a bubble under the name
 rather than a box standing in the name's place. The row is not rebuilt for the edit, so the name
@@ -241,7 +251,7 @@ a field that lost the keyboard took what it held.
 At most one bubble is on screen, and it holds the keyboard, so the dock's shortcuts wait while a name
 is being typed.
 
-### 15. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Wash the rows a colour reaches and tint the icon it is given to
+### 16. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Wash the rows a colour reaches and tint the icon it is given to
 
 A colour a plugin gives a directory is now a ground rather than a line. The Folder Tree washes each row the
 colour reaches: the folder it was given to at one strength, and the rows under it more lightly, so a marked
@@ -258,7 +268,7 @@ draws, and the words keep their own ink.
 The park a rola-tree wears stands on the look's Mid and draws its picture in the look's Front rather than in the
 tree's own colour: the colour belongs to the rows the tree marks, and the park says what the folder is.
 
-### 16. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Watch the directories on screen and refresh only what a change reached
+### 17. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Watch the directories on screen and refresh only what a change reached
 
 A change another program makes to the files is now noticed by the directories on screen, and only what it
 reached is read and drawn again. The File System plugin watches each directory a location or an open tree step
@@ -275,7 +285,7 @@ their own timer.
 readings gain `Forget(directory)`, which drops the reading for that directory and the directories holding it and
 keeps its neighbours. A watcher buffer that overflows is answered with a change across the board.
 
-### 17. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Wrap a tile's name under it and let its line grow
+### 18. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Wrap a tile's name under it and let its line grow
 
 A grid tile's name is now wrapped under the picture rather than cut off with an ellipsis: what does not fit
 in the width of the icon is carried onto the next line, and a name with no break in it is broken where the
@@ -284,20 +294,20 @@ the line it stands on is as tall as its tallest tile, so one long name makes its
 pictures of the line on one row. A table row is one line high and keeps its names cut off at the end, since
 a row of two lines is not a row.
 
-### 18. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Fetch a version's content from the Version Graph's node menu
+### 19. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Fetch a version's content from the Version Graph's node menu
 
 A right-click on a node of the Version Graph now offers the content the node is made of, under the Fetch category: `This version's blobs` brings the content the node's variant points at, and `All versions' blobs` also the chain of the version it is based on. Both items wear the download picture, and an item whose content is already here is not pressable, since a fetch of it would carry nothing.
 
 The run is `rola fetch --with` with the node's variant as its word, so a node below the top is fetched exactly as it is rather than as the version its entry is at now, and a tree comes with the files its structure names. Nothing is written into the work: what follows a run is the graph read again with those versions' content marked as held here, including when the graph stands on the whole work.
 
-### 19. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner
+### 20. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner
 
 The Version Graph's corner holds a second button under the hover switch: the show-all button clears
 the chosen file and draws the whole work again. It gives the same answer as a press on empty drawing,
 for a reader who wants every lane back without finding a patch of ground to click, and a tooltip
 names it.
 
-### 20. [`app`] [`RorolalaDesktop`] [`ROLALauncher`] [`theme`] Follow the look's file while the other program is open
+### 21. [`app`] [`RorolalaDesktop`] [`ROLALauncher`] [`theme`] Follow the look's file while the other program is open
 
 The Desktop program and the launcher are drawn from one `theme.json`, and each read it when it started: a
 colour or a day/night choice made beside a window that was already open was seen only by the next run of it.
@@ -311,7 +321,7 @@ watch whose directory is not there yet follows nothing.
 The launcher's colours were already the Desktop's: it compiles the same configuration and theme sources, and its
 settings write the same file. What was missing was the live half.
 
-### 21. [`app`] [`RorolalaDesktop`] [`theme`] State the light look's semantic colours in the bright set
+### 22. [`app`] [`RorolalaDesktop`] [`theme`] State the light look's semantic colours in the bright set
 
 The light look now states its twelve semantic colours in the bright set the dark look states, rather
 than in darker shades chosen to be read as words on a light ground. A state is no longer coloured by
@@ -321,27 +331,27 @@ window is in. The two variants' fields remain in `theme.json` for anyone who wan
 stated apart; a file that names none draws both in the one set, and the light set is stated as the
 dark one so the two cannot drift.
 
-### 22. [`librorolala`] [`write`] Export the content fetch as rola_write_fetch_with
+### 23. [`librorolala`] [`write`] Export the content fetch as rola_write_fetch_with
 
 `librorolala` carries the fetch of named entries' content as one workflow, `FetchWithRequest::fetch_with`, and the C ABI exports it as `rola_write_fetch_with`. It reads the Layout a fetch left, syncs the index only when a named version is not in the local one, and brings each version's content, and the whole chain when asked. The command line and a C# caller enter the same function, so the order they read and fetch in cannot drift.
 
-### 23. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala
+### 24. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala
 
 The write workflows behind `rola layout path` and `rola layout entry` now live in `librorolala::write`: storage puts and extracts, Layout batches, path bind, unbind, move and switch, entry write, remove, owner changes, description changes, preference changes and version changes, the tree cache rebuild, VCS index object writes, file version writes, single file tracking, single path retracking and alignment in a Workspace or a Vault, content fetching, and the sync plan and its carry, the collecting planning and sweep, the checkout cache writes, restores and forgets, and store and index repacking. The tree's own writes live there too: `tree init`, `tree add`, `tree rm`, `tree reset` and `tree write-desc`. The command line and the C ABI call the same functions, so their order, their checks and their failures cannot drift.
 
 The five whole workflows are there as well: `write::ownership` plans and applies a hold or a giveup, `write::bring` resolves references, brings entries in and merges a variant, `write::track` plans a recording and applies the messages in one batch, `write::align` runs every alignment mode, and `write::retrack` moves a recording. A shared request layer resolves the Workspace, the account, the Vault name and address, and the candidate Vaults from values rather than from a command's resources. The C ABI exports the one-shot flows as JSON requests and answers: `rola_write_bring` for both the bring of entries and the variant merge, `rola_write_retrack`, `rola_write_align` for the whole workflow with the single-entry form renamed `rola_write_align_entry`, `rola_write_ownership_plan`, `rola_write_ownership_apply`, `rola_write_track_plan` and `rola_write_track_apply`, each taking a `RolaProgress` and a `RolaCancellation`. The sync workflow is a request-shaped plan and apply as well: the plan fetches the Vault's Layout before reading it, a plan holding a blocked entry is refused before anything is written, and both check the caller's cancellation between entries.
 
-### 24. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry
+### 25. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry
 
 `rola_write_layout_move_fetched` and `rola_write_layout_remove_fetched_entry` move a path or remove an entry in the fetched copy of a Vault's own Layout, making the Vault's action first and writing the copy only to what it answered. `LayoutWriter` gained `MoveFetched`, `RemoveFetchedEntry` and `SwitchEntry`, the last carrying the entry's preference along with its version, owner and description. The desktop's low-level Layout commands no longer start `rola`.
 
-### 25. [`modules`] [`rola-sharp`] Add the C# bindings
+### 26. [`modules`] [`rola-sharp`] Add the C# bindings
 
 `RolaSharp` is the C# bindings: a generated `RorolalaBinding`, the `Scope` family over users, daemons, Workspaces, Vaults, Layouts, stores, VCS indexes, statuses, trees, ownership, inverse indexes, version graphs, books and ignore rules, and the writers over storage, Layouts, the tree cache, VCS indexes, file versions, one file's tracking and one path's retracking, and store and index packing. The read side no longer writes the tree cache; the write side calls the same `librorolala` workflows as the command line. Workspace and Vault scopes can be opened from any nested directory. The tree scope answers a tree's mark as well as its status: the Layout entry id, whether a description is staged and what it says. The user scope reads the userdata name the assembly was built for, which is `release` unless the build names another, and takes a name explicitly when a caller wants one; `Home` is gone, because the name rather than the user's home is what it reads.
 
 The writers over the whole workflows are there too: `Bring`, `BringVariant`, `Retrack`, `Align`, `PlanOwnership`, `ApplyOwnership`, `PlanTrack` and `Track`. Each takes a request record and answers a result record, the plan a track asks for is the exact text the native side answered with, and the single-entry alignment is now `AlignEntry`. The sync writer takes a `SyncRequest`, the plan it was handed and a `Progress`, so what a panel previewed is what it applies. An ownership plan can be handed back to `ApplyOwnership`, and every write failure has its own kind, tree and missing Vault included.
 
-### 26. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores
+### 27. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores
 
 The store a Workspace, a Vault or a `git-rola` project writes content to is a set of stores rather
 than one directory. `workspace.toml` takes `[default] storages`, `vault.toml` takes
@@ -363,6 +373,15 @@ spans several stores is planned as one batch, so each store's packs are opened o
 many chunks is read from whichever store holds each of them in the order they are named. `git rola
 bring` and `git rola update` build a runtime that can open a socket again, so fetching content from a
 Vault no longer panics.
+
+### 28. [`modules`] [`storage`] [`fsck`] Answer whether a store holds together
+
+`RorolalaStorage::fsck` answers with an `FsckReport`: the findings of a check
+that reads the layout first and content only when `FsckOptions::full` asks it
+to. The structural check names broken pack indexes, pack files that are gone,
+manifests that do not read, and contents whose chunks are missing. The full
+check reads every key the store names and checks it against its key. Nothing is
+repaired.
 
 ## Refactor
 

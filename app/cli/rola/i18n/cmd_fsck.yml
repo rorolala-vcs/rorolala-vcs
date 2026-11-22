@@ -1,0 +1,93 @@
+_version: 2
+
+fsck:
+  help:
+    en: |
+        # Check that the store holds together
+        **Usage**: rola [[GREEN]]__fsck__[[/]] [__--full__]
+        **Flags**:
+             __--full__    Read every object and check it against its key
+
+        > [!Note]
+        > The check reads the store and changes nothing
+    zh-CN: |
+        # 检查仓库是否完整
+        **用法**：rola [[GREEN]]__fsck__[[/]] [__--full__]
+        **标识**：
+             __--full__    读取每个对象并与它的键核对
+
+        > [!Note]
+        > 检查只读取仓库，不修改任何内容
+
+  cmd_fsck_description:
+    en: Check that every store the run can reach holds together
+    zh-CN: 检查本次运行能到达的每个仓库是否完整
+
+  complete:
+    full:
+      en: Read every object and check it against its key
+      zh-CN: 读取每个对象并与它的键核对
+
+  result_clean:
+    en: The store holds together
+    zh-CN: 仓库完整
+
+  result_checked:
+    en: "Checked %{packs} packs, %{manifests} manifests and %{objects} objects"
+    zh-CN: "检查了 %{packs} 个 pack、%{manifests} 个 manifest 与 %{objects} 个对象"
+
+  result_broken_pack:
+    en: "Pack %{index} does not read"
+    zh-CN: "pack %{index} 无法读取"
+
+  result_missing_pack:
+    en: "Pack %{index} has an index but no pack file"
+    zh-CN: "pack %{index} 有索引但缺少 pack 文件"
+
+  result_broken_manifest:
+    en: "The manifest of %{key} does not read"
+    zh-CN: "%{key} 的 manifest 无法读取"
+
+  result_missing_chunk:
+    en: "The manifest of %{key} names a chunk that is gone: %{chunk}"
+    zh-CN: "%{key} 的 manifest 记录了一个已不在的块：%{chunk}"
+
+  result_missing_object:
+    en: "The object %{key} is gone"
+    zh-CN: "对象 %{key} 已不在"
+
+  result_corrupt_object:
+    en: "The object %{key} does not hash to its key"
+    zh-CN: "对象 %{key} 与它的键不符"
+
+  result_malformed_object:
+    en: "The object %{key} does not read"
+    zh-CN: "对象 %{key} 无法读取"
+
+  result_store_unreadable:
+    en: "The store at %{root} could not be checked: %{reason}"
+    zh-CN: "无法检查位于 %{root} 的仓库：%{reason}"
+
+  result_found:
+    en: "Found %{count} problems"
+    zh-CN: "发现 %{count} 个问题"
+
+  err_no_storage:
+    en: This run is not inside any store
+    zh-CN: 当前运行不在任何仓库中
+
+  err_no_storage_help:
+    en: |
+        Please run this inside a store, or inside the Vault or Workspace that keeps one
+    zh-CN: |
+        请在仓库内运行，或在保有仓库的保险库或工作区内运行
+
+  err_failed:
+    en: "The check could not be finished: %{reason}"
+    zh-CN: "检查未能完成：%{reason}"
+
+  err_failed_help:
+    en: |
+        See the reason above, then try again
+    zh-CN: |
+        看上面的原因，然后重试

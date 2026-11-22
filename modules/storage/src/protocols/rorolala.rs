@@ -15,6 +15,7 @@
 //! - `config`, what the store is told by the file that makes it a store.
 //! - `entry`, reading and writing one entry, and the file-level cares that come with it.
 //! - `content`, what a store keeps, and how it decides to keep it.
+//! - `fsck`, whether it still holds what it names.
 //! - `pack`, many objects in one file, and the index that says where each one sits.
 //! - `backend`, what the store answers a caller and a peer with, the two trait impls.
 
@@ -24,6 +25,7 @@ mod config;
 mod consts;
 mod content;
 mod entry;
+mod fsck;
 mod pack;
 mod paths;
 

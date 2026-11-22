@@ -15,8 +15,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use librorolala::storage::{
-    AlgorithmChoice, Chunking, Codec, Error, FRAME_VERSION, Frame, Key, Layout, RorolalaStorage,
-    StorageBackend as _, internals::Internals as _, store_file,
+    AlgorithmChoice, Chunking, Codec, Error, FRAME_VERSION, Frame, FsckOptions, Key, Layout,
+    RorolalaStorage, StorageBackend as _, internals::Internals as _, store_file,
 };
 use rorolala_utils_sandbox::{Guard, Sandbox};
 
@@ -37,6 +37,7 @@ async fn main() {
     what_is_not_there_is_not_claimed(&sandbox, &store, &mut checked).await;
     a_cut_content_whose_chunk_is_gone_is_named_but_not_held(&sandbox, &mut checked).await;
     content_that_does_not_hold_together_is_refused(&sandbox, &mut checked).await;
+    a_store_is_checked_for_what_it_still_holds(&sandbox, &mut checked).await;
 
     checked.report();
 }
@@ -676,6 +677,62 @@ async fn content_that_does_not_hold_together_is_refused(sandbox: &Sandbox, check
         "a chunk holding another content is refused",
         matches!(store.extract_file(&key, &out).await, Err(Error::Corrupt(_))),
         "something was handed back for it",
+    );
+}
+
+/// What a store still holds, asked of the check rather than of a read.
+async fn a_store_is_checked_for_what_it_still_holds(sandbox: &Sandbox, checked: &mut Checked) {
+    let store = RorolalaStorage::create(sandbox.join("fsck"));
+    let content = mixed(300 * 1024);
+    let file = sandbox.join("fsck-in");
+    fs::write(&file, &content).expect("the content is written to a file");
+
+    let key = store
+        .write_file(
+            &file,
+            AlgorithmChoice::new(Codec::Raw, Chunking::Fixed { size: 32 * 1024 }),
+        )
+        .await
+        .expect("the content is written");
+
+    let structural = store
+        .fsck(FsckOptions::default())
+        .await
+        .expect("the store is checked");
+    checked.wants(
+        "a store that holds together is clean",
+        structural.is_clean(),
+        &format!("{structural:?}"),
+    );
+
+    let full = store
+        .fsck(FsckOptions { full: true })
+        .await
+        .expect("the store is checked in full");
+    checked.wants(
+        "a full check of a store that holds together is clean",
+        full.is_clean() && full.checked_objects > 0,
+        &format!("{full:?}"),
+    );
+
+    let manifest = store
+        .read_manifest(&key)
+        .await
+        .expect("the manifest is read")
+        .expect("the entry is a manifest");
+    let chunk = manifest.chunks()[0].key();
+    store.remove(&chunk).await.expect("the chunk is taken away");
+
+    let report = store
+        .fsck(FsckOptions::default())
+        .await
+        .expect("the store is checked again");
+    checked.wants(
+        "a content whose chunk is gone is named by its manifest",
+        report.missing_chunks.len() == 1
+            && report.missing_chunks[0].manifest == key
+            && report.missing_chunks[0].chunks == vec![chunk],
+        &format!("{report:?}"),
     );
 }
 

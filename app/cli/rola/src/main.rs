@@ -37,6 +37,7 @@ mod cmd_entries;
 mod cmd_explain;
 mod cmd_fetch;
 mod cmd_fs_ops;
+mod cmd_fsck;
 mod cmd_init;
 mod cmd_ownership;
 mod cmd_pack;

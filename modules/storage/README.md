@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Content-addressed storage: objects named by the hash of their content, kept through a replaceable local backend and moved between two ends of the same kind over a stream.
+Content-addressed storage: objects named by the hash of their content, kept through a replaceable local backend and moved between two ends of the same kind over a stream. It also answers whether a store still holds what it names, see `RorolalaStorage::fsck`.
 
 ## Boundary
 

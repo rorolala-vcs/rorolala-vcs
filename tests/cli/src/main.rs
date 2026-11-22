@@ -908,6 +908,44 @@ fn storage(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["storage", "extract-file"]);
     checked.exits("extracting without a hash is refused", &ran, 84);
+
+    // The store is checked as it stands, which is what `rola fsck` is for.
+    let ran = rola.run(ws, &["fsck"]);
+    checked.exits("a store that holds together is checked", &ran, 0);
+    checked.stdout_has(
+        "the check says the store holds together",
+        &ran,
+        "holds together",
+    );
+
+    let ran = rola.run(ws, &["fsck", "--json"]);
+    checked.wants(
+        "the check answers as data when asked",
+        json(&ran).is_some_and(|value| {
+            value
+                .get("stores")
+                .and_then(serde_json::Value::as_array)
+                .and_then(|stores| stores.first())
+                .is_some_and(|store| {
+                    store
+                        .get("broken_packs")
+                        .is_some_and(serde_json::Value::is_array)
+                        && store
+                            .get("missing_packs")
+                            .is_some_and(serde_json::Value::is_array)
+                        && store
+                            .get("corrupt")
+                            .is_some_and(serde_json::Value::is_array)
+                        && store
+                            .get("checked_packs")
+                            .is_some_and(serde_json::Value::is_number)
+                })
+        }),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["fsck", "extra"]);
+    checked.exits("a word fsck cannot use is refused", &ran, 14);
 }
 
 /// The version control index, written to and read back by hand.

@@ -30,6 +30,9 @@ pub use error::*;
 mod frame;
 pub use frame::*;
 
+mod fsck;
+pub use fsck::*;
+
 mod key;
 pub use key::*;
 

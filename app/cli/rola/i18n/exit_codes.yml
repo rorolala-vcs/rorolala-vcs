@@ -413,6 +413,18 @@ exit_codes:
     en: A hash the fetch was given names no one variant or version
     zh-CN: 取回所指定的哈希没有指向唯一的变体或版本
 
+  fsck:
+    en: The store does not hold together
+    zh-CN: 仓库不完整
+
+  fsck_no_storage:
+    en: "`rola fsck` was run where there is no store"
+    zh-CN: "`rola fsck` 运行在任何仓库之外"
+
+  fsck_failed:
+    en: The check could not be finished
+    zh-CN: 检查未能完成
+
   retrack:
     en: A file's version pointer could not be moved back
     zh-CN: 无法回退文件的版本指针
