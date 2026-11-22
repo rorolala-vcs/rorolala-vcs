@@ -199,6 +199,38 @@ pub fn render_error_tree_argument(_: ErrorTreeArgument, ec: &mut ResExitCode) {
     ec.exit_code = EC_ERR_TREE_ARGUMENT;
 }
 
+/// Error: a word written as a hash names no one version or variant.
+#[derive(Grouped)]
+pub struct ErrorTreeHash {
+    /// What was given instead of a hash.
+    pub(crate) hash: String,
+    /// Why it named no one hash.
+    pub(crate) miss: crate::hash::HashMiss,
+}
+
+impl Failure for ErrorTreeHash {
+    fn name(&self) -> &'static str {
+        "error_tree_hash"
+    }
+
+    fn reason(&self) -> String {
+        self.miss
+            .reason(&self.hash, || t!("tree.err_argument").trim().to_string())
+    }
+}
+
+failure!(ErrorTreeHash);
+
+#[renderer(buffer)]
+pub fn render_error_tree_hash(error: ErrorTreeHash, ec: &mut ResExitCode) {
+    r_eprintln!("{}", err_line!(error.reason()));
+    r_eprintln!(
+        "{}",
+        help_line!(error.miss.help(t!("tree.err_argument_help").trim()))
+    );
+    ec.exit_code = EC_ERR_TREE_ARGUMENT;
+}
+
 /// Error: a tree's files, store or Layout could not be read.
 #[derive(Grouped)]
 pub struct ErrorTreeFailed {

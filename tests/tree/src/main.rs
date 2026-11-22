@@ -76,7 +76,11 @@ fn creation(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["tree", "status", "main"]);
     checked.exits("a directory that is not a tree is refused", &ran, 95);
-    checked.stderr_has("the refusal says the path is not inside a tree", &ran, "not inside a tree");
+    checked.stderr_has(
+        "the refusal says the path is not inside a tree",
+        &ran,
+        "not inside a tree",
+    );
 
     let ran = rola.run(ws, &["tree", "init", "main"]);
     checked.exits("a directory is made a tree", &ran, 0);
@@ -123,11 +127,19 @@ fn lifecycle(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["tree", "status", "main"]);
     checked.exits("the tree is read after recording", &ran, 0);
-    checked.stdout_has("a recorded tree with nothing staged is clean", &ran, "clean");
+    checked.stdout_has(
+        "a recorded tree with nothing staged is clean",
+        &ran,
+        "clean",
+    );
 
     let ran = rola.run(ws, &["status", "main"]);
     checked.exits("a named tree is looked back from its version", &ran, 0);
-    checked.stdout_has("the chain draws what the version recorded", &ran, "first tree");
+    checked.stdout_has(
+        "the chain draws what the version recorded",
+        &ran,
+        "first tree",
+    );
     checked.wants(
         "a clean tree has no draft above the chain",
         !ran.stdout.contains("??"),
@@ -143,7 +155,11 @@ fn lifecycle(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["tree", "status", "main"]);
     checked.exits("the change is read", &ran, 0);
-    checked.stdout_has("what is not staged is a part of the reading", &ran, "Not staged:");
+    checked.stdout_has(
+        "what is not staged is a part of the reading",
+        &ran,
+        "Not staged:",
+    );
     checked.stdout_has("the change is a modification", &ran, "modified");
 
     let ran = rola.run(ws.join("main").as_path(), &["tree", "diff-stat"]);
@@ -164,8 +180,16 @@ fn lifecycle(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["status", "main"]);
     checked.exits("a named tree is looked back from its version", &ran, 0);
-    checked.stdout_has("the chain draws what the version recorded", &ran, "first tree");
-    checked.stdout_has("an unrecorded change is a draft above the chain", &ran, "??");
+    checked.stdout_has(
+        "the chain draws what the version recorded",
+        &ran,
+        "first tree",
+    );
+    checked.stdout_has(
+        "an unrecorded change is a draft above the chain",
+        &ran,
+        "??",
+    );
     checked.wants(
         "a named tree is not read as the tree's own status",
         !ran.stdout.contains("Not staged:"),
@@ -173,20 +197,37 @@ fn lifecycle(rola: &Rola, ws: &Path, checked: &mut Checked) {
     );
 
     let ran = rola.run(ws, &["status", "main/a.psd"]);
-    checked.exits("a file inside a tree is refused as a status target", &ran, 94);
-    checked.stderr_has("the refusal says the path is inside a tree", &ran, "inside a tree");
+    checked.exits(
+        "a file inside a tree is refused as a status target",
+        &ran,
+        94,
+    );
+    checked.stderr_has(
+        "the refusal says the path is inside a tree",
+        &ran,
+        "inside a tree",
+    );
 
-    let ran = rola.run(ws.join("main").as_path(), &["tree", "diff-stat", "--staged"]);
+    let ran = rola.run(
+        ws.join("main").as_path(),
+        &["tree", "diff-stat", "--staged"],
+    );
     checked.exits("the staged structure is compared with the work", &ran, 0);
     checked.stdout_has("the staged comparison names the path", &ran, "M a.psd");
 
     let ran = rola.run(ws.join("main").as_path(), &["tree", "add", "."]);
     checked.exits("the change is staged from inside the tree", &ran, 0);
 
-    let ran = rola.run(ws.join("main").as_path(), &["tree", "write-desc", "a longer body"]);
+    let ran = rola.run(
+        ws.join("main").as_path(),
+        &["tree", "write-desc", "a longer body"],
+    );
     checked.exits("a description is written without an editor", &ran, 0);
 
-    let ran = rola.run(ws.join("main").as_path(), &["track", ".", "--message", "second tree"]);
+    let ran = rola.run(
+        ws.join("main").as_path(),
+        &["track", ".", "--message", "second tree"],
+    );
     checked.exits("a tree is recorded from inside it", &ran, 0);
 
     if let (Some(first), Some(second)) = (first, layout_version(rola, ws)) {
@@ -246,20 +287,33 @@ fn reading(rola: &Rola, ws: &Path, checked: &mut Checked) {
         .filter(|token| token.len() == 64)
         .map(str::to_owned)
         .collect();
-    let mut read_from_variant = false;
+    let mut read_from_variant = None;
     for hash in &hashes {
         let ran = rola.run(ws, &["tree", "cat-desc", hash]);
         if ran.stdout.contains("a longer body") {
-            read_from_variant = true;
+            read_from_variant = Some(hash);
 
             break;
         }
     }
     checked.wants(
         "a variant hash reads the description of its structure",
-        read_from_variant,
+        read_from_variant.is_some(),
         "no variant hash read the recorded description",
     );
+
+    // The head of a hash names the same object as the whole one, which is what a person writes.
+    if let Some(hash) = read_from_variant {
+        let head = &hash[..hash.len().min(7)];
+
+        let ran = rola.run(ws, &["tree", "cat-desc", head]);
+        checked.exits("a head of a variant hash reads the description", &ran, 0);
+        checked.stdout_has("the description is the one recorded", &ran, "a longer body");
+
+        let ran = rola.run(ws, &["tree", "ls-tree", head]);
+        checked.exits("a head of a variant hash lists its structure", &ran, 0);
+        checked.stdout_has("a file is a blob", &ran, "100644 blob ");
+    }
 
     let ran = rola.run(ws, &["tree", "status", "main", "--json"]);
     checked.exits("the reading is asked for as data", &ran, 0);
@@ -332,7 +386,11 @@ fn retrack(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["tree", "status", "main"]);
     checked.exits("the tree is read after the forced move", &ran, 0);
-    checked.stdout_has("the work matches what the tree records again", &ran, "clean");
+    checked.stdout_has(
+        "the work matches what the tree records again",
+        &ran,
+        "clean",
+    );
 
     let id = ws.join("main").join(".rola-tree").join("id");
     let before = fs::read_to_string(&id).expect("the tree's local id");
@@ -419,7 +477,11 @@ fn restore(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["tree", "status", "main"]);
     checked.exits("the tree is read after the restore", &ran, 0);
-    checked.stdout_has("the rest of the work matches what the tree records", &ran, "clean");
+    checked.stdout_has(
+        "the rest of the work matches what the tree records",
+        &ran,
+        "clean",
+    );
 }
 
 /// One file inside a tree is put back to what the tree staged, or to what it records.
@@ -518,7 +580,11 @@ fn missing_tree_delete(rola: &Rola, ws: &Path, checked: &mut Checked) {
     );
 
     let ran = rola.run(ws, &["layout", "entries", "--json"]);
-    checked.exits("the Layout is read after the tree is confirmed gone", &ran, 0);
+    checked.exits(
+        "the Layout is read after the tree is confirmed gone",
+        &ran,
+        0,
+    );
     checked.wants(
         "the Layout no longer names the lost tree",
         !ran.stdout.contains("\"main\""),
@@ -526,7 +592,11 @@ fn missing_tree_delete(rola: &Rola, ws: &Path, checked: &mut Checked) {
     );
 
     let ran = rola.run(ws, &["status"]);
-    checked.exits("the Workspace is read after the tree is confirmed gone", &ran, 0);
+    checked.exits(
+        "the Workspace is read after the tree is confirmed gone",
+        &ran,
+        0,
+    );
     checked.wants(
         "the lost tree is gone from the reading",
         !ran.stdout.contains("main"),
@@ -546,11 +616,22 @@ fn workspace_rows(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["status"]);
     checked.exits("the Workspace is read", &ran, 0);
-    checked.stdout_has("the added tree is a structural change", &ran, "+ extra (tree object)");
-    checked.stdout_has("the tree's work is one content line", &ran, "main (1 not staged)");
+    checked.stdout_has(
+        "the added tree is a structural change",
+        &ran,
+        "+ extra (tree object)",
+    );
+    checked.stdout_has(
+        "the tree's work is one content line",
+        &ran,
+        "main (1 not staged)",
+    );
     checked.wants(
         "trees are drawn before files",
-        ran.stdout.find("extra").zip(ran.stdout.find("z.txt")).is_some_and(|(tree, file)| tree < file),
+        ran.stdout
+            .find("extra")
+            .zip(ran.stdout.find("z.txt"))
+            .is_some_and(|(tree, file)| tree < file),
         "the tree is not drawn before the file",
     );
     checked.wants(
@@ -597,7 +678,10 @@ fn mixed_track(rola: &Rola, ws: &Path, checked: &mut Checked) {
     checked.exits("a tree and a file are tracked together", &ran, 0);
     checked.wants(
         "the run reports them in the order it named them",
-        ran.stdout.find("main").zip(ran.stdout.find("beside.psd")).is_some_and(|(tree, file)| tree < file),
+        ran.stdout
+            .find("main")
+            .zip(ran.stdout.find("beside.psd"))
+            .is_some_and(|(tree, file)| tree < file),
         "the tree is not reported before the file",
     );
 
@@ -646,7 +730,8 @@ fn fake_editor(place: &Path, text: &str, code: i32) -> String {
             format!("#!/bin/sh\nprintf '%s' '{text}' > \"$1\"\nexit {code}\n"),
         )
         .expect("a fake editor");
-        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("an executable editor");
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
+            .expect("an executable editor");
 
         format!("sh {}", script.display())
     }
@@ -685,12 +770,19 @@ fn desc_editor(rola: &Rola, ws: &Path, checked: &mut Checked) {
         "the staged description is not what the editor wrote",
     );
 
-    let ran = rola.run(&tree, &["track", ".", "--message", "the description editor"]);
+    let ran = rola.run(
+        &tree,
+        &["track", ".", "--message", "the description editor"],
+    );
     checked.exits("the tree records the description", &ran, 0);
 
     let ran = rola.run(ws, &["tree", "cat-desc", "main"]);
     checked.exits("the description is read back", &ran, 0);
-    checked.stdout_has("the recorded description is the edited one", &ran, "edited description");
+    checked.stdout_has(
+        "the recorded description is the edited one",
+        &ran,
+        "edited description",
+    );
 }
 
 /// `tree reset` puts staged work back to the recorded version, for the tree or the paths named.
@@ -706,7 +798,11 @@ fn reset_staging(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(&tree, &["tree", "reset"]);
     checked.exits("the whole staging area is reset", &ran, 0);
-    checked.stdout_has("the run says the staging area is back", &ran, "back to the recorded version");
+    checked.stdout_has(
+        "the run says the staging area is back",
+        &ran,
+        "back to the recorded version",
+    );
 
     let ran = rola.run(ws, &["tree", "status", "main"]);
     checked.exits("the tree is read after the whole reset", &ran, 0);
@@ -731,7 +827,11 @@ fn reset_staging(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(&tree, &["tree", "write-desc", "soon gone"]);
     checked.exits("a description is staged", &ran, 0);
-    checked.wants("the staged description is there", staged.is_file(), "no staged description");
+    checked.wants(
+        "the staged description is there",
+        staged.is_file(),
+        "no staged description",
+    );
 
     let ran = rola.run(&tree, &["tree", "reset"]);
     checked.exits("the whole reset clears the description", &ran, 0);
@@ -743,7 +843,11 @@ fn reset_staging(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["tree", "reset", "main/not-there.psd"]);
     checked.exits("a path the tree does not know is refused", &ran, 94);
-    checked.stderr_has("the refusal says the path cannot be reset", &ran, "cannot be reset");
+    checked.stderr_has(
+        "the refusal says the path cannot be reset",
+        &ran,
+        "cannot be reset",
+    );
 
     // Put the work back so the refusals after this run the tree they expect.
     fs::write(tree.join("a.psd"), b"tree work").expect("the recorded work");
@@ -787,7 +891,11 @@ fn ignore_rules(rola: &Rola, ws: &Path, checked: &mut Checked) {
     let ran = rola.run(ws, &["tree", "status", "main"]);
     checked.exits("the tree is read with nested rules", &ran, 0);
     checked.stdout_has("the nested rules file is work", &ran, "sub2/.rolaignore");
-    checked.stdout_has("the rule that takes a file back is read", &ran, "sub2/keep.psd");
+    checked.stdout_has(
+        "the rule that takes a file back is read",
+        &ran,
+        "sub2/keep.psd",
+    );
     checked.wants(
         "a nested rule hides the files it names",
         !ran.stdout.contains("hidden.psd"),
@@ -804,7 +912,11 @@ fn ignore_rules(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(&tree, &["tree", "add", "."]);
     checked.exits("the tree stages what the rules keep", &ran, 0);
-    checked.stdout_has("the nested rules file is staged as work", &ran, "sub2/.rolaignore");
+    checked.stdout_has(
+        "the nested rules file is staged as work",
+        &ran,
+        "sub2/.rolaignore",
+    );
 
     // The tree's own root file is the shallow layer, and a nested file decides after it.
     fs::write(tree.join(".rolaignore"), "*.psd\n").expect("rules at the tree root");
@@ -852,7 +964,14 @@ fn root_tree(rola: &Rola, ws: &Path, checked: &mut Checked) {
     checked.wants(
         "the root tree is recorded at the reserved root path",
         json(&ran)
-            .and_then(|value| value.get("entries")?.get(0)?.get("path")?.as_str().map(str::to_owned))
+            .and_then(|value| {
+                value
+                    .get("entries")?
+                    .get(0)?
+                    .get("path")?
+                    .as_str()
+                    .map(str::to_owned)
+            })
             .as_deref()
             == Some("."),
         "the root tree is not shown at the root path",
@@ -860,7 +979,11 @@ fn root_tree(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(&root, &["status", "."]);
     checked.exits("the root tree is looked back at from `.`", &ran, 0);
-    checked.stdout_has("the chain draws what the root tree recorded", &ran, "the root tree");
+    checked.stdout_has(
+        "the chain draws what the root tree recorded",
+        &ran,
+        "the root tree",
+    );
 
     fs::write(root.join("a.psd"), b"two").expect("work the root tree has not recorded");
 
@@ -898,8 +1021,7 @@ fn tree_removal(rola: &Rola, ws: &Path, checked: &mut Checked) {
         checked.exits("the Layout is read after the removal", &ran, 0);
         checked.wants(
             "the removed tree leaves no entry at `.`",
-            !ran
-                .stdout
+            !ran.stdout
                 .lines()
                 .any(|line| line.split_whitespace().next() == Some(".")),
             "the Layout holds a pathless entry",
@@ -989,8 +1111,16 @@ fn tree_move(rola: &Rola, ws: &Path, checked: &mut Checked) {
         .expect("the tree is moved outside Rorolala");
 
     let ran = rola.run(ws, &["status"]);
-    checked.exits("the Workspace is read after the move without an id", &ran, 0);
-    checked.stdout_has("the tree that moved is lost", &ran, "- legacy (tree object)");
+    checked.exits(
+        "the Workspace is read after the move without an id",
+        &ran,
+        0,
+    );
+    checked.stdout_has(
+        "the tree that moved is lost",
+        &ran,
+        "- legacy (tree object)",
+    );
     checked.stdout_has(
         "where it moved to is a gain",
         &ran,

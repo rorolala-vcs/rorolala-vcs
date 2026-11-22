@@ -80,8 +80,9 @@ pub fn complete_tree_diff_stat(ctx: ShellContext) -> Suggest {
 ///
 /// # Errors
 ///
-/// Renders [`ErrorTreeDiffStatArgument`] when more than two operands are named or one does not read,
-/// [`ErrorTreeShouldInWorkspace`] when the run is not inside a Workspace, and
+/// Renders [`ErrorTreeDiffStatArgument`] when more than two operands are named,
+/// [`ErrorTreeHash`](crate::tree::cmd_tree::ErrorTreeHash) when a hash names no one version or
+/// variant, [`ErrorTreeShouldInWorkspace`] when the run is not inside a Workspace, and
 /// [`ErrorTreeDiffStatFailed`] when a structure or the work cannot be read.
 #[command(node = "tree.diff-stat", entry = EntryTreeDiffStat)]
 pub fn tree_diff_stat(args: EntryTreeDiffStat, format: &mut ResFormat) -> Next {

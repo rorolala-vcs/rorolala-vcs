@@ -5,9 +5,9 @@
 #![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
 use librorolala::layout::Layout;
-use librorolala::storage::StorageSet;
-use librorolala::tree::{EntryKind, TreeStructure, read_structure, version_of};
-use librorolala::vcs::VCSIndex;
+use librorolala::storage::{Key, StorageSet};
+use librorolala::tree::{EntryKind, TreeStructure, read_structure};
+use librorolala::vcs::{VCSIndex, VCSIndexObject};
 use librorolala::workspace::Workspace;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
@@ -26,12 +26,13 @@ use rorolala_utils_cli_theme::{err_line, help_line, trd};
 use rust_i18n::t;
 
 use crate::Next;
-use crate::complete::{strip_written, typing_flag};
+use crate::complete::{IndexObject, index_keys, strip_written, typing_flag};
 use crate::exit_codes::{EC_ERR_TREE_FAILED, EC_HELP};
 use crate::failure::failure;
 use crate::format::ResFormat;
+use crate::hash::{looks_like_hash, resolve};
 use crate::layout::chosen;
-use crate::tree::cmd_tree::{ErrorTreeFailed, ErrorTreeShouldInWorkspace, locate};
+use crate::tree::cmd_tree::{ErrorTreeFailed, ErrorTreeHash, ErrorTreeShouldInWorkspace, locate};
 
 /// What an entry is drawn as when the run names no template.
 const DEFAULT_FORMAT: &str =
@@ -72,8 +73,8 @@ pub fn complete_tree_ls_tree(ctx: ShellContext) -> Suggest {
 ///
 /// Renders [`ErrorTreeNotATree`](crate::tree::cmd_tree::ErrorTreeNotATree) when the path is not
 /// inside a tree, [`ErrorTreeShouldInWorkspace`] when the run is not inside a Workspace,
-/// [`ErrorTreeArgument`](crate::tree::cmd_tree::ErrorTreeArgument) when the target does not read, and
-/// [`ErrorTreeLsTreeFailed`] when the structure cannot be read.
+/// [`ErrorTreeHash`](crate::tree::cmd_tree::ErrorTreeHash) when a hash names no one version or
+/// variant, and [`ErrorTreeLsTreeFailed`] when the structure cannot be read.
 #[command(node = "tree.ls-tree", entry = EntryTreeLsTree)]
 pub fn tree_ls_tree(args: EntryTreeLsTree, format: &mut ResFormat) -> Next {
     format.default_template(DEFAULT_FORMAT);
@@ -141,7 +142,7 @@ pub fn handle_tree_ls_tree(
     ResultTreeLsTree { structure }.into()
 }
 
-/// The structure a listing names: a version hash, or a tree's recorded version.
+/// The structure a listing names: a version or variant hash, or a tree's recorded version.
 pub fn resolve_structure(
     held: &Workspace,
     layout: &Layout,
@@ -151,17 +152,51 @@ pub fn resolve_structure(
     runtime: &tokio::runtime::Runtime,
 ) -> Result<TreeStructure, Next> {
     if let Some(text) = target
-        && let Ok(version) = version_of(text.trim_start_matches("blake3:"))
+        && looks_like_hash(text)
     {
-        return match runtime.block_on(read_structure(index, store, &version)) {
-            Ok(structure) => Ok(structure),
-            Err(error) => Err(ErrorTreeFailed::new(error.to_string()).to_chain()),
+        // A whole hash is taken as it is, and a head is resolved among what the index holds: what a
+        // target may name is read here rather than guessed at from its length.
+        let key = match resolve(text, || index_keys(Some(index), IndexObject::Any)) {
+            Ok(key) => key,
+            Err(miss) => {
+                return Err(ErrorTreeHash {
+                    hash: text.to_owned(),
+                    miss,
+                }
+                .into());
+            }
         };
+
+        return structure_of(index, store, &key, runtime);
     }
 
     let tree = locate(held, target)?;
 
     match runtime.block_on(tree.recorded_structure(layout, index, store)) {
+        Ok(structure) => Ok(structure),
+        Err(error) => Err(ErrorTreeFailed::new(error.to_string()).to_chain()),
+    }
+}
+
+/// The structure the version or variant hash names.
+///
+/// A variant names its structure through the content it holds, and a version names it through the
+/// variant it stands on, so either hash reads the same structure.
+fn structure_of(
+    index: &VCSIndex,
+    store: &StorageSet,
+    key: &Key,
+    runtime: &tokio::runtime::Runtime,
+) -> Result<TreeStructure, Next> {
+    if let Ok(VCSIndexObject::Variant(variant)) = runtime.block_on(index.read(*key)) {
+        return match runtime.block_on(store.read_object(&Key::new(*variant.storage_hash()))) {
+            Ok(bytes) => TreeStructure::decode(&bytes)
+                .map_err(|error| ErrorTreeFailed::new(error.to_string()).to_chain()),
+            Err(error) => Err(ErrorTreeFailed::new(error.to_string()).to_chain()),
+        };
+    }
+
+    match runtime.block_on(read_structure(index, store, key.digest())) {
         Ok(structure) => Ok(structure),
         Err(error) => Err(ErrorTreeFailed::new(error.to_string()).to_chain()),
     }

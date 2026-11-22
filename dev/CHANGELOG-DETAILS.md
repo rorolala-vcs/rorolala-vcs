@@ -10,11 +10,23 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 `rola retrack` on a path whose recorded version is the first of its chain used to panic while counting the chain back. It now ends with `error_retrack_out_of_chain` and exit code 250, naming the version that has no earlier one.
 
-### 2. [`app`] [`RorolalaDesktop`] [`docking`] Give a dock's header strip back when the dock leaves its group
+### 2. [`app`] [`rola`] [`tree`] Read a short hash in the tree commands that name a version
+
+The commands that name a tree version read a whole hash and nothing else: `tree ls-tree`, `tree cat-desc` and
+`tree diff-stat` took a head of one for a path and answered that no tree was there. They now read a head as the
+other commands do, resolved among the versions and variants the index holds, and a head that names nothing or
+several of them is reported with the same words the rest of the program uses.
+
+A variant hash now reads the same structure wherever it is given, so the three commands agree about what one
+names instead of only `cat-desc` following it.
+
+The other places the program reads a hash were checked and already resolve a head.
+
+### 3. [`app`] [`RorolalaDesktop`] [`docking`] Give a dock's header strip back when the dock leaves its group
 
 A dock's header strip is one control the plugin draws, and the region that showed it kept it after the dock was taken out of its group. When the group was pruned, for example because the dock was pulled into a window of its own, the strip stayed parented to a region nothing could reach: the Overview's sync and refresh buttons were gone, and bringing the dock back and choosing its tab threw `The control already has a visual parent`. The region now gives the strip up when the dock leaves it, and a region that is pruned clears the strip before it goes.
 
-### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Ask a row again when the answers behind it were let go of
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Ask a row again when the answers behind it were let go of
 
 A row's badge, state and ownership are read as the row is made, so a view that keeps its rows across a read
 keeps what the answers said before it. The Folder Tree lost its badges for a full refresh because a freshly made
@@ -30,7 +42,7 @@ are.
 This is what the Version Graph's own operations needed: a retrack or a fetched variant says the files changed
 through the host, which is the same signal the Ownership commands use, and every view of the work now answers it.
 
-### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Stand a place's tile on the plate a file's stands on
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Stand a place's tile on the plate a file's stands on
 
 A grid of a place, `rola@` or `git-rola@`, drew its pictures bare, where a grid of a directory stands every
 picture on a rounded plate: the `Mid` ground with a `Splitter` line and the picture inset so the plate reads as
@@ -40,7 +52,7 @@ thumbnail, and so no type icon at the plate's corner, since the picture a place 
 The plate itself is stated once, in `Plate`, rather than where a tile is drawn, because the two listings make
 tiles and a plate written twice is two plates that disagree the first time either is changed.
 
-### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Give a tile the room its badges stand in
+### 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Give a tile the room its badges stand in
 
 The ends of a crowded badge arc were drawn past the picture's edge, and the picture is the whole of a
 tile: an icon drawn large put the first and the last badge outside the tile's own box, where the
@@ -49,7 +61,7 @@ picture is now at least what an arc reaches into, so every badge stands on the t
 the size a grid opens at the room already there is enough and nothing moves; a larger picture gains the
 room its badges need, and the tiles of a line therefore stand a little further apart.
 
-### 6. [`librorolala`] [`write`] [`sync`] Write a tree's work when a sync pulls its version
+### 7. [`librorolala`] [`write`] [`sync`] Write a tree's work when a sync pulls its version
 
 A sync that pulled a tree version tried to write the structure as a file at the tree's path, so it
 failed wherever the directory was already there: Windows answered `Access is denied`, and the other
@@ -57,7 +69,7 @@ systems answered that the target is a directory. The pulled version is now writt
 writes one: the structure is read, the work is laid down under the tree, the paths the new version no
 longer names are taken away, and the baseline and the local id record the version that is now here.
 
-### 7. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused
+### 8. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused
 
 `rola track` refused a changed file that the fetched copy says another account holds, but a tree was
 recorded without `--force`: the check only looked at files, and a tree's commit wrote the committer in
@@ -65,7 +77,7 @@ as its owner. A tree another account holds is now refused the same way, whether 
 through a file inside it, or through a directory that contains it, and `--force` still records it. The
 refusal now counts entries rather than files.
 
-### 8. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault
+### 9. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault
 
 `RolaAccounts.Locate(null, rule)` and `RolaMembers.Locate(null, rule)` passed a zero Vault pointer to a native export that requires one, which panicked inside the library. The two now call `rola_account_locate_local` and `rola_member_locate_local`, the same search with the Vault's root left out, so a run with no Vault in scope lists the Workspace's and the user's keys instead of crashing.
 

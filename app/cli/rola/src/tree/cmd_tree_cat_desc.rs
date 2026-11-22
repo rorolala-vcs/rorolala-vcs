@@ -4,11 +4,7 @@
 // what the command needs of the run rather than a signature this program shaped.
 #![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
-use librorolala::layout::Layout;
-use librorolala::storage::{Key, StorageSet};
-use librorolala::tree::{TreeStructure, read_description, read_structure, version_of};
-use librorolala::vcs::{VCSIndex, VCSIndexObject};
-use librorolala::workspace::Workspace;
+use librorolala::tree::read_description;
 use mingling::{
     Grouped, LazyRes, Suggest,
     consts::UNMATCHED,
@@ -29,9 +25,7 @@ use crate::Next;
 use crate::exit_codes::{EC_ERR_TREE_FAILED, EC_HELP};
 use crate::failure::failure;
 use crate::layout::chosen;
-use crate::tree::cmd_tree::{
-    ErrorTreeArgument, ErrorTreeFailed, ErrorTreeShouldInWorkspace, locate,
-};
+use crate::tree::cmd_tree::{ErrorTreeFailed, ErrorTreeShouldInWorkspace};
 
 #[help(buffer)]
 pub fn help_tree_cat_desc(_: EntryTreeCatDesc, ec: &mut ResExitCode) {
@@ -60,8 +54,8 @@ pub fn complete_tree_cat_desc() -> Suggest {
 ///
 /// Renders [`ErrorTreeNotATree`](crate::tree::cmd_tree::ErrorTreeNotATree) when the path is not
 /// inside a tree, [`ErrorTreeShouldInWorkspace`] when the run is not inside a Workspace,
-/// [`ErrorTreeArgument`] when the target does not read, and
-/// [`ErrorTreeCatDescFailed`] when the version or its description cannot be read.
+/// [`ErrorTreeHash`](crate::tree::cmd_tree::ErrorTreeHash) when a hash names no one version or
+/// variant, and [`ErrorTreeCatDescFailed`] when the version or its description cannot be read.
 #[command(node = "tree.cat-desc", entry = EntryTreeCatDesc)]
 pub fn tree_cat_desc(args: EntryTreeCatDesc) -> Next {
     let picked = args.pick(arg![Option<String>]).pick(&UNMATCHED).to_result();
@@ -115,7 +109,14 @@ pub fn handle_tree_cat_desc(
         Err(error) => return ErrorTreeFailed::new(error.to_string()).into(),
     };
 
-    let structure = match structure_of(held, &layout, store, index, target.as_deref(), &runtime) {
+    let structure = match crate::tree::cmd_tree_ls_tree::resolve_structure(
+        held,
+        &layout,
+        store,
+        index,
+        target.as_deref(),
+        &runtime,
+    ) {
         Ok(structure) => structure,
         Err(next) => return next,
     };
@@ -126,51 +127,6 @@ pub fn handle_tree_cat_desc(
     };
 
     ResultTreeCatDesc { description }.into()
-}
-
-/// The structure a description is read from: a version hash, or a tree's recorded version.
-fn structure_of(
-    held: &Workspace,
-    layout: &Layout,
-    store: &StorageSet,
-    index: &VCSIndex,
-    target: Option<&str>,
-    runtime: &tokio::runtime::Runtime,
-) -> Result<TreeStructure, Next> {
-    if let Some(text) = target {
-        match version_of(text.trim_start_matches("blake3:")) {
-            Ok(version) => {
-                // A hash may name the version or the variant once it was made from: a variant names
-                // its structure through the content it holds, and the description hangs off the
-                // structure, so either hash reads the same description.
-                return match runtime.block_on(index.read(Key::new(version))) {
-                    Ok(VCSIndexObject::Variant(variant)) => {
-                        let key = Key::new(*variant.storage_hash());
-                        match runtime.block_on(store.read_object(&key)) {
-                            Ok(bytes) => match TreeStructure::decode(&bytes) {
-                                Ok(structure) => Ok(structure),
-                                Err(error) => Err(ErrorTreeFailed::new(error.to_string()).into()),
-                            },
-                            Err(error) => Err(ErrorTreeFailed::new(error.to_string()).into()),
-                        }
-                    }
-                    _ => runtime
-                        .block_on(read_structure(index, store, &version))
-                        .map_err(|error| ErrorTreeFailed::new(error.to_string()).into()),
-                };
-            }
-            // A target that is not a hash is a path, and a path that reads as no tree is refused by
-            // `locate`; a hash that does not read is an argument the run cannot use.
-            Err(_) if text.len() == 64 => return Err(ErrorTreeArgument.into()),
-            Err(_) => {}
-        }
-    }
-
-    let tree = locate(held, target)?;
-
-    runtime
-        .block_on(tree.recorded_structure(layout, index, store))
-        .map_err(|error| ErrorTreeFailed::new(error.to_string()).into())
 }
 
 /// Result: one version's description was read.
