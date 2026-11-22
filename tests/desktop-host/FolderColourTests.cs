@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FileSystemPlugin;
@@ -13,14 +14,13 @@ using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// What a marked folder does to the directory dock and to the tree: the ground of a listing inside it, the
-/// row of an entry under it, and the icon of an entry that is a tree of its own.
+/// What a marked folder does to the directory dock and to the tree: the icon of an entry that is the colour's
+/// own, and the wash a tree row is read on.
 /// </summary>
 /// <remarks>
 /// The colour is a rule a plugin registers, and the File System plugin is what lays it out. What is checked
-/// here is the layering the two agree on: an entry inherits the nearest marked directory, a row of it under a
-/// marked directory is drawn darker than the directory itself, and a listing inside one wears the colour in the
-/// bright ground it is read on.
+/// here is the layering the two agree on: an entry inherits the nearest marked directory, a marked entry wears
+/// its colour on its own icon, and a row under it is washed more lightly than the row the colour belongs to.
 /// </remarks>
 public sealed class FolderColourTests
 {
@@ -33,9 +33,9 @@ public sealed class FolderColourTests
         ChosenEntry.Clear();
     }
 
-    /// <summary>A listing inside a marked folder keeps the colour on the ground and under a tile's caption.</summary>
+    /// <summary>A marked folder wears its colour on its own icon, and its children are not tinted.</summary>
     [Fact]
-    public void AListingInsideAMarkedFolderWearsItsColour()
+    public void AMarkedFolderWearsItsColourOnItsIconAndNotOnItsChildren()
     {
         var root = Scratch.New("folder-colour-listing");
         var marked = Directory.CreateDirectory(Path.Combine(root, "marked")).FullName;
@@ -69,7 +69,7 @@ public sealed class FolderColourTests
 
         try
         {
-            control.OpenAt(marked);
+            control.OpenAt(root);
             Pump();
 
             var view = window.GetVisualDescendants().OfType<EntryView<Entry>>().First();
@@ -78,25 +78,31 @@ public sealed class FolderColourTests
             Assert.Equal(0, Assert.IsAssignableFrom<ISolidColorBrush>(ground.Background).Color.A);
 
             var list = view.GetVisualDescendants().OfType<ListBox>().First();
-            var entry = Assert.Single(list.Items.OfType<Entry>(), item => item.Path == file);
-            var container = Assert.IsType<ListBoxItem>(list.ContainerFromItem(entry));
-            var tile = container.GetVisualDescendants()
-                .OfType<Border>()
-                .FirstOrDefault(border => border.Child is StackPanel && border.Padding.Left > 0);
+            var markedEntry = Assert.Single(list.Items.OfType<Entry>(), item => item.Path == marked);
+            var markedTile = Assert.IsType<ListBoxItem>(list.ContainerFromItem(markedEntry));
 
-            Assert.NotNull(tile);
-            Assert.Null(tile!.Background);
+            // The colour is the marked entry's own answer, and it is taken as the hue of the entry's picture.
+            Assert.Contains(
+                markedTile.GetVisualDescendants().OfType<Image>(),
+                image => image.BlendMode == BitmapBlendingMode.Hue
+            );
 
-            var underline = tile.GetVisualDescendants()
-                .OfType<Border>()
-                .FirstOrDefault(border =>
-                    border.BorderThickness.Bottom > 0 && border.BorderThickness.Top == 0
-                );
+            // A row under it inherits the colour, and an inherited row carries neither a tint nor a line under
+            // its name: the colour belongs to the folder it was given to.
+            control.OpenAt(marked);
+            Pump();
 
-            Assert.NotNull(underline);
-            Assert.Equal(
-                FolderColours.Band(entry),
-                Assert.IsType<SolidColorBrush>(underline!.BorderBrush).Color
+            list = window.GetVisualDescendants().OfType<ListBox>().First();
+            var hero = Assert.Single(list.Items.OfType<Entry>(), item => item.Path == file);
+            var heroTile = Assert.IsType<ListBoxItem>(list.ContainerFromItem(hero));
+
+            Assert.DoesNotContain(
+                heroTile.GetVisualDescendants().OfType<Image>(),
+                image => image.BlendMode == BitmapBlendingMode.Hue
+            );
+            Assert.DoesNotContain(
+                heroTile.GetVisualDescendants().OfType<Border>(),
+                border => border.BorderThickness.Bottom > 0 && border.BorderThickness.Top == 0
             );
         }
         finally
@@ -155,7 +161,7 @@ public sealed class FolderColourTests
         }
     }
 
-    /// <summary>A tree's park is worn on its folder tile, in the colour its id names.</summary>
+    /// <summary>A tree's park is worn on its folder tile, in the look's own ground.</summary>
     [Fact]
     public void ATreeMarkIsWornOnTheFolderTile()
     {
@@ -201,7 +207,7 @@ public sealed class FolderColourTests
             var container = Assert.IsType<ListBoxItem>(list.ContainerFromItem(entry));
             var arc = Assert.Single(container.GetVisualDescendants().OfType<BadgeArc>());
             var badge = Assert.Single(arc.Children);
-            var expected = colours.Colour(new Entry(tree, EntryKind.Directory));
+            var expected = RorolalaColours.Mid;
             var fill = badge.GetVisualDescendants()
                 .OfType<Border>()
                 .FirstOrDefault(border =>

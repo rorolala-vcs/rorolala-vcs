@@ -296,14 +296,14 @@ public sealed class TreeRowTests
                 PumpFrames(window, 20);
             }
 
-            // The line is still there after the layout that moved its row, which is what a posted paint is
+            // The wash is still there after the layout that moved its row, which is what a posted paint is
             // for: a resize that cleared the layer and waited for the next frame would leave this empty.
-            var blocks = window
+            var washes = window
                 .GetVisualDescendants()
                 .OfType<Canvas>()
-                .First(canvas => canvas.Name == "TreeBlocks");
+                .First(canvas => canvas.Name == "TreeWashes");
 
-            Assert.NotEmpty(blocks.Children);
+            Assert.NotEmpty(washes.Children);
         }
         finally
         {
@@ -403,9 +403,9 @@ public sealed class TreeRowTests
         }
     }
 
-    /// <summary>A marked folder is one coloured line beside its own row and everything under it.</summary>
+    /// <summary>A marked folder washes its own row more strongly than the rows under it.</summary>
     [Fact]
-    public void AMarkedFolderIsOneLineBesideItsWholeSubtree()
+    public void AMarkedFolderWashesItsOwnRowMoreThanItsSubtree()
     {
         var directory = Scratch.New("tree-colour");
         var marked = Directory.CreateDirectory(Path.Combine(directory, "marked")).FullName;
@@ -427,74 +427,51 @@ public sealed class TreeRowTests
             PumpFrames(window, 20);
 
             var markedRow = Until(window, () => Row(window, marked));
-            var blocks = window.GetVisualDescendants()
-                .OfType<Canvas>()
-                .First(canvas => canvas.Name == "TreeBlocks");
-
-            // The folder's own row carries no fill of its own: the mark is the line beside the rows.
-            Assert.Equal(0, Wash(markedRow).A);
-
-            var line = Assert.Single(blocks.Children.OfType<Border>());
-
-            Assert.True(line.Width > 2);
-            Assert.Equal(Colors.Red.R, Assert.IsType<SolidColorBrush>(line.Background).Color.R);
 
             markedRow.IsExpanded = true;
             PumpFrames(window, 20);
-
-            line = Assert.Single(blocks.Children.OfType<Border>());
-
-            Assert.Equal(markedRow.Bounds.Height, line.Height, 1);
-
-            var guides = markedRow.GetVisualDescendants()
-                .OfType<Panel>()
-                .FirstOrDefault(one => one.Name == "TreeGuides");
-
-            Assert.NotNull(guides);
-            Assert.False(Assert.IsType<Border>(Assert.Single(guides!.Children)).IsVisible);
-
-            // A marked folder inside another draws its line at its own deeper indent: the two colours stand
-            // beside one another rather than one replacing the other.
-            EntryColourProviders.Register(new FixedColour("it.tree.row.blue", child, Colors.Blue));
 
             var childRow = Until(window, () => Row(window, child));
 
             childRow.IsExpanded = true;
             PumpFrames(window, 20);
 
-            var lines = blocks.Children.OfType<Border>().ToList();
+            // The plain folder beside the marked one is on screen and carries no wash of its own, which is
+            // what the count below is about.
+            Assert.NotNull(Until(window, () => Row(window, plain)));
 
-            Assert.Equal(2, lines.Count);
+            var washes = window.GetVisualDescendants()
+                .OfType<Canvas>()
+                .First(canvas => canvas.Name == "TreeWashes");
+            var bands = washes.Children.OfType<Border>().ToList();
 
-            var outer = Assert.Single(
-                lines,
-                one => Assert.IsType<SolidColorBrush>(one.Background).Color.R == Colors.Red.R
-            );
-            var inner = Assert.Single(
-                lines,
-                one => Assert.IsType<SolidColorBrush>(one.Background).Color.R == Colors.Blue.R
-            );
+            // The marked folder, the folder under it and the file under that: three rows, and the plain folder
+            // beside the marked one carries no wash at all.
+            Assert.Equal(3, bands.Count);
 
-            Assert.True(Canvas.GetLeft(inner) > Canvas.GetLeft(outer));
+            var own = Assert.IsType<SolidColorBrush>(bands[0].Background).Color;
+            var inherited = Assert.IsType<SolidColorBrush>(bands[1].Background).Color;
 
-            var plainRow = Until(window, () => Row(window, plain));
+            Assert.Equal(Colors.Red.R, own.R);
+            Assert.True(own.A > inherited.A, $"the marked row is washed {own.A} and the row under it {inherited.A}");
+            Assert.Equal(inherited, Assert.IsType<SolidColorBrush>(bands[2].Background).Color);
 
-            Assert.Equal(0, Wash(plainRow).A);
+            // The wash is the row's own line rather than the whole step: the step's bounds include the steps
+            // under it, and a wash over all of them would repeat the folder's colour over its whole subtree.
+            Assert.True(bands[0].Height < markedRow.Bounds.Height);
+
+            // A colour is a wash, not a line: the tree's own guides are drawn through the subtree as usual.
+            var guides = markedRow.GetVisualDescendants()
+                .OfType<Panel>()
+                .FirstOrDefault(one => one.Name == "TreeGuides");
+
+            Assert.NotNull(guides);
+            Assert.All(guides!.Children.OfType<Border>(), line => Assert.True(line.IsVisible));
         }
         finally
         {
             window.Close();
         }
-    }
-
-    /// <summary>The wash a row's header carries.</summary>
-    /// <param name="row">The row to ask.</param>
-    /// <returns>The wash, or a colour of no strength when the row carries none.</returns>
-    private static Color Wash(TreeViewItem row)
-    {
-        var header = Assert.IsType<Border>(row.Header);
-
-        return header.Background is ISolidColorBrush brush ? brush.Color : default;
     }
 
     /// <summary>Paints a window with the program's own look, so that a row is measured as it is drawn.</summary>

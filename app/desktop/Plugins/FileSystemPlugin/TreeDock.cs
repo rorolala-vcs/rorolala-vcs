@@ -2731,7 +2731,7 @@ internal sealed class TreeBrowser : UserControl
     /// one line down a level rather than as a mark on each row.
     /// </remarks>
     /// <param name="item">The row.</param>
-    private void Guides(TreeViewItem item)
+    private static void Guides(TreeViewItem item)
     {
         // The template's first column is sixteen pixels, which is the arrow's picture and one of the
         // two margins around it. The row asks for the wider column after the template is applied, so
@@ -2757,7 +2757,7 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>Widens the arrow's column and draws the row's guides once the template is there.</summary>
     /// <param name="item">The row.</param>
-    private void Shape(TreeViewItem item)
+    private static void Shape(TreeViewItem item)
     {
         if (
             item.GetVisualDescendants()
@@ -2784,7 +2784,7 @@ internal sealed class TreeBrowser : UserControl
 
     /// <summary>Puts the guide lines in a row's template once it has one.</summary>
     /// <param name="item">The row.</param>
-    private void DrawGuides(TreeViewItem item)
+    private static void DrawGuides(TreeViewItem item)
     {
         // The template's own margin reads Level, which is set when the row joins a tree; the ancestors
         // answer the same question even when the event that asks is earlier than that, and the larger of
