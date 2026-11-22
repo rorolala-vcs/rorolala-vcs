@@ -394,7 +394,7 @@ cmd_layout_path:
         **Usage**: rola layout path [[GREEN]]__move__[[/]] <FROM> <TO>
         **Flags**:
              __--layout__ <NAME[@VAULT]>    Move the path in that Layout
-                                    Write `truth@VAULT` to point at the Vault's Layout
+                                        Write `truth@VAULT` to point at the Vault's Layout
              __--vault__ __-v__                 Switch to editing the Vault's Layout
              __--offline__                  Do not reach the Vault when moving, using only what was fetched locally
     zh-CN: |
@@ -402,7 +402,7 @@ cmd_layout_path:
         **用法**：rola layout path [[GREEN]]__move__[[/]] <源路径> <目标路径>
         **标识**：
              __--layout__ <名称[@保险库]>    在指定布局中移动路径
-                                     以 `truth@VAULT` 指向保险库布局
+                                         以 `truth@VAULT` 指向保险库布局
              __--vault__ __-v__                  切换为编辑保险库的布局
              __--offline__                   移动时不连接保险库，仅使用本地已取回的内容
 
@@ -446,7 +446,7 @@ cmd_layout_path:
         **Usage**: rola layout path [[GREEN]]__new-uuid__[[/]] <PATH>
         **Flags**:
              __--layout__ <NAME[@VAULT]>    Change the path in that Layout
-                                    Write `truth@VAULT` to point at the Vault's Layout
+                                        Write `truth@VAULT` to point at the Vault's Layout
              __--vault__ __-v__                 Switch to editing the Vault's Layout
              __--offline__                  Do not reach the Vault, using only what was fetched locally
         > [!Note]
@@ -456,7 +456,7 @@ cmd_layout_path:
         **用法**：rola layout path [[GREEN]]__new-uuid__[[/]] <路径>
         **标识**：
              __--layout__ <名称[@保险库]>    在指定布局中修改路径
-                                     以 `truth@VAULT` 指向保险库布局
+                                         以 `truth@VAULT` 指向保险库布局
              __--vault__ __-v__                  切换为编辑保险库的布局
              __--offline__                   不访问保险库，仅使用本地已取回的内容
         > [!Note]
@@ -528,7 +528,7 @@ cmd_layout_entries:
         **Flags**:
              __--vault__ __-v__                 List the Vault's Layout, rather than the Workspace's
              __--layout__ <NAME[@VAULT]>    List that Layout
-                                    Write `truth@VAULT` to point at the Vault's Layout
+                                        Write `truth@VAULT` to point at the Vault's Layout
              __--uuid__ <UUID>              List only the entry with this UUID
     zh-CN: |
         # 列出布局中各条目所持有的内容
@@ -536,7 +536,7 @@ cmd_layout_entries:
         **标识**：
              __--vault__ __-v__                  列出保险库的布局，而非工作区的布局
              __--layout__ <名称[@保险库]>    列出指定布局
-                                     以 `truth@VAULT` 指向保险库布局
+                                         以 `truth@VAULT` 指向保险库布局
              __--uuid__ <UUID>               只列出该 UUID 的条目
 
 
