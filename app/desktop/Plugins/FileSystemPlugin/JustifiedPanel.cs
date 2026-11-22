@@ -19,6 +19,11 @@ namespace FileSystemPlugin;
 /// least room, reading from its start, sharing its room out would spread the few tiles of a short line
 /// across the whole width.
 /// </para>
+/// <para>
+/// A line is as tall as its tallest tile and each tile stands at its own height inside it, so a tile whose
+/// name wrapped taller than its neighbours makes the whole line taller without stretching any of them: the
+/// pictures of a line stay on one row, and what grows is the room under the one that needed it.
+/// </para>
 /// </remarks>
 internal sealed class JustifiedPanel : Panel
 {

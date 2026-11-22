@@ -3263,12 +3263,13 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     /// <param name="keepScroll">Whether the reader keeps the place they had scrolled to.</param>
     internal void Retarget(Listing<TItem> source, bool keepScroll) => Rebind(source, keepScroll);
 
-    /// <summary>One entry as a tile: its icon above its name, on one line and cut off when it is too long.</summary>
+    /// <summary>One entry as a tile: its picture above its name, the name wrapped rather than cut off.</summary>
     /// <remarks>
     /// The name is as wide as the icon and not one pixel wider, so that the two read as one column rather
-    /// than as a picture with a caption under it that happens to start somewhere else. What does not fit is
-    /// taken off the end rather than wrapped, because a tile of two lines is a tile of another height, and a
-    /// row of tiles that are not the same height is not a row.
+    /// than as a picture with a caption under it that happens to start somewhere else. A name that does not
+    /// fit on one line is carried onto the next, since a name cut short is a name the reader has to open the
+    /// entry to read: the tile is as tall as its name needs, and the line it stands on is as tall as its
+    /// tallest tile (see <see cref="JustifiedPanel"/>).
     /// </remarks>
     /// <param name="item">The entry to draw.</param>
     protected override Control Item(TItem item) => Prepared(item, Tile(item));
@@ -3335,7 +3336,7 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     }
 
     /// <summary>
-    /// A tile's name, on a line of its own under the picture.
+    /// A tile's name, under the picture and as wide as it.
     /// </summary>
     /// <remarks>
     /// What a contribution says about an entry stands on the icon here rather than beside the name, which is
@@ -3343,6 +3344,11 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     /// taking room off the name at every zoom, the one thing a tile has none of. What is left is the name,
     /// as wide as the icon and not one pixel wider, so that the two read as one column rather than as a
     /// picture with a caption under it that happens to start somewhere else.
+    /// <para>
+    /// A name longer than that line is wrapped rather than cut off, and a name with no word break in it is broken
+    /// where the line ends: what a tile shows is the whole name, whatever it takes. Its height is therefore the
+    /// name's to say, which is what makes one tile of a line taller than the rest.
+    /// </para>
     /// </remarks>
     /// <param name="item">The entry to draw.</param>
     /// <returns>What to draw where the name goes.</returns>
@@ -3352,8 +3358,7 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
         {
             MaxWidth = Math.Max(1, _icon),
             Text = Source.Name(item),
-            TextWrapping = TextWrapping.NoWrap,
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextWrapping = TextWrapping.Wrap,
             Classes = { "entry-name", "caption" },
             HorizontalAlignment = HorizontalAlignment.Center,
         };
