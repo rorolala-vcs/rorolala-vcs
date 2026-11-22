@@ -19,8 +19,11 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 ## Optimized
 
 1. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] Stop reading and drawing every view when a window comes back. [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rorolaladesktop-stop-reading-and-drawing-every-view-when-a-window-comes-back)
-2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event. [See details](dev/CHANGELOG-DETAILS.md#2-app-rorolaladesktop-plugins-file-system-redraw-a-dock-once-for-a-change-instead-of-once-per-event)
-3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-rorolala-vcs-leave-the-views-alone-when-a-background-fetch-changes-nothing)
+2. **\[BREAKING!\]** [`modules`] [`daemon`] [`sync_all`] Name the window storage sync-all is to carry with. [See details](dev/CHANGELOG-DETAILS.md#2-breaking-modules-daemon-sync_all-name-the-window-storage-sync-all-is-to-carry-with)
+3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-plugins-file-system-redraw-a-dock-once-for-a-change-instead-of-once-per-event)
+4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-rorolala-vcs-leave-the-views-alone-when-a-background-fetch-changes-nothing)
+5. [`modules`] [`daemon`] [`sync_storage`] Read a content's chunks with the window in flight again. [See details](dev/CHANGELOG-DETAILS.md#5-modules-daemon-sync_storage-read-a-contents-chunks-with-the-window-in-flight-again)
+6. [`modules`] [`storage`] [`content`] Publish a content into packs instead of a file apiece. [See details](dev/CHANGELOG-DETAILS.md#6-modules-storage-content-publish-a-content-into-packs-instead-of-a-file-apiece)
 
 ## Feature
 

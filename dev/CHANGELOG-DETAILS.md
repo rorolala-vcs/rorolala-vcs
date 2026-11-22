@@ -96,7 +96,11 @@ for: it reads when it is opened, when the files change, and when the program say
 changed through `IFileChanges`. What another program does to the files is picked up by the next read the
 program is asked for, and the Overview's own timer goes on reading the work while it is on screen.
 
-### 2. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event
+### 2. **\[BREAKING!\]** [`modules`] [`daemon`] [`sync_all`] Name the window storage sync-all is to carry with
+
+`rola storage sync-all` now carries content with as many reads in flight as `--concurrency` names, held to what the Vault is set to serve, which is what every command that moves content already does. What carries the ask is the action's input, which was empty until now and read by neither end. A Workspace and a Vault of different versions therefore cannot run `rola storage sync-all` against each other: upgrade both ends together. A caller that reaches the action through the C ABI is unaffected, since an empty input still means the default window.
+
+### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event
 
 The File System plugin's directory dock and folder tree hand what a change asks for to one queue,
 `Frame`, which runs it once at the end of the turn. Several events raised by one step, one read or
@@ -109,9 +113,17 @@ to. What an eye, a hide rule or a badge strip says is redrawn only when the answ
 
 The navigation bar asks for one toolbar update per turn as well.
 
-### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing
 
 A background fetch that brings the Vault's Layout already here no longer tells the listing and the readings that the files changed. The run fingerprints the copy's generation pointer and the fetched ignore rules before and after the exchange; when both are the same, the view is left as it is. A foreground change still reads once its next fetch ends, and a refresh the user asked for still reads when it finishes.
+
+### 5. [`modules`] [`daemon`] [`sync_storage`] Read a content's chunks with the window in flight again
+
+A sync's sending side read a chunked content one chunk at a time, opening every pack afresh for each of them, after the window it was granted stopped being passed down. The chunks are once again read through one batch per store with that many reads in flight, in the manifest's order, and the sending side no longer hashes what the receiving side checks on arrival. This is the carrying every command that moves content goes through, `rola bring`, `rola sync`, `rola align`, `rola retrack` and `rola fetch` included.
+
+### 6. [`modules`] [`storage`] [`content`] Publish a content into packs instead of a file apiece
+
+A store publishing another store's content wrote one file for each chunk, and read each chunk through a batch of its own. The content is now read through one batch of the source and written through one batch of the target, so a content of ten thousand chunks is two packs rather than ten thousand files.
 
 ## Feature
 
@@ -346,9 +358,11 @@ place it was made from and writes through the first one that can be written, and
 `StorageWriter.Create`, `WorkspaceWriter.BindStorage` and `VaultWriter.BindStorage` are the C ABI
 calls for making and binding a store. A collecting run refuses a store with no usable root even
 with `--force`, a store that records nobody gets its one `.` and not one per list, and a binding that
-is gone or read-only is said on standard error instead of being skipped in silence. `git rola bring`
-and `git rola update` build a runtime that can open a socket again, so fetching content from a Vault
-no longer panics.
+is gone or read-only is said on standard error instead of being skipped in silence. A read that
+spans several stores is planned as one batch, so each store's packs are opened once and a content of
+many chunks is read from whichever store holds each of them in the order they are named. `git rola
+bring` and `git rola update` build a runtime that can open a socket again, so fetching content from a
+Vault no longer panics.
 
 ## Refactor
 
