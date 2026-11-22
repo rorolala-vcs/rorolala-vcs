@@ -121,7 +121,15 @@ internal static class Program
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder
             .Configure<App>()
-            .With(new FontManagerOptions { DefaultFamilyName = NotoSans.Address })
+            .With(
+                new FontManagerOptions
+                {
+                    DefaultFamilyName = NotoSans.Address,
+                    // The Latin face has no CJK glyphs, and the machine's own answer for them is not the
+                    // face this program is designed in.
+                    FontFallbacks = Cjk.Fallbacks,
+                }
+            )
             .UsePlatformDetect()
             .UseWaylandWithFallback()
             .LogToTrace();

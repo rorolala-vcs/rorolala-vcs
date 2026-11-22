@@ -142,7 +142,16 @@ class Program
 #pragma warning disable AVALONIA_X11_CSD, AVALONIA_WAYLAND_FORCE_CSD
         AppBuilder
             .Configure<App>()
-            .With(new FontManagerOptions { DefaultFamilyName = NotoSans.Address })
+            .With(
+                new FontManagerOptions
+                {
+                    DefaultFamilyName = NotoSans.Address,
+                    // What the Latin face has no glyph for, the machine is otherwise left to answer, and a
+                    // Chinese word then comes from whichever face it prefers rather than from one the design
+                    // names. The list is what makes that choice the program's.
+                    FontFallbacks = Cjk.Fallbacks,
+                }
+            )
             .With(() => new X11PlatformOptions { EnableDrawnDecorations = true })
             .With(() => new WaylandPlatformOptions { ForceDrawnDecorations = true })
             .UsePlatformDetect()
