@@ -101,7 +101,11 @@ internal sealed class Skin
         OnPrimary = new SolidColorBrush(Readable(palette.Primary));
         Muted = new SolidColorBrush(palette.Front, 0.62);
         Faint = new SolidColorBrush(palette.Front, 0.38);
-        Hover = new SolidColorBrush(palette.Front, 0.08);
+        Hover = new SolidColorBrush(
+            IsLight(palette.Mid)
+                ? Color.FromArgb(0x14, 0x00, 0x00, 0x00)
+                : Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)
+        );
         BorderSoft = new SolidColorBrush(palette.Splitter, 0.58);
 
         Ear = new SolidColorBrush(

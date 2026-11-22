@@ -3016,16 +3016,12 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
 
         var bandColour = Source.Band(item);
 
-        // Every row but the last wears the line that tells it from the next, so that the table ends in the
-        // card's own edge rather than in a line drawn against nothing.
-        var last = Items.Count > 0 && Equals(Source.Key(item), Source.Key(Items[^1]));
-
+        // No line between two rows: the rows of a listing are one surface, and a line drawn between them
+        // reads as a gap the colour and the hover wash run across. What ends the table is the card it is in.
         var row = new Border
         {
             Padding = new Thickness(Inset, 0),
-            BorderThickness = last ? new Thickness(0) : new Thickness(0, 0, 0, 1),
         };
-        row[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
 
         // The strip is at the row's own left edge, outside the column grid's inset: it is a mark of the
         // row rather than a value in one of its columns. The grid keeps the inset as a margin so the columns

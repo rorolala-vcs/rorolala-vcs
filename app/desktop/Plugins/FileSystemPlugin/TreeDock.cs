@@ -1418,26 +1418,44 @@ internal sealed class TreeBrowser : UserControl
 
         try
         {
-            var blocks = new List<TreeBlock>();
+            var rows = VisibleRows().ToArray();
+            var tops = new double[rows.Length];
+            var high = new double[rows.Length];
             var incomplete = false;
 
-            foreach (var item in VisibleRows())
+            for (var at = 0; at < rows.Length; at++)
             {
+                high[at] = rows[at].Bounds.Height;
+
+                if (rows[at].TranslatePoint(new Point(0, 0), _washes) is { } origin)
+                {
+                    tops[at] = origin.Y;
+                }
+                else
+                {
+                    // A row with a size but no place on the layer is still being laid out: keeping what is
+                    // there is better than clearing it for a place that is about to be answered.
+                    incomplete = true;
+                }
+            }
+
+            if (incomplete)
+            {
+                return;
+            }
+
+            var blocks = new List<TreeBlock>();
+
+            for (var at = 0; at < rows.Length; at++)
+            {
+                var item = rows[at];
+
                 if (
                     item.Tag is not string path
                     || item.Bounds.Width <= 0
                     || item.Bounds.Height <= 0
                 )
                 {
-                    continue;
-                }
-
-                if (item.TranslatePoint(new Point(0, 0), _washes) is not { } at)
-                {
-                    // A row with a size but no place on the layer is still being laid out: keeping what is
-                    // there is better than clearing it for a place that is about to be answered.
-                    incomplete = true;
-
                     continue;
                 }
 
@@ -1453,31 +1471,32 @@ internal sealed class TreeBrowser : UserControl
                 // lightly, which is what makes the marked folder read as where the colour belongs.
                 var own = FolderColours.Mark(entry) is not null;
 
-                // The wash is the row's own line rather than the whole step: a step's bounds include the
-                // steps under it while open, and a wash over those would be the colour of the folder repeated
-                // over everything in it instead of the ground each row is read on.
+                // The wash covers the row from its own top to the top of the row below it, rather than the
+                // header alone: the room under a step belongs to the step, and a wash stopping at the header
+                // leaves one pixel of the ground between two coloured rows.
                 var header = item
                     .GetVisualDescendants()
                     .OfType<Border>()
                     .FirstOrDefault(one => one.Name == "SelectionBorder");
-                var row =
-                    header is not null && header.TranslatePoint(new Point(0, 0), _washes) is { } top
-                        ? new Rect(top, header.Bounds.Size)
-                        : new Rect(at, new Size(item.Bounds.Width, item.Bounds.Height));
+
+                if (
+                    header is null
+                    || header.TranslatePoint(new Point(0, 0), _washes) is not { } top
+                )
+                {
+                    continue;
+                }
+
+                var bottom = at + 1 < rows.Length ? tops[at + 1] : tops[at] + high[at];
 
                 blocks.Add(
                     new TreeBlock(
                         path,
                         item.Level,
-                        row,
+                        new Rect(top.X, tops[at], header.Bounds.Width, Math.Max(0, bottom - tops[at])),
                         WithAlpha(band, own ? OwnWash : InheritedWash)
                     )
                 );
-            }
-
-            if (incomplete)
-            {
-                return;
             }
 
             if (SameBlocks(blocks, _drawnBlocks))
@@ -2733,6 +2752,9 @@ internal sealed class TreeBrowser : UserControl
     /// <summary>How strong a guide line is against the row it stands in.</summary>
     private const double Guide = 0.65;
 
+    /// <summary>How strong a guide line in a colour is, which is quieter than the look's own grey.</summary>
+    private const double TintedGuide = 0.38;
+
     /// <summary>The name the layer of guide lines carries, which a test reads.</summary>
     private const string GuideName = "TreeGuides";
 
@@ -2850,7 +2872,12 @@ internal sealed class TreeBrowser : UserControl
         // overhang is read from the two heights rather than written as a number, so a row that grows
         // again takes its lines with it.
         var overhang = Math.Max(0, item.Bounds.Height - border.Bounds.Height);
-        var margin = new Thickness((-depth * Indent) + Lead, 0, 0, -overhang);
+
+        // The row's own padding sits above the header, and a line starting at the header would leave a
+        // pixel of it between two rows' segments: the layer is pulled up by the header's offset so that
+        // the coloured column is one run from the top of a row to the bottom of it.
+        var above = Math.Max(0, border.TranslatePoint(new Point(0, 0), item)?.Y ?? 0);
+        var margin = new Thickness((-depth * Indent) + Lead, -above, 0, -overhang);
 
         if (existing is not null)
         {
@@ -2926,7 +2953,7 @@ internal sealed class TreeBrowser : UserControl
         if (tint is { } colour)
         {
             line.Background = new SolidColorBrush(colour);
-            line.Opacity = Guide;
+            line.Opacity = TintedGuide;
 
             return;
         }

@@ -626,25 +626,16 @@ internal sealed class RorolalaTheme
         /// The colour a surface takes under the pointer.
         /// </summary>
         /// <remarks>
-        /// The step is taken from the face towards the ink, so that it goes whichever way reads on the
-        /// ground it is drawn on: a light look darkens under the pointer and a dark look brightens. What a
-        /// hover is for is being seen, and a step that only ever darkened (the hollow of the ground, say)
-        /// is barely there on a dark ground; a hover the eye cannot catch reads as lag even where there is
-        /// none to feel, which is the whole of what this token is for. Being a step rather than a colour of
-        /// its own, it also holds for whatever ink and ground the user chose.
+        /// A wash of black on the light look and of white on the dark one, rather than a colour of its own, so that
+        /// the step is taken from whatever surface the pointer is on: a row that carries a colour is deepened in
+        /// that colour on the light look and lifted in it on the dark one, where a mixed neutral would grey the
+        /// row it is meant to mark. How far the step goes is small enough to be told at a glance and short of what
+        /// reads as a chosen surface, which is the primary's wash's to say.
         /// </remarks>
-        public Color Hover => Mix(Elevated, Fg, HoverStep);
-
-        /// <summary>
-        /// How far towards the ink the pointer's step goes.
-        /// </summary>
-        /// <remarks>
-        /// A small part of the way: enough to be told from the face at a glance on either ground, and not
-        /// so far that it reads as a chosen surface, which is the primary's wash's to say. A hover is a
-        /// report of where the pointer is, and a selection is a statement about an entry, so the two
-        /// steps are far apart.
-        /// </remarks>
-        private const double HoverStep = 0.08;
+        public Color Hover =>
+            IsLight
+                ? Color.FromArgb(0x14, 0x00, 0x00, 0x00)
+                : Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF);
 
         /// <summary>The semantics the look states, which do not follow the five the user chooses.</summary>
         public Contract.SemanticPalette Semantic => palette.Semantic;
@@ -1146,13 +1137,21 @@ internal sealed class RorolalaTheme
             // said because the base theme does draw something: its border would be that card.
             On(
                 selector => selector.OfType<ListBox>(),
-                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0))
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                // No room around the rows: a padding at the list's own edge would leave a strip of the ground
+                // beside every row, and rows that carry a colour or a hover wash are read as one surface.
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(0))
             ),
             On(
                 selector => selector.OfType<ListBoxItem>(),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(8, 4)),
                 new Setter(Layoutable.MinHeightProperty, RowHeight),
-                new Setter(TemplatedControl.CornerRadiusProperty, Small)
+                new Setter(TemplatedControl.CornerRadiusProperty, Small),
+                // A row is a part of the list's surface rather than a card of its own: the base theme leaves a
+                // border and a margin that read as a one-pixel gap between two rows, which a colour or a hover
+                // wash then stops at.
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                new Setter(Layoutable.MarginProperty, new Thickness(0))
             ),
             // One wash for every chosen row, named against the part the base theme paints rather than
             // the item: the item's own background is what the template binds, and a style on the item
