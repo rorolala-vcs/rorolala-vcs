@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media;
 using Avalonia.Themes.Simple;
 using RorolalaLauncher.Theming;
 
@@ -25,6 +26,15 @@ public sealed class App : Application
         // The base theme every look is layered onto: rectangular controls, opaque neutral colours, and no
         // accent of its own. What the launcher draws itself is drawn from the palette in force.
         Styles.Add(new SimpleTheme());
+
+        // Text is drawn with grayscale antialiasing rather than the platform's default, which is subpixel on
+        // Windows and grayscale on Wayland: the two programs are read as one look, and on one of the platforms
+        // the default reads as coloured, uneven edges beside the shapes it is set in. The toolkit exposes the mode
+        // on the visual rather than as a styleable property, so it is put on every window as it opens and inherits
+        // down that window's tree from there.
+        Window.WindowOpenedEvent.AddClassHandler<Window>(
+            (window, _) => TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias)
+        );
     }
 
     /// <inheritdoc />

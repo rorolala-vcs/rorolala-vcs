@@ -1019,10 +1019,7 @@ internal sealed class RorolalaTheme
             // The window is the ground the cards sit on, where the base theme would have it be the same
             // colour as a card: the design is a stack of surfaces, and that only reads if there is a
             // ground beneath them.
-            On(
-                selector => selector.OfType<Window>(),
-                Brushed(TemplatedControl.BackgroundProperty, Bg)
-            ),
+            On(selector => selector.OfType<Window>(), Brushed(TemplatedControl.BackgroundProperty, Bg)),
 
             On(
                 selector => Pressable(selector),

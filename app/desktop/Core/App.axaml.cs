@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Threading;
 using RorolalaDesktop.Configuration;
 
@@ -23,6 +24,15 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+
+        // Text is drawn with grayscale antialiasing rather than the platform's default, which is subpixel on
+        // Windows and grayscale on Wayland: the same words read smooth on one and coloured at the edges on the
+        // other, and one look is worth more than the platform's accidental best. The toolkit exposes the mode on
+        // the visual rather than as a styleable property, so it is put on every window as it opens and inherits
+        // down that window's tree from there.
+        Window.WindowOpenedEvent.AddClassHandler<Window>(
+            (window, _) => TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias)
+        );
     }
 
     public override void OnFrameworkInitializationCompleted()
