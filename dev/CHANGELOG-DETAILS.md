@@ -198,7 +198,7 @@ mention.
 
 ### 8. [`app`] [`rola-daemon-gui`] Start the daemon when the window is asked to run
 
-`rola-daemon-gui` accepts `--run`, and a run with it presses Start once the window is up instead of waiting for the button. Both windows, the Win32 one and the GTK 4 one, read the flag from their own command line.
+`rola-daemon-gui` accepts `--run`, and a run with it presses Start once the window is up instead of waiting for the button. Both windows, the Win32 one and the GTK 4 one, read the flag from their own command line. On Linux a run that finds the window already open hands the request to that window, so the start reaches it rather than a second process that exits at once. A window whose daemon is already up leaves it running, which is what the insensitive button already says.
 
 ### 9. [`app`] [`ROLALauncher`] [`vaults`] Open the daemon's window from an address's menu
 

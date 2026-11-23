@@ -219,26 +219,40 @@ static void activate(GtkApplication *application, gpointer user_data) {
     app_set_status("Ready.");
   }
 
-  /* `--run` is the run the launcher does not ask for: a person asked for the daemon
-     to be up as the window appeared, so Start is pressed once here. */
+  /* `--run` is a request made for the window this run reaches: Start is pressed
+     once that window is up, whether this is the first run or one handed over from a
+     window that is already open. */
   if (g_app.start_on_open) {
     g_app.start_on_open = FALSE;
     daemon_page_start();
   }
 }
 
-/* `--run` is the only argument this program reads. It is the word the launcher
-   passes when the daemon is to be started as the window opens; any other word is
-   left alone, which is what a run that only wants the window passes. */
-static gboolean command_line_wants_start(int argc, char **argv) {
+/* Every run that reaches here is a request to show the window: a first run, or one
+   handed over from a window that is already open. `--run` is read from that run's
+   own arguments, which is how a start reaches the window the launcher finds already
+   up rather than a second process that exits at once. GApplication parses its
+   arguments before this point and refuses an option it does not know, so the
+   command line is handled here rather than left to that parsing. */
+static gint on_command_line(GApplication *application,
+                            GApplicationCommandLine *command_line,
+                            gpointer user_data) {
+  char **argv;
+  int argc;
   int index;
 
+  (void)user_data;
+  argv = g_application_command_line_get_arguments(command_line, &argc);
+  g_app.start_on_open = FALSE;
   for (index = 1; index < argc; ++index) {
     if (strcmp(argv[index], "--run") == 0) {
-      return TRUE;
+      g_app.start_on_open = TRUE;
     }
   }
-  return FALSE;
+  g_strfreev(argv);
+
+  g_application_activate(application);
+  return 0;
 }
 
 int main(int argc, char **argv) {
@@ -246,10 +260,11 @@ int main(int argc, char **argv) {
   int status;
 
   fix_daemon_path();
-  g_app.start_on_open = command_line_wants_start(argc, argv);
 
   application = gtk_application_new("org.rorolala.DaemonGui",
-                                    G_APPLICATION_DEFAULT_FLAGS);
+                                    G_APPLICATION_HANDLES_COMMAND_LINE);
+  g_signal_connect(application, "command-line", G_CALLBACK(on_command_line),
+                   NULL);
   g_signal_connect(application, "activate", G_CALLBACK(activate), NULL);
 
   status = g_application_run(G_APPLICATION(application), argc, argv);

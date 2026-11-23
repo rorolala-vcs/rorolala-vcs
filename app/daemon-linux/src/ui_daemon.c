@@ -144,7 +144,17 @@ static void start_daemon(void) {
   daemon_page_sync_status();
 }
 
-void daemon_page_start(void) { start_daemon(); }
+void daemon_page_start(void) {
+  /* `--run` reaches here even when the daemon is already up, where the button is
+     insensitive; pressing Start is refusing to start a second one, not an error. */
+  if (daemon_is_running()) {
+    app_set_status("rola-daemon is already running.");
+    daemon_page_sync_status();
+    return;
+  }
+
+  start_daemon();
+}
 
 static void stop_daemon(void) {
   if (!daemon_is_running()) {
