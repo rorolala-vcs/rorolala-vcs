@@ -2,7 +2,7 @@
 
 ## Introduction
 
-`ROLALauncher` is the small Avalonia window a person starts first. It is a two-column main menu: the Vaults it knows on the left, the Workspaces this machine has opened on the right. The left column reads the `rola-daemon` address book and the addresses this launcher hosts, checks each one with a handshake, and lets a hosted address be added, edited or removed. An address's menu also opens the daemon's window and starts the daemon on the way up. The right column creates, imports and opens a Workspace, chooses the account, and opens the Desktop program onto a chosen Workspace.
+`ROLALauncher` is the small Avalonia window a person starts first. It is a two-column main menu: the Vaults it knows on the left, the Workspaces this machine has opened on the right. The left column reads the `rola-daemon` address book and the addresses this launcher hosts, checks each one with a handshake, and lets a hosted address be added, edited or removed. An address's menu also opens the daemon's window, starts the daemon on the way up, and checks that address again once it is up. The right column creates, imports and opens a Workspace, chooses the account, and opens the Desktop program onto a chosen Workspace.
 
 ## Boundary
 

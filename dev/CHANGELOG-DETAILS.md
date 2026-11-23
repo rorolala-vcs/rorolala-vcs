@@ -202,7 +202,7 @@ mention.
 
 ### 9. [`app`] [`ROLALauncher`] [`vaults`] Open the daemon's window from an address's menu
 
-The menu an address in the launcher's Vaults dock opens now begins with Open daemon, which starts `rola-daemon-gui --run` from beside the launcher and leaves it running. The window is the address book's own program, so it is reached from the place that reads its registry. A window that could not be started is reported in a notice that names the program.
+The menu an address in the launcher's Vaults dock opens now begins with Open daemon, which starts `rola-daemon-gui --run` from beside the launcher and leaves it running. The window is the address book's own program, so it is reached from the place that reads its registry. A window that could not be started is reported in a notice that names the program. The address whose menu was used is checked again a moment later, once the daemon has had time to bind, so the lamp reports the daemon that was just started rather than the one that was not running before.
 
 ### 10. [`app`] [`RorolalaDesktop`] [`docking`] Dock a panel against the window's own edge
 

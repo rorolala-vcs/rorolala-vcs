@@ -56,6 +56,9 @@ internal sealed class LauncherWindow : Window
     /// <summary>How long a window is waited for before this window takes the wait back.</summary>
     private static readonly TimeSpan WaitForWindow = TimeSpan.FromSeconds(30);
 
+    /// <summary>How long the daemon is given to start before its address is checked again.</summary>
+    private static readonly TimeSpan DaemonStartWait = TimeSpan.FromSeconds(2);
+
     /// <summary>Where this program keeps its own files.</summary>
     private readonly LauncherFiles _files;
 
@@ -1261,7 +1264,7 @@ internal sealed class LauncherWindow : Window
                 () =>
                 {
                     _vaultMenu.IsOpen = false;
-                    OpenDaemon();
+                    OpenDaemon(entry);
                 },
                 danger: false
             )
@@ -1443,15 +1446,21 @@ internal sealed class LauncherWindow : Window
     }
 
     /// <summary>
-    /// Opens the daemon's window, which is where the daemon is started and stopped.
+    /// Opens the daemon's window, which starts the daemon, and checks the address again once it has.
     /// </summary>
     /// <remarks>
     /// The window is a program of its own beside this one rather than a command of the command line, so it is
     /// started and left behind: what is opened is a window, and this launcher has no answer to wait for.
     /// <c>--run</c> is what it is asked with, which is the word for a window that starts the daemon as it
     /// opens.
+    /// <para>
+    /// The address is checked again once the daemon has had time to bind. A handshake spoken at the press
+    /// would reach a port that nothing listens on yet and paint a failure that is only a start not finished,
+    /// so the check waits for the start rather than racing it.
+    /// </para>
     /// </remarks>
-    private void OpenDaemon()
+    /// <param name="entry">The address whose menu opened the window.</param>
+    private void OpenDaemon(VaultEntry entry)
     {
         var start = new ProcessStartInfo
         {
@@ -1465,6 +1474,11 @@ internal sealed class LauncherWindow : Window
         try
         {
             using var process = Process.Start(start);
+
+            if (process is not null)
+            {
+                _ = CheckAfterDaemonStarts(entry);
+            }
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
@@ -1473,6 +1487,16 @@ internal sealed class LauncherWindow : Window
                 RolaI18N.Get("launcher.vaults.open_daemon_failed", _files.DaemonGui)
             );
         }
+    }
+
+    /// <summary>Checks an address again once the daemon the window started has had time to bind.</summary>
+    /// <param name="entry">The address.</param>
+    /// <returns>A task that ends when the check has been asked for.</returns>
+    private async Task CheckAfterDaemonStarts(VaultEntry entry)
+    {
+        await Task.Delay(DaemonStartWait);
+
+        CheckOne(entry);
     }
 
     /// <summary>Writes the hosted addresses, saying so when they could not be written.</summary>
