@@ -35,7 +35,14 @@ pub enum ActionError {
     /// No action answers to the id asked for.
     UnknownAction(u32),
     /// What an action produced could not be turned into JSON.
-    Json(JsonError),
+    Json {
+        /// What the failure said.
+        message: String,
+        /// The line it was found on.
+        line: usize,
+        /// The column it was found on.
+        column: usize,
+    },
     /// The target a caller named would not read as an address.
     Addr(AddrError),
     /// The session could not be established: a key could not be read, the peer could not
@@ -69,6 +76,20 @@ pub enum ActionError {
     Transport(String),
 }
 
+impl ActionError {
+    /// The failure a value that would not encode is handed over as.
+    #[must_use]
+    pub fn json(source: JsonError) -> Self {
+        let (message, line, column) = source.into_parts();
+
+        Self::Json {
+            message,
+            line,
+            column,
+        }
+    }
+}
+
 impl fmt::Display for ActionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -84,10 +105,10 @@ impl fmt::Display for ActionError {
             }
             Self::Store(source) => write!(formatter, "the store failed: {source}"),
             Self::UnknownAction(id) => write!(formatter, "no action answers to id {id}"),
-            Self::Json(source) => {
+            Self::Json { message, .. } => {
                 write!(
                     formatter,
-                    "what the action produced would not encode: {source}"
+                    "what the action produced would not encode: {message}"
                 )
             }
             Self::Addr(source) => write!(formatter, "{source}"),
@@ -115,7 +136,6 @@ impl std::error::Error for ActionError {
             // it failed on, so one arm says it for both.
             Self::Io(source) | Self::LocalFile(source) => Some(source),
             Self::Codec(source) => Some(source),
-            Self::Json(source) => Some(source),
             Self::Addr(source) => Some(source),
             Self::Auth(source) => Some(source),
             _ => None,
@@ -156,7 +176,7 @@ impl rorolala_errors::Failure for ActionError {
             Self::Codec(_) => "action_error_codec",
             Self::Store(_) => "action_error_store",
             Self::UnknownAction(_) => "action_error_unknown_action",
-            Self::Json(_) => "action_error_json",
+            Self::Json { .. } => "action_error_json",
             Self::Addr(_) => "action_error_addr",
             Self::Auth(_) => "action_error_auth",
             Self::LocalFile(_) => "action_error_local_file",

@@ -38,7 +38,7 @@ impl Default for KeyLocateRule {
     }
 }
 
-#[lazyffi(export = rola_key_locate_rule_)]
+#[lazyffi(export = rola_)]
 impl KeyLocateRule {
     /// A rule that searches every directory.
     #[must_use]

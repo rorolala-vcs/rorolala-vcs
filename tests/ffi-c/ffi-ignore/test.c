@@ -94,36 +94,36 @@ int main(void) {
     snprintf(sooner, sizeof sooner, "%s/b", later);
     put(sooner, "!*.mb\n");
 
-    RolaIgnoreRules *set = load_rola_ignore_rules(rules, root);
+    RolaIgnoreRules *set = rola_ignore_rules_load(rules, root);
     want(set != NULL, "a directory of rules loads");
 
     if (set != NULL) {
         char path[1200];
 
         snprintf(path, sizeof path, "%s/scenes/a.mb", root);
-        want(rola_ignore_rules_is_ignore(set, path, false), "a rule ignores what it matches");
+        want(rola_ignore_rules_is_ignored(set, path, false), "a rule ignores what it matches");
 
         snprintf(path, sizeof path, "%s/scenes/a.ma", root);
-        want(!rola_ignore_rules_is_ignore(set, path, false), "a path no rule matches is not ignored");
+        want(!rola_ignore_rules_is_ignored(set, path, false), "a path no rule matches is not ignored");
 
         /* The Vault's deeper `*.mb` was applied first, and the Workspace's negation last: it stands. */
         snprintf(path, sizeof path, "%s/scenes/keep.mb", root);
         want(
-            !rola_ignore_rules_is_ignore(set, path, false),
+            !rola_ignore_rules_is_ignored(set, path, false),
             "a Workspace rule decides over the one it fetched from a Vault"
         );
 
         free_rola_ignore_rules(set);
     }
 
-    RolaIgnoreRules *ordered = load_rola_ignore_rules(later, root);
+    RolaIgnoreRules *ordered = rola_ignore_rules_load(later, root);
     want(ordered != NULL, "a set of two files loads");
 
     if (ordered != NULL) {
         char path[1200];
         snprintf(path, sizeof path, "%s/scenes/a.mb", root);
         want(
-            !rola_ignore_rules_is_ignore(ordered, path, false),
+            !rola_ignore_rules_is_ignored(ordered, path, false),
             "the file whose name sorts later decides"
         );
 
@@ -134,13 +134,13 @@ int main(void) {
     char absent[600];
     snprintf(absent, sizeof absent, "%s/absent", root);
 
-    RolaIgnoreRules *empty = load_rola_ignore_rules(absent, root);
+    RolaIgnoreRules *empty = rola_ignore_rules_load(absent, root);
     want(empty != NULL, "a directory no rules were written to loads as an empty set");
 
     if (empty != NULL) {
         char path[1200];
         snprintf(path, sizeof path, "%s/scenes/a.mb", root);
-        want(!rola_ignore_rules_is_ignore(empty, path, false), "an empty set ignores nothing");
+        want(!rola_ignore_rules_is_ignored(empty, path, false), "an empty set ignores nothing");
 
         free_rola_ignore_rules(empty);
     }

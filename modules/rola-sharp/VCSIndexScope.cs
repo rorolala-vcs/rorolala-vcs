@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 namespace RolaSharp;
 
@@ -22,10 +21,10 @@ public sealed class VCSIndexScope : Scope, IDisposable
     /// <summary>Everything the index holds, once it is read.</summary>
     public VcsIndexListing? Listing { get; private set; }
 
-    /// <summary>One object as JSON, as the command line writes it.</summary>
+    /// <summary>Reads one index object as the kind it turned out to be.</summary>
     /// <param name="hash">The object's key.</param>
-    /// <returns>The document, or nothing when the index holds no such object.</returns>
-    public string? ObjectJson(string hash)
+    /// <returns>The object, or nothing when the index holds no such object.</returns>
+    public VcsIndexObjectView? ObjectView(string hash)
     {
         ArgumentNullException.ThrowIfNull(hash);
         EnsureHandle();
@@ -33,15 +32,26 @@ public sealed class VCSIndexScope : Scope, IDisposable
         var key = Marshal.StringToCoTaskMemUTF8(hash);
         try
         {
-            var answer = RorolalaBinding.rola_vcsindex_object_json(_handle, key);
+            var answer = RorolalaBinding.rola_vcs_index_object_view(_handle, key);
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
                 throw ReadResults.VcsIndex(answer.payload);
             }
 
-            var json = NativeText.Taken(answer.payload);
+            var handle = answer.payload;
+            if (handle == 0)
+            {
+                return null;
+            }
 
-            return json is "" or "null" ? null : json;
+            try
+            {
+                return ViewOf(handle);
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_vcs_index_object_view(handle);
+            }
         }
         finally
         {
@@ -56,15 +66,7 @@ public sealed class VCSIndexScope : Scope, IDisposable
     {
         ArgumentNullException.ThrowIfNull(hash);
 
-        var json = ObjectJson(hash);
-        if (json is null)
-        {
-            return null;
-        }
-
-        using var document = JsonDocument.Parse(json);
-
-        return RolaJson.Number(document.RootElement, "number");
+        return ObjectView(hash) is VcsIndexVersionView version ? version.Number : null;
     }
 
     /// <inheritdoc/>
@@ -89,7 +91,7 @@ public sealed class VCSIndexScope : Scope, IDisposable
         var path = Marshal.StringToCoTaskMemUTF8(_root);
         try
         {
-            var handle = RorolalaBinding.locate_rola_vcs_index(path);
+            var handle = RorolalaBinding.rola_vcs_index_locate(path);
             if (handle == 0)
             {
                 throw new RolaReadError(
@@ -106,11 +108,11 @@ public sealed class VCSIndexScope : Scope, IDisposable
             Marshal.FreeCoTaskMem(path);
         }
 
-        var root = NativeText.Taken(RorolalaBinding.rola_vcsindex_rootver(_handle));
+        var root = NativeText.Taken(RorolalaBinding.rola_vcs_index_root_version(_handle));
         RootVersion = root == "null" ? string.Empty : root;
 
-        var json = NativeText.Taken(RorolalaBinding.rola_vcsindex_list_json(_handle));
-        if (string.IsNullOrEmpty(json) || json == "null")
+        var listing = RorolalaBinding.rola_vcs_index_list(_handle);
+        if (listing == 0)
         {
             throw new RolaReadError(
                 RolaReadErrorKind.Unreadable,
@@ -119,8 +121,14 @@ public sealed class VCSIndexScope : Scope, IDisposable
             );
         }
 
-        using var document = JsonDocument.Parse(json);
-        Listing = Parse(document.RootElement);
+        try
+        {
+            Listing = ReadListing(listing);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_vcs_index_listing(listing);
+        }
     }
 
     /// <summary>Gives the native index back.</summary>
@@ -128,7 +136,7 @@ public sealed class VCSIndexScope : Scope, IDisposable
     {
         if (_handle != 0)
         {
-            RorolalaBinding.free_rola_vcsindex(_handle);
+            RorolalaBinding.free_rola_vcs_index(_handle);
             _handle = 0;
         }
 
@@ -143,95 +151,164 @@ public sealed class VCSIndexScope : Scope, IDisposable
         }
     }
 
-    private static VcsIndexListing Parse(JsonElement root)
+    private static VcsIndexObjectView ViewOf(nint handle)
     {
-        var versions = new List<VcsVersionItem>();
-        var variants = new List<VcsVariantItem>();
-        var strings = new List<string>();
+        var view = Marshal.PtrToStructure<RolaVCSIndexObjectView>(handle);
 
-        if (RolaJson.Items(root, "versions") is { } versionItems)
+        switch (view.tag)
         {
-            foreach (var item in versionItems.EnumerateArray())
-            {
-                var version = VersionOf(item, "version");
-                if (version is null)
-                {
-                    continue;
-                }
+            case RolaVCSIndexObjectViewTag.RolaVCSIndexObjectView_Creator:
+                return new VcsIndexCreatorView(NativeText.Taken(view.payload.Creator.text));
 
-                var variant = item.TryGetProperty("variant", out var one) ? Variant(one) : null;
-                versions.Add(
-                    new VcsVersionItem(RolaJson.Number(item, "version_num"), version, variant)
+            case RolaVCSIndexObjectViewTag.RolaVCSIndexObjectView_Message:
+                return new VcsIndexMessageView(NativeText.Taken(view.payload.Message.text));
+
+            case RolaVCSIndexObjectViewTag.RolaVCSIndexObjectView_Variant:
+                var variant = view.payload.Variant;
+
+                return new VcsIndexVariantView(
+                    Key(NativeText.Taken(variant.hash)),
+                    Key(NativeText.Taken(variant.base_version)),
+                    Key(NativeText.Taken(variant.storage)),
+                    Optional(Key(NativeText.Taken(variant.join)))
                 );
-            }
+
+            case RolaVCSIndexObjectViewTag.RolaVCSIndexObjectView_Version:
+                var version = view.payload.Version;
+
+                return new VcsIndexVersionView(
+                    version.number_present != 0 ? version.number : null,
+                    Key(NativeText.Taken(version.hash)),
+                    Key(NativeText.Taken(version.variant))
+                );
+
+            default:
+                throw new RolaReadError(
+                    RolaReadErrorKind.Unreadable,
+                    null,
+                    "the index object is of a kind this build does not read"
+                );
         }
-
-        if (RolaJson.Items(root, "variants") is { } variantItems)
-        {
-            foreach (var item in variantItems.EnumerateArray())
-            {
-                if (!item.TryGetProperty("variant", out var one) || Variant(one) is not { } variant)
-                {
-                    continue;
-                }
-
-                variants.Add(new VcsVariantItem(variant, VersionOf(item, "version")));
-            }
-        }
-
-        if (RolaJson.Items(root, "string_hashes") is { } hashes)
-        {
-            strings.AddRange(
-                hashes
-                    .EnumerateArray()
-                    .Select(item => Key(item.GetString() ?? string.Empty))
-                    .Where(key => key.Length > 0)
-            );
-        }
-
-        return new VcsIndexListing(versions, variants, strings);
     }
 
-    private static VcsVersion? VersionOf(JsonElement item, string name)
+    private static VcsIndexListing ReadListing(nint handle)
     {
-        if (
-            !item.TryGetProperty(name, out var version)
-            || version.ValueKind is not JsonValueKind.Object
-            || RolaJson.Text(version, "variant") is not { Length: > 0 } variant
-        )
-        {
-            return null;
-        }
-
-        return new VcsVersion(Key(variant));
-    }
-
-    private static VcsVariant? Variant(JsonElement item)
-    {
-        var storage = RolaJson.Text(item, "storage_hash") ?? RolaJson.Text(item, "storage");
-        var baseVersion = RolaJson.Text(item, "base_version");
-        var creator = RolaJson.Text(item, "creator");
-        var message = RolaJson.Text(item, "message");
-        if (
-            string.IsNullOrEmpty(storage)
-            || string.IsNullOrEmpty(baseVersion)
-            || string.IsNullOrEmpty(creator)
-            || string.IsNullOrEmpty(message)
-        )
-        {
-            return null;
-        }
-
-        var join = RolaJson.Text(item, "join");
-
-        return new VcsVariant(
-            Key(storage),
-            Key(baseVersion),
-            string.IsNullOrEmpty(join) ? null : Key(join),
-            Key(creator),
-            Key(message)
+        return new VcsIndexListing(
+            ReadVersions(handle),
+            ReadVariants(handle),
+            ReadStrings(handle)
         );
     }
+
+    private static IReadOnlyList<VcsVersionItem> ReadVersions(nint handle)
+    {
+        var versions = new List<VcsVersionItem>();
+        var count = RorolalaBinding.rola_vcs_index_listing_version_count(handle);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_vcs_index_listing_version_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var version = Key(
+                    NativeText.Taken(RorolalaBinding.rola_vcs_index_version_item_version(item))
+                );
+                if (version.Length == 0)
+                {
+                    continue;
+                }
+
+                var variant = Optional(
+                    Key(
+                        NativeText.Taken(
+                            RorolalaBinding.rola_vcs_index_version_item_variant(item)
+                        )
+                    )
+                );
+                ulong? number = RorolalaBinding.rola_vcs_index_version_item_version_num_present(
+                    item
+                )
+                    ? RorolalaBinding.rola_vcs_index_version_item_version_num(item)
+                    : null;
+
+                versions.Add(new VcsVersionItem(number, version, variant));
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_vcs_index_version_item(item);
+            }
+        }
+
+        return versions;
+    }
+
+    private static IReadOnlyList<VcsVariantItem> ReadVariants(nint handle)
+    {
+        var variants = new List<VcsVariantItem>();
+        var count = RorolalaBinding.rola_vcs_index_listing_variant_count(handle);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_vcs_index_listing_variant_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var variant = Key(
+                    NativeText.Taken(RorolalaBinding.rola_vcs_index_variant_item_variant(item))
+                );
+                if (variant.Length == 0)
+                {
+                    continue;
+                }
+
+                var version = Optional(
+                    Key(
+                        NativeText.Taken(
+                            RorolalaBinding.rola_vcs_index_variant_item_version(item)
+                        )
+                    )
+                );
+
+                variants.Add(new VcsVariantItem(variant, version));
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_vcs_index_variant_item(item);
+            }
+        }
+
+        return variants;
+    }
+
+    private static IReadOnlyList<string> ReadStrings(nint handle)
+    {
+        var strings = new List<string>();
+        var count = RorolalaBinding.rola_vcs_index_listing_string_count(handle);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var hash = Key(
+                NativeText.Taken(RorolalaBinding.rola_vcs_index_listing_string_at(handle, index))
+            );
+            if (hash.Length > 0)
+            {
+                strings.Add(hash);
+            }
+        }
+
+        return strings;
+    }
+
+    private static string? Optional(string text) => text.Length == 0 ? null : text;
 
     private static string Key(string text) =>
         text.Length == 0 || text.StartsWith("blake3:", StringComparison.Ordinal)

@@ -6,6 +6,8 @@
 
 use rorolala_protocol::{Action, ActionContext, ActionError, Both, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{Blake3Hash, Key, StorageSet};
+use rorolala_utils_lazyffi::lazyffi;
+use serde::{Deserialize, Serialize};
 
 use super::sync_storage::{DEFAULT_WINDOW, Side, carry_blob, grant, split_ask, sync_storage};
 
@@ -33,11 +35,25 @@ use super::sync_storage::{DEFAULT_WINDOW, Side, carry_blob, grant, split_ask, sy
 /// what happened says it in its own words.
 pub struct ActionSyncAll;
 
+/// The ask a full sync is handed.
+///
+/// # FFI
+///
+/// A `RolaDaemonSyncAllRequest` the caller fills. `ask` is borrowed for the call and released by the
+/// caller; an empty `ask` leaves both ends on the default window.
+#[lazyffi(export = RolaDaemonSyncAllRequest, input)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SyncAllRequest {
+    /// How much the sending side reads at once, `c:<n>`, or empty for the default.
+    pub ask: String,
+}
+
 impl Action for ActionSyncAll {
     /// The sync is id 1: what a peer asks for once it has spoken.
     const ID: u32 = 1;
 
-    type Input = String;
+    /// The ask for how much is read at once, and nothing else.
+    type Input = SyncAllRequest;
     type Output = ();
 
     /// Works out what a full sync is, and has the two stores carry it out.
@@ -56,7 +72,7 @@ impl Action for ActionSyncAll {
 
         // How much the caller wants read at once is its own word, so it crosses to the Vault first:
         // the window is the sending side's number, and each side sends one direction of a full sync.
-        let here = input.into_inner();
+        let here = input.into_inner().map(|request| request.ask);
         let to_vault = here.clone().map(String::into_bytes);
         let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;
         let text = arrived

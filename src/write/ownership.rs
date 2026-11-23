@@ -9,7 +9,7 @@ use rorolala_layout::{EntryKind, Layout, LayoutPath, MutableData};
 use rorolala_protocol::VaultAddress;
 use rorolala_tree::Tree;
 use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
-use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_lazyffi::{StrSpan, lazyffi};
 use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_utils_progress::Progress;
 use rorolala_workspace::Workspace;
@@ -18,10 +18,11 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::daemon::{
-    Ownership, action_fetch_layout, action_giveup_ownership_async, action_request_ownership_async,
+    Ownership, OwnershipChange, action_fetch_layout, action_giveup_ownership_async,
+    action_request_ownership_async,
 };
 use crate::write::layout::{cached_copy, set_cached_owners};
-use crate::write::request::Common;
+use crate::write::request::{Common, WriteCommon};
 use crate::write::{Cancellation, WriteError, WriteProgress};
 
 /// How alike two text files have to be to count as the same file moved.
@@ -161,14 +162,9 @@ pub fn apply(
     }
 
     let ids: Vec<String> = wanted.iter().map(|item| item.id.to_string()).collect();
-    let input = match serde_json::to_string(&(name, ids)) {
-        Ok(input) => input,
-        Err(error) => {
-            return Ok(Outcome {
-                entries: Vec::new(),
-                failed: vec![Refusal::Failed(error.to_string())],
-            });
-        }
+    let change = OwnershipChange {
+        name: name.to_owned(),
+        uuids: ids,
     };
     let target = target.to_string();
     let Ok(runtime) = tokio::runtime::Runtime::new() else {
@@ -185,7 +181,7 @@ pub fn apply(
                     workspace,
                     account,
                     target.clone(),
-                    input.clone(),
+                    change.clone(),
                     progress.clone(),
                 )
                 .await
@@ -195,7 +191,7 @@ pub fn apply(
                     workspace,
                     account,
                     target.clone(),
-                    input.clone(),
+                    change.clone(),
                     progress.clone(),
                 )
                 .await
@@ -203,12 +199,9 @@ pub fn apply(
         }
     });
 
-    let outcomes: Vec<Ownership> = match answer
-        .map_err(|error| Refusal::Failed(error.to_string()))
-        .and_then(|said| {
-            serde_json::from_str(&said).map_err(|error| Refusal::Failed(error.to_string()))
-        }) {
-        Ok(outcomes) => outcomes,
+    let outcomes: Vec<Ownership> = match answer.map_err(|error| Refusal::Failed(error.to_string()))
+    {
+        Ok(answer) => answer.outcomes(),
         Err(refusal) => {
             return Ok(Outcome {
                 entries: Vec::new(),
@@ -392,8 +385,13 @@ fn tree_under(root: &Path, disk: &Path) -> Option<LayoutPath> {
 
 /// Which way an ownership request moves.
 ///
-/// It is the request layer's spelling of [`Kind`]: a request is read from JSON, so the kind it
-/// carries is the one that reads, while the plan and the apply take the kind the library writes.
+/// It is the request layer's spelling of [`Kind`]: the fields a C caller fills carry the kind the
+/// library writes, while the plan and the apply take the same value.
+///
+/// # FFI
+///
+/// A `RolaWriteOwnershipKind` the caller fills, one `tag` naming which way the ownership moves.
+#[lazyffi(export = RolaWriteOwnershipKind)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OwnershipKind {
@@ -436,6 +434,61 @@ pub struct OwnershipRequest {
     /// Whether what can be moved is moved when not every name passes its gates.
     #[serde(default)]
     pub allow_partial: bool,
+}
+
+/// An ownership request a C caller fills.
+///
+/// # FFI
+///
+/// A `RolaWriteOwnershipRequest` the caller fills. Every `const char *` is borrowed for the call
+/// and released by the caller, so nothing here is freed when the call returns. `paths` is a
+/// `RolaStrSpan` of the names to move the ownership for, each read from the Workspace root.
+#[lazyffi(export = RolaWriteOwnershipRequest, input)]
+#[derive(Debug, Clone)]
+pub struct OwnershipInput {
+    /// The Workspace, the account, the Vault and the words every write request carries.
+    pub common: WriteCommon,
+    /// Which way the ownership moves.
+    pub kind: OwnershipKind,
+    /// The names to move the ownership for.
+    pub paths: StrSpan,
+    /// Whether what can be moved is moved when not every name passes its gates.
+    pub allow_partial: bool,
+}
+
+impl From<OwnershipInput> for OwnershipRequest {
+    fn from(input: OwnershipInput) -> Self {
+        Self {
+            common: input.common.into(),
+            kind: input.kind,
+            paths: input.paths.into_vec(),
+            allow_partial: input.allow_partial,
+        }
+    }
+}
+
+/// One entry a plan promised to move, as an apply is handed it back.
+///
+/// # FFI
+///
+/// A `RolaWriteOwnershipAgreed` the caller fills from what a plan answered. Both strings are
+/// borrowed for the call and released by the caller.
+#[lazyffi(export = RolaWriteOwnershipAgreed, input)]
+#[derive(Debug, Clone)]
+pub struct OwnershipAgreed {
+    /// Where the entry sits in the Layout.
+    pub path: String,
+    /// The `Uuid` ownership is about, as text.
+    pub uuid: String,
+}
+
+impl From<OwnershipAgreed> for WantedView {
+    fn from(input: OwnershipAgreed) -> Self {
+        Self {
+            path: input.path,
+            uuid: input.uuid,
+        }
+    }
 }
 
 /// One entry a plan means to move, as JSON names it.
@@ -493,12 +546,6 @@ struct Prepared {
 ///
 /// The rest of the report is not read: what this run has to agree with is the entries, and the
 /// words a refusal is told in are the caller's to keep.
-#[derive(Debug, Deserialize)]
-struct GivenPlan {
-    /// The entries the plan said it would move.
-    wanted: Vec<WantedView>,
-}
-
 impl OwnershipRequest {
     /// Reads every gate the request names, and says what may move and what may not.
     ///
@@ -541,29 +588,24 @@ impl OwnershipRequest {
     ///
     /// # Errors
     ///
-    /// Returns what [`request_plan`](Self::request_plan) returns, [`WriteError::Json`] when
-    /// `plan_json` does not read, [`WriteError::Precondition`] when it names entries this run would
-    /// not move, and [`WriteError::Cancelled`] when `cancellation` was set.
+    /// Returns what [`request_plan`](Self::request_plan) returns, [`WriteError::Precondition`] when
+    /// `wanted` names entries this run would not move, and [`WriteError::Cancelled`] when
+    /// `cancellation` was set.
     pub fn request_apply(
         &self,
-        plan_json: Option<&str>,
+        wanted: Option<&[WantedView]>,
         progress: &Progress,
         cancellation: &Cancellation,
     ) -> Result<Outcome, WriteError> {
         let prepared = self.prepare(progress, cancellation)?;
 
-        if let Some(json) = plan_json.filter(|json| !json.is_empty()) {
-            let planned: GivenPlan =
-                serde_json::from_str(json).map_err(|error| WriteError::Json {
-                    reason: error.to_string(),
-                })?;
-
-            if !same_entries(&prepared.wanted, &planned.wanted) {
-                return Err(WriteError::Precondition {
-                    what: "the ownership plan".to_owned(),
-                    reason: "the entries to move are not the ones it names".to_owned(),
-                });
-            }
+        if let Some(wanted) = wanted.filter(|wanted| !wanted.is_empty())
+            && !same_entries(&prepared.wanted, wanted)
+        {
+            return Err(WriteError::Precondition {
+                what: "the ownership plan".to_owned(),
+                reason: "the entries to move are not the ones it names".to_owned(),
+            });
         }
 
         if !self.allow_partial && !prepared.refused.is_empty() {
@@ -633,7 +675,9 @@ impl OwnershipRequest {
             &workspace,
             &account,
             vault.address.to_string(),
-            vault.name.clone(),
+            &crate::daemon::FetchLayoutRequest {
+                name: vault.name.clone(),
+            },
         )
         .map_err(|error| WriteError::Action {
             reason: error.to_string(),
@@ -727,76 +771,372 @@ fn same_entries(wanted: &[Wanted], given: &[WantedView]) -> bool {
     then.len() == given.len() && now == then
 }
 
-/// Plans the ownership moves a JSON request names, without moving any.
+/// Plans the ownership moves a request names, without moving any.
 ///
 /// # FFI
 ///
-/// `request` is a JSON object of the shape [`OwnershipRequest`] reads: `workspace`, `account`,
-/// `target`, `offline`, `force`, `concurrency`, `labels`, `kind`, `paths` and `allow_partial`. A
-/// relative name in `paths` is read from the Workspace's root, not from the process's working
-/// directory, and an absolute one is taken as it stands. The answer is a JSON string the caller
-/// releases with `free_string`, the shape [`OwnershipPlanReport`] writes:
-/// `{"wanted":[{"path":"...","uuid":"..."}],"refused":[...],"skipped":0}`.
+/// `request` is a `RolaWriteOwnershipRequest` the caller fills and keeps; every `const char *` in
+/// it is borrowed for the call and released by the caller. A relative name in `paths` is read from
+/// the Workspace's root, not from the process's working directory, and an absolute one is taken as
+/// it stands.
+///
+/// A `RolaWriteOwnershipPlan *` the caller releases with `free_rola_write_ownership_plan` answers
+/// it: `_wanted_count` and `_wanted_at` name each entry the move would act on, `_refused_count` and
+/// `_refused_at` name why the gates refuse one, and `_skipped` is how many files a directory
+/// brought in that the Layout does not name.
 ///
 /// # Errors
 ///
 /// Returns a `RolaWriteError *` the caller releases with `free_rola_write_error`. The tag is
-/// [`WriteError`]'s: `Json` when `request` does not read, `Offline` when the request is offline,
-/// `NoWorkspace`, `NoLayout`, `NoAccount`, `NoTrack` or `Precondition` when it does not resolve,
-/// `Action` when the fetch fails, `NotCached` when the fetch left no copy, `InvalidPath` when a
-/// name is not inside the Workspace, `Layout` when the reading does not resolve, and `Cancelled`
-/// when `cancellation` was set.
+/// [`WriteError`]'s: `Offline` when the request is offline, `NoWorkspace`, `NoLayout`, `NoAccount`,
+/// `NoTrack` or `Precondition` when it does not resolve, `Action` when the fetch fails, `NotCached`
+/// when the fetch left no copy, `InvalidPath` when a name is not inside the Workspace, `Layout`
+/// when the reading does not resolve, and `Cancelled` when `cancellation` was set.
 #[lazyffi(export = rola_write_ownership_plan)]
 pub fn ownership_plan_at(
-    request: &str,
+    request: &OwnershipInput,
     progress: &WriteProgress,
     cancellation: &Cancellation,
-) -> Result<String, WriteError> {
-    let request: OwnershipRequest =
-        serde_json::from_str(request).map_err(|error| WriteError::Json {
-            reason: error.to_string(),
-        })?;
+) -> Result<WriteOwnershipPlan, WriteError> {
+    let request: OwnershipRequest = request.clone().into();
     let watched = crate::write::progress::watching(progress);
     let report = request.request_plan(&watched, cancellation)?;
 
-    serde_json::to_string(&report).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteOwnershipPlan::of(&report))
 }
 
-/// Moves the ownership a JSON request names and a plan agreed to.
+/// Moves the ownership a request names and a plan agreed to.
 ///
 /// # FFI
 ///
-/// `request` is the JSON object [`ownership_plan_at`] reads, with the same rule for a relative
-/// `paths` entry. `plan` is the JSON that call answered with, or an empty string for a run that
-/// wants the plan re-made and applied without comparing. The answer is a JSON string the caller
-/// releases with `free_string`, the shape [`Outcome`] writes:
-/// `{"entries":[{"path":"...","uuid":"...","owner":"..."}],"failed":[...]}`.
+/// `request` is the `RolaWriteOwnershipRequest` [`ownership_plan_at`] reads, with the same rule for
+/// a relative `paths` entry. `wanted` and `wanted_len` are the caller's array of the entries the
+/// plan promised to move, borrowed for the call, and a length of zero asks for the plan to be made
+/// again and applied without comparing.
+///
+/// A `RolaWriteOwnershipApply *` the caller releases with `free_rola_write_ownership_apply`
+/// answers it: `_entry_count` and `_entry_at` name each entry the Vault moved, with `owner` empty
+/// when nobody holds it, and `_failed_count` and `_failed_at` name what was refused.
 ///
 /// # Errors
 ///
 /// Returns a `RolaWriteError *` the caller releases with `free_rola_write_error`, with what
-/// [`ownership_plan_at`] names, and `Json` when `plan` does not read and `Precondition` when it
-/// names entries this run would not move.
+/// [`ownership_plan_at`] names, and `Precondition` when `wanted` names entries this run would not
+/// move.
 #[lazyffi(export = rola_write_ownership_apply)]
 pub fn ownership_apply_at(
-    request: &str,
-    plan: &str,
+    request: &OwnershipInput,
+    wanted: &[OwnershipAgreed],
     progress: &WriteProgress,
     cancellation: &Cancellation,
-) -> Result<String, WriteError> {
-    let request: OwnershipRequest =
-        serde_json::from_str(request).map_err(|error| WriteError::Json {
-            reason: error.to_string(),
-        })?;
+) -> Result<WriteOwnershipApply, WriteError> {
+    let request: OwnershipRequest = request.clone().into();
+    let agreed: Vec<WantedView> = wanted.iter().cloned().map(WantedView::from).collect();
     let watched = crate::write::progress::watching(progress);
-    let outcome =
-        request.request_apply((!plan.is_empty()).then_some(plan), &watched, cancellation)?;
+    let outcome = request.request_apply(
+        (!agreed.is_empty()).then_some(agreed.as_slice()),
+        &watched,
+        cancellation,
+    )?;
 
-    serde_json::to_string(&outcome).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteOwnershipApply::of(&outcome))
+}
+
+/// One entry an ownership plan means to move.
+///
+/// # FFI
+///
+/// A `RolaWriteOwnershipWanted *` the caller releases with `free_rola_write_ownership_wanted`.
+/// `_path` and `_uuid` each return a `char *` the caller releases with `free_string`.
+#[lazyffi(export = RolaWriteOwnershipWanted)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteOwnershipWanted {
+    /// Where the entry sits in the Layout.
+    path: String,
+    /// The `Uuid` ownership is about, as text.
+    uuid: String,
+}
+
+impl WriteOwnershipWanted {
+    /// One entry a plan names.
+    fn of(wanted: &WantedView) -> Self {
+        Self {
+            path: wanted.path.clone(),
+            uuid: wanted.uuid.clone(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteOwnershipWanted {
+    /// Where the entry sits in the Layout.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// The `Uuid` ownership is about, as text.
+    #[must_use]
+    pub fn uuid(&self) -> String {
+        self.uuid.clone()
+    }
+}
+
+/// Why an entry's ownership may not be moved, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteOwnershipRefusal *` the caller releases with `free_rola_write_ownership_refusal`.
+/// `_kind`, `_path`, `_owner` and `_cause` each return a `char *` the caller releases with
+/// `free_string`; `_path` is empty when the refusal names no entry, `_owner` is empty when nobody
+/// holds the entry, and `_cause` is empty unless the refusal carries a failure's words.
+#[lazyffi(export = RolaWriteOwnershipRefusal)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteOwnershipRefusal {
+    /// The kind of refusal, as its word.
+    kind: String,
+    /// The path the refusal names, empty when it names none.
+    path: String,
+    /// The account that holds the entry, empty when it names none.
+    owner: String,
+    /// The failure's words, empty when the refusal carries none.
+    cause: String,
+}
+
+impl WriteOwnershipRefusal {
+    /// One refusal, as a C caller reads it.
+    fn of(refusal: &Refusal) -> Self {
+        let (kind, path, owner, cause) = match refusal {
+            Refusal::Path(path) => ("path", path.clone(), String::new(), String::new()),
+            Refusal::Upstream(path) => ("upstream", path.clone(), String::new(), String::new()),
+            Refusal::Version(path) => ("version", path.clone(), String::new(), String::new()),
+            Refusal::Changed(path) => ("changed", path.clone(), String::new(), String::new()),
+            Refusal::Taken { path, owner } => ("taken", path.clone(), owner.clone(), String::new()),
+            Refusal::NotHeld { path, owner } => (
+                "not_held",
+                path.clone(),
+                owner.clone().unwrap_or_default(),
+                String::new(),
+            ),
+            Refusal::Failed(cause) => ("failed", String::new(), String::new(), cause.clone()),
+        };
+
+        Self {
+            kind: kind.to_owned(),
+            path,
+            owner,
+            cause,
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteOwnershipRefusal {
+    /// The kind of refusal, as its word.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    /// The path the refusal names, or an empty string when it names none.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// The account that holds the entry, or an empty string when it names none.
+    #[must_use]
+    pub fn owner(&self) -> String {
+        self.owner.clone()
+    }
+
+    /// The failure's words, or an empty string when the refusal carries none.
+    #[must_use]
+    pub fn cause(&self) -> String {
+        self.cause.clone()
+    }
+}
+
+/// What an ownership plan would move, what it refused, and what it skipped.
+///
+/// # FFI
+///
+/// A `RolaWriteOwnershipPlan *` the caller releases with `free_rola_write_ownership_plan`.
+/// `_wanted_count` and `_wanted_at` answer the entries a move would act on, each a
+/// `RolaWriteOwnershipWanted *` released with `free_rola_write_ownership_wanted`; `_refused_count`
+/// and `_refused_at` answer the refusals, each a `RolaWriteOwnershipRefusal *` released with
+/// `free_rola_write_ownership_refusal`; and `_skipped` is how many files a directory brought in
+/// that the Layout does not name.
+#[lazyffi(export = RolaWriteOwnershipPlan)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteOwnershipPlan {
+    /// The entries a move would act on, in the plan's path order.
+    wanted: Vec<WriteOwnershipWanted>,
+    /// Why the gates refuse an entry, in path order.
+    refused: Vec<WriteOwnershipRefusal>,
+    /// How many files a directory brought in that the Layout does not name.
+    skipped: usize,
+}
+
+impl WriteOwnershipPlan {
+    /// The answer a plan is handed over as.
+    fn of(report: &OwnershipPlanReport) -> Self {
+        Self {
+            wanted: report.wanted.iter().map(WriteOwnershipWanted::of).collect(),
+            refused: report
+                .refused
+                .iter()
+                .map(WriteOwnershipRefusal::of)
+                .collect(),
+            skipped: report.skipped,
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteOwnershipPlan {
+    /// How many entries a move would act on.
+    #[must_use]
+    pub const fn wanted_count(&self) -> usize {
+        self.wanted.len()
+    }
+
+    /// One entry a move would act on, or null past the end.
+    #[must_use]
+    pub fn wanted_at(&self, index: usize) -> Option<WriteOwnershipWanted> {
+        self.wanted.get(index).cloned()
+    }
+
+    /// How many entries the gates refuse.
+    #[must_use]
+    pub const fn refused_count(&self) -> usize {
+        self.refused.len()
+    }
+
+    /// One refusal, or null past the end.
+    #[must_use]
+    pub fn refused_at(&self, index: usize) -> Option<WriteOwnershipRefusal> {
+        self.refused.get(index).cloned()
+    }
+
+    /// How many files a directory brought in that the Layout does not name.
+    #[must_use]
+    pub const fn skipped(&self) -> usize {
+        self.skipped
+    }
+}
+
+/// One entry whose ownership the Vault agreed to move.
+///
+/// # FFI
+///
+/// A `RolaWriteOwnershipEntry *` the caller releases with `free_rola_write_ownership_entry`.
+/// `_path`, `_uuid` and `_owner` each return a `char *` the caller releases with `free_string`;
+/// `_owner` is empty when nobody holds the entry.
+#[lazyffi(export = RolaWriteOwnershipEntry)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteOwnershipEntry {
+    /// The path the entry is named at.
+    path: String,
+    /// The entry's `Uuid`.
+    uuid: String,
+    /// The owner the Vault answered with, empty when nobody holds it.
+    owner: String,
+}
+
+impl WriteOwnershipEntry {
+    /// One moved entry, as a C caller reads it.
+    fn of(item: &Item) -> Self {
+        Self {
+            path: item.path.clone(),
+            uuid: item.uuid.clone(),
+            owner: item.owner.clone().unwrap_or_default(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteOwnershipEntry {
+    /// The path the entry is named at.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// The entry's `Uuid`.
+    #[must_use]
+    pub fn uuid(&self) -> String {
+        self.uuid.clone()
+    }
+
+    /// The owner the Vault answered with, or an empty string when nobody holds it.
+    #[must_use]
+    pub fn owner(&self) -> String {
+        self.owner.clone()
+    }
+}
+
+/// What an ownership move came to.
+///
+/// # FFI
+///
+/// A `RolaWriteOwnershipApply *` the caller releases with `free_rola_write_ownership_apply`.
+/// `_entry_count` and `_entry_at` answer the entries the Vault moved, each a
+/// `RolaWriteOwnershipEntry *` released with `free_rola_write_ownership_entry`; `_failed_count`
+/// and `_failed_at` answer the refusals, each a `RolaWriteOwnershipRefusal *` released with
+/// `free_rola_write_ownership_refusal`.
+#[lazyffi(export = RolaWriteOwnershipApply)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteOwnershipApply {
+    /// The entries the Vault moved.
+    entries: Vec<WriteOwnershipEntry>,
+    /// What was refused.
+    failed: Vec<WriteOwnershipRefusal>,
+}
+
+impl WriteOwnershipApply {
+    /// The answer a move is handed over as.
+    fn of(outcome: &Outcome) -> Self {
+        Self {
+            entries: outcome
+                .entries
+                .iter()
+                .map(WriteOwnershipEntry::of)
+                .collect(),
+            failed: outcome
+                .failed
+                .iter()
+                .map(WriteOwnershipRefusal::of)
+                .collect(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteOwnershipApply {
+    /// How many entries the Vault moved.
+    #[must_use]
+    pub const fn entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// One entry the Vault moved, or null past the end.
+    #[must_use]
+    pub fn entry_at(&self, index: usize) -> Option<WriteOwnershipEntry> {
+        self.entries.get(index).cloned()
+    }
+
+    /// How many entries were refused.
+    #[must_use]
+    pub const fn failed_count(&self) -> usize {
+        self.failed.len()
+    }
+
+    /// One refusal, or null past the end.
+    #[must_use]
+    pub fn failed_at(&self, index: usize) -> Option<WriteOwnershipRefusal> {
+        self.failed.get(index).cloned()
+    }
 }
 
 /// Reads the version and, for a giveup, the tree.

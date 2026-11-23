@@ -16,7 +16,9 @@
 // are handed over is not this program's to choose.
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
-use librorolala::daemon::{action_fetch_ignore_rules, action_fetch_layout};
+use librorolala::daemon::{
+    FetchIgnoreRulesRequest, FetchLayoutRequest, action_fetch_ignore_rules, action_fetch_layout,
+};
 use librorolala::write::fetch_with::{
     FetchWithMissing, FetchWithRefusal, FetchWithRequest, FetchWithSource,
     HashMiss as FetchHashMiss,
@@ -310,13 +312,23 @@ pub fn handle_layout_fetch(
     let account_name = current.get_ref().must_bind()?;
     let account = account_named(&account_name, Some(held), None)?;
 
-    action_fetch_layout(held, &account, target.to_string(), name.clone())?;
+    action_fetch_layout(
+        held,
+        &account,
+        target.to_string(),
+        &FetchLayoutRequest { name: name.clone() },
+    )?;
 
     // The rules the Vault manages come with the Layout: they are what the fetched copy means for
     // the readings the Workspace makes, and a rule the Vault gave up is gone from here by the same
     // fetch. A run that named `--no-ignore-rules` leaves whatever is here as it is.
     if !state.no_ignore_rules {
-        action_fetch_ignore_rules(held, &account, target.to_string(), name.clone())?;
+        action_fetch_ignore_rules(
+            held,
+            &account,
+            target.to_string(),
+            &FetchIgnoreRulesRequest { name: name.clone() },
+        )?;
     }
 
     // What is named is the place the copy is kept rather than the generation this run wrote: a

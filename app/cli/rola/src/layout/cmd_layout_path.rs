@@ -6,7 +6,8 @@
 //! the layer for writing content by hand.
 
 use librorolala::daemon::{
-    EntryRemove, PathMove, action_move_remote_path, action_remove_remote_path,
+    EntryRemove, PathMove, RemoveRemotePathRequest, action_move_remote_path,
+    action_remove_remote_path,
 };
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
@@ -293,12 +294,11 @@ pub fn handle_layout_path_remove(
             held,
             &account,
             target.to_string(),
-            path.as_str().to_owned(),
+            &RemoveRemotePathRequest {
+                path: path.as_str().to_owned(),
+            },
         )?;
-        let outcome: EntryRemove = match serde_json::from_str(&answer) {
-            Ok(outcome) => outcome,
-            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-        };
+        let outcome: EntryRemove = answer.outcome();
 
         return match outcome {
             EntryRemove::Removed => {
@@ -487,10 +487,7 @@ pub fn handle_layout_path_move(
             from.as_str().to_owned(),
             to.as_str().to_owned(),
         )?;
-        let outcome: PathMove = match serde_json::from_str(&answer) {
-            Ok(outcome) => outcome,
-            Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-        };
+        let outcome: PathMove = answer.outcome();
 
         return match outcome {
             PathMove::Moved => {

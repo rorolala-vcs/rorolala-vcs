@@ -19,7 +19,8 @@ use librorolala::auth::{
     user_keys_dir,
 };
 use librorolala::daemon::{
-    action_fetch_layout, action_read_remote_index, action_sync_hashes_with_stores_async,
+    FetchLayoutRequest, ReadRemoteIndexRequest, action_fetch_layout, action_read_remote_index,
+    action_sync_hashes_with_stores_async,
 };
 use librorolala::layout::Layout;
 use librorolala::protocol::VaultAddress;
@@ -294,7 +295,9 @@ pub fn fetch_layout(
         workspace,
         account,
         source.target.clone(),
-        source.name.clone(),
+        &FetchLayoutRequest {
+            name: source.name.clone(),
+        },
     )
     .map_err(|error| {
         t!(
@@ -330,16 +333,20 @@ fn object(
     source: &VaultSource,
     hash: &[u8; 32],
 ) -> Result<VCSIndexObject, String> {
-    action_read_remote_index(workspace, account, source.target.clone(), hex(hash)).map_err(
-        |error| {
-            t!(
-                "update.err_index",
-                vault = source.name.as_str(),
-                error = error.to_string()
-            )
-            .to_string()
-        },
+    action_read_remote_index(
+        workspace,
+        account,
+        source.target.clone(),
+        &ReadRemoteIndexRequest { hash: hex(hash) },
     )
+    .map_err(|error| {
+        t!(
+            "update.err_index",
+            vault = source.name.as_str(),
+            error = error.to_string()
+        )
+        .to_string()
+    })
 }
 
 /// The version the index holds under `hash`.

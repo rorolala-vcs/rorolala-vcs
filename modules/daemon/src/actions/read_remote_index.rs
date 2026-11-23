@@ -11,9 +11,11 @@ use std::str::FromStr as _;
 use rorolala_errors::{BincodeError, Failure as _};
 use rorolala_protocol::{Action, ActionContext, ActionError, Encodable as _, OnlyWorkspace};
 use rorolala_storage::Key;
+use rorolala_utils_lazyffi::lazyffi;
 use rorolala_vcs::{
     UNKNOWN_VERSION, VCSIndex, VCSIndexObject, VCSIndexReadingError, VCSWrite as _, Version,
 };
+use serde::{Deserialize, Serialize};
 
 use super::sync_index::local_index;
 use super::sync_storage::{Side, carry_blob};
@@ -31,11 +33,24 @@ use super::sync_storage::{Side, carry_blob};
 /// [`UNKNOWN_VERSION`] when the chain will not trace, since the chain is there and not here.
 pub struct ActionReadRemoteIndex;
 
+/// The hash of the index object to read.
+///
+/// # FFI
+///
+/// A `RolaDaemonReadRemoteIndexRequest` the caller fills. `hash` is borrowed for the call and
+/// released by the caller, and is read as hex or named with `blake3:` in front of it.
+#[lazyffi(export = RolaDaemonReadRemoteIndexRequest, input)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReadRemoteIndexRequest {
+    /// The hash of the object, as hex or named with `blake3:`.
+    pub hash: String,
+}
+
 impl Action for ActionReadRemoteIndex {
     /// The read is id 9.
     const ID: u32 = 9;
 
-    type Input = String;
+    type Input = ReadRemoteIndexRequest;
     type Output = VCSIndexObject;
 
     /// Asks the other end for the object under the hash, and answers with what it read.
@@ -52,7 +67,7 @@ impl Action for ActionReadRemoteIndex {
         let local = local_index(&ctx)?;
 
         // The hash is the caller's, so it belongs to the Workspace and crosses to the Vault first.
-        let here = input.into_inner();
+        let here = input.into_inner().map(|request| request.hash);
         let to_vault = here.clone().map(String::into_bytes);
         let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;
         let named = arrived

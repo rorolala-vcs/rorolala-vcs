@@ -38,7 +38,7 @@ pub async fn action_handshake_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_handshake)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_handshake)]
 pub fn action_handshake(
     workspace: &Workspace,
     account: &Account,
@@ -63,7 +63,7 @@ pub async fn action_sync_all_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: SyncAllRequest,
     progress: Progress,
 ) -> Result<(), ActionError> {
     proc_action::<ActionSyncAll>(workspace, account, target, input, progress).await
@@ -82,15 +82,15 @@ pub async fn action_sync_all_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_sync_all)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_sync_all)]
 pub fn action_sync_all(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    request: &SyncAllRequest,
 ) -> Result<(), ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_sync_all_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_sync_all_async(workspace, account, target, request.clone(), Progress::silent()))
 }
 
 /// Runs the [`ActionSyncIndexAll`](crate::ActionSyncIndexAll) action on the input it is handed, taken
@@ -107,10 +107,9 @@ pub async fn action_sync_index_all_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
     progress: Progress,
 ) -> Result<(), ActionError> {
-    proc_action::<ActionSyncIndexAll>(workspace, account, target, input, progress).await
+    proc_action::<ActionSyncIndexAll>(workspace, account, target, (), progress).await
 }
 
 /// Runs the [`ActionSyncIndexAll`](crate::ActionSyncIndexAll) action, blocking until it has.
@@ -126,15 +125,14 @@ pub async fn action_sync_index_all_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_sync_index_all)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_sync_index_all)]
 pub fn action_sync_index_all(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
 ) -> Result<(), ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_sync_index_all_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_sync_index_all_async(workspace, account, target, Progress::silent()))
 }
 
 /// Runs the [`ActionListRemote`](crate::ActionListRemote) action on the input it is handed, taken
@@ -151,7 +149,7 @@ pub async fn action_list_remote_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: ListRemoteRequest,
     progress: Progress,
 ) -> Result<String, ActionError> {
     proc_action::<ActionListRemote>(workspace, account, target, input, progress).await
@@ -170,15 +168,15 @@ pub async fn action_list_remote_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_list_remote)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_list_remote)]
 pub fn action_list_remote(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    request: &ListRemoteRequest,
 ) -> Result<String, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_list_remote_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_list_remote_async(workspace, account, target, request.clone(), Progress::silent()))
 }
 
 /// Runs the [`ActionSyncHashes`](crate::ActionSyncHashes) action on the input it is handed, taken
@@ -195,7 +193,7 @@ pub async fn action_sync_hashes_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: SyncHashesRequest,
     progress: Progress,
 ) -> Result<String, ActionError> {
     proc_action::<ActionSyncHashes>(workspace, account, target, input, progress).await
@@ -214,15 +212,15 @@ pub async fn action_sync_hashes_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_sync_hashes)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_sync_hashes)]
 pub fn action_sync_hashes(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    request: &SyncHashesRequest,
 ) -> Result<String, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_sync_hashes_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_sync_hashes_async(workspace, account, target, request.clone(), Progress::silent()))
 }
 
 /// Runs the [`ActionListRemoteIndex`](crate::ActionListRemoteIndex) action on the input it is handed, taken
@@ -239,7 +237,7 @@ pub async fn action_list_remote_index_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: ListRemoteIndexRequest,
     progress: Progress,
 ) -> Result<String, ActionError> {
     proc_action::<ActionListRemoteIndex>(workspace, account, target, input, progress).await
@@ -258,15 +256,15 @@ pub async fn action_list_remote_index_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_list_remote_index)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_list_remote_index)]
 pub fn action_list_remote_index(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    request: &ListRemoteIndexRequest,
 ) -> Result<String, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_list_remote_index_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_list_remote_index_async(workspace, account, target, request.clone(), Progress::silent()))
 }
 
 /// Runs the [`ActionReadRemoteIndex`](crate::ActionReadRemoteIndex) action on the input it is handed, taken
@@ -283,7 +281,7 @@ pub async fn action_read_remote_index_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: ReadRemoteIndexRequest,
     progress: Progress,
 ) -> Result<VCSIndexObject, ActionError> {
     proc_action::<ActionReadRemoteIndex>(workspace, account, target, input, progress).await
@@ -302,15 +300,15 @@ pub async fn action_read_remote_index_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_read_remote_index)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_read_remote_index)]
 pub fn action_read_remote_index(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    request: &ReadRemoteIndexRequest,
 ) -> Result<VCSIndexObject, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_read_remote_index_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_read_remote_index_async(workspace, account, target, request.clone(), Progress::silent()))
 }
 
 /// Runs the [`ActionFetchLayout`](crate::ActionFetchLayout) action on the input it is handed, taken
@@ -327,7 +325,7 @@ pub async fn action_fetch_layout_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: FetchLayoutRequest,
     progress: Progress,
 ) -> Result<(), ActionError> {
     proc_action::<ActionFetchLayout>(workspace, account, target, input, progress).await
@@ -346,15 +344,15 @@ pub async fn action_fetch_layout_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_fetch_layout)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_fetch_layout)]
 pub fn action_fetch_layout(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    request: &FetchLayoutRequest,
 ) -> Result<(), ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_fetch_layout_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_fetch_layout_async(workspace, account, target, request.clone(), Progress::silent()))
 }
 
 /// Runs the [`ActionRequestOwnership`](crate::ActionRequestOwnership) action on the input it is handed, taken
@@ -371,9 +369,9 @@ pub async fn action_request_ownership_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: OwnershipChange,
     progress: Progress,
-) -> Result<String, ActionError> {
+) -> Result<Ownerships, ActionError> {
     proc_action::<ActionRequestOwnership>(workspace, account, target, input, progress).await
 }
 
@@ -390,15 +388,15 @@ pub async fn action_request_ownership_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_request_ownership)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_request_ownership)]
 pub fn action_request_ownership(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
-) -> Result<String, ActionError> {
+    request: &RequestOwnershipRequest,
+) -> Result<Ownerships, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_request_ownership_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_request_ownership_async(workspace, account, target, request.clone().into(), Progress::silent()))
 }
 
 /// Runs the [`ActionGiveupOwnership`](crate::ActionGiveupOwnership) action on the input it is handed, taken
@@ -415,9 +413,9 @@ pub async fn action_giveup_ownership_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: OwnershipChange,
     progress: Progress,
-) -> Result<String, ActionError> {
+) -> Result<Ownerships, ActionError> {
     proc_action::<ActionGiveupOwnership>(workspace, account, target, input, progress).await
 }
 
@@ -434,15 +432,15 @@ pub async fn action_giveup_ownership_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_giveup_ownership)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_giveup_ownership)]
 pub fn action_giveup_ownership(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
-) -> Result<String, ActionError> {
+    request: &GiveupOwnershipRequest,
+) -> Result<Ownerships, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_giveup_ownership_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_giveup_ownership_async(workspace, account, target, request.clone().into(), Progress::silent()))
 }
 
 /// Runs the [`ActionMoveRemotePath`](crate::ActionMoveRemotePath) action on the input it is handed, taken
@@ -461,7 +459,7 @@ pub async fn action_move_remote_path_async(
     target: String,
     from: String, to: String,
     progress: Progress,
-) -> Result<String, ActionError> {
+) -> Result<PathMoveOutcome, ActionError> {
     proc_action::<ActionMoveRemotePath>(workspace, account, target, (from, to), progress).await
 }
 
@@ -478,13 +476,13 @@ pub async fn action_move_remote_path_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_move_remote_path)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_move_remote_path)]
 pub fn action_move_remote_path(
     workspace: &Workspace,
     account: &Account,
     target: String,
     from: String, to: String,
-) -> Result<String, ActionError> {
+) -> Result<PathMoveOutcome, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(action_move_remote_path_async(workspace, account, target, from, to, Progress::silent()))
 }
@@ -505,7 +503,7 @@ pub async fn action_create_remote_entry_async(
     target: String,
     path: String, uuid: String, version: String,
     progress: Progress,
-) -> Result<String, ActionError> {
+) -> Result<EntryWriteOutcome, ActionError> {
     proc_action::<ActionCreateRemoteEntry>(workspace, account, target, (path, uuid, version), progress).await
 }
 
@@ -522,13 +520,13 @@ pub async fn action_create_remote_entry_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_create_remote_entry)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_create_remote_entry)]
 pub fn action_create_remote_entry(
     workspace: &Workspace,
     account: &Account,
     target: String,
     path: String, uuid: String, version: String,
-) -> Result<String, ActionError> {
+) -> Result<EntryWriteOutcome, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(action_create_remote_entry_async(workspace, account, target, path, uuid, version, Progress::silent()))
 }
@@ -549,7 +547,7 @@ pub async fn action_set_remote_version_async(
     target: String,
     uuid: String, version: String,
     progress: Progress,
-) -> Result<String, ActionError> {
+) -> Result<EntryWriteOutcome, ActionError> {
     proc_action::<ActionSetRemoteVersion>(workspace, account, target, (uuid, version), progress).await
 }
 
@@ -566,13 +564,13 @@ pub async fn action_set_remote_version_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_set_remote_version)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_set_remote_version)]
 pub fn action_set_remote_version(
     workspace: &Workspace,
     account: &Account,
     target: String,
     uuid: String, version: String,
-) -> Result<String, ActionError> {
+) -> Result<EntryWriteOutcome, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(action_set_remote_version_async(workspace, account, target, uuid, version, Progress::silent()))
 }
@@ -591,10 +589,10 @@ pub async fn action_write_remote_entries_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    creates: Vec<RemoteCreate>, sets: Vec<RemoteSet>,
     progress: Progress,
-) -> Result<String, ActionError> {
-    proc_action::<ActionWriteRemoteEntries>(workspace, account, target, input, progress).await
+) -> Result<EntryWrites, ActionError> {
+    proc_action::<ActionWriteRemoteEntries>(workspace, account, target, (creates, sets), progress).await
 }
 
 /// Runs the [`ActionWriteRemoteEntries`](crate::ActionWriteRemoteEntries) action, blocking until it has.
@@ -610,15 +608,15 @@ pub async fn action_write_remote_entries_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_write_remote_entries)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_write_remote_entries)]
 pub fn action_write_remote_entries(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
-) -> Result<String, ActionError> {
+    creates: &[RemoteCreate], sets: &[RemoteSet],
+) -> Result<EntryWrites, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_write_remote_entries_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_write_remote_entries_async(workspace, account, target, creates.to_vec(), sets.to_vec(), Progress::silent()))
 }
 
 /// Runs the [`ActionBringRemoteIndex`](crate::ActionBringRemoteIndex) action on the input it is handed, taken
@@ -635,9 +633,9 @@ pub async fn action_bring_remote_index_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: BringRemoteIndexRequest,
     progress: Progress,
-) -> Result<String, ActionError> {
+) -> Result<ChainOutcome, ActionError> {
     proc_action::<ActionBringRemoteIndex>(workspace, account, target, input, progress).await
 }
 
@@ -654,15 +652,15 @@ pub async fn action_bring_remote_index_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_bring_remote_index)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_bring_remote_index)]
 pub fn action_bring_remote_index(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
-) -> Result<String, ActionError> {
+    request: &BringRemoteIndexRequest,
+) -> Result<ChainOutcome, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_bring_remote_index_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_bring_remote_index_async(workspace, account, target, request.clone(), Progress::silent()))
 }
 
 /// Runs the [`ActionFetchIgnoreRules`](crate::ActionFetchIgnoreRules) action on the input it is handed, taken
@@ -679,7 +677,7 @@ pub async fn action_fetch_ignore_rules_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: FetchIgnoreRulesRequest,
     progress: Progress,
 ) -> Result<(), ActionError> {
     proc_action::<ActionFetchIgnoreRules>(workspace, account, target, input, progress).await
@@ -698,15 +696,15 @@ pub async fn action_fetch_ignore_rules_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_fetch_ignore_rules)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_fetch_ignore_rules)]
 pub fn action_fetch_ignore_rules(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    request: &FetchIgnoreRulesRequest,
 ) -> Result<(), ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_fetch_ignore_rules_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_fetch_ignore_rules_async(workspace, account, target, request.clone(), Progress::silent()))
 }
 
 /// Runs the [`ActionRemoveRemotePath`](crate::ActionRemoveRemotePath) action on the input it is handed, taken
@@ -723,9 +721,9 @@ pub async fn action_remove_remote_path_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
+    input: RemoveRemotePathRequest,
     progress: Progress,
-) -> Result<String, ActionError> {
+) -> Result<EntryRemoveOutcome, ActionError> {
     proc_action::<ActionRemoveRemotePath>(workspace, account, target, input, progress).await
 }
 
@@ -742,13 +740,13 @@ pub async fn action_remove_remote_path_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_remove_remote_path)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_remove_remote_path)]
 pub fn action_remove_remote_path(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    input: String,
-) -> Result<String, ActionError> {
+    request: &RemoveRemotePathRequest,
+) -> Result<EntryRemoveOutcome, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_remove_remote_path_async(workspace, account, target, input, Progress::silent()))
+    runtime.block_on(action_remove_remote_path_async(workspace, account, target, request.clone(), Progress::silent()))
 }

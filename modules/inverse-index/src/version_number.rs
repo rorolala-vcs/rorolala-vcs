@@ -21,7 +21,7 @@ impl From<u64> for VersionNumber {
 impl VersionNumber {
     /// The number itself.
     #[must_use]
-    #[lazyffi(export = version_number_value)]
+    #[lazyffi(export = rola_version_number_value)]
     pub const fn value(&self) -> u64 {
         self.0
     }

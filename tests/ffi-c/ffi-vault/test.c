@@ -38,42 +38,56 @@ int main(void) {
         return 2;
     }
 
-    RorolalaResult made = create_vault(dir);
-    want(made.tag == RorolalaResult_Ok, "create_vault succeeds on a fresh directory");
-    want(made.payload == NULL, "create_vault hands back nothing on success");
+    RorolalaResult made = rola_vault_create(dir);
+    want(made.tag == RorolalaResult_Ok, "rola_vault_create succeeds on a fresh directory");
+    want(made.payload == NULL, "rola_vault_create hands back nothing on success");
 
-    RolaVault *vault = locate_rola_vault(dir);
-    want(vault != NULL, "locate_rola_vault finds the Vault just made");
-    want(locate_rola_vault(plain) == NULL, "locate_rola_vault answers with nothing elsewhere");
+    RolaVault *vault = rola_vault_locate(dir);
+    want(vault != NULL, "rola_vault_locate finds the Vault just made");
+    want(rola_vault_locate(plain) == NULL, "rola_vault_locate answers with nothing elsewhere");
 
     if (vault != NULL) {
-        want(!RolaVault_is_locking(vault), "a Vault is unlocked to begin with");
+        want(!rola_vault_is_locking(vault), "a Vault is unlocked to begin with");
 
-        RolaVaultLocking *guard = RolaVault_get_locking_guard(vault);
+        RolaVaultLocking *guard = rola_vault_lock_acquire(vault);
         want(guard != NULL, "the lock is handed out as a guard");
-        want(RolaVault_is_locking(vault), "holding the guard is holding the lock");
+        want(rola_vault_is_locking(vault), "holding the guard is holding the lock");
 
-        RolaVault_drop_locking_guard(guard);
-        want(!RolaVault_is_locking(vault), "giving the guard back gives the lock back");
+        rola_vault_lock_release(guard);
+        want(!rola_vault_is_locking(vault), "giving the guard back gives the lock back");
 
         free_rola_vault(vault);
     }
 
     /* What the Vault says about itself is data, and its one Layout is named truth. */
-    char *config = rola_vault_config_json(dir);
-    want(config != NULL && strcmp(config, "null") != 0, "a Vault has a configuration");
-    want(config != NULL && strstr(config, "\"description\":\"New Rola Vault\"") != NULL,
-         "a Vault says what it is");
-    want(config != NULL && strstr(config, "\"admins\":[]") != NULL,
-         "a new Vault has no administrator");
-    want(config != NULL && strstr(config, "\"max_concurrency\":") != NULL,
-         "a Vault carries what its daemon may serve at once");
-    free_string(config);
+    RolaVaultConfig *config = rola_vault_config_read(dir);
+    want(config != NULL, "a Vault has a configuration");
+    if (config != NULL) {
+        char *description = rola_vault_config_description(config);
+        want(description != NULL && strcmp(description, "New Rola Vault") == 0,
+             "a Vault says what it is");
+        free_string(description);
 
-    char *layouts = rola_layouts_json(dir);
-    want(layouts != NULL && strstr(layouts, "\"name\":\"truth\"") != NULL,
-         "a Vault's Layout is named truth");
-    free_string(layouts);
+        want(rola_vault_config_admin_count(config) == 0, "a new Vault has no administrator");
+        want(rola_vault_config_max_concurrency(config) > 0,
+             "a Vault carries what its daemon may serve at once");
+        free_rola_vault_config(config);
+    }
+
+    RolaLayouts *layouts = rola_layouts(dir);
+    want(layouts != NULL, "a Vault holds a Layout");
+    if (layouts != NULL) {
+        RolaLayout *one = rola_layouts_at(layouts, 0);
+        if (one != NULL) {
+            char *name = rola_layout_name(one);
+            want(name != NULL && strcmp(name, "truth") == 0,
+                 "a Vault's Layout is named truth");
+            free_string(name);
+            free_rola_layout(one);
+        }
+
+        free_rola_layouts(layouts);
+    }
 
     remove_tree(dir);
     remove_tree(plain);

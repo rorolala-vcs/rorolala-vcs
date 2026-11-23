@@ -194,6 +194,14 @@ pub const ROOT_SUB_VAULT: &str = "";
 #[lazyffi(export = ROLA_VAULT_DEFAULT_PORT)]
 pub const VAULT_DEFAULT_PORT: u16 = 7717;
 
+/// The version of the C ABI this build speaks, as `major * 10000 + minor * 100 + patch`.
+///
+/// The header states it as the `ROROLALA_ABI_VERSION` macros, and a caller reads the same number at
+/// run time from the `ROLA_ABI_VERSION` symbol. Adding, removing or changing an export or a
+/// transparent type moves the minor number.
+#[lazyffi(export = ROLA_ABI_VERSION)]
+pub const ABI_VERSION: u32 = 10300;
+
 /// The variable that names the port a daemon listens on.
 ///
 /// It is consulted only where `--port` named none, and what it says is the same number

@@ -274,8 +274,12 @@ pub async fn action_sync_hashes_with_stores_async(
     stores: &StorageSet,
     progress: Progress,
 ) -> Result<String, ActionError> {
-    proc_action_with_stores::<ActionSyncHashes>(workspace, account, target, input, stores, progress)
-        .await
+    let request = SyncHashesRequest { units: input };
+
+    proc_action_with_stores::<ActionSyncHashes>(
+        workspace, account, target, request, stores, progress,
+    )
+    .await
 }
 
 #[cfg(test)]

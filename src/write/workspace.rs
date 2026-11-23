@@ -6,12 +6,11 @@ use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_workspace::Workspace;
 use rorolala_workspace_analyze::{Cache, cache_path, entry_of, walk};
-use serde::Serialize;
 
 use crate::write::WriteError;
 
 /// What a cache rebuild found.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy)]
 pub struct CacheReport {
     /// How many paths were written down.
     pub paths: usize,
@@ -128,7 +127,7 @@ pub fn clear_track_at(directory: &Path) -> Result<(), WriteError> {
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"paths":N,"bytes":N}`, or a
+/// A `RolaWriteWorkspaceCache *` the caller releases with `free_rola_write_workspace_cache`, or a
 /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
 ///
 /// # Errors
@@ -136,13 +135,44 @@ pub fn clear_track_at(directory: &Path) -> Result<(), WriteError> {
 /// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, and
 /// [`WriteError::Layout`] when the cache cannot be written.
 #[lazyffi(export = rola_write_workspace_rebuild_cache)]
-pub fn rebuild_tree_cache_at(directory: &Path) -> Result<String, WriteError> {
+pub fn rebuild_tree_cache_at(directory: &Path) -> Result<WriteWorkspaceCache, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let report = rebuild_tree_cache(&workspace)?;
 
-    serde_json::to_string(&report).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
+    Ok(WriteWorkspaceCache {
+        paths: u64::try_from(report.paths).unwrap_or(u64::MAX),
+        bytes: report.bytes,
     })
+}
+
+/// What a cache rebuild found, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteWorkspaceCache *` the caller releases with `free_rola_write_workspace_cache`.
+/// `_paths` is how many paths were written down, and `_bytes` how many bytes they hold.
+#[lazyffi(export = RolaWriteWorkspaceCache)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WriteWorkspaceCache {
+    /// How many paths were written down.
+    paths: u64,
+    /// How many bytes the paths hold.
+    bytes: u64,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteWorkspaceCache {
+    /// How many paths were written down.
+    #[must_use]
+    pub const fn paths(&self) -> u64 {
+        self.paths
+    }
+
+    /// How many bytes the paths hold.
+    #[must_use]
+    pub const fn bytes(&self) -> u64 {
+        self.bytes
+    }
 }
 
 #[cfg(test)]

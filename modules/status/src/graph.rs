@@ -59,7 +59,7 @@ struct VariantNode {
 ///
 /// # FFI
 ///
-/// Opaque: C takes a pointer from `locate_rola_version_graph` and gives it back with
+/// Opaque: C takes a pointer from `rola_version_graph_locate` and gives it back with
 /// `free_rola_version_graph`. Every version and variant is read by its own accessor; the strings are
 /// owned by the caller and released with `free_string`.
 #[lazyffi(export = RolaVersionGraph)]
@@ -94,7 +94,7 @@ pub struct VersionGraph {
 /// has no version history: no Workspace holds the directory, the Workspace works in no Layout, the
 /// Layout does not name `target`, nothing was ever recorded for it, or the chain cannot be read.
 #[must_use]
-#[lazyffi(export = locate_rola_version_graph)]
+#[lazyffi(export = rola_version_graph_locate)]
 pub fn locate_version_graph(directory: &Path, target: &Path) -> Option<VersionGraph> {
     let workspace = Workspace::locate(directory)?;
     let layout = working_layout(&workspace)?;

@@ -189,7 +189,7 @@ impl Broken {
 ///
 /// # FFI
 ///
-/// Opaque: C takes a pointer from `locate_rola_status` and gives it back with `free_rola_status`.
+/// Opaque: C takes a pointer from `rola_status_locate` and gives it back with `free_rola_status`.
 /// What it holds (the four lists, the moves among them, and the merges) is read one entry at a
 /// time, by the accessors beside it.
 #[lazyffi(export = RolaStatus)]

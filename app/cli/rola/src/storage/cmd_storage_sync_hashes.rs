@@ -11,7 +11,7 @@
 // covers the one signature that needs it.
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
-use librorolala::daemon::action_sync_hashes_async;
+use librorolala::daemon::{SyncHashesRequest, action_sync_hashes_async};
 use librorolala::protocol::ActionError;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
@@ -182,7 +182,9 @@ pub fn handle_storage_sync_hashes(
         held,
         &account,
         target.to_string(),
-        hashes.join("\n"),
+        SyncHashesRequest {
+            units: hashes.join("\n"),
+        },
         reporting.progress(),
     ));
     reporting.finish();

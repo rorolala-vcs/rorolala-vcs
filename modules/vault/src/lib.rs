@@ -57,7 +57,7 @@ pub struct Vault {
 /// pointing at the directory that contains the configuration file, or
 /// `None` if no Vault could be found.
 #[must_use]
-#[lazyffi(export = locate_rola_vault)]
+#[lazyffi(export = rola_vault_locate)]
 pub fn locate_vault(vault_dir: &Path) -> Option<Vault> {
     Vault::locate(vault_dir)
 }

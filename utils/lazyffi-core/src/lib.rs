@@ -4,13 +4,26 @@
 //! once, here, instead of being repeated in `rorolala-utils-lazyffi-macros` and
 //! `rorolala-dev-bindgen`. Those two would otherwise drift apart silently.
 
-use just_fmt::{pascal_case, snake_case};
+use just_fmt::pascal_case;
 
 /// The repr-C sibling of [`String`].
 ///
 /// `builtin` implements the conversions against exactly this type, and the header
 /// generator spells it as `char *`.
 pub const STRING_REPR: &str = "*mut c_char";
+
+/// The repr-C sibling of the string span, `StrSpan`, in `rorolala-utils-lazyffi`.
+///
+/// A span crosses as a struct holding the strings' pointers and how many there are,
+/// because C has no slice of its own. `rorolala-utils-lazyffi` defines the Rust struct
+/// with exactly this name and layout, and the header generator spells it out.
+pub const STR_SPAN_REPR: &str = "RolaStrSpan";
+
+/// Name of the pointer field of [`STR_SPAN_REPR`].
+pub const STR_SPAN_ITEMS: &str = "items";
+
+/// Name of the count field of [`STR_SPAN_REPR`].
+pub const STR_SPAN_COUNT: &str = "count";
 
 /// Name of the function that releases a string handed out by an export.
 ///
@@ -75,7 +88,7 @@ macro_rules! for_each_scalar {
 /// ```
 #[must_use]
 pub fn value_name(rust_name: &str) -> String {
-    format!("ffi_{}", snake_case!(rust_name.to_string()))
+    format!("ffi_{}", snake_case(rust_name))
 }
 
 /// Export name of a type (`struct`, `enum`): `FFI<PascalCase>`.
@@ -115,8 +128,8 @@ pub const DEFAULT_METHOD_PREFIX: &str = "ffi_";
 pub fn method_name(prefix: &str, rust_name: &str, method_name: &str) -> String {
     format!(
         "{prefix}{}_{}",
-        snake_case!(rust_name.to_string()),
-        snake_case!(method_name.to_string())
+        snake_case(rust_name),
+        snake_case(method_name)
     )
 }
 
@@ -134,12 +147,56 @@ pub fn method_name(prefix: &str, rust_name: &str, method_name: &str) -> String {
 /// one, and the two would be one symbol.
 ///
 /// ```
-/// assert_eq!(rorolala_utils_lazyffi_core::free_name("VaultConfig"), "free_vault_config");
+/// assert_eq!(rorolala_utils_lazyffi_core::free_name("RolaVaultConfig"), "free_rola_vault_config");
 /// assert_eq!(rorolala_utils_lazyffi_core::free_name("Counter"), "free_counter");
+/// assert_eq!(rorolala_utils_lazyffi_core::free_name("RolaVCSIndex"), "free_rola_vcs_index");
+/// assert_eq!(rorolala_utils_lazyffi_core::free_name("RolaWriteTreeAddChange"), "free_rola_write_tree_add_change");
 /// ```
 #[must_use]
 pub fn free_name(name: &str) -> String {
-    format!("free_{}", snake_case!(name.to_string()))
+    format!("free_{}", snake_case(name))
+}
+
+/// `name` in snake case, with an acronym and a following word kept apart.
+///
+/// A plain conversion reads `RolaVCSIndex` as one word. A C name reads better with the acronym
+/// split off, so `RolaVCSIndex` becomes `rola_vcs_index`.
+fn snake_case(name: &str) -> String {
+    let characters: Vec<char> = name.chars().collect();
+    let mut out = String::with_capacity(name.len() + 4);
+
+    for (index, &character) in characters.iter().enumerate() {
+        let previous = index.checked_sub(1).map(|at| characters[at]);
+        let next = characters.get(index + 1).copied();
+
+        let boundary = previous.is_some_and(|previous| {
+            character.is_uppercase()
+                && (previous.is_lowercase()
+                    || previous.is_ascii_digit()
+                    || (previous.is_uppercase() && next.is_some_and(char::is_lowercase)))
+        });
+
+        if boundary {
+            out.push('_');
+        }
+        out.push(character.to_ascii_lowercase());
+    }
+
+    out
+}
+
+/// Name of the length parameter that carries a slice's count in C.
+///
+/// C has no slice, so a `&[T]` parameter crosses as two: a pointer to the first element
+/// and its length. The macro and the header generator both name the second one here, so
+/// a caller cannot meet two spellings of the same call.
+///
+/// ```
+/// assert_eq!(rorolala_utils_lazyffi_core::length_name("ops"), "ops_len");
+/// ```
+#[must_use]
+pub fn length_name(param: &str) -> String {
+    format!("{param}_len")
 }
 
 /// Name of the tag enum generated for a data-carrying enum: `<repr>Tag`.

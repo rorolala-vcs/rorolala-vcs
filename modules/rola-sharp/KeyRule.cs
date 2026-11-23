@@ -31,10 +31,10 @@ internal sealed class KeyRule : IDisposable
     public static KeyRule New()
     {
         var rule = new KeyRule(
-            RorolalaBinding.rola_key_locate_rule_key_locate_rule_new()
+            RorolalaBinding.rola_key_locate_rule_new()
         );
-        RorolalaBinding.rola_key_locate_rule_key_locate_rule_set_find_local(rule._handle, true);
-        RorolalaBinding.rola_key_locate_rule_key_locate_rule_set_find_user(rule._handle, true);
+        RorolalaBinding.rola_key_locate_rule_set_find_local(rule._handle, true);
+        RorolalaBinding.rola_key_locate_rule_set_find_user(rule._handle, true);
 
         return rule;
     }

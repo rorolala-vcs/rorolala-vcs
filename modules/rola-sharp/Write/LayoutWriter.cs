@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 using RolaSharp;
 
@@ -185,18 +184,24 @@ public sealed class LayoutWriter : Writer
         }
     }
 
-    /// <summary>Applies a batch of changes named as JSON.</summary>
-    /// <param name="ops">The changes, as the native request shape.</param>
-    public void Apply(string ops)
+    /// <summary>Applies a batch of changes to the Layout this writer works over.</summary>
+    /// <param name="ops">The changes, in the order they are to be applied.</param>
+    public void Apply(IReadOnlyList<LayoutChange> ops)
     {
         ArgumentNullException.ThrowIfNull(ops);
 
+        using var memory = new NativeRequest();
+        var built = memory.Array(ops.Select(change => Native(memory, change)).ToList());
         var directory = Utf8(_layout.Root.FullName);
         var layout = Utf8(_layout.Name ?? string.Empty);
-        var changes = Utf8(ops);
         try
         {
-            var answer = RorolalaBinding.rola_write_layout_apply(directory, layout, changes);
+            var answer = RorolalaBinding.rola_write_layout_apply(
+                directory,
+                layout,
+                built.Items,
+                built.Count
+            );
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
                 throw WriteResults.From(answer.payload);
@@ -206,8 +211,120 @@ public sealed class LayoutWriter : Writer
         {
             Marshal.FreeCoTaskMem(directory);
             Marshal.FreeCoTaskMem(layout);
-            Marshal.FreeCoTaskMem(changes);
         }
+    }
+
+    /// <summary>One change as the native side reads it.</summary>
+    /// <param name="memory">Where the change's strings are held.</param>
+    /// <param name="change">The change.</param>
+    /// <returns>The native change.</returns>
+    private static RolaWriteLayoutOp Native(NativeRequest memory, LayoutChange change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+
+        return change.Kind switch
+        {
+            LayoutChangeKind.CreateEntry => new RolaWriteLayoutOp
+            {
+                tag = RolaWriteLayoutOpTag.RolaWriteLayoutOp_CreateEntry,
+                payload = new RolaWriteLayoutOpPayload
+                {
+                    CreateEntry = new RolaWriteLayoutOpCreateEntry
+                    {
+                        uuid = memory.Text(change.Uuid),
+                        path = memory.Text(change.Path),
+                        version = memory.Text(change.Version),
+                        owner = memory.Text(change.Owner),
+                        description = memory.Text(change.Description),
+                        kind = memory.Text(change.EntryKind),
+                    },
+                },
+            },
+            LayoutChangeKind.UpdateEntry => new RolaWriteLayoutOp
+            {
+                tag = RolaWriteLayoutOpTag.RolaWriteLayoutOp_UpdateEntry,
+                payload = new RolaWriteLayoutOpPayload
+                {
+                    UpdateEntry = new RolaWriteLayoutOpUpdateEntry
+                    {
+                        uuid = memory.Text(change.Uuid),
+                        version = memory.Text(change.Version),
+                        owner = memory.Text(change.Owner),
+                        description = memory.Text(change.Description),
+                    },
+                },
+            },
+            LayoutChangeKind.RemoveEntry => new RolaWriteLayoutOp
+            {
+                tag = RolaWriteLayoutOpTag.RolaWriteLayoutOp_RemoveEntry,
+                payload = new RolaWriteLayoutOpPayload
+                {
+                    RemoveEntry = new RolaWriteLayoutOpRemoveEntry
+                    {
+                        uuid = memory.Text(change.Uuid),
+                    },
+                },
+            },
+            LayoutChangeKind.CreatePath => new RolaWriteLayoutOp
+            {
+                tag = RolaWriteLayoutOpTag.RolaWriteLayoutOp_CreatePath,
+                payload = new RolaWriteLayoutOpPayload
+                {
+                    CreatePath = new RolaWriteLayoutOpCreatePath
+                    {
+                        path = memory.Text(change.Path),
+                        uuid = memory.Text(change.Uuid),
+                    },
+                },
+            },
+            LayoutChangeKind.MovePath => new RolaWriteLayoutOp
+            {
+                tag = RolaWriteLayoutOpTag.RolaWriteLayoutOp_MovePath,
+                payload = new RolaWriteLayoutOpPayload
+                {
+                    MovePath = new RolaWriteLayoutOpMovePath
+                    {
+                        from = memory.Text(change.From),
+                        to = memory.Text(change.To),
+                    },
+                },
+            },
+            LayoutChangeKind.RemovePath => new RolaWriteLayoutOp
+            {
+                tag = RolaWriteLayoutOpTag.RolaWriteLayoutOp_RemovePath,
+                payload = new RolaWriteLayoutOpPayload
+                {
+                    RemovePath = new RolaWriteLayoutOpRemovePath
+                    {
+                        path = memory.Text(change.Path),
+                    },
+                },
+            },
+            LayoutChangeKind.ChangeOwnership => new RolaWriteLayoutOp
+            {
+                tag = RolaWriteLayoutOpTag.RolaWriteLayoutOp_ChangeOwnership,
+                payload = new RolaWriteLayoutOpPayload
+                {
+                    ChangeOwnership = new RolaWriteLayoutOpChangeOwnership
+                    {
+                        uuid = memory.Text(change.Uuid),
+                        owner = memory.Text(change.Owner),
+                    },
+                },
+            },
+            _ => new RolaWriteLayoutOp
+            {
+                tag = RolaWriteLayoutOpTag.RolaWriteLayoutOp_ChangeUuid,
+                payload = new RolaWriteLayoutOpPayload
+                {
+                    ChangeUuid = new RolaWriteLayoutOpChangeUuid
+                    {
+                        from = memory.Text(change.From),
+                        to = memory.Text(change.To),
+                    },
+                },
+            },
+        };
     }
 
     /// <summary>Moves the entry at one path to another.</summary>
@@ -426,21 +543,18 @@ public sealed class LayoutWriter : Writer
         bool tree = false
     ) =>
         Apply(
-            JsonSerializer.Serialize(
-                new[]
+            [
+                new LayoutChange
                 {
-                    new
-                    {
-                        op = "create_entry",
-                        uuid = uuid.ToString(),
-                        path,
-                        version,
-                        owner,
-                        description,
-                        kind = tree ? "tree" : "file",
-                    },
-                }
-            )
+                    Kind = LayoutChangeKind.CreateEntry,
+                    Uuid = uuid.ToString(),
+                    Path = path,
+                    Version = version,
+                    Owner = owner ?? string.Empty,
+                    Description = description,
+                    EntryKind = tree ? "tree" : "file",
+                },
+            ]
         );
 
     /// <summary>Changes who holds an entry, keeping what it holds.</summary>
@@ -448,9 +562,14 @@ public sealed class LayoutWriter : Writer
     /// <param name="owner">The account that now holds it, or nothing.</param>
     public void ChangeOwnership(Guid uuid, string? owner) =>
         Apply(
-            JsonSerializer.Serialize(
-                new[] { new { op = "change_ownership", uuid = uuid.ToString(), owner } }
-            )
+            [
+                new LayoutChange
+                {
+                    Kind = LayoutChangeKind.ChangeOwnership,
+                    Uuid = uuid.ToString(),
+                    Owner = owner ?? string.Empty,
+                },
+            ]
         );
 
     /// <summary>Moves an entry to a new Uuid.</summary>
@@ -458,12 +577,14 @@ public sealed class LayoutWriter : Writer
     /// <param name="to">The Uuid it is to have.</param>
     public void ChangeUuid(Guid from, Guid to) =>
         Apply(
-            JsonSerializer.Serialize(
-                new[]
+            [
+                new LayoutChange
                 {
-                    new { op = "change_uuid", from = from.ToString(), to = to.ToString() },
-                }
-            )
+                    Kind = LayoutChangeKind.ChangeUuid,
+                    From = from.ToString(),
+                    To = to.ToString(),
+                },
+            ]
         );
 
     /// <summary>Gives the entry at a path a new Uuid, holding what it held.</summary>

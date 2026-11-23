@@ -6,7 +6,7 @@
 //! there, so a line read here is what [`storage extract-file`](crate::storage::cmd_storage_extract_file)
 //! takes back.
 
-use librorolala::daemon::action_list_remote_async;
+use librorolala::daemon::{ListRemoteRequest, action_list_remote_async};
 use librorolala::protocol::ActionError;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest, Wrap,
@@ -127,7 +127,9 @@ pub fn handle_storage_ls_remote_manifests(
         held,
         &account,
         target.to_string(),
-        "manifests".to_owned(),
+        ListRemoteRequest {
+            which: "manifests".to_owned(),
+        },
         Progress::silent(),
     ))?;
 

@@ -64,7 +64,7 @@ public sealed class VersionGraphScope : Scope, IDisposable
         var target = Utf8(Wire(_target));
         try
         {
-            var handle = RorolalaBinding.locate_rola_version_graph(directory, target);
+            var handle = RorolalaBinding.rola_version_graph_locate(directory, target);
             if (handle == 0)
             {
                 throw new RolaReadError(

@@ -9,7 +9,7 @@ use rorolala_utils_lazyffi::lazyffi;
 ///
 /// Returned when a [`VCSIndexObject`](crate::VCSIndexObject) is turned into another kind
 /// and the two do not match.
-#[lazyffi(export = RolaParseVCSIndexObjectError)]
+#[lazyffi(export = RolaVCSIndexObjectParseError)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ParseVCSIndexObjectError {
     /// A Variant was expected, but a Version was found

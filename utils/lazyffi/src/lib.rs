@@ -12,11 +12,13 @@ pub mod builtin;
 mod convert;
 pub mod option;
 pub mod result;
+pub mod span;
 
 pub use convert::*;
 pub use option::*;
 pub use result::*;
 pub use rorolala_utils_lazyffi_macros::*;
+pub use span::*;
 
 /// Allocates a NUL-terminated copy of `bytes` for handing to C.
 ///

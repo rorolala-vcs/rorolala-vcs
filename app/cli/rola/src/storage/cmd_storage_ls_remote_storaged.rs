@@ -7,7 +7,7 @@
 
 use std::str::FromStr as _;
 
-use librorolala::daemon::action_list_remote_async;
+use librorolala::daemon::{ListRemoteRequest, action_list_remote_async};
 use librorolala::protocol::ActionError;
 use librorolala::storage::Key;
 use mingling::{
@@ -138,7 +138,9 @@ pub fn handle_storage_ls_remote_storaged(
         held,
         &account,
         target.to_string(),
-        "storaged".to_owned(),
+        ListRemoteRequest {
+            which: "storaged".to_owned(),
+        },
         Progress::silent(),
     ))?;
 

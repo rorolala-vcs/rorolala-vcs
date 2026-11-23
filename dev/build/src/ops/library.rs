@@ -89,6 +89,7 @@ fn ensure_header(workspace: &Workspace) -> Result<(), crate::Error> {
     let config = rorolala_dev_bindgen::Config {
         source_roots: &roots,
         output_dir: &directory,
+        enforce_naming: true,
     };
 
     rorolala_dev_bindgen::generate(&config)

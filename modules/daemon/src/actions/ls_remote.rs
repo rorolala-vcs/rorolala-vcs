@@ -7,6 +7,8 @@
 
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
 use rorolala_storage::{Key, StorageSet};
+use rorolala_utils_lazyffi::lazyffi;
+use serde::{Deserialize, Serialize};
 
 use super::sync_all::local_stores;
 use super::sync_storage::{Side, carry_blob};
@@ -27,11 +29,25 @@ use super::sync_storage::{Side, carry_blob};
 /// caller that wants keys apart reads it the way it was written, a line at a time.
 pub struct ActionListRemote;
 
+/// The word that names the listing wanted.
+///
+/// # FFI
+///
+/// A `RolaDaemonListRemoteRequest` the caller fills. `which` is borrowed for the call and released by
+/// the caller; `manifests` asks for the contents the store keeps cut, and any other word, empty
+/// included, asks for the objects it holds.
+#[lazyffi(export = RolaDaemonListRemoteRequest, input)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ListRemoteRequest {
+    /// Which listing is wanted, `manifests` or anything else for the objects.
+    pub which: String,
+}
+
 impl Action for ActionListRemote {
     /// The listing is id 6.
     const ID: u32 = 6;
 
-    type Input = String;
+    type Input = ListRemoteRequest;
     type Output = String;
 
     /// Asks the other end what it holds, and answers with what it said.
@@ -49,7 +65,7 @@ impl Action for ActionListRemote {
 
         // What listing is wanted is the caller's word, so it belongs to the Workspace and crosses to
         // the Vault first, the Vault is the side with a store of its own to answer with.
-        let here = input.into_inner();
+        let here = input.into_inner().map(|request| request.which);
         let to_vault = here.clone().map(String::into_bytes);
         let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;
         let which = arrived

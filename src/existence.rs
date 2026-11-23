@@ -16,11 +16,14 @@ use std::path::Path;
 use std::str::FromStr as _;
 
 use rorolala_auth::{Account, KeyLocateRule};
-use rorolala_daemon::{action_list_remote_async, action_read_remote_index_async};
+use rorolala_daemon::{
+    ListRemoteRequest, ReadRemoteIndexRequest, action_list_remote_async,
+    action_read_remote_index_async,
+};
 use rorolala_layout::Layout;
 use rorolala_protocol::VaultAddress;
 use rorolala_status::tracked_vault;
-use rorolala_status::{AskedTarget, Existence, ExistenceError, Target, local};
+use rorolala_status::{Existence, ExistenceError, SearchTarget, Target, local};
 use rorolala_storage::Key;
 use rorolala_utils_configure::Configure as _;
 use rorolala_utils_lazyffi::lazyffi;
@@ -28,7 +31,6 @@ use rorolala_utils_location::Locate as _;
 use rorolala_utils_progress::Progress;
 use rorolala_vcs::{VCSIndex, VCSIndexObject};
 use rorolala_workspace::{Config as WorkspaceConfig, Workspace};
-use serde::{Deserialize, Serialize};
 
 use crate::auth;
 
@@ -130,7 +132,9 @@ fn listing(
             workspace,
             account,
             address.to_string(),
-            STORAGED.to_owned(),
+            ListRemoteRequest {
+                which: STORAGED.to_owned(),
+            },
             Progress::silent(),
         ))
         .ok()?;
@@ -231,46 +235,65 @@ fn object(
             workspace,
             account,
             address.to_string(),
-            key.hex(),
+            ReadRemoteIndexRequest { hash: key.hex() },
             Progress::silent(),
         ))
         .ok()
 }
 
-/// The request the C ABI carries.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-struct Request {
-    /// The targets, in the order the answer keeps.
-    targets: Vec<AskedTarget>,
-    /// The account to ask as, or nothing for the user's current account.
-    account: Option<String>,
-}
-
-/// What the C ABI answers with.
-#[derive(Debug, Serialize)]
-struct Answer {
+/// What each target a search asked about came to, in the order asked.
+///
+/// # FFI
+///
+/// A `RolaSearchSources *` the caller releases with `free_rola_search_sources`. `_count` answers how
+/// many targets there are, and `_at` answers one of them, a `RolaSearchSource *` the caller releases
+/// with `free_rola_search_source`.
+#[lazyffi(export = RolaSearchSources)]
+#[derive(Debug, Clone, Default)]
+pub struct SearchSources {
     /// One answer per target, in the order they were asked about.
-    targets: Vec<AnswerTarget>,
+    targets: Vec<SearchSource>,
 }
 
-/// What one target came to, as the C ABI writes it.
-#[derive(Debug, Serialize)]
-struct AnswerTarget {
+#[lazyffi(export = rola_)]
+impl SearchSources {
+    /// How many targets were answered.
+    #[must_use]
+    pub const fn count(&self) -> usize {
+        self.targets.len()
+    }
+
+    /// The answer at `index`, or null past the end.
+    #[must_use]
+    pub fn at(&self, index: usize) -> Option<SearchSource> {
+        self.targets.get(index).cloned()
+    }
+}
+
+/// What one target came to, and which Vaults can provide it.
+///
+/// # FFI
+///
+/// A `RolaSearchSource *` the caller releases with `free_rola_search_source`. `_kind`, `_hash`,
+/// `_path`, `_version`, `_variant`, `_storage`, each entry of `_source_at` and each entry of
+/// `_unreachable_at` return a `char *` the caller releases with `free_string`. `_hash` is empty for an
+/// entry target and `_path` is empty for a variant or a version, and `_version`, `_variant` and
+/// `_storage` are empty when the reading did not reach them.
+#[lazyffi(export = RolaSearchSource)]
+#[derive(Debug, Clone)]
+pub struct SearchSource {
     /// What kind the target was.
-    kind: &'static str,
-    /// The hash it was written with, for a variant or a version.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<String>,
-    /// The path it was written with, for an entry.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    path: Option<String>,
-    /// The version it names or records, as hex.
-    version: Option<String>,
-    /// The variant that version fixes, as hex.
-    variant: Option<String>,
-    /// The key of the content, as hex.
-    storage: Option<String>,
+    kind: String,
+    /// The hash it was written with, for a variant or a version, or an empty string.
+    hash: String,
+    /// The path it was written with, for an entry, or an empty string.
+    path: String,
+    /// The version it names or records, as hex, or an empty string.
+    version: String,
+    /// The variant that version fixes, as hex, or an empty string.
+    variant: String,
+    /// The key of the content, as hex, or an empty string.
+    storage: String,
     /// Whether every object it needs is held here.
     offline: bool,
     /// Whether its content is a tree structure.
@@ -283,24 +306,24 @@ struct AnswerTarget {
     unreachable: Vec<String>,
 }
 
-impl AnswerTarget {
+impl SearchSource {
     /// One answer for `asked`, from what the search came to.
-    fn new(asked: &AskedTarget, sourced: &Sourced) -> Self {
+    fn new(asked: &SearchTarget, sourced: &Sourced) -> Self {
         let (hash, path) = match asked {
-            AskedTarget::Variant { hash } | AskedTarget::Version { hash } => {
-                (Some(hash.clone()), None)
+            SearchTarget::Variant { hash } | SearchTarget::Version { hash } => {
+                (hash.clone(), String::new())
             }
-            AskedTarget::Entry { path } => (None, Some(path.clone())),
+            SearchTarget::Entry { path } => (String::new(), path.clone()),
         };
         let existence = &sourced.existence;
 
         Self {
-            kind: asked.kind(),
+            kind: asked.kind().to_owned(),
             hash,
             path,
-            version: existence.version.map(|key| key.hex()),
-            variant: existence.variant.map(|key| key.hex()),
-            storage: existence.storage.map(|key| key.hex()),
+            version: existence.version.map_or_else(String::new, |key| key.hex()),
+            variant: existence.variant.map_or_else(String::new, |key| key.hex()),
+            storage: existence.storage.map_or_else(String::new, |key| key.hex()),
             offline: existence.held,
             tree: existence.tree,
             expanded: sourced.expanded(),
@@ -310,39 +333,119 @@ impl AnswerTarget {
     }
 }
 
+#[lazyffi(export = rola_)]
+impl SearchSource {
+    /// What kind the target was: `variant`, `version` or `entry`.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    /// The hash it was written with, for a variant or a version, or an empty string.
+    #[must_use]
+    pub fn hash(&self) -> String {
+        self.hash.clone()
+    }
+
+    /// The path it was written with, for an entry, or an empty string.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// The version it names or records, as hex, or an empty string.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
+
+    /// The variant that version fixes, as hex, or an empty string.
+    #[must_use]
+    pub fn variant(&self) -> String {
+        self.variant.clone()
+    }
+
+    /// The key of the content, as hex, or an empty string.
+    #[must_use]
+    pub fn storage(&self) -> String {
+        self.storage.clone()
+    }
+
+    /// Whether every object it needs is held here.
+    #[must_use]
+    pub const fn offline(&self) -> bool {
+        self.offline
+    }
+
+    /// Whether its content is a tree structure.
+    #[must_use]
+    pub const fn tree(&self) -> bool {
+        self.tree
+    }
+
+    /// Whether a tree's files were checked, which needs its structure to be here.
+    #[must_use]
+    pub const fn expanded(&self) -> bool {
+        self.expanded
+    }
+
+    /// How many Vaults hold every object it needs.
+    #[must_use]
+    pub const fn source_count(&self) -> usize {
+        self.sources.len()
+    }
+
+    /// The name of the Vault at `index`, or an empty string past the end.
+    #[must_use]
+    pub fn source_at(&self, index: usize) -> String {
+        self.sources.get(index).cloned().unwrap_or_default()
+    }
+
+    /// How many Vaults could not be asked.
+    #[must_use]
+    pub const fn unreachable_count(&self) -> usize {
+        self.unreachable.len()
+    }
+
+    /// The name of the Vault at `index`, or an empty string past the end.
+    #[must_use]
+    pub fn unreachable_at(&self, index: usize) -> String {
+        self.unreachable.get(index).cloned().unwrap_or_default()
+    }
+}
+
 /// Which Vaults can provide what a variant, a version or a Layout entry names.
 ///
-/// The request names the targets and, when it names one, the account to ask as; without one the
-/// user's current account is asked as. Every Vault the Workspace has bound is asked what its store
-/// holds, and a target is answered with the Vaults holding every object it needs. Content this side
-/// does not hold is named by the Vault's own index, so a Vault can be found for a version this side
-/// never fetched.
+/// The targets are read in the order given and, when the caller names one, the account to ask as;
+/// without one the user's current account is asked as. Every Vault the Workspace has bound is asked
+/// what its store holds, and a target is answered with the Vaults holding every object it needs.
+/// Content this side does not hold is named by the Vault's own index, so a Vault can be found for a
+/// version this side never fetched.
 ///
 /// # FFI
 ///
-/// `directory` is the directory the Workspace is searched upwards from, and `request` is a UTF-8
-/// JSON document of this shape:
-///
-/// ```json
-/// {"targets": [{"kind": "version", "hash": "blake3:..."}], "account": "alice"}
-/// ```
-///
-/// `account` is optional. The answer is an owned JSON string the caller releases with
-/// `free_string`, `{"targets": [...]}` in the order asked, each with `kind`, the `hash` or `path`,
-/// `version`, `variant`, `storage`, `offline`, `tree`, `expanded`, `sources` and `unreachable`. A
-/// failure is a `RolaExistenceError *` the caller releases with `free_rola_existence_error`.
+/// `directory` is the directory the Workspace is searched upwards from. `targets` and `targets_len`
+/// are the caller's array and its length, borrowed for the call and released by the caller, and
+/// `account` is the account to ask as, or an empty string for the user's current account. A
+/// `RolaSearchSources *` the caller releases with `free_rola_search_sources` answers with one target
+/// per entry asked about, in the same order. A failure is a `RolaExistenceError *` the caller
+/// releases with `free_rola_existence_error`.
 ///
 /// # Errors
 ///
 /// Returns [`ExistenceError::NoWorkspace`] when no Workspace holds `directory`,
 /// [`ExistenceError::NoLayout`] when the Workspace works in no Layout,
 /// [`ExistenceError::NoIndex`] when it holds no version control index,
-/// [`ExistenceError::BadRequest`] when `request` names a target this build cannot read,
+/// [`ExistenceError::BadRequest`] when a target names a hash or a path this build cannot read,
 /// [`ExistenceError::NoCurrentAccount`] when no account was named and the user's current account
 /// names none, [`ExistenceError::NoAccount`] when the account named is not here, and
-/// [`ExistenceError::Read`] when the Workspace's configuration or the answer could not be read.
-#[lazyffi(export = rola_search_source_json)]
-pub fn search_source_json(directory: &Path, request: &str) -> Result<String, ExistenceError> {
+/// [`ExistenceError::Read`] when the Workspace's configuration could not be read.
+#[lazyffi(export = rola_search_source)]
+pub fn search_source(
+    directory: &Path,
+    targets: &[SearchTarget],
+    account: &str,
+) -> Result<SearchSources, ExistenceError> {
     let workspace = Workspace::locate(directory).ok_or(ExistenceError::NoWorkspace)?;
     let layout = workspace
         .layout_readonly()
@@ -351,14 +454,9 @@ pub fn search_source_json(directory: &Path, request: &str) -> Result<String, Exi
         })?
         .ok_or(ExistenceError::NoLayout)?;
     let index = VCSIndex::locate(directory).ok_or(ExistenceError::NoIndex)?;
-    let request: Request =
-        serde_json::from_str(request).map_err(|error| ExistenceError::BadRequest {
-            reason: error.to_string(),
-        })?;
 
-    let name = request
-        .account
-        .clone()
+    let named = (!account.is_empty()).then(|| account.to_owned());
+    let name = named
         .or_else(auth::current_account)
         .ok_or(ExistenceError::NoCurrentAccount)?;
     let account = auth::find_account(
@@ -368,9 +466,9 @@ pub fn search_source_json(directory: &Path, request: &str) -> Result<String, Exi
     )
     .ok_or(ExistenceError::NoAccount { name })?;
 
-    let mut targets = Vec::with_capacity(request.targets.len());
-    for asked in &request.targets {
-        targets.push(asked.target()?);
+    let mut asked = Vec::with_capacity(targets.len());
+    for target in targets {
+        asked.push(target.target()?);
     }
 
     let candidates = candidates(&workspace)?;
@@ -384,19 +482,15 @@ pub fn search_source_json(directory: &Path, request: &str) -> Result<String, Exi
         &index,
         &account,
         &candidates,
-        &targets,
+        &asked,
     );
 
-    serde_json::to_string(&Answer {
-        targets: request
-            .targets
+    Ok(SearchSources {
+        targets: targets
             .iter()
             .zip(&sourced)
-            .map(|(asked, sourced)| AnswerTarget::new(asked, sourced))
+            .map(|(asked, sourced)| SearchSource::new(asked, sourced))
             .collect(),
-    })
-    .map_err(|error| ExistenceError::Read {
-        reason: error.to_string(),
     })
 }
 

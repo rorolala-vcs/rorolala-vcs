@@ -9,20 +9,19 @@
 //! a Vault's Layout. The last is why this lives in the crate that ties the modules together: only a
 //! Workspace knows where it keeps its fetched copies, and only it can say one was never fetched.
 //!
-//! What crosses is the JSON `rola layout ls` and `rola layout entries` already write, so a caller
-//! that read those commands reads the same fields here.
+//! What crosses is what `rola layout ls` and `rola layout entries` already write, as handles a C
+//! caller reads field by field: the Layouts a place holds, and the entries of one Layout.
 
 use std::fmt;
 use std::path::{Component, Path};
 
-use rorolala_layout::{Layout, LayoutError};
+use rorolala_layout::{Layout as LayoutRecord, LayoutError};
 use rorolala_storage::Key;
 use rorolala_utils_constants::{DEFAULT_LAYOUT_NAME, LAYOUT_TRACK_FILE, VAULT_LAYOUT_NAME};
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vault::Vault;
 use rorolala_workspace::Workspace;
-use serde::Serialize;
 
 /// The marker a Vault puts in front of a path it has deprecated.
 ///
@@ -68,57 +67,87 @@ impl fmt::Display for LayoutReadError {
 
 impl std::error::Error for LayoutReadError {}
 
-/// The Layouts a place holds, as the C ABI writes them.
-#[derive(Debug, Serialize)]
-struct LayoutsAnswer {
+/// Which Layouts the place holding `directory` has, as `rola layout ls` shows them.
+///
+/// A Workspace holds one Layout and a Vault keeps one, so the answer is one item: the label it goes
+/// by, that it is the one being worked in, and the Vault it tracks. A directory no Workspace or
+/// Vault holds has no Layout at all.
+///
+/// # FFI
+///
+/// A `RolaLayouts *` the caller releases with `free_rola_layouts`, or null when neither a Workspace
+/// nor a Vault holds the directory. Its `_count` and `_at` answer with the Layouts, each a
+/// `RolaLayout *` the caller releases with `free_rola_layout` after reading its fields.
+#[must_use]
+#[lazyffi(export = rola_layouts)]
+pub fn layouts(directory: &Path) -> Option<Layouts> {
+    place(directory).map(|(layout, name)| Layouts {
+        layouts: vec![Layout {
+            name: name.to_owned(),
+            is_current: true,
+            tracking: track_of(&layout),
+        }],
+    })
+}
+
+/// The Layouts a place holds.
+#[lazyffi(export = RolaLayouts)]
+#[derive(Debug, Clone, Default)]
+pub struct Layouts {
     /// The Layouts, which is the one the place works in.
-    layouts: Vec<LayoutItem>,
+    layouts: Vec<Layout>,
+}
+
+#[lazyffi(export = rola_)]
+impl Layouts {
+    /// How many Layouts the place holds.
+    #[must_use]
+    pub const fn count(&self) -> usize {
+        self.layouts.len()
+    }
+
+    /// The Layout at `index`, or null past the end.
+    #[must_use]
+    pub fn at(&self, index: usize) -> Option<Layout> {
+        self.layouts.get(index).cloned()
+    }
 }
 
 /// One Layout, as `rola layout ls` shows it.
-#[derive(Debug, Serialize)]
-struct LayoutItem {
+#[lazyffi(export = RolaLayout)]
+#[derive(Debug, Clone)]
+pub struct Layout {
     /// The label it is listed under.
-    name: &'static str,
+    name: String,
     /// Whether it is the one the run is working in.
     is_current: bool,
     /// The Vault upstream it tracks, empty when it tracks none.
     tracking: String,
 }
 
-/// Which Layouts the place holding `directory` has, as `rola layout ls --json` writes them.
-///
-/// A Workspace holds one Layout and a Vault keeps one, so the answer is one item: the label it goes
-/// by, that it is the one being worked in, and the Vault it tracks. A directory no Workspace or
-/// Vault holds is answered with the JSON `null`.
-///
-/// # FFI
-///
-/// An owned JSON string the caller releases with `free_string`, `{"layouts":[{"name","is_current",
-/// "tracking"}]}`. `name` is `main` for a Workspace and `truth` for a Vault, `tracking` is empty
-/// when it tracks none, and `null` is answered when neither holds the directory or a Workspace
-/// holds no Layout.
-#[must_use]
-#[lazyffi(export = rola_layouts_json)]
-pub fn layouts_json(directory: &Path) -> String {
-    place(directory).map_or_else(
-        || "null".to_owned(),
-        |(layout, name)| {
-            let answer = LayoutsAnswer {
-                layouts: vec![LayoutItem {
-                    name,
-                    is_current: true,
-                    tracking: track_of(&layout),
-                }],
-            };
+#[lazyffi(export = rola_)]
+impl Layout {
+    /// The label the Layout is listed under: `main` for a Workspace and `truth` for a Vault.
+    #[must_use]
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
 
-            serde_json::to_string(&answer).unwrap_or_else(|_| "null".to_owned())
-        },
-    )
+    /// Whether it is the one the run is working in.
+    #[must_use]
+    pub const fn is_current(&self) -> bool {
+        self.is_current
+    }
+
+    /// The Vault upstream it tracks, or an empty string when it tracks none.
+    #[must_use]
+    pub fn tracking(&self) -> String {
+        self.tracking.clone()
+    }
 }
 
 /// The Layout the place holding `directory` works in, with the label it is listed under.
-fn place(directory: &Path) -> Option<(Layout, &'static str)> {
+fn place(directory: &Path) -> Option<(LayoutRecord, &'static str)> {
     if let Some(workspace) = Workspace::locate(directory) {
         let layout = workspace.layout_readonly().ok().flatten()?;
 
@@ -133,21 +162,38 @@ fn place(directory: &Path) -> Option<(Layout, &'static str)> {
 
 /// The Vault a Layout tracks, as read from the file beside it, or an empty string when it tracks
 /// none.
-fn track_of(layout: &Layout) -> String {
+fn track_of(layout: &LayoutRecord) -> String {
     std::fs::read_to_string(layout.dir().join(LAYOUT_TRACK_FILE))
         .map_or_else(|_| String::new(), |track| track.trim().to_owned())
 }
 
-/// What a Layout's entries hold, as the C ABI writes them.
-#[derive(Debug, Serialize)]
-struct EntriesAnswer {
-    /// Each entry, in path order.
-    entries: Vec<EntryItem>,
+/// What a Layout's entries hold.
+#[lazyffi(export = RolaLayoutEntries)]
+#[derive(Debug, Clone, Default)]
+pub struct LayoutEntries {
+    /// Each entry, in path order and then `Uuid` order.
+    entries: Vec<LayoutEntry>,
+}
+
+#[lazyffi(export = rola_)]
+impl LayoutEntries {
+    /// How many entries the Layout holds.
+    #[must_use]
+    pub const fn count(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// The entry at `index`, or null past the end.
+    #[must_use]
+    pub fn at(&self, index: usize) -> Option<LayoutEntry> {
+        self.entries.get(index).cloned()
+    }
 }
 
 /// One entry, as `rola layout entries` shows it.
-#[derive(Debug, Serialize)]
-struct EntryItem {
+#[lazyffi(export = RolaLayoutEntry)]
+#[derive(Debug, Clone)]
+pub struct LayoutEntry {
     /// The path it is at, `.` when it is at none.
     path: String,
     /// The `Uuid` it is known by.
@@ -164,7 +210,52 @@ struct EntryItem {
     deprecated: bool,
 }
 
-/// What a Layout's entries hold, as `rola layout entries --json` writes it.
+#[lazyffi(export = rola_)]
+impl LayoutEntry {
+    /// The path it is at, or `.` when it is at none.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// The `Uuid` it is known by.
+    #[must_use]
+    pub fn uuid(&self) -> String {
+        self.uuid.clone()
+    }
+
+    /// The version it is at, as hex.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
+
+    /// The account that holds it, or an empty string when none does.
+    #[must_use]
+    pub fn owner(&self) -> String {
+        self.owner.clone()
+    }
+
+    /// What it says about itself.
+    #[must_use]
+    pub fn description(&self) -> String {
+        self.description.clone()
+    }
+
+    /// The cut it prefers, or an empty string when none is named.
+    #[must_use]
+    pub fn preference(&self) -> String {
+        self.preference.clone()
+    }
+
+    /// Whether the Vault has deprecated it, by moving it under `@/removed/`.
+    #[must_use]
+    pub const fn deprecated(&self) -> bool {
+        self.deprecated
+    }
+}
+
+/// What a Layout's entries hold, as `rola layout entries` shows them.
 ///
 /// `layout` names which Layout to read. An empty string or `main` reads the one a Workspace is
 /// working in, `truth` reads a Vault's own, `NAME@VAULT` reads the copy a fetch left in the
@@ -172,12 +263,11 @@ struct EntryItem {
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"entries":[{"path","uuid",
-/// "version","owner","description","preference","deprecated"}]}`, in path order and then `Uuid`
-/// order. `path` is
-/// `.` for the root entry, `version` is the hex the version is stored under, `owner` is empty when
-/// no account holds it, `preference` is empty when the store may choose, and `deprecated` says
-/// whether the Vault moved it under `@/removed/`. A
+/// A `RolaLayoutEntries *` the caller releases with `free_rola_layout_entries`, in path order and
+/// then `Uuid` order. Its `_count` and `_at` answer with the entries, each a `RolaLayoutEntry *` the
+/// caller releases with `free_rola_layout_entry`. `path` is `.` for the root entry, `version` is the
+/// hex the version is stored under, `owner` is empty when no account holds it, `preference` is empty
+/// when the store may choose, and `deprecated` says whether the Vault moved it under `@/removed/`. A
 /// failure is a `RolaLayoutError *` the caller releases with `free_rola_layout_error`.
 ///
 /// # Errors
@@ -186,12 +276,12 @@ struct EntryItem {
 /// [`LayoutReadError::NoLayout`] when the Workspace works in no Layout,
 /// [`LayoutReadError::NotCached`] when `NAME@VAULT` names a copy that was never fetched,
 /// [`LayoutReadError::Missing`] when the name is not one the place has a Layout under, and
-/// [`LayoutReadError::Read`] when the Layout or the answer could not be read.
-#[lazyffi(export = rola_layout_entries_json)]
-pub fn layout_entries_json(directory: &Path, layout: &str) -> Result<String, LayoutReadError> {
+/// [`LayoutReadError::Read`] when the Layout could not be read.
+#[lazyffi(export = rola_layout_entries)]
+pub fn layout_entries(directory: &Path, layout: &str) -> Result<LayoutEntries, LayoutReadError> {
     let layout = chosen(directory, layout.trim())?;
 
-    let mut entries: Vec<EntryItem> = layout
+    let mut entries: Vec<LayoutEntry> = layout
         .entries()
         .into_iter()
         .map(|(entry, data)| {
@@ -200,7 +290,7 @@ pub fn layout_entries_json(directory: &Path, layout: &str) -> Result<String, Lay
                 .as_ref()
                 .is_some_and(|path| path.as_str().starts_with(REMOVED_PREFIX));
 
-            EntryItem {
+            LayoutEntry {
                 // An entry at no path is answered as the root, `.`, which is what a path of the
                 // root itself prints as: the two are one answer to a caller that has no entry.
                 path: path.map_or_else(|| ".".to_owned(), |path| path.to_string()),
@@ -220,9 +310,7 @@ pub fn layout_entries_json(directory: &Path, layout: &str) -> Result<String, Lay
             .then_with(|| left.uuid.cmp(&right.uuid))
     });
 
-    serde_json::to_string(&EntriesAnswer { entries }).map_err(|error| LayoutReadError::Read {
-        reason: error.to_string(),
-    })
+    Ok(LayoutEntries { entries })
 }
 
 /// The Layout `name` resolves to in the place holding `directory`.
@@ -230,14 +318,14 @@ pub fn layout_entries_json(directory: &Path, layout: &str) -> Result<String, Lay
 /// It is the one reading of a Layout's name: a Layout command reaches a copy through it, and so
 /// does the content fetch that reads its words, see [`crate::write::fetch_with`]. A second reading
 /// would be a second set of names to keep right.
-pub(crate) fn chosen(directory: &Path, name: &str) -> Result<Layout, LayoutReadError> {
+pub(crate) fn chosen(directory: &Path, name: &str) -> Result<LayoutRecord, LayoutReadError> {
     if let Some((layout, vault)) = remote_spec(name) {
         let workspace = Workspace::locate(directory).ok_or(LayoutReadError::NoWorkspace)?;
         let Some(copy) = workspace.readonly_layout_copy(vault, layout) else {
             return Err(LayoutReadError::NotCached);
         };
 
-        return match Layout::open_existing(&copy) {
+        return match LayoutRecord::open_existing(&copy) {
             Ok(copy) => Ok(copy),
             Err(error) if error.is_not_found() => Err(LayoutReadError::NotCached),
             Err(error) => Err(read(&error)),
@@ -306,7 +394,7 @@ mod tests {
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
 
-    use super::{LayoutReadError, is_plain_name, layout_entries_json, layouts_json, remote_spec};
+    use super::{LayoutReadError, is_plain_name, layout_entries, layouts, remote_spec};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -372,7 +460,7 @@ mod tests {
     fn a_place_with_no_layout_is_answered_with_null() {
         let dir = scratch("absent");
 
-        assert_eq!(layouts_json(&dir), "null");
+        assert!(layouts(&dir).is_none());
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -381,13 +469,13 @@ mod tests {
     fn a_workspace_lists_its_one_layout() {
         let dir = recorded("list");
 
-        let answer: serde_json::Value = serde_json::from_str(&layouts_json(&dir)).unwrap();
-        let layouts = answer["layouts"].as_array().unwrap();
+        let answer = layouts(&dir).unwrap();
 
-        assert_eq!(layouts.len(), 1);
-        assert_eq!(layouts[0]["name"], "main");
-        assert_eq!(layouts[0]["is_current"], true);
-        assert_eq!(layouts[0]["tracking"], "");
+        assert_eq!(answer.count(), 1);
+        let one = answer.at(0).unwrap();
+        assert_eq!(one.name(), "main");
+        assert!(one.is_current());
+        assert_eq!(one.tracking(), "");
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -396,29 +484,30 @@ mod tests {
     fn an_entry_carries_its_path_version_owner_and_description() {
         let dir = recorded("entries");
 
-        let answer: serde_json::Value =
-            serde_json::from_str(&layout_entries_json(&dir, "").unwrap()).unwrap();
-        let entries = answer["entries"].as_array().unwrap();
+        let answer = layout_entries(&dir, "").unwrap();
+        let entries: Vec<_> = (0..answer.count())
+            .filter_map(|index| answer.at(index))
+            .collect();
 
         assert_eq!(entries.len(), 2);
 
         let held = entries
             .iter()
-            .find(|entry| entry["uuid"] == Uuid::from_u128(1).to_string())
+            .find(|entry| entry.uuid() == Uuid::from_u128(1).to_string())
             .unwrap();
-        assert_eq!(held["path"], "art/hero.psd");
-        assert_eq!(held["owner"], "alice");
-        assert_eq!(held["description"], "first");
-        assert_eq!(held["deprecated"], false);
-        assert_eq!(held["version"].as_str().unwrap().len(), 64);
+        assert_eq!(held.path(), "art/hero.psd");
+        assert_eq!(held.owner(), "alice");
+        assert_eq!(held.description(), "first");
+        assert!(!held.deprecated());
+        assert_eq!(held.version().len(), 64);
 
         // An entry at no path is answered as the root rather than left out.
         let root = entries
             .iter()
-            .find(|entry| entry["uuid"] == Uuid::from_u128(2).to_string())
+            .find(|entry| entry.uuid() == Uuid::from_u128(2).to_string())
             .unwrap();
-        assert_eq!(root["path"], ".");
-        assert_eq!(root["owner"], "");
+        assert_eq!(root.path(), ".");
+        assert_eq!(root.owner(), "");
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -430,7 +519,7 @@ mod tests {
         fs::remove_dir_all(dir.join(".rola/layout")).unwrap();
 
         assert!(matches!(
-            layout_entries_json(&dir, ""),
+            layout_entries(&dir, ""),
             Err(LayoutReadError::NoLayout)
         ));
 
@@ -442,7 +531,7 @@ mod tests {
         let dir = scratch("nowhere");
 
         assert!(matches!(
-            layout_entries_json(&dir, ""),
+            layout_entries(&dir, ""),
             Err(LayoutReadError::NoWorkspace)
         ));
 
@@ -454,7 +543,7 @@ mod tests {
         let dir = recorded("not-cached");
 
         assert!(matches!(
-            layout_entries_json(&dir, "truth@studio"),
+            layout_entries(&dir, "truth@studio"),
             Err(LayoutReadError::NotCached)
         ));
 
@@ -466,7 +555,7 @@ mod tests {
         let dir = recorded("missing");
 
         assert!(matches!(
-            layout_entries_json(&dir, "other"),
+            layout_entries(&dir, "other"),
             Err(LayoutReadError::Missing)
         ));
 

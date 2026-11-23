@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 namespace RolaSharp;
 
@@ -107,8 +106,8 @@ public sealed class TreeScope : Scope
         var path = Marshal.StringToCoTaskMemUTF8(_root);
         try
         {
-            var json = NativeText.Taken(RorolalaBinding.rola_tree_status_json(path));
-            if (string.IsNullOrEmpty(json) || json == "null")
+            var handle = RorolalaBinding.rola_tree_status(path);
+            if (handle == 0)
             {
                 throw new RolaReadError(
                     RolaReadErrorKind.Unavailable,
@@ -117,15 +116,15 @@ public sealed class TreeScope : Scope
                 );
             }
 
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            Status = new TreeStatus(
-                Changes(root, "staged"),
-                Changes(root, "unstaged"),
-                Untracked(root),
-                Conflicts(root),
-                RolaJson.Flag(root, "wrong")
-            );
+            try
+            {
+                Status = ReadStatus(handle);
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_tree_status(handle);
+            }
+
             Mark = MarkOf(_root);
         }
         finally
@@ -144,7 +143,7 @@ public sealed class TreeScope : Scope
         var path = Marshal.StringToCoTaskMemUTF8(directory);
         try
         {
-            return RorolalaBinding.rola_is_tree(path);
+            return RorolalaBinding.rola_tree_is_tree(path);
         }
         finally
         {
@@ -162,7 +161,24 @@ public sealed class TreeScope : Scope
         var path = Marshal.StringToCoTaskMemUTF8(directory);
         try
         {
-            return ParseMark(NativeText.Taken(RorolalaBinding.rola_tree_mark_json(path)));
+            var handle = RorolalaBinding.rola_tree_mark(path);
+            if (handle == 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                return new TreeMark(
+                    NativeText.Taken(RorolalaBinding.rola_tree_mark_id(handle)),
+                    RorolalaBinding.rola_tree_mark_described(handle),
+                    NativeText.Taken(RorolalaBinding.rola_tree_mark_description(handle))
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_tree_mark(handle);
+            }
         }
         finally
         {
@@ -170,77 +186,114 @@ public sealed class TreeScope : Scope
         }
     }
 
-    private static TreeMark? ParseMark(string json)
+    private static TreeStatus ReadStatus(nint handle)
     {
-        if (string.IsNullOrEmpty(json) || json == "null")
-        {
-            return null;
-        }
-
-        using var document = JsonDocument.Parse(json);
-        var root = document.RootElement;
-        if (root.ValueKind is not JsonValueKind.Object)
-        {
-            return null;
-        }
-
-        return new TreeMark(
-            RolaJson.Text(root, "id") ?? string.Empty,
-            RolaJson.Flag(root, "described"),
-            RolaJson.Text(root, "description") ?? string.Empty
+        return new TreeStatus(
+            ReadChanges(handle, true),
+            ReadChanges(handle, false),
+            ReadUntracked(handle),
+            ReadConflicts(handle),
+            RorolalaBinding.rola_tree_status_wrong(handle)
         );
     }
 
-    private static IReadOnlyList<TreeChange> Changes(JsonElement root, string name)
+    private static IReadOnlyList<TreeChange> ReadChanges(nint handle, bool staged)
     {
-        var items = RolaJson.Items(root, name);
-        if (items is null)
+        var count = staged
+            ? RorolalaBinding.rola_tree_status_staged_count(handle)
+            : RorolalaBinding.rola_tree_status_unstaged_count(handle);
+        var changes = new List<TreeChange>();
+
+        for (nuint index = 0; index < count; index++)
         {
-            return [];
+            var item = staged
+                ? RorolalaBinding.rola_tree_status_staged_at(handle, index)
+                : RorolalaBinding.rola_tree_status_unstaged_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var oldPath = NativeText.Taken(RorolalaBinding.rola_tree_change_old_path(item));
+                changes.Add(
+                    new TreeChange(
+                        NativeText.Taken(RorolalaBinding.rola_tree_change_path(item)),
+                        NativeText.Taken(RorolalaBinding.rola_tree_change_kind(item)),
+                        NativeText.Taken(RorolalaBinding.rola_tree_change_change(item)),
+                        string.IsNullOrEmpty(oldPath) ? null : oldPath
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_tree_change(item);
+            }
         }
 
-        return items
-            .Value.EnumerateArray()
-            .Select(item => new TreeChange(
-                RolaJson.Text(item, "path") ?? string.Empty,
-                RolaJson.Text(item, "kind") ?? string.Empty,
-                RolaJson.Text(item, "change") ?? string.Empty,
-                RolaJson.Text(item, "old_path") is { Length: > 0 } old ? old : null
-            ))
-            .ToArray();
+        return changes;
     }
 
-    private static IReadOnlyList<TreeUntracked> Untracked(JsonElement root)
+    private static IReadOnlyList<TreeUntracked> ReadUntracked(nint handle)
     {
-        var items = RolaJson.Items(root, "untracked");
-        if (items is null)
+        var count = RorolalaBinding.rola_tree_status_untracked_count(handle);
+        var untracked = new List<TreeUntracked>();
+
+        for (nuint index = 0; index < count; index++)
         {
-            return [];
+            var item = RorolalaBinding.rola_tree_status_untracked_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                untracked.Add(
+                    new TreeUntracked(
+                        NativeText.Taken(RorolalaBinding.rola_tree_untracked_path(item)),
+                        NativeText.Taken(RorolalaBinding.rola_tree_untracked_kind(item))
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_tree_untracked(item);
+            }
         }
 
-        return items
-            .Value.EnumerateArray()
-            .Select(item => new TreeUntracked(
-                RolaJson.Text(item, "path") ?? string.Empty,
-                RolaJson.Text(item, "kind") ?? string.Empty
-            ))
-            .ToArray();
+        return untracked;
     }
 
-    private static IReadOnlyList<TreeConflict> Conflicts(JsonElement root)
+    private static IReadOnlyList<TreeConflict> ReadConflicts(nint handle)
     {
-        var items = RolaJson.Items(root, "conflicts");
-        if (items is null)
+        var count = RorolalaBinding.rola_tree_status_conflict_count(handle);
+        var conflicts = new List<TreeConflict>();
+
+        for (nuint index = 0; index < count; index++)
         {
-            return [];
+            var item = RorolalaBinding.rola_tree_status_conflict_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                conflicts.Add(
+                    new TreeConflict(
+                        NativeText.Taken(RorolalaBinding.rola_tree_conflict_path(item)),
+                        NativeText.Taken(RorolalaBinding.rola_tree_conflict_theirs(item))
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_tree_conflict(item);
+            }
         }
 
-        return items
-            .Value.EnumerateArray()
-            .Select(item => new TreeConflict(
-                RolaJson.Text(item, "path") ?? string.Empty,
-                RolaJson.Text(item, "theirs") ?? string.Empty
-            ))
-            .ToArray();
+        return conflicts;
     }
 }

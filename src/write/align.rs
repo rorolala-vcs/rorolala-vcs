@@ -33,27 +33,18 @@ use rorolala_workspace::{Merging, Pending, Workspace};
 use rorolala_workspace_analyze::{
     Cache, PathRename, TreeDiff, cache_path, entry_of, tree_diff_remembering,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::fetch::Sources;
 use crate::status::{VariantMove, variant_moves};
-use crate::write::request::Common;
+use crate::write::request::{Common, WriteCommon};
 use crate::write::storage::extract_file;
 use crate::write::{
     Cancellation, WriteError, WriteProgress,
-    checkout::{Restored, restore, restore_vault},
+    checkout::{Restored, WriteRestore, restore, restore_vault},
     layout::set_all,
 };
-
-/// What aligning one path wrote.
-#[derive(Debug, Clone, Serialize)]
-pub struct Aligned {
-    /// The Layout entry the path names.
-    pub id: uuid::Uuid,
-    /// The version the Layout now records.
-    pub version: rorolala_storage::Key,
-}
 
 /// Puts the content of `version` at `path` and makes the entry say what `owner`, `description` and
 /// `preference` say.
@@ -70,7 +61,7 @@ pub fn align_entry(
     owner: Option<&str>,
     description: &str,
     preference: Option<&str>,
-) -> Result<Aligned, WriteError> {
+) -> Result<Restored, WriteError> {
     let restored = restore(workspace, cwd, path, version)?;
     let layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
@@ -94,7 +85,7 @@ pub fn align_vault_entry(
     owner: Option<&str>,
     description: &str,
     preference: Option<&str>,
-) -> Result<Aligned, WriteError> {
+) -> Result<Restored, WriteError> {
     let restored = restore_vault(vault, cwd, path, version)?;
     let layout = vault.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
@@ -110,7 +101,7 @@ fn align_in(
     owner: Option<&str>,
     description: &str,
     preference: Option<&str>,
-) -> Result<Aligned, WriteError> {
+) -> Result<Restored, WriteError> {
     set_all(
         layout,
         restored.id,
@@ -120,19 +111,16 @@ fn align_in(
         preference,
     )?;
 
-    Ok(Aligned {
-        id: restored.id,
-        version: restored.version,
-    })
+    Ok(restored.clone())
 }
 
 /// Puts a path under a Workspace on one version and writes what the record says about it.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-/// `free_rola_write_error`. `owner` and `preference` are empty when the entry has none.
+/// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `owner` and `preference`
+/// are empty when the entry has none.
 ///
 /// It is the single-entry form: it aligns one path with one version. The `rola_write_align` export
 /// is the whole `rola align` workflow, which takes a request document instead.
@@ -149,7 +137,7 @@ pub fn align_entry_at(
     owner: &str,
     description: &str,
     preference: &str,
-) -> Result<String, WriteError> {
+) -> Result<WriteRestore, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let aligned = align_entry(
         &workspace,
@@ -161,18 +149,16 @@ pub fn align_entry_at(
         (!preference.is_empty()).then_some(preference),
     )?;
 
-    serde_json::to_string(&aligned).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteRestore::of(aligned.id, &aligned.version))
 }
 
 /// Puts a path under a Vault on one version and writes what the record says about it.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-/// `free_rola_write_error`. `owner` and `preference` are empty when the entry has none.
+/// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `owner` and `preference`
+/// are empty when the entry has none.
 ///
 /// # Errors
 ///
@@ -186,7 +172,7 @@ pub fn align_vault_at(
     owner: &str,
     description: &str,
     preference: &str,
-) -> Result<String, WriteError> {
+) -> Result<WriteRestore, WriteError> {
     let vault = Vault::locate(directory).ok_or(WriteError::NoVault)?;
     let aligned = align_vault_entry(
         &vault,
@@ -198,9 +184,7 @@ pub fn align_vault_at(
         (!preference.is_empty()).then_some(preference),
     )?;
 
-    serde_json::to_string(&aligned).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteRestore::of(aligned.id, &aligned.version))
 }
 
 /// How alike two text files have to be to count as the same file moved, when nothing is said.
@@ -236,6 +220,12 @@ pub enum Mode {
 ///
 /// It is [`Mode`] with a wire spelling, so a C caller can name the same choice a command line does.
 /// The document carries the choice in `kind`, and `move_to` also carries where the path went.
+///
+/// # FFI
+///
+/// A `RolaWriteAlignMode` the caller fills: `tag` selects the variant and the payload companion
+/// it names holds `move_to`'s path. The path is borrowed for the call and released by the caller.
+#[lazyffi(export = RolaWriteAlignMode)]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AlignMode {
@@ -288,8 +278,7 @@ pub struct Options {
 }
 
 /// What an alignment did to one path.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Did {
     /// A lost path was confirmed gone.
     Deleted,
@@ -314,7 +303,7 @@ pub enum Did {
 }
 
 /// One path an alignment acted on.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Item {
     /// What was done with it.
     pub did: Did,
@@ -326,8 +315,7 @@ pub struct Item {
 ///
 /// A refusal is a decision rather than a failure: the command turns one into its own words and exit
 /// code, while [`WriteError`] is what the library could not do at all.
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Debug, Clone)]
 pub enum Refusal {
     /// The path names nothing the run's mode could act on.
     Argument,
@@ -378,9 +366,6 @@ pub enum Refusal {
         /// What was named.
         path: String,
         /// What is wrong with it.
-        ///
-        /// The wire spelling is `move_kind`, since `kind` is what names the refusal itself.
-        #[serde(rename = "move_kind")]
         kind: MoveKind,
     },
     /// A per-file mode was asked of a tree.
@@ -402,8 +387,7 @@ pub enum Refusal {
 }
 
 /// The ways what a move names cannot be moved onto.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MoveKind {
     /// It is not a file inside the Workspace.
     Missing,
@@ -521,7 +505,8 @@ pub struct Carry<'a> {
 /// a C or C# caller has no process directory the run could mean, so the root the request names is
 /// the whole of where a name is read from.
 ///
-/// [`align_at`] reads one from JSON; a Rust caller makes one and calls [`run`](Self::run).
+/// [`align_at`] reads one from the C caller's fields; a Rust caller makes a [`AlignRequest`] and
+/// calls [`run`](AlignRequest::run).
 #[derive(Debug, Deserialize)]
 pub struct AlignRequest {
     /// The Workspace, the account, the target and the rest of what every write shares.
@@ -537,6 +522,40 @@ pub struct AlignRequest {
     /// Whether an entry the ignore rules govern may be selected anyway.
     #[serde(default)]
     include_ignored: bool,
+}
+
+/// An alignment a C caller asks for.
+///
+/// # FFI
+///
+/// A `RolaWriteAlignRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. A relative `path`, and a
+/// relative path in a `move_to` mode, is read against the Workspace root.
+#[lazyffi(export = RolaWriteAlignRequest, input)]
+#[derive(Debug, Clone)]
+pub struct AlignInput {
+    /// The Workspace, the account, the target and the rest of what every write shares.
+    pub common: WriteCommon,
+    /// The path the run acts on, read against the Workspace root.
+    pub path: String,
+    /// What the run does with the path.
+    pub mode: AlignMode,
+    /// Whether a move is put back in content as well as in place.
+    pub completely: bool,
+    /// Whether an entry the ignore rules govern may be selected anyway.
+    pub include_ignored: bool,
+}
+
+impl From<AlignInput> for AlignRequest {
+    fn from(input: AlignInput) -> Self {
+        Self {
+            common: input.common.into(),
+            path: input.path,
+            mode: input.mode,
+            completely: input.completely,
+            include_ignored: input.include_ignored,
+        }
+    }
 }
 
 /// Settles the tree against the Layout for the one path a run named.
@@ -712,91 +731,321 @@ fn candidates_of(common: &Common, workspace: &Workspace) -> Vec<(String, VaultAd
     candidates
 }
 
-/// The outcome of an alignment as a request caller reads it.
+/// What an alignment came to, as the C ABI hands it over.
 ///
-/// The tag is `kind`, and its value says which of the four shapes it is. It is a view rather than a
-/// `Serialize` on [`Outcome`] because the four carry no field in common, and a newtype variant
-/// holding a list cannot carry a tag in serde.
-#[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum OutcomeJson<'a> {
-    /// What was done to the paths named, in the order it was done.
-    Paths {
-        /// What was done, in the order it was done.
-        paths: &'a [Item],
-    },
-    /// One tree's work was put back, named as the Layout names it.
-    Tree {
-        /// The tree's path in the Layout.
-        path: &'a str,
-    },
-    /// One file inside a tree was put back.
-    TreeFile {
-        /// The file as a person knows it.
-        path: &'a str,
-        /// Whether it came from what the tree has staged rather than the version it records.
-        staged: bool,
-    },
-    /// The run refused to act, and names why.
-    Refused {
-        /// Why it refused.
-        refusal: &'a Refusal,
-    },
+/// `kind` says which of the four shapes it is: `paths`, `tree`, `tree_file` or `refused`. The other
+/// fields say nothing for a kind that does not use them, so a caller reads the ones its kind names.
+/// The refusal, which only the `refused` kind carries, is reached through [`WriteAlign::refusal`]
+/// and crosses as a handle of its own.
+///
+/// # FFI
+///
+/// A `RolaWriteAlign *` the caller releases with `free_rola_write_align`. `_kind` says which shape
+/// it is; `_paths_count` and `_paths_at` answer the `paths` kind, each a `RolaWriteAlignEntry *`
+/// released with `free_rola_write_align_entry`; `_path` and `_staged` answer the `tree` and
+/// `tree_file` kinds; and `_refusal` answers the `refused` kind with a `RolaWriteAlignRefusal *`
+/// released with `free_rola_write_align_refusal`, or null for the other kinds. Every `char *` is
+/// released with `free_string`.
+#[lazyffi(export = RolaWriteAlign)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteAlign {
+    /// Which of the four shapes the run answered with.
+    kind: String,
+    /// What was done to each path, for the `paths` kind.
+    paths: Vec<WriteAlignEntry>,
+    /// The tree or tree file the run put back, for the `tree` and `tree_file` kinds.
+    path: String,
+    /// Whether a tree file came from what the tree has staged, for the `tree_file` kind.
+    staged: bool,
+    /// Why the run refused to act, for the `refused` kind.
+    refusal: Option<WriteAlignRefusal>,
 }
 
-impl<'a> From<&'a Outcome> for OutcomeJson<'a> {
-    fn from(outcome: &'a Outcome) -> Self {
+impl WriteAlign {
+    /// The answer an alignment's outcome is handed over as.
+    fn of(outcome: &Outcome) -> Self {
         match outcome {
-            Outcome::Paths(items) => Self::Paths { paths: items },
-            Outcome::Tree { path } => Self::Tree { path },
-            Outcome::TreeFile { path, staged } => Self::TreeFile {
-                path,
-                staged: *staged,
+            Outcome::Paths(items) => Self {
+                kind: "paths".to_owned(),
+                paths: items.iter().map(WriteAlignEntry::of).collect(),
+                ..Self::default()
             },
-            Outcome::Refused(refusal) => Self::Refused { refusal },
+            Outcome::Tree { path } => Self {
+                kind: "tree".to_owned(),
+                path: path.clone(),
+                ..Self::default()
+            },
+            Outcome::TreeFile { path, staged } => Self {
+                kind: "tree_file".to_owned(),
+                path: path.clone(),
+                staged: *staged,
+                ..Self::default()
+            },
+            Outcome::Refused(refusal) => Self {
+                kind: "refused".to_owned(),
+                refusal: Some(WriteAlignRefusal::of(refusal)),
+                ..Self::default()
+            },
         }
     }
 }
 
-/// Runs the whole `rola align` workflow for a request document and answers what it came to.
+#[lazyffi(export = rola_)]
+impl WriteAlign {
+    /// Which of the four shapes the run answered with.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    /// How many paths the run acted on, which is zero for the kinds that acted on none.
+    #[must_use]
+    pub const fn paths_count(&self) -> usize {
+        self.paths.len()
+    }
+
+    /// One path the run acted on, or null past the end.
+    #[must_use]
+    pub fn paths_at(&self, index: usize) -> Option<WriteAlignEntry> {
+        self.paths.get(index).cloned()
+    }
+
+    /// The tree or tree file the run put back, or an empty string for the kinds that put none back.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// Whether a tree file came from what the tree has staged, which is false for every other kind.
+    #[must_use]
+    pub const fn staged(&self) -> bool {
+        self.staged
+    }
+
+    /// Why the run refused to act, or null for a run that acted.
+    #[must_use]
+    pub fn refusal(&self) -> Option<WriteAlignRefusal> {
+        self.refusal.clone()
+    }
+}
+
+/// One path an alignment acted on.
 ///
 /// # FFI
 ///
-/// `request` is an owned JSON document the caller keeps; it names the Workspace, the path and the
-/// mode, and carries the `Common` fields beside them:
-/// `{"workspace":"D:/work","path":"a.txt","mode":{"kind":"delete"}}`. The mode is one of `delete`,
-/// `rename`, `break`, `move_to`, `restore_move`, `restore_modify`, `restore_staged`,
-/// `restore_delete` and `restore`, where `move_to` also carries `path`. Relative paths in `path`
-/// and in a `move_to` mode resolve against the Workspace root. `completely` and `include_ignored`
-/// are false when left out.
+/// A `RolaWriteAlignEntry *` the caller releases with `free_rola_write_align_entry`. `_did` and
+/// `_what` each return a `char *` the caller releases with `free_string`.
+#[lazyffi(export = RolaWriteAlignEntry)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteAlignEntry {
+    /// What was done with the path.
+    did: String,
+    /// What it was done to.
+    what: String,
+}
+
+impl WriteAlignEntry {
+    /// The answer one settled path is handed over as.
+    fn of(item: &Item) -> Self {
+        Self {
+            did: did_word(item.did).to_owned(),
+            what: item.what.clone(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteAlignEntry {
+    /// What was done with the path.
+    #[must_use]
+    pub fn did(&self) -> String {
+        self.did.clone()
+    }
+
+    /// What it was done to.
+    #[must_use]
+    pub fn what(&self) -> String {
+        self.what.clone()
+    }
+}
+
+/// Why an alignment refused to act, as the C ABI hands it over.
 ///
-/// `progress` is the `RolaProgress *` the run says its events to, and `cancellation` is the
-/// `RolaCancellation *` it checks. The outcome is an owned JSON string the caller releases with
-/// `free_string`, tagged by `kind`: `{"kind":"paths","paths":[{"did":"...","what":"..."}]}`,
-/// `{"kind":"tree","path":"..."}`, `{"kind":"tree_file","path":"...","staged":...}` or
-/// `{"kind":"refused","refusal":{...}}`. A failure is a `RolaWriteError *` the caller releases with
+/// `kind` names the refusal, and the other fields say what the refusal that kind carries is about.
+/// A field a kind does not use is empty: `path` for `argument`, `tree_unsupported`,
+/// `layout_exists` and `layout_missing`; `from` and `to` for everything but `real_move`;
+/// `move_kind` for everything but `move`; `cause` for everything but `layout_failed` and `failed`.
+///
+/// # FFI
+///
+/// A `RolaWriteAlignRefusal *` the caller releases with `free_rola_write_align_refusal`. `_kind`,
+/// `_path`, `_from`, `_to`, `_move_kind` and `_cause` each return a `char *` the caller releases
+/// with `free_string`.
+#[lazyffi(export = RolaWriteAlignRefusal)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteAlignRefusal {
+    /// What the refusal is, as `snake_case`.
+    kind: String,
+    /// What was named.
+    path: String,
+    /// Where the Layout named the move, for a move between two entries.
+    from: String,
+    /// Where the tree holds the move, for a move between two entries.
+    to: String,
+    /// What is wrong with a move's destination, for a `move` refusal.
+    move_kind: String,
+    /// What the Layout or the run said, for a refusal that carries words.
+    cause: String,
+}
+
+impl WriteAlignRefusal {
+    /// The answer one refusal is handed over as.
+    fn of(refusal: &Refusal) -> Self {
+        let mut answer = Self {
+            kind: refusal_word(refusal).to_owned(),
+            ..Self::default()
+        };
+
+        match refusal {
+            Refusal::Ignored { path }
+            | Refusal::NotLost { path }
+            | Refusal::NotModified { path }
+            | Refusal::NotStaged { path }
+            | Refusal::NotRestorable { path }
+            | Refusal::RestoreExists { path }
+            | Refusal::NoRename { path } => answer.path.clone_from(path),
+            Refusal::RealMove { from, to } => {
+                answer.from.clone_from(from);
+                answer.to.clone_from(to);
+            }
+            Refusal::Move { path, kind } => {
+                answer.path.clone_from(path);
+                move_kind_word(*kind).clone_into(&mut answer.move_kind);
+            }
+            Refusal::LayoutFailed { cause } | Refusal::Failed { cause } => {
+                answer.cause.clone_from(cause);
+            }
+            Refusal::Argument
+            | Refusal::TreeUnsupported
+            | Refusal::LayoutExists
+            | Refusal::LayoutMissing => {}
+        }
+
+        answer
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteAlignRefusal {
+    /// What the refusal is, as `snake_case`.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    /// What was named, or an empty string for a refusal that names nothing.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// Where the Layout named the move, or an empty string for every other refusal.
+    #[must_use]
+    pub fn from(&self) -> String {
+        self.from.clone()
+    }
+
+    /// Where the tree holds the move, or an empty string for every other refusal.
+    #[must_use]
+    pub fn to(&self) -> String {
+        self.to.clone()
+    }
+
+    /// What is wrong with a move's destination, or an empty string for every other refusal.
+    #[must_use]
+    pub fn move_kind(&self) -> String {
+        self.move_kind.clone()
+    }
+
+    /// What the Layout or the run said, or an empty string for a refusal that carries no words.
+    #[must_use]
+    pub fn cause(&self) -> String {
+        self.cause.clone()
+    }
+}
+
+/// The word an alignment reports one action by.
+const fn did_word(did: Did) -> &'static str {
+    match did {
+        Did::Deleted => "deleted",
+        Did::Moved => "moved",
+        Did::Broke => "broke",
+        Did::Asserted => "asserted",
+        Did::RestoredMove => "restored_move",
+        Did::RestoredCompletely => "restored_completely",
+        Did::RestoredModify => "restored_modify",
+        Did::RestoredDelete => "restored_delete",
+        Did::RestoredMerge => "restored_merge",
+        Did::Unmerged => "unmerged",
+    }
+}
+
+/// The word an alignment reports one refusal by.
+const fn refusal_word(refusal: &Refusal) -> &'static str {
+    match refusal {
+        Refusal::Argument => "argument",
+        Refusal::Ignored { .. } => "ignored",
+        Refusal::NotLost { .. } => "not_lost",
+        Refusal::NotModified { .. } => "not_modified",
+        Refusal::NotStaged { .. } => "not_staged",
+        Refusal::NotRestorable { .. } => "not_restorable",
+        Refusal::RestoreExists { .. } => "restore_exists",
+        Refusal::NoRename { .. } => "no_rename",
+        Refusal::RealMove { .. } => "real_move",
+        Refusal::Move { .. } => "move",
+        Refusal::TreeUnsupported => "tree_unsupported",
+        Refusal::LayoutExists => "layout_exists",
+        Refusal::LayoutMissing => "layout_missing",
+        Refusal::LayoutFailed { .. } => "layout_failed",
+        Refusal::Failed { .. } => "failed",
+    }
+}
+
+/// The word an alignment reports one move's fault by.
+const fn move_kind_word(kind: MoveKind) -> &'static str {
+    match kind {
+        MoveKind::Missing => "missing",
+        MoveKind::NotATree => "not_a_tree",
+        MoveKind::Tracked => "tracked",
+    }
+}
+
+/// Runs the whole `rola align` workflow for a request a C caller fills and answers what it came
+/// to.
+///
+/// # FFI
+///
+/// `request` is a `RolaWriteAlignRequest` the caller fills and keeps; every `const char *` in it is
+/// borrowed for the call and released by the caller. `progress` is the `RolaProgress *` the run
+/// says its events to, and `cancellation` is the `RolaCancellation *` it checks. The outcome is a
+/// `RolaWriteAlign *` the caller releases with `free_rola_write_align`, whose `_kind` says which of
+/// the four answers it is. A failure is a `RolaWriteError *` the caller releases with
 /// `free_rola_write_error`.
 ///
 /// # Errors
 ///
-/// Returns [`WriteError::Json`] when `request` does not read as an [`AlignRequest`], and whatever
-/// [`AlignRequest::run`] names.
+/// Returns whatever [`AlignRequest::run`] names.
 #[lazyffi(export = rola_write_align)]
 pub fn align_at(
-    request: &str,
+    request: &AlignInput,
     progress: &WriteProgress,
     cancellation: &Cancellation,
-) -> Result<String, WriteError> {
-    let request: AlignRequest =
-        serde_json::from_str(request).map_err(|error| WriteError::Json {
-            reason: error.to_string(),
-        })?;
+) -> Result<WriteAlign, WriteError> {
+    let request: AlignRequest = request.clone().into();
     let watching = crate::write::progress::watching(progress);
     let outcome = request.run(&watching, cancellation)?;
 
-    serde_json::to_string(&OutcomeJson::from(&outcome)).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteAlign::of(&outcome))
 }
 
 /// The Vaults a run may bring content from, or nothing when it has no account to speak as.
@@ -2406,7 +2655,7 @@ mod tests {
 
     use super::{
         AlignMode, AlignRequest, Carry, Did, Item, Messages, Mode, MoveKind, Options, Outcome,
-        OutcomeJson, Refusal, Settled, align_entry, align_vault_entry, settle,
+        Refusal, Settled, WriteAlign, align_entry, align_vault_entry, settle,
     };
     use crate::write::Cancellation;
     use crate::write::request::Common;
@@ -2753,18 +3002,21 @@ mod tests {
             did: Did::Deleted,
             what: "a.txt".to_owned(),
         }]);
-        let json = serde_json::to_value(OutcomeJson::from(&paths)).expect("the outcome writes");
-        assert_eq!(json["kind"], "paths");
-        assert_eq!(json["paths"][0]["did"], "deleted");
-        assert_eq!(json["paths"][0]["what"], "a.txt");
+        let answer = WriteAlign::of(&paths);
+        assert_eq!(answer.kind(), "paths");
+        assert_eq!(answer.paths_count(), 1);
+        let item = answer.paths_at(0).expect("the item is there");
+        assert_eq!(item.did(), "deleted");
+        assert_eq!(item.what(), "a.txt");
 
         let refused = Outcome::Refused(Refusal::Move {
             path: "a.txt".to_owned(),
             kind: MoveKind::Tracked,
         });
-        let json = serde_json::to_value(OutcomeJson::from(&refused)).expect("the outcome writes");
-        assert_eq!(json["kind"], "refused");
-        assert_eq!(json["refusal"]["kind"], "move");
-        assert_eq!(json["refusal"]["move_kind"], "tracked");
+        let answer = WriteAlign::of(&refused);
+        assert_eq!(answer.kind(), "refused");
+        let refusal = answer.refusal().expect("the refusal is there");
+        assert_eq!(refusal.kind(), "move");
+        assert_eq!(refusal.move_kind(), "tracked");
     }
 }

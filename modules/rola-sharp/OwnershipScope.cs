@@ -103,7 +103,7 @@ public sealed class OwnershipScope : Scope, IDisposable
         var path = Marshal.StringToCoTaskMemUTF8(_root);
         try
         {
-            var handle = RorolalaBinding.locate_rola_ownership(path);
+            var handle = RorolalaBinding.rola_ownership_locate(path);
             if (handle == 0)
             {
                 throw new RolaReadError(

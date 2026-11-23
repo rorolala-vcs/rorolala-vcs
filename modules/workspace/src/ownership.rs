@@ -48,7 +48,7 @@ pub enum EntryLock {
 ///
 /// # FFI
 ///
-/// Opaque: C takes a pointer from `locate_rola_ownership` and gives it back with
+/// Opaque: C takes a pointer from `rola_ownership_locate` and gives it back with
 /// `free_rola_ownership`. What it holds (the two Layouts, the account and the root) is never read
 /// from outside.
 #[lazyffi(export = RolaOwnership)]

@@ -19,7 +19,7 @@ use crate::{
 
 /// The inverse index of the Vault or Workspace `dir` is inside, if it is inside one.
 #[must_use]
-#[lazyffi(export = locate_rola_inverse_index)]
+#[lazyffi(export = rola_inverse_index_locate)]
 pub fn locate_inverse_index(dir: &Path) -> Option<InverseIndex> {
     InverseIndex::locate(dir)
 }
@@ -34,7 +34,7 @@ impl InverseIndex {
     ///
     /// # FFI
     /// Blocks until the rebuild is done.
-    #[lazyffi(export = rebuild_rola_inverse_index)]
+    #[lazyffi(export = rola_inverse_index_rebuild)]
     pub fn rebuild_blocking(&self) -> Result<InverseIndexReport, InverseIndexError> {
         run(self.rebuild()).map_err(|error| InverseIndexError::Io(error.into()))?
     }
@@ -47,7 +47,7 @@ impl InverseIndex {
     ///
     /// # FFI
     /// Blocks until the rebuild is done.
-    #[lazyffi(export = rebuild_full_rola_inverse_index)]
+    #[lazyffi(export = rola_inverse_index_full_rebuild)]
     pub fn rebuild_full_blocking(&self) -> Result<InverseIndexReport, InverseIndexError> {
         run(self.rebuild_full()).map_err(|error| InverseIndexError::Io(error.into()))?
     }
@@ -61,7 +61,7 @@ impl InverseIndex {
     ///
     /// # FFI
     /// Blocks until the read is done. `hash` is the hex a key is written as.
-    #[lazyffi(export = get_store_dependents)]
+    #[lazyffi(export = rola_inverse_index_store_dependents)]
     pub fn store_dependents_blocking(
         &self,
         hash: &str,
@@ -81,7 +81,7 @@ impl InverseIndex {
     ///
     /// # FFI
     /// Blocks until the read is done. `hash` is the hex a key is written as.
-    #[lazyffi(export = get_variant_dependents)]
+    #[lazyffi(export = rola_inverse_index_variant_dependents)]
     pub fn variant_dependents_blocking(
         &self,
         hash: &str,
@@ -101,7 +101,7 @@ impl InverseIndex {
     ///
     /// # FFI
     /// Blocks until the read is done. `hash` is the hex a key is written as.
-    #[lazyffi(export = get_version_dependents)]
+    #[lazyffi(export = rola_inverse_index_version_dependents)]
     pub fn version_dependents_blocking(
         &self,
         hash: &str,
@@ -121,7 +121,7 @@ impl InverseIndex {
     ///
     /// # FFI
     /// Blocks until the read is done. `hash` is the hex a key is written as.
-    #[lazyffi(export = get_child_versions)]
+    #[lazyffi(export = rola_inverse_index_child_versions)]
     pub fn child_versions_blocking(
         &self,
         hash: &str,
@@ -141,7 +141,7 @@ impl InverseIndex {
     ///
     /// # FFI
     /// Blocks until the read is done. `hash` is the hex a key is written as.
-    #[lazyffi(export = get_creator_dependents)]
+    #[lazyffi(export = rola_inverse_index_creator_dependents)]
     pub fn creator_dependents_blocking(
         &self,
         hash: &str,
@@ -161,7 +161,7 @@ impl InverseIndex {
     ///
     /// # FFI
     /// Blocks until the read is done. `hash` is the hex a key is written as.
-    #[lazyffi(export = get_message_dependents)]
+    #[lazyffi(export = rola_inverse_index_message_dependents)]
     pub fn message_dependents_blocking(
         &self,
         hash: &str,
@@ -181,7 +181,7 @@ impl InverseIndex {
     ///
     /// # FFI
     /// Blocks until the read is done. `hash` is the hex a key is written as.
-    #[lazyffi(export = get_join_dependents)]
+    #[lazyffi(export = rola_inverse_index_join_dependents)]
     pub fn join_dependents_blocking(
         &self,
         hash: &str,
@@ -202,7 +202,7 @@ impl InverseIndex {
     ///
     /// # FFI
     /// Blocks until the read is done. `hash` is the hex a key is written as.
-    #[lazyffi(export = get_version_number)]
+    #[lazyffi(export = rola_inverse_index_version_number)]
     pub fn version_num_blocking(
         &self,
         hash: &str,
@@ -219,77 +219,77 @@ impl InverseIndex {
 impl InverseIndexReport {
     /// What the rebuild had to do: `fresh`, `incremental` or `full`.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_mode)]
+    #[lazyffi(export = rola_inverse_index_report_mode)]
     pub fn mode(&self) -> String {
         self.mode.name().to_owned()
     }
 
     /// How many objects the index holds, as the build left it.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_objects)]
+    #[lazyffi(export = rola_inverse_index_report_objects)]
     pub const fn objects(&self) -> u64 {
         self.objects
     }
 
     /// How many objects this rebuild read.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_objects_read)]
+    #[lazyffi(export = rola_inverse_index_report_objects_read)]
     pub const fn objects_read(&self) -> u64 {
         self.objects_read
     }
 
     /// How many of them are variants.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_variants)]
+    #[lazyffi(export = rola_inverse_index_report_variants)]
     pub const fn variants(&self) -> u64 {
         self.variants
     }
 
     /// How many are versions.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_versions)]
+    #[lazyffi(export = rola_inverse_index_report_versions)]
     pub const fn versions(&self) -> u64 {
         self.versions
     }
 
     /// How many are creators.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_creators)]
+    #[lazyffi(export = rola_inverse_index_report_creators)]
     pub const fn creators(&self) -> u64 {
         self.creators
     }
 
     /// How many are messages.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_messages)]
+    #[lazyffi(export = rola_inverse_index_report_messages)]
     pub const fn messages(&self) -> u64 {
         self.messages
     }
 
     /// How many versions this rebuild numbered itself, the root's own number included.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_versions_numbered)]
+    #[lazyffi(export = rola_inverse_index_report_versions_numbered)]
     pub const fn versions_numbered(&self) -> u64 {
         self.versions_numbered
     }
 
     /// How many records the inverse index has.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_entries)]
+    #[lazyffi(export = rola_inverse_index_report_entries)]
     pub const fn entries(&self) -> u64 {
         self.entries
     }
 
     /// How many dependents are noted across the records.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_dependents)]
+    #[lazyffi(export = rola_inverse_index_report_dependents)]
     pub const fn dependents(&self) -> u64 {
         self.dependents
     }
 
     /// The digest of what was written, as hex.
     #[must_use]
-    #[lazyffi(export = inverse_index_report_fingerprint)]
+    #[lazyffi(export = rola_inverse_index_report_fingerprint)]
     pub fn fingerprint(&self) -> String {
         self.fingerprint.clone()
     }

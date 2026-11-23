@@ -14,13 +14,15 @@ use std::path::Path;
 use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::Layout;
 use rorolala_tree::consts::{DESCRIPTION, ENTRY_ID, MARK};
-use rorolala_tree::{Tree, TreeStatus};
+use rorolala_tree::{
+    Change as TreeChangeRecord, Conflict as TreeConflictRecord, EntryKind, Tree,
+    TreeStatus as TreeStatusRecord, Untracked as TreeUntrackedRecord,
+};
 use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
-use serde::Serialize;
 
 pub use rorolala_status::*;
 
@@ -40,7 +42,7 @@ use crate::auth;
 /// read: no Workspace holds the directory, the Workspace works in no Layout, or the tree cannot be
 /// read beside the one it does.
 #[must_use]
-#[lazyffi(export = locate_rola_status)]
+#[lazyffi(export = rola_status_locate)]
 pub fn locate_status(directory: &Path) -> Option<Status> {
     let workspace = Workspace::locate(directory)?;
     let layout = working_layout(&workspace)?;
@@ -112,28 +114,266 @@ pub fn tree_is_wrong(
         .is_empty()
 }
 
-/// How the rola-tree holding `directory` stands, as the JSON a caller reads.
+/// How the rola-tree holding `directory` stands.
 ///
 /// The reading is the tree's own: what its staging area holds beside the version the Layout records, what
 /// the work under it changed without being staged, and what a merge left in conflict. A caller that read
-/// `.rola-tree` itself would be keeping a second copy of the format, so the answer crosses as data.
+/// `.rola-tree` itself would be keeping a second copy of the format, so the answer crosses as entries.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, or `null` when there is nothing to read:
-/// no Workspace holds the directory, the directory is not inside a tree, the Workspace works in no Layout,
-/// the index or the store is not there, or the tree cannot be read.
+/// A `RolaTreeStatus *` the caller releases with `free_rola_tree_status`, or null when there is nothing to
+/// read: no Workspace holds the directory, the directory is not inside a tree, the Workspace works in no
+/// Layout, the index or the store is not there, or the tree cannot be read.
 #[must_use]
-#[lazyffi(export = rola_tree_status_json)]
-pub fn tree_status_json(directory: &Path) -> String {
-    tree_status(directory).map_or_else(
-        || "null".to_owned(),
-        |status| serde_json::to_string(&status).unwrap_or_else(|_| "null".to_owned()),
-    )
+#[lazyffi(export = rola_tree_status)]
+pub fn tree_status(directory: &Path) -> Option<TreeStatus> {
+    read_tree_status(directory).map(|status| TreeStatus::from_record(&status))
+}
+
+/// How a tree stands beside the version it records.
+#[lazyffi(export = RolaTreeStatus)]
+#[derive(Debug, Clone, Default)]
+pub struct TreeStatus {
+    /// Paths that differ between the recorded version and the staged structure.
+    staged: Vec<TreeChange>,
+    /// Paths that differ between the staged structure and the work on disk.
+    unstaged: Vec<TreeChange>,
+    /// Paths the work holds and the staged structure does not.
+    untracked: Vec<TreeUntracked>,
+    /// Paths a merge left in conflict.
+    conflicts: Vec<TreeConflict>,
+    /// Whether the tree's own Layout entry is a change that must not be recorded.
+    wrong: bool,
+}
+
+impl TreeStatus {
+    /// The status of a reading, with every record taken out of the tree's own types.
+    fn from_record(record: &TreeStatusRecord) -> Self {
+        Self {
+            staged: record.staged.iter().map(TreeChange::from_record).collect(),
+            unstaged: record
+                .unstaged
+                .iter()
+                .map(TreeChange::from_record)
+                .collect(),
+            untracked: record
+                .untracked
+                .iter()
+                .map(TreeUntracked::from_record)
+                .collect(),
+            conflicts: record
+                .conflicts
+                .iter()
+                .map(TreeConflict::from_record)
+                .collect(),
+            wrong: record.wrong,
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl TreeStatus {
+    /// Whether nothing is staged, changed or in conflict.
+    #[must_use]
+    pub const fn is_clean(&self) -> bool {
+        self.staged.is_empty()
+            && self.unstaged.is_empty()
+            && self.untracked.is_empty()
+            && self.conflicts.is_empty()
+            && !self.wrong
+    }
+
+    /// Whether the tree's own Layout entry makes the reading the wrong one to record.
+    #[must_use]
+    pub const fn wrong(&self) -> bool {
+        self.wrong
+    }
+
+    /// How many paths differ between the recorded version and the staged structure.
+    #[must_use]
+    pub const fn staged_count(&self) -> usize {
+        self.staged.len()
+    }
+
+    /// One staged change, or null past the end.
+    #[must_use]
+    pub fn staged_at(&self, index: usize) -> Option<TreeChange> {
+        self.staged.get(index).cloned()
+    }
+
+    /// How many paths differ between the staged structure and the work on disk.
+    #[must_use]
+    pub const fn unstaged_count(&self) -> usize {
+        self.unstaged.len()
+    }
+
+    /// One unstaged change, or null past the end.
+    #[must_use]
+    pub fn unstaged_at(&self, index: usize) -> Option<TreeChange> {
+        self.unstaged.get(index).cloned()
+    }
+
+    /// How many paths the work holds and the staged structure does not.
+    #[must_use]
+    pub const fn untracked_count(&self) -> usize {
+        self.untracked.len()
+    }
+
+    /// One untracked path, or null past the end.
+    #[must_use]
+    pub fn untracked_at(&self, index: usize) -> Option<TreeUntracked> {
+        self.untracked.get(index).cloned()
+    }
+
+    /// How many paths a merge left in conflict.
+    #[must_use]
+    pub const fn conflict_count(&self) -> usize {
+        self.conflicts.len()
+    }
+
+    /// One conflict, or null past the end.
+    #[must_use]
+    pub fn conflict_at(&self, index: usize) -> Option<TreeConflict> {
+        self.conflicts.get(index).cloned()
+    }
+}
+
+/// One path that differs between two structures.
+#[lazyffi(export = RolaTreeChange)]
+#[derive(Debug, Clone)]
+pub struct TreeChange {
+    /// The path in the later structure, or the path it was at for a deletion.
+    path: String,
+    /// What the path is: `file`, `directory` or `symlink`.
+    kind: String,
+    /// What happened: `added`, `modified`, `metadata`, `deleted`, `type_changed` or `renamed`.
+    change: String,
+    /// Where it was, for a rename, or an empty string.
+    old_path: String,
+}
+
+impl TreeChange {
+    /// The change a record says, with its words already read.
+    fn from_record(record: &TreeChangeRecord) -> Self {
+        Self {
+            path: record.path.clone(),
+            kind: kind_word(record.kind),
+            change: record.status().to_owned(),
+            old_path: record.old_path.clone().unwrap_or_default(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl TreeChange {
+    /// The path in the later structure, or where it was for a deletion.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// What the path is.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    /// What happened to it.
+    #[must_use]
+    pub fn change(&self) -> String {
+        self.change.clone()
+    }
+
+    /// Where it was, for a rename, or an empty string.
+    #[must_use]
+    pub fn old_path(&self) -> String {
+        self.old_path.clone()
+    }
+}
+
+/// One path the tree holds and nothing staged has.
+#[lazyffi(export = RolaTreeUntracked)]
+#[derive(Debug, Clone)]
+pub struct TreeUntracked {
+    /// The path.
+    path: String,
+    /// What it is: `file`, `directory` or `symlink`.
+    kind: String,
+}
+
+impl TreeUntracked {
+    /// The untracked path a record says.
+    fn from_record(record: &TreeUntrackedRecord) -> Self {
+        Self {
+            path: record.path.clone(),
+            kind: kind_word(record.kind),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl TreeUntracked {
+    /// The path.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// What it is.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+}
+
+/// One path a merge left in conflict.
+#[lazyffi(export = RolaTreeConflict)]
+#[derive(Debug, Clone)]
+pub struct TreeConflict {
+    /// The path the two sides disagree about.
+    path: String,
+    /// The conflict copy that holds the other side.
+    theirs: String,
+}
+
+impl TreeConflict {
+    /// The conflict a record says.
+    fn from_record(record: &TreeConflictRecord) -> Self {
+        Self {
+            path: record.path.clone(),
+            theirs: record.theirs.clone(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl TreeConflict {
+    /// The path the two sides disagree about.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// The conflict copy that holds the other side.
+    #[must_use]
+    pub fn theirs(&self) -> String {
+        self.theirs.clone()
+    }
+}
+
+/// What a path is, as the word the status uses.
+fn kind_word(kind: EntryKind) -> String {
+    match kind {
+        EntryKind::File => "file",
+        EntryKind::Directory => "directory",
+        EntryKind::Symlink => "symlink",
+    }
+    .to_owned()
 }
 
 /// The status of the tree holding `directory`, when there is one to read.
-fn tree_status(directory: &Path) -> Option<TreeStatus> {
+fn read_tree_status(directory: &Path) -> Option<TreeStatusRecord> {
     let workspace = Workspace::locate(directory)?;
     let layout = working_layout(&workspace)?;
     let index = VCSIndex::locate(directory)?;
@@ -167,21 +407,40 @@ fn tree_status(directory: &Path) -> Option<TreeStatus> {
 /// The answer is the mark alone: a tree is a directory holding a `.rola-tree` directory, and
 /// nothing about the Workspace, the Layout, the index or the store is read. That is what makes it
 /// the cheap question a listing asks about every directory it draws, beside
-/// [`tree_status_json`], which is the whole reading of one.
+/// [`tree_status`], which is the whole reading of one.
 ///
 /// # FFI
 ///
 /// `true` when the directory holds the tree's mark, `false` otherwise, including when the path is
 /// not a directory.
 #[must_use]
-#[lazyffi(export = rola_is_tree)]
+#[lazyffi(export = rola_tree_is_tree)]
 pub fn is_tree(directory: &Path) -> bool {
     directory.join(MARK).is_dir()
 }
 
-/// The id of a tree and the description of its next version, as the C ABI writes them.
-#[derive(Debug, Serialize)]
-struct TreeMark {
+/// The id of a tree and the description staged for it.
+///
+/// A tree's id is what tells a tree that moved from one that was lost and another that appeared;
+/// the description is what the next version is to say. A caller that read `.rola-tree` itself
+/// would be keeping a second copy of the format, which is what [`tree_status`] exists to avoid for
+/// the status; this is the same answer for the two fields the status does not carry.
+///
+/// # FFI
+///
+/// A `RolaTreeMark *` the caller releases with `free_rola_tree_mark`, or null when the directory is
+/// not the root of a tree. The id is empty when the file is there and cannot be read, and the
+/// description is empty when none is staged.
+#[must_use]
+#[lazyffi(export = rola_tree_mark)]
+pub fn tree_mark(directory: &Path) -> Option<TreeMark> {
+    read_tree_mark(directory)
+}
+
+/// The id of a tree and the description staged for it.
+#[lazyffi(export = RolaTreeMark)]
+#[derive(Debug, Clone, Default)]
+pub struct TreeMark {
     /// The Layout entry id the tree keeps, empty when the file says nothing.
     id: String,
     /// Whether a description is staged for the next version.
@@ -190,30 +449,29 @@ struct TreeMark {
     description: String,
 }
 
-/// The id of the tree at `directory` and the description staged for it, as one JSON document.
-///
-/// A tree's id is what tells a tree that moved from one that was lost and another that appeared;
-/// the description is what the next version is to say. A caller that read `.rola-tree` itself
-/// would be keeping a second copy of the format, which is what [`tree_status_json`] exists to
-/// avoid for the status; this is the same answer for the two fields the status does not carry.
-///
-/// # FFI
-///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"id":"<uuid>","described":true,"description":"..."}`, or `null` when the directory is not the
-/// root of a tree. `id` is empty when the file is there and cannot be read, and `description` is
-/// empty when none is staged.
-#[must_use]
-#[lazyffi(export = rola_tree_mark_json)]
-pub fn tree_mark_json(directory: &Path) -> String {
-    tree_mark(directory).map_or_else(
-        || "null".to_owned(),
-        |mark| serde_json::to_string(&mark).unwrap_or_else(|_| "null".to_owned()),
-    )
+#[lazyffi(export = rola_)]
+impl TreeMark {
+    /// The Layout entry id the tree keeps, or an empty string when the file says nothing.
+    #[must_use]
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    /// Whether a description is staged for the next version.
+    #[must_use]
+    pub const fn described(&self) -> bool {
+        self.described
+    }
+
+    /// The description itself, or an empty string when none is staged.
+    #[must_use]
+    pub fn description(&self) -> String {
+        self.description.clone()
+    }
 }
 
 /// The mark of the tree at `directory`, when the directory is the root of one.
-fn tree_mark(directory: &Path) -> Option<TreeMark> {
+fn read_tree_mark(directory: &Path) -> Option<TreeMark> {
     let mark = directory.join(MARK);
 
     if !mark.is_dir() {
@@ -245,9 +503,7 @@ mod tests {
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
 
-    use super::{
-        RolaStatus, Status, free_rola_status, is_tree, locate_rola_status, tree_mark_json,
-    };
+    use super::{RolaStatus, Status, free_rola_status, is_tree, rola_status_locate, tree_mark};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     ///
@@ -304,7 +560,7 @@ mod tests {
 
         // SAFETY: `raw` is a NUL-terminated C string that outlives the call, which is all the export
         // reads it for.
-        unsafe { locate_rola_status(raw.as_ptr().cast_mut()) }
+        unsafe { rola_status_locate(raw.as_ptr().cast_mut()) }
     }
 
     /// What a string the ABI handed out says, released once it has been read.
@@ -338,7 +594,7 @@ mod tests {
         let dir = scratch("not-tree");
 
         assert!(!is_tree(&dir));
-        assert_eq!(tree_mark_json(&dir), "null");
+        assert!(tree_mark(&dir).is_none());
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -352,16 +608,16 @@ mod tests {
 
         assert!(is_tree(&dir));
 
-        let answer: serde_json::Value = serde_json::from_str(&tree_mark_json(&dir)).unwrap();
-        assert_eq!(answer["id"], "1a2b3c4d");
-        assert_eq!(answer["described"], false);
-        assert_eq!(answer["description"], "");
+        let reading = tree_mark(&dir).unwrap();
+        assert_eq!(reading.id(), "1a2b3c4d");
+        assert!(!reading.described());
+        assert_eq!(reading.description(), "");
 
         fs::write(mark.join("description"), "the next version").unwrap();
 
-        let answer: serde_json::Value = serde_json::from_str(&tree_mark_json(&dir)).unwrap();
-        assert_eq!(answer["described"], true);
-        assert_eq!(answer["description"], "the next version");
+        let reading = tree_mark(&dir).unwrap();
+        assert!(reading.described());
+        assert_eq!(reading.description(), "the next version");
 
         let _ = fs::remove_dir_all(&dir);
     }

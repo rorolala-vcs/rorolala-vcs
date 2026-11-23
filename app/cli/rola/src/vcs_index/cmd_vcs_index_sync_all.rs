@@ -167,7 +167,6 @@ pub fn handle_vcs_index_sync_all(
         held,
         &account,
         target.to_string(),
-        String::new(),
         reporting.progress(),
     ));
     reporting.finish();

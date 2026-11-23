@@ -1,6 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
-using System.Text.Json;
 
 using RolaSharp;
 
@@ -23,16 +21,26 @@ public sealed partial class WorkspaceWriter
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        using var document = JsonDocument.Parse(
-            Invoke(
-                JsonSerializer.Serialize(request with { Workspace = _workspace.Root.FullName }),
-                progress,
-                cancellation,
-                RorolalaBinding.rola_write_bring
-            )
+        using var memory = new NativeRequest();
+        var native = memory.Pointer(
+            new RolaWriteBringRequest
+            {
+                common = memory.Common(request, _workspace.Root.FullName),
+                refs = memory.Span(request.Refs),
+                to = memory.Text(request.To),
+                by_name = NativeRequest.Flag(request.ByName),
+            }
         );
 
-        return Brings.Parse(document.RootElement);
+        var answer = Call(RorolalaBinding.rola_write_bring, native, progress, cancellation);
+        try
+        {
+            return Brings.Read(answer);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_bring(answer);
+        }
     }
 
     /// <summary>Brings a variant in to be joined into a file this Layout names.</summary>
@@ -53,16 +61,28 @@ public sealed partial class WorkspaceWriter
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        using var document = JsonDocument.Parse(
-            Invoke(
-                JsonSerializer.Serialize(request with { Workspace = _workspace.Root.FullName }),
-                progress,
-                cancellation,
-                RorolalaBinding.rola_write_bring
-            )
+        using var memory = new NativeRequest();
+        var native = memory.Pointer(
+            new RolaWriteBringRequest
+            {
+                common = memory.Common(request, _workspace.Root.FullName),
+                to = memory.Text(request.To),
+                join = memory.Text(request.Join),
+                variant = memory.Text(request.Variant),
+                file = memory.Text(request.File),
+                tree_merge = NativeRequest.Flag(request.TreeMerge),
+            }
         );
 
-        return Brings.ParseVariant(document.RootElement);
+        var answer = Call(RorolalaBinding.rola_write_bring, native, progress, cancellation);
+        try
+        {
+            return Brings.ReadVariant(answer);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_bring(answer);
+        }
     }
 
     /// <summary>Moves a path's record to a version, or one version back when none is named.</summary>
@@ -79,16 +99,28 @@ public sealed partial class WorkspaceWriter
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        using var document = JsonDocument.Parse(
-            Invoke(
-                JsonSerializer.Serialize(request with { Workspace = _workspace.Root.FullName }),
-                progress,
-                cancellation,
-                RorolalaBinding.rola_write_retrack
-            )
+        using var memory = new NativeRequest();
+        var native = memory.Pointer(
+            new RolaWriteRetrackRequest
+            {
+                common = memory.Common(request, _workspace.Root.FullName),
+                file = memory.Text(request.File),
+                record = memory.Text(request.Record),
+                only_index = NativeRequest.Flag(request.OnlyIndex),
+                deny_jump = NativeRequest.Flag(request.DenyJump),
+                fork = NativeRequest.Flag(request.Fork),
+            }
         );
 
-        return Retracks.Parse(document.RootElement);
+        var answer = Call(RorolalaBinding.rola_write_retrack, native, progress, cancellation);
+        try
+        {
+            return Retracks.Read(answer);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_retrack(answer);
+        }
     }
 
     /// <summary>Reads what a batch recording would record, without writing anything.</summary>
@@ -105,16 +137,18 @@ public sealed partial class WorkspaceWriter
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var json = Invoke(
-            JsonSerializer.Serialize(request with { Workspace = _workspace.Root.FullName }),
-            progress,
-            cancellation,
-            RorolalaBinding.rola_write_track_plan
-        );
+        using var memory = new NativeRequest();
+        var native = memory.Pointer(TrackFields(memory, request));
 
-        using var document = JsonDocument.Parse(json);
-
-        return Tracks.ParsePlan(document.RootElement) with { Json = json };
+        var answer = Call(RorolalaBinding.rola_write_track_plan, native, progress, cancellation);
+        try
+        {
+            return Tracks.ReadPlan(answer);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_track_plan(answer);
+        }
     }
 
     /// <summary>Records what a plan named, once the caller has said what each subject did.</summary>
@@ -130,7 +164,7 @@ public sealed partial class WorkspaceWriter
     [SuppressMessage(
         "Usage",
         "CA1062:Validate arguments of public methods",
-        Justification = "a null progress or cancellation is the caller asking this side to make one, which Invoke does"
+        Justification = "a null progress or cancellation is the caller asking this side to make one, which Call does"
     )]
     public TrackResult Track(
         TrackRequest request,
@@ -147,7 +181,7 @@ public sealed partial class WorkspaceWriter
         // The native side rereads the plan's subjects and their digests against the work; a plan
         // built by hand holds no subjects it could send, and the messages alone would say nothing
         // about which content each one is for.
-        if (string.IsNullOrEmpty(plan.Json))
+        if (!plan.Agreed)
         {
             throw new RolaWriteError(
                 RolaWriteErrorKind.Precondition,
@@ -156,18 +190,45 @@ public sealed partial class WorkspaceWriter
             );
         }
 
-        using var document = JsonDocument.Parse(
-            Invoke(
-                JsonSerializer.Serialize(request with { Workspace = _workspace.Root.FullName }),
-                plan.Json,
-                JsonSerializer.Serialize(messages),
-                progress,
-                cancellation,
-                RorolalaBinding.rola_write_track_apply
-            )
+        using var memory = new NativeRequest();
+        var native = memory.Pointer(TrackFields(memory, request));
+        var subjects = memory.Array(
+            plan.Subjects
+                .Select(subject => new RolaWriteTrackAgreed
+                {
+                    path = memory.Text(subject.Path),
+                    digest = memory.Text(subject.Digest),
+                })
+                .ToList()
+        );
+        var words = memory.Array(
+            messages
+                .Select(pair => new RolaWriteTrackMessage
+                {
+                    path = memory.Text(pair.Key),
+                    text = memory.Text(pair.Value),
+                })
+                .ToList()
         );
 
-        return Tracks.ParseApply(document.RootElement);
+        var answer = Call(
+            RorolalaBinding.rola_write_track_apply,
+            native,
+            subjects.Items,
+            subjects.Count,
+            words.Items,
+            words.Count,
+            progress,
+            cancellation
+        );
+        try
+        {
+            return Tracks.ReadApply(answer);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_track_apply(answer);
+        }
     }
 
     /// <summary>Settles one path against the Layout it works from.</summary>
@@ -177,7 +238,7 @@ public sealed partial class WorkspaceWriter
     /// <returns>What the run did.</returns>
     /// <exception cref="RolaWriteError">
     /// The run failed, or refused to act. A refusal is reported as
-    /// <see cref="RolaWriteErrorKind.Precondition"/> with the refusal's own JSON as its reason, since a
+    /// <see cref="RolaWriteErrorKind.Precondition"/> with the reasons the refusal names, since a
     /// refusal is a decision the path made rather than a failure of the write.
     /// </exception>
     public AlignResult Align(
@@ -187,17 +248,29 @@ public sealed partial class WorkspaceWriter
     )
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Mode);
 
-        using var document = JsonDocument.Parse(
-            Invoke(
-                JsonSerializer.Serialize(request with { Workspace = _workspace.Root.FullName }),
-                progress,
-                cancellation,
-                RorolalaBinding.rola_write_align
-            )
+        using var memory = new NativeRequest();
+        var native = memory.Pointer(
+            new RolaWriteAlignRequest
+            {
+                common = memory.Common(request, _workspace.Root.FullName),
+                path = memory.Text(request.Path),
+                mode = memory.Mode(request.Mode),
+                completely = NativeRequest.Flag(request.Completely),
+                include_ignored = NativeRequest.Flag(request.IncludeIgnored),
+            }
         );
 
-        return Aligns.Parse(document.RootElement);
+        var answer = Call(RorolalaBinding.rola_write_align, native, progress, cancellation);
+        try
+        {
+            return Aligns.Read(answer);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_align(answer);
+        }
     }
 
     /// <summary>Reads every gate an ownership move has to pass, without moving any.</summary>
@@ -214,16 +287,34 @@ public sealed partial class WorkspaceWriter
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        using var document = JsonDocument.Parse(
-            Invoke(
-                JsonSerializer.Serialize(request with { Workspace = _workspace.Root.FullName }),
-                progress,
-                cancellation,
-                RorolalaBinding.rola_write_ownership_plan
-            )
+        using var memory = new NativeRequest();
+        var native = memory.Pointer(
+            new RolaWriteOwnershipRequest
+            {
+                common = memory.Common(request, _workspace.Root.FullName),
+                kind =
+                    request.Kind == OwnershipKind.Giveup
+                        ? RolaWriteOwnershipKind.RolaWriteOwnershipKind_Giveup
+                        : RolaWriteOwnershipKind.RolaWriteOwnershipKind_Hold,
+                paths = memory.Span(request.Paths),
+                allow_partial = NativeRequest.Flag(request.AllowPartial),
+            }
         );
 
-        return Ownerships.ParsePlan(document.RootElement);
+        var answer = Call(
+            RorolalaBinding.rola_write_ownership_plan,
+            native,
+            progress,
+            cancellation
+        );
+        try
+        {
+            return Ownerships.ReadPlan(answer);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_ownership_plan(answer);
+        }
     }
 
     /// <summary>Moves the ownership a plan named, once every gate has been read again.</summary>
@@ -236,7 +327,7 @@ public sealed partial class WorkspaceWriter
     [SuppressMessage(
         "Usage",
         "CA1062:Validate arguments of public methods",
-        Justification = "a null progress or cancellation is the caller asking this side to make one, which Invoke does"
+        Justification = "a null progress or cancellation is the caller asking this side to make one, which Call does"
     )]
     public OwnershipResult ApplyOwnership(
         OwnershipPlanRequest request,
@@ -247,181 +338,242 @@ public sealed partial class WorkspaceWriter
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // The native side reads only the entries a plan promised to move; its refusals and its skip
-        // count are the caller's to keep, and writing them back would only be a copy it never reads.
-        var agreed =
-            plan is null ? string.Empty : JsonSerializer.Serialize(new { wanted = plan.Wanted });
-
-        using var document = JsonDocument.Parse(
-            Invoke(
-                JsonSerializer.Serialize(request with { Workspace = _workspace.Root.FullName }),
-                agreed,
-                progress,
-                cancellation,
-                RorolalaBinding.rola_write_ownership_apply
-            )
+        using var memory = new NativeRequest();
+        var native = memory.Pointer(
+            new RolaWriteOwnershipRequest
+            {
+                common = memory.Common(request, _workspace.Root.FullName),
+                kind =
+                    request.Kind == OwnershipKind.Giveup
+                        ? RolaWriteOwnershipKind.RolaWriteOwnershipKind_Giveup
+                        : RolaWriteOwnershipKind.RolaWriteOwnershipKind_Hold,
+                paths = memory.Span(request.Paths),
+                allow_partial = NativeRequest.Flag(request.AllowPartial),
+            }
         );
 
-        return Ownerships.ParseApply(document.RootElement);
+        // The native side reads only the entries a plan promised to move; its refusals and its skip
+        // count are the caller's to keep, and sending them back would only be a copy it never reads.
+        var agreed =
+            plan is null
+                ? (Items: 0, Count: (nuint)0)
+                : memory.Array(
+                    plan.Wanted
+                        .Select(wanted => new RolaWriteOwnershipAgreed
+                        {
+                            path = memory.Text(wanted.Path),
+                            uuid = memory.Text(wanted.Uuid),
+                        })
+                        .ToList()
+                );
+
+        var answer = Call(
+            RorolalaBinding.rola_write_ownership_apply,
+            native,
+            agreed.Items,
+            agreed.Count,
+            progress,
+            cancellation
+        );
+        try
+        {
+            return Ownerships.ReadApply(answer);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_ownership_apply(answer);
+        }
     }
 
     /// <summary>A native call that takes a request, a progress handle and a cancellation handle.</summary>
-    /// <param name="request">The UTF-8 request document.</param>
+    /// <param name="request">The native request.</param>
     /// <param name="progress">The progress the run says itself to.</param>
     /// <param name="cancellation">The flag the run checks.</param>
     /// <returns>The native answer, which the caller owns.</returns>
     private delegate RorolalaResult RequestCall(nint request, nint progress, nint cancellation);
 
-    /// <summary>A native call that takes a request, a plan and both handles.</summary>
-    /// <param name="request">The UTF-8 request document.</param>
-    /// <param name="plan">The UTF-8 plan document, or zero when the run is to make its own.</param>
+    /// <summary>A native call that takes a request, an agreed array and both handles.</summary>
+    /// <param name="request">The native request.</param>
+    /// <param name="agreed">The caller's array.</param>
+    /// <param name="agreedLen">How many records the array holds.</param>
     /// <param name="progress">The progress the run says itself to.</param>
     /// <param name="cancellation">The flag the run checks.</param>
     /// <returns>The native answer, which the caller owns.</returns>
-    private delegate RorolalaResult PlanCall(
+    private delegate RorolalaResult AgreedCall(
         nint request,
-        nint plan,
+        nint agreed,
+        nuint agreedLen,
         nint progress,
         nint cancellation
     );
 
-    /// <summary>A native call that takes a request, a plan, a message map and both handles.</summary>
-    /// <param name="request">The UTF-8 request document.</param>
-    /// <param name="plan">The UTF-8 plan document, or zero when the run is to make its own.</param>
-    /// <param name="messages">The UTF-8 message map, or zero when the run takes none.</param>
+    /// <summary>A native call that takes a request, two arrays and both handles.</summary>
+    /// <param name="request">The native request.</param>
+    /// <param name="subjects">The caller's subjects.</param>
+    /// <param name="subjectsLen">How many subjects there are.</param>
+    /// <param name="messages">The caller's messages.</param>
+    /// <param name="messagesLen">How many messages there are.</param>
     /// <param name="progress">The progress the run says itself to.</param>
     /// <param name="cancellation">The flag the run checks.</param>
     /// <returns>The native answer, which the caller owns.</returns>
-    private delegate RorolalaResult MessageCall(
+    private delegate RorolalaResult TrackCall(
         nint request,
-        nint plan,
+        nint subjects,
+        nuint subjectsLen,
         nint messages,
+        nuint messagesLen,
         nint progress,
         nint cancellation
     );
 
     /// <summary>Runs a request call, making the handles a caller left out.</summary>
-    /// <param name="request">The request document.</param>
+    /// <param name="call">The native call.</param>
+    /// <param name="request">The native request.</param>
     /// <param name="progress">The caller's progress, or nothing.</param>
     /// <param name="cancellation">The caller's cancellation, or nothing.</param>
-    /// <param name="call">The native call.</param>
-    /// <returns>The answer JSON, which the native side owned.</returns>
-    private static string Invoke(
-        string request,
-        Progress? progress,
-        Cancellation? cancellation,
-        RequestCall call
-    ) =>
-        Invoke(
-            request,
-            null,
-            null,
-            progress,
-            cancellation,
-            (asked, _, _, watching, stopping) => call(asked, watching, stopping)
-        );
-
-    /// <summary>Runs a plan call, making the handles a caller left out.</summary>
-    /// <param name="request">The request document.</param>
-    /// <param name="plan">The plan document, or nothing for a call that takes none.</param>
-    /// <param name="progress">The caller's progress, or nothing.</param>
-    /// <param name="cancellation">The caller's cancellation, or nothing.</param>
-    /// <param name="call">The native call.</param>
-    /// <returns>The answer JSON, which the native side owned.</returns>
-    private static string Invoke(
-        string request,
-        string? plan,
-        Progress? progress,
-        Cancellation? cancellation,
-        PlanCall call
-    ) =>
-        Invoke(
-            request,
-            plan,
-            null,
-            progress,
-            cancellation,
-            (asked, given, _, watching, stopping) => call(asked, given, watching, stopping)
-        );
-
-    /// <summary>Runs a call, making the handles a caller left out and releasing what this owned.</summary>
-    /// <param name="request">The request document.</param>
-    /// <param name="plan">The plan document, or nothing for a call that takes none.</param>
-    /// <param name="messages">The message map, or nothing for a call that takes none.</param>
-    /// <param name="progress">The caller's progress, or nothing.</param>
-    /// <param name="cancellation">The caller's cancellation, or nothing.</param>
-    /// <param name="call">The native call.</param>
-    /// <returns>The answer JSON, which the native side owned.</returns>
+    /// <returns>The answer handle, which the caller releases with the call's own `free_`.</returns>
     /// <exception cref="RolaWriteError">The native call answered with a failure this takes over.</exception>
-    private static string Invoke(
-        string request,
-        string? plan,
-        string? messages,
+    private static nint Call(
+        RequestCall call,
+        nint request,
         Progress? progress,
-        Cancellation? cancellation,
-        MessageCall call
+        Cancellation? cancellation
     )
     {
-        Progress? ownedProgress = null;
-        Cancellation? ownedCancellation = null;
-        nint requestText = 0;
-        nint planText = 0;
-        nint messagesText = 0;
+        var (watching, stopping, ownedProgress, ownedCancellation) = Handles(progress, cancellation);
         try
         {
-            var watching = progress;
-            if (watching is null)
-            {
-                ownedProgress = Progress.New();
-                watching = ownedProgress;
-            }
+            var answer = call(request, watching.Handle, stopping.Handle);
 
-            // The native side refuses a null handle rather than reading it as "no progress", so a
-            // caller that asked for neither still hands in a real one it never reads back.
-            var stopping = cancellation;
-            if (stopping is null)
-            {
-                ownedCancellation = Cancellation.New();
-                stopping = ownedCancellation;
-            }
-
-            requestText = Utf8(request);
-            planText = plan is null ? 0 : Utf8(plan);
-            messagesText = messages is null ? 0 : Utf8(messages);
-
-            var answer = call(
-                requestText,
-                planText,
-                messagesText,
-                watching.Handle,
-                stopping.Handle
-            );
-            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
-            {
-                throw WriteResults.From(answer.payload);
-            }
-
-            return NativeText.Taken(answer.payload);
+            return Payload(answer);
         }
         finally
         {
-            if (requestText != 0)
-            {
-                Marshal.FreeCoTaskMem(requestText);
-            }
-
-            if (planText != 0)
-            {
-                Marshal.FreeCoTaskMem(planText);
-            }
-
-            if (messagesText != 0)
-            {
-                Marshal.FreeCoTaskMem(messagesText);
-            }
-
             ownedProgress?.Dispose();
             ownedCancellation?.Dispose();
         }
+    }
+
+    /// <summary>Runs a call with one agreed array, making the handles a caller left out.</summary>
+    /// <param name="call">The native call.</param>
+    /// <param name="request">The native request.</param>
+    /// <param name="agreed">The caller's array.</param>
+    /// <param name="agreedLen">How many records the array holds.</param>
+    /// <param name="progress">The caller's progress, or nothing.</param>
+    /// <param name="cancellation">The caller's cancellation, or nothing.</param>
+    /// <returns>The answer handle, which the caller releases with the call's own `free_`.</returns>
+    /// <exception cref="RolaWriteError">The native call answered with a failure this takes over.</exception>
+    private static nint Call(
+        AgreedCall call,
+        nint request,
+        nint agreed,
+        nuint agreedLen,
+        Progress? progress,
+        Cancellation? cancellation
+    )
+    {
+        var (watching, stopping, ownedProgress, ownedCancellation) = Handles(progress, cancellation);
+        try
+        {
+            var answer = call(request, agreed, agreedLen, watching.Handle, stopping.Handle);
+
+            return Payload(answer);
+        }
+        finally
+        {
+            ownedProgress?.Dispose();
+            ownedCancellation?.Dispose();
+        }
+    }
+
+    /// <summary>Runs a track apply, making the handles a caller left out.</summary>
+    /// <param name="call">The native call.</param>
+    /// <param name="request">The native request.</param>
+    /// <param name="subjects">The caller's subjects.</param>
+    /// <param name="subjectsLen">How many subjects there are.</param>
+    /// <param name="messages">The caller's messages.</param>
+    /// <param name="messagesLen">How many messages there are.</param>
+    /// <param name="progress">The caller's progress, or nothing.</param>
+    /// <param name="cancellation">The caller's cancellation, or nothing.</param>
+    /// <returns>The answer handle, which the caller releases with the call's own `free_`.</returns>
+    /// <exception cref="RolaWriteError">The native call answered with a failure this takes over.</exception>
+    private static nint Call(
+        TrackCall call,
+        nint request,
+        nint subjects,
+        nuint subjectsLen,
+        nint messages,
+        nuint messagesLen,
+        Progress? progress,
+        Cancellation? cancellation
+    )
+    {
+        var (watching, stopping, ownedProgress, ownedCancellation) = Handles(progress, cancellation);
+        try
+        {
+            var answer = call(
+                request,
+                subjects,
+                subjectsLen,
+                messages,
+                messagesLen,
+                watching.Handle,
+                stopping.Handle
+            );
+
+            return Payload(answer);
+        }
+        finally
+        {
+            ownedProgress?.Dispose();
+            ownedCancellation?.Dispose();
+        }
+    }
+
+    /// <summary>The fields a batch recording sends, which a plan and an apply share.</summary>
+    /// <param name="memory">Where the request's strings are held.</param>
+    /// <param name="request">The recording.</param>
+    /// <returns>The native request.</returns>
+    private RolaWriteTrackRequest TrackFields(NativeRequest memory, TrackRequest request) =>
+        new()
+        {
+            common = memory.Common(request, _workspace.Root.FullName),
+            files = memory.Span(request.Files),
+            replace = NativeRequest.Flag(request.Replace),
+            policy = memory.Text(request.Policy),
+            include_ignored = NativeRequest.Flag(request.IncludeIgnored),
+        };
+
+    /// <summary>The handles a call runs with, making either one a caller left out.</summary>
+    /// <param name="progress">The caller's progress, or nothing.</param>
+    /// <param name="cancellation">The caller's cancellation, or nothing.</param>
+    /// <returns>The two handles and the ones this made and must give back.</returns>
+    private static (Progress Watching, Cancellation Stopping, Progress? OwnedProgress, Cancellation? OwnedCancellation) Handles(
+        Progress? progress,
+        Cancellation? cancellation
+    )
+    {
+        var ownedProgress = progress is null ? Progress.New() : null;
+        var watching = progress ?? ownedProgress!;
+        var ownedCancellation = cancellation is null ? Cancellation.New() : null;
+        var stopping = cancellation ?? ownedCancellation!;
+
+        // The native side refuses a null handle rather than reading it as "no progress", so a
+        // caller that asked for neither still hands in a real one it never reads back.
+        return (watching, stopping, ownedProgress, ownedCancellation);
+    }
+
+    /// <summary>The payload of an answer, or the failure it answered with.</summary>
+    /// <param name="answer">The native answer.</param>
+    /// <returns>The payload handle.</returns>
+    /// <exception cref="RolaWriteError">The answer is a failure.</exception>
+    private static nint Payload(RorolalaResult answer)
+    {
+        if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+        {
+            throw WriteResults.From(answer.payload);
+        }
+
+        return answer.payload;
     }
 }

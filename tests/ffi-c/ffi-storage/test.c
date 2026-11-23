@@ -35,25 +35,36 @@ int main(void) {
     const char *scratch = fixture("ROLA_SCRATCH");
 
     /* The listing is the keys the store holds, and the fixture put one there. */
-    RorolalaResult objects = rola_storage_objects_json(workspace);
+    RorolalaResult objects = rola_storage_objects(workspace);
     want(objects.tag == RorolalaResult_Ok, "a Workspace's store lists its objects");
     if (objects.tag == RorolalaResult_Ok) {
-        const char *json = objects.payload;
-        want(json != NULL && strstr(json, "\"keys\"") != NULL, "the listing names keys");
-        want(key[0] != '\0' && json != NULL && strstr(json, key) != NULL,
-             "the content the fixture stored is listed under its key");
-        free_string(objects.payload);
+        RolaStorageKeys *keys = objects.payload;
+        want(keys != NULL, "the listing answers as a handle");
+
+        if (keys != NULL) {
+            int found = 0;
+            for (uintptr_t index = 0; index < rola_storage_keys_count(keys); index++) {
+                char *listed = rola_storage_keys_at(keys, index);
+                if (listed != NULL && key[0] != '\0' && strcmp(listed, key) == 0) {
+                    found = 1;
+                }
+                free_string(listed);
+            }
+
+            want(found, "the content the fixture stored is listed under its key");
+            free_rola_storage_keys(keys);
+        }
     } else {
         released(objects);
     }
 
     /* Manifests are listed the same way; a small object is stored whole, so it need not be one. */
-    RorolalaResult manifests = rola_storage_manifests_json(workspace);
+    RorolalaResult manifests = rola_storage_manifests(workspace);
     want(manifests.tag == RorolalaResult_Ok, "a Workspace's store lists its manifests");
     if (manifests.tag == RorolalaResult_Ok) {
-        const char *json = manifests.payload;
-        want(json != NULL && strstr(json, "\"keys\"") != NULL, "the manifest listing names keys");
-        free_string(manifests.payload);
+        if (manifests.payload != NULL) {
+            free_rola_storage_keys(manifests.payload);
+        }
     } else {
         released(manifests);
     }
@@ -99,7 +110,7 @@ int main(void) {
     }
 
     /* A directory no place holds has no store to read. */
-    RorolalaResult nowhere = rola_storage_objects_json("/nonexistent/rola/store");
+    RorolalaResult nowhere = rola_storage_objects("/nonexistent/rola/store");
     want(nowhere.tag == RorolalaResult_Err, "a directory outside every place is a failure");
     if (nowhere.tag == RorolalaResult_Err) {
         const RolaStorageError *error = nowhere.payload;
@@ -125,7 +136,7 @@ int main(void) {
         free_rola_write_error(twice.payload);
     }
 
-    RorolalaResult bound = rola_workspace_bind_storage(workspace, store);
+    RorolalaResult bound = rola_workspace_storage_bind(workspace, store);
     want(bound.tag == RorolalaResult_Ok, "a store is bound to the Workspace");
     if (bound.tag == RorolalaResult_Ok) {
         const char *json = bound.payload;
@@ -138,15 +149,26 @@ int main(void) {
         free_rola_write_error(bound.payload);
     }
 
-    RorolalaResult connected = rola_storage_connected_json(store);
+    RorolalaResult connected = rola_storage_connected(store);
     want(connected.tag == RorolalaResult_Ok, "the store says who writes to it");
     if (connected.tag == RorolalaResult_Ok) {
-        const char *json = connected.payload;
-        want(json != NULL && strstr(json, "\"workspaces\"") != NULL,
-             "the record names workspaces");
-        want(json != NULL && strstr(json, workspace) != NULL,
-             "the record names the Workspace that was bound");
-        free_string(connected.payload);
+        RolaStorageConnected *record = connected.payload;
+        want(record != NULL, "the record answers as a handle");
+
+        if (record != NULL) {
+            int named = 0;
+            for (uintptr_t index = 0; index < rola_storage_connected_workspace_count(record);
+                 index++) {
+                char *bound_workspace = rola_storage_connected_workspace_at(record, index);
+                if (bound_workspace != NULL && strcmp(bound_workspace, workspace) == 0) {
+                    named = 1;
+                }
+                free_string(bound_workspace);
+            }
+
+            want(named, "the record names the Workspace that was bound");
+            free_rola_storage_connected(record);
+        }
     } else {
         free_rola_write_error(connected.payload);
     }

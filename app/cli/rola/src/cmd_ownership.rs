@@ -29,7 +29,7 @@
     clippy::trivially_copy_pass_by_ref
 )]
 
-use librorolala::daemon::action_fetch_layout;
+use librorolala::daemon::{FetchLayoutRequest, action_fetch_layout};
 use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::Layout;
 use librorolala::workspace::Workspace;
@@ -451,7 +451,14 @@ fn change(
     // second would see a bar that appeared when the slow half was already over.
     let mut step = progress.begin("", Some(2));
 
-    action_fetch_layout(held, &account, target.to_string(), vault_name.clone())?;
+    action_fetch_layout(
+        held,
+        &account,
+        target.to_string(),
+        &FetchLayoutRequest {
+            name: vault_name.clone(),
+        },
+    )?;
     step.advance_by(1);
 
     let copy = match cached_vault_copy(held, &vault_name) {
@@ -579,10 +586,6 @@ fn settling(held: &Workspace, layout: &Layout, force: bool) -> Result<Option<Tre
 /// # Errors
 ///
 /// Whatever encoding the pair fails with, which is nothing a caller can bring about.
-pub fn ownership_input(name: String, ids: Vec<String>) -> Result<String, serde_json::Error> {
-    serde_json::to_string(&(name, ids))
-}
-
 /// What was refused, in the words the run is told it in.
 fn describe(refusal: &Refusal) -> String {
     match refusal {

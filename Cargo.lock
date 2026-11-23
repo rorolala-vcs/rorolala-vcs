@@ -3920,8 +3920,6 @@ dependencies = [
  "rorolala-vcs",
  "rorolala-workspace",
  "rorolala-workspace-analyze",
- "serde",
- "serde_json",
  "tokio",
  "uuid",
 ]
@@ -4019,6 +4017,7 @@ dependencies = [
 name = "rorolala-utils-lazyffi"
 version = "0.4.0"
 dependencies = [
+ "rorolala-dev-bindgen",
  "rorolala-utils-lazyffi-core",
  "rorolala-utils-lazyffi-macros",
 ]

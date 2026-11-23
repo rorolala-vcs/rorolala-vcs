@@ -7,11 +7,10 @@ use rorolala_ignore::IgnoreRuleSet;
 use rorolala_storage::{Batch, Lockable as _, RorolalaStorage, StorageSet};
 use rorolala_tree::{EntryKind, Staging, Tree, TreeEntry, TreeRules, TreeStructure, conflict_copy};
 use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
-use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_lazyffi::{StrSpan, lazyffi};
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
-use serde::Serialize;
 
 use crate::write::WriteError;
 
@@ -49,7 +48,7 @@ pub fn write_description(
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"bytes":N}`, or a
+/// A `RolaWriteTreeDescription *` the caller releases with `free_rola_write_tree_description`, or a
 /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `target` is the tree's
 /// path, relative to `directory`, and empty for the directory itself.
 ///
@@ -62,7 +61,7 @@ pub fn write_description_at(
     directory: &Path,
     target: &str,
     text: &str,
-) -> Result<String, WriteError> {
+) -> Result<WriteTreeDescription, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let target = if target.is_empty() {
         directory.to_path_buf()
@@ -76,16 +75,35 @@ pub fn write_description_at(
     };
     let bytes = write_description(&workspace, &target, text)?;
 
-    serde_json::to_string(&serde_json::json!({ "bytes": bytes })).map_err(|error| {
-        WriteError::Json {
-            reason: error.to_string(),
-        }
+    Ok(WriteTreeDescription {
+        bytes: u64::try_from(bytes).unwrap_or(u64::MAX),
     })
 }
 
+/// How many bytes the description a tree now waits to carry is.
+///
+/// # FFI
+///
+/// A `RolaWriteTreeDescription *` the caller releases with `free_rola_write_tree_description`.
+/// `_bytes` is how many bytes the description is.
+#[lazyffi(export = RolaWriteTreeDescription)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WriteTreeDescription {
+    /// How many bytes the description is.
+    bytes: u64,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTreeDescription {
+    /// How many bytes the description is.
+    #[must_use]
+    pub const fn bytes(&self) -> u64 {
+        self.bytes
+    }
+}
+
 /// What happened to one path when work was staged.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AddChangeKind {
     /// The path was not staged before.
     Added,
@@ -96,7 +114,7 @@ pub enum AddChangeKind {
 }
 
 /// One path a staging changed.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct AddChange {
     /// The path, as the tree writes it.
     pub path: String,
@@ -473,10 +491,10 @@ fn under(scope: &str, path: &str) -> bool {
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"changes":[{"path":"a","kind":"added"}]}`, or a `RolaWriteError *` the caller releases with
-/// `free_rola_write_error`. `paths` is a JSON array of strings, and `target` is the tree's path,
-/// empty for the directory itself.
+/// A `RolaWriteTreeAdd *` the caller releases with `free_rola_write_tree_add`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a
+/// `RolaStrSpan` of the paths to stage, and `target` is the tree's path, empty for the directory
+/// itself.
 ///
 /// # Errors
 ///
@@ -486,13 +504,11 @@ fn under(scope: &str, path: &str) -> bool {
 pub fn stage_paths_at(
     directory: &Path,
     target: &str,
-    paths: &str,
+    paths: StrSpan,
     include_ignored: bool,
-) -> Result<String, WriteError> {
+) -> Result<WriteTreeAdd, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
-    let paths: Vec<String> = serde_json::from_str(paths).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })?;
+    let paths = paths.into_vec();
     let tree_root = if target.is_empty() {
         directory.to_path_buf()
     } else {
@@ -505,17 +521,95 @@ pub fn stage_paths_at(
     };
     let changes = stage_paths(&workspace, &tree_root, "", &paths, include_ignored)?;
 
-    serde_json::to_string(&serde_json::json!({ "changes": changes })).map_err(|error| {
-        WriteError::Json {
-            reason: error.to_string(),
-        }
+    Ok(WriteTreeAdd {
+        changes: changes.iter().map(WriteTreeAddChange::of).collect(),
     })
+}
+
+/// What staging work into a tree changed.
+///
+/// # FFI
+///
+/// A `RolaWriteTreeAdd *` the caller releases with `free_rola_write_tree_add`. `_change_count` and
+/// `_change_at` answer what changed, each a `RolaWriteTreeAddChange *` released with
+/// `free_rola_write_tree_add_change`.
+#[lazyffi(export = RolaWriteTreeAdd)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTreeAdd {
+    /// One change per path the staging touched, in the order the tree writes them.
+    changes: Vec<WriteTreeAddChange>,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTreeAdd {
+    /// How many paths the staging changed.
+    #[must_use]
+    pub const fn change_count(&self) -> usize {
+        self.changes.len()
+    }
+
+    /// One path the staging changed, or null past the end.
+    #[must_use]
+    pub fn change_at(&self, index: usize) -> Option<WriteTreeAddChange> {
+        self.changes.get(index).cloned()
+    }
+}
+
+/// One path a staging changed, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteTreeAddChange *` the caller releases with `free_rola_write_tree_add_change`.
+/// `_path` and `_kind` each return a `char *` the caller releases with `free_string`; `_kind` is
+/// `added`, `updated` or `deleted`.
+#[lazyffi(export = RolaWriteTreeAddChange)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTreeAddChange {
+    /// The path, as the tree writes it.
+    path: String,
+    /// What happened to it.
+    kind: String,
+}
+
+impl WriteTreeAddChange {
+    /// The answer one changed path is handed over as.
+    fn of(change: &AddChange) -> Self {
+        Self {
+            path: change.path.clone(),
+            kind: change_word(change.kind).to_owned(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTreeAddChange {
+    /// The path, as the tree writes it.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// What happened to it.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+}
+
+/// The word the C ABI reports one change by.
+const fn change_word(kind: AddChangeKind) -> &'static str {
+    match kind {
+        AddChangeKind::Added => "added",
+        AddChangeKind::Updated => "updated",
+        AddChangeKind::Deleted => "deleted",
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs;
 
+    use rorolala_utils_lazyffi::StrSpan;
     use rorolala_utils_location::Locate as _;
     use rorolala_workspace::Workspace;
 
@@ -530,8 +624,18 @@ mod tests {
         Workspace::create(&dir).unwrap();
         let workspace = Workspace::locate(&dir).unwrap();
 
-        let json = super::stage_paths_at(&dir, "tree", r#"["one.txt"]"#, false).unwrap();
-        assert!(json.contains("one.txt"));
+        let answer = super::stage_paths_at(
+            &dir,
+            "tree",
+            StrSpan::from(vec!["one.txt".to_owned()]),
+            false,
+        )
+        .unwrap();
+        assert_eq!(answer.change_count(), 1);
+        assert_eq!(
+            answer.change_at(0).expect("the change is there").path(),
+            "one.txt"
+        );
 
         let changes = super::stage_paths(
             &workspace,

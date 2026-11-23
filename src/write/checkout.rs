@@ -11,7 +11,6 @@ use rorolala_vault::Vault;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
 use rorolala_workspace_analyze::{Cache, cache_path, entry_of};
-use serde::Serialize;
 
 use crate::write::{WriteError, layout::set_version, storage::extract_file, tree::relative_to};
 
@@ -131,12 +130,55 @@ pub fn forget(layout: &Layout, root: &Path, path: &str) -> Result<(), WriteError
 }
 
 /// What restoring one path wrote.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Restored {
     /// The Layout entry the path names.
     pub id: uuid::Uuid,
     /// The version the Layout now records.
     pub version: Key,
+}
+
+/// What putting content back at a path wrote: the entry, and the version it now records.
+///
+/// It is the answer of every call that restores a path or aligns one, in a Workspace and in a Vault
+/// alike, because each of them settles one entry on one version.
+///
+/// # FFI
+///
+/// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`. Its `_id` and
+/// `_version` each return a `char *` the caller releases with `free_string`.
+#[lazyffi(export = RolaWriteRestore)]
+#[derive(Debug, Clone)]
+pub struct WriteRestore {
+    /// The Layout entry the path names, as its `Uuid`.
+    id: String,
+    /// The version the Layout now records, as a key.
+    version: String,
+}
+
+impl WriteRestore {
+    /// The answer a settled entry is handed over as.
+    pub(crate) fn of(id: uuid::Uuid, version: &Key) -> Self {
+        Self {
+            id: id.to_string(),
+            version: version.to_string(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteRestore {
+    /// The Layout entry the path names, as its `Uuid`.
+    #[must_use]
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    /// The version the Layout now records, as a key.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
 }
 
 /// Puts the content of `version` at `path`, and writes down that the two agree.
@@ -256,44 +298,42 @@ fn restore_into(
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-/// `free_rola_write_error`.
+/// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, and the failures
 /// [`restore`] names.
 #[lazyffi(export = rola_write_checkout_restore)]
-pub fn restore_at(directory: &Path, path: &str, version: &str) -> Result<String, WriteError> {
+pub fn restore_at(directory: &Path, path: &str, version: &str) -> Result<WriteRestore, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let restored = restore(&workspace, directory, path, version)?;
 
-    serde_json::to_string(&restored).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteRestore::of(restored.id, &restored.version))
 }
 
 /// Puts a version's content back at a path under a Vault.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-/// `free_rola_write_error`.
+/// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::NoVault`] when no Vault holds `directory`, and the failures
 /// [`restore_vault`] names.
 #[lazyffi(export = rola_write_checkout_restore_vault)]
-pub fn restore_vault_at(directory: &Path, path: &str, version: &str) -> Result<String, WriteError> {
+pub fn restore_vault_at(
+    directory: &Path,
+    path: &str,
+    version: &str,
+) -> Result<WriteRestore, WriteError> {
     let vault = Vault::locate(directory).ok_or(WriteError::NoVault)?;
     let restored = restore_vault(&vault, directory, path, version)?;
 
-    serde_json::to_string(&restored).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteRestore::of(restored.id, &restored.version))
 }
 
 /// Forgets the reading of a path under a Workspace.

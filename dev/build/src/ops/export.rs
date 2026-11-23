@@ -10,7 +10,7 @@
 //! | `rorolala.dll`               | `build/lib/rorolala.dll`          |
 //! | `rorolala.dll.lib`           | `build/lib/rorolala.dll.lib`      |
 //! | `rola[.exe]` and more        | `build/bin/rola[.exe]` and more   |
-//! | `ffi_bindings/rorolala_ffi.h`| `build/lib/rorolala.h`/`.hpp`     |
+//! | `ffi_bindings/rorolala_ffi.h`| `build/lib/rorolala.h`             |
 //! | `mingling/<program>_comp.*`  | `build/scripts/<program>/*`       |
 //!
 //! Windows and Linux each have one artifact that is not cargo's at all: the window over the daemon,
@@ -200,11 +200,10 @@ pub fn export_artifacts(userdata_name: &str, self_contained: bool) -> Result<(),
         fs::copy_file(&release.join(cargo), &library.join(exported))?;
     }
 
-    // The header is C and C++ at once, its declarations sit in an `extern "C"` block, so it is
-    // handed over under both names.
+    // The header is C, its declarations sit in an `extern "C"` block so a C++ caller can include
+    // it as it is.
     let header = workspace.header()?;
     fs::copy_file(&header, &library.join("rorolala.h"))?;
-    fs::copy_file(&header, &library.join("rorolala.hpp"))?;
 
     // Every program is laid down beside the others, so that a word of `rola`'s reaches the program
     // it names, `rola jj` is `rola-jj`.

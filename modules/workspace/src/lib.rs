@@ -63,7 +63,7 @@ pub struct Workspace {
 /// pointing at the directory that contains the configuration file, or
 /// `None` if no Workspace could be found.
 #[must_use]
-#[lazyffi(export = locate_rola_workspace)]
+#[lazyffi(export = rola_workspace_locate)]
 pub fn locate_workspace(workspace_dir: &Path) -> Option<Workspace> {
     Workspace::locate(workspace_dir)
 }
@@ -450,7 +450,7 @@ mod tests {
     use rorolala_utils_configure::Configure as _;
     use rorolala_utils_location::Locate;
 
-    use crate::{CONFIG_PATH, Config, Workspace, free_rola_workspace, locate_rola_workspace};
+    use crate::{CONFIG_PATH, Config, Workspace, free_rola_workspace, rola_workspace_locate};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -475,7 +475,7 @@ mod tests {
 
         // SAFETY: `raw` is a NUL-terminated C string that outlives the call, which is
         // all the export reads it for.
-        let found = unsafe { locate_rola_workspace(raw.as_ptr().cast_mut()) };
+        let found = unsafe { rola_workspace_locate(raw.as_ptr().cast_mut()) };
 
         assert!(found.is_null(), "{dir:?}");
 
@@ -489,7 +489,7 @@ mod tests {
         let raw = CString::new(dir.to_str().unwrap()).unwrap();
 
         // SAFETY: `raw` is a NUL-terminated C string that outlives the call.
-        let found = unsafe { locate_rola_workspace(raw.as_ptr().cast_mut()) };
+        let found = unsafe { rola_workspace_locate(raw.as_ptr().cast_mut()) };
         assert!(!found.is_null(), "{dir:?}");
 
         // SAFETY: `found` came from the export above and has not been released yet.

@@ -118,10 +118,10 @@ pub fn render_error_action(err: ErrorAction, ec: &mut ResExitCode) {
             );
             ec.exit_code = EC_ERR_ACTION_UNKNOWN;
         }
-        ActionError::Json(source) => {
+        ActionError::Json { message, .. } => {
             r_eprintln!(
                 "{}",
-                err_line!(t!("error.action.err_json", reason = source.to_string()).trim())
+                err_line!(t!("error.action.err_json", reason = message).trim())
             );
             r_eprintln!("{}", help_line!(t!("error.action.err_json_help").trim()));
             ec.exit_code = EC_ERR_ACTION_JSON;

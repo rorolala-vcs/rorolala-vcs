@@ -33,7 +33,7 @@ impl Vault {
     /// Returns [`CreationError::DirCreateFailed`] if the directory or its keys directory
     /// cannot be created, and the configuration errors if the configuration file cannot be
     /// created inside it.
-    #[lazyffi(export = create_vault)]
+    #[lazyffi(export = rola_vault_create)]
     pub fn create(dir: &Path) -> Result<(), CreationError> {
         fs::create_dir_all(dir).map_err(|_| CreationError::DirCreateFailed)?;
         fs::create_dir_all(dir.join(KEYS_DIR)).map_err(|_| CreationError::DirCreateFailed)?;

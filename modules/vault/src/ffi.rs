@@ -2,7 +2,7 @@
 //!
 //! What locks a Vault is a guard being held, and a guard is a value rather than a name, so what
 //! crosses the ABI is a pointer to one. It is opaque in both directions: C takes one from
-//! `RolaVault_get_locking_guard` and gives it back to `RolaVault_drop_locking_guard`, and nothing
+//! `rola_vault_lock_acquire` and gives it back to `rola_vault_lock_release`, and nothing
 //! about the guard (what it holds, how it releases the lock, how long it must live) is readable
 //! from outside. Holding the pointer is holding the lock, and giving it back is giving the lock
 //! back, so a consumer that leaks one leaves the Vault locked.
@@ -23,7 +23,7 @@ use crate::{RolaVault, Vault};
 ///
 /// # FFI
 /// Opaque: C holds a pointer to one and reaches it only through
-/// `RolaVault_get_locking_guard`, which hands one out, and `RolaVault_drop_locking_guard`,
+/// `rola_vault_lock_acquire`, which hands one out, and `rola_vault_lock_release`,
 /// which gives the lock back with it.
 pub type RolaVaultLocking = LockingGuard<Vault>;
 
@@ -37,14 +37,14 @@ pub type RolaVaultLocking = LockingGuard<Vault>;
 ///
 /// # Safety
 ///
-/// `vault` must be a pointer `locate_rola_vault` handed out, and its owner must not have released
+/// `vault` must be a pointer `rola_vault_locate` handed out, and its owner must not have released
 /// it.
 // The name is the C header's spelling: the exported type, an underscore, then the action. That is
 // what the generated header declares and what a C caller links against, not a Rust identifier style.
 #[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn RolaVault_is_locking(vault: *const RolaVault) -> bool {
-    // SAFETY: the caller keeps the handle from `locate_rola_vault` alive for the call, which is all
+pub unsafe extern "C" fn rola_vault_is_locking(vault: *const RolaVault) -> bool {
+    // SAFETY: the caller keeps the handle from `rola_vault_locate` alive for the call, which is all
     // this reads it over.
     let Some(vault) = (unsafe { vault.as_ref() }) else {
         return false;
@@ -59,26 +59,24 @@ pub unsafe extern "C" fn RolaVault_is_locking(vault: *const RolaVault) -> bool {
 ///
 /// # FFI
 ///
-/// Returns a pointer the caller releases with `RolaVault_drop_locking_guard`, and null when nothing
+/// Returns a pointer the caller releases with `rola_vault_lock_release`, and null when nothing
 /// was locked. The lock is held until then, a caller that keeps the pointer keeps the lock,
 /// whatever else it does.
 ///
 /// A Vault that is locked already is not waited for: nothing is handed back and it is the caller's
 /// to decide what to do about it. Whether it was locked already or its lock file could not be made
-/// is not told here; `RolaVault_is_locking` is what says which.
+/// is not told here; `rola_vault_is_locking` is what says which.
 ///
 /// # Safety
 ///
-/// As [`RolaVault_is_locking`]: the pointer must be one `locate_rola_vault` handed out and not yet
+/// As [`rola_vault_is_locking`]: the pointer must be one `rola_vault_locate` handed out and not yet
 /// released.
 // The name is the C header's spelling: the exported type, an underscore, then the action. That is
 // what the generated header declares and what a C caller links against, not a Rust identifier style.
 #[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn RolaVault_get_locking_guard(
-    vault: *const RolaVault,
-) -> *mut RolaVaultLocking {
-    // SAFETY: as `RolaVault_is_locking`.
+pub unsafe extern "C" fn rola_vault_lock_acquire(vault: *const RolaVault) -> *mut RolaVaultLocking {
+    // SAFETY: as `rola_vault_is_locking`.
     let Some(vault) = (unsafe { vault.as_ref() }) else {
         return ptr::null_mut();
     };
@@ -96,7 +94,7 @@ pub unsafe extern "C" fn RolaVault_get_locking_guard(
         .map_or(ptr::null_mut(), |guard| Box::into_raw(Box::new(guard)))
 }
 
-/// Releases a guard `RolaVault_get_locking_guard` handed out, unlocking the Vault.
+/// Releases a guard `rola_vault_lock_acquire` handed out, unlocking the Vault.
 ///
 /// # FFI
 ///
@@ -105,17 +103,17 @@ pub unsafe extern "C" fn RolaVault_get_locking_guard(
 ///
 /// # Safety
 ///
-/// `guard` must be a pointer from `RolaVault_get_locking_guard` that has not been released, or null.
+/// `guard` must be a pointer from `rola_vault_lock_acquire` that has not been released, or null.
 // The name is the C header's spelling: the exported type, an underscore, then the action. That is
 // what the generated header declares and what a C caller links against, not a Rust identifier style.
 #[allow(nonstandard_style)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn RolaVault_drop_locking_guard(guard: *mut RolaVaultLocking) {
+pub unsafe extern "C" fn rola_vault_lock_release(guard: *mut RolaVaultLocking) {
     if guard.is_null() {
         return;
     }
 
-    // SAFETY: the caller guarantees the pointer came from `RolaVault_get_locking_guard` and has not
+    // SAFETY: the caller guarantees the pointer came from `rola_vault_lock_acquire` and has not
     // been released, which is what taking the box back takes over. Dropping the guard is what gives
     // the lock back.
     drop(unsafe { Box::from_raw(guard) });

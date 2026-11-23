@@ -101,7 +101,7 @@ public sealed class WriteTests
 
             Assert.False(string.IsNullOrEmpty(creator));
             Assert.False(string.IsNullOrEmpty(message));
-            Assert.Contains("alice", index.ObjectJson(creator), StringComparison.Ordinal);
+            Assert.Equal("alice", Assert.IsType<VcsIndexCreatorView>(index.ObjectView(creator)).Text);
 
             index.Read();
             Assert.Contains(
@@ -229,34 +229,6 @@ public sealed class WriteTests
                 () => new LayoutWriter(workspace.Layout).MoveFetched("a.psd", "b.psd")
             );
             Assert.Equal(RolaWriteErrorKind.InvalidPath, local.Kind);
-        }
-        finally
-        {
-            Directory.Delete(directory, true);
-        }
-    }
-
-    [Fact]
-    public async Task An_async_aggregate_read_honours_cancellation()
-    {
-        var directory = Scratch();
-        try
-        {
-            RunRola(directory, "init");
-
-            using var cancellation = new CancellationTokenSource();
-            await cancellation.CancelAsync();
-
-            var error = await Assert.ThrowsAsync<RolaReadError>(
-                () =>
-                    ReadApi.JsonAsync(
-                        directory,
-                        "{\"kind\":\"layouts\",\"path\":\"\"}",
-                        cancellation.Token
-                    )
-            );
-
-            Assert.Equal(RolaReadErrorKind.Cancelled, error.Kind);
         }
         finally
         {
@@ -557,35 +529,6 @@ public sealed class WriteTests
 
             Assert.True(ignore.IsIgnored("a.tmp"));
             Assert.False(ignore.IsIgnored("a.psd"));
-        }
-        finally
-        {
-            Directory.Delete(directory, true);
-        }
-    }
-
-    [Fact]
-    public void An_aggregate_read_answers_and_can_be_cancelled()
-    {
-        var directory = Scratch();
-        try
-        {
-            RunRola(directory, "init");
-
-            var json = ReadApi.Json(directory, "{\"kind\":\"layouts\",\"path\":\"\"}");
-            Assert.Contains("main", json, StringComparison.Ordinal);
-
-            using var cancellation = Cancellation.New();
-            cancellation.Cancel();
-            var error = Assert.Throws<RolaReadError>(
-                () =>
-                    ReadApi.Json(
-                        directory,
-                        "{\"kind\":\"layouts\",\"path\":\"\"}",
-                        cancellation
-                    )
-            );
-            Assert.Equal(RolaReadErrorKind.Cancelled, error.Kind);
         }
         finally
         {

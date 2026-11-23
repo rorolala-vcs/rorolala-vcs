@@ -1,15 +1,22 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use rorolala_utils_configure::Configure;
 use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_location::Locate as _;
 use serde::{Deserialize, Serialize};
+
+use crate::Workspace;
 
 /// Top-level configuration for the Workspace
 ///
 /// A Workspace keeps its own settings beside the data it holds: where the Vaults it shares
 /// through are, and, as there comes to be more, whatever else the copy being worked in
 /// needs to remember.
-#[lazyffi(export = WorkspaceConfig)]
+// The conversions the export generates only move a handle; what the configuration carries is
+// ordinary data, so the derived `Deserialize` has nothing unsafe to hide.
+#[allow(clippy::unsafe_derive_deserialize)]
+#[lazyffi(export = RolaWorkspaceConfig)]
 #[derive(Debug, Default, Clone, Configure, Serialize, Deserialize)]
 pub struct Config {
     /// The Vaults this Workspace knows, each under a name of its own.
@@ -60,6 +67,99 @@ impl Config {
     pub const fn gc_config(&self) -> Option<&GcConfig> {
         self.gc.as_ref()
     }
+}
+
+/// One Vault a Workspace knows.
+#[lazyffi(export = RolaWorkspaceVault)]
+#[derive(Debug, Clone)]
+pub struct WorkspaceVault {
+    /// The name the Workspace knows it by.
+    name: String,
+    /// The address it answers at.
+    address: String,
+    /// Whether it is the Vault the Workspace reaches for.
+    is_default: bool,
+}
+
+#[lazyffi(export = rola_)]
+impl WorkspaceVault {
+    /// The name the Workspace knows it by.
+    #[must_use]
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    /// The address it answers at.
+    #[must_use]
+    pub fn address(&self) -> String {
+        self.address.clone()
+    }
+
+    /// Whether it is the Vault the Workspace reaches for.
+    #[must_use]
+    pub const fn is_default(&self) -> bool {
+        self.is_default
+    }
+}
+
+#[lazyffi(export = rola_workspace_)]
+impl Config {
+    /// How many Vaults this Workspace knows.
+    #[must_use]
+    pub fn vault_count(&self) -> usize {
+        self.vaults().len()
+    }
+
+    /// The Vault at `index`, in name order, or null past the end.
+    #[must_use]
+    pub fn vault_at(&self, index: usize) -> Option<WorkspaceVault> {
+        let default = self.default_config().vault();
+        let mut vaults: Vec<(&String, &String)> = self.vaults().iter().collect();
+        vaults.sort_by_key(|(left, _)| *left);
+
+        vaults.get(index).map(|(name, address)| WorkspaceVault {
+            name: (*name).clone(),
+            address: (*address).clone(),
+            is_default: default == Some(name.as_str()),
+        })
+    }
+
+    /// The name of the Vault this Workspace reaches for, or an empty string when it names none.
+    #[must_use]
+    pub fn default_vault(&self) -> String {
+        self.default_config().vault().unwrap_or_default().to_owned()
+    }
+
+    /// Whether the configuration tells a collecting run what to keep.
+    #[must_use]
+    pub const fn gc_present(&self) -> bool {
+        self.gc.is_some()
+    }
+
+    /// How long a collecting run keeps what nothing references, in seconds, or -1 when the
+    /// configuration says nothing.
+    #[must_use]
+    pub fn gc_grace(&self) -> i64 {
+        self.gc
+            .as_ref()
+            .and_then(GcConfig::grace)
+            .and_then(|grace| i64::try_from(grace).ok())
+            .unwrap_or(-1)
+    }
+}
+
+/// A Workspace's configuration, read from the Workspace holding `directory`.
+///
+/// # FFI
+///
+/// A `RolaWorkspaceConfig *` the caller releases with `free_rola_workspace_config`, or null when a
+/// directory no Workspace holds, or when the configuration cannot be read.
+#[must_use]
+#[lazyffi(export = rola_workspace_config_read)]
+pub fn read(directory: &Path) -> Option<Config> {
+    let workspace = Workspace::locate(directory)?;
+
+    Config::read_from(&workspace.config_path()).ok()
 }
 
 /// What a collecting run in this Workspace is told about what was written recently.

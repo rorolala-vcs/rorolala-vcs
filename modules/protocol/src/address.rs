@@ -568,7 +568,7 @@ impl SinglePickable for VaultAddress {
 #[lazyffi(export = rola_vault_address_)]
 impl VaultAddress {
     /// The link the caller wrote, as it was written.
-    #[lazyffi(export = vault_address_read_raw)]
+    #[lazyffi(export = rola_vault_address_raw)]
     #[must_use]
     pub fn read_raw(&self) -> String {
         self.raw.clone()
@@ -578,7 +578,7 @@ impl VaultAddress {
     ///
     /// It is the host alone, without the account an SSH address names: what an SSH address adds
     /// to a host is [`read_ssh_user`](Self::read_ssh_user)'s to say.
-    #[lazyffi(export = vault_address_read_addr)]
+    #[lazyffi(export = rola_vault_address_addr)]
     #[must_use]
     pub fn read_addr(&self) -> String {
         self.address().to_string()
@@ -589,7 +589,7 @@ impl VaultAddress {
     /// An SSH address names a port only when one was written, and one that was not is SSH's own
     /// to choose, so nothing is written where a number is expected, which is what `0` is here:
     /// no session is made to port 0.
-    #[lazyffi(export = vault_address_read_port)]
+    #[lazyffi(export = rola_vault_address_port)]
     #[must_use]
     pub const fn read_port(&self) -> u16 {
         match &self.link {
@@ -607,7 +607,7 @@ impl VaultAddress {
     /// process to start. It is `0` for a daemon and `1` for an SSH session, and
     /// [`read_ssh_user`](Self::read_ssh_user) and [`read_ssh_path`](Self::read_ssh_path) are
     /// read after it says which.
-    #[lazyffi(export = vault_address_read_kind)]
+    #[lazyffi(export = rola_vault_address_kind)]
     #[must_use]
     pub const fn read_kind(&self) -> u8 {
         match self.link {
@@ -620,7 +620,7 @@ impl VaultAddress {
     ///
     /// It is empty for a daemon link, which names no account: what a caller reads it for is known
     /// from [`read_kind`](Self::read_kind) before it is asked.
-    #[lazyffi(export = vault_address_read_ssh_user)]
+    #[lazyffi(export = rola_vault_address_ssh_user)]
     #[must_use]
     pub fn read_ssh_user(&self) -> String {
         match &self.link {
@@ -633,7 +633,7 @@ impl VaultAddress {
     ///
     /// It is empty for a daemon link, which names a namespace rather than a path: what a daemon
     /// link has to say about where a Vault is is the namespace alone.
-    #[lazyffi(export = vault_address_read_ssh_path)]
+    #[lazyffi(export = rola_vault_address_ssh_path)]
     #[must_use]
     pub fn read_ssh_path(&self) -> String {
         match &self.link {

@@ -48,20 +48,24 @@ use rorolala_vault::Vault;
 use rorolala_vcs::{VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version};
 use rorolala_workspace::{Merging, Pending, Workspace};
 use rorolala_workspace_analyze::{Cache, cache_path, entry_of, tree_diff_remembering};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::daemon::{Chain, action_bring_remote_index_async, action_fetch_layout};
+use crate::daemon::{
+    BringRemoteIndexRequest, Chain, action_bring_remote_index_async, action_fetch_layout,
+};
 use crate::fetch::Sources;
 use crate::status::variant_moves;
 use crate::tree::{
     EntryKind as TreeEntryKind, Staging, Tree, TreeStructure, compare, conflict_copy,
     read_structure,
 };
-use crate::write::checkout::{forget, remember, restore as restore_path, restore_vault};
+use crate::write::checkout::{
+    WriteRestore, forget, remember, restore as restore_path, restore_vault,
+};
 use crate::write::layout::{set_version, switch_entry};
 use crate::write::progress::{WriteProgress, watching};
-use crate::write::request::Common;
+use crate::write::request::{Common, WriteCommon};
 use crate::write::tree::relative_to;
 use crate::write::{Cancellation, WriteError};
 
@@ -71,7 +75,7 @@ use crate::write::{Cancellation, WriteError};
 const DEFAULT_ALIKE: f32 = 0.6;
 
 /// What retracking one path wrote.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Retracked {
     /// The Layout entry the path names.
     pub id: Uuid,
@@ -378,11 +382,11 @@ fn asked_version(
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-/// `free_rola_write_error`. An empty `target` moves one version back, `fork` gives the path a fresh
-/// `Uuid`, and `only_index` leaves the work on disk alone. `force` goes past changes the record does
-/// not name, and `deny_jump` refuses a target off the path's chain.
+/// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. An empty `target` moves one
+/// version back, `fork` gives the path a fresh `Uuid`, and `only_index` leaves the work on disk
+/// alone. `force` goes past changes the record does not name, and `deny_jump` refuses a target off
+/// the path's chain.
 ///
 /// # Errors
 ///
@@ -401,7 +405,7 @@ pub fn retrack_file_at(
     only_index: bool,
     force: bool,
     deny_jump: bool,
-) -> Result<String, WriteError> {
+) -> Result<WriteRestore, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let target = (!target.is_empty()).then_some(target);
     let options = RetrackOptions {
@@ -412,20 +416,18 @@ pub fn retrack_file_at(
     };
     let retracked = retrack_file(&workspace, directory, path, target, options)?;
 
-    serde_json::to_string(&retracked).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteRestore::of(retracked.id, &retracked.version))
 }
 
 /// Moves the record of a path under a Vault to a version.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-/// `free_rola_write_error`. An empty `target` moves one version back, `fork` gives the path a fresh
-/// `Uuid`, and `only_index` leaves the work on disk alone. `force` goes past changes the record does
-/// not name, and `deny_jump` refuses a target off the path's chain.
+/// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. An empty `target` moves one
+/// version back, `fork` gives the path a fresh `Uuid`, and `only_index` leaves the work on disk
+/// alone. `force` goes past changes the record does not name, and `deny_jump` refuses a target off
+/// the path's chain.
 ///
 /// # Errors
 ///
@@ -444,7 +446,7 @@ pub fn retrack_vault_file_at(
     only_index: bool,
     force: bool,
     deny_jump: bool,
-) -> Result<String, WriteError> {
+) -> Result<WriteRestore, WriteError> {
     let vault = Vault::locate(directory).ok_or(WriteError::NoVault)?;
     let target = (!target.is_empty()).then_some(target);
     let options = RetrackOptions {
@@ -455,9 +457,7 @@ pub fn retrack_vault_file_at(
     };
     let retracked = retrack_vault_file(&vault, directory, path, target, options)?;
 
-    serde_json::to_string(&retracked).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteRestore::of(retracked.id, &retracked.version))
 }
 
 /// What a path outside the Workspace is refused with, whichever way the run named it.
@@ -489,6 +489,43 @@ pub struct RetrackRequest {
     /// Whether the path is given a fresh `Uuid` holding what it records now.
     #[serde(default)]
     fork: bool,
+}
+
+/// A retrack a C caller asks for.
+///
+/// # FFI
+///
+/// A `RolaWriteRetrackRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `file` is a path in the
+/// Workspace, relative to its root or absolute, and an empty `record` moves one version back.
+#[lazyffi(export = RolaWriteRetrackRequest, input)]
+#[derive(Debug, Clone)]
+pub struct RetrackInput {
+    /// The fields every write request carries.
+    pub common: WriteCommon,
+    /// The one file or tree to retrack.
+    pub file: String,
+    /// What the path is to record, empty for one version back.
+    pub record: String,
+    /// Whether the record moves and the work on disk is left alone.
+    pub only_index: bool,
+    /// Whether a version or an entry off the way to what the path records is refused.
+    pub deny_jump: bool,
+    /// Whether the path is given a fresh `Uuid` holding what it records now.
+    pub fork: bool,
+}
+
+impl From<RetrackInput> for RetrackRequest {
+    fn from(input: RetrackInput) -> Self {
+        Self {
+            common: input.common.into(),
+            file: input.file,
+            record: input.record,
+            only_index: input.only_index,
+            deny_jump: input.deny_jump,
+            fork: input.fork,
+        }
+    }
 }
 
 impl RetrackRequest {
@@ -707,46 +744,223 @@ fn refused(refusal: RetrackRefusal, record: &str) -> WriteError {
     }
 }
 
-/// Retracks one path of a Workspace from a JSON request.
+/// Retracks one path of a Workspace from a request a C caller fills.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, or a `RolaWriteError *` the caller
-/// releases with `free_rola_write_error`. A path is answered as
-/// `{"kind":"path","path":"art/a.psd","version":"0f0f0f","number":3,"changed":true,
-/// "switched":true,"from":null,"to":null,"forked":false,"took":[["origin",2]]}`, and a tree as
-/// `{"kind":"tree","path":"art","version":"0f0f0f","took":[]}`. `version` is the digest in hex, and
-/// `number` is the version's number in its chain, or null when the run does not know it; `from` and
-/// `to` are the `Uuid`s a run that recorded another entry moved between, or null; and `took` names
-/// each Vault that handed content over and how many objects it brought. `progress` is the handle the
-/// caller polls with `rola_progress_next_json`, and `cancellation` is the flag it sets with
-/// `rola_cancellation_cancel`.
-///
-/// `request` is the JSON of a [`RetrackRequest`]: its flattened `common` fields at the top level,
-/// `file` and `record` as strings, and `only_index`, `deny_jump` and `fork` as bools. `file` is a
-/// path in the Workspace, relative to its root or absolute. An empty or missing `record` moves one
-/// version back.
+/// `request` is a `RolaWriteRetrackRequest` the caller fills and keeps; every `const char *` in it
+/// is borrowed for the call and released by the caller. A `RolaWriteRetrack *` the caller releases
+/// with `free_rola_write_retrack` answers it, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `_kind` says whether the record that moved belongs to a path or to a
+/// tree. `_path` and `_version` name what moved; `_number_present` and `_number` say the version's
+/// number in its chain, which a run that does not know it says with a false `_number_present`;
+/// `_changed`, `_switched` and `_forked` say what the run did; `_from` and `_to` name the `Uuid`s a
+/// run that recorded another entry moved between, empty when it moved between none; and
+/// `_took_count` and `_took_at` name each Vault that handed content over and how many objects it
+/// brought. A tree answers no number, no change and no `Uuid`, so those fields say nothing for it.
+/// `progress` is the handle the caller polls with `rola_progress_next`, and `cancellation` is the
+/// flag it sets with `rola_cancellation_cancel`.
 ///
 /// # Errors
 ///
-/// Returns [`WriteError::Json`] when `request` does not read as a [`RetrackRequest`] or the outcome
-/// cannot be written, and the failures [`RetrackRequest::run`] names.
+/// Returns the failures [`RetrackRequest::run`] names.
 #[lazyffi(export = rola_write_retrack)]
 pub fn retrack_at(
-    request: &str,
+    request: &RetrackInput,
     progress: &WriteProgress,
     cancellation: &Cancellation,
-) -> Result<String, WriteError> {
-    let request: RetrackRequest =
-        serde_json::from_str(request).map_err(|error| WriteError::Json {
-            reason: error.to_string(),
-        })?;
+) -> Result<WriteRetrack, WriteError> {
+    let request: RetrackRequest = request.clone().into();
     let watched = watching(progress);
     let outcome = request.run(&watched, cancellation)?;
 
-    serde_json::to_string(&outcome).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteRetrack::of(&outcome))
+}
+
+/// What a retrack came to, as the C ABI hands it over.
+///
+/// A path's record and a tree's carry different fields, and `kind` says which one moved. A tree
+/// answers no number, no change and no `Uuid`, so a caller reads those only when `kind` is `path`.
+///
+/// # FFI
+///
+/// A `RolaWriteRetrack *` the caller releases with `free_rola_write_retrack`. `_kind`, `_path`,
+/// `_version`, `_from` and `_to` each return a `char *` the caller releases with `free_string`;
+/// `_from` and `_to` are empty when the run moved between no two entries; `_number` says nothing
+/// unless `_number_present` is true; `_took_count` and `_took_at` answer the Vaults, each a
+/// `RolaWriteRetrackTook *` the caller releases with `free_rola_write_retrack_took`.
+#[lazyffi(export = RolaWriteRetrack)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "each flag is one fact about what the run did, and a caller reads each on its own"
+)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteRetrack {
+    /// Whether the record that moved belongs to one path or to a tree.
+    kind: String,
+    /// Where the entry sits in the Layout.
+    path: String,
+    /// The version it records now, as hex.
+    version: String,
+    /// Whether the version's number in its chain is known.
+    number_present: bool,
+    /// That version's number in its chain, or 0 when it is not known.
+    number: u64,
+    /// Whether what the path records is not what it recorded before.
+    changed: bool,
+    /// Whether the version's content was written back over the file.
+    switched: bool,
+    /// The `Uuid` the path recorded before, empty when the run recorded no entry.
+    from: String,
+    /// The `Uuid` the path records now, empty when the run recorded no entry.
+    to: String,
+    /// Whether the run gave the entry a fresh `Uuid`.
+    forked: bool,
+    /// What each Vault handed over while the run went on.
+    took: Vec<WriteRetrackTook>,
+}
+
+impl WriteRetrack {
+    /// The answer a retrack is handed over as.
+    fn of(outcome: &RetrackOutcome) -> Self {
+        let took = outcome
+            .took
+            .iter()
+            .map(|(vault, count)| WriteRetrackTook {
+                vault: vault.clone(),
+                count: u64::try_from(*count).unwrap_or(u64::MAX),
+            })
+            .collect();
+
+        match &outcome.record {
+            Recorded::Path(path) => Self {
+                kind: "path".to_owned(),
+                path: path.path.clone(),
+                version: path.version.clone(),
+                number_present: path.number.is_some(),
+                number: path.number.unwrap_or_default(),
+                changed: path.changed,
+                switched: path.switched,
+                from: path.from.clone().unwrap_or_default(),
+                to: path.to.clone().unwrap_or_default(),
+                forked: path.forked,
+                took,
+            },
+            Recorded::Tree(tree) => Self {
+                kind: "tree".to_owned(),
+                path: tree.path.clone(),
+                version: tree.version.clone(),
+                took,
+                ..Self::default()
+            },
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteRetrack {
+    /// Whether the record that moved belongs to one path or to a tree.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    /// Where the entry sits in the Layout.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// The version it records now, as hex.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
+
+    /// Whether the version's number in its chain is known.
+    #[must_use]
+    pub const fn number_present(&self) -> bool {
+        self.number_present
+    }
+
+    /// That version's number in its chain, or 0 when it is not known.
+    #[must_use]
+    pub const fn number(&self) -> u64 {
+        self.number
+    }
+
+    /// Whether what the path records is not what it recorded before.
+    #[must_use]
+    pub const fn changed(&self) -> bool {
+        self.changed
+    }
+
+    /// Whether the version's content was written back over the file.
+    #[must_use]
+    pub const fn switched(&self) -> bool {
+        self.switched
+    }
+
+    /// The `Uuid` the path recorded before, or an empty string when the run recorded no entry.
+    #[must_use]
+    pub fn from(&self) -> String {
+        self.from.clone()
+    }
+
+    /// The `Uuid` the path records now, or an empty string when the run recorded no entry.
+    #[must_use]
+    pub fn to(&self) -> String {
+        self.to.clone()
+    }
+
+    /// Whether the run gave the entry a fresh `Uuid`.
+    #[must_use]
+    pub const fn forked(&self) -> bool {
+        self.forked
+    }
+
+    /// How many Vaults handed content over.
+    #[must_use]
+    pub const fn took_count(&self) -> usize {
+        self.took.len()
+    }
+
+    /// One Vault that handed content over, or null past the end.
+    #[must_use]
+    pub fn took_at(&self, index: usize) -> Option<WriteRetrackTook> {
+        self.took.get(index).cloned()
+    }
+}
+
+/// How many objects one Vault handed over, as a retrack reports it.
+///
+/// # FFI
+///
+/// A `RolaWriteRetrackTook *` the caller releases with `free_rola_write_retrack_took`. `_vault`
+/// returns a `char *` the caller releases with `free_string`, and `_count` the objects it handed
+/// over.
+#[lazyffi(export = RolaWriteRetrackTook)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteRetrackTook {
+    /// The Vault's name.
+    vault: String,
+    /// The objects it handed over.
+    count: u64,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteRetrackTook {
+    /// The Vault's name.
+    #[must_use]
+    pub fn vault(&self) -> String {
+        self.vault.clone()
+    }
+
+    /// How many objects it handed over.
+    #[must_use]
+    pub const fn objects(&self) -> u64 {
+        self.count
+    }
 }
 
 /// What a run asked the path to record.
@@ -858,10 +1072,9 @@ pub struct Request<'a> {
 }
 
 /// What a retrack came to.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct RetrackOutcome {
     /// What the path records now.
-    #[serde(flatten)]
     pub record: Recorded,
     /// What each Vault handed over while the run went on, in the order they were asked.
     pub took: Vec<(String, usize)>,
@@ -871,8 +1084,7 @@ pub struct RetrackOutcome {
 ///
 /// The `kind` an outcome is written with tells a path's record from a tree's: the two carry
 /// different fields, and a caller that acts on one has to know which it was given.
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Debug, Clone)]
 pub enum Recorded {
     /// The record of one path, and its work with it.
     Path(RetrackedPath),
@@ -881,7 +1093,7 @@ pub enum Recorded {
 }
 
 /// What moving a path's record came to.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct RetrackedPath {
     /// Where the entry sits in the Layout.
     pub path: String,
@@ -902,7 +1114,7 @@ pub struct RetrackedPath {
 }
 
 /// What moving a tree's record came to.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct RetrackedTree {
     /// The tree as a person knows it.
     pub path: String,
@@ -1940,8 +2152,13 @@ fn fetch_copy(run: &Run<'_>) -> Result<(), RetrackRefusal> {
         return Err(RetrackRefusal::Failed(WriteError::NoAccount));
     };
 
-    action_fetch_layout(run.workspace, account, address.to_string(), name.clone())
-        .map_err(RetrackRefusal::Action)
+    action_fetch_layout(
+        run.workspace,
+        account,
+        address.to_string(),
+        &crate::daemon::FetchLayoutRequest { name: name.clone() },
+    )
+    .map_err(RetrackRefusal::Action)
 }
 
 /// Whether this index holds the version under a hash, holds something else there, or holds nothing.
@@ -1976,12 +2193,14 @@ fn bring(run: &Run<'_>, hash: Blake3Hash) -> Result<(), RetrackRefusal> {
             run.workspace,
             end.account,
             end.address,
-            Key::new(hash).hex(),
+            BringRemoteIndexRequest {
+                hash: Key::new(hash).hex(),
+            },
             run.progress.clone(),
         ))
         .map_err(RetrackRefusal::Action)?;
 
-    let chain: Chain = serde_json::from_str(&said).map_err(|error| internal(error.to_string()))?;
+    let chain = said.chain();
 
     match chain {
         Chain::Brought => Ok(()),
@@ -2836,10 +3055,10 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        EntryTarget, HashMiss, Recorded, Recording, Relation, RetrackOptions, RetrackOutcome,
-        RetrackedPath, RetrackedTree, SwitchAction, SwitchRefusal, TargetRefusal, VersionTarget,
-        recording_of, relation, resolve_hash, retrack_at, retrack_file, retrack_vault_file,
-        switch_action, switched_data, told,
+        EntryTarget, HashMiss, Recorded, Recording, Relation, RetrackInput, RetrackOptions,
+        RetrackOutcome, RetrackedPath, RetrackedTree, SwitchAction, SwitchRefusal, TargetRefusal,
+        VersionTarget, WriteRetrack, recording_of, relation, resolve_hash, retrack_at,
+        retrack_file, retrack_vault_file, switch_action, switched_data, told,
     };
     use crate::write::track::{TrackOptions, track_file, track_vault_file};
     use crate::write::{Cancellation, WriteProgress};
@@ -3316,32 +3535,33 @@ mod tests {
         // Nothing else is said: the bools are false, `record` is empty, and a run that needs no
         // Vault, account or store resolution beyond the Workspace's own still retracks. The file is
         // relative, which the request reads against the Workspace root rather than a process cwd.
-        let request = serde_json::json!({
-            "workspace": dir.to_str().unwrap(),
-            "file": "a.txt",
-        });
-        let answer = retrack_at(
-            &request.to_string(),
-            &WriteProgress::new(),
-            &Cancellation::new(),
-        )
-        .unwrap();
-        let answer: serde_json::Value = serde_json::from_str(&answer).unwrap();
+        let request = RetrackInput {
+            common: super::super::request::WriteCommon {
+                workspace: dir.to_str().unwrap().to_owned(),
+                ..Default::default()
+            },
+            file: "a.txt".to_owned(),
+            record: String::new(),
+            only_index: false,
+            deny_jump: false,
+            fork: false,
+        };
+        let answer = retrack_at(&request, &WriteProgress::new(), &Cancellation::new()).unwrap();
 
-        assert_eq!(answer["kind"], "path");
-        assert_eq!(answer["path"], "a.txt");
-        assert_eq!(answer["version"], first.version.hex());
-        assert_eq!(answer["changed"], true);
-        assert_eq!(answer["switched"], true);
-        assert_eq!(answer["forked"], false);
+        assert_eq!(answer.kind(), "path");
+        assert_eq!(answer.path(), "a.txt");
+        assert_eq!(answer.version(), first.version.hex());
+        assert!(answer.changed());
+        assert!(answer.switched());
+        assert!(!answer.forked());
         assert_eq!(fs::read(dir.join("a.txt")).unwrap(), b"one");
 
         let _ = fs::remove_dir_all(&dir);
     }
 
     /// What a run came to is written with the kind a caller branches on and with every field the
-    /// command's result carries, so a number and a `Uuid` the run does not know are null and not
-    /// absent, and a tree is told apart by its kind rather than by which fields happen to be there.
+    /// command's result carries, so a number and a `Uuid` the run does not know are absent and not
+    /// guessed, and a tree is told apart by its kind rather than by which fields happen to be there.
     #[test]
     fn what_a_retrack_came_to_is_written_with_its_kind_and_fields() {
         let moved = RetrackOutcome {
@@ -3357,15 +3577,18 @@ mod tests {
             }),
             took: vec![("origin".to_owned(), 2)],
         };
-        let written = serde_json::to_value(&moved).unwrap();
+        let answer = WriteRetrack::of(&moved);
 
-        assert_eq!(written["kind"], "path");
-        assert_eq!(written["path"], "art/a.psd");
-        assert_eq!(written["number"], 3_u64);
-        assert_eq!(written["switched"], false);
-        assert_eq!(written["from"], serde_json::Value::Null);
-        assert_eq!(written["took"][0][0], "origin");
-        assert_eq!(written["took"][0][1], 2_u64);
+        assert_eq!(answer.kind(), "path");
+        assert_eq!(answer.path(), "art/a.psd");
+        assert!(answer.number_present());
+        assert_eq!(answer.number(), 3);
+        assert!(!answer.switched());
+        assert_eq!(answer.from(), "");
+        assert_eq!(answer.took_count(), 1);
+        let took = answer.took_at(0).expect("the Vault is named");
+        assert_eq!(took.vault(), "origin");
+        assert_eq!(took.objects(), 2);
 
         let tree = RetrackOutcome {
             record: Recorded::Tree(RetrackedTree {
@@ -3374,10 +3597,10 @@ mod tests {
             }),
             took: Vec::new(),
         };
-        let written = serde_json::to_value(&tree).unwrap();
+        let answer = WriteRetrack::of(&tree);
 
-        assert_eq!(written["kind"], "tree");
-        assert_eq!(written["path"], "art");
-        assert_eq!(written["took"], serde_json::json!([]));
+        assert_eq!(answer.kind(), "tree");
+        assert_eq!(answer.path(), "art");
+        assert_eq!(answer.took_count(), 0);
     }
 }

@@ -36,7 +36,7 @@ where
             let output = Entry::process(rorolala_protocol::OnlyWorkspace::empty(), ctx).await?;
 
             serde_json::to_string(&output)
-                .map_err(|error| rorolala_protocol::ActionError::Json(error.into()))
+                .map_err(|error| rorolala_protocol::ActionError::json(error.into()))
         })
     }
 }

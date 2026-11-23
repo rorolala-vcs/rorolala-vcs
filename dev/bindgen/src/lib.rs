@@ -98,14 +98,14 @@ use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet, renderer::Deco
 use quote::quote;
 use rorolala_utils_lazyffi_core::{
     DEFAULT_METHOD_PREFIX, FREE_STRING, RESULT_ERR_VARIANT, RESULT_OK_VARIANT, RESULT_REPR,
-    STRING_REPR, VariantFields, c_variant_name, for_each_scalar, free_name, method_name,
-    payload_type_name, tag_type_name, type_name, value_name, variant_needs_companion,
-    variant_type_name,
+    STR_SPAN_COUNT, STR_SPAN_ITEMS, STR_SPAN_REPR, STRING_REPR, VariantFields, c_variant_name,
+    for_each_scalar, free_name, length_name, method_name, payload_type_name, tag_type_name,
+    type_name, value_name, variant_needs_companion, variant_type_name,
 };
 use syn::{
     Attribute, Expr, ExprLit, Fields, FnArg, GenericArgument, ImplItem, Item, ItemConst, ItemEnum,
     ItemFn, ItemImpl, ItemStruct, ItemType, Lit, Meta, Pat, PathArguments, PointerMutability,
-    ReceiverKind, ReturnType, Signature, Type, spanned::Spanned,
+    ReceiverKind, ReturnType, Signature, Token, Type, spanned::Spanned,
 };
 
 /// File name of the generated header.
@@ -148,23 +148,117 @@ const BANNER: &str = "\
  */
 ";
 
+/// Name of the constant whose value the header states as `ROROLALA_ABI_VERSION`.
+const ABI_CONSTANT: &str = "ROLA_ABI_VERSION";
+
+/// Prefix of the macros that pin the ABI version.
+const ABI_MACRO: &str = "ROROLALA_ABI_VERSION";
+
+/// What every export in the header assumes, as a C comment.
+const CONVENTIONS: &str = "\
+/**
+ * What every export here assumes:
+ *
+ * - Strings are UTF-8 and NUL terminated. An input is borrowed for the call; a returned
+ *   string belongs to the caller and is released with `free_string`.
+ * - Reading past the end of a list returns an empty string, `0`, `NULL` or `false` rather
+ *   than failing.
+ * - A handle belongs to the caller that made it and is released with its own `free_*`. A
+ *   handle may not be used by two threads at once unless the function says otherwise.
+ * - There is no initialisation or finalisation call: loading the library is enough.
+ * - Only a call returning `RorolalaResult` can fail. A pointer or scalar return spells
+ *   \"none\" as an empty value.
+ */
+
+";
+
 /// Header preamble: the include guard, the standard headers the reprs need, the
 /// `extern "C"` block a C++ consumer needs, and the declaration of the string
 /// release helper.
 ///
 /// The helper is declared unconditionally: it costs nothing, and a C caller could
 /// not release a returned string otherwise.
-fn preamble() -> String {
-    let mut out = format!(
-        "\n#ifndef {INCLUDE_GUARD}\n#define {INCLUDE_GUARD}\n\n\
-         #include <stdarg.h>\n#include <stdbool.h>\n#include <stdint.h>\n#include <stdlib.h>\n\n\
-         #ifdef __cplusplus\nextern \"C\" {{\n#endif\n\n\
-         void {FREE_STRING}(char *string);\n\n"
+fn preamble(version: Option<u32>, span_used: bool) -> String {
+    let mut out = String::new();
+    let _ = write!(
+        out,
+        "\n#ifndef {INCLUDE_GUARD}\n#define {INCLUDE_GUARD}\n\n"
+    );
+    out.push_str(
+        "#include <stdarg.h>\n#include <stdbool.h>\n#include <stddef.h>\n\
+         #include <stdint.h>\n#include <stdlib.h>\n\n",
     );
 
+    if let Some(version) = version {
+        out.push_str(&version_declarations(version));
+    }
+
+    out.push_str(CONVENTIONS);
+    out.push_str("#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n");
+    let _ = writeln!(out, "void {FREE_STRING}(char *string);\n");
     out.push_str(&result_declarations());
+    if span_used {
+        out.push_str(&str_span_declarations());
+    }
 
     out
+}
+
+/// The string span, declared when a transparent input struct holds one.
+///
+/// A list of strings cannot cross as a Rust slice, so it crosses as a pointer and a
+/// count. The shape is a built-in rather than one `#[lazyffi]` item's, so it is
+/// declared here the way the result type is, and `rorolala-utils-lazyffi` implements
+/// the conversion against exactly this layout. It is left out of a header that holds no
+/// input struct, because a type nothing can name yet only enlarges the surface.
+fn str_span_declarations() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "/**\n * A list of strings as C passes one.\n *\n * The strings are borrowed for the call and belong to the caller.\n */"
+    );
+    let _ = writeln!(out, "typedef struct {STR_SPAN_REPR} {{");
+    let _ = writeln!(out, "  const char *const * {STR_SPAN_ITEMS};");
+    let _ = writeln!(out, "  size_t {STR_SPAN_COUNT};");
+    let _ = writeln!(out, "}} {STR_SPAN_REPR};\n");
+    out
+}
+
+/// The macros that pin the version of the ABI described by the header.
+///
+/// The number is `major * 10000 + minor * 100 + patch`, so a caller can compare across majors
+/// without the header having to carry three numbers of its own.
+fn version_declarations(version: u32) -> String {
+    let major = version / 10_000;
+    let minor = version / 100 % 100;
+    let patch = version % 100;
+
+    format!(
+        "/** The version of this C ABI, as `major * 10000 + minor * 100 + patch`. */\n\
+         #define {ABI_MACRO} {version}\n\
+         #define {ABI_MACRO}_MAJOR {major}\n\
+         #define {ABI_MACRO}_MINOR {minor}\n\
+         #define {ABI_MACRO}_PATCH {patch}\n\n"
+    )
+}
+
+/// The version the exported constant states, when the sources export one.
+fn abi_version(exports: &Exports) -> Option<u32> {
+    exports.constants.iter().find_map(|(item, _)| {
+        let name =
+            export_override(&item.attrs).unwrap_or_else(|| value_name(&item.ident.to_string()));
+        if name != ABI_CONSTANT {
+            return None;
+        }
+
+        match item.expr.as_ref() {
+            Expr::Lit(ExprLit {
+                lit: Lit::Int(value),
+                ..
+            }) => value.base10_parse().ok(),
+            _ => None,
+        }
+    })
 }
 
 /// The result type every header declares, whether or not anything uses it.
@@ -230,6 +324,11 @@ pub struct Config<'a> {
     pub source_roots: &'a [PathBuf],
     /// Directory the header is written into; created when missing.
     pub output_dir: &'a Path,
+    /// Whether every name the header declares is checked against the naming rule.
+    ///
+    /// The build turns this on so a new export cannot land under a name of its own choosing. A
+    /// test tree is made of placeholder names, so tests leave it off.
+    pub enforce_naming: bool,
 }
 
 /// Something in the sources that cannot be rendered into the header.
@@ -268,6 +367,8 @@ pub enum Error {
     },
     /// Items were found that cannot be rendered into C.
     Diagnostics(Vec<Diagnostic>),
+    /// Names that do not follow the rule the header states.
+    Names(Vec<String>),
 }
 
 impl fmt::Display for Error {
@@ -276,6 +377,11 @@ impl fmt::Display for Error {
             Self::Io { path, source } => write!(formatter, "{}: {source}", path.display()),
             Self::Parse { path, source } => write!(formatter, "{}: {source}", path.display()),
             Self::Diagnostics(diagnostics) => formatter.write_str(&render_diagnostics(diagnostics)),
+            Self::Names(names) => write!(
+                formatter,
+                "these names do not follow the naming rule: {}",
+                names.join(", ")
+            ),
         }
     }
 }
@@ -285,7 +391,7 @@ impl StdError for Error {
         match self {
             Self::Io { source, .. } => Some(source),
             Self::Parse { source, .. } => Some(source),
-            Self::Diagnostics(_) => None,
+            Self::Diagnostics(_) | Self::Names(_) => None,
         }
     }
 }
@@ -304,6 +410,13 @@ pub fn generate(config: &Config<'_>) -> Result<PathBuf, Error> {
     }
 
     let header = render(&exports).map_err(Error::Diagnostics)?;
+
+    if config.enforce_naming {
+        let names = nonconforming(&header);
+        if !names.is_empty() {
+            return Err(Error::Names(names));
+        }
+    }
 
     fs::create_dir_all(config.output_dir).map_err(|source| Error::Io {
         path: config.output_dir.to_path_buf(),
@@ -384,6 +497,13 @@ fn scan_dir(dir: &Path, exports: &mut Exports) -> Result<(), Error> {
 
     for path in paths {
         if path.is_dir() {
+            // A crate's `tests/` directory holds integration test programs, not the
+            // library: an export written there is never compiled into what a C caller
+            // links against, so it is not part of the surface the header describes.
+            if path.ends_with("tests") {
+                continue;
+            }
+
             scan_dir(&path, exports)?;
         } else if path.extension().is_some_and(|extension| extension == "rs") {
             scan_file(&path, exports)?;
@@ -535,6 +655,32 @@ fn export_override(attrs: &[Attribute]) -> Option<String> {
     }
 
     None
+}
+
+/// Reads the bare `input` flag from the `#[lazyffi]` attribute, if present.
+///
+/// A struct with it is a transparent value C fills, rather than an opaque handle it can
+/// only point at. This parser is a second copy of the one in
+/// `rorolala-utils-lazyffi-macros`, for the reason the crate docs give about `export`.
+fn has_input(attrs: &[Attribute]) -> bool {
+    for attr in attrs.iter().filter(|attr| is_lazyffi(attr)) {
+        let mut found = false;
+        let _ = attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("input") {
+                found = true;
+            } else if meta.input.peek(Token![=]) {
+                // An argument this flag does not care about still has a value to consume,
+                // or the parser stops at it and never reaches `input`.
+                let _ = meta.value()?.parse::<Expr>()?;
+            }
+            Ok(())
+        });
+        if found {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// The repr-C siblings of the exported types, plus every C name the header
@@ -755,6 +901,10 @@ fn reprs(exports: &Exports) -> Reprs {
     reprs.claim("Path", Path::new(""), STRING_REPR);
     // The same, for the borrowed spelling of a string.
     reprs.claim("str", Path::new(""), STRING_REPR);
+    // A string span is a built-in input type: its repr is declared in the preamble, and
+    // a field of one is held by value there, so it is a name rather than a handle.
+    reprs.claim("StrSpan", Path::new(""), STR_SPAN_REPR);
+    reprs.names.insert(STR_SPAN_REPR.to_string());
 
     for (item, origin) in &exports.types {
         let (rust_name, attrs) = match item {
@@ -770,7 +920,7 @@ fn reprs(exports: &Exports) -> Reprs {
             .releases
             .insert(repr.clone(), release_name(&rust_name, attrs));
 
-        if matches!(item, TypeItem::Struct(_)) {
+        if matches!(item, TypeItem::Struct(_)) && !has_input(attrs) {
             reprs.opaque.insert(repr.clone());
         }
 
@@ -790,6 +940,26 @@ fn reprs(exports: &Exports) -> Reprs {
     }
 
     reprs
+}
+
+/// Whether a transparent input struct holds a string span.
+///
+/// The span is a built-in, so it is declared only where one is used. A header with no
+/// input struct would otherwise carry a type nothing in it can name.
+fn uses_str_span(exports: &Exports, reprs: &Reprs) -> bool {
+    exports.types.iter().any(|(item, origin)| {
+        let TypeItem::Struct(item) = item else {
+            return false;
+        };
+        if !has_input(&item.attrs) {
+            return false;
+        }
+
+        let resolution = Resolution::plain(reprs, &origin.path);
+        item.fields
+            .iter()
+            .any(|field| repr_of(&field.ty, &resolution).is_some_and(|repr| repr == STR_SPAN_REPR))
+    })
 }
 
 /// Resolves the repr-C sibling of a Rust type.
@@ -1249,7 +1419,9 @@ fn build_definitions(
 ) {
     for (item, origin) in &exports.types {
         match item {
-            TypeItem::Struct(item) => build_struct(item, origin, reprs, definitions),
+            TypeItem::Struct(item) => {
+                build_struct(item, origin, reprs, definitions, diagnostics);
+            }
             TypeItem::Enum(item) => build_enum(item, origin, reprs, definitions, diagnostics),
         }
     }
@@ -1257,19 +1429,36 @@ fn build_definitions(
 
 /// Builds the definition of one exported struct.
 ///
-/// The struct is opaque: its fields are not converted and never reach C, so what is
-/// emitted is an incomplete type plus the declaration of the release that frees the
-/// handles exports hand out.
+/// Without `input` the struct is opaque: its fields are not converted and never reach C,
+/// so what is emitted is an incomplete type plus the declaration of the release that
+/// frees the handles exports hand out. With `input` the fields *are* the interface, so
+/// each is written out the way its own input conversion takes it, and no release is
+/// emitted: a value C filled is never handed back.
 fn build_struct(
     item: &ItemStruct,
     origin: &Origin,
     reprs: &Reprs,
     definitions: &mut Vec<Definition>,
+    diagnostics: &mut Vec<Diagnostic>,
 ) {
     let rust_name = item.ident.to_string();
     let Some(repr) = reprs.declared_in(&rust_name, &origin.path) else {
         return;
     };
+
+    if has_input(&item.attrs) {
+        build_input_struct(
+            item,
+            &rust_name,
+            &repr,
+            origin,
+            reprs,
+            definitions,
+            diagnostics,
+        );
+        return;
+    }
+
     let release = release_name(&rust_name, &item.attrs);
 
     definitions.push(Definition {
@@ -1280,6 +1469,56 @@ fn build_struct(
         name: repr,
         origin: origin.clone(),
         item: rust_name,
+        line: item.ident.span().start().line,
+    });
+}
+
+/// Builds the definition of one transparent input struct.
+///
+/// Each field is named as C reads it and typed the way the Rust field's own input
+/// conversion takes it. A string field is read-only, so it is `const char *`, while a
+/// scalar and a built-in span keep their own C spelling.
+fn build_input_struct(
+    item: &ItemStruct,
+    rust_name: &str,
+    repr: &str,
+    origin: &Origin,
+    reprs: &Reprs,
+    definitions: &mut Vec<Definition>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let mut reporting = Reporting::new(origin, diagnostics);
+    let resolution = Resolution::plain(reprs, &origin.path);
+    let mut body = String::new();
+
+    for field in &item.fields {
+        let Some(name) = field.ident.as_ref() else {
+            continue;
+        };
+        let label = format!("{rust_name}.{name}");
+
+        let c_type = if read_only_string(&field.ty, &resolution) {
+            Some(READ_ONLY_STRING.to_string())
+        } else {
+            field_c_type(&field.ty, &resolution, &mut reporting, &label)
+        };
+
+        let Some(c_type) = c_type else {
+            continue;
+        };
+
+        body.push_str(&render_doc(&doc_lines(&field.attrs), "  "));
+        let _ = writeln!(body, "  {c_type} {name};");
+    }
+
+    definitions.push(Definition {
+        text: format!(
+            "{doc}typedef struct {repr} {{\n{body}}} {repr};\n\n",
+            doc = render_doc(&doc_lines(&item.attrs), "")
+        ),
+        name: repr.to_string(),
+        origin: origin.clone(),
+        item: rust_name.to_string(),
         line: item.ident.span().start().line,
     });
 }
@@ -1605,6 +1844,337 @@ fn visit(
     ordered.push(node);
 }
 
+/// Where one C type places its bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Layout {
+    /// How many bytes the type takes.
+    size: usize,
+    /// The boundary its address is a multiple of.
+    align: usize,
+}
+
+impl Layout {
+    /// A pointer, eight bytes wide on every target this project ships.
+    const POINTER: Self = Self { size: 8, align: 8 };
+
+    /// A C enum, whose underlying type is `int` on every compiler this project ships.
+    const ENUM: Self = Self { size: 4, align: 4 };
+}
+
+/// The kind of C aggregate one generated definition declares.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Aggregate {
+    /// A struct, whose fields follow one another.
+    Struct,
+    /// A union, whose fields share one place.
+    Union,
+    /// An enum, whose size is the one `int` takes.
+    Enum,
+}
+
+/// Rounds `value` up to the next multiple of `align`.
+const fn align_up(value: usize, align: usize) -> usize {
+    value.div_ceil(align) * align
+}
+
+/// Splits one generated `typedef` into its kind, its name and the body between the braces.
+///
+/// An opaque handle has no body, which is what makes this `None`: there is no layout to pin.
+fn aggregate_of(text: &str) -> Option<(Aggregate, String, &str)> {
+    // A definition may carry documentation above it, so the `typedef` is found wherever it
+    // starts rather than required to be the first word.
+    let text = text.get(text.find("typedef ")?..)?;
+    let text = text.trim_start();
+    let (kind, rest) = if let Some(rest) = text.strip_prefix("typedef struct ") {
+        (Aggregate::Struct, rest)
+    } else if let Some(rest) = text.strip_prefix("typedef union ") {
+        (Aggregate::Union, rest)
+    } else {
+        let rest = text.strip_prefix("typedef enum ")?;
+        (Aggregate::Enum, rest)
+    };
+
+    let open = text.find('{')?;
+    let close = open + text[open..].find('}')?;
+    let name = rest.split_whitespace().next()?.to_string();
+
+    Some((kind, name, &text[open + 1..close]))
+}
+
+/// The text with every `/* ... */` comment removed.
+fn without_comments(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+
+    while let Some(start) = rest.find("/*") {
+        out.push_str(&rest[..start]);
+        let Some(end) = rest[start..].find("*/") else {
+            return out;
+        };
+        rest = &rest[start + end + 2..];
+    }
+
+    out.push_str(rest);
+    out
+}
+
+/// The C type and name of every field in a generated struct or union body.
+///
+/// `None` when a field cannot be read, since a layout computed from the fields it did
+/// read would describe a different type.
+fn c_fields(body: &str) -> Option<Vec<(String, String)>> {
+    let stripped = without_comments(body);
+    let mut fields = Vec::new();
+
+    for item in stripped.split(';') {
+        let item = item.trim();
+        if item.is_empty() {
+            continue;
+        }
+
+        let (c_type, name) = item.rsplit_once(char::is_whitespace)?;
+        let name = name.trim();
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|character| character.is_alphanumeric() || character == '_')
+        {
+            return None;
+        }
+
+        fields.push((c_type.trim().to_string(), name.to_string()));
+    }
+
+    Some(fields)
+}
+
+/// The width and alignment of one C type the header writes.
+///
+/// A type this table does not know is `None`, and the definition that names it is left
+/// without an assertion rather than given one computed from a guess.
+fn layout_of(c_type: &str, layouts: &BTreeMap<String, Layout>) -> Option<Layout> {
+    let c_type = c_type.trim();
+
+    if c_type.contains('*') {
+        return Some(Layout::POINTER);
+    }
+
+    if let Some(layout) = layouts.get(c_type) {
+        return Some(*layout);
+    }
+
+    match c_type {
+        "char" | "signed char" | "unsigned char" | "int8_t" | "uint8_t" | "bool" => {
+            Some(Layout { size: 1, align: 1 })
+        }
+        "short" | "unsigned short" | "int16_t" | "uint16_t" => Some(Layout { size: 2, align: 2 }),
+        "int" | "unsigned int" | "int32_t" | "uint32_t" | "float" => {
+            Some(Layout { size: 4, align: 4 })
+        }
+        "long long" | "unsigned long long" | "int64_t" | "uint64_t" | "double" | "uintptr_t"
+        | "intptr_t" | "size_t" | "ptrdiff_t" => Some(Layout { size: 8, align: 8 }),
+        _ => None,
+    }
+}
+
+/// How one aggregate places its bytes, and where each of its fields starts.
+fn measure(
+    kind: Aggregate,
+    body: &str,
+    layouts: &BTreeMap<String, Layout>,
+) -> Option<(Layout, Vec<(String, usize)>)> {
+    if kind == Aggregate::Enum {
+        return Some((Layout::ENUM, Vec::new()));
+    }
+
+    let mut offsets = Vec::new();
+    let mut size = 0usize;
+    let mut align = 1usize;
+    let mut offset = 0usize;
+
+    for (c_type, name) in c_fields(body)? {
+        let field = layout_of(&c_type, layouts)?;
+        let at = if kind == Aggregate::Struct {
+            offset = align_up(offset, field.align);
+            let at = offset;
+            offset += field.size;
+            at
+        } else {
+            0
+        };
+
+        offsets.push((name, at));
+        size = size.max(if kind == Aggregate::Union {
+            field.size
+        } else {
+            offset
+        });
+        align = align.max(field.align);
+    }
+
+    Some((
+        Layout {
+            size: align_up(size, align),
+            align,
+        },
+        offsets,
+    ))
+}
+
+/// The size and offset assertions of every transparent type in the header.
+///
+/// A C caller cannot see a layout change until a field reads back wrong, so the header
+/// states each size and the offset of each struct field, and asserts them where they are
+/// compiled.
+fn layout_assertions(definitions: &[Definition], span_used: bool) -> String {
+    let mut out = String::from(
+        "#ifdef __cplusplus\n\
+         #define ROROLALA_ABI_STATIC_ASSERT(condition, message) static_assert(condition, message)\n\
+         #else\n\
+         #define ROROLALA_ABI_STATIC_ASSERT(condition, message) _Static_assert(condition, message)\n\
+         #endif\n\n",
+    );
+
+    emit_size(&mut out, RESULT_REPR, Layout { size: 16, align: 8 });
+    emit_offset(&mut out, RESULT_REPR, "tag", 0);
+    emit_offset(&mut out, RESULT_REPR, "payload", 8);
+
+    // The string span is declared in the preamble rather than built from a definition, so
+    // its layout is pinned here the way the result type's is, and only when it is there.
+    let mut layouts = BTreeMap::new();
+    if span_used {
+        emit_size(&mut out, STR_SPAN_REPR, Layout { size: 16, align: 8 });
+        emit_offset(&mut out, STR_SPAN_REPR, STR_SPAN_ITEMS, 0);
+        emit_offset(&mut out, STR_SPAN_REPR, STR_SPAN_COUNT, 8);
+
+        // The preamble types are complete before every definition, so a definition naming
+        // one can be measured against it.
+        layouts.insert(STR_SPAN_REPR.to_string(), Layout { size: 16, align: 8 });
+    }
+
+    for definition in definitions {
+        let Some((kind, name, body)) = aggregate_of(&definition.text) else {
+            continue;
+        };
+        let Some((layout, offsets)) = measure(kind, body, &layouts) else {
+            continue;
+        };
+
+        layouts.insert(name.clone(), layout);
+        emit_size(&mut out, &name, layout);
+        if kind == Aggregate::Struct {
+            for (field, offset) in offsets {
+                emit_offset(&mut out, &name, &field, offset);
+            }
+        }
+    }
+
+    out
+}
+
+/// States the size of one type and asserts it.
+fn emit_size(out: &mut String, name: &str, layout: Layout) {
+    let macro_name = format!("ROROLALA_ABI_SIZE_{}", name.to_ascii_uppercase());
+    let _ = writeln!(out, "#define {macro_name} {}", layout.size);
+    let _ = writeln!(
+        out,
+        "ROROLALA_ABI_STATIC_ASSERT(sizeof({name}) == {macro_name}, \"{name} changed size\");\n"
+    );
+}
+
+/// States the offset of one struct field and asserts it.
+fn emit_offset(out: &mut String, name: &str, field: &str, offset: usize) {
+    let macro_name = format!(
+        "ROROLALA_ABI_OFFSET_{}_{}",
+        name.to_ascii_uppercase(),
+        field.to_ascii_uppercase()
+    );
+    let _ = writeln!(out, "#define {macro_name} {offset}");
+    let _ = writeln!(
+        out,
+        "ROROLALA_ABI_STATIC_ASSERT(offsetof({name}, {field}) == {macro_name}, \"{name}.{field} moved\");\n"
+    );
+}
+
+/// The names in a rendered header that the naming rule does not admit.
+///
+/// A function is `rola_...` in lower snake case, a constant is `ROLA_...` in upper snake case,
+/// and a type is `Rola...`.
+fn nonconforming(header: &str) -> Vec<String> {
+    let mut names = Vec::new();
+
+    for line in header.lines() {
+        let line = line.trim_start();
+
+        if let Some(rest) = line.strip_prefix("typedef ") {
+            let mut words = rest.split_whitespace();
+            let Some(kind) = words.next() else { continue };
+            if !matches!(kind, "struct" | "union" | "enum") {
+                continue;
+            }
+            let Some(name) = words.next() else { continue };
+            let name = name.trim_end_matches(';');
+            if !conforms_type(name) {
+                names.push(name.to_string());
+            }
+            continue;
+        }
+
+        if !line.ends_with(';') || !line.contains('(') {
+            continue;
+        }
+
+        let head = line.split('(').next().unwrap_or_default();
+        let name = head
+            .split_whitespace()
+            .last()
+            .unwrap_or_default()
+            .trim_start_matches('*');
+
+        if !conforms_function(name) {
+            names.push(name.to_string());
+        }
+    }
+
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Whether one type name follows `Rola<Area><Thing>`.
+fn conforms_type(name: &str) -> bool {
+    name == RESULT_REPR
+        || name == tag_type_name(RESULT_REPR)
+        || name
+            .strip_prefix("Rola")
+            .is_some_and(|rest| !rest.is_empty() && rest.chars().all(char::is_alphanumeric))
+}
+
+/// Whether one function or constant name follows the rule.
+fn conforms_function(name: &str) -> bool {
+    let lower = |rest: &str| {
+        !rest.is_empty()
+            && rest.chars().all(|character| {
+                character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_'
+            })
+    };
+    let upper = |rest: &str| {
+        !rest.is_empty()
+            && rest.chars().all(|character| {
+                character.is_ascii_uppercase() || character.is_ascii_digit() || character == '_'
+            })
+    };
+
+    if name == FREE_STRING || name.starts_with("ROROLALA_ABI_") {
+        return true;
+    }
+
+    ["rola_", "free_rola_"]
+        .into_iter()
+        .any(|prefix| name.strip_prefix(prefix).is_some_and(lower))
+        || name.strip_prefix("ROLA_").is_some_and(upper)
+}
+
 /// Renders the whole header, or reports everything it could not resolve.
 fn render(exports: &Exports) -> Result<String, Vec<Diagnostic>> {
     let reprs = reprs(exports);
@@ -1618,9 +2188,11 @@ fn render(exports: &Exports) -> Result<String, Vec<Diagnostic>> {
     }
 
     let definitions = order(&definitions)?;
+    let version = abi_version(exports);
+    let span_used = uses_str_span(exports, &reprs);
 
     let mut out = String::from(BANNER);
-    out.push_str(&preamble());
+    out.push_str(&preamble(version, span_used));
 
     for (item, origin) in &exports.constants {
         render_const(&mut out, item, origin, &reprs, &mut diagnostics);
@@ -1628,6 +2200,7 @@ fn render(exports: &Exports) -> Result<String, Vec<Diagnostic>> {
     for definition in &definitions {
         out.push_str(&definition.text);
     }
+    out.push_str(&layout_assertions(&definitions, span_used));
     for (item, origin) in &exports.functions {
         render_function(&mut out, item, origin, &reprs, &mut diagnostics);
     }
@@ -2481,6 +3054,34 @@ fn render_signature(
             continue;
         };
 
+        // A slice crosses as two parameters, a pointer to the first element and its
+        // count, named the way the macro names them. The element type is what one
+        // element is held as, so the pointer is to that, never to a handle.
+        if let Type::Reference(reference) = &*pat_type.ty
+            && reference.mutability.is_none()
+            && let Type::Slice(slice) = &*reference.elem
+        {
+            if repr_of(&slice.elem, resolution).is_some_and(|repr| repr == STRING_REPR) {
+                reporting.report(
+                    pat_type.ty.span().start().line,
+                    item,
+                    "a slice of strings crosses as a string span: take a `StrSpan` instead, \
+                     which is one pointer and one count"
+                        .to_string(),
+                );
+                continue;
+            }
+
+            let Some(inner) = pointee_c_type(&slice.elem, resolution, reporting, item) else {
+                continue;
+            };
+
+            let ident = &pat_ident.ident;
+            params.push(format!("const {inner} * {ident}"));
+            params.push(format!("size_t {}", length_name(&ident.to_string())));
+            continue;
+        }
+
         let c_type = if read_only_string(&pat_type.ty, resolution) {
             Some(READ_ONLY_STRING.to_string())
         } else {
@@ -2642,6 +3243,7 @@ mod tests {
         let config = Config {
             source_roots: std::slice::from_ref(&root),
             output_dir: &output_dir,
+            enforce_naming: false,
         };
 
         fs::read_to_string(generate(&config).unwrap()).unwrap()
@@ -2654,6 +3256,7 @@ mod tests {
         let config = Config {
             source_roots: std::slice::from_ref(&root),
             output_dir: &output_dir,
+            enforce_naming: false,
         };
 
         generate(&config).unwrap_err().to_string()
@@ -3225,5 +3828,258 @@ pub unsafe extern "C" fn RolaVault_is_locking(userdata: *mut c_void) { todo!() }
 "#,
         );
         assert!(error.contains("is declared already"), "{error}");
+    }
+
+    #[test]
+    fn the_abi_version_is_stated_as_macros_and_a_symbol() {
+        // One number in the sources, three macros and one symbol in the header, so a caller
+        // compares a compile-time constant and a run-time value that cannot drift apart.
+        let header = header_for(
+            r"
+/// The version.
+#[lazyffi(export = ROLA_ABI_VERSION)]
+pub const ABI_VERSION: u32 = 10203;
+",
+        );
+
+        assert!(
+            header.contains("#define ROROLALA_ABI_VERSION 10203"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_VERSION_MAJOR 1"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_VERSION_MINOR 2"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_VERSION_PATCH 3"),
+            "{header}"
+        );
+        assert!(
+            header.contains("extern const uint32_t ROLA_ABI_VERSION;"),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_transparent_type_states_its_size_and_field_offsets() {
+        // The sizes are computed from the fields the header itself writes, so an assertion
+        // fires exactly when the layout the C compiler sees changes.
+        let header = header_for(
+            r"
+/// A thing.
+#[lazyffi(export = RolaThing)]
+pub enum Thing {
+    /// Nothing.
+    Nothing,
+    /// Two fields.
+    Pair {
+        /// Whether.
+        left: bool,
+        /// How many.
+        right: u64,
+    },
+}
+",
+        );
+
+        assert!(
+            header.contains("#define ROROLALA_ABI_SIZE_ROLATHINGPAIR 16"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_OFFSET_ROLATHINGPAIR_RIGHT 8"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_SIZE_ROLATHINGTAG 4"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_SIZE_ROLATHING 24"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_OFFSET_ROLATHING_PAYLOAD 8"),
+            "{header}"
+        );
+        assert!(
+            header.contains("sizeof(RolaThing) == ROROLALA_ABI_SIZE_ROLATHING"),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn an_input_struct_writes_every_field_and_states_its_layout() {
+        let header = header_for(
+            r"
+/// What a caller asks.
+#[lazyffi(export = RolaAskRequest, input)]
+pub struct AskRequest {
+    /// Where to look.
+    pub workspace: String,
+    /// The files to ask about.
+    pub files: StrSpan,
+    /// Whether to stay off the network.
+    pub offline: bool,
+}
+
+/// Answers a request.
+#[lazyffi(export = rola_ask_request)]
+pub fn ask_request(request: &AskRequest) {}
+
+/// Takes one by value, which only a complete type can be.
+#[lazyffi(export = rola_ask_by_value)]
+pub fn ask_by_value(request: AskRequest) {}
+",
+        );
+
+        // A string field is read-only, while a built-in span is held by value.
+        assert!(
+            header.contains(
+                "typedef struct RolaAskRequest {\n\
+                 \x20 /** Where to look. */\n\
+                 \x20 const char * workspace;\n\
+                 \x20 /** The files to ask about. */\n\
+                 \x20 RolaStrSpan files;\n\
+                 \x20 /** Whether to stay off the network. */\n\
+                 \x20 bool offline;\n\
+                 } RolaAskRequest;"
+            ),
+            "{header}"
+        );
+
+        // The span is a built-in, declared beside the result type.
+        assert!(
+            header.contains("typedef struct RolaStrSpan {\n  const char *const * items;\n  size_t count;\n} RolaStrSpan;"),
+            "{header}"
+        );
+
+        // A shared borrow is a const pointer to the repr, and a value is the repr itself.
+        assert!(
+            header.contains("void rola_ask_request(const RolaAskRequest * request);"),
+            "{header}"
+        );
+        assert!(
+            header.contains("void rola_ask_by_value(RolaAskRequest request);"),
+            "{header}"
+        );
+
+        // Every field's offset is stated, and the span's own layout with it.
+        assert!(
+            header.contains("#define ROROLALA_ABI_SIZE_ROLASTRSPAN 16"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_OFFSET_ROLASTRSPAN_COUNT 8"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_SIZE_ROLAASKREQUEST 32"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_OFFSET_ROLAASKREQUEST_FILES 8"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_OFFSET_ROLAASKREQUEST_OFFLINE 24"),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_slice_of_a_tagged_union_is_a_pointer_and_a_count() {
+        let header = header_for(
+            r"
+/// One change.
+#[lazyffi(export = RolaAskOp)]
+pub enum AskOp {
+    /// Adds an entry.
+    Add {
+        /// The path to add.
+        path: String,
+    },
+}
+
+/// Applies a list of changes.
+#[lazyffi(export = rola_ask_ops)]
+pub fn ask_ops(ops: &[AskOp]) {}
+",
+        );
+
+        // A slice has no C value, so it crosses as the pair the macro names.
+        assert!(
+            header.contains("void rola_ask_ops(const RolaAskOp * ops, size_t ops_len);"),
+            "{header}"
+        );
+
+        // The element is the tagged union the enum already declares.
+        assert!(
+            header.contains("typedef struct RolaAskOp {\n  RolaAskOpTag tag;\n  RolaAskOpPayload payload;\n} RolaAskOp;"),
+            "{header}"
+        );
+        assert!(
+            header.contains("#define ROROLALA_ABI_SIZE_ROLAASKOP 16"),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_slice_of_strings_is_reported_rather_than_given_a_span_it_does_not_have() {
+        let error = error_for(
+            r"
+/// Joins names.
+#[lazyffi(export = rola_join)]
+pub fn join(names: &[String]) {}
+",
+        );
+
+        assert!(error.contains("crosses as a string span"), "{error}");
+        assert!(error.contains("StrSpan"), "{error}");
+    }
+
+    #[test]
+    fn a_test_only_export_is_not_part_of_the_header() {
+        // A crate's `tests/` holds programs, and an export written there is never compiled
+        // into the library a C caller links, so the header must not describe it.
+        let header = header_for_tree(&[
+            (
+                "src/lib.rs",
+                "/// Real.\n#[lazyffi(export = rola_real)]\npub fn real() {}\n",
+            ),
+            (
+                "tests/input.rs",
+                "/// Probe.\n#[lazyffi(export = rola_probe)]\npub fn probe() {}\n",
+            ),
+        ]);
+
+        assert!(header.contains("void rola_real(void);"), "{header}");
+        assert!(!header.contains("rola_probe"), "{header}");
+    }
+
+    #[test]
+    fn a_name_outside_the_rule_is_refused() {
+        let root = write_tree(&[(
+            "src/lib.rs",
+            r"
+/// A vault.
+#[lazyffi(export = create_vault)]
+pub fn make() {}
+",
+        )]);
+        let output_dir = root.join("out");
+        let config = Config {
+            source_roots: std::slice::from_ref(&root),
+            output_dir: &output_dir,
+            enforce_naming: true,
+        };
+
+        let error = generate(&config).unwrap_err().to_string();
+        assert!(error.contains("create_vault"), "{error}");
+        assert!(error.contains("naming rule"), "{error}");
     }
 }

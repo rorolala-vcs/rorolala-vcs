@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 using RolaSharp;
 
@@ -55,9 +54,15 @@ public sealed class TreeWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return (int)(RolaJson.Number(document.RootElement, "bytes") ?? 0);
+            var handle = answer.payload;
+            try
+            {
+                return (int)RorolalaBinding.rola_write_tree_description_bytes(handle);
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_tree_description(handle);
+            }
         }
         finally
         {
@@ -83,13 +88,19 @@ public sealed class TreeWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new TreeInit(
-                RolaJson.Text(document.RootElement, "path") ?? string.Empty,
-                (int)(RolaJson.Number(document.RootElement, "collapsed") ?? 0),
-                RolaJson.Flag(document.RootElement, "is_root")
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new TreeInit(
+                    NativeText.Taken(RorolalaBinding.rola_write_tree_init_path(handle)),
+                    (int)RorolalaBinding.rola_write_tree_init_collapsed(handle),
+                    RorolalaBinding.rola_write_tree_init_is_root(handle)
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_tree_init(handle);
+            }
         }
         finally
         {
@@ -106,33 +117,33 @@ public sealed class TreeWriter : Writer
     {
         ArgumentNullException.ThrowIfNull(paths);
 
-        var directory = Utf8(_workspace.Root.FullName);
-        var at = Utf8(target ?? string.Empty);
-        var list = Utf8(JsonSerializer.Serialize(paths));
+        using var request = new NativeRequest();
+        var directory = request.Text(_workspace.Root.FullName);
+        var at = request.Text(target);
+        var list = request.Span(paths.ToArray());
+        var answer = RorolalaBinding.rola_write_tree_reset(directory, at, list);
+        if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+        {
+            throw WriteResults.From(answer.payload);
+        }
+
+        var handle = answer.payload;
         try
         {
-            var answer = RorolalaBinding.rola_write_tree_reset(directory, at, list);
-            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            var count = RorolalaBinding.rola_write_tree_reset_path_count(handle);
+            var reset = new List<string>((int)count);
+            for (nuint index = 0; index < count; index++)
             {
-                throw WriteResults.From(answer.payload);
+                reset.Add(
+                    NativeText.Taken(RorolalaBinding.rola_write_tree_reset_path_at(handle, index))
+                );
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-            var reset =
-                RolaJson
-                    .Items(document.RootElement, "paths")
-                    ?.EnumerateArray()
-                    .Select(item => item.GetString() ?? string.Empty)
-                    .ToArray()
-                ?? [];
-
-            return new TreeReset(RolaJson.Flag(document.RootElement, "whole"), reset);
+            return new TreeReset(RorolalaBinding.rola_write_tree_reset_whole(handle), reset);
         }
         finally
         {
-            Marshal.FreeCoTaskMem(directory);
-            Marshal.FreeCoTaskMem(at);
-            Marshal.FreeCoTaskMem(list);
+            RorolalaBinding.free_rola_write_tree_reset(handle);
         }
     }
 
@@ -149,41 +160,53 @@ public sealed class TreeWriter : Writer
     {
         ArgumentNullException.ThrowIfNull(paths);
 
-        var directory = Utf8(_workspace.Root.FullName);
-        var at = Utf8(target ?? string.Empty);
-        var list = Utf8(JsonSerializer.Serialize(paths));
+        using var request = new NativeRequest();
+        var directory = request.Text(_workspace.Root.FullName);
+        var at = request.Text(target);
+        var list = request.Span(paths.ToArray());
+        var answer = RorolalaBinding.rola_write_tree_add(directory, at, list, includeIgnored);
+        if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+        {
+            throw WriteResults.From(answer.payload);
+        }
+
+        var handle = answer.payload;
         try
         {
-            var answer = RorolalaBinding.rola_write_tree_add(
-                directory,
-                at,
-                list,
-                includeIgnored
-            );
-            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            var count = RorolalaBinding.rola_write_tree_add_change_count(handle);
+            var changes = new List<TreeAddChange>((int)count);
+            for (nuint index = 0; index < count; index++)
             {
-                throw WriteResults.From(answer.payload);
-            }
+                var change = RorolalaBinding.rola_write_tree_add_change_at(handle, index);
+                if (change == 0)
+                {
+                    continue;
+                }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-            var changes =
-                RolaJson
-                    .Items(document.RootElement, "changes")
-                    ?.EnumerateArray()
-                    .Select(item => new TreeAddChange(
-                        RolaJson.Text(item, "path") ?? string.Empty,
-                        RolaJson.Text(item, "kind") ?? string.Empty
-                    ))
-                    .ToArray()
-                ?? [];
+                try
+                {
+                    changes.Add(
+                        new TreeAddChange(
+                            NativeText.Taken(
+                                RorolalaBinding.rola_write_tree_add_change_path(change)
+                            ),
+                            NativeText.Taken(
+                                RorolalaBinding.rola_write_tree_add_change_kind(change)
+                            )
+                        )
+                    );
+                }
+                finally
+                {
+                    RorolalaBinding.free_rola_write_tree_add_change(change);
+                }
+            }
 
             return changes;
         }
         finally
         {
-            Marshal.FreeCoTaskMem(directory);
-            Marshal.FreeCoTaskMem(at);
-            Marshal.FreeCoTaskMem(list);
+            RorolalaBinding.free_rola_write_tree_add(handle);
         }
     }
 
@@ -204,40 +227,43 @@ public sealed class TreeWriter : Writer
     {
         ArgumentNullException.ThrowIfNull(paths);
 
-        var directory = Utf8(_workspace.Root.FullName);
-        var at = Utf8(target ?? string.Empty);
-        var list = Utf8(JsonSerializer.Serialize(paths));
+        using var request = new NativeRequest();
+        var directory = request.Text(_workspace.Root.FullName);
+        var at = request.Text(target);
+        var list = request.Span(paths.ToArray());
+        var answer = RorolalaBinding.rola_write_tree_remove_paths(
+            directory,
+            at,
+            list,
+            cached,
+            recursive,
+            force
+        );
+        if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+        {
+            throw WriteResults.From(answer.payload);
+        }
+
+        var handle = answer.payload;
         try
         {
-            var answer = RorolalaBinding.rola_write_tree_remove_paths(
-                directory,
-                at,
-                list,
-                cached,
-                recursive,
-                force
-            );
-            if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
+            var count = RorolalaBinding.rola_write_tree_remove_path_count(handle);
+            var removed = new List<string>((int)count);
+            for (nuint index = 0; index < count; index++)
             {
-                throw WriteResults.From(answer.payload);
+                removed.Add(
+                    NativeText.Taken(RorolalaBinding.rola_write_tree_remove_path_at(handle, index))
+                );
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-            var removed =
-                RolaJson
-                    .Items(document.RootElement, "paths")
-                    ?.EnumerateArray()
-                    .Select(item => item.GetString() ?? string.Empty)
-                    .ToArray()
-                ?? [];
-
-            return new TreeRemoval(removed, RolaJson.Flag(document.RootElement, "cached"));
+            return new TreeRemoval(
+                removed,
+                RorolalaBinding.rola_write_tree_remove_cached(handle)
+            );
         }
         finally
         {
-            Marshal.FreeCoTaskMem(directory);
-            Marshal.FreeCoTaskMem(at);
-            Marshal.FreeCoTaskMem(list);
+            RorolalaBinding.free_rola_write_tree_remove(handle);
         }
     }
 

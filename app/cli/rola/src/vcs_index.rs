@@ -33,7 +33,10 @@ pub mod cmd_vcs_index_write_version;
 use std::str::FromStr as _;
 
 use librorolala::auth::Account;
-use librorolala::daemon::{action_list_remote_index_async, action_read_remote_index_async};
+use librorolala::daemon::{
+    ListRemoteIndexRequest, ReadRemoteIndexRequest, action_list_remote_index_async,
+    action_read_remote_index_async,
+};
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::protocol::ActionError;
 use librorolala::status::Target;
@@ -628,7 +631,9 @@ pub fn list_remote_hashes(
         workspace,
         account,
         target.to_owned(),
-        which.to_owned(),
+        ListRemoteIndexRequest {
+            which: which.to_owned(),
+        },
         Progress::silent(),
     ))?;
 
@@ -658,7 +663,9 @@ pub fn read_remote(
         workspace,
         account,
         target.to_owned(),
-        hash.to_owned(),
+        ReadRemoteIndexRequest {
+            hash: hash.to_owned(),
+        },
         Progress::silent(),
     ))
 }

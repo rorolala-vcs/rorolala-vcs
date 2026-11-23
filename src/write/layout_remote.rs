@@ -13,11 +13,13 @@ use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_workspace::Workspace;
-use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use crate::auth::Account;
-use crate::daemon::{EntryRemove, PathMove, action_move_remote_path, action_remove_remote_path};
+use crate::daemon::{
+    EntryRemove, PathMove, RemoveRemotePathRequest, action_move_remote_path,
+    action_remove_remote_path,
+};
 use crate::remote::Reached;
 use crate::write::WriteError;
 use crate::write::layout::{cached_copy, path_of};
@@ -65,7 +67,7 @@ pub fn move_path_fetched(
         reason: error.to_string(),
     })?;
 
-    let outcome: PathMove = answer(&said)?;
+    let outcome: PathMove = said.outcome();
 
     follow_move(&workspace, &reached.name, &from, &to, &outcome)
 }
@@ -115,13 +117,15 @@ pub fn remove_fetched_entry(directory: &Path, layout: &str, uuid: &str) -> Resul
         &workspace,
         &account,
         reached.address.to_string(),
-        path.as_str().to_owned(),
+        &RemoveRemotePathRequest {
+            path: path.as_str().to_owned(),
+        },
     )
     .map_err(|error| WriteError::Action {
         reason: error.to_string(),
     })?;
 
-    let outcome: EntryRemove = answer(&said)?;
+    let outcome: EntryRemove = said.outcome();
 
     follow_remove(&workspace, &reached.name, &path, &outcome)
 }
@@ -175,13 +179,6 @@ fn account(workspace: &Workspace) -> Result<Account, WriteError> {
     let name = crate::auth::current_account().ok_or(WriteError::NoAccount)?;
 
     crate::keys::account_named(&name, Some(workspace), None).ok_or(WriteError::NoAccount)
-}
-
-/// The outcome a Vault answered with, read as the shape its action writes.
-fn answer<T: DeserializeOwned>(text: &str) -> Result<T, WriteError> {
-    serde_json::from_str(text).map_err(|error| WriteError::Action {
-        reason: format!("the Vault's answer did not read: {error}"),
-    })
 }
 
 /// Writes a move the Vault agreed to into the copy the Workspace keeps.

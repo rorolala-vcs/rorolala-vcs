@@ -51,7 +51,7 @@ public sealed class UserScope : Scope
     /// An account that was never named answers empty, which is the same answer the command line gives.
     /// </remarks>
     public static string CurrentAccount =>
-        NativeText.Taken(RorolalaBinding.rola_current_account());
+        NativeText.Taken(RorolalaBinding.rola_account_current());
 
     /// <summary>The userdata name this scope reads.</summary>
     public string Profile => _name;
@@ -124,12 +124,12 @@ public sealed class UserScope : Scope
             {
                 try
                 {
-                    var count = (int)RorolalaBinding.rola_accounts_len(handle);
+                    var count = (int)RorolalaBinding.rola_accounts_count(handle);
                     for (var index = 0; index < count; index++)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
 
-                        var account = RorolalaBinding.read_rola_accounts_by_index(handle, (nuint)index);
+                        var account = RorolalaBinding.rola_accounts_at(handle, (nuint)index);
                         if (account == 0)
                         {
                             continue;
@@ -137,8 +137,8 @@ public sealed class UserScope : Scope
 
                         try
                         {
-                            var name = NativeText.Taken(RorolalaBinding.rola_account_account_name(account));
-                            var path = NativeText.Taken(RorolalaBinding.rola_account_account_key_path(account));
+                            var name = NativeText.Taken(RorolalaBinding.rola_account_name(account));
+                            var path = NativeText.Taken(RorolalaBinding.rola_account_key_path(account));
                             var privateKey = new PrivateKey(name, new FileInfo(path));
                             var publicPath = Path.ChangeExtension(path, ".pub");
                             var publicKey = File.Exists(publicPath)
@@ -169,12 +169,12 @@ public sealed class UserScope : Scope
             {
                 try
                 {
-                    var count = (int)RorolalaBinding.rola_members_len(members);
+                    var count = (int)RorolalaBinding.rola_members_count(members);
                     for (var index = 0; index < count; index++)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
 
-                        var member = RorolalaBinding.read_rola_members_by_index(members, (nuint)index);
+                        var member = RorolalaBinding.rola_members_at(members, (nuint)index);
                         if (member == 0)
                         {
                             continue;
@@ -182,8 +182,8 @@ public sealed class UserScope : Scope
 
                         try
                         {
-                            var name = NativeText.Taken(RorolalaBinding.rola_member_member_name(member));
-                            var path = NativeText.Taken(RorolalaBinding.rola_member_member_key_path(member));
+                            var name = NativeText.Taken(RorolalaBinding.rola_member_name(member));
+                            var path = NativeText.Taken(RorolalaBinding.rola_member_key_path(member));
                             var key = new PublicKey(name, new FileInfo(path));
                             if (publicKeys.All(existing => existing.Name != name))
                             {

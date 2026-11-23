@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use rorolala_layout::Layout;
 use rorolala_storage::{Lockable as _, StorageSet, key_of_file};
 use rorolala_tree::{EntryKind, Tree, TreeEntry, TreeStructure, conflict_copy};
-use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_lazyffi::{StrSpan, lazyffi};
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
@@ -255,9 +255,10 @@ pub fn remove_paths_for_workspace(
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"paths":[...],"cached":false}`,
-/// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a JSON array
-/// of strings, and `target` is the tree's path, empty for the directory itself.
+/// A `RolaWriteTreeRemove *` the caller releases with `free_rola_write_tree_remove`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a
+/// `RolaStrSpan` of the paths to remove, and `target` is the tree's path, empty for the directory
+/// itself.
 ///
 /// # Errors
 ///
@@ -267,15 +268,13 @@ pub fn remove_paths_for_workspace(
 pub fn remove_paths_at(
     directory: &Path,
     target: &str,
-    paths: &str,
+    paths: StrSpan,
     cached: bool,
     recursive: bool,
     force: bool,
-) -> Result<String, WriteError> {
+) -> Result<WriteTreeRemove, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
-    let paths: Vec<String> = serde_json::from_str(paths).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })?;
+    let paths = paths.into_vec();
     let tree_root = if target.is_empty() {
         directory.to_path_buf()
     } else {
@@ -298,13 +297,55 @@ pub fn remove_paths_at(
         },
     )?;
 
-    serde_json::to_string(&serde_json::json!({
-        "paths": removal.paths,
-        "cached": removal.cached,
-    }))
-    .map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteTreeRemove::of(&removal))
+}
+
+/// What a tree removal staged, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteTreeRemove *` the caller releases with `free_rola_write_tree_remove`.
+/// `_path_count` and `_path_at` answer the paths that left the staged structure, each a `char *`
+/// the caller releases with `free_string`, and `_cached` says whether the work was left where it
+/// was.
+#[lazyffi(export = RolaWriteTreeRemove)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTreeRemove {
+    /// The paths that left the staged structure, in path order.
+    paths: Vec<String>,
+    /// Whether the work was left where it was.
+    cached: bool,
+}
+
+impl WriteTreeRemove {
+    /// The answer a removal is handed over as.
+    fn of(removal: &Removal) -> Self {
+        Self {
+            paths: removal.paths.clone(),
+            cached: removal.cached,
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTreeRemove {
+    /// How many paths left the staged structure.
+    #[must_use]
+    pub const fn path_count(&self) -> usize {
+        self.paths.len()
+    }
+
+    /// One path that left the staged structure, or an empty string past the end.
+    #[must_use]
+    pub fn path_at(&self, index: usize) -> String {
+        self.paths.get(index).cloned().unwrap_or_default()
+    }
+
+    /// Whether the work was left where it was.
+    #[must_use]
+    pub const fn cached(&self) -> bool {
+        self.cached
+    }
 }
 
 /// `path` inside `root`, or nothing when it is not.

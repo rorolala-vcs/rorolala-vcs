@@ -23,7 +23,7 @@
     clippy::too_many_lines
 )]
 
-use librorolala::daemon::{action_fetch_layout, action_sync_index_all_async};
+use librorolala::daemon::{FetchLayoutRequest, action_fetch_layout, action_sync_index_all_async};
 use librorolala::fetch::Sources;
 use librorolala::protocol::ActionError;
 use librorolala::workspace::Workspace;
@@ -301,7 +301,14 @@ pub fn handle_bring(
     // the one read; a run with none is told so by the check below rather than by a fetch it may
     // not make.
     if !**offline {
-        action_fetch_layout(held, &account, target.to_string(), vault_name.clone())?;
+        action_fetch_layout(
+            held,
+            &account,
+            target.to_string(),
+            &FetchLayoutRequest {
+                name: vault_name.clone(),
+            },
+        )?;
     }
 
     let remote_layout = cached_vault_copy(held, &vault_name)?;
@@ -556,7 +563,6 @@ fn pull(
         held,
         account,
         target.to_owned(),
-        String::new(),
         reporting.progress(),
     ))?;
 

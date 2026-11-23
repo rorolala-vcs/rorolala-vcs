@@ -254,7 +254,7 @@ impl Variant {
     ///     Variant::new_bare_variant([0u8; 32], [1u8; 32], Some([2u8; 32]), [3u8; 32], [4u8; 32], 0);
     /// assert_eq!(merge.type_of(), VariantType::Merge);
     /// ```
-    #[lazyffi(export = get_rola_variant_type)]
+    #[lazyffi(export = rola_variant_type_read)]
     #[must_use]
     pub fn type_of(&self) -> VariantType {
         self.into()

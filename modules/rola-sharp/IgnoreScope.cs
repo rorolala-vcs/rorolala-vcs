@@ -33,7 +33,7 @@ public sealed class IgnoreScope : Scope, IDisposable
         var text = Utf8(path);
         try
         {
-            return RorolalaBinding.rola_ignore_rules_is_ignore(_handle, text, directory);
+            return RorolalaBinding.rola_ignore_rules_is_ignored(_handle, text, directory);
         }
         finally
         {
@@ -64,7 +64,7 @@ public sealed class IgnoreScope : Scope, IDisposable
         var root = Utf8(_root);
         try
         {
-            var handle = RorolalaBinding.load_rola_ignore_rules(rules, root);
+            var handle = RorolalaBinding.rola_ignore_rules_load(rules, root);
             if (handle == 0)
             {
                 throw new RolaReadError(

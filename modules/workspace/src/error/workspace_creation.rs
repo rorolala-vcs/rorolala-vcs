@@ -1,7 +1,7 @@
 use rorolala_utils_lazyffi::lazyffi;
 
 /// Represents an error that occurs during the creation of a Workspace
-#[lazyffi(export = WorkspaceCreationError)]
+#[lazyffi(export = RolaWorkspaceCreationError)]
 #[derive(Debug)]
 pub enum CreationError {
     /// Failure when the directory the Workspace keeps its data in cannot be created

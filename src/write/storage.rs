@@ -4,12 +4,11 @@ use std::path::Path;
 
 use rorolala_storage::{Chunking, Codec, Key, StorageSet, policy as chunking_policy};
 use rorolala_utils_lazyffi::lazyffi;
-use serde::Serialize;
 
 use crate::write::WriteError;
 
 /// What a store answered when content went in.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Stored {
     /// The key the content is kept under.
     pub key: Key,
@@ -84,8 +83,8 @@ pub async fn extract_file(
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"key":"blake3:...","chunked":false}`,
-/// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is the empty
+/// A `RolaWriteStoragePut *` the caller releases with `free_rola_write_storage_put`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is the empty
 /// string when the store is to choose the cut.
 ///
 /// # Errors
@@ -94,7 +93,11 @@ pub async fn extract_file(
 /// [`WriteError::Precondition`] when `policy` names no cut, and [`WriteError::Storage`] when the
 /// content cannot be stored.
 #[lazyffi(export = rola_write_storage_put_file)]
-pub fn put_file_to(directory: &Path, file: &Path, policy: &str) -> Result<String, WriteError> {
+pub fn put_file_to(
+    directory: &Path,
+    file: &Path,
+    policy: &str,
+) -> Result<WriteStoragePut, WriteError> {
     let set = crate::storage_set::for_directory(directory)
         .map_err(|error| WriteError::Storage {
             reason: error.to_string(),
@@ -111,9 +114,41 @@ pub fn put_file_to(directory: &Path, file: &Path, policy: &str) -> Result<String
             other => other,
         })?;
 
-    serde_json::to_string(&stored).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
+    Ok(WriteStoragePut {
+        key: stored.key.to_string(),
+        chunked: stored.chunked,
     })
+}
+
+/// What a store answered when content went in, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteStoragePut *` the caller releases with `free_rola_write_storage_put`. `_key`
+/// returns a `char *` the caller releases with `free_string`, and `_chunked` says whether the
+/// content is kept as a manifest of chunks.
+#[lazyffi(export = RolaWriteStoragePut)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteStoragePut {
+    /// The key the content is kept under.
+    key: String,
+    /// Whether the content is kept as a manifest of chunks.
+    chunked: bool,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteStoragePut {
+    /// The key the content is kept under.
+    #[must_use]
+    pub fn key(&self) -> String {
+        self.key.clone()
+    }
+
+    /// Whether the content is kept as a manifest of chunks.
+    #[must_use]
+    pub const fn chunked(&self) -> bool {
+        self.chunked
+    }
 }
 
 /// A storage failure as the write error a caller branches on.
@@ -200,9 +235,9 @@ mod tests {
         let file = dir.join("content.bin");
         fs::write(&file, b"content").unwrap();
 
-        let json = put_file_to(&dir, &file, "").unwrap();
+        let stored = put_file_to(&dir, &file, "").unwrap();
 
-        assert!(json.contains("blake3:"));
+        assert!(stored.key().contains("blake3:"));
 
         let _ = fs::remove_dir_all(&dir);
     }

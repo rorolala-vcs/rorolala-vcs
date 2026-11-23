@@ -97,11 +97,6 @@ pub enum WriteError {
         /// Why it failed.
         reason: String,
     },
-    /// A JSON document did not read as the shape a request or a plan has.
-    Json {
-        /// Why it did not.
-        reason: String,
-    },
     /// The write stopped for a reason this build does not name.
     Internal {
         /// Why it stopped.
@@ -152,7 +147,6 @@ impl fmt::Display for WriteError {
             | Self::Layout { reason }
             | Self::Storage { reason }
             | Self::Index { reason }
-            | Self::Json { reason }
             | Self::Internal { reason }
             | Self::Tree { reason } => formatter.write_str(reason),
             Self::NotATree { path } => write!(formatter, "{path} is not inside a tree"),

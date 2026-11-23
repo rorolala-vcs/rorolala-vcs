@@ -1,7 +1,7 @@
 use rorolala_utils_lazyffi::lazyffi;
 
 /// Represents an error that occurs during the creation of a Vault
-#[lazyffi(export = VaultCreationError)]
+#[lazyffi(export = RolaVaultCreationError)]
 #[derive(Debug)]
 pub enum CreationError {
     /// Failure when the directory the Vault keeps its configuration in cannot be created

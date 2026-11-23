@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace RolaSharp;
 
 /// <summary>The daemon this user's registrations are read through.</summary>
@@ -44,8 +42,8 @@ public sealed class DaemonScope : Scope
     protected override void Load(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var json = NativeText.Taken(RorolalaBinding.rola_daemon_vaults_json());
-        if (string.IsNullOrEmpty(json) || json == "null")
+        var handle = RorolalaBinding.rola_daemon_vaults_new();
+        if (handle == 0)
         {
             throw new RolaReadError(
                 RolaReadErrorKind.Unreadable,
@@ -54,24 +52,39 @@ public sealed class DaemonScope : Scope
             );
         }
 
-        using var document = JsonDocument.Parse(json);
-        var vaults = new Dictionary<string, VaultScope>(StringComparer.Ordinal);
-        var items = RolaJson.Items(document.RootElement, "vaults");
-        if (items is not null)
+        try
         {
-            foreach (var item in items.Value.EnumerateArray())
+            var vaults = new Dictionary<string, VaultScope>(StringComparer.Ordinal);
+            var count = RorolalaBinding.rola_daemon_vaults_count(handle);
+            for (nuint index = 0; index < count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
-                var name = RolaJson.Text(item, "name");
-                var path = RolaJson.Text(item, "path");
-                if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(path))
+                var item = RorolalaBinding.rola_daemon_vaults_at(handle, index);
+                if (item == 0)
                 {
-                    vaults[name] = new VaultScope(path);
+                    continue;
+                }
+
+                try
+                {
+                    var name = NativeText.Taken(RorolalaBinding.rola_daemon_vault_name(item));
+                    var path = NativeText.Taken(RorolalaBinding.rola_daemon_vault_path(item));
+                    if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(path))
+                    {
+                        vaults[name] = new VaultScope(path);
+                    }
+                }
+                finally
+                {
+                    RorolalaBinding.free_rola_daemon_vault(item);
                 }
             }
-        }
 
-        _vaults = vaults;
+            _vaults = vaults;
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_daemon_vaults(handle);
+        }
     }
 }

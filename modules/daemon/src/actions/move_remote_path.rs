@@ -7,6 +7,8 @@
 //! outcome happened, so the Workspace can change the copy it keeps to agree with it.
 
 use rorolala_protocol::{Action, ActionContext, ActionError, Encodable as _, OnlyWorkspace};
+use rorolala_utils_lazyffi::lazyffi;
+use serde::Serialize;
 
 use super::layout_remote::{PathMove, batched, codec_failed, local_layout, move_remote};
 use super::sync_storage::{Side, carry_blob};
@@ -21,10 +23,9 @@ use super::sync_storage::{Side, carry_blob};
 ///
 /// # Output
 ///
-/// What became of it, as JSON: the entry is now at the path it was moved to, nothing was at the
-/// path it came from, something is already at the path it was going to, or a path is not one a
-/// remote Layout may name. It crosses as text for the reason an ownership outcome does, see
-/// `request-ownership`.
+/// What became of it: the entry is now at the path it was moved to, nothing was at the path it came
+/// from, something is already at the path it was going to, or a path is not one a remote Layout may
+/// name. [`PathMoveOutcome`] is what a C caller reads.
 pub struct ActionMoveRemotePath;
 
 impl Action for ActionMoveRemotePath {
@@ -36,7 +37,7 @@ impl Action for ActionMoveRemotePath {
     /// - from: String
     /// - to: String
     type Input = (String, String);
-    type Output = String;
+    type Output = PathMoveOutcome;
 
     /// Asks the Vault to move the path, and answers with what it said.
     ///
@@ -44,8 +45,8 @@ impl Action for ActionMoveRemotePath {
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
     /// Vault, [`ActionError::Codec`] if a path or an outcome will not cross,
-    /// [`ActionError::Store`] if the Vault's Layout could not be written,
-    /// [`ActionError::Json`] if the outcome will not encode, and whatever the exchange fails with.
+    /// [`ActionError::Store`] if the Vault's Layout could not be written, and whatever the exchange
+    /// fails with.
     async fn process(
         input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
@@ -85,6 +86,68 @@ impl Action for ActionMoveRemotePath {
             PathMove::decode(bytes).map_err(codec_failed)?
         };
 
-        serde_json::to_string(&outcome).map_err(|error| ActionError::Json(error.into()))
+        Ok(PathMoveOutcome::from(outcome))
+    }
+}
+
+/// What became of a move, as a C caller reads it.
+///
+/// # FFI
+///
+/// A `RolaDaemonPathMoveOutcome *` the caller releases with `free_rola_daemon_path_move_outcome`. `kind` says which
+/// outcome it was, and it carries nothing else.
+#[lazyffi(export = RolaDaemonPathMoveOutcome)]
+#[derive(Debug, Clone, Serialize)]
+pub struct PathMoveOutcome {
+    /// Which outcome the move reached.
+    kind: PathMoveKind,
+}
+
+/// Which outcome a move reached.
+#[lazyffi(export = RolaDaemonPathMoveKind)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum PathMoveKind {
+    /// The entry is now at the path it was moved to.
+    Moved,
+    /// The Vault's Layout names nothing at the path that was to move.
+    Missing,
+    /// The path it was to move to already names something.
+    Taken,
+    /// A path is not one a remote Layout may name.
+    Malformed,
+}
+
+#[lazyffi(export = rola_daemon_)]
+impl PathMoveOutcome {
+    /// Which outcome the move reached.
+    #[must_use]
+    pub const fn kind(&self) -> PathMoveKind {
+        self.kind
+    }
+}
+
+impl From<PathMove> for PathMoveOutcome {
+    fn from(outcome: PathMove) -> Self {
+        let kind = match outcome {
+            PathMove::Moved => PathMoveKind::Moved,
+            PathMove::Missing => PathMoveKind::Missing,
+            PathMove::Taken => PathMoveKind::Taken,
+            PathMove::Malformed => PathMoveKind::Malformed,
+        };
+
+        Self { kind }
+    }
+}
+
+impl PathMoveOutcome {
+    /// The outcome as the action made it, for a caller inside Rust.
+    #[must_use]
+    pub const fn outcome(&self) -> PathMove {
+        match self.kind {
+            PathMoveKind::Moved => PathMove::Moved,
+            PathMoveKind::Missing => PathMove::Missing,
+            PathMoveKind::Taken => PathMove::Taken,
+            PathMoveKind::Malformed => PathMove::Malformed,
+        }
     }
 }

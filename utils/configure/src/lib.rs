@@ -28,7 +28,7 @@ pub use rorolala_utils_configure_macros::*;
 ///
 /// A value rather than a message, because [`Error`] crosses to C, where a caller
 /// switches on the variant and reads the fields instead of parsing text.
-#[lazyffi(export = ConfigureErrorReason)]
+#[lazyffi(export = RolaConfigureErrorReason)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reason {
     /// Nothing is there.
@@ -77,7 +77,7 @@ impl fmt::Display for Reason {
 /// act on it, paths, a [`Reason`], a position. None of them holds a message: the enum
 /// crosses to C, where a caller switches on the variant, and text is for
 /// [`Display`](fmt::Display) to produce rather than for the value to carry.
-#[lazyffi(export = ConfigureError)]
+#[lazyffi(export = RolaConfigureError)]
 #[derive(Debug)]
 pub enum Error {
     /// The file could not be read.
@@ -1096,7 +1096,7 @@ mod tests {
 
         // What C reads out of the union, and what it switches on. The tag is what
         // makes the read sound.
-        assert!(matches!(repr.tag, crate::ConfigureErrorTag::Parse));
+        assert!(matches!(repr.tag, crate::RolaConfigureErrorTag::Parse));
         // SAFETY: the tag says `Parse` is the live variant, and it was just written.
         let payload = unsafe { repr.payload.Parse };
         let c_file = payload.file;

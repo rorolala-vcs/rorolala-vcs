@@ -19,20 +19,20 @@ use rorolala_storage::{Key, Resolved, ShortHash, StorageSet};
 use rorolala_tree::{
     EntryKind as TreeKind, Staging, Tree, TreeStructure, conflict_copy, merge, read_structure,
 };
-use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_lazyffi::{StrSpan, lazyffi};
 use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_utils_progress::Progress;
 use rorolala_vcs::{VCSIndex, VCSIndexObject, Variant};
 use rorolala_workspace::{Merging, Pending, Workspace};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::daemon::{action_fetch_layout, action_sync_index_all_async};
+use crate::daemon::{FetchLayoutRequest, action_fetch_layout, action_sync_index_all_async};
 use crate::fetch::Sources;
 use crate::write::checkout::Checkout;
 use crate::write::layout::cached_copy;
 use crate::write::progress::{WriteProgress, watching};
-use crate::write::request::Common;
+use crate::write::request::{Common, WriteCommon};
 use crate::write::storage::extract_file;
 use crate::write::sync::{chain_store_keys, store_of};
 use crate::write::{Cancellation, WriteError};
@@ -106,7 +106,7 @@ impl Default for Messages {
 }
 
 /// One entry a bring put in.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Item {
     /// The `Uuid` it is known by.
     pub uuid: String,
@@ -117,7 +117,7 @@ pub struct Item {
 }
 
 /// What a bring came to.
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default)]
 pub struct Outcome {
     /// The entries that came in.
     pub entries: Vec<Item>,
@@ -211,7 +211,9 @@ impl BringRequest {
                 &workspace,
                 &account,
                 reached.address.to_string(),
-                reached.name.clone(),
+                &FetchLayoutRequest {
+                    name: reached.name.clone(),
+                },
             )
             .map_err(|error| WriteError::Action {
                 reason: error.to_string(),
@@ -238,9 +240,6 @@ impl BringRequest {
                     &workspace,
                     &account,
                     reached.address.to_string(),
-                    // The exchange has one answer whichever side asks: a full sync is everything
-                    // either side holds, and an input names nothing, see `ActionSyncIndexAll`.
-                    String::new(),
                     progress.clone(),
                 ))
                 .map_err(|error| WriteError::Action {
@@ -317,11 +316,44 @@ pub struct BringVariantRequest {
     tree_merge: bool,
 }
 
+/// A bring a C caller asks for.
+///
+/// Both brings are one entry point, and `join` is what tells them apart: an empty `join` asks for a
+/// bring of entries, and a non-empty one asks for the variant merge, whose `variant`, `file` and
+/// `tree_merge` are then read. A bring of entries reads `refs`, `to` and `by_name` instead.
+///
+/// # FFI
+///
+/// A `RolaWriteBringRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `refs` is a
+/// `RolaStrSpan` of the references to bring in, and an empty `to` lands each at the path the Vault's
+/// Layout names it by.
+#[lazyffi(export = RolaWriteBringRequest, input)]
+#[derive(Debug, Clone, Default)]
+pub struct BringInput {
+    /// The fields every write request carries.
+    pub common: WriteCommon,
+    /// The references to bring in.
+    pub refs: StrSpan,
+    /// Where the references land, empty to land each at the path the Vault names it by.
+    pub to: String,
+    /// Whether each reference keeps only its own name under a destination.
+    pub by_name: bool,
+    /// The marker that asks for a variant merge, empty for a bring of entries.
+    pub join: String,
+    /// The variant to bring in, for a variant merge.
+    pub variant: String,
+    /// The file it is to be joined into, for a variant merge.
+    pub file: String,
+    /// Whether a tree variant is merged into its tree, for a variant merge.
+    pub tree_merge: bool,
+}
+
 impl BringVariantRequest {
     /// The request a command builds from the resources it holds.
     ///
-    /// A C caller fills the same request from its JSON document instead, so this exists for the
-    /// caller that already holds the Workspace, the account and the flags as values.
+    /// A C caller fills [`BringInput`] instead, so this exists for the caller that already holds
+    /// the Workspace, the account and the flags as values.
     #[must_use]
     pub const fn new(
         common: Common,
@@ -642,7 +674,7 @@ pub enum HashMiss {
 ///
 /// It is the one file the run wrote, named the way the caller named the three things it is about,
 /// so a caller that words them its own way needs nothing else from the merge.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct VariantReport {
     /// The file the variant is waiting to be joined into, as the run named it.
     pub target: String,
@@ -908,9 +940,6 @@ fn pull_index(
             workspace,
             &account,
             reached.address.to_string(),
-            // The exchange has one answer whichever side asks: a full sync is everything either
-            // side holds, and an input names nothing, see `ActionSyncIndexAll`.
-            String::new(),
             progress.clone(),
         ))
         .map_err(|error| {
@@ -1106,69 +1135,215 @@ fn merge_tree(
 }
 
 /// Brings what a Vault holds and a Layout does not into it, or a variant the index holds in to be
-/// joined into a file the Layout names, from a JSON request.
+/// joined into a file the Layout names, from a request a C caller fills.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, or a `RolaWriteError *` the caller
-/// releases with `free_rola_write_error`. `progress` is the handle the caller polls with
-/// `rola_progress_next_json`, and `cancellation` is the flag it sets with
+/// `request` is a `RolaWriteBringRequest` the caller fills and keeps; every `const char *` in it is
+/// borrowed for the call and released by the caller. A `RolaWriteBring *` the caller releases with
+/// `free_rola_write_bring` answers both forms: `_joined` says which one came back. Nothing else in
+/// the answer means anything for the form that did not come back. A failure is a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `progress` is the handle the
+/// caller polls with `rola_progress_next`, and `cancellation` is the flag it sets with
 /// `rola_cancellation_cancel`.
 ///
-/// A request that names no `join` brings entries in, and the answer is
-/// `{"entries":[{"uuid":"...","remote_path":"...","local_path":"..."}],"failed":["..."]}`.
-/// `remote_path` is null when the Vault's Layout names no path for the entry, and `failed` holds
-/// one line per entry that could not come in. Its document is the fields every write request
-/// carries (`workspace`, `account`, `target`, `offline`, `force`, `concurrency` and `labels`) at
-/// the top level, `refs` as an array of strings, `to` as a string or null, and `by_name` as a
-/// bool. The references are paths of the Vault's Layout and are never read as filesystem paths;
-/// `to` is where this side writes, and a relative one is read against the Workspace's root, not
-/// against a process directory.
-///
-/// A request that carries `join` brings a variant in, and the answer is
-/// `{"target":"...","variant":"...","path":"..."}`, the file it waits to be joined into, the
-/// variant that came in and the path its file was written to. Its document is the same fields
-/// every write request carries, `join` as the marker that asks for this form and whose value is not
-/// read, `variant` as the variant to bring in, `file` as the file it is joined into, `to` as where
-/// the variant file is to lie or null for the place the convention gives it, and `tree_merge` as a
-/// bool. `refs` and `by_name` are not part of it.
+/// An empty `join` brings entries in. `_entry_count` and `_entry_at` name each one, with
+/// `remote_path` empty when the Vault's Layout names no path for the entry, and `_failed_count` and
+/// `_failed_at` hold one line per entry that could not come in. A non-empty `join` brings a variant
+/// in, and `_joined` is true with `_target`, `_variant` and `_path` naming the file it waits to be
+/// joined into, the variant that came in and the path its file was written to.
 ///
 /// # Errors
 ///
-/// Returns [`WriteError::Json`] when `request` does not read as a [`BringRequest`] or a
-/// [`BringVariantRequest`], or the answer cannot be written, and the failures
-/// [`BringRequest::run`] or [`BringVariantRequest::variant`] name, as the request asks for one or
-/// the other.
+/// Returns the failures [`BringRequest::run`] or [`BringVariantRequest::variant`] name, as `join`
+/// asks for one or the other.
 #[lazyffi(export = rola_write_bring)]
 pub fn bring_at(
-    request: &str,
+    request: &BringInput,
     progress: &WriteProgress,
     cancellation: &Cancellation,
-) -> Result<String, WriteError> {
-    let asked: BringRequest = serde_json::from_str(request).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })?;
+) -> Result<WriteBring, WriteError> {
     let watched = watching(progress);
+    let asked = BringRequest {
+        common: request.common.clone().into(),
+        refs: request.refs.clone().into_vec(),
+        to: (!request.to.is_empty()).then(|| request.to.clone()),
+        by_name: request.by_name,
+        join: (!request.join.is_empty()).then(|| request.join.clone()),
+    };
 
     // The two brings answer different things, so the answer is read from the request rather than
     // guessed at: `join` is the one field a variant merge has and a bring of entries does not.
     if asked.join.is_some() {
-        let variant: BringVariantRequest =
-            serde_json::from_str(request).map_err(|error| WriteError::Json {
-                reason: error.to_string(),
-            })?;
+        let variant = BringVariantRequest::new(
+            asked.common,
+            request.variant.clone(),
+            request.file.clone(),
+            (!request.to.is_empty()).then(|| request.to.clone()),
+            request.tree_merge,
+        );
         let report = variant.variant(&watched, cancellation)?;
 
-        return serde_json::to_string(&report).map_err(|error| WriteError::Json {
-            reason: error.to_string(),
-        });
+        return Ok(WriteBring::of_variant(&report));
     }
 
     let outcome = asked.run(&watched, cancellation)?;
 
-    serde_json::to_string(&outcome).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteBring::of_entries(&outcome))
+}
+
+/// What a bring came to, as the C ABI hands it over.
+///
+/// One export answers two things, a bring of entries and a variant merge, and `joined` says which
+/// of them came back: a variant merge answers the target, the variant and the path, and a bring of
+/// entries answers the entries and the failures. The fields of the form that did not come back say
+/// nothing, so a caller reads the ones `joined` names.
+///
+/// # FFI
+///
+/// A `RolaWriteBring *` the caller releases with `free_rola_write_bring`. `_joined` says which form
+/// it is. `_entry_count` and `_entry_at` answer the entries, each a `RolaWriteBringEntry *`
+/// released with `free_rola_write_bring_entry`; `_failed_count` and `_failed_at` answer the failure
+/// lines; and `_target`, `_variant` and `_path` answer a variant merge. Every `char *` is released
+/// with `free_string`.
+#[lazyffi(export = RolaWriteBring)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteBring {
+    /// Whether the answer is a variant merge rather than a bring of entries.
+    joined: bool,
+    /// The entries that came in, for a bring of entries.
+    entries: Vec<WriteBringEntry>,
+    /// What could not be brought in, one line each, for a bring of entries.
+    failed: Vec<String>,
+    /// The file the variant waits to be joined into, for a variant merge.
+    target: String,
+    /// The variant that came in, for a variant merge.
+    variant: String,
+    /// The path the variant's file was written to, for a variant merge.
+    path: String,
+}
+
+impl WriteBring {
+    /// The answer a bring of entries is handed over as.
+    fn of_entries(outcome: &Outcome) -> Self {
+        Self {
+            entries: outcome.entries.iter().map(WriteBringEntry::of).collect(),
+            failed: outcome.failed.clone(),
+            ..Self::default()
+        }
+    }
+
+    /// The answer a variant merge is handed over as.
+    fn of_variant(report: &VariantReport) -> Self {
+        Self {
+            joined: true,
+            target: report.target.clone(),
+            variant: report.variant.clone(),
+            path: report.path.clone(),
+            ..Self::default()
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteBring {
+    /// Whether the answer is a variant merge rather than a bring of entries.
+    #[must_use]
+    pub const fn joined(&self) -> bool {
+        self.joined
+    }
+
+    /// How many entries came in, which is zero for a variant merge.
+    #[must_use]
+    pub const fn entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// One entry that came in, or null past the end.
+    #[must_use]
+    pub fn entry_at(&self, index: usize) -> Option<WriteBringEntry> {
+        self.entries.get(index).cloned()
+    }
+
+    /// How many entries could not come in, which is zero for a variant merge.
+    #[must_use]
+    pub const fn failed_count(&self) -> usize {
+        self.failed.len()
+    }
+
+    /// One entry that could not come in, or an empty string past the end.
+    #[must_use]
+    pub fn failed_at(&self, index: usize) -> String {
+        self.failed.get(index).cloned().unwrap_or_default()
+    }
+
+    /// The file the variant waits to be joined into, or an empty string for a bring of entries.
+    #[must_use]
+    pub fn target(&self) -> String {
+        self.target.clone()
+    }
+
+    /// The variant that came in, or an empty string for a bring of entries.
+    #[must_use]
+    pub fn variant(&self) -> String {
+        self.variant.clone()
+    }
+
+    /// The path the variant's file was written to, or an empty string for a bring of entries.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+}
+
+/// One entry a bring put in.
+///
+/// # FFI
+///
+/// A `RolaWriteBringEntry *` the caller releases with `free_rola_write_bring_entry`. `_uuid`,
+/// `_remote_path` and `_local_path` each return a `char *` the caller releases with `free_string`;
+/// `_remote_path` is empty when the Vault's Layout names no path for the entry.
+#[lazyffi(export = RolaWriteBringEntry)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteBringEntry {
+    /// The `Uuid` it is known by.
+    uuid: String,
+    /// The path the Vault's Layout names it by, empty when it names none.
+    remote_path: String,
+    /// The path this Layout now names it by.
+    local_path: String,
+}
+
+impl WriteBringEntry {
+    /// The answer one brought entry is handed over as.
+    fn of(item: &Item) -> Self {
+        Self {
+            uuid: item.uuid.clone(),
+            remote_path: item.remote_path.clone().unwrap_or_default(),
+            local_path: item.local_path.clone(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteBringEntry {
+    /// The `Uuid` it is known by.
+    #[must_use]
+    pub fn uuid(&self) -> String {
+        self.uuid.clone()
+    }
+
+    /// The path the Vault's Layout names it by, or an empty string when it names none.
+    #[must_use]
+    pub fn remote_path(&self) -> String {
+        self.remote_path.clone()
+    }
+
+    /// The path this Layout now names it by.
+    #[must_use]
+    pub fn local_path(&self) -> String {
+        self.local_path.clone()
+    }
 }
 
 /// Reads every reference before anything is written, so one that names nothing leaves nothing half
@@ -1847,9 +2022,9 @@ mod tests {
     use rorolala_layout::LayoutPath;
 
     use super::{
-        BringRequest, BringVariantRequest, Destination, Item, Outcome, Refusal, VariantRefusal,
-        VariantReport, bring_at, is_pattern, landing, matching, parent, pattern_base, placeable,
-        rooted, under,
+        BringInput, BringRequest, BringVariantRequest, Destination, Item, Outcome, Refusal,
+        VariantRefusal, VariantReport, WriteBring, bring_at, is_pattern, landing, matching, parent,
+        pattern_base, placeable, rooted, under,
     };
     use crate::write::{Cancellation, WriteError, WriteProgress};
 
@@ -2142,10 +2317,12 @@ mod tests {
             path: "merge/file.txt.theirs".to_owned(),
         };
 
-        assert_eq!(
-            serde_json::to_string(&report).expect("JSON"),
-            r#"{"target":"merge/file.txt","variant":"5b4a","path":"merge/file.txt.theirs"}"#
-        );
+        let answer = WriteBring::of_variant(&report);
+        assert!(answer.joined());
+        assert_eq!(answer.target(), "merge/file.txt");
+        assert_eq!(answer.variant(), "5b4a");
+        assert_eq!(answer.path(), "merge/file.txt.theirs");
+        assert_eq!(answer.entry_count(), 0);
     }
 
     #[test]
@@ -2184,10 +2361,17 @@ mod tests {
             failed: vec!["v: the version's content is not here".to_owned()],
         };
 
-        assert_eq!(
-            serde_json::to_string(&outcome).expect("JSON"),
-            r#"{"entries":[{"uuid":"u","remote_path":"a/b.psd","local_path":"here/b.psd"},{"uuid":"v","remote_path":null,"local_path":"c.psd"}],"failed":["v: the version's content is not here"]}"#
-        );
+        let answer = WriteBring::of_entries(&outcome);
+        assert!(!answer.joined());
+        assert_eq!(answer.entry_count(), 2);
+        let first = answer.entry_at(0).expect("the first entry is there");
+        assert_eq!(first.uuid(), "u");
+        assert_eq!(first.remote_path(), "a/b.psd");
+        assert_eq!(first.local_path(), "here/b.psd");
+        let second = answer.entry_at(1).expect("the second entry is there");
+        assert_eq!(second.remote_path(), "");
+        assert_eq!(answer.failed_count(), 1);
+        assert_eq!(answer.failed_at(0), "v: the version's content is not here");
     }
 
     #[test]
@@ -2216,17 +2400,17 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a scratch directory");
 
-        let request = serde_json::json!({
-            "workspace": dir.display().to_string(),
-            "account": "alice",
-            "refs": ["a"],
-        });
-        let error = bring_at(
-            &serde_json::to_string(&request).expect("JSON"),
-            &WriteProgress::new(),
-            &Cancellation::new(),
-        )
-        .expect_err("no Workspace holds the directory");
+        let request = BringInput {
+            common: super::super::request::WriteCommon {
+                workspace: dir.display().to_string(),
+                account: "alice".to_owned(),
+                ..Default::default()
+            },
+            refs: vec!["a".to_owned()].into(),
+            ..Default::default()
+        };
+        let error = bring_at(&request, &WriteProgress::new(), &Cancellation::new())
+            .expect_err("no Workspace holds the directory");
 
         assert!(matches!(error, WriteError::NoWorkspace));
 
@@ -2240,19 +2424,19 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a scratch directory");
 
-        let request = serde_json::json!({
-            "workspace": dir.display().to_string(),
-            "account": "alice",
-            "join": "a.txt",
-            "variant": "5b4a",
-            "file": "a.txt",
-        });
-        let error = bring_at(
-            &serde_json::to_string(&request).expect("JSON"),
-            &WriteProgress::new(),
-            &Cancellation::new(),
-        )
-        .expect_err("no Workspace holds the directory");
+        let request = BringInput {
+            common: super::super::request::WriteCommon {
+                workspace: dir.display().to_string(),
+                account: "alice".to_owned(),
+                ..Default::default()
+            },
+            join: "a.txt".to_owned(),
+            variant: "5b4a".to_owned(),
+            file: "a.txt".to_owned(),
+            ..Default::default()
+        };
+        let error = bring_at(&request, &WriteProgress::new(), &Cancellation::new())
+            .expect_err("no Workspace holds the directory");
 
         assert!(matches!(error, WriteError::NoWorkspace));
 
@@ -2268,20 +2452,20 @@ mod tests {
 
         // Cancellation is checked before the Workspace is even resolved, so a request that names
         // none still stops on the flag rather than on what it does not name.
-        let request = serde_json::json!({
-            "workspace": dir.display().to_string(),
-            "join": "a.txt",
-            "variant": "5b4a",
-            "file": "a.txt",
-        });
+        let request = BringInput {
+            common: super::super::request::WriteCommon {
+                workspace: dir.display().to_string(),
+                ..Default::default()
+            },
+            join: "a.txt".to_owned(),
+            variant: "5b4a".to_owned(),
+            file: "a.txt".to_owned(),
+            ..Default::default()
+        };
         let cancellation = Cancellation::new();
         cancellation.cancel();
-        let error = bring_at(
-            &serde_json::to_string(&request).expect("JSON"),
-            &WriteProgress::new(),
-            &cancellation,
-        )
-        .expect_err("the run was asked to stop");
+        let error = bring_at(&request, &WriteProgress::new(), &cancellation)
+            .expect_err("the run was asked to stop");
 
         assert!(matches!(error, WriteError::Cancelled));
 

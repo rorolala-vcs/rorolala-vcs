@@ -18,7 +18,6 @@ use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_vault::Vault;
 use rorolala_workspace::Workspace;
-use serde::Serialize;
 
 use crate::write::WriteError;
 
@@ -63,12 +62,13 @@ fn depth(root: &Path) -> usize {
 }
 
 /// What a binding wrote, as the C ABI answers it.
-#[derive(Debug, Serialize)]
+#[lazyffi(export = RolaWriteStorageBind)]
+#[derive(Debug, Clone, Default)]
 #[allow(
     clippy::struct_excessive_bools,
-    reason = "each flag is a separate member of the JSON a caller reads"
+    reason = "each flag is a separate fact about the binding that a caller reads on its own"
 )]
-struct BindAnswer {
+pub struct WriteStorageBind {
     /// Whether a Workspace was bound.
     bound_workspace: bool,
     /// Whether a Vault was bound.
@@ -79,6 +79,45 @@ struct BindAnswer {
     read_only: bool,
     /// What a caller should be told, one line each.
     warnings: Vec<String>,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteStorageBind {
+    /// Whether a Workspace was bound.
+    #[must_use]
+    pub const fn bound_workspace(&self) -> bool {
+        self.bound_workspace
+    }
+
+    /// Whether a Vault was bound.
+    #[must_use]
+    pub const fn bound_vault(&self) -> bool {
+        self.bound_vault
+    }
+
+    /// Whether the store recorded the binding back.
+    #[must_use]
+    pub const fn reverse_recorded(&self) -> bool {
+        self.reverse_recorded
+    }
+
+    /// Whether the store can only be read.
+    #[must_use]
+    pub const fn read_only(&self) -> bool {
+        self.read_only
+    }
+
+    /// How many lines a caller should be told.
+    #[must_use]
+    pub const fn warning_count(&self) -> usize {
+        self.warnings.len()
+    }
+
+    /// One line a caller should be told, or an empty string past the end.
+    #[must_use]
+    pub fn warning_at(&self, index: usize) -> String {
+        self.warnings.get(index).cloned().unwrap_or_default()
+    }
 }
 
 /// Makes the directory at `root` a store.
@@ -127,20 +166,19 @@ pub fn create_store_at(root: &Path) -> Result<(), WriteError> {
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"bound_workspace":true,"bound_vault":false,"reverse_recorded":true,"read_only":false,"warnings":[]}`,
-/// or a `RolaWriteError *` the caller releases with `free_rola_write_error`.
+/// A `RolaWriteStorageBind *` the caller releases with `free_rola_write_storage_bind`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::NoWorkspace`] when no Workspace holds the root,
 /// [`WriteError::Precondition`] when the path is not a store or is inside the Workspace's own data
 /// directory, and [`WriteError::Storage`] when a configuration cannot be read or written.
-#[lazyffi(export = rola_workspace_bind_storage)]
+#[lazyffi(export = rola_workspace_storage_bind)]
 pub fn workspace_bind_storage(
     workspace_root: &Path,
     store_root: &Path,
-) -> Result<String, WriteError> {
+) -> Result<WriteStorageBind, WriteError> {
     let workspace = Workspace::locate(workspace_root).ok_or(WriteError::NoWorkspace)?;
     let root = normalized_store(store_root)?;
     let own = normalize(&workspace.get_root().join(".rola"));
@@ -169,30 +207,31 @@ pub fn workspace_bind_storage(
             .map_err(|error| config_error(&error))?;
     }
 
-    answer(
-        &BindAnswer {
-            bound_workspace: true,
-            bound_vault: false,
-            reverse_recorded: reverse,
-            read_only,
-            warnings,
-        },
-        &root,
-    )
+    Ok(WriteStorageBind {
+        bound_workspace: true,
+        bound_vault: false,
+        reverse_recorded: reverse,
+        read_only,
+        warnings,
+    })
 }
 
 /// Binds a store to the Vault rooted at `vault_root`.
 ///
 /// # FFI
 ///
-/// The same JSON as [`workspace_bind_storage`], with `bound_vault` set instead.
+/// The same `RolaWriteStorageBind *` as [`workspace_bind_storage`], with `_bound_vault` set
+/// instead.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::NoVault`] when no Vault holds the root, and the same failures as
 /// [`workspace_bind_storage`] otherwise.
-#[lazyffi(export = rola_vault_bind_storage)]
-pub fn vault_bind_storage(vault_root: &Path, store_root: &Path) -> Result<String, WriteError> {
+#[lazyffi(export = rola_vault_storage_bind)]
+pub fn vault_bind_storage(
+    vault_root: &Path,
+    store_root: &Path,
+) -> Result<WriteStorageBind, WriteError> {
     let vault = Vault::locate(vault_root).ok_or(WriteError::NoVault)?;
     let root = normalized_store(store_root)?;
     let own = normalize(vault.get_root());
@@ -222,41 +261,75 @@ pub fn vault_bind_storage(vault_root: &Path, store_root: &Path) -> Result<String
             .map_err(|error| config_error(&error))?;
     }
 
-    answer(
-        &BindAnswer {
-            bound_workspace: false,
-            bound_vault: true,
-            reverse_recorded: reverse,
-            read_only,
-            warnings,
-        },
-        &root,
-    )
+    Ok(WriteStorageBind {
+        bound_workspace: false,
+        bound_vault: true,
+        reverse_recorded: reverse,
+        read_only,
+        warnings,
+    })
 }
 
 /// The places the store rooted at `store_root` records as writing to it.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"workspaces":["..."],"vaults":["..."]}`, or a `RolaWriteError *` the caller releases with
-/// `free_rola_write_error`.
+/// A `RolaStorageConnected *` the caller releases with `free_rola_storage_connected`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::Precondition`] when the directory is not a store, and
 /// [`WriteError::Storage`] when its configuration cannot be read.
-#[lazyffi(export = rola_storage_connected_json)]
-pub fn connected_json(store_root: &Path) -> Result<String, WriteError> {
+#[lazyffi(export = rola_storage_connected)]
+pub fn connected(store_root: &Path) -> Result<StorageConnected, WriteError> {
     let root = normalized_store(store_root)?;
     let store = RorolalaStorage::at(&root).ok_or_else(|| not_a_store(&root))?;
     let connected = store.connected().map_err(|error| WriteError::Storage {
         reason: error.to_string(),
     })?;
 
-    serde_json::to_string(&connected).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
+    Ok(StorageConnected {
+        workspaces: connected.workspaces,
+        vaults: connected.vaults,
     })
+}
+
+/// The places a store records as writing to it.
+#[lazyffi(export = RolaStorageConnected)]
+#[derive(Debug, Clone, Default)]
+pub struct StorageConnected {
+    /// The Workspaces that write to it, as the configuration writes them.
+    workspaces: Vec<String>,
+    /// The Vaults that write to it, as the configuration writes them.
+    vaults: Vec<String>,
+}
+
+#[lazyffi(export = rola_)]
+impl StorageConnected {
+    /// How many Workspaces write to the store.
+    #[must_use]
+    pub const fn workspace_count(&self) -> usize {
+        self.workspaces.len()
+    }
+
+    /// The Workspace at `index`, or an empty string past the end.
+    #[must_use]
+    pub fn workspace_at(&self, index: usize) -> String {
+        self.workspaces.get(index).cloned().unwrap_or_default()
+    }
+
+    /// How many Vaults write to the store.
+    #[must_use]
+    pub const fn vault_count(&self) -> usize {
+        self.vaults.len()
+    }
+
+    /// The Vault at `index`, or an empty string past the end.
+    #[must_use]
+    pub fn vault_at(&self, index: usize) -> String {
+        self.vaults.get(index).cloned().unwrap_or_default()
+    }
 }
 
 /// `path` resolved and checked to be a store, without opening it.
@@ -319,13 +392,6 @@ fn record(
         .map_err(|error| WriteError::Storage {
             reason: error.to_string(),
         })
-}
-
-/// The JSON a binding answers with.
-fn answer(binding: &BindAnswer, root: &Path) -> Result<String, WriteError> {
-    serde_json::to_string(binding).map_err(|error| WriteError::Json {
-        reason: format!("{}: {error}", root.display()),
-    })
 }
 
 #[cfg(test)]
@@ -449,9 +515,8 @@ mod tests {
         assert!(create_store_at(&store).is_err());
 
         let answer = workspace_bind_storage(&dir, &store).unwrap();
-        let answer: serde_json::Value = serde_json::from_str(&answer).unwrap();
-        assert_eq!(answer["bound_workspace"], true);
-        assert_eq!(answer["reverse_recorded"], true);
+        assert!(answer.bound_workspace());
+        assert!(answer.reverse_recorded());
 
         let workspace = Workspace::locate(&dir).unwrap();
         let set = workspace.storage_set().unwrap();

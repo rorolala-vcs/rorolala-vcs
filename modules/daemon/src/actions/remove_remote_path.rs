@@ -11,6 +11,8 @@
 //! account's own entries are its own to let go of.
 
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
+use rorolala_utils_lazyffi::lazyffi;
+use serde::{Deserialize, Serialize};
 
 use super::layout_remote::{EntryRemove, remote_transact, remove_remote};
 
@@ -23,18 +25,29 @@ use super::layout_remote::{EntryRemove, remote_transact, remove_remote};
 ///
 /// # Output
 ///
-/// What became of it, as JSON: the entry is gone, the path names nothing, the account may not remove
-/// it, or the path is not one a remote Layout may name. It crosses as text for the reason an
-/// ownership outcome does, see `request-ownership`.
+/// What became of it: the entry is gone, the path names nothing, the account may not remove it, or
+/// the path is not one a remote Layout may name. [`EntryRemoveOutcome`] is what a C caller reads.
 pub struct ActionRemoveRemotePath;
+
+/// The path whose entry is to be removed.
+///
+/// # FFI
+///
+/// A `RolaDaemonRemoveRemotePathRequest` the caller fills. `path` is borrowed for the call and
+/// released by the caller, and is read as the Vault's own Layout writes it.
+#[lazyffi(export = RolaDaemonRemoveRemotePathRequest, input)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RemoveRemotePathRequest {
+    /// The path to remove.
+    pub path: String,
+}
 
 impl Action for ActionRemoveRemotePath {
     /// Removing a path is id 19: the first of the writes a file's deletion makes.
     const ID: u32 = 19;
 
-    /// The path to remove.
-    type Input = String;
-    type Output = String;
+    type Input = RemoveRemotePathRequest;
+    type Output = EntryRemoveOutcome;
 
     /// Asks the Vault to remove the path, and answers with what it said.
     ///
@@ -42,17 +55,105 @@ impl Action for ActionRemoveRemotePath {
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
     /// Vault, or the Vault holds no member to act as, [`ActionError::Codec`] if a path or an outcome
-    /// will not cross, [`ActionError::Store`] if the Vault's Layout could not be written,
-    /// [`ActionError::Json`] if the outcome will not encode, and whatever the exchange fails with.
+    /// will not cross, [`ActionError::Store`] if the Vault's Layout could not be written, and
+    /// whatever the exchange fails with.
     async fn process(
         input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
     ) -> Result<Self::Output, ActionError> {
-        let outcome: EntryRemove = remote_transact(&mut ctx, input, |layout, path, me, admin| {
-            remove_remote(layout, &path, me, admin)
-        })
-        .await?;
+        let outcome: EntryRemove =
+            remote_transact(&mut ctx, input, |layout, request, me, admin| {
+                remove_remote(layout, &request.path, me, admin)
+            })
+            .await?;
 
-        serde_json::to_string(&outcome).map_err(|error| ActionError::Json(error.into()))
+        Ok(EntryRemoveOutcome::from(outcome))
+    }
+}
+
+/// What became of a request to remove an entry, as a C caller reads it.
+///
+/// # FFI
+///
+/// A `RolaDaemonEntryRemoveOutcome *` the caller releases with `free_rola_daemon_entry_remove_outcome`. `kind` says
+/// which outcome it was, and `owner` is the account that holds the entry when the removal was
+/// refused and somebody holds it, empty otherwise.
+#[lazyffi(export = RolaDaemonEntryRemoveOutcome)]
+#[derive(Debug, Clone, Serialize)]
+pub struct EntryRemoveOutcome {
+    /// Which outcome the removal reached.
+    kind: RemoveKind,
+    /// The account that holds the entry, empty when nobody does.
+    owner: String,
+}
+
+/// Which outcome a removal reached.
+#[lazyffi(export = RolaDaemonEntryRemoveKind)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum RemoveKind {
+    /// The Vault's Layout no longer holds the entry, or names a path for it.
+    Removed,
+    /// The Vault's Layout names nothing at that path, or holds no entry by it.
+    Missing,
+    /// The account does not hold the entry and does not administrate the Vault.
+    Refused,
+    /// A path is not one a remote Layout may name.
+    Malformed,
+}
+
+#[lazyffi(export = rola_daemon_)]
+impl EntryRemoveOutcome {
+    /// Which outcome the removal reached.
+    #[must_use]
+    pub const fn kind(&self) -> RemoveKind {
+        self.kind
+    }
+
+    /// The account that holds the entry, or an empty string when nobody does.
+    ///
+    /// # FFI
+    ///
+    /// The caller releases it with `free_string`.
+    #[must_use]
+    pub fn owner(&self) -> String {
+        self.owner.clone()
+    }
+}
+
+impl From<EntryRemove> for EntryRemoveOutcome {
+    fn from(outcome: EntryRemove) -> Self {
+        match outcome {
+            EntryRemove::Removed => Self {
+                kind: RemoveKind::Removed,
+                owner: String::new(),
+            },
+            EntryRemove::Missing => Self {
+                kind: RemoveKind::Missing,
+                owner: String::new(),
+            },
+            EntryRemove::Refused { owner } => Self {
+                kind: RemoveKind::Refused,
+                owner: owner.unwrap_or_default(),
+            },
+            EntryRemove::Malformed => Self {
+                kind: RemoveKind::Malformed,
+                owner: String::new(),
+            },
+        }
+    }
+}
+
+impl EntryRemoveOutcome {
+    /// The outcome as the action made it, for a caller inside Rust.
+    #[must_use]
+    pub fn outcome(&self) -> EntryRemove {
+        match self.kind {
+            RemoveKind::Removed => EntryRemove::Removed,
+            RemoveKind::Missing => EntryRemove::Missing,
+            RemoveKind::Refused => EntryRemove::Refused {
+                owner: (!self.owner.is_empty()).then(|| self.owner.clone()),
+            },
+            RemoveKind::Malformed => EntryRemove::Malformed,
+        }
     }
 }

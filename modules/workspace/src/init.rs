@@ -88,7 +88,7 @@ impl Workspace {
     /// Returns [`CreationError`] if the data directory
     /// cannot be created at the given directory, or if the configuration
     /// file cannot be created inside it.
-    #[lazyffi(export = create_workspace)]
+    #[lazyffi(export = rola_workspace_create)]
     pub fn create(dir: &Path) -> Result<(), CreationError> {
         let data = dir.join(DATA_DIR);
 

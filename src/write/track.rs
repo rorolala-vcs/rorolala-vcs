@@ -11,18 +11,12 @@
 //! plan reads the content and settles every gate before an editor is opened, so a run whose editor is
 //! left empty has written nothing, and the list the editor shows is the list apply will write.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use rorolala_layout::{EntryKind, Layout, LayoutPath};
-use rorolala_storage::{Key, StorageSet};
-use rorolala_utils_lazyffi::lazyffi;
-use rorolala_utils_location::{Locate as _, normalize};
-use rorolala_vault::Vault;
-use rorolala_vcs::VCSIndex;
-use rorolala_workspace::Workspace;
-use serde::Serialize;
-use uuid::Uuid;
-
+use self::batch::{
+    Action, FileKind, Item, Outcome, Refusal, Subject, TrackAgreed, TrackInput, TrackMessage,
+};
 use crate::write::{
     Cancellation, WriteError, WriteProgress,
     index::write_file_version,
@@ -30,9 +24,17 @@ use crate::write::{
     storage::put_file,
     workspace::rebuild_tree_cache,
 };
+use rorolala_layout::{EntryKind, Layout, LayoutPath};
+use rorolala_storage::{Key, StorageSet};
+use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_location::{Locate as _, normalize};
+use rorolala_vault::Vault;
+use rorolala_vcs::VCSIndex;
+use rorolala_workspace::Workspace;
+use uuid::Uuid;
 
 /// What tracking one file wrote.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct TrackedFile {
     /// The Layout entry the path names.
     pub id: Uuid,
@@ -42,6 +44,448 @@ pub struct TrackedFile {
     pub variant: Key,
     /// The version the Layout records.
     pub version: Key,
+}
+
+/// What tracking one file wrote, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteTrackedFile *` the caller releases with `free_rola_write_tracked_file`. `_id`,
+/// `_storage`, `_variant` and `_version` each return a `char *` the caller releases with
+/// `free_string`.
+#[lazyffi(export = RolaWriteTrackedFile)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTrackedFile {
+    /// The Layout entry the path names, as its `Uuid`.
+    id: String,
+    /// The content's key.
+    storage: String,
+    /// The variant the version points at.
+    variant: String,
+    /// The version the Layout records.
+    version: String,
+}
+
+impl WriteTrackedFile {
+    /// The answer a tracked file is handed over as.
+    fn of(tracked: &TrackedFile) -> Self {
+        Self {
+            id: tracked.id.to_string(),
+            storage: tracked.storage.to_string(),
+            variant: tracked.variant.to_string(),
+            version: tracked.version.to_string(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTrackedFile {
+    /// The Layout entry the path names, as its `Uuid`.
+    #[must_use]
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    /// The content's key.
+    #[must_use]
+    pub fn storage(&self) -> String {
+        self.storage.clone()
+    }
+
+    /// The variant the version points at.
+    #[must_use]
+    pub fn variant(&self) -> String {
+        self.variant.clone()
+    }
+
+    /// The version the Layout records.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
+}
+
+/// One subject a plan asks a message for, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteTrackSubject *` the caller releases with `free_rola_write_track_subject`.
+/// `_tree` says whether it is a tree's structure, and `_key`, `_path` and `_digest` each return
+/// a `char *` the caller releases with `free_string`; `_digest` is empty for a tree.
+#[lazyffi(export = RolaWriteTrackSubject)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTrackSubject {
+    /// Whether the subject is a tree's structure rather than a file's content.
+    tree: bool,
+    /// The key the editing file names the subject's section by.
+    key: String,
+    /// The path as a person knows it.
+    path: String,
+    /// The digest of the content the subject was read from, as lowercase hex, or empty for a
+    /// tree.
+    digest: String,
+}
+
+impl From<&Subject> for WriteTrackSubject {
+    fn from(subject: &Subject) -> Self {
+        Self {
+            tree: subject.tree,
+            key: subject.key.clone(),
+            path: subject.path.clone(),
+            digest: subject.digest.clone(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTrackSubject {
+    /// Whether the subject is a tree's structure rather than a file's content.
+    #[must_use]
+    pub const fn tree(&self) -> bool {
+        self.tree
+    }
+
+    /// The key the editing file names the subject's section by.
+    #[must_use]
+    pub fn key(&self) -> String {
+        self.key.clone()
+    }
+
+    /// The path as a person knows it.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// The content's digest in lowercase hex, or an empty string for a tree.
+    #[must_use]
+    pub fn digest(&self) -> String {
+        self.digest.clone()
+    }
+}
+
+/// One subject a run recorded, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteTrackItem *` the caller releases with `free_rola_write_track_item`. `_path` and
+/// `_action` each return a `char *` the caller releases with `free_string`; `_action` is
+/// `added`, `updated` or `replaced`.
+#[lazyffi(export = RolaWriteTrackItem)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTrackItem {
+    /// Where it sits in the Layout.
+    path: String,
+    /// What happened to it.
+    action: String,
+}
+
+impl From<&Item> for WriteTrackItem {
+    fn from(item: &Item) -> Self {
+        Self {
+            path: item.path.clone(),
+            action: action_word(item.action).to_owned(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTrackItem {
+    /// Where it sits in the Layout.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// What happened to it.
+    #[must_use]
+    pub fn action(&self) -> String {
+        self.action.clone()
+    }
+}
+
+/// Why a plan or an apply refused, as the C ABI hands it over.
+///
+/// `kind` names the refusal, and the other fields say what that kind carries. A field a kind
+/// does not use is empty or zero: `path` for every kind but the two that carry paths, `paths`
+/// for `ignored`, `lost` and `unowned`, `name` for `preference`, `file_kind` for `file`, and
+/// `cause` for `layout_failed`.
+///
+/// # FFI
+///
+/// A `RolaWriteTrackRefusal *` the caller releases with `free_rola_write_track_refusal`.
+/// `_kind`, `_path`, `_name`, `_file_kind` and `_cause` each return a `char *` the caller
+/// releases with `free_string`, and `_paths_count` and `_paths_at` answer the paths, each a
+/// `char *` the caller releases with `free_string`.
+#[lazyffi(export = RolaWriteTrackRefusal)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTrackRefusal {
+    /// What the refusal is, as `snake_case`.
+    kind: String,
+    /// The path the refusal is about, empty when it names none.
+    path: String,
+    /// The paths the refusal is about, empty when it names none.
+    paths: Vec<String>,
+    /// The name a preference holds, empty for every other refusal.
+    name: String,
+    /// What is wrong with a name, for a `file` refusal.
+    file_kind: String,
+    /// What the Layout said, for a `layout_failed` refusal.
+    cause: String,
+}
+
+impl From<&Refusal> for WriteTrackRefusal {
+    fn from(refusal: &Refusal) -> Self {
+        let mut answer = Self {
+            kind: refusal_word(refusal).to_owned(),
+            ..Self::default()
+        };
+
+        match refusal {
+            Refusal::File { path, kind } => {
+                answer.path.clone_from(path);
+                file_kind_word(*kind).clone_into(&mut answer.file_kind);
+            }
+            Refusal::Ignored { paths } | Refusal::Lost { paths } | Refusal::Unowned { paths } => {
+                answer.paths.clone_from(paths);
+            }
+            Refusal::Preference { path, name } => {
+                answer.path.clone_from(path);
+                answer.name.clone_from(name);
+            }
+            Refusal::Unrecorded { path }
+            | Refusal::Merge { path }
+            | Refusal::Merging { path }
+            | Refusal::MergeChanged { path }
+            | Refusal::TreeConflict { path } => answer.path.clone_from(path),
+            Refusal::LayoutFailed { cause } => answer.cause.clone_from(cause),
+            Refusal::TreeUnsupported | Refusal::LayoutExists | Refusal::LayoutMissing => {}
+        }
+
+        answer
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTrackRefusal {
+    /// What the refusal is, as `snake_case`.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    /// The path the refusal is about, or an empty string when it names none.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// How many paths the refusal names, which is zero for the kinds that name none.
+    #[must_use]
+    pub const fn paths_count(&self) -> usize {
+        self.paths.len()
+    }
+
+    /// One path the refusal names, or an empty string past the end.
+    #[must_use]
+    pub fn paths_at(&self, index: usize) -> String {
+        self.paths.get(index).cloned().unwrap_or_default()
+    }
+
+    /// The name a preference holds, or an empty string for every other refusal.
+    #[must_use]
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    /// What is wrong with a name, or an empty string for every other refusal.
+    #[must_use]
+    pub fn file_kind(&self) -> String {
+        self.file_kind.clone()
+    }
+
+    /// What the Layout said, or an empty string for every other refusal.
+    #[must_use]
+    pub fn cause(&self) -> String {
+        self.cause.clone()
+    }
+}
+
+/// The word the C ABI reports one action by.
+const fn action_word(action: Action) -> &'static str {
+    match action {
+        Action::Added => "added",
+        Action::Updated => "updated",
+        Action::Replaced => "replaced",
+    }
+}
+
+/// The word the C ABI reports one file's fault by.
+const fn file_kind_word(kind: FileKind) -> &'static str {
+    match kind {
+        FileKind::NotAFile => "not_a_file",
+        FileKind::OutsideWorkspace => "outside_workspace",
+        FileKind::InsideData => "inside_data",
+    }
+}
+
+/// The word the C ABI reports one refusal by.
+const fn refusal_word(refusal: &Refusal) -> &'static str {
+    match refusal {
+        Refusal::File { .. } => "file",
+        Refusal::Ignored { .. } => "ignored",
+        Refusal::Preference { .. } => "preference",
+        Refusal::Lost { .. } => "lost",
+        Refusal::Unowned { .. } => "unowned",
+        Refusal::Unrecorded { .. } => "unrecorded",
+        Refusal::Merge { .. } => "merge",
+        Refusal::Merging { .. } => "merging",
+        Refusal::MergeChanged { .. } => "merge_changed",
+        Refusal::TreeUnsupported => "tree_unsupported",
+        Refusal::TreeConflict { .. } => "tree_conflict",
+        Refusal::LayoutExists => "layout_exists",
+        Refusal::LayoutMissing => "layout_missing",
+        Refusal::LayoutFailed { .. } => "layout_failed",
+    }
+}
+
+/// What a plan would record, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteTrackPlan *` the caller releases with `free_rola_write_track_plan`.
+/// `_subject_count` and `_subject_at` name the subjects, each a `RolaWriteTrackSubject *`
+/// released with `free_rola_write_track_subject`; `_unchanged` is the count of files that hold
+/// what the Layout already names; `_prefill_count` and `_prefill_at` answer the words each
+/// subject is to be asked with; and `_refused` answers the refusal that stops the run with a
+/// `RolaWriteTrackRefusal *` released with `free_rola_write_track_refusal`, or null when the
+/// plan would go ahead.
+#[lazyffi(export = RolaWriteTrackPlan)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTrackPlan {
+    /// The subjects a message is asked for, in the order the run named them.
+    subjects: Vec<WriteTrackSubject>,
+    /// How many files hold what the Layout already names.
+    unchanged: u64,
+    /// What each subject is to be asked with, one per subject.
+    prefill: Vec<String>,
+    /// What stops the run before anything is written, when anything does.
+    refused: Option<WriteTrackRefusal>,
+}
+
+impl WriteTrackPlan {
+    /// The answer a plan is handed over as.
+    pub(crate) fn of(
+        subjects: &[Subject],
+        unchanged: usize,
+        prefill: &[String],
+        refused: Option<&Refusal>,
+    ) -> Self {
+        Self {
+            subjects: subjects.iter().map(WriteTrackSubject::from).collect(),
+            unchanged: u64::try_from(unchanged).unwrap_or(u64::MAX),
+            prefill: prefill.to_vec(),
+            refused: refused.map(WriteTrackRefusal::from),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTrackPlan {
+    /// How many subjects a message is asked for.
+    #[must_use]
+    pub const fn subject_count(&self) -> usize {
+        self.subjects.len()
+    }
+
+    /// One subject a message is asked for, or null past the end.
+    #[must_use]
+    pub fn subject_at(&self, index: usize) -> Option<WriteTrackSubject> {
+        self.subjects.get(index).cloned()
+    }
+
+    /// How many files hold what the Layout already names.
+    #[must_use]
+    pub const fn unchanged(&self) -> u64 {
+        self.unchanged
+    }
+
+    /// How many words the plan prefills, one per subject.
+    #[must_use]
+    pub const fn prefill_count(&self) -> usize {
+        self.prefill.len()
+    }
+
+    /// One word the plan prefills, or an empty string past the end.
+    #[must_use]
+    pub fn prefill_at(&self, index: usize) -> String {
+        self.prefill.get(index).cloned().unwrap_or_default()
+    }
+
+    /// What stops the run before anything is written, or null when the plan goes ahead.
+    #[must_use]
+    pub fn refused(&self) -> Option<WriteTrackRefusal> {
+        self.refused.clone()
+    }
+}
+
+/// What carrying a plan out came to, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteTrackApply *` the caller releases with `free_rola_write_track_apply`.
+/// `_item_count` and `_item_at` name the subjects recorded, each a `RolaWriteTrackItem *`
+/// released with `free_rola_write_track_item`; `_refused_count` and `_refused_at` answer what
+/// stopped the run, each a `RolaWriteTrackRefusal *` released with
+/// `free_rola_write_track_refusal`.
+#[lazyffi(export = RolaWriteTrackApply)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTrackApply {
+    /// One item per subject recorded, in the order the run named them.
+    items: Vec<WriteTrackItem>,
+    /// What stopped the run after the plan was made, one refusal at most.
+    refused: Vec<WriteTrackRefusal>,
+}
+
+impl WriteTrackApply {
+    /// The answer a carried-out plan is handed over as.
+    pub(crate) fn of(outcome: &Outcome) -> Self {
+        Self {
+            items: outcome.items.iter().map(WriteTrackItem::from).collect(),
+            refused: outcome
+                .refused
+                .iter()
+                .map(WriteTrackRefusal::from)
+                .collect(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTrackApply {
+    /// How many subjects were recorded.
+    #[must_use]
+    pub const fn item_count(&self) -> usize {
+        self.items.len()
+    }
+
+    /// One subject that was recorded, or null past the end.
+    #[must_use]
+    pub fn item_at(&self, index: usize) -> Option<WriteTrackItem> {
+        self.items.get(index).cloned()
+    }
+
+    /// How many refusals stopped the run, which is at most one.
+    #[must_use]
+    pub const fn refused_count(&self) -> usize {
+        self.refused.len()
+    }
+
+    /// One refusal that stopped the run, or null past the end.
+    #[must_use]
+    pub fn refused_at(&self, index: usize) -> Option<WriteTrackRefusal> {
+        self.refused.get(index).cloned()
+    }
 }
 
 /// How a file is to be tracked.
@@ -68,6 +512,7 @@ pub mod batch {
     };
     use rorolala_tree::{Staging, Tree};
     use rorolala_utils_constants::WORKSPACE_IGNORE_RULES_DIR;
+    use rorolala_utils_lazyffi::{StrSpan, lazyffi};
     use rorolala_utils_location::{Locate as _, normalize};
     use rorolala_utils_progress::Progress;
     use rorolala_vcs::{Creator, Message, VCSIndex, VCSIndexBatch, Variant, Version};
@@ -75,10 +520,12 @@ pub mod batch {
     use rorolala_workspace_analyze::{
         Cache, PathRename, cache_path, entry_of, tree_diff, tree_diff_remembering, walk,
     };
-    use serde::{Deserialize, Serialize};
+    use serde::Deserialize;
     use uuid::Uuid;
 
-    use crate::write::request::Common;
+    use super::{WriteTrackApply, WriteTrackPlan};
+
+    use crate::write::request::{Common, WriteCommon};
     use crate::write::{Cancellation, WriteError};
 
     /// How alike two text files have to be to count as the same file moved.
@@ -2196,250 +2643,87 @@ pub mod batch {
         include_ignored: bool,
     }
 
-    /// One subject a plan asks a message for, as the C ABI answers it.
-    ///
-    /// Its serde shape is `{"tree":false,"key":"...","path":"a.txt","digest":"..."}`, and `digest`
-    /// is the empty string for a tree.
-    #[derive(Debug, Clone, Serialize)]
-    pub struct SubjectView {
-        /// Whether the subject is a tree's structure rather than a file's content.
-        pub tree: bool,
-        /// The key the editing file names the subject's section by.
-        pub key: String,
-        /// The path as a person knows it.
+    /// One subject a plan asked a message for, as an apply reads it back.
+    #[derive(Debug, Clone)]
+    pub struct GivenSubject {
+        /// The path the plan named.
         pub path: String,
-        /// The digest of the content the subject was read from, as lowercase hex, or empty for a
-        /// tree.
+        /// The digest the plan read, which the content has to still have.
         pub digest: String,
     }
 
-    impl From<&Subject> for SubjectView {
-        fn from(subject: &Subject) -> Self {
+    /// A batch recording a C caller asks for.
+    ///
+    /// # FFI
+    ///
+    /// A `RolaWriteTrackRequest` the caller fills. Every `const char *` is borrowed for the call
+    /// and released by the caller, so nothing here is freed when the call returns. `files` is a
+    /// `RolaStrSpan` of the names to record, each read from the Workspace root, and an empty
+    /// `policy` leaves the cut to the store.
+    #[lazyffi(export = RolaWriteTrackRequest, input)]
+    #[derive(Debug, Clone)]
+    pub struct TrackInput {
+        /// The fields every write request carries.
+        pub common: WriteCommon,
+        /// The names to record.
+        pub files: StrSpan,
+        /// Whether each file's version is replaced rather than added after it.
+        pub replace: bool,
+        /// The cut every file this run writes is made with, empty for the store's own choice.
+        pub policy: String,
+        /// Whether a file the ignore rules govern may be named anyway.
+        pub include_ignored: bool,
+    }
+
+    impl From<TrackInput> for TrackRequest {
+        fn from(input: TrackInput) -> Self {
             Self {
-                tree: subject.tree,
-                key: subject.key.clone(),
-                path: subject.path.clone(),
-                digest: subject.digest.clone(),
+                common: input.common.into(),
+                files: input.files.into_vec(),
+                replace: input.replace,
+                policy: (!input.policy.is_empty()).then_some(input.policy),
+                include_ignored: input.include_ignored,
             }
         }
     }
 
-    /// What happened to one subject, as the C ABI answers it.
-    #[derive(Debug, Clone, Copy, Serialize)]
-    #[serde(rename_all = "snake_case")]
-    pub enum ActionView {
-        /// It was not recorded before, and now is.
-        Added,
-        /// It was recorded, and its content changed.
-        Updated,
-        /// The version it was at was replaced by a new one.
-        Replaced,
-    }
-
-    impl From<Action> for ActionView {
-        fn from(action: Action) -> Self {
-            match action {
-                Action::Added => Self::Added,
-                Action::Updated => Self::Updated,
-                Action::Replaced => Self::Replaced,
-            }
-        }
-    }
-
-    /// One subject a run recorded, as the C ABI answers it.
+    /// One subject a plan promised to record, as a C caller hands it back.
     ///
-    /// Its serde shape is `{"path":"a.txt","action":"added"}`.
-    #[derive(Debug, Clone, Serialize)]
-    pub struct ItemView {
-        /// Where it sits in the Layout.
-        pub path: String,
-        /// What happened to it.
-        pub action: ActionView,
-    }
-
-    impl From<&Item> for ItemView {
-        fn from(item: &Item) -> Self {
-            Self {
-                path: item.path.clone(),
-                action: ActionView::from(item.action),
-            }
-        }
-    }
-
-    /// The ways a name is not a file a run may record, as the C ABI answers it.
-    #[derive(Debug, Clone, Copy, Serialize)]
-    #[serde(rename_all = "snake_case")]
-    pub enum FileKindView {
-        /// It is not a file.
-        NotAFile,
-        /// It is not inside the Workspace.
-        OutsideWorkspace,
-        /// It is part of the Workspace's own data rather than its work.
-        InsideData,
-    }
-
-    impl From<FileKind> for FileKindView {
-        fn from(kind: FileKind) -> Self {
-            match kind {
-                FileKind::NotAFile => Self::NotAFile,
-                FileKind::OutsideWorkspace => Self::OutsideWorkspace,
-                FileKind::InsideData => Self::InsideData,
-            }
-        }
-    }
-
-    /// Why a plan or an apply refused, as the C ABI answers it.
+    /// # FFI
     ///
-    /// The shape is the library's own: an externally tagged object whose tag is the variant in
-    /// `snake_case`, so a file refusal is `{"file":{"path":"a.txt","kind":"not_a_file"}}` and an
-    /// ignored one is `{"ignored":{"paths":["a.txt"]}}`.
-    #[derive(Debug, Clone, Serialize)]
-    #[serde(rename_all = "snake_case")]
-    pub enum RefusalView {
-        /// A name is not a file or a directory inside the Workspace.
-        File {
-            /// The name as it was written.
-            path: String,
-            /// What is wrong with it.
-            kind: FileKindView,
-        },
-        /// The names are ones the ignore rules govern, so they cannot be selected.
-        Ignored {
-            /// What was named, as it was written.
-            paths: Vec<String>,
-        },
-        /// A file's recorded chunking preference names a policy this build does not carry.
-        Preference {
-            /// The path whose preference it is.
-            path: String,
-            /// The name the preference holds.
-            name: String,
-        },
-        /// The Layout names paths the tree does not hold.
-        Lost {
-            /// The paths the Layout names and the tree does not hold.
-            paths: Vec<String>,
-        },
-        /// The changed files are ones the Vault's fetched copy says another account holds.
-        Unowned {
-            /// The paths that are not this account's to record.
-            paths: Vec<String>,
-        },
-        /// A file `replace` names has no version the Layout records.
-        Unrecorded {
-            /// The path named.
-            path: String,
-        },
-        /// The version `replace` names is a merge, and replacing it would drop what was joined in.
-        Merge {
-            /// The path named.
-            path: String,
-        },
-        /// A variant is waiting to be joined into the file, and an amend would drop that join.
-        Merging {
-            /// The path named.
-            path: String,
-        },
-        /// A variant file no longer holds the variant's own content.
-        MergeChanged {
-            /// The variant file that changed.
-            path: String,
-        },
-        /// A tree cannot be recorded with `replace` or a chunking policy.
-        TreeUnsupported,
-        /// A tree has a conflict that was never settled.
-        TreeConflict {
-            /// The tree.
-            path: String,
-        },
-        /// A Layout change names a path that is already there.
-        LayoutExists,
-        /// A Layout change names a path that is not there.
-        LayoutMissing,
-        /// The Layout failed for another reason.
-        LayoutFailed {
-            /// What the Layout said.
-            cause: String,
-        },
-    }
-
-    impl From<&Refusal> for RefusalView {
-        fn from(refusal: &Refusal) -> Self {
-            match refusal {
-                Refusal::File { path, kind } => Self::File {
-                    path: path.clone(),
-                    kind: FileKindView::from(*kind),
-                },
-                Refusal::Ignored { paths } => Self::Ignored {
-                    paths: paths.clone(),
-                },
-                Refusal::Preference { path, name } => Self::Preference {
-                    path: path.clone(),
-                    name: name.clone(),
-                },
-                Refusal::Lost { paths } => Self::Lost {
-                    paths: paths.clone(),
-                },
-                Refusal::Unowned { paths } => Self::Unowned {
-                    paths: paths.clone(),
-                },
-                Refusal::Unrecorded { path } => Self::Unrecorded { path: path.clone() },
-                Refusal::Merge { path } => Self::Merge { path: path.clone() },
-                Refusal::Merging { path } => Self::Merging { path: path.clone() },
-                Refusal::MergeChanged { path } => Self::MergeChanged { path: path.clone() },
-                Refusal::TreeUnsupported => Self::TreeUnsupported,
-                Refusal::TreeConflict { path } => Self::TreeConflict { path: path.clone() },
-                Refusal::LayoutExists => Self::LayoutExists,
-                Refusal::LayoutMissing => Self::LayoutMissing,
-                Refusal::LayoutFailed { cause } => Self::LayoutFailed {
-                    cause: cause.clone(),
-                },
-            }
-        }
-    }
-
-    /// What a plan would record, as the C ABI answers it.
-    ///
-    /// Its serde shape is
-    /// `{"subjects":[{"tree":false,"key":"...","path":"a.txt","digest":"..."}],"unchanged":0,"prefill":[],"refused":null}`.
-    /// `refused` is the shape [`RefusalView`] writes, and is null when the plan would go ahead.
-    #[derive(Debug, Clone, Serialize)]
-    pub struct TrackPlanReport {
-        /// The subjects a message is asked for, in the order the run named them.
-        pub subjects: Vec<SubjectView>,
-        /// How many files hold what the Layout already names.
-        pub unchanged: usize,
-        /// What each subject is to be asked with, one per subject.
-        pub prefill: Vec<String>,
-        /// What stops the run before anything is written, when anything does.
-        pub refused: Option<RefusalView>,
-    }
-
-    /// What carrying a plan out came to, as the C ABI answers it.
-    ///
-    /// Its serde shape is `{"items":[{"path":"a.txt","action":"added"}],"refused":[]}`.
-    #[derive(Debug, Clone, Serialize)]
-    pub struct TrackApplyReport {
-        /// One item per subject recorded, in the order the run named them.
-        pub items: Vec<ItemView>,
-        /// What stopped the run after the plan was made, one refusal at most.
-        pub refused: Vec<RefusalView>,
-    }
-
-    /// One subject a plan asked a message for, as an apply reads it back.
-    #[derive(Debug, Deserialize)]
-    struct GivenSubject {
+    /// A `RolaWriteTrackAgreed` the caller fills from what a plan answered. Both strings are
+    /// borrowed for the call and released by the caller.
+    #[lazyffi(export = RolaWriteTrackAgreed, input)]
+    #[derive(Debug, Clone)]
+    pub struct TrackAgreed {
         /// The path the plan named.
-        path: String,
+        pub path: String,
         /// The digest the plan read, which the content has to still have.
-        digest: String,
+        pub digest: String,
     }
 
-    /// A plan an apply was handed, read only for what it promised to record.
-    #[derive(Debug, Deserialize)]
-    struct GivenPlan {
-        /// The subjects the plan said it would record.
-        subjects: Vec<GivenSubject>,
+    impl From<TrackAgreed> for GivenSubject {
+        fn from(input: TrackAgreed) -> Self {
+            Self {
+                path: input.path,
+                digest: input.digest,
+            }
+        }
+    }
+
+    /// The words one subject's version carries, as a C caller hands them back.
+    ///
+    /// # FFI
+    ///
+    /// A `RolaWriteTrackMessage` the caller fills. Both strings are borrowed for the call and
+    /// released by the caller.
+    #[lazyffi(export = RolaWriteTrackMessage, input)]
+    #[derive(Debug, Clone)]
+    pub struct TrackMessage {
+        /// The path the plan named the subject by.
+        pub path: String,
+        /// The words the subject's version carries.
+        pub text: String,
     }
 
     /// Whether a plan made now names the subjects a plan was handed, in the same order and with
@@ -2512,7 +2796,7 @@ pub mod batch {
             &self,
             progress: &Progress,
             cancellation: &Cancellation,
-        ) -> Result<TrackPlanReport, WriteError> {
+        ) -> Result<WriteTrackPlan, WriteError> {
             let prepared = self.prepare()?;
             let planned = plan(
                 &prepared.carry(),
@@ -2523,44 +2807,34 @@ pub mod batch {
                 cancellation,
             )?;
 
-            Ok(TrackPlanReport {
-                subjects: planned.subjects().iter().map(SubjectView::from).collect(),
-                unchanged: planned.unchanged(),
-                prefill: planned.prefill().to_vec(),
-                refused: planned.refused().map(RefusalView::from),
-            })
+            Ok(WriteTrackPlan::of(
+                planned.subjects(),
+                planned.unchanged(),
+                planned.prefill(),
+                planned.refused(),
+            ))
         }
 
         /// Records what a plan named, once the caller has said what each subject did.
         ///
         /// The plan is read again first, because the Workspace may have changed since it was made:
         /// a subject that was added, removed, reordered or given other content is refused rather
-        /// than recorded. `messages_json` maps each subject's `path` to the words its version
-        /// carries, and a subject with no message is refused.
+        /// than recorded. `messages` maps each subject's path to the words its version carries, and
+        /// a subject with no message is refused.
         ///
         /// # Errors
         ///
-        /// Returns what [`request_plan`](Self::request_plan) returns, [`WriteError::Json`] when
-        /// `plan_json` or `messages_json` does not read, [`WriteError::Precondition`] when the plan
-        /// no longer matches the work or a subject has no message, and [`WriteError::Storage`],
-        /// [`WriteError::Index`], [`WriteError::Layout`], [`WriteError::Tree`] or
-        /// [`WriteError::Internal`] when a write fails.
+        /// Returns what [`request_plan`](Self::request_plan) returns, [`WriteError::Precondition`]
+        /// when the plan no longer matches the work or a subject has no message, and
+        /// [`WriteError::Storage`], [`WriteError::Index`], [`WriteError::Layout`],
+        /// [`WriteError::Tree`] or [`WriteError::Internal`] when a write fails.
         pub fn request_apply(
             &self,
-            plan_json: &str,
-            messages_json: &str,
+            given: &[GivenSubject],
+            messages: &BTreeMap<String, String>,
             progress: &Progress,
             cancellation: &Cancellation,
-        ) -> Result<TrackApplyReport, WriteError> {
-            let given: GivenPlan =
-                serde_json::from_str(plan_json).map_err(|error| WriteError::Json {
-                    reason: error.to_string(),
-                })?;
-            let messages: BTreeMap<String, String> =
-                serde_json::from_str(messages_json).map_err(|error| WriteError::Json {
-                    reason: error.to_string(),
-                })?;
-
+        ) -> Result<WriteTrackApply, WriteError> {
             let prepared = self.prepare()?;
             let carry = prepared.carry();
             let planned = plan(
@@ -2572,15 +2846,15 @@ pub mod batch {
                 cancellation,
             )?;
 
-            if !same_subjects(planned.subjects(), &given.subjects) {
+            if !same_subjects(planned.subjects(), given) {
                 return Err(WriteError::Precondition {
                     what: "the plan".to_owned(),
                     reason: "it no longer matches the work".to_owned(),
                 });
             }
 
-            let mut texts = Vec::with_capacity(given.subjects.len());
-            for subject in &given.subjects {
+            let mut texts = Vec::with_capacity(given.len());
+            for subject in given {
                 let Some(text) = messages.get(&subject.path) else {
                     return Err(WriteError::Precondition {
                         what: format!("the message for `{}`", subject.path),
@@ -2599,10 +2873,7 @@ pub mod batch {
                 cancellation,
             )?;
 
-            Ok(TrackApplyReport {
-                items: outcome.items.iter().map(ItemView::from).collect(),
-                refused: outcome.refused.iter().map(RefusalView::from).collect(),
-            })
+            Ok(WriteTrackApply::of(&outcome))
         }
 
         /// Resolves every part a recording works through, in the order a command reads them.
@@ -2926,10 +3197,10 @@ fn locate_file(root: &Path, cwd: &Path, path: &str) -> Result<(PathBuf, String),
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"id":"...","storage":"...","variant":"...","version":"..."}`, or a `RolaWriteError *` the
-/// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice,
-/// `owner` is empty when the entry has no owner, and `description` is the entry's description.
+/// A `RolaWriteTrackedFile *` the caller releases with `free_rola_write_tracked_file`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is empty for the
+/// store's own choice, `owner` is empty when the entry has no owner, and `description` is the
+/// entry's description.
 ///
 /// # Errors
 ///
@@ -2944,7 +3215,7 @@ pub fn track_file_at(
     policy: &str,
     owner: &str,
     description: &str,
-) -> Result<String, WriteError> {
+) -> Result<WriteTrackedFile, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let options = TrackOptions {
         policy: policy.to_owned(),
@@ -2953,19 +3224,17 @@ pub fn track_file_at(
     };
     let tracked = track_file(&workspace, directory, path, creator, message, options)?;
 
-    serde_json::to_string(&tracked).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteTrackedFile::of(&tracked))
 }
 
 /// Records one file's content as a version in the Vault a directory is in.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"id":"...","storage":"...","variant":"...","version":"..."}`, or a `RolaWriteError *` the
-/// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice,
-/// `owner` is empty when the entry has no owner, and `description` is the entry's description.
+/// A `RolaWriteTrackedFile *` the caller releases with `free_rola_write_tracked_file`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is empty for the
+/// store's own choice, `owner` is empty when the entry has no owner, and `description` is the
+/// entry's description.
 ///
 /// # Errors
 ///
@@ -2980,7 +3249,7 @@ pub fn track_vault_file_at(
     policy: &str,
     owner: &str,
     description: &str,
-) -> Result<String, WriteError> {
+) -> Result<WriteTrackedFile, WriteError> {
     let vault = Vault::locate(directory).ok_or(WriteError::NoVault)?;
     let options = TrackOptions {
         policy: policy.to_owned(),
@@ -2989,87 +3258,77 @@ pub fn track_vault_file_at(
     };
     let tracked = track_vault_file(&vault, directory, path, creator, message, options)?;
 
-    serde_json::to_string(&tracked).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteTrackedFile::of(&tracked))
 }
 
 /// Reads what a batch recording would record, without writing anything.
 ///
 /// # FFI
 ///
-/// `request` is a JSON object of the shape [`batch::TrackRequest`] reads: the fields every write
-/// request carries (`workspace`, `account`, `target`, `offline`, `force`, `concurrency` and
-/// `labels`) at the top level, `files` as an array of strings, and `replace`, `policy` and
-/// `include_ignored` when they are needed. A relative name in `files` is read from the Workspace
-/// root, not from the process directory. The answer is an owned JSON string the caller releases
-/// with `free_string`,
-/// `{"subjects":[{"tree":false,"key":"...","path":"a.txt","digest":"..."}],"unchanged":0,"prefill":[],"refused":null}`.
-/// `digest` is the content's digest in lowercase hex, and empty for a tree. `key` is the subject's
-/// section key, and `path` is the name the messages object maps. `refused` is null or an externally
-/// tagged refusal object. `progress` is the handle the caller polls with
-/// `rola_progress_next_json`, and `cancellation` is the flag it sets with
-/// `rola_cancellation_cancel`.
+/// `request` is a `RolaWriteTrackRequest` the caller fills and keeps; every `const char *` in it
+/// is borrowed for the call and released by the caller. A relative name in `files` is read from
+/// the Workspace root, not from the process directory. A `RolaWriteTrackPlan *` the caller
+/// releases with `free_rola_write_track_plan` answers it: `_subject_count` and `_subject_at` name
+/// the subjects, `_unchanged` and `_prefill_count` say how many files are already recorded and how
+/// many words are prefilled, and `_refused` answers the refusal that stops the run, or null.
+/// `progress` is the handle the caller polls with `rola_progress_next`, and `cancellation` is the
+/// flag it sets with `rola_cancellation_cancel`.
 ///
 /// # Errors
 ///
 /// Returns a `RolaWriteError *` the caller releases with `free_rola_write_error`, with the tag
-/// [`WriteError`]'s: `Json` when `request` does not read, and every failure
-/// [`batch::TrackRequest::request_plan`] names when the reading fails.
+/// [`WriteError`]'s: every failure [`batch::TrackRequest::request_plan`] names when the reading
+/// fails.
 #[lazyffi(export = rola_write_track_plan)]
 pub fn track_plan_at(
-    request: &str,
+    request: &TrackInput,
     progress: &WriteProgress,
     cancellation: &Cancellation,
-) -> Result<String, WriteError> {
-    let request: batch::TrackRequest =
-        serde_json::from_str(request).map_err(|error| WriteError::Json {
-            reason: error.to_string(),
-        })?;
+) -> Result<WriteTrackPlan, WriteError> {
+    let request: batch::TrackRequest = request.clone().into();
     let watched = crate::write::progress::watching(progress);
-    let report = request.request_plan(&watched, cancellation)?;
 
-    serde_json::to_string(&report).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    request.request_plan(&watched, cancellation)
 }
 
 /// Records what a plan named, once the caller has said what each subject did.
 ///
 /// # FFI
 ///
-/// `request` is the JSON object [`track_plan_at`] reads. `plan` is the JSON that call answered
-/// with. `messages` is a JSON object mapping each subject's `path` to the words its version
-/// carries, as `{"a.txt":"first","art":"tree structure"}`. The answer is an owned JSON string the
-/// caller releases with `free_string`,
-/// `{"items":[{"path":"a.txt","action":"added"}],"refused":[]}`. `action` is `added`, `updated` or
-/// `replaced`. `refused` is the same externally tagged shape the plan answers with, and `items` is
-/// empty when it is not.
+/// `request` is the `RolaWriteTrackRequest` [`track_plan_at`] reads. `subjects` and
+/// `subjects_len` are the caller's array of the subjects the plan promised to record, and
+/// `messages` and `messages_len` are its array of the words each subject's version carries, by the
+/// path the plan names it by. Both arrays are borrowed for the call. A `RolaWriteTrackApply *` the
+/// caller releases with `free_rola_write_track_apply` answers it: `_item_count` and `_item_at` name
+/// each subject recorded, with `_action` among `added`, `updated` and `replaced`, and
+/// `_refused_count` and `_refused_at` name what stopped the run.
 ///
 /// # Errors
 ///
 /// Returns a `RolaWriteError *` the caller releases with `free_rola_write_error`, with the tag
-/// [`WriteError`]'s: `Json` when `request`, `plan` or `messages` does not read, `Precondition` when
-/// the plan no longer matches the work or a subject has no message, and every failure
-/// [`batch::TrackRequest::request_apply`] names when a write fails.
+/// [`WriteError`]'s: `Precondition` when the plan no longer matches the work or a subject has no
+/// message, and every failure [`batch::TrackRequest::request_apply`] names when a write fails.
 #[lazyffi(export = rola_write_track_apply)]
 pub fn track_apply_at(
-    request: &str,
-    plan: &str,
-    messages: &str,
+    request: &TrackInput,
+    subjects: &[TrackAgreed],
+    messages: &[TrackMessage],
     progress: &WriteProgress,
     cancellation: &Cancellation,
-) -> Result<String, WriteError> {
-    let request: batch::TrackRequest =
-        serde_json::from_str(request).map_err(|error| WriteError::Json {
-            reason: error.to_string(),
-        })?;
+) -> Result<WriteTrackApply, WriteError> {
+    let request: batch::TrackRequest = request.clone().into();
+    let given = subjects
+        .iter()
+        .cloned()
+        .map(batch::GivenSubject::from)
+        .collect::<Vec<_>>();
+    let words: BTreeMap<String, String> = messages
+        .iter()
+        .map(|message| (message.path.clone(), message.text.clone()))
+        .collect();
     let watched = crate::write::progress::watching(progress);
-    let report = request.request_apply(plan, messages, &watched, cancellation)?;
 
-    serde_json::to_string(&report).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    request.request_apply(&given, &words, &watched, cancellation)
 }
 
 #[cfg(test)]
@@ -3447,47 +3706,57 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    /// A plan and an apply answer the shapes a C caller reads, with a refusal externally tagged the
-    /// way the library names it.
+    /// A plan and an apply answer the shapes a C caller reads, with a refusal named the way the
+    /// library names it.
     #[test]
     fn a_track_report_answers_the_c_abi_shape() {
-        use super::batch::{
-            ActionView, FileKindView, ItemView, RefusalView, SubjectView, TrackApplyReport,
-            TrackPlanReport,
-        };
+        use super::batch::{Action, FileKind, Item, Outcome, Refusal, Subject};
+        use super::{WriteTrackApply, WriteTrackPlan};
 
-        let plan = TrackPlanReport {
-            subjects: vec![SubjectView {
+        let plan = WriteTrackPlan::of(
+            &[Subject {
                 tree: false,
                 key: "key".to_owned(),
                 path: "a.txt".to_owned(),
                 digest: "ab".to_owned(),
             }],
-            unchanged: 2,
-            prefill: vec![String::new()],
-            refused: Some(RefusalView::File {
+            2,
+            &[String::new()],
+            Some(&Refusal::File {
                 path: "a.txt".to_owned(),
-                kind: FileKindView::NotAFile,
+                kind: FileKind::NotAFile,
             }),
-        };
-        assert_eq!(
-            serde_json::to_string(&plan).expect("a report serializes"),
-            r#"{"subjects":[{"tree":false,"key":"key","path":"a.txt","digest":"ab"}],"unchanged":2,"prefill":[""],"refused":{"file":{"path":"a.txt","kind":"not_a_file"}}}"#
         );
+        assert_eq!(plan.subject_count(), 1);
+        let subject = plan.subject_at(0).expect("the subject is there");
+        assert!(!subject.tree());
+        assert_eq!(subject.key(), "key");
+        assert_eq!(subject.path(), "a.txt");
+        assert_eq!(subject.digest(), "ab");
+        assert_eq!(plan.unchanged(), 2);
+        assert_eq!(plan.prefill_count(), 1);
+        let refused = plan.refused().expect("the plan is refused");
+        assert_eq!(refused.kind(), "file");
+        assert_eq!(refused.file_kind(), "not_a_file");
 
-        let apply = TrackApplyReport {
-            items: vec![ItemView {
+        let apply = WriteTrackApply::of(&Outcome {
+            items: vec![Item {
                 path: "a.txt".to_owned(),
-                action: ActionView::Added,
+                action: Action::Added,
             }],
-            refused: vec![RefusalView::Ignored {
+            refused: vec![Refusal::Ignored {
                 paths: vec!["b.txt".to_owned()],
             }],
-        };
+        });
+        assert_eq!(apply.item_count(), 1);
         assert_eq!(
-            serde_json::to_string(&apply).expect("a report serializes"),
-            r#"{"items":[{"path":"a.txt","action":"added"}],"refused":[{"ignored":{"paths":["b.txt"]}}]}"#
+            apply.item_at(0).expect("the item is there").action(),
+            "added"
         );
+        assert_eq!(apply.refused_count(), 1);
+        let refused = apply.refused_at(0).expect("the refusal is there");
+        assert_eq!(refused.kind(), "ignored");
+        assert_eq!(refused.paths_at(0), "b.txt");
     }
     /// A plan and an apply through the ABI record what the plan saw.
     ///
@@ -3508,46 +3777,48 @@ mod tests {
         .unwrap();
         fs::write(dir.join("a.txt"), b"one").unwrap();
 
-        let request = serde_json::json!({
-            "workspace": dir,
-            "account": "alice",
-            "files": ["a.txt"],
-        })
-        .to_string();
+        let request = super::batch::TrackInput {
+            common: crate::write::request::WriteCommon {
+                workspace: dir.display().to_string(),
+                account: "alice".to_owned(),
+                ..Default::default()
+            },
+            files: vec!["a.txt".to_owned()].into(),
+            replace: false,
+            policy: String::new(),
+            include_ignored: false,
+        };
         let progress = super::WriteProgress::new();
         let cancellation = super::Cancellation::new();
 
         let planned =
             super::track_plan_at(&request, &progress, &cancellation).expect("the plan reads");
-        let plan: serde_json::Value = serde_json::from_str(&planned).expect("the plan is JSON");
-        assert_eq!(plan["subjects"][0]["path"], "a.txt", "{planned}");
-        assert!(
-            plan["subjects"][0]["digest"]
-                .as_str()
-                .is_some_and(|digest| digest.len() == 64),
-            "{planned}"
-        );
+        assert_eq!(planned.subject_count(), 1);
+        let subject = planned.subject_at(0).expect("the subject is there");
+        assert_eq!(subject.path(), "a.txt", "{planned:?}");
+        assert_eq!(subject.digest().len(), 64, "{planned:?}");
 
-        let applied = super::track_apply_at(
-            &request,
-            &planned,
-            r#"{"a.txt":"first"}"#,
-            &progress,
-            &cancellation,
-        )
-        .expect("the apply records");
-        let report: serde_json::Value = serde_json::from_str(&applied).expect("the report is JSON");
-        assert_eq!(report["items"][0]["path"], "a.txt", "{applied}");
-        assert_eq!(report["items"][0]["action"], "added", "{applied}");
+        // The apply reads back only what a plan promised to record, so the array it is handed
+        // names each subject's path and the digest the plan read.
+        let agreed = vec![super::batch::TrackAgreed {
+            path: subject.path(),
+            digest: subject.digest(),
+        }];
+        let messages = vec![super::batch::TrackMessage {
+            path: "a.txt".to_owned(),
+            text: "first".to_owned(),
+        }];
+
+        let applied = super::track_apply_at(&request, &agreed, &messages, &progress, &cancellation)
+            .expect("the apply records");
+        assert_eq!(applied.item_count(), 1, "{applied:?}");
+        let item = applied.item_at(0).expect("the item is there");
+        assert_eq!(item.path(), "a.txt", "{applied:?}");
+        assert_eq!(item.action(), "added", "{applied:?}");
 
         let again =
             super::track_plan_at(&request, &progress, &cancellation).expect("the plan reads");
-        let again: serde_json::Value = serde_json::from_str(&again).expect("the plan is JSON");
-        assert_eq!(
-            again["subjects"].as_array().map(Vec::len),
-            Some(0),
-            "{again}"
-        );
+        assert_eq!(again.subject_count(), 0, "{again:?}");
 
         let _ = fs::remove_dir_all(&dir);
     }

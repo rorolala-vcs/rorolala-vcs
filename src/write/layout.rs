@@ -10,7 +10,6 @@ use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vault::Vault;
 use rorolala_workspace::{Merging, Workspace};
-use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::write::WriteError;
@@ -828,59 +827,107 @@ pub fn switch_entry_at(
     switch_entry(&target, &path, id, data)
 }
 
-/// One change, as a request document names it.
-#[derive(Debug, Deserialize)]
-#[serde(tag = "op", rename_all = "snake_case")]
-enum RawOp {
-    /// Makes an entry.
-    CreateEntry {
-        uuid: String,
-        path: Option<String>,
-        version: String,
-        owner: Option<String>,
-        description: Option<String>,
-        kind: Option<String>,
-    },
-    /// Changes what an entry holds.
-    UpdateEntry {
-        uuid: String,
-        version: String,
-        owner: Option<String>,
-        description: Option<String>,
-    },
-    /// Removes an entry.
-    RemoveEntry { uuid: String },
-    /// Binds a path.
-    CreatePath { path: String, uuid: String },
-    /// Moves a path.
-    MovePath { from: String, to: String },
-    /// Removes a path.
-    RemovePath { path: String },
-    /// Changes who holds an entry.
-    ChangeOwnership { uuid: String, owner: Option<String> },
-    /// Changes an entry's Uuid.
-    ChangeUuid { from: String, to: String },
-}
-
-/// Applies a batch of changes named as JSON to the Layout a directory is in.
+/// One change, as a C caller names it.
+///
+/// It mirrors the request document the command line reads field for field, except that a name the
+/// change does not use is the empty string rather than absent.
 ///
 /// # FFI
 ///
-/// An empty string on success, or a `RolaWriteError *` the caller releases with
-/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+/// A `RolaWriteLayoutOp` the caller fills: `tag` selects the change and the payload companion it
+/// names holds that change's strings. Every `const char *` is borrowed for the call and released by
+/// the caller, so nothing here is freed when the call returns.
+#[lazyffi(export = RolaWriteLayoutOp)]
+#[derive(Debug, Clone)]
+pub enum WriteLayoutOp {
+    /// Makes an entry.
+    CreateEntry {
+        /// The entry's `Uuid`, as text.
+        uuid: String,
+        /// The path it is named at, empty to leave it unplaced.
+        path: String,
+        /// The version it holds.
+        version: String,
+        /// The account that holds it, empty for none.
+        owner: String,
+        /// What the entry says about itself, empty for nothing.
+        description: String,
+        /// `tree` to make a tree entry, empty for a file.
+        kind: String,
+    },
+    /// Changes what an entry holds.
+    UpdateEntry {
+        /// The entry's `Uuid`, as text.
+        uuid: String,
+        /// The version it now holds.
+        version: String,
+        /// The account that holds it, empty for none.
+        owner: String,
+        /// What the entry says about itself, empty for nothing.
+        description: String,
+    },
+    /// Removes an entry.
+    RemoveEntry {
+        /// The entry's `Uuid`, as text.
+        uuid: String,
+    },
+    /// Binds a path.
+    CreatePath {
+        /// The path.
+        path: String,
+        /// The entry's `Uuid`, as text.
+        uuid: String,
+    },
+    /// Moves a path.
+    MovePath {
+        /// The path it is at.
+        from: String,
+        /// The path it is to be at.
+        to: String,
+    },
+    /// Removes a path.
+    RemovePath {
+        /// The path.
+        path: String,
+    },
+    /// Changes who holds an entry.
+    ChangeOwnership {
+        /// The entry's `Uuid`, as text.
+        uuid: String,
+        /// The account that holds it, empty for none.
+        owner: String,
+    },
+    /// Changes an entry's `Uuid`.
+    ChangeUuid {
+        /// The `Uuid` it is at, as text.
+        from: String,
+        /// The `Uuid` it is to be at, as text.
+        to: String,
+    },
+}
+
+/// Applies a batch of changes to the Layout a directory is in.
+///
+/// # FFI
+///
+/// `directory` and `layout` are borrowed for the call, and `layout` is `main`, `truth`, or empty
+/// for the one being worked in. `ops` and `ops_len` are the caller's array of changes, borrowed for
+/// the call and released by the caller. An empty answer on success, or a `RolaWriteError *` the
+/// caller releases with `free_rola_write_error`.
 ///
 /// # Errors
 ///
-/// Returns [`WriteError::NoLayout`] when the place has no Layout, [`WriteError::Json`] when
-/// `ops` does not read, [`WriteError::InvalidPath`] or [`WriteError::NotFound`] when a name does not
-/// read, and [`WriteError::Layout`] when a change does not apply.
+/// Returns [`WriteError::NoLayout`] when the place has no Layout, [`WriteError::InvalidPath`] or
+/// [`WriteError::NotFound`] when a name does not read, and [`WriteError::Layout`] when a change does
+/// not apply.
 #[lazyffi(export = rola_write_layout_apply)]
-pub fn apply_json(directory: &Path, layout: &str, ops: &str) -> Result<(), WriteError> {
+pub fn apply_ops(directory: &Path, layout: &str, ops: &[WriteLayoutOp]) -> Result<(), WriteError> {
     let target = open(directory, layout)?;
-    let raw: Vec<RawOp> = serde_json::from_str(ops).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })?;
-    let ops = raw.into_iter().map(op_of).collect::<Result<Vec<_>, _>>()?;
+    let ops = ops
+        .iter()
+        .cloned()
+        .map(op_of)
+        .collect::<Result<Vec<_>, _>>()?;
 
     apply(&target, &ops)
 }
@@ -908,10 +955,10 @@ fn open(directory: &Path, name: &str) -> Result<Layout, WriteError> {
     })
 }
 
-/// Turns one request document into a typed change.
-fn op_of(raw: RawOp) -> Result<LayoutOp, WriteError> {
+/// Turns one change into a typed one, with an empty name read as absent.
+fn op_of(raw: WriteLayoutOp) -> Result<LayoutOp, WriteError> {
     match raw {
-        RawOp::CreateEntry {
+        WriteLayoutOp::CreateEntry {
             uuid,
             path,
             version,
@@ -923,15 +970,15 @@ fn op_of(raw: RawOp) -> Result<LayoutOp, WriteError> {
                 path: uuid,
                 reason: error.to_string(),
             })?;
-            let path = path.map(|path| path_of(&path)).transpose()?;
-            let mut data = mutable(&version, owner, description)?;
-            if kind.as_deref() == Some("tree") {
+            let path = (!path.is_empty()).then(|| path_of(&path)).transpose()?;
+            let mut data = mutable(&version, none_if_empty(owner), none_if_empty(description))?;
+            if kind == "tree" {
                 data = data.with_kind(EntryKind::Tree);
             }
 
             Ok(LayoutOp::CreateEntry { id, path, data })
         }
-        RawOp::UpdateEntry {
+        WriteLayoutOp::UpdateEntry {
             uuid,
             version,
             owner,
@@ -941,38 +988,38 @@ fn op_of(raw: RawOp) -> Result<LayoutOp, WriteError> {
                 path: uuid,
                 reason: error.to_string(),
             })?;
-            let data = mutable(&version, owner, description)?;
+            let data = mutable(&version, none_if_empty(owner), none_if_empty(description))?;
 
             Ok(LayoutOp::UpdateEntry { id, data })
         }
-        RawOp::RemoveEntry { uuid } => Ok(LayoutOp::RemoveEntry {
+        WriteLayoutOp::RemoveEntry { uuid } => Ok(LayoutOp::RemoveEntry {
             id: Uuid::from_str(&uuid).map_err(|error| WriteError::InvalidPath {
                 path: uuid,
                 reason: error.to_string(),
             })?,
         }),
-        RawOp::CreatePath { path, uuid } => Ok(LayoutOp::CreatePath {
+        WriteLayoutOp::CreatePath { path, uuid } => Ok(LayoutOp::CreatePath {
             path: path_of(&path)?,
             id: Uuid::from_str(&uuid).map_err(|error| WriteError::InvalidPath {
                 path: uuid,
                 reason: error.to_string(),
             })?,
         }),
-        RawOp::MovePath { from, to } => Ok(LayoutOp::MovePath {
+        WriteLayoutOp::MovePath { from, to } => Ok(LayoutOp::MovePath {
             from: path_of(&from)?,
             to: path_of(&to)?,
         }),
-        RawOp::RemovePath { path } => Ok(LayoutOp::RemovePath {
+        WriteLayoutOp::RemovePath { path } => Ok(LayoutOp::RemovePath {
             path: path_of(&path)?,
         }),
-        RawOp::ChangeOwnership { uuid, owner } => Ok(LayoutOp::ChangeOwnership {
+        WriteLayoutOp::ChangeOwnership { uuid, owner } => Ok(LayoutOp::ChangeOwnership {
             id: Uuid::from_str(&uuid).map_err(|error| WriteError::InvalidPath {
                 path: uuid,
                 reason: error.to_string(),
             })?,
-            owner,
+            owner: none_if_empty(owner),
         }),
-        RawOp::ChangeUuid { from, to } => Ok(LayoutOp::ChangeUuid {
+        WriteLayoutOp::ChangeUuid { from, to } => Ok(LayoutOp::ChangeUuid {
             from: Uuid::from_str(&from).map_err(|error| WriteError::InvalidPath {
                 path: from,
                 reason: error.to_string(),
@@ -983,6 +1030,11 @@ fn op_of(raw: RawOp) -> Result<LayoutOp, WriteError> {
             })?,
         }),
     }
+}
+
+/// The text, or nothing when it names none.
+fn none_if_empty(text: String) -> Option<String> {
+    (!text.is_empty()).then_some(text)
 }
 
 /// A path as the request writes it.

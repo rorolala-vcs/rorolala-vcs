@@ -13,9 +13,7 @@ use std::path::Path;
 use std::str::FromStr as _;
 
 use rorolala_storage::{Error as StorageError, Key, StorageSet};
-use rorolala_tree::TreeStructure;
 use rorolala_utils_lazyffi::lazyffi;
-use serde::Serialize;
 
 /// What reading a store failed with.
 ///
@@ -40,6 +38,8 @@ pub enum StorageReadError {
     },
     /// The key does not read as one this build knows.
     Malformed,
+    /// The content is not a tree structure this build reads.
+    NotAStructure,
     /// The store itself failed, or what it holds does not read.
     Read {
         /// Why it failed.
@@ -54,6 +54,7 @@ impl fmt::Display for StorageReadError {
             Self::NotFound { key } => write!(formatter, "no object is stored under {key}"),
             Self::Exists { path } => write!(formatter, "`{path}` is already there"),
             Self::Malformed => formatter.write_str("the key is not one this build knows"),
+            Self::NotAStructure => formatter.write_str("the content is not a tree structure"),
             Self::Read { reason } => write!(formatter, "the store could not be read: {reason}"),
         }
     }
@@ -61,61 +62,75 @@ impl fmt::Display for StorageReadError {
 
 impl std::error::Error for StorageReadError {}
 
-/// The keys a store holds, as the C ABI writes them.
-#[derive(Debug, Serialize)]
-struct KeysAnswer {
+/// The keys a store holds.
+#[lazyffi(export = RolaStorageKeys)]
+#[derive(Debug, Clone, Default)]
+pub struct StorageKeys {
     /// The keys, as `blake3:<hex>`.
-    keys: Vec<Key>,
+    keys: Vec<String>,
 }
 
-/// Every object the store holding `directory` holds, as `rola storage ls-storaged --json` writes it.
+#[lazyffi(export = rola_)]
+impl StorageKeys {
+    /// How many keys the store answered with.
+    #[must_use]
+    pub const fn count(&self) -> usize {
+        self.keys.len()
+    }
+
+    /// The key at `index`, or an empty string past the end.
+    #[must_use]
+    pub fn at(&self, index: usize) -> String {
+        self.keys.get(index).cloned().unwrap_or_default()
+    }
+}
+
+/// Every object the store holding `directory` holds, as `rola storage ls-storaged` lists them.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"keys":["blake3:..."]}`, in the
-/// order the store answers. A failure is a `RolaStorageError *` the caller releases with
-/// `free_rola_storage_error`.
+/// A `RolaStorageKeys *` the caller releases with `free_rola_storage_keys`, in the order the store
+/// answers. A failure is a `RolaStorageError *` the caller releases with `free_rola_storage_error`.
 ///
 /// # Errors
 ///
 /// Returns [`StorageReadError::NoStore`] when no Workspace or Vault holds `directory`, and
 /// [`StorageReadError::Read`] when the store cannot be listed.
-#[lazyffi(export = rola_storage_objects_json)]
-pub fn objects_json(directory: &Path) -> Result<String, StorageReadError> {
+#[lazyffi(export = rola_storage_objects)]
+pub fn objects(directory: &Path) -> Result<StorageKeys, StorageReadError> {
     let set = stores_of(directory)?;
     let runtime = runtime()?;
     let keys = runtime
         .block_on(set.list_exist_keys())
         .map_err(storage_error)?;
 
-    serde_json::to_string(&KeysAnswer { keys }).map_err(|error| StorageReadError::Read {
-        reason: error.to_string(),
+    Ok(StorageKeys {
+        keys: keys.iter().map(ToString::to_string).collect(),
     })
 }
 
 /// Every content key the store holding `directory` keeps as a manifest, as
-/// `rola storage ls-manifests --json` writes it.
+/// `rola storage ls-manifests` lists them.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"keys":["blake3:..."]}`, in the
-/// order the store answers. A failure is a `RolaStorageError *` the caller releases with
-/// `free_rola_storage_error`.
+/// A `RolaStorageKeys *` the caller releases with `free_rola_storage_keys`, in the order the store
+/// answers. A failure is a `RolaStorageError *` the caller releases with `free_rola_storage_error`.
 ///
 /// # Errors
 ///
 /// Returns [`StorageReadError::NoStore`] when no Workspace or Vault holds `directory`, and
 /// [`StorageReadError::Read`] when the manifests cannot be listed.
-#[lazyffi(export = rola_storage_manifests_json)]
-pub fn manifests_json(directory: &Path) -> Result<String, StorageReadError> {
+#[lazyffi(export = rola_storage_manifests)]
+pub fn manifests(directory: &Path) -> Result<StorageKeys, StorageReadError> {
     let set = stores_of(directory)?;
     let runtime = runtime()?;
     let keys = runtime
         .block_on(set.list_manifest_keys())
         .map_err(storage_error)?;
 
-    serde_json::to_string(&KeysAnswer { keys }).map_err(|error| StorageReadError::Read {
-        reason: error.to_string(),
+    Ok(StorageKeys {
+        keys: keys.iter().map(ToString::to_string).collect(),
     })
 }
 
@@ -156,14 +171,14 @@ pub fn extract(directory: &Path, hash: &str, destination: &Path) -> Result<(), S
 /// The chunks a manifest names, when the content under `hash` was stored chunked.
 ///
 /// A manifest is what a chunked object is put back together from; a caller that has the key but
-/// not the chunks cannot produce the content. The answer is `null` when the content is kept whole,
-/// which is a fact about how it was stored rather than a failure.
+/// not the chunks cannot produce the content. A manifest with no chunks means the content is kept
+/// whole, which is a fact about how it was stored rather than a failure.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"chunks":[{"key":"blake3:...","len":N}]}`, or `null` when the content is not chunked. A failure
-/// is a `RolaStorageError *` the caller releases with `free_rola_storage_error`.
+/// A `RolaStorageManifest *` the caller releases with `free_rola_storage_manifest`. A manifest with
+/// no chunks means the content is kept whole. A failure is a `RolaStorageError *` the caller
+/// releases with `free_rola_storage_error`.
 ///
 /// # Errors
 ///
@@ -171,8 +186,8 @@ pub fn extract(directory: &Path, hash: &str, destination: &Path) -> Result<(), S
 /// [`StorageReadError::Malformed`] when `hash` is not a key this build reads,
 /// [`StorageReadError::NotFound`] when the store does not hold the key, or
 /// [`StorageReadError::Read`] when the manifest cannot be read.
-#[lazyffi(export = rola_storage_manifest_json)]
-pub fn manifest_json(directory: &Path, hash: &str) -> Result<String, StorageReadError> {
+#[lazyffi(export = rola_storage_manifest)]
+pub fn manifest(directory: &Path, hash: &str) -> Result<StorageManifest, StorageReadError> {
     let set = stores_of(directory)?;
     let key = Key::from_str(hash).map_err(|_| StorageReadError::Malformed)?;
     let runtime = runtime()?;
@@ -181,46 +196,43 @@ pub fn manifest_json(directory: &Path, hash: &str) -> Result<String, StorageRead
         .block_on(set.manifest_of(&key))
         .map_err(storage_error)?;
 
-    let Some(manifest) = manifest else {
-        return Ok("null".to_owned());
-    };
-
-    let answer = ManifestAnswer {
-        chunks: manifest
+    let chunks = manifest.map_or_else(Vec::new, |manifest| {
+        manifest
             .chunks()
             .iter()
-            .map(|chunk| ChunkItem {
-                key: chunk.key(),
+            .map(|chunk| StorageChunk {
+                key: chunk.key().to_string(),
                 len: chunk.len(),
             })
-            .collect(),
-    };
+            .collect()
+    });
 
-    serde_json::to_string(&answer).map_err(|error| StorageReadError::Read {
-        reason: error.to_string(),
-    })
+    Ok(StorageManifest { chunks })
 }
 
 /// The structure stored under `hash`, as the entries a tree version names.
 ///
 /// A tree entry's storage key is the structure itself, written whole; a caller that has the key but
 /// not the format has no way to reach the files inside it. The bytes are decoded here and cross as
-/// data, the same shape [`rola_tree_entries_json`](crate::tree_entries_json) writes from hex.
+/// entries, the same shape [`tree_entries`](crate::tree_entries) reads from hex.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, or `null` when the content does not
-/// decode as a tree structure. A failure is a `RolaStorageError *` the caller releases with
-/// `free_rola_storage_error`.
+/// A `RolaTreeEntries *` the caller releases with `free_rola_tree_entries`. A failure is a
+/// `RolaStorageError *` the caller releases with `free_rola_storage_error`.
 ///
 /// # Errors
 ///
 /// Returns [`StorageReadError::NoStore`] when no Workspace or Vault holds `directory`,
 /// [`StorageReadError::Malformed`] when `hash` is not a key this build reads,
-/// [`StorageReadError::NotFound`] when the store does not hold the key, and
+/// [`StorageReadError::NotFound`] when the store does not hold the key,
+/// [`StorageReadError::NotAStructure`] when the content does not decode as a tree structure, and
 /// [`StorageReadError::Read`] when the content cannot be read.
-#[lazyffi(export = rola_tree_structure_json)]
-pub fn tree_structure_json(directory: &Path, hash: &str) -> Result<String, StorageReadError> {
+#[lazyffi(export = rola_tree_structure)]
+pub fn tree_structure(
+    directory: &Path,
+    hash: &str,
+) -> Result<crate::TreeEntries, StorageReadError> {
     let set = stores_of(directory)?;
     let key = Key::from_str(hash).map_err(|_| StorageReadError::Malformed)?;
     let runtime = runtime()?;
@@ -231,29 +243,61 @@ pub fn tree_structure_json(directory: &Path, hash: &str) -> Result<String, Stora
         });
     };
 
-    let Ok(structure) = TreeStructure::decode(&bytes) else {
-        return Ok("null".to_owned());
-    };
+    crate::TreeEntries::decode(&bytes).ok_or(StorageReadError::NotAStructure)
+}
 
-    serde_json::to_string(&structure).map_err(|error| StorageReadError::Read {
-        reason: error.to_string(),
-    })
+/// The chunks of a chunked object.
+#[lazyffi(export = RolaStorageManifest)]
+#[derive(Debug, Clone)]
+pub struct StorageManifest {
+    /// The chunks, in the order the content is put back together.
+    chunks: Vec<StorageChunk>,
+}
+
+#[lazyffi(export = rola_)]
+impl StorageManifest {
+    /// How many chunks the manifest names, or 0 when the content is kept whole.
+    #[must_use]
+    pub const fn chunk_count(&self) -> usize {
+        self.chunks.len()
+    }
+
+    /// The chunk at `index`, or null past the end.
+    #[must_use]
+    pub fn chunk_at(&self, index: usize) -> Option<StorageChunk> {
+        self.chunks.get(index).cloned()
+    }
 }
 
 /// One chunk of a manifest.
-#[derive(Debug, Serialize)]
-struct ChunkItem {
+#[lazyffi(export = RolaStorageChunk)]
+#[derive(Debug, Clone)]
+pub struct StorageChunk {
     /// The key the chunk is stored under.
-    key: Key,
+    key: String,
     /// How many bytes the chunk holds.
     len: u64,
 }
 
-/// The chunks of a chunked object.
-#[derive(Debug, Serialize)]
-struct ManifestAnswer {
-    /// The chunks, in the order the content is put back together.
-    chunks: Vec<ChunkItem>,
+#[lazyffi(export = rola_)]
+impl StorageChunk {
+    /// The key the chunk is stored under.
+    #[must_use]
+    pub fn key(&self) -> String {
+        self.key.clone()
+    }
+
+    /// How many bytes the chunk holds.
+    #[must_use]
+    pub const fn len(&self) -> u64 {
+        self.len
+    }
+
+    /// Whether the chunk holds no bytes.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
 }
 
 /// A runtime of this call's own, so a synchronous export can drive an asynchronous store.
@@ -295,9 +339,7 @@ mod tests {
     use rorolala_tree::{FileMode, TreeEntry, TreeStructure};
     use rorolala_utils_location::Locate as _;
 
-    use super::{
-        StorageReadError, extract, manifest_json, manifests_json, objects_json, tree_structure_json,
-    };
+    use super::{StorageReadError, extract, manifest, manifests, objects, tree_structure};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -347,7 +389,7 @@ mod tests {
     fn a_directory_with_no_store_is_no_store() {
         let dir = scratch("absent");
 
-        assert!(matches!(objects_json(&dir), Err(StorageReadError::NoStore)));
+        assert!(matches!(objects(&dir), Err(StorageReadError::NoStore)));
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -358,10 +400,12 @@ mod tests {
         let _ = RorolalaStorage::create(&dir);
         let key = kept(&dir, b"stored content");
 
-        let answer: serde_json::Value = serde_json::from_str(&objects_json(&dir).unwrap()).unwrap();
-        let keys = answer["keys"].as_array().unwrap();
+        let keys = objects(&dir).unwrap();
 
-        assert!(keys.iter().any(|listed| listed == &key), "{keys:?}");
+        assert!(
+            (0..keys.count()).any(|index| keys.at(index) == key),
+            "{keys:?}"
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -372,13 +416,7 @@ mod tests {
         let _ = RorolalaStorage::create(&dir);
         let _ = kept(&dir, b"stored content");
 
-        let answer: serde_json::Value =
-            serde_json::from_str(&manifests_json(&dir).unwrap()).unwrap();
-
-        assert_eq!(
-            answer["keys"].as_array().unwrap(),
-            &Vec::<serde_json::Value>::new()
-        );
+        assert_eq!(manifests(&dir).unwrap().count(), 0);
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -438,7 +476,7 @@ mod tests {
         let _ = RorolalaStorage::create(&dir);
         let key = kept(&dir, b"stored whole");
 
-        assert_eq!(manifest_json(&dir, &key).unwrap(), "null");
+        assert_eq!(manifest(&dir, &key).unwrap().chunk_count(), 0);
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -457,12 +495,10 @@ mod tests {
             .block_on(store.write_object(&structure.encode(), Codec::Raw))
             .unwrap();
 
-        let answer: serde_json::Value =
-            serde_json::from_str(&tree_structure_json(&dir, &key.to_string()).unwrap()).unwrap();
-        let entries = answer["entries"].as_array().unwrap();
+        let entries = tree_structure(&dir, &key.to_string()).unwrap();
 
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0]["path"], "a");
+        assert_eq!(entries.count(), 1);
+        assert_eq!(entries.at(0).unwrap().path(), "a");
 
         let _ = fs::remove_dir_all(&dir);
     }

@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 using RolaSharp;
 
@@ -49,9 +48,15 @@ public sealed class StorageWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new Packed(RolaJson.Flag(document.RootElement, "changed"));
+            var handle = answer.payload;
+            try
+            {
+                return new Packed(RorolalaBinding.rola_write_pack_changed(handle));
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_pack(handle);
+            }
         }
         finally
         {
@@ -83,11 +88,18 @@ public sealed class StorageWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-            return new Stored(
-                RolaJson.Text(document.RootElement, "key") ?? string.Empty,
-                RolaJson.Flag(document.RootElement, "chunked")
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new Stored(
+                    NativeText.Taken(RorolalaBinding.rola_write_storage_put_key(handle)),
+                    RorolalaBinding.rola_write_storage_put_chunked(handle)
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_storage_put(handle);
+            }
         }
         finally
         {

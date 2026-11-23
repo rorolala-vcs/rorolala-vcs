@@ -45,43 +45,43 @@ public sealed class InverseIndexScope : Scope, IDisposable
     /// <param name="hash">The variant's key.</param>
     /// <returns>The keys, in the index's order.</returns>
     public IReadOnlyList<string> VariantDependents(string hash) =>
-        List(hash, RorolalaBinding.get_variant_dependents);
+        List(hash, RorolalaBinding.rola_inverse_index_variant_dependents);
 
     /// <summary>The versions that name the content stored under a key.</summary>
     /// <param name="hash">The content key.</param>
     /// <returns>The keys, in the index's order.</returns>
     public IReadOnlyList<string> StoreDependents(string hash) =>
-        List(hash, RorolalaBinding.get_store_dependents);
+        List(hash, RorolalaBinding.rola_inverse_index_store_dependents);
 
     /// <summary>The versions based on a version.</summary>
     /// <param name="hash">The version's key.</param>
     /// <returns>The keys, in the index's order.</returns>
     public IReadOnlyList<string> VersionDependents(string hash) =>
-        List(hash, RorolalaBinding.get_version_dependents);
+        List(hash, RorolalaBinding.rola_inverse_index_version_dependents);
 
     /// <summary>The versions a version's chain holds.</summary>
     /// <param name="hash">The version's key.</param>
     /// <returns>The keys, in the index's order.</returns>
     public IReadOnlyList<string> ChildVersions(string hash) =>
-        List(hash, RorolalaBinding.get_child_versions);
+        List(hash, RorolalaBinding.rola_inverse_index_child_versions);
 
     /// <summary>The variants that name a creator.</summary>
     /// <param name="hash">The creator's key.</param>
     /// <returns>The keys, in the index's order.</returns>
     public IReadOnlyList<string> CreatorDependents(string hash) =>
-        List(hash, RorolalaBinding.get_creator_dependents);
+        List(hash, RorolalaBinding.rola_inverse_index_creator_dependents);
 
     /// <summary>The variants that name a message.</summary>
     /// <param name="hash">The message's key.</param>
     /// <returns>The keys, in the index's order.</returns>
     public IReadOnlyList<string> MessageDependents(string hash) =>
-        List(hash, RorolalaBinding.get_message_dependents);
+        List(hash, RorolalaBinding.rola_inverse_index_message_dependents);
 
     /// <summary>The variants that merge a variant in.</summary>
     /// <param name="hash">The variant's key.</param>
     /// <returns>The keys, in the index's order.</returns>
     public IReadOnlyList<string> JoinDependents(string hash) =>
-        List(hash, RorolalaBinding.get_join_dependents);
+        List(hash, RorolalaBinding.rola_inverse_index_join_dependents);
 
     /// <summary>The number a version's chain gives it.</summary>
     /// <param name="hash">The version's key.</param>
@@ -94,7 +94,7 @@ public sealed class InverseIndexScope : Scope, IDisposable
         var key = Utf8(Wire(hash));
         try
         {
-            var answer = RorolalaBinding.get_version_number(_handle, key);
+            var answer = RorolalaBinding.rola_inverse_index_version_number(_handle, key);
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
                 throw ReadResults.Inverse(answer.payload);
@@ -102,7 +102,7 @@ public sealed class InverseIndexScope : Scope, IDisposable
 
             try
             {
-                return RorolalaBinding.version_number_value(answer.payload);
+                return RorolalaBinding.rola_version_number_value(answer.payload);
             }
             finally
             {
@@ -137,7 +137,7 @@ public sealed class InverseIndexScope : Scope, IDisposable
         var path = Utf8(_root);
         try
         {
-            var handle = RorolalaBinding.locate_rola_inverse_index(path);
+            var handle = RorolalaBinding.rola_inverse_index_locate(path);
             if (handle == 0)
             {
                 throw new RolaReadError(
@@ -163,8 +163,8 @@ public sealed class InverseIndexScope : Scope, IDisposable
         EnsureHandle();
 
         var answer = full
-            ? RorolalaBinding.rebuild_full_rola_inverse_index(_handle)
-            : RorolalaBinding.rebuild_rola_inverse_index(_handle);
+            ? RorolalaBinding.rola_inverse_index_full_rebuild(_handle)
+            : RorolalaBinding.rola_inverse_index_rebuild(_handle);
         if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
         {
             throw ReadResults.InverseBuild(answer.payload);
@@ -174,17 +174,17 @@ public sealed class InverseIndexScope : Scope, IDisposable
         try
         {
             return new InverseIndexReport(
-                NativeText.Taken(RorolalaBinding.inverse_index_report_mode(report)),
-                RorolalaBinding.inverse_index_report_objects(report),
-                RorolalaBinding.inverse_index_report_objects_read(report),
-                RorolalaBinding.inverse_index_report_variants(report),
-                RorolalaBinding.inverse_index_report_versions(report),
-                RorolalaBinding.inverse_index_report_creators(report),
-                RorolalaBinding.inverse_index_report_messages(report),
-                RorolalaBinding.inverse_index_report_versions_numbered(report),
-                RorolalaBinding.inverse_index_report_entries(report),
-                RorolalaBinding.inverse_index_report_dependents(report),
-                NativeText.Taken(RorolalaBinding.inverse_index_report_fingerprint(report))
+                NativeText.Taken(RorolalaBinding.rola_inverse_index_report_mode(report)),
+                RorolalaBinding.rola_inverse_index_report_objects(report),
+                RorolalaBinding.rola_inverse_index_report_objects_read(report),
+                RorolalaBinding.rola_inverse_index_report_variants(report),
+                RorolalaBinding.rola_inverse_index_report_versions(report),
+                RorolalaBinding.rola_inverse_index_report_creators(report),
+                RorolalaBinding.rola_inverse_index_report_messages(report),
+                RorolalaBinding.rola_inverse_index_report_versions_numbered(report),
+                RorolalaBinding.rola_inverse_index_report_entries(report),
+                RorolalaBinding.rola_inverse_index_report_dependents(report),
+                NativeText.Taken(RorolalaBinding.rola_inverse_index_report_fingerprint(report))
             );
         }
         finally
@@ -222,14 +222,14 @@ public sealed class InverseIndexScope : Scope, IDisposable
             var list = answer.payload;
             try
             {
-                var count = (int)RorolalaBinding.rola_hash_list_len(list);
+                var count = (int)RorolalaBinding.rola_hash_list_count(list);
                 var keys = new List<string>(count);
                 for (var index = 0; index < count; index++)
                 {
                     keys.Add(
                         Key(
                             NativeText.Taken(
-                                RorolalaBinding.read_rola_hash_list_by_index(list, (nuint)index)
+                                RorolalaBinding.rola_hash_list_at(list, (nuint)index)
                             )
                         )
                     );

@@ -19,6 +19,7 @@ use rorolala_protocol::{Action, ActionContext, ActionError, Encodable as _, Only
 use rorolala_utils_constants::{
     IGNORE_RULES_VAULTS_DIR, VAULT_IGNORE_RULES_DIR, WORKSPACE_IGNORE_RULES_DIR,
 };
+use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use serde::{Deserialize, Serialize};
 
@@ -38,11 +39,24 @@ use super::sync_storage::{Side, carry_blob};
 /// when the Vault holds none.
 pub struct ActionFetchIgnoreRules;
 
+/// The name the Workspace keeps this Vault's rules under.
+///
+/// # FFI
+///
+/// A `RolaDaemonFetchIgnoreRulesRequest` the caller fills. `name` is borrowed for the call and
+/// released by the caller, and is the name the Workspace bound the Vault by.
+#[lazyffi(export = RolaDaemonFetchIgnoreRulesRequest, input)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FetchIgnoreRulesRequest {
+    /// The name the Workspace keeps this Vault's rules under.
+    pub name: String,
+}
+
 impl Action for ActionFetchIgnoreRules {
     /// The fetch of a Vault's rules is id 18: the first free slot after the index fetch's.
     const ID: u32 = 18;
 
-    type Input = String;
+    type Input = FetchIgnoreRulesRequest;
     type Output = ();
 
     /// Asks the Vault for its ignore rules, and writes what it answers under the Workspace's own.
@@ -59,7 +73,7 @@ impl Action for ActionFetchIgnoreRules {
     ) -> Result<Self::Output, ActionError> {
         // Which directory the copy lands in is the Workspace's own business, so the name is read
         // here and never looked at on the Vault.
-        let cache = input.into_inner().unwrap_or_default();
+        let cache = input.into_inner().map_or_default(|request| request.name);
 
         // What the Vault holds is read there: it is the side with a rule directory, and the
         // Workspace side has none of the Vault's to read.

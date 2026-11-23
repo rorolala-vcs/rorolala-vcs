@@ -2,8 +2,8 @@
  * A sync run across the ABI: a directory no Workspace is in is a failure.
  *
  * The run has an account, a key and an address, but no Workspace to work in, so the answer is the
- * tag-and-payload failure rather than a JSON report. The payload is released the way every write
- * failure is.
+ * tag-and-payload failure rather than a typed report. The payload is released the way every write
+ * failure is, and a run that succeeds answers with a handle of its own.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -52,7 +52,7 @@ int main(void) {
 
     free_rola_write_error(answer.payload);
 
-    RorolalaResult made = create_workspace(dir);
+    RorolalaResult made = rola_workspace_create(dir);
     want(made.tag == RorolalaResult_Ok, "a Workspace is made");
 
     RorolalaResult nameless = rola_write_sync(
@@ -84,8 +84,13 @@ int main(void) {
     );
     want(empty.tag == RorolalaResult_Ok, "a run with every side left alone succeeds");
     want(empty.payload != NULL, "the run answers with its numbers");
+    if (empty.tag == RorolalaResult_Ok && empty.payload != NULL) {
+        RolaWriteSync *report = empty.payload;
+        want(rola_write_sync_applied(report) == 0, "nothing was applied");
+        want(rola_write_sync_received(report) == 0, "nothing was received");
+        free_rola_write_sync(report);
+    }
 
-    free_string(empty.payload);
     remove_tree(dir);
 
     return finish();

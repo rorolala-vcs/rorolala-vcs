@@ -17,10 +17,10 @@
 //!
 //! # Output
 //!
-//! What became of it, as JSON: the chain was brought and written, the Vault holds an object under that
-//! hash that is not a version, the object under a hash the chain needs is not the variant the version
-//! above it names, or the Vault holds nothing under a hash the chain needs. It crosses as text for the
-//! reason an ownership outcome does, see `request-ownership`.
+//! What became of it: the chain was brought and written, the Vault holds an object under that hash
+//! that is not a version, the object under a hash the chain needs is not the variant the version
+//! above it names, or the Vault holds nothing under a hash the chain needs. `ChainOutcome` is what a
+//! C caller reads.
 
 use std::collections::BTreeSet;
 use std::str::FromStr as _;
@@ -28,6 +28,7 @@ use std::str::FromStr as _;
 use rorolala_errors::{BincodeError, Failure as _};
 use rorolala_protocol::{Action, ActionContext, ActionError, Encodable as _, OnlyWorkspace};
 use rorolala_storage::{Blake3Hash, Key};
+use rorolala_utils_lazyffi::lazyffi;
 use rorolala_vcs::{VCSIndex, VCSIndexObject, VCSIndexReadingError, VCSWrite};
 use serde::{Deserialize, Serialize};
 
@@ -37,12 +38,25 @@ use super::sync_storage::{Side, carry_blob};
 /// An Action that brings the chain under a version from the other end's index.
 pub struct ActionBringRemoteIndex;
 
+/// The hash of the version to bring the chain of.
+///
+/// # FFI
+///
+/// A `RolaDaemonBringRemoteIndexRequest` the caller fills. `hash` is borrowed for the call and
+/// released by the caller, and is read as hex or named with `blake3:` in front of it.
+#[lazyffi(export = RolaDaemonBringRemoteIndexRequest, input)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BringRemoteIndexRequest {
+    /// The hash of the version to start from.
+    pub hash: String,
+}
+
 impl Action for ActionBringRemoteIndex {
     /// Bringing a chain is id 17: what a retrack reads when the version it goes to is not here.
     const ID: u32 = 17;
 
-    type Input = String;
-    type Output = String;
+    type Input = BringRemoteIndexRequest;
+    type Output = ChainOutcome;
 
     /// Asks the Vault for the chain under the hash, and writes what comes back into this index.
     ///
@@ -50,8 +64,8 @@ impl Action for ActionBringRemoteIndex {
     ///
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a Vault,
     /// [`ActionError::Codec`] if the hash does not read or a payload will not cross,
-    /// [`ActionError::Store`] if the index or the chain could not be read, [`ActionError::Json`] if
-    /// the answer will not encode, and whatever the exchange fails with.
+    /// [`ActionError::Store`] if the index or the chain could not be read, and whatever the
+    /// exchange fails with.
     async fn process(
         input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
@@ -67,7 +81,7 @@ impl Action for ActionBringRemoteIndex {
         // What is wanted, and what this side already holds, is the Workspace's to say: the Vault is
         // told both as one value, so it walks down only as far as it has to.
         let asked = if ctx.is_workspace() {
-            let named = input.into_inner().unwrap_or_default();
+            let named = input.into_inner().map_or_default(|request| request.hash);
             let start = key_of(&named)?;
             let held = local
                 .object_keys()
@@ -127,7 +141,95 @@ impl Action for ActionBringRemoteIndex {
                 .await?
         };
 
-        serde_json::to_string(&answer).map_err(|error| ActionError::Json(error.into()))
+        Ok(ChainOutcome::from(answer))
+    }
+}
+
+/// What became of a chain this index asked the other end for, as a C caller reads it.
+///
+/// # FFI
+///
+/// A `RolaDaemonChainOutcome *` the caller releases with `free_rola_daemon_chain_outcome`. `kind` says which
+/// outcome it was, and `key` is the hash the walk stopped at, empty unless the outcome names one.
+///
+/// # Errors
+///
+/// None of its own: an outcome the walk reached is answered as one.
+#[lazyffi(export = RolaDaemonChainOutcome)]
+#[derive(Debug, Clone, Serialize)]
+pub struct ChainOutcome {
+    /// Which outcome the walk reached.
+    kind: ChainKind,
+    /// The hash the walk stopped at, empty when the outcome names none.
+    key: String,
+}
+
+/// Which outcome a walk of a chain reached.
+#[lazyffi(export = RolaDaemonChainKind)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum ChainKind {
+    /// The chain was brought, and is written into this index.
+    Brought,
+    /// The Vault holds an object under the hash, and it is not the version a chain starts from.
+    NotAVersion,
+    /// The object under a hash is not the variant the version above it names.
+    NotAVariant,
+    /// The Vault holds nothing under a hash the chain needs.
+    Missing,
+}
+
+#[lazyffi(export = rola_daemon_)]
+impl ChainOutcome {
+    /// Which outcome the walk reached.
+    #[must_use]
+    pub const fn kind(&self) -> ChainKind {
+        self.kind
+    }
+
+    /// The hash the walk stopped at, or an empty string when the outcome names none.
+    ///
+    /// # FFI
+    ///
+    /// The caller releases it with `free_string`.
+    #[must_use]
+    pub fn key(&self) -> String {
+        self.key.clone()
+    }
+}
+
+impl From<Chain> for ChainOutcome {
+    fn from(chain: Chain) -> Self {
+        match chain {
+            Chain::Brought => Self {
+                kind: ChainKind::Brought,
+                key: String::new(),
+            },
+            Chain::NotAVersion => Self {
+                kind: ChainKind::NotAVersion,
+                key: String::new(),
+            },
+            Chain::NotAVariant(key) => Self {
+                kind: ChainKind::NotAVariant,
+                key,
+            },
+            Chain::Missing(key) => Self {
+                kind: ChainKind::Missing,
+                key,
+            },
+        }
+    }
+}
+
+impl ChainOutcome {
+    /// The outcome as the action made it, for a caller inside Rust.
+    #[must_use]
+    pub fn chain(&self) -> Chain {
+        match self.kind {
+            ChainKind::Brought => Chain::Brought,
+            ChainKind::NotAVersion => Chain::NotAVersion,
+            ChainKind::NotAVariant => Chain::NotAVariant(self.key.clone()),
+            ChainKind::Missing => Chain::Missing(self.key.clone()),
+        }
     }
 }
 
@@ -313,7 +415,7 @@ mod tests {
     };
     use rorolala_workspace::Workspace;
 
-    use super::{ActionBringRemoteIndex, Chain, Found, chain_under};
+    use super::{ActionBringRemoteIndex, BringRemoteIndexRequest, Chain, Found, chain_under};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -553,7 +655,9 @@ mod tests {
         let (said, _) = run(async {
             tokio::join!(
                 ActionBringRemoteIndex::process(
-                    OnlyWorkspace::from(Some(Key::new(chain.top).hex())),
+                    OnlyWorkspace::from(Some(BringRemoteIndexRequest {
+                        hash: Key::new(chain.top).hex(),
+                    })),
                     workspace_ctx,
                 ),
                 ActionBringRemoteIndex::process(OnlyWorkspace::empty(), vault_ctx),
@@ -561,8 +665,8 @@ mod tests {
         });
 
         let said = said.expect("the Workspace side answers");
-        let answer: Chain = serde_json::from_str(&said).expect("the answer is JSON");
-        assert!(matches!(answer, Chain::Brought), "{said}");
+        let answer = said.chain();
+        assert!(matches!(answer, Chain::Brought), "{answer:?}");
 
         // What came back is written here: the objects of the chain are in this Workspace's index,
         // which is what makes the version readable on this side from now on.

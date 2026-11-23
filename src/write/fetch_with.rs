@@ -39,12 +39,12 @@ use std::str::FromStr as _;
 use rorolala_errors::Failure as _;
 use rorolala_layout::{EntryKind, Layout, LayoutPath};
 use rorolala_storage::{Resolved, ShortHash, StorageBackend as _};
-use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_lazyffi::{StrSpan, lazyffi};
 use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_utils_progress::Progress;
 use rorolala_vcs::{ComputeBlake3 as _, VCSIndex, VCSIndexKind, VCSIndexObject};
 use rorolala_workspace::Workspace;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::daemon::action_sync_index_all_async;
@@ -54,7 +54,7 @@ use crate::protocol::ActionError;
 use crate::storage::{Key, StorageSet};
 use crate::tree::TreeStructure;
 use crate::write::progress::{WriteProgress, watching};
-use crate::write::request::Common;
+use crate::write::request::{Common, WriteCommon};
 use crate::write::sync::{chain_store_keys, store_of};
 use crate::write::{Cancellation, WriteError};
 
@@ -79,8 +79,40 @@ pub struct FetchWithRequest {
     pub recursive: bool,
 }
 
+/// A content fetch a C caller asks for.
+///
+/// # FFI
+///
+/// A `RolaWriteFetchRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `words` is a
+/// `RolaStrSpan` of the paths, directories, `Uuid`s and hashes whose content comes, and an empty
+/// `layout` reads the one being worked in.
+#[lazyffi(export = RolaWriteFetchRequest, input)]
+#[derive(Debug, Clone)]
+pub struct FetchInput {
+    /// The fields every write request carries.
+    pub common: WriteCommon,
+    /// The Layout the words are read in, empty for the one being worked in.
+    pub layout: String,
+    /// The paths, directories, `Uuid`s and hashes whose content comes.
+    pub words: StrSpan,
+    /// Whether each target comes with the chain behind it or alone.
+    pub recursive: bool,
+}
+
+impl From<FetchInput> for FetchWithRequest {
+    fn from(input: FetchInput) -> Self {
+        Self {
+            common: input.common.into(),
+            layout: input.layout,
+            words: input.words.into_vec(),
+            recursive: input.recursive,
+        }
+    }
+}
+
 /// One target whose content was fetched.
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct FetchWithEntry {
     /// What it was fetched by: a `Uuid`, a variant's hash, or a version's hash.
     pub target: String,
@@ -91,7 +123,7 @@ pub struct FetchWithEntry {
 }
 
 /// One target whose content is still not here.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct FetchWithMissing {
     /// What it was fetched by.
     pub target: String,
@@ -100,7 +132,7 @@ pub struct FetchWithMissing {
 }
 
 /// How many objects one Vault handed over.
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct FetchWithSource {
     /// The Vault's name.
     pub vault: String,
@@ -109,7 +141,7 @@ pub struct FetchWithSource {
 }
 
 /// What a fetch of content came to.
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct FetchWithReport {
     /// The targets whose content was fetched, in the order they were named.
     pub entries: Vec<FetchWithEntry>,
@@ -296,7 +328,6 @@ impl FetchWithRequest {
                     &workspace,
                     &account,
                     reached.address.to_string(),
-                    String::new(),
                     progress.clone(),
                 ))
                 .map_err(FetchWithRefusal::Action)?;
@@ -507,49 +538,183 @@ impl FetchWithRequest {
     }
 }
 
-/// The content fetch a JSON request asks for.
+/// The content fetch a request a C caller fills asks for.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, or a `RolaWriteError *` the caller
-/// releases with `free_rola_write_error`. `progress` is the handle the caller polls with
-/// `rola_progress_next_json`, and `cancellation` is the flag it sets with
-/// `rola_cancellation_cancel`.
+/// `request` is a `RolaWriteFetchRequest` the caller fills and keeps; every `const char *` in it is
+/// borrowed for the call and released by the caller. A `RolaWriteFetch *` the caller releases with
+/// `free_rola_write_fetch` answers it, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `progress` is the handle the caller polls with `rola_progress_next`,
+/// and `cancellation` is the flag it sets with `rola_cancellation_cancel`.
 ///
-/// The answer is `{"entries":[{"target","path","version"}],"brought":[{"vault","count"}]}`: the
-/// targets whose content is here, in the order they were named, and how many objects each Vault
-/// handed over. `target` is the `Uuid` an entry is known by, a variant's hash, or a version's hash;
-/// `path` is `.` for anything that is not an entry; `version` is the version the content is of. Its
-/// document is the fields every write request carries (`workspace`, `account`, `target`, `offline`,
-/// `force`, `concurrency` and `labels`) at the top level, `target` written the way the other write
-/// requests write one, `layout` as the name `rola layout` commands take, `words` as an array of
-/// strings, and `recursive` as a bool.
+/// `_entry_count` and `_entry_at` name the targets whose content is here, in the order they were
+/// named, and `_brought_count` and `_brought_at` say how many objects each Vault handed over.
+/// `target` is the `Uuid` an entry is known by, a variant's hash, or a version's hash; `path` is
+/// `.` for anything that is not an entry; `version` is the version the content is of.
 ///
 /// The copy of a Vault's Layout a path word reads is the one a fetch left, so a caller outside the
-/// command line fetches that copy first, with `do_action_fetch_layout`, and calls this after it. A
-/// run that names only hashes reads no Layout.
+/// command line fetches that copy first, with `rola_daemon_action_fetch_layout`, and calls this
+/// after it. A run that names only hashes reads no Layout.
 ///
 /// # Errors
 ///
-/// Returns [`WriteError::Json`] when `request` does not read as a [`FetchWithRequest`] or the
-/// answer cannot be written, and what [`FetchWithRequest::fetch_with`] names, folded into
-/// [`WriteError`].
-#[lazyffi(export = rola_write_fetch_with)]
+/// Returns what [`FetchWithRequest::fetch_with`] names, folded into [`WriteError`].
+#[lazyffi(export = rola_write_fetch)]
 pub fn fetch_with_at(
-    request: &str,
+    request: &FetchInput,
     progress: &WriteProgress,
     cancellation: &Cancellation,
-) -> Result<String, WriteError> {
-    let asked: FetchWithRequest =
-        serde_json::from_str(request).map_err(|error| WriteError::Json {
-            reason: error.to_string(),
-        })?;
+) -> Result<WriteFetch, WriteError> {
+    let asked: FetchWithRequest = request.clone().into();
     let watched = watching(progress);
     let report = asked.fetch_with(&watched, cancellation)?;
 
-    serde_json::to_string(&report).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteFetch::of(&report))
+}
+
+/// What a content fetch came to, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteFetch *` the caller releases with `free_rola_write_fetch`. `_entry_count` and
+/// `_entry_at` answer the targets, each a `RolaWriteFetchEntry *` released with
+/// `free_rola_write_fetch_entry`; `_brought_count` and `_brought_at` answer what each Vault handed
+/// over, each a `RolaWriteFetchSource *` released with `free_rola_write_fetch_source`.
+#[lazyffi(export = RolaWriteFetch)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteFetch {
+    /// The targets whose content was fetched, in the order they were named.
+    entries: Vec<WriteFetchEntry>,
+    /// Each Vault that handed something over.
+    brought: Vec<WriteFetchSource>,
+}
+
+impl WriteFetch {
+    /// The answer a fetch of content is handed over as.
+    fn of(report: &FetchWithReport) -> Self {
+        Self {
+            entries: report.entries.iter().map(WriteFetchEntry::of).collect(),
+            brought: report.brought.iter().map(WriteFetchSource::of).collect(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteFetch {
+    /// How many targets the run fetched.
+    #[must_use]
+    pub const fn entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// One target the run fetched, or null past the end.
+    #[must_use]
+    pub fn entry_at(&self, index: usize) -> Option<WriteFetchEntry> {
+        self.entries.get(index).cloned()
+    }
+
+    /// How many Vaults handed something over.
+    #[must_use]
+    pub const fn brought_count(&self) -> usize {
+        self.brought.len()
+    }
+
+    /// One Vault that handed something over, or null past the end.
+    #[must_use]
+    pub fn brought_at(&self, index: usize) -> Option<WriteFetchSource> {
+        self.brought.get(index).cloned()
+    }
+}
+
+/// One target whose content was fetched.
+///
+/// # FFI
+///
+/// A `RolaWriteFetchEntry *` the caller releases with `free_rola_write_fetch_entry`. `_target`,
+/// `_path` and `_version` each return a `char *` the caller releases with `free_string`.
+#[lazyffi(export = RolaWriteFetchEntry)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteFetchEntry {
+    /// What it was fetched by: a `Uuid`, a variant's hash, or a version's hash.
+    target: String,
+    /// The path it is at, `.` when it is at none or is not an entry.
+    path: String,
+    /// The version the content is of, as hex.
+    version: String,
+}
+
+impl WriteFetchEntry {
+    /// The answer one fetched target is handed over as.
+    fn of(entry: &FetchWithEntry) -> Self {
+        Self {
+            target: entry.target.clone(),
+            path: entry.path.clone(),
+            version: entry.version.clone(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteFetchEntry {
+    /// What it was fetched by.
+    #[must_use]
+    pub fn target(&self) -> String {
+        self.target.clone()
+    }
+
+    /// The path it is at, or `.` when it is at none or is not an entry.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// The version the content is of, as hex.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
+}
+
+/// How many objects one Vault handed over.
+///
+/// # FFI
+///
+/// A `RolaWriteFetchSource *` the caller releases with `free_rola_write_fetch_source`. `_vault`
+/// returns a `char *` the caller releases with `free_string`, and `_count` the objects it handed
+/// over.
+#[lazyffi(export = RolaWriteFetchSource)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteFetchSource {
+    /// The Vault's name.
+    vault: String,
+    /// The objects it handed over.
+    count: u64,
+}
+
+impl WriteFetchSource {
+    /// The answer one Vault's take is handed over as.
+    fn of(source: &FetchWithSource) -> Self {
+        Self {
+            vault: source.vault.clone(),
+            count: u64::try_from(source.count).unwrap_or(u64::MAX),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteFetchSource {
+    /// The Vault's name.
+    #[must_use]
+    pub fn vault(&self) -> String {
+        self.vault.clone()
+    }
+
+    /// The objects it handed over.
+    #[must_use]
+    pub const fn count(&self) -> u64 {
+        self.count
+    }
 }
 
 impl From<FetchWithRefusal> for WriteError {

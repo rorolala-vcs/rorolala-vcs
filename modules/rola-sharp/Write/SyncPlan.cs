@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace RolaSharp.Write;
 
 /// <summary>Which way a sync may move content.</summary>
@@ -55,8 +53,8 @@ public sealed record SyncPlan(
     ulong UpToDate
 )
 {
-    /// <summary>The plan's own JSON, which an apply sends back unchanged.</summary>
-    internal string Json { get; init; } = string.Empty;
+    /// <summary>Whether the plan came from the native side, which an apply requires.</summary>
+    internal bool Agreed { get; init; }
 
     /// <summary>Whether the Vault's Layout was read, which a plan from the native side always was.</summary>
     public bool LayoutRead { get; init; } = true;
@@ -99,124 +97,157 @@ public sealed record SyncReport(
     public bool LayoutRead { get; init; }
 }
 
-/// <summary>Reads the plan the library answers with.</summary>
+/// <summary>Reads the plan the library hands over.</summary>
 internal static class SyncPlans
 {
-    /// <summary>Reads a plan from its JSON.</summary>
-    /// <param name="root">The plan's JSON.</param>
+    /// <summary>Reads a plan from its handle.</summary>
+    /// <param name="handle">The plan, which this does not release.</param>
     /// <returns>The plan.</returns>
-    public static SyncPlan Parse(JsonElement root)
+    public static SyncPlan Read(nint handle)
     {
         var entries = new List<SyncEntry>();
-        var items = RolaJson.Items(root, "entries");
-        if (items is { } array)
+        var count = RorolalaBinding.rola_write_sync_plan_entry_count(handle);
+        for (nuint index = 0; index < count; index++)
         {
-            foreach (var item in array.EnumerateArray())
+            var item = RorolalaBinding.rola_write_sync_plan_entry_at(handle, index);
+            if (item == 0)
             {
-                if (item.ValueKind is not JsonValueKind.Object)
-                {
-                    continue;
-                }
+                continue;
+            }
 
+            try
+            {
                 entries.Add(
                     new SyncEntry(
-                        RolaJson.Text(item, "uuid") ?? string.Empty,
-                        RolaJson.Text(item, "local_path"),
-                        RolaJson.Text(item, "remote_path"),
-                        RolaJson.Text(item, "planned_path"),
-                        RolaJson.Text(item, "local_version"),
-                        RolaJson.Text(item, "remote_version"),
-                        RolaJson.Text(item, "owner"),
-                        RolaJson.Flag(item, "deprecated"),
-                        RolaJson.Text(item, "item_kind"),
-                        RolaJson.Flag(item, "modified"),
-                        RolaJson.Text(item, "kind") ?? string.Empty
+                        NativeText.Taken(RorolalaBinding.rola_write_sync_entry_uuid(item)),
+                        Optional(NativeText.Taken(RorolalaBinding.rola_write_sync_entry_local_path(item))),
+                        Optional(NativeText.Taken(RorolalaBinding.rola_write_sync_entry_remote_path(item))),
+                        Optional(NativeText.Taken(RorolalaBinding.rola_write_sync_entry_planned_path(item))),
+                        Optional(NativeText.Taken(RorolalaBinding.rola_write_sync_entry_local_version(item))),
+                        Optional(NativeText.Taken(RorolalaBinding.rola_write_sync_entry_remote_version(item))),
+                        Optional(NativeText.Taken(RorolalaBinding.rola_write_sync_entry_owner(item))),
+                        RorolalaBinding.rola_write_sync_entry_deprecated(item),
+                        Optional(NativeText.Taken(RorolalaBinding.rola_write_sync_entry_item_kind(item))),
+                        RorolalaBinding.rola_write_sync_entry_modified(item),
+                        NativeText.Taken(RorolalaBinding.rola_write_sync_entry_kind(item))
                     )
                 );
             }
+            finally
+            {
+                RorolalaBinding.free_rola_write_sync_entry(item);
+            }
         }
 
-        return new SyncPlan(
-            RolaJson.Text(root, "layout") ?? string.Empty,
-            RolaJson.Text(root, "vault") ?? string.Empty,
-            RolaJson.Flag(root, "forced"),
+        var plan = new SyncPlan(
+            NativeText.Taken(RorolalaBinding.rola_write_sync_plan_layout(handle)),
+            NativeText.Taken(RorolalaBinding.rola_write_sync_plan_vault(handle)),
+            RorolalaBinding.rola_write_sync_plan_forced(handle),
             entries,
-            RolaJson.Number(root, "up_to_date") ?? 0
+            RorolalaBinding.rola_write_sync_plan_up_to_date(handle)
         )
         {
-            LayoutRead = RolaJson.Flag(root, "layout_read"),
-            Index = RolaJson.Flag(root, "index"),
-            Storage = RolaJson.Flag(root, "storage"),
+            Agreed = true,
+            LayoutRead = RorolalaBinding.rola_write_sync_plan_layout_read(handle),
+            Index = RorolalaBinding.rola_write_sync_plan_index(handle),
+            Storage = RorolalaBinding.rola_write_sync_plan_storage(handle),
         };
+
+        return plan;
     }
+
+    private static string? Optional(string text) => text.Length == 0 ? null : text;
 }
 
 /// <summary>Reads what a sync run came to.</summary>
 internal static class SyncReports
 {
-    /// <summary>Reads a report from its JSON.</summary>
-    /// <param name="root">The report's JSON.</param>
+    /// <summary>Reads the one-shot run's answer.</summary>
+    /// <param name="handle">The answer, which this does not release.</param>
     /// <returns>The report.</returns>
-    public static SyncReport Parse(JsonElement root)
+    public static SyncReport OfRun(nint handle)
     {
         var failed = new List<string>();
-        if (RolaJson.Items(root, "failed") is { } failures)
+        var failedCount = RorolalaBinding.rola_write_sync_failed_count(handle);
+        for (nuint index = 0; index < failedCount; index++)
         {
-            foreach (var item in failures.EnumerateArray())
-            {
-                if (item.ValueKind is JsonValueKind.String)
-                {
-                    failed.Add(item.GetString() ?? string.Empty);
-                }
-            }
+            failed.Add(
+                NativeText.Taken(RorolalaBinding.rola_write_sync_failed_at(handle, index))
+            );
         }
 
         var took = new List<(string Vault, ulong Count)>();
-        if (RolaJson.Items(root, "took") is { } taken)
+        var tookCount = RorolalaBinding.rola_write_sync_took_count(handle);
+        for (nuint index = 0; index < tookCount; index++)
         {
-            foreach (var item in taken.EnumerateArray())
+            var item = RorolalaBinding.rola_write_sync_took_at(handle, index);
+            if (item == 0)
             {
-                if (item.ValueKind is not JsonValueKind.Array)
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                var parts = item.EnumerateArray().ToArray();
-                if (parts.Length == 2 && parts[0].ValueKind is JsonValueKind.String)
-                {
-                    took.Add(
-                        (
-                            parts[0].GetString() ?? string.Empty,
-                            parts[1].GetUInt64()
-                        )
-                    );
-                }
+            try
+            {
+                took.Add(
+                    (
+                        NativeText.Taken(RorolalaBinding.rola_write_sync_took_vault(item)),
+                        RorolalaBinding.rola_write_sync_took_objects(item)
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_sync_took(item);
             }
         }
 
-        // The one-shot export answers `missing_layout` where the request-shaped apply answers
-        // `layout_read`, and the two say one thing read two ways, so a report carrying either is
-        // read for both.
-        var layoutRead = root.TryGetProperty("layout_read", out var read)
-            ? read.ValueKind is JsonValueKind.True
-            : !RolaJson.Flag(root, "missing_layout");
-        var missingLayout = root.TryGetProperty("missing_layout", out var missing)
-            ? missing.ValueKind is JsonValueKind.True
-            : !layoutRead;
+        var missing = RorolalaBinding.rola_write_sync_missing_layout(handle);
 
         return new SyncReport(
-            RolaJson.Number(root, "applied") ?? 0,
-            RolaJson.Number(root, "received") ?? 0,
+            RorolalaBinding.rola_write_sync_applied(handle),
+            RorolalaBinding.rola_write_sync_received(handle),
             failed,
-            RolaJson.Number(root, "index_objects") ?? 0,
-            RolaJson.Number(root, "storage_objects") ?? 0,
-            missingLayout,
+            RorolalaBinding.rola_write_sync_index_objects(handle),
+            RorolalaBinding.rola_write_sync_storage_objects(handle),
+            missing,
             took
         )
         {
-            Layout = RolaJson.Text(root, "layout") ?? string.Empty,
-            Vault = RolaJson.Text(root, "vault") ?? string.Empty,
-            UpToDate = RolaJson.Number(root, "up_to_date") ?? 0,
+            LayoutRead = !missing,
+        };
+    }
+
+    /// <summary>Reads the answer of a plan carried out.</summary>
+    /// <param name="handle">The answer, which this does not release.</param>
+    /// <returns>The report.</returns>
+    public static SyncReport OfApply(nint handle)
+    {
+        var failed = new List<string>();
+        var failedCount = RorolalaBinding.rola_write_sync_apply_failed_count(handle);
+        for (nuint index = 0; index < failedCount; index++)
+        {
+            failed.Add(
+                NativeText.Taken(
+                    RorolalaBinding.rola_write_sync_apply_failed_at(handle, index)
+                )
+            );
+        }
+
+        var layoutRead = RorolalaBinding.rola_write_sync_apply_layout_read(handle);
+
+        return new SyncReport(
+            RorolalaBinding.rola_write_sync_apply_applied(handle),
+            RorolalaBinding.rola_write_sync_apply_received(handle),
+            failed,
+            RorolalaBinding.rola_write_sync_apply_index_objects(handle),
+            RorolalaBinding.rola_write_sync_apply_storage_objects(handle),
+            !layoutRead,
+            []
+        )
+        {
+            Layout = NativeText.Taken(RorolalaBinding.rola_write_sync_apply_layout(handle)),
+            Vault = NativeText.Taken(RorolalaBinding.rola_write_sync_apply_vault(handle)),
+            UpToDate = RorolalaBinding.rola_write_sync_apply_up_to_date(handle),
             LayoutRead = layoutRead,
         };
     }

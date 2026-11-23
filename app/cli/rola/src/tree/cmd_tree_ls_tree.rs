@@ -73,7 +73,7 @@ pub fn complete_tree_ls_tree(ctx: ShellContext) -> Suggest {
 ///
 /// Renders [`ErrorTreeNotATree`](crate::tree::cmd_tree::ErrorTreeNotATree) when the path is not
 /// inside a tree, [`ErrorTreeShouldInWorkspace`] when the run is not inside a Workspace,
-/// [`ErrorTreeHash`](crate::tree::cmd_tree::ErrorTreeHash) when a hash names no one version or
+/// [`ErrorTreeHash`] when a hash names no one version or
 /// variant, and [`ErrorTreeLsTreeFailed`] when the structure cannot be read.
 #[command(node = "tree.ls-tree", entry = EntryTreeLsTree)]
 pub fn tree_ls_tree(args: EntryTreeLsTree, format: &mut ResFormat) -> Next {

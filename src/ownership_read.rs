@@ -24,7 +24,7 @@ use crate::auth;
 /// A `RolaOwnership` the caller releases with `free_rola_ownership`, or null when there is nothing
 /// to answer with.
 #[must_use]
-#[lazyffi(export = locate_rola_ownership)]
+#[lazyffi(export = rola_ownership_locate)]
 pub fn locate_ownership(directory: &Path) -> Option<Ownership> {
     let workspace = Workspace::locate(directory)?;
 
@@ -38,7 +38,7 @@ pub fn locate_ownership(directory: &Path) -> Option<Ownership> {
 /// The account name, or an empty string when none is named. The caller owns the string and
 /// releases it with `free_string`.
 #[must_use]
-#[lazyffi(export = rola_current_account)]
+#[lazyffi(export = rola_account_current)]
 pub fn current_account() -> String {
     auth::current_account().unwrap_or_default()
 }

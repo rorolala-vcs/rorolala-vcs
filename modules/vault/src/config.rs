@@ -4,7 +4,10 @@ use std::path::Path;
 use just_fmt::CaseFormatter;
 use rorolala_utils_configure::Configure;
 use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_location::Locate as _;
 use serde::{Deserialize, Deserializer, Serialize};
+
+use crate::Vault;
 
 /// The name a Vault goes by when its configuration says nothing about one.
 const UNKNOWN_VAULT_NAME: &str = "unknown_vault";
@@ -22,7 +25,10 @@ const NEW_VAULT_DESCRIPTION: &str = "New Rola Vault";
 ///
 /// Vault serves as a remote storage warehouse, and this struct aggregates
 /// all of the settings required to connect to and interact with it.
-#[lazyffi(export = VaultConfig)]
+// The conversions the export generates only move a handle; what the configuration carries is
+// ordinary data, so the derived `Deserialize` has nothing unsafe to hide.
+#[allow(clippy::unsafe_derive_deserialize)]
+#[lazyffi(export = RolaVaultConfig)]
 #[derive(Debug, Default, Clone, Configure, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -104,6 +110,57 @@ impl Config {
     pub const fn gc_config(&self) -> Option<&GcConfig> {
         self.gc.as_ref()
     }
+}
+
+#[lazyffi(export = rola_vault_)]
+impl Config {
+    /// The name this Vault goes by.
+    #[must_use]
+    pub fn name(&self) -> String {
+        self.vault_config().name().to_owned()
+    }
+
+    /// What this Vault says about itself.
+    #[must_use]
+    pub fn description(&self) -> String {
+        self.vault_config().description().to_owned()
+    }
+
+    /// How many administrators this Vault names.
+    #[must_use]
+    pub fn admin_count(&self) -> usize {
+        self.auth_config().admins().len()
+    }
+
+    /// The administrator at `index`, or an empty string past the end.
+    #[must_use]
+    pub fn admin_at(&self, index: usize) -> String {
+        self.auth_config()
+            .admins()
+            .get(index)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// The most transfers this Vault's daemon carries at once.
+    #[must_use]
+    pub const fn max_concurrency(&self) -> u16 {
+        self.daemon_config().max_concurrency()
+    }
+}
+
+/// A Vault's configuration, read from the Vault holding `directory`.
+///
+/// # FFI
+///
+/// A `RolaVaultConfig *` the caller releases with `free_rola_vault_config`, or null when a directory
+/// no Vault holds, or when the configuration cannot be read.
+#[must_use]
+#[lazyffi(export = rola_vault_config_read)]
+pub fn read(directory: &Path) -> Option<Config> {
+    let vault = Vault::locate(directory)?;
+
+    Config::read_from(&vault.config_path()).ok()
 }
 
 /// The stores a Vault binds.
@@ -249,7 +306,7 @@ impl AuthConfig {
 ///
 /// The type is `MetaConfig` rather than `VaultConfig` because the latter is the name
 /// [`Config`] crosses the C ABI under.
-#[lazyffi(export = VaultMetaConfig)]
+#[lazyffi(export = RolaVaultMetaConfig)]
 #[derive(Debug, Clone, Configure, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MetaConfig {
@@ -408,7 +465,7 @@ const DEFAULT_KEY_DISCOVERY: &[KeyDiscovery] = &[
 pub const VAULT_DEFAULT_MAX_CONCURRENCY: u16 = 16;
 
 /// Configuration for the Vault daemon.
-#[lazyffi(export = VaultDaemonConfig)]
+#[lazyffi(export = RolaVaultDaemonConfig)]
 #[derive(Debug, Clone, Configure, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DaemonConfig {

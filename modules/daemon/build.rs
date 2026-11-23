@@ -167,6 +167,13 @@ struct Action {
     /// The same, spelled as the arguments of a call, the names alone, since a call that
     /// takes the parameters one by one is handed the names and not a tuple.
     call_args: String,
+    /// What the blocking entry point takes for its input, when it differs from what the
+    /// `async` one takes. A request a C caller fills is borrowed for the call, while the
+    /// `async` entry point takes the value the action runs on.
+    request_params: String,
+    /// The arguments the blocking entry point hands on, which may build an owned value out
+    /// of the borrowed request.
+    request_args: String,
     /// What the action yields, as written.
     output: String,
 }
@@ -193,9 +200,33 @@ fn actions_in(path: &Path) -> Result<Vec<Action>, String> {
 
     file.items
         .iter()
-        .filter_map(|item| action_of(item).transpose())
+        .filter_map(|item| action_of(item, &file).transpose())
         .map(|action| action.map_err(|error| format!("{}: {error}", path.display())))
         .collect()
+}
+
+/// The type an action's C request takes, when the file declares one.
+///
+/// A request is the struct the file declares as `<Action>Request`, or a type alias of that
+/// name when the request is a list of records, which crosses as a slice rather than a
+/// struct. Naming it is what lets the blocking entry point take the request a C caller
+/// fills while the `async` one still takes what the action runs on; a file that declares
+/// none keeps the input's own shape, as every entry point did before.
+fn request_type(file: &syn::File, type_name: &str) -> Option<Type> {
+    let bare = type_name.strip_prefix("Action").unwrap_or(type_name);
+    let wanted = format!("{bare}Request");
+
+    for item in &file.items {
+        match item {
+            Item::Struct(item) if item.ident == wanted => {
+                return syn::parse_str::<Type>(&wanted).ok();
+            }
+            Item::Type(item) if item.ident == wanted => return Some((*item.ty).clone()),
+            _ => {}
+        }
+    }
+
+    None
 }
 
 /// The action one item declares, if the item is an `impl Action for ...`.
@@ -204,7 +235,7 @@ fn actions_in(path: &Path) -> Result<Vec<Action>, String> {
 /// type, yields `None`, so a file can hold whatever else it likes. An `impl Action` that
 /// cannot be read is an error instead: leaving it out would leave an action out of the
 /// registry without saying so.
-fn action_of(item: &Item) -> Result<Option<Action>, String> {
+fn action_of(item: &Item, file: &syn::File) -> Result<Option<Action>, String> {
     let Item::Impl(item) = item else {
         return Ok(None);
     };
@@ -250,16 +281,48 @@ fn action_of(item: &Item) -> Result<Option<Action>, String> {
     let id = id.ok_or_else(|| format!("`{type_name}` declares no `{ACTION_ID}`"))?;
     let (ty, attributes) = input.ok_or_else(|| format!("`{type_name}` declares no `Input`"))?;
     let (params, argument, call_args) = input_parameters(ty, attributes, named.as_deref())?;
+    // An action that reads nothing still hands `()` to `proc_action`; the entry points take no
+    // parameter for it, so only the call carries it.
+    let argument = if params.is_empty() {
+        "()".to_owned()
+    } else {
+        argument
+    };
+    let (request_params, request_args) = match request_type(file, &type_name) {
+        Some(request) => request_parameters(&request, ty, attributes)?,
+        None => (params.clone(), call_args.clone()),
+    };
     let output = output.ok_or_else(|| format!("`{type_name}` declares no `Output`"))?;
 
     Ok(Some(Action {
         id,
         type_name,
-        params,
-        argument,
-        call_args,
+        params: parameter_line(&params),
+        argument: argument_suffix(&argument),
+        call_args: argument_suffix(&call_args),
+        request_params: parameter_line(&request_params),
+        request_args: argument_suffix(&request_args),
         output,
     }))
+}
+
+/// Lays one parameter list into the signature: a line of its own with its trailing comma, or
+/// nothing at all when there is no input.
+fn parameter_line(params: &str) -> String {
+    if params.is_empty() {
+        String::new()
+    } else {
+        format!("    {params},\n")
+    }
+}
+
+/// Lays one argument list into a call, after the arguments every entry point already hands on.
+fn argument_suffix(arguments: &str) -> String {
+    if arguments.is_empty() {
+        String::new()
+    } else {
+        format!(", {arguments}")
+    }
 }
 
 /// How an action's input is handed to its entry points: the parameters to take, the value to
@@ -276,6 +339,14 @@ fn input_parameters(
     named: Option<&str>,
 ) -> Result<(String, String, String), String> {
     let hints = hint_names(attributes);
+
+    // An action that reads nothing declares `()`, and then neither entry point takes an input
+    // at all rather than taking an empty one.
+    if let Type::Tuple(tuple) = ty
+        && tuple.elems.is_empty()
+    {
+        return Ok((String::new(), String::new(), String::new()));
+    }
 
     if let Type::Tuple(tuple) = ty
         && tuple.elems.len() > 1
@@ -305,6 +376,103 @@ fn input_parameters(
         .to_owned();
 
     Ok((format!("{name}: {}", render_type(ty)?), name.clone(), name))
+}
+
+/// How a request a C caller fills is taken by the blocking entry point.
+///
+/// The request is borrowed for the call, as every other request crossing the C ABI is, so
+/// the entry point takes a `&T` the caller fills and keeps. The `async` entry point still
+/// takes the value the action runs on, so what this returns is the borrowed parameters
+/// beside the arguments that build that value out of them.
+///
+/// A request that is a tuple is spread over one parameter per element, as an input is, and
+/// a `Vec` element crosses as a slice: C passes a pointer and a count, and the element's
+/// own input conversion reads each record. The names come from the request's doc comments
+/// the way an input's do.
+fn request_parameters(
+    request: &Type,
+    input: &Type,
+    attributes: &[Attribute],
+) -> Result<(String, String), String> {
+    let hints = hint_names(attributes);
+
+    if let Type::Tuple(tuple) = request
+        && tuple.elems.len() > 1
+    {
+        let mut parameters = Vec::new();
+        let mut arguments = Vec::new();
+        for (index, element) in tuple.elems.iter().enumerate() {
+            let name = hints
+                .get(index)
+                .cloned()
+                .unwrap_or_else(|| format!("p{index}"));
+
+            parameters.push(format!("{name}: {}", render_request_type(element)?));
+            arguments.push(request_argument(element, &name));
+        }
+
+        return Ok((parameters.join(", "), arguments.join(", ")));
+    }
+
+    let name = "request".to_owned();
+    let borrowed = if vec_element(request).is_some() {
+        format!("{name}: {}", render_request_type(request)?)
+    } else {
+        format!("{name}: &{}", render_type(request)?)
+    };
+
+    // A request that is the input itself is cloned as it is; one the action reads into a
+    // value of its own is turned into that value, which the action's own `From` states.
+    let argument = if render_type(request)? == render_type(input)? {
+        format!("{name}.clone()")
+    } else {
+        format!("{name}.clone().into()")
+    };
+
+    Ok((borrowed, argument))
+}
+
+/// Renders one request parameter's type: a list of records crosses as a slice, since C
+/// passes the first element and a count, and anything else is its own type.
+fn render_request_type(ty: &Type) -> Result<String, String> {
+    if let Some(element) = vec_element(ty) {
+        return Ok(format!("&[{}]", render_type(element)?));
+    }
+
+    render_type(ty)
+}
+
+/// The argument the blocking entry point hands on for one request parameter.
+///
+/// A slice is copied into the owned list the `async` entry point takes, and anything else
+/// is handed on as it is.
+fn request_argument(ty: &Type, name: &str) -> String {
+    if vec_element(ty).is_some() {
+        format!("{name}.to_vec()")
+    } else {
+        name.to_owned()
+    }
+}
+
+/// The element of a `Vec<T>`, when `ty` is one.
+fn vec_element(ty: &Type) -> Option<&Type> {
+    let Type::Path(TypePath {
+        qself: None, path, ..
+    }) = ty
+    else {
+        return None;
+    };
+    let segment = path.segments.last()?;
+    if segment.ident != "Vec" {
+        return None;
+    }
+    let PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return None;
+    };
+    arguments.args.iter().find_map(|argument| match argument {
+        GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    })
 }
 
 /// The name an action's `process` gives its input, if it names it.
@@ -515,6 +683,8 @@ fn render(manifest: &Path, template: &str, actions: &[Action]) -> String {
             ("params".to_owned(), action.params.clone()),
             ("argument".to_owned(), action.argument.clone()),
             ("call_args".to_owned(), action.call_args.clone()),
+            ("request_params".to_owned(), action.request_params.clone()),
+            ("request_args".to_owned(), action.request_args.clone()),
             ("output".to_owned(), action.output.clone()),
         ]));
     }

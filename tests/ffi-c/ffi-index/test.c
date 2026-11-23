@@ -39,56 +39,64 @@ int main(void) {
     }
 
     /* A Workspace keeps an index of its own, which is what there is to locate. */
-    RorolalaResult made = create_workspace(dir);
-    want(made.tag == RorolalaResult_Ok, "create_workspace succeeds on a fresh directory");
+    RorolalaResult made = rola_workspace_create(dir);
+    want(made.tag == RorolalaResult_Ok, "rola_workspace_create succeeds on a fresh directory");
 
-    RolaVCSIndex *index = locate_rola_vcs_index(dir);
-    want(index != NULL, "locate_rola_vcs_index finds the Workspace's index");
-    want(locate_rola_vcs_index(plain) == NULL, "locate_rola_vcs_index answers with nothing elsewhere");
+    RolaVCSIndex *index = rola_vcs_index_locate(dir);
+    want(index != NULL, "rola_vcs_index_locate finds the Workspace's index");
+    want(rola_vcs_index_locate(plain) == NULL, "rola_vcs_index_locate answers with nothing elsewhere");
     if (index != NULL) {
         /* An index with nothing in it lists three empty sets and has no root version yet. */
-        char *list = rola_vcsindex_list_json(index);
-        want(list != NULL && strstr(list, "\"versions\":[]") != NULL,
-             "an empty index lists no versions");
-        want(list != NULL && strstr(list, "\"variants\":[]") != NULL,
-             "an empty index lists no variants");
-        want(list != NULL && strstr(list, "\"string_hashes\":[]") != NULL,
-             "an empty index lists no text objects");
-        free_string(list);
+        RolaVCSIndexListing *listing = rola_vcs_index_list(index);
+        want(listing != NULL, "an empty index lists");
+        if (listing != NULL) {
+            want(rola_vcs_index_listing_version_count(listing) == 0,
+                 "an empty index lists no versions");
+            want(rola_vcs_index_listing_variant_count(listing) == 0,
+                 "an empty index lists no variants");
+            want(rola_vcs_index_listing_string_count(listing) == 0,
+                 "an empty index lists no text objects");
 
-        char *root = rola_vcsindex_rootver(index);
+            char *none = rola_vcs_index_listing_string_at(listing, 0);
+            want(none != NULL && none[0] == '\0', "past the end there is no text hash");
+            free_string(none);
+
+            free_rola_vcs_index_listing(listing);
+        }
+
+        char *root = rola_vcs_index_root_version(index);
         want(root != NULL && strcmp(root, "null") == 0,
              "an index with nothing in it has no root version");
         free_string(root);
 
         /* Naming a key nothing is stored under is a failure the caller frees. */
-        RorolalaResult object = rola_vcsindex_object_json(
+        RorolalaResult object = rola_vcs_index_object_view(
             index,
             "blake3:2222222222222222222222222222222222222222222222222222222222222222"
         );
         want(object.tag == RorolalaResult_Err, "a key nothing is stored under is a failure");
         if (object.tag == RorolalaResult_Err && object.payload != NULL) {
-            free_rola_vcsindex_reading_error(object.payload);
+            free_rola_vcs_index_reading_error(object.payload);
         }
 
-        free_rola_vcsindex(index);
+        free_rola_vcs_index(index);
     }
 
     /* The inverse index is reached the same way, and rebuilt over the objects it holds. */
-    RolaInverseIndex *inverse = locate_rola_inverse_index(dir);
-    want(inverse != NULL, "locate_rola_inverse_index finds the inverse index of the Workspace");
+    RolaInverseIndex *inverse = rola_inverse_index_locate(dir);
+    want(inverse != NULL, "rola_inverse_index_locate finds the inverse index of the Workspace");
 
     if (inverse != NULL) {
-        RorolalaResult rebuilt = rebuild_rola_inverse_index(inverse);
+        RorolalaResult rebuilt = rola_inverse_index_rebuild(inverse);
         want(rebuilt.tag == RorolalaResult_Ok, "an index with nothing in it rebuilds");
 
         if (rebuilt.tag == RorolalaResult_Ok) {
             RolaInverseIndexReport *report = rebuilt.payload;
             want(report != NULL, "the rebuild answers with a report rather than with nothing");
             if (report != NULL) {
-                want(inverse_index_report_objects(report) == 0, "an empty index holds no objects");
+                want(rola_inverse_index_report_objects(report) == 0, "an empty index holds no objects");
 
-                char *fingerprint = inverse_index_report_fingerprint(report);
+                char *fingerprint = rola_inverse_index_report_fingerprint(report);
                 want(fingerprint != NULL, "the report names the records by a digest");
                 free_string(fingerprint);
 
@@ -99,7 +107,7 @@ int main(void) {
         }
 
         /* The dependents of a key are a list read by position, and an empty index has none. */
-        RorolalaResult dependents = get_store_dependents(
+        RorolalaResult dependents = rola_inverse_index_store_dependents(
             inverse,
             "blake3:3333333333333333333333333333333333333333333333333333333333333333"
         );
@@ -108,9 +116,9 @@ int main(void) {
             RolaHashList *hashes = dependents.payload;
             want(hashes != NULL, "the dependents cross as a list");
             if (hashes != NULL) {
-                want(rola_hash_list_len(hashes) == 0, "an empty index has no dependents");
+                want(rola_hash_list_count(hashes) == 0, "an empty index has no dependents");
 
-                char *first = read_rola_hash_list_by_index(hashes, 0);
+                char *first = rola_hash_list_at(hashes, 0);
                 want(first != NULL && first[0] == '\0', "past the end there is no hash");
                 free_string(first);
 

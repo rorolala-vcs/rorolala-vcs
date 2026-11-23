@@ -24,7 +24,7 @@ use crate::{BookError, BookSearch, Hit, Snippet};
 ///
 /// Answers with a `RolaBookSearch` the caller releases with `free_rola_book_search`, or with a
 /// `RolaBookError` released with `free_rola_book_error`.
-#[lazyffi(export = open_rola_book_search)]
+#[lazyffi(export = rola_book_search_open)]
 pub fn open(path: &Path) -> Result<BookSearch, BookError> {
     BookSearch::open(path)
 }
@@ -36,7 +36,7 @@ pub fn open(path: &Path) -> Result<BookSearch, BookError> {
 /// Answers with a `RolaBookSearch` the caller releases with `free_rola_book_search`, or with null
 /// when there is no book to open.
 #[must_use]
-#[lazyffi(export = locate_rola_book_search)]
+#[lazyffi(export = rola_book_search_locate)]
 pub fn locate(start: &Path) -> Option<BookSearch> {
     BookSearch::locate(start)
 }
@@ -50,14 +50,14 @@ impl BookSearch {
     /// Answers with a `RolaBookResults` the caller releases with `free_rola_book_results`. Nothing
     /// matched is an empty list rather than a failure.
     #[must_use]
-    #[lazyffi(export = search_rola_book)]
+    #[lazyffi(export = rola_book_search_run)]
     pub fn search_for_ffi(&self, query: &str, limit: usize) -> BookResults {
         BookResults(self.search(query, limit))
     }
 
     /// How many articles the book holds.
     #[must_use]
-    #[lazyffi(export = count_rola_book_articles)]
+    #[lazyffi(export = rola_book_articles_count)]
     pub const fn count_for_ffi(&self) -> usize {
         self.count()
     }
@@ -84,7 +84,7 @@ impl BookResults {
     /// Answers with a `RolaBookHit` the caller releases with `free_rola_book_hit`, or with null
     /// past the end.
     #[must_use]
-    #[lazyffi(export = rola_book_results_hit)]
+    #[lazyffi(export = rola_book_results_at)]
     pub fn hit(&self, index: usize) -> Option<BookHit> {
         self.0.get(index).cloned().map(BookHit)
     }
@@ -151,7 +151,7 @@ impl BookHit {
     /// Answers with a `RolaBookSnippet` the caller releases with `free_rola_book_snippet`, or with
     /// null past the end.
     #[must_use]
-    #[lazyffi(export = rola_book_hit_snippet)]
+    #[lazyffi(export = rola_book_hit_snippet_at)]
     pub fn snippet(&self, index: usize) -> Option<BookSnippet> {
         self.0.snippets.get(index).cloned().map(BookSnippet)
     }

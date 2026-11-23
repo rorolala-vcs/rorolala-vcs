@@ -6,3 +6,8 @@ edition.workspace = true
 [dependencies]
 rorolala-utils-lazyffi-core.workspace = true
 rorolala-utils-lazyffi-macros.workspace = true
+
+# The input shapes are proved against the header itself, so the proof reads the same
+# generator the build does rather than a copy of its output.
+[dev-dependencies]
+rorolala-dev-bindgen.workspace = true

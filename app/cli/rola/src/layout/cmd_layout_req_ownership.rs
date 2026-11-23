@@ -5,7 +5,7 @@
 //! else holds the entry. What the Workspace keeps as a copy is changed to match, so a copy read
 //! afterwards agrees with the Vault.
 
-use librorolala::daemon::{Ownership, action_request_ownership};
+use librorolala::daemon::{Ownership, RequestOwnershipRequest, action_request_ownership};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
@@ -152,18 +152,15 @@ pub fn handle_layout_req_ownership(
 
     // The `Uuid`s are taken in one batch rather than one connection apiece: the action answers with
     // one outcome per entry, in the order they were named, and the bar is unnamed because this door
-    // is not watched. What crosses back is the batch as text, since an action's output is what the
-    // C ABI hands back; what a run was told is read here, where the words it is said in are.
+    // is not watched. What a run was told is read here, where the words it is said in are.
     let ids: Vec<String> = state.ids.iter().map(ToString::to_string).collect();
-    let input = match crate::cmd_ownership::ownership_input(String::new(), ids) {
-        Ok(input) => input,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
-    let answer = action_request_ownership(held, &account, target.to_string(), input)?;
-    let outcomes: Vec<Ownership> = match serde_json::from_str(&answer) {
-        Ok(outcomes) => outcomes,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
+    let answer = action_request_ownership(
+        held,
+        &account,
+        target.to_string(),
+        &RequestOwnershipRequest::new(String::new(), ids),
+    )?;
+    let outcomes: Vec<Ownership> = answer.outcomes();
 
     // What the Vault agreed to is written into the copy once, after the whole exchange: a copy that
     // is not there is left as it is, and one that is opened and written per entry is what made this

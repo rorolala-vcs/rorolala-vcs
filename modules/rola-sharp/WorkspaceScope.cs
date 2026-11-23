@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 namespace RolaSharp;
 
@@ -102,7 +101,7 @@ public sealed class WorkspaceScope
                 throw new InvalidOperationException("call Read first");
             }
 
-            return RorolalaBinding.RolaWorkspace_is_locking(_handle);
+            return RorolalaBinding.rola_workspace_is_locking(_handle);
         }
     }
 
@@ -215,7 +214,7 @@ public sealed class WorkspaceScope
         Dispose();
 
         var path = Utf8(_root);
-        var handle = RorolalaBinding.locate_rola_workspace(path);
+        var handle = RorolalaBinding.rola_workspace_locate(path);
         if (handle == 0)
         {
             Marshal.FreeCoTaskMem(path);
@@ -230,8 +229,24 @@ public sealed class WorkspaceScope
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var json = NativeText.Taken(RorolalaBinding.rola_workspace_config_json(path));
-            Config = ParseConfig(json);
+            var config = RorolalaBinding.rola_workspace_config_read(path);
+            var storages = RorolalaBinding.rola_workspace_storages_new(path);
+            try
+            {
+                Config = config == 0 ? null : ReadConfig(config, storages);
+            }
+            finally
+            {
+                if (config != 0)
+                {
+                    RorolalaBinding.free_rola_workspace_config(config);
+                }
+
+                if (storages != 0)
+                {
+                    RorolalaBinding.free_rola_storage_bindings(storages);
+                }
+            }
         }
         catch
         {
@@ -256,42 +271,91 @@ public sealed class WorkspaceScope
         GC.SuppressFinalize(this);
     }
 
-    private static WorkspaceConfig? ParseConfig(string json)
+    private static WorkspaceConfig ReadConfig(nint config, nint storages)
     {
-        if (string.IsNullOrEmpty(json) || json == "null")
+        var count = RorolalaBinding.rola_workspace_config_vault_count(config);
+        var vaults = new List<VaultBinding>();
+        for (nuint index = 0; index < count; index++)
         {
-            return null;
+            var item = RorolalaBinding.rola_workspace_config_vault_at(config, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                vaults.Add(
+                    new VaultBinding(
+                        NativeText.Taken(RorolalaBinding.rola_workspace_vault_name(item)),
+                        NativeText.Taken(RorolalaBinding.rola_workspace_vault_address(item)),
+                        RorolalaBinding.rola_workspace_vault_is_default(item)
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_workspace_vault(item);
+            }
         }
 
-        using var document = JsonDocument.Parse(json);
-        var root = document.RootElement;
-        var vaults = RolaJson
-            .Items(root, "vaults")
-            ?.EnumerateArray()
-            .Select(item => new VaultBinding(
-                RolaJson.Text(item, "name") ?? string.Empty,
-                RolaJson.Text(item, "address") ?? string.Empty,
-                RolaJson.Flag(item, "is_default")
-            ))
-            .ToArray()
-            ?? [];
-        var defaultVault = RolaJson.Text(root, "default");
-        ulong? grace = null;
-        if (
-            root.ValueKind is JsonValueKind.Object
-            && root.TryGetProperty("gc", out var gc)
-            && gc.ValueKind is JsonValueKind.Object
-        )
+        var defaultVault = NativeText.Taken(
+            RorolalaBinding.rola_workspace_config_default_vault(config)
+        );
+
+        GcConfig? gc = null;
+        if (RorolalaBinding.rola_workspace_config_gc_present(config))
         {
-            grace = RolaJson.Number(gc, "grace");
+            var grace = RorolalaBinding.rola_workspace_config_gc_grace(config);
+            gc = new GcConfig(grace < 0 ? null : checked((ulong)grace));
         }
 
         return new WorkspaceConfig(
             vaults,
-            defaultVault,
-            grace is null ? null : new GcConfig(grace),
-            RolaJson.StorageBindings(root)
+            string.IsNullOrEmpty(defaultVault) ? null : defaultVault,
+            gc,
+            ReadStorages(storages)
         );
+    }
+
+    private static IReadOnlyList<StorageBinding> ReadStorages(nint handle)
+    {
+        var storages = new List<StorageBinding>();
+        if (handle == 0)
+        {
+            return storages;
+        }
+
+        var count = RorolalaBinding.rola_storage_bindings_count(handle);
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_storage_bindings_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var reason = NativeText.Taken(RorolalaBinding.rola_storage_binding_reason(item));
+                storages.Add(
+                    new StorageBinding(
+                        NativeText.Taken(RorolalaBinding.rola_storage_binding_path(item)),
+                        NativeText.Taken(RorolalaBinding.rola_storage_binding_root(item)),
+                        RorolalaBinding.rola_storage_binding_own(item),
+                        RorolalaBinding.rola_storage_binding_present(item),
+                        RorolalaBinding.rola_storage_binding_writable(item),
+                        string.IsNullOrEmpty(reason) ? null : reason
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_storage_binding(item);
+            }
+        }
+
+        return storages;
     }
 
     private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);

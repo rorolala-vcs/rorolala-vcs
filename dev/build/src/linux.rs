@@ -507,10 +507,6 @@ fn dev_package(
         &build.join("lib/rorolala.h"),
         &root.join("usr/include/rorolala.h"),
     )?;
-    fs::copy_file(
-        &build.join("lib/rorolala.hpp"),
-        &root.join("usr/include/rorolala.hpp"),
-    )?;
     // A musl build has no shared library: a `cdylib` needs a dynamic C runtime, and the musl
     // target makes the static one alone (see `ops/library.rs`). What is there is copied; what is
     // not is the desktop tree's own, which was built for the machine that runs it.

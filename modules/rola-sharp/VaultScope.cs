@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 namespace RolaSharp;
 
@@ -93,7 +92,7 @@ public sealed class VaultScope
                 throw new InvalidOperationException("call Read first");
             }
 
-            return RorolalaBinding.RolaVault_is_locking(_handle);
+            return RorolalaBinding.rola_vault_is_locking(_handle);
         }
     }
 
@@ -167,7 +166,7 @@ public sealed class VaultScope
         Dispose();
 
         var path = Utf8(_root);
-        var handle = RorolalaBinding.locate_rola_vault(path);
+        var handle = RorolalaBinding.rola_vault_locate(path);
         if (handle == 0)
         {
             Marshal.FreeCoTaskMem(path);
@@ -178,8 +177,24 @@ public sealed class VaultScope
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var json = NativeText.Taken(RorolalaBinding.rola_vault_config_json(path));
-            Config = ParseConfig(json);
+            var config = RorolalaBinding.rola_vault_config_read(path);
+            var storages = RorolalaBinding.rola_vault_storages_new(path);
+            try
+            {
+                Config = config == 0 ? null : ReadConfig(config, storages);
+            }
+            finally
+            {
+                if (config != 0)
+                {
+                    RorolalaBinding.free_rola_vault_config(config);
+                }
+
+                if (storages != 0)
+                {
+                    RorolalaBinding.free_rola_storage_bindings(storages);
+                }
+            }
         }
         catch
         {
@@ -204,29 +219,64 @@ public sealed class VaultScope
         GC.SuppressFinalize(this);
     }
 
-    private static VaultConfig? ParseConfig(string json)
+    private static VaultConfig ReadConfig(nint config, nint storages)
     {
-        if (string.IsNullOrEmpty(json) || json == "null")
+        var count = RorolalaBinding.rola_vault_config_admin_count(config);
+        var admins = new List<string>();
+        for (nuint index = 0; index < count; index++)
         {
-            return null;
+            admins.Add(
+                NativeText.Taken(RorolalaBinding.rola_vault_config_admin_at(config, index))
+            );
         }
 
-        using var document = JsonDocument.Parse(json);
-        var root = document.RootElement;
-        var admins = RolaJson
-            .Items(root, "admins")
-            ?.EnumerateArray()
-            .Select(item => item.GetString() ?? string.Empty)
-            .ToArray()
-            ?? [];
-
         return new VaultConfig(
-            RolaJson.Text(root, "name") ?? string.Empty,
-            RolaJson.Text(root, "description") ?? string.Empty,
+            NativeText.Taken(RorolalaBinding.rola_vault_config_name(config)),
+            NativeText.Taken(RorolalaBinding.rola_vault_config_description(config)),
             admins,
-            (ushort)(RolaJson.Number(root, "max_concurrency") ?? 0),
-            RolaJson.StorageBindings(root)
+            RorolalaBinding.rola_vault_config_max_concurrency(config),
+            ReadStorages(storages)
         );
+    }
+
+    private static IReadOnlyList<StorageBinding> ReadStorages(nint handle)
+    {
+        var storages = new List<StorageBinding>();
+        if (handle == 0)
+        {
+            return storages;
+        }
+
+        var count = RorolalaBinding.rola_storage_bindings_count(handle);
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_storage_bindings_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var reason = NativeText.Taken(RorolalaBinding.rola_storage_binding_reason(item));
+                storages.Add(
+                    new StorageBinding(
+                        NativeText.Taken(RorolalaBinding.rola_storage_binding_path(item)),
+                        NativeText.Taken(RorolalaBinding.rola_storage_binding_root(item)),
+                        RorolalaBinding.rola_storage_binding_own(item),
+                        RorolalaBinding.rola_storage_binding_present(item),
+                        RorolalaBinding.rola_storage_binding_writable(item),
+                        string.IsNullOrEmpty(reason) ? null : reason
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_storage_binding(item);
+            }
+        }
+
+        return storages;
     }
 
     private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);

@@ -27,7 +27,7 @@ int main(void) {
         return finish();
     }
 
-    RorolalaResult opened = open_rola_book_search(path);
+    RorolalaResult opened = rola_book_search_open(path);
     want(opened.tag == RorolalaResult_Ok, "a book opens");
     if (opened.tag != RorolalaResult_Ok) {
         if (opened.payload != NULL) {
@@ -42,21 +42,21 @@ int main(void) {
         return finish();
     }
 
-    RolaBookSearch *located = locate_rola_book_search(beside);
+    RolaBookSearch *located = rola_book_search_locate(beside);
     want(located != NULL, "the book is located by walking up from a program's directory");
     if (located != NULL) {
         free_rola_book_search(located);
     }
 
-    want(count_rola_book_articles(book) == 2, "the book holds the two articles it was made of");
+    want(rola_book_articles_count(book) == 2, "the book holds the two articles it was made of");
 
-    RolaBookResults *results = search_rola_book(book, "needle", 10);
+    RolaBookResults *results = rola_book_search_run(book, "needle", 10);
     want(results != NULL, "a search answers with a list rather than failing");
 
     if (results != NULL) {
         want(rola_book_results_count(results) == 1, "only the article that says needle is found");
 
-        RolaBookHit *hit = rola_book_results_hit(results, 0);
+        RolaBookHit *hit = rola_book_results_at(results, 0);
         want(hit != NULL, "the article that matched is handed out");
 
         if (hit != NULL) {
@@ -74,7 +74,7 @@ int main(void) {
             want(rola_book_hit_score(hit) > 0.0, "a hit carries a score");
             want(rola_book_hit_snippet_count(hit) >= 1, "a hit carries the fragments that matched");
 
-            RolaBookSnippet *snippet = rola_book_hit_snippet(hit, 0);
+            RolaBookSnippet *snippet = rola_book_hit_snippet_at(hit, 0);
             want(snippet != NULL, "a fragment is handed out");
 
             if (snippet != NULL) {
@@ -101,12 +101,12 @@ int main(void) {
             free_rola_book_hit(hit);
         }
 
-        want(rola_book_results_hit(results, 99) == NULL, "past the end of the list is nothing");
+        want(rola_book_results_at(results, 99) == NULL, "past the end of the list is nothing");
 
         free_rola_book_results(results);
     }
 
-    RorolalaResult refused = open_rola_book_search("/nonexistent/rola-ffi-book/builtin.book");
+    RorolalaResult refused = rola_book_search_open("/nonexistent/rola-ffi-book/builtin.book");
     want(refused.tag == RorolalaResult_Err, "a file that is not there is refused");
     if (refused.tag == RorolalaResult_Err && refused.payload != NULL) {
         free_rola_book_error(refused.payload);

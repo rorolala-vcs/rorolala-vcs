@@ -13,7 +13,7 @@
 // what the command needs of the run rather than a signature this program shaped.
 #![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
-use librorolala::daemon::action_sync_all_async;
+use librorolala::daemon::{SyncAllRequest, action_sync_all_async};
 use librorolala::protocol::ActionError;
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest, Wrap,
@@ -175,7 +175,9 @@ pub fn handle_storage_sync_all(
         held,
         &account,
         target.to_string(),
-        format!("c:{n}", n = **concurrency),
+        SyncAllRequest {
+            ask: format!("c:{n}", n = **concurrency),
+        },
         reporting.progress(),
     ));
     reporting.finish();

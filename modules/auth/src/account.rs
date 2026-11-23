@@ -112,7 +112,7 @@ impl Account {
     }
 }
 
-#[lazyffi(export = rola_account_)]
+#[lazyffi(export = rola_)]
 impl Account {
     /// The account's name, which is the stem of its private key file.
     #[must_use]
@@ -159,14 +159,14 @@ impl Accounts {
 impl Accounts {
     /// How many accounts the search found.
     #[must_use]
-    #[lazyffi(export = rola_accounts_len)]
+    #[lazyffi(export = rola_accounts_count)]
     pub const fn len(&self) -> usize {
         self.accounts.len()
     }
 
     /// Whether the search found no accounts at all.
     #[must_use]
-    #[lazyffi(export = is_rola_accounts_empty)]
+    #[lazyffi(export = rola_accounts_is_empty)]
     pub const fn is_empty(&self) -> bool {
         self.accounts.is_empty()
     }
@@ -176,7 +176,7 @@ impl Accounts {
     /// The handle is a copy of the account the set holds, so releasing it releases only
     /// that copy, the set is read again for the next one.
     #[must_use]
-    #[lazyffi(export = read_rola_accounts_by_index)]
+    #[lazyffi(export = rola_accounts_at)]
     pub fn at(&self, index: usize) -> Option<Account> {
         self.accounts.get(index).cloned()
     }

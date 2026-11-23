@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use rorolala_utils_lazyffi::lazyffi;
-use rorolala_utils_progress::{Signal, Signals};
+use rorolala_utils_progress::{Direction, Signal, Signals};
 
 /// A write's progress, collected until the caller asks for it.
 ///
@@ -20,7 +20,7 @@ use rorolala_utils_progress::{Signal, Signals};
 #[derive(Debug, Clone)]
 pub struct WriteProgress {
     /// The events not yet read, oldest first.
-    queue: Arc<Mutex<VecDeque<String>>>,
+    queue: Arc<Mutex<VecDeque<Signal>>>,
 }
 
 impl WriteProgress {
@@ -32,14 +32,14 @@ impl WriteProgress {
         }
     }
 
-    /// The next event as JSON, or the JSON `null` when nothing is waiting.
+    /// The next event, or nothing when nothing is waiting.
     #[must_use]
-    pub fn next_json(&self) -> String {
+    pub fn next_event(&self) -> Option<Signal> {
         let Ok(mut queue) = self.queue.lock() else {
-            return "null".to_owned();
+            return None;
         };
 
-        queue.pop_front().unwrap_or_else(|| "null".to_owned())
+        queue.pop_front()
     }
 }
 
@@ -51,10 +51,6 @@ impl Default for WriteProgress {
 
 impl Signals for WriteProgress {
     fn signal(&self, signal: Signal) {
-        let Ok(text) = serde_json::to_string(&signal) else {
-            return;
-        };
-
         let Ok(mut queue) = self.queue.lock() else {
             return;
         };
@@ -64,7 +60,7 @@ impl Signals for WriteProgress {
         if queue.len() >= 256 {
             let _ = queue.pop_front();
         }
-        queue.push_back(text);
+        queue.push_back(signal);
     }
 }
 
@@ -89,14 +85,126 @@ pub fn watching(progress: &WriteProgress) -> rorolala_utils_progress::Progress {
     rorolala_utils_progress::Progress::to(progress.clone())
 }
 
-/// The next event a write has said, as JSON.
+/// One thing a write has said about itself, as the C ABI hands it over.
+///
+/// A transparent enum has no pointer of its own, so "nothing is waiting" cannot be a null of the
+/// enum itself; it is a null of this handle instead, which is what a poll answers with. What the
+/// write said is read from the handle by [`signal`](Self::signal).
 ///
 /// # FFI
 ///
-/// An owned string the caller releases with `free_string`, or the JSON `null` when nothing is
-/// waiting. The shape is `rorolala_utils_progress::Signal`'s serde output.
+/// A `RolaProgressEvent *` the caller releases with `free_rola_progress_event`, or null when nothing
+/// is waiting. What it carries is a `RolaProgressSignal` by value, whose `char *` fields the caller
+/// releases with `free_string`.
+#[lazyffi(export = RolaProgressEvent)]
+#[derive(Debug, Clone)]
+pub struct ProgressEvent {
+    /// What the write said.
+    signal: ProgressSignal,
+}
+
+impl ProgressEvent {
+    /// The event `signal` says, with the numbers that may be absent said apart from them.
+    fn taken(signal: Signal) -> Self {
+        Self {
+            signal: ProgressSignal::from_signal(signal),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl ProgressEvent {
+    /// What the write said.
+    #[must_use]
+    pub fn signal(&self) -> ProgressSignal {
+        self.signal.clone()
+    }
+}
+
+/// One thing a write has said about itself, as the C ABI reads it.
+///
+/// It mirrors [`Signal`], with the numbers that may be absent said as a presence flag beside them:
+/// a scalar has no null to spend at the boundary, so a `Begin` that is part of no other task has
+/// `parent_present` false and a `parent` that says nothing, and one whose length is not known has
+/// `total_present` false in the same way. A task that moves no data carries an empty `direction`.
+///
+/// # FFI
+///
+/// A tagged union: `RolaProgressSignalTag` says which event it is, and `RolaProgressSignalPayload`
+/// holds its fields. Every `char *` is owned by the caller and released with `free_string`.
+#[lazyffi(export = RolaProgressSignal)]
+#[derive(Debug, Clone)]
+pub enum ProgressSignal {
+    /// A task has begun.
+    Begin {
+        /// What the task is named by.
+        id: u64,
+        /// Whether it is part of another task.
+        parent_present: bool,
+        /// The task it is part of, or 0 when it is part of none.
+        parent: u64,
+        /// What the task is called.
+        what: String,
+        /// Which way its work moves, `up` or `down`, or empty when it moves no data.
+        direction: String,
+        /// Whether how much of the task there is in all is known.
+        total_present: bool,
+        /// How much of the task there is in all, or 0 when it is not known.
+        total: u64,
+    },
+    /// A task has moved.
+    Advance {
+        /// The task that moved.
+        id: u64,
+        /// How much of the task is done.
+        done: u64,
+    },
+    /// A task is over.
+    Finish {
+        /// The task that is over.
+        id: u64,
+    },
+}
+
+impl ProgressSignal {
+    /// The signal `signal` says, with the numbers that may be absent said apart from them.
+    fn from_signal(signal: Signal) -> Self {
+        match signal {
+            Signal::Begin {
+                id,
+                parent,
+                what,
+                direction,
+                total,
+            } => Self::Begin {
+                id,
+                parent_present: parent.is_some(),
+                parent: parent.unwrap_or_default(),
+                what,
+                direction: match direction {
+                    Some(Direction::Up) => "up",
+                    Some(Direction::Down) => "down",
+                    None => "",
+                }
+                .to_owned(),
+                total_present: total.is_some(),
+                total: total.unwrap_or_default(),
+            },
+            Signal::Advance { id, done } => Self::Advance { id, done },
+            Signal::Finish { id } => Self::Finish { id },
+        }
+    }
+}
+
+/// The next event a write has said.
+///
+/// # FFI
+///
+/// A `RolaProgressEvent *` the caller releases with `free_rola_progress_event`, or null when nothing
+/// is waiting. What it carries is read with `rola_progress_event_signal`, a `RolaProgressSignal` by
+/// value whose `char *` fields the caller releases with `free_string`.
 #[must_use]
-#[lazyffi(export = rola_progress_next_json)]
-pub fn next_progress(progress: &WriteProgress) -> String {
-    progress.next_json()
+#[lazyffi(export = rola_progress_next)]
+pub fn next_progress(progress: &WriteProgress) -> Option<ProgressEvent> {
+    progress.next_event().map(ProgressEvent::taken)
 }

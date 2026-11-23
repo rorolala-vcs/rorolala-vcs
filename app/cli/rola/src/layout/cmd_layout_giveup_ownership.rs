@@ -4,7 +4,7 @@
 //! done with an entry asks the Vault to name nobody, which it does when this account holds it. What
 //! the Workspace keeps as a copy is changed to match.
 
-use librorolala::daemon::{Ownership, action_giveup_ownership};
+use librorolala::daemon::{GiveupOwnershipRequest, Ownership, action_giveup_ownership};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     macros::{
@@ -152,18 +152,15 @@ pub fn handle_layout_giveup_ownership(
 
     // The `Uuid`s are let go of in one batch rather than one connection apiece: the action answers
     // with one outcome per entry, in the order they were named, and the bar is unnamed because this
-    // door is not watched. What crosses back is the batch as text, since an action's output is what
-    // the C ABI hands back; what a run was told is read here, where the words it is said in are.
+    // door is not watched. What a run was told is read here, where the words it is said in are.
     let ids: Vec<String> = state.ids.iter().map(ToString::to_string).collect();
-    let input = match crate::cmd_ownership::ownership_input(String::new(), ids) {
-        Ok(input) => input,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
-    let answer = action_giveup_ownership(held, &account, target.to_string(), input)?;
-    let outcomes: Vec<Ownership> = match serde_json::from_str(&answer) {
-        Ok(outcomes) => outcomes,
-        Err(error) => return ErrorLayoutFailed::new(error.to_string()).into(),
-    };
+    let answer = action_giveup_ownership(
+        held,
+        &account,
+        target.to_string(),
+        &GiveupOwnershipRequest::new(String::new(), ids),
+    )?;
+    let outcomes: Vec<Ownership> = answer.outcomes();
 
     // What the Vault agreed to is written into the copy once, after the whole exchange: a copy that
     // is not there is left as it is, and one that is opened and written per entry is what made this

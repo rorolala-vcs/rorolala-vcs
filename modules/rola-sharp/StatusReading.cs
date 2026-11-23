@@ -435,7 +435,7 @@ public sealed class StatusReading : IDisposable
 
         try
         {
-            var handle = RorolalaBinding.locate_rola_status(path);
+            var handle = RorolalaBinding.rola_status_locate(path);
 
             return handle == 0 ? null : new StatusReading(handle);
         }

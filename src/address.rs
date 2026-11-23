@@ -11,7 +11,7 @@ use rorolala_utils_lazyffi::lazyffi;
 
 /// Parses `text` as the address a Vault answers at.
 ///
-/// What a caller does with the parts is what `vault_address_read_raw` and its siblings are for: the
+/// What a caller does with the parts is what `rola_vault_address_raw` and its siblings are for: the
 /// link as it was written, the host, the port, the kind, and the account and path of an SSH one.
 ///
 /// # FFI
@@ -23,7 +23,7 @@ use rorolala_utils_lazyffi::lazyffi;
 /// # Errors
 ///
 /// Returns [`AddrError`] naming `text` when it names no address this build reads.
-#[lazyffi(export = parse_rola_vault_address)]
+#[lazyffi(export = rola_vault_address_parse)]
 pub fn parse_address(text: &str) -> Result<VaultAddress, AddrError> {
     VaultAddress::parse(text)
 }

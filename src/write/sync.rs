@@ -11,7 +11,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use crate::auth::Account;
-use crate::daemon::action_fetch_layout;
+use crate::daemon::{FetchLayoutRequest, action_fetch_layout};
 use crate::ignore::IgnoreRuleSet;
 use crate::layout::{EntryKind, Layout, LayoutPath};
 use crate::protocol::VaultAddress;
@@ -21,7 +21,7 @@ use crate::workspace::Workspace;
 use crate::workspace_analyze::tree_diff;
 use crate::write::layout::cached_copy;
 use crate::write::progress::WriteProgress;
-use crate::write::request::{Common, Reached};
+use crate::write::request::{Common, Reached, WriteCommon};
 use crate::write::{Cancellation, WriteError};
 use rorolala_errors::Failure as _;
 use rorolala_utils_lazyffi::lazyffi;
@@ -95,6 +95,11 @@ fn split_extension(file: &str) -> (&str, &str) {
 }
 
 /// How far a run is to go.
+///
+/// # FFI
+///
+/// A `RolaWriteDirection` the caller fills, one `tag` naming which way content may move.
+#[lazyffi(export = RolaWriteDirection)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {
@@ -132,6 +137,39 @@ pub enum Kind {
     UpToDate,
 }
 
+impl Kind {
+    /// The word a plan reports the entry by, in the spelling the C caller reads.
+    const fn word(self) -> &'static str {
+        match self {
+            Self::Create => "create",
+            Self::Send => "send",
+            Self::Receive => "receive",
+            Self::Diverged => "diverged",
+            Self::Refused => "refused",
+            Self::Blocked => "blocked",
+            Self::RemoteOnly => "remote_only",
+            Self::Mismatched => "kind_mismatch",
+            Self::UpToDate => "up_to_date",
+        }
+    }
+
+    /// The kind a plan's word names, or nothing when it names none this build writes.
+    pub(crate) fn from_word(word: &str) -> Option<Self> {
+        Some(match word {
+            "create" => Self::Create,
+            "send" => Self::Send,
+            "receive" => Self::Receive,
+            "diverged" => Self::Diverged,
+            "refused" => Self::Refused,
+            "blocked" => Self::Blocked,
+            "remote_only" => Self::RemoteOnly,
+            "kind_mismatch" => Self::Mismatched,
+            "up_to_date" => Self::UpToDate,
+            _ => return None,
+        })
+    }
+}
+
 /// One entry the plan speaks about.
 #[derive(Debug, Clone, Serialize)]
 pub struct Entry {
@@ -160,7 +198,7 @@ pub struct Entry {
 }
 
 /// What a run is to do.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Plan {
     /// The Layout being worked in.
     pub layout: String,
@@ -812,7 +850,49 @@ const fn yes() -> bool {
     true
 }
 
-/// What a sync plan says, in the shape the command line's `--json` writes it.
+/// A sync a C caller asks for.
+///
+/// # FFI
+///
+/// A `RolaWriteSyncRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `storage`, `index` and
+/// `layout` say which sides move: a caller that fills them with true moves every side, which is
+/// what the command line does when nothing is said, and a zeroed struct moves none of the three.
+#[lazyffi(export = RolaWriteSyncRequest, input)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "the request is the command's flags, and each is a switch its caller sets"
+)]
+#[derive(Debug, Clone)]
+pub struct SyncInput {
+    /// The fields every write request carries.
+    pub common: WriteCommon,
+    /// How far the run goes.
+    pub direction: Direction,
+    /// Whether a version whose chain moved apart may go up anyway.
+    pub forced: bool,
+    /// Whether the store moves.
+    pub storage: bool,
+    /// Whether the index moves.
+    pub index: bool,
+    /// Whether the Vault's Layout is read and written.
+    pub layout: bool,
+}
+
+impl From<SyncInput> for SyncRequest {
+    fn from(input: SyncInput) -> Self {
+        Self {
+            common: input.common.into(),
+            direction: input.direction,
+            forced: input.forced,
+            storage: input.storage,
+            index: input.index,
+            layout: input.layout,
+        }
+    }
+}
+
+/// What a sync plan says, in the shape the C ABI hands it over.
 ///
 /// It is the plan [`Plan`] carries, read together with the two sides the request may leave behind:
 /// a plan names what is to move, and `index` and `storage` say whether the run that made it moves
@@ -824,7 +904,7 @@ const fn yes() -> bool {
     clippy::struct_excessive_bools,
     reason = "the plan is the command line's JSON plan, where each side a run may leave alone is its own field"
 )]
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct SyncPlan {
     /// The Layout being worked in.
     pub layout: String,
@@ -842,6 +922,244 @@ pub struct SyncPlan {
     pub index: bool,
     /// Whether the store is to move.
     pub storage: bool,
+}
+
+/// What a sync plan says, as the C ABI hands it over.
+///
+/// The plan a request answers with, read together with the two sides the request may leave behind:
+/// a plan names what is to move, and `index` and `storage` say whether the run that made it moves
+/// the index and the store as well.
+///
+/// # FFI
+///
+/// A `RolaWriteSyncPlan *` the caller releases with `free_rola_write_sync_plan`. `_layout`,
+/// `_vault` and `_up_to_date` say what the plan is about, `_forced` whether it may change history,
+/// `_layout_read`, `_index` and `_storage` which sides move, and `_entry_count` and `_entry_at`
+/// name each entry, a `RolaWriteSyncEntry *` released with `free_rola_write_sync_entry`. Every
+/// `char *` is released with `free_string`.
+#[lazyffi(export = RolaWriteSyncPlan)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "the plan's three sides are independent switches of the run, and a caller reads each on its own"
+)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteSyncPlan {
+    /// The Layout being worked in.
+    layout: String,
+    /// The Vault it tracks.
+    vault: String,
+    /// Whether the run was told to change history rather than refuse.
+    forced: bool,
+    /// What is to move, in path order.
+    entries: Vec<WriteSyncEntry>,
+    /// How many entries both sides already hold at the same version.
+    up_to_date: u64,
+    /// Whether the Vault's Layout was read.
+    layout_read: bool,
+    /// Whether the index is to move.
+    index: bool,
+    /// Whether the store is to move.
+    storage: bool,
+}
+
+impl WriteSyncPlan {
+    /// The answer a plan is handed over as.
+    fn of(plan: &SyncPlan) -> Self {
+        Self {
+            layout: plan.layout.clone(),
+            vault: plan.vault.clone(),
+            forced: plan.forced,
+            entries: plan.entries.iter().map(WriteSyncEntry::of).collect(),
+            up_to_date: u64::try_from(plan.up_to_date).unwrap_or(u64::MAX),
+            layout_read: plan.layout_read,
+            index: plan.index,
+            storage: plan.storage,
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteSyncPlan {
+    /// The Layout being worked in.
+    #[must_use]
+    pub fn layout(&self) -> String {
+        self.layout.clone()
+    }
+
+    /// The Vault it tracks.
+    #[must_use]
+    pub fn vault(&self) -> String {
+        self.vault.clone()
+    }
+
+    /// Whether the run was told to change history rather than refuse.
+    #[must_use]
+    pub const fn forced(&self) -> bool {
+        self.forced
+    }
+
+    /// How many entries are to move.
+    #[must_use]
+    pub const fn entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// One entry that is to move, or null past the end.
+    #[must_use]
+    pub fn entry_at(&self, index: usize) -> Option<WriteSyncEntry> {
+        self.entries.get(index).cloned()
+    }
+
+    /// How many entries both sides already hold at the same version.
+    #[must_use]
+    pub const fn up_to_date(&self) -> u64 {
+        self.up_to_date
+    }
+
+    /// Whether the Vault's Layout was read.
+    #[must_use]
+    pub const fn layout_read(&self) -> bool {
+        self.layout_read
+    }
+
+    /// Whether the index is to move.
+    #[must_use]
+    pub const fn index(&self) -> bool {
+        self.index
+    }
+
+    /// Whether the store is to move.
+    #[must_use]
+    pub const fn storage(&self) -> bool {
+        self.storage
+    }
+}
+
+/// One entry a sync plan speaks about, as the C ABI hands it over.
+///
+/// Every path, version, owner and kind is an empty string when the plan names none, so a caller
+/// that reads a field and finds nothing is told the plan said nothing rather than that it said
+/// nothing exists.
+///
+/// # FFI
+///
+/// A `RolaWriteSyncEntry *` the caller releases with `free_rola_write_sync_entry`. `_uuid`,
+/// `_local_path`, `_remote_path`, `_planned_path`, `_local_version`, `_remote_version`, `_owner`,
+/// `_item_kind` and `_kind` each return a `char *` the caller releases with `free_string`, and
+/// `_deprecated` and `_modified` say the two flags.
+#[lazyffi(export = RolaWriteSyncEntry)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteSyncEntry {
+    /// The `Uuid` it is known by.
+    uuid: String,
+    /// The path this Layout names it by, empty when it names none.
+    local_path: String,
+    /// The path the Vault's Layout names it by, empty when it names none.
+    remote_path: String,
+    /// The name the Vault's Layout is to give it, empty when this creates none.
+    planned_path: String,
+    /// The version this Layout is at, as hex, empty when it is at none.
+    local_version: String,
+    /// The version the Vault is at, as hex, empty when the Vault holds none.
+    remote_version: String,
+    /// The account the Vault names as its holder, empty when nobody holds it.
+    owner: String,
+    /// Whether the Vault has moved it under `@/removed/`.
+    deprecated: bool,
+    /// What the entry is, a file or a tree, empty when the plan names none.
+    item_kind: String,
+    /// Whether the file this Layout names has been changed in the tree.
+    modified: bool,
+    /// What the plan means to do with it.
+    kind: String,
+}
+
+impl WriteSyncEntry {
+    /// The answer one entry is handed over as.
+    fn of(entry: &Entry) -> Self {
+        Self {
+            uuid: entry.uuid.clone(),
+            local_path: entry.local_path.clone().unwrap_or_default(),
+            remote_path: entry.remote_path.clone().unwrap_or_default(),
+            planned_path: entry.planned_path.clone().unwrap_or_default(),
+            local_version: entry.local_version.clone().unwrap_or_default(),
+            remote_version: entry.remote_version.clone().unwrap_or_default(),
+            owner: entry.owner.clone().unwrap_or_default(),
+            deprecated: entry.deprecated,
+            item_kind: entry.item_kind.unwrap_or_default().to_owned(),
+            modified: entry.modified,
+            kind: entry.kind.word().to_owned(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteSyncEntry {
+    /// The `Uuid` it is known by.
+    #[must_use]
+    pub fn uuid(&self) -> String {
+        self.uuid.clone()
+    }
+
+    /// The path this Layout names it by, or an empty string when it names none.
+    #[must_use]
+    pub fn local_path(&self) -> String {
+        self.local_path.clone()
+    }
+
+    /// The path the Vault's Layout names it by, or an empty string when it names none.
+    #[must_use]
+    pub fn remote_path(&self) -> String {
+        self.remote_path.clone()
+    }
+
+    /// The name the Vault's Layout is to give it, or an empty string when this creates none.
+    #[must_use]
+    pub fn planned_path(&self) -> String {
+        self.planned_path.clone()
+    }
+
+    /// The version this Layout is at, as hex, or an empty string when it is at none.
+    #[must_use]
+    pub fn local_version(&self) -> String {
+        self.local_version.clone()
+    }
+
+    /// The version the Vault is at, as hex, or an empty string when the Vault holds none.
+    #[must_use]
+    pub fn remote_version(&self) -> String {
+        self.remote_version.clone()
+    }
+
+    /// The account the Vault names as its holder, or an empty string when nobody holds it.
+    #[must_use]
+    pub fn owner(&self) -> String {
+        self.owner.clone()
+    }
+
+    /// Whether the Vault has moved it under `@/removed/`.
+    #[must_use]
+    pub const fn deprecated(&self) -> bool {
+        self.deprecated
+    }
+
+    /// What the entry is, a file or a tree, or an empty string when the plan names none.
+    #[must_use]
+    pub fn item_kind(&self) -> String {
+        self.item_kind.clone()
+    }
+
+    /// Whether the file this Layout names has been changed in the tree.
+    #[must_use]
+    pub const fn modified(&self) -> bool {
+        self.modified
+    }
+
+    /// What the plan means to do with it.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
 }
 
 /// What a request resolved to, and the plan it is about.
@@ -979,7 +1297,9 @@ impl SyncRequest {
                     &workspace,
                     &account,
                     reached.address.to_string(),
-                    reached.name.clone(),
+                    &FetchLayoutRequest {
+                        name: reached.name.clone(),
+                    },
                 )
                 .map_err(|error| WriteError::Action {
                     reason: error.to_string(),
@@ -1034,41 +1354,33 @@ impl SyncRequest {
     }
 }
 
-/// Builds a sync plan from a JSON request.
+/// Builds a sync plan from a request a C caller fills.
 ///
 /// # FFI
 ///
-/// `request` is a JSON object of the shape [`SyncRequest`] reads: the fields every write request
-/// carries (`workspace`, `account`, `target`, `offline`, `force`, `concurrency` and `labels`) at
-/// the top level, and `direction` (`up`, `down` or `both`), `forced`, `storage`, `index` and
-/// `layout` when they are needed. The answer is an owned JSON string the caller releases with
-/// `free_string`:
-/// `{"layout":"main","vault":"default","forced":false,"entries":[...],"up_to_date":0,"layout_read":true,"index":true,"storage":true}`.
-/// An entry is
-/// `{"uuid":"...","local_path":"...","remote_path":"...","planned_path":null,"local_version":"...","remote_version":"...","owner":"...","deprecated":false,"item_kind":"file","modified":false,"kind":"send"}`.
-/// `progress` is the handle the caller polls with `rola_progress_next_json`, and `cancellation` is
+/// `request` is a `RolaWriteSyncRequest` the caller fills and keeps; every `const char *` in it is
+/// borrowed for the call and released by the caller. A `RolaWriteSyncPlan *` the caller releases
+/// with `free_rola_write_sync_plan` answers it: `_layout`, `_vault`, `_forced`, `_up_to_date`,
+/// `_layout_read`, `_index`, `_storage`, and each entry through `_entry_count` and `_entry_at`.
+/// `progress` is the handle the caller polls with `rola_progress_next`, and `cancellation` is
 /// the flag it sets with `rola_cancellation_cancel`.
 ///
 /// # Errors
 ///
 /// Returns a `RolaWriteError *` the caller releases with `free_rola_write_error`, with the tag
-/// [`WriteError`]'s: `Json` when `request` does not read, and every failure
-/// [`SyncRequest::request_plan`] names when the plan cannot be made.
+/// [`WriteError`]'s: every failure [`SyncRequest::request_plan`] names when the plan cannot be
+/// made.
 #[lazyffi(export = rola_write_sync_plan)]
 pub fn sync_plan_at(
-    request: &str,
+    request: &SyncInput,
     progress: &WriteProgress,
     cancellation: &Cancellation,
-) -> Result<String, WriteError> {
-    let request: SyncRequest = serde_json::from_str(request).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })?;
+) -> Result<WriteSyncPlan, WriteError> {
+    let request: SyncRequest = request.clone().into();
     let watched = crate::write::progress::watching(progress);
     let plan = request.request_plan(&watched, cancellation)?;
 
-    serde_json::to_string(&plan).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteSyncPlan::of(&plan))
 }
 
 #[cfg(test)]
@@ -1338,7 +1650,9 @@ mod tests {
         assert!(matches!(error, WriteError::NoTrack));
 
         // The apply half reads the same parts, so a Workspace with no Vault fails it the same way.
-        let error = request.request_apply("{}", &progress, &live).unwrap_err();
+        let error = request
+            .request_apply(Some(&[]), &progress, &live)
+            .unwrap_err();
         assert!(matches!(error, WriteError::NoTrack));
 
         // A run asked to stop before it began stops before it reads anything, whichever half asked.
@@ -1347,7 +1661,7 @@ mod tests {
         let error = request.request_plan(&progress, &cancelled).unwrap_err();
         assert!(matches!(error, WriteError::Cancelled));
         let error = request
-            .request_apply("{}", &progress, &cancelled)
+            .request_apply(Some(&[]), &progress, &cancelled)
             .unwrap_err();
         assert!(matches!(error, WriteError::Cancelled));
 
@@ -1416,8 +1730,9 @@ mod tests {
         assert!(!plan.index && !plan.storage);
         assert!(plan.entries.is_empty());
 
-        let json = serde_json::to_string(&plan).unwrap();
-        let report = request.request_apply(&json, &progress, &live).unwrap();
+        // An apply reads only what a plan promised to move, and this plan promises nothing, so the
+        // empty slice is the one a caller of an empty plan sends.
+        let report = request.request_apply(Some(&[]), &progress, &live).unwrap();
 
         assert_eq!(report.layout, plan.layout);
         assert_eq!(report.vault, "vault");

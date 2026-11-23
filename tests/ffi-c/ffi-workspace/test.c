@@ -41,25 +41,25 @@ int main(void) {
     }
 
     /* Making one succeeds, carrying nothing. */
-    RorolalaResult made = create_workspace(dir);
-    want(made.tag == RorolalaResult_Ok, "create_workspace succeeds on a fresh directory");
-    want(made.payload == NULL, "create_workspace hands back nothing on success");
+    RorolalaResult made = rola_workspace_create(dir);
+    want(made.tag == RorolalaResult_Ok, "rola_workspace_create succeeds on a fresh directory");
+    want(made.payload == NULL, "rola_workspace_create hands back nothing on success");
 
     /* It is a Workspace, and a directory that is not one answers with nothing. */
-    RolaWorkspace *workspace = locate_rola_workspace(dir);
-    want(workspace != NULL, "locate_rola_workspace finds the Workspace just made");
-    want(locate_rola_workspace(plain) == NULL, "locate_rola_workspace answers with nothing elsewhere");
+    RolaWorkspace *workspace = rola_workspace_locate(dir);
+    want(workspace != NULL, "rola_workspace_locate finds the Workspace just made");
+    want(rola_workspace_locate(plain) == NULL, "rola_workspace_locate answers with nothing elsewhere");
 
     if (workspace != NULL) {
         /* The guard holds the lock, and the lock is read back through the handle. */
-        want(!RolaWorkspace_is_locking(workspace), "a Workspace is unlocked to begin with");
+        want(!rola_workspace_is_locking(workspace), "a Workspace is unlocked to begin with");
 
-        RolaWorkspaceLocking *guard = RolaWorkspace_get_locking_guard(workspace);
+        RolaWorkspaceLocking *guard = rola_workspace_lock_acquire(workspace);
         want(guard != NULL, "the lock is handed out as a guard");
-        want(RolaWorkspace_is_locking(workspace), "holding the guard is holding the lock");
+        want(rola_workspace_is_locking(workspace), "holding the guard is holding the lock");
 
-        RolaWorkspace_drop_locking_guard(guard);
-        want(!RolaWorkspace_is_locking(workspace), "giving the guard back gives the lock back");
+        rola_workspace_lock_release(guard);
+        want(!rola_workspace_is_locking(workspace), "giving the guard back gives the lock back");
 
         free_rola_workspace(workspace);
     }

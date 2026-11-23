@@ -24,7 +24,6 @@ pub mod gc;
 pub mod keys;
 pub mod layout_read;
 pub mod ownership_read;
-pub mod read_v2;
 pub mod remote;
 pub mod status;
 pub mod storage_read;
@@ -38,7 +37,6 @@ pub use existence::*;
 pub use gc::*;
 pub use layout_read::*;
 pub use ownership_read::*;
-pub use read_v2::*;
 pub use status::*;
 pub use storage_read::*;
 pub use storage_set::*;
@@ -243,25 +241,115 @@ pub fn account_find(account_name: &str, rule: &KeyLocateRule) -> Option<Account>
     auth::find_account(account_name, &roots_here(), rule)
 }
 
-/// The entries of a tree's structure, as the JSON a caller reads.
+/// The entries of a tree's structure.
 ///
 /// A tree's structure crosses as its bytes, and the format behind those bytes is this crate's own.
 /// A caller that read them back would be keeping a second copy of the format; it hands them here
-/// instead, as hex, and reads the entries as data: each entry's path, kind, mode, storage and link
-/// target.
+/// instead, as hex, and reads the entries as data.
+#[lazyffi(export = RolaTreeEntries)]
+#[derive(Debug, Clone, Default)]
+pub struct TreeEntries {
+    /// The entries, in the order the structure writes them.
+    entries: Vec<TreeEntry>,
+}
+
+#[lazyffi(export = rola_)]
+impl TreeEntries {
+    /// How many entries the structure holds.
+    #[must_use]
+    pub const fn count(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// The entry at `index`, or null past the end.
+    #[must_use]
+    pub fn at(&self, index: usize) -> Option<TreeEntry> {
+        self.entries.get(index).cloned()
+    }
+}
+
+impl TreeEntries {
+    /// The entries of `bytes`, when they decode as a structure this build reads.
+    #[must_use]
+    pub fn decode(bytes: &[u8]) -> Option<Self> {
+        let structure = tree::TreeStructure::decode(bytes).ok()?;
+
+        Some(Self {
+            entries: structure
+                .entries()
+                .iter()
+                .cloned()
+                .map(|entry| TreeEntry { entry })
+                .collect(),
+        })
+    }
+}
+
+/// One entry of a tree's structure.
+#[lazyffi(export = RolaTreeEntry)]
+#[derive(Debug, Clone)]
+pub struct TreeEntry {
+    /// The entry itself, which holds the path, kind, mode, storage and target.
+    entry: tree::TreeEntry,
+}
+
+#[lazyffi(export = rola_)]
+impl TreeEntry {
+    /// The path, tree-root relative and `/` separated.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.entry.path().to_owned()
+    }
+
+    /// What the path is: `file`, `directory` or `symlink`.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        match self.entry.kind() {
+            tree::EntryKind::File => "file",
+            tree::EntryKind::Directory => "directory",
+            tree::EntryKind::Symlink => "symlink",
+        }
+        .to_owned()
+    }
+
+    /// The mode, when the entry is a file: `regular` or `executable`.
+    #[must_use]
+    pub fn mode(&self) -> String {
+        match self.entry.mode() {
+            Some(tree::FileMode::Regular) => "regular",
+            Some(tree::FileMode::Executable) => "executable",
+            None => "",
+        }
+        .to_owned()
+    }
+
+    /// The key a file's content is stored under, or an empty string.
+    #[must_use]
+    pub fn storage(&self) -> String {
+        self.entry
+            .storage()
+            .map_or_else(String::new, ToString::to_string)
+    }
+
+    /// What a symbolic link points at, or an empty string.
+    #[must_use]
+    pub fn target(&self) -> String {
+        self.entry.target().unwrap_or_default().to_owned()
+    }
+}
+
+/// The entries of a tree's structure, decoded from the hex a caller holds.
 ///
-/// The answer is `null` when the text is not hex or the bytes are not a structure this build reads,
-/// so a caller always reads JSON and says what an answer that names nothing means.
+/// # FFI
+///
+/// A `RolaTreeEntries *` the caller releases with `free_rola_tree_entries`, or null when the text is
+/// not hex or the bytes are not a structure this build reads.
 #[must_use]
-#[lazyffi(export = rola_tree_entries_json)]
-pub fn tree_entries_json(structure_hex: &str) -> String {
-    let Some(bytes) = unhex(structure_hex) else {
-        return "null".to_owned();
-    };
+#[lazyffi(export = rola_tree_entries)]
+pub fn tree_entries(structure_hex: &str) -> Option<TreeEntries> {
+    let bytes = unhex(structure_hex)?;
 
-    let decoded = rorolala_tree::TreeStructure::decode(&bytes).ok();
-
-    serde_json::to_string(&decoded).unwrap_or_else(|_| "null".to_owned())
+    TreeEntries::decode(&bytes)
 }
 
 /// The bytes `text` writes as hex, when every pair is a hex digit.

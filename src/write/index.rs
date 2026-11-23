@@ -7,12 +7,11 @@ use rorolala_storage::Key;
 use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::{Creator, Message, ROOT_VERSION, VCSIndex, VCSWrite as _, Variant, Version};
-use serde::{Deserialize, Serialize};
 
 use crate::write::WriteError;
 
 /// The variant and version a file's content was recorded as.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct FileVersion {
     /// The variant the version points at.
     pub variant: Key,
@@ -107,9 +106,9 @@ pub fn write_file_version(
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`,
-/// `{"variant":"blake3:...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases
-/// with `free_rola_write_error`. `join` is the empty string when the variant merges nothing.
+/// A `RolaWriteFileVersion *` the caller releases with `free_rola_write_file_version`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `join` is the empty string
+/// when the variant merges nothing.
 ///
 /// # Errors
 ///
@@ -123,7 +122,7 @@ pub fn write_file_version_at(
     join: &str,
     creator: &str,
     message: &str,
-) -> Result<String, WriteError> {
+) -> Result<WriteFileVersion, WriteError> {
     let index = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
     let storage = digest(storage, "storage")?;
     let base = digest(base, "base")?;
@@ -158,23 +157,63 @@ pub fn write_file_version_at(
         message,
     )?;
 
-    serde_json::to_string(&written).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
+    Ok(WriteFileVersion {
+        variant: written.variant.to_string(),
+        version: written.version.to_string(),
     })
 }
 
-/// One object, as a request document names it.
-#[derive(Debug, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum RawObject {
+/// The variant and version a file's content was recorded as, as the C ABI hands them over.
+///
+/// # FFI
+///
+/// A `RolaWriteFileVersion *` the caller releases with `free_rola_write_file_version`. `_variant`
+/// and `_version` each return a `char *` the caller releases with `free_string`.
+#[lazyffi(export = RolaWriteFileVersion)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteFileVersion {
+    /// The variant the version points at.
+    variant: String,
+    /// The version the Layout records.
+    version: String,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteFileVersion {
+    /// The variant the version points at.
+    #[must_use]
+    pub fn variant(&self) -> String {
+        self.variant.clone()
+    }
+
+    /// The version the Layout records.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
+}
+
+/// One object, as a C caller names it.
+///
+/// It mirrors the request document the command line reads, except that a name the object does not
+/// use is the empty string rather than absent.
+///
+/// # FFI
+///
+/// A `RolaWriteIndexObjectRequest` the caller fills: `tag` selects the object and the payload
+/// companion it names holds that object's strings. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns.
+#[lazyffi(export = RolaWriteIndexObjectRequest)]
+#[derive(Debug, Clone)]
+pub enum IndexObjectInput {
     /// A variant: the stored entry it points at, its base, and what made it.
     Variant {
         /// The content key the variant points at.
         storage: String,
         /// The base version's content key.
         base_version: String,
-        /// The variant it merges in, when it merges one.
-        join: Option<String>,
+        /// The variant it merges in, empty when it merges none.
+        join: String,
         /// The creator's content key.
         creator: String,
         /// The message's content key.
@@ -197,29 +236,56 @@ enum RawObject {
     },
 }
 
+/// The key an index object was written under.
+///
+/// # FFI
+///
+/// A `RolaWriteIndexObject *` the caller releases with `free_rola_write_index_object`. `_key`
+/// returns a `char *` the caller releases with `free_string`.
+#[lazyffi(export = RolaWriteIndexObject)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteIndexObject {
+    /// The key the object was written under.
+    key: String,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteIndexObject {
+    /// The key the object was written under.
+    #[must_use]
+    pub fn key(&self) -> String {
+        self.key.clone()
+    }
+}
+
 /// Writes one object into the index a directory is in.
 ///
 /// # FFI
 ///
-/// An owned string the caller releases with `free_string`, the key the object was written under,
-/// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. The request is one
-/// object, `{"kind":"variant",...}`, `{"kind":"version",...}`, `{"kind":"creator",...}` or
-/// `{"kind":"message",...}`.
+/// `directory` is borrowed for the call, and `request` is a `RolaWriteIndexObjectRequest` the
+/// caller fills and keeps, with every `const char *` in it borrowed for the call. A
+/// `RolaWriteIndexObject *` the caller releases with `free_rola_write_index_object` answers it,
+/// whose `_key` is the key the object was written under, or a `RolaWriteError *` the caller
+/// releases with `free_rola_write_error`.
 ///
 /// # Errors
 ///
-/// Returns [`WriteError::NoIndex`] when no index is there, [`WriteError::Json`] when the request
-/// does not read, [`WriteError::Precondition`] when a key or a text is not one the index accepts,
-/// and [`WriteError::Index`] when the index refuses the write.
-#[lazyffi(export = rola_write_index_object_json)]
-pub fn write_object_json(directory: &Path, request: &str) -> Result<String, WriteError> {
+/// Returns [`WriteError::NoIndex`] when no index is there, [`WriteError::Precondition`] when a key
+/// or a text is not one the index accepts, and [`WriteError::Index`] when the index refuses the
+/// write.
+#[lazyffi(export = rola_write_index_object)]
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "a tagged union crosses as a value, since a C caller fills the tag and the payload together"
+)]
+pub fn write_object(
+    directory: &Path,
+    request: IndexObjectInput,
+) -> Result<WriteIndexObject, WriteError> {
     let index = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
-    let raw: RawObject = serde_json::from_str(request).map_err(|error| WriteError::Json {
-        reason: format!("{error:?}"),
-    })?;
 
-    match raw {
-        RawObject::Variant {
+    let key = match &request {
+        IndexObjectInput::Variant {
             storage,
             base_version,
             join,
@@ -227,52 +293,56 @@ pub fn write_object_json(directory: &Path, request: &str) -> Result<String, Writ
             message,
         } => {
             let variant = Variant::new_bare_variant(
-                digest(&storage, "storage")?,
-                digest(&base_version, "base_version")?,
-                join.as_deref()
-                    .map(|join| digest(join, "join"))
+                digest(storage, "storage")?,
+                digest(base_version, "base_version")?,
+                (!join.is_empty())
+                    .then(|| digest(join, "join"))
                     .transpose()?,
-                digest(&creator, "creator")?,
-                digest(&message, "message")?,
+                digest(creator, "creator")?,
+                digest(message, "message")?,
                 0,
             );
             index
                 .write_variant(&variant)
                 .map_err(|error| WriteError::Index {
                     reason: format!("{error:?}"),
-                })
+                })?
         }
-        RawObject::Version { variant } => {
-            let version = Version::new_bare_version(digest(&variant, "variant")?, 0);
+        IndexObjectInput::Version { variant } => {
+            let version = Version::new_bare_version(digest(variant, "variant")?, 0);
             index
                 .write_version(&version)
                 .map_err(|error| WriteError::Index {
                     reason: format!("{error:?}"),
-                })
+                })?
         }
-        RawObject::Creator { text } => {
-            let creator = Creator::try_from(text).map_err(|error| WriteError::Precondition {
-                what: "creator".to_owned(),
-                reason: format!("{error:?}"),
-            })?;
+        IndexObjectInput::Creator { text } => {
+            let creator =
+                Creator::try_from(text.clone()).map_err(|error| WriteError::Precondition {
+                    what: "creator".to_owned(),
+                    reason: format!("{error:?}"),
+                })?;
             index
                 .write_creator(&creator)
                 .map_err(|error| WriteError::Index {
                     reason: format!("{error:?}"),
-                })
+                })?
         }
-        RawObject::Message { text } => {
-            let message = Message::try_from(text).map_err(|error| WriteError::Precondition {
-                what: "message".to_owned(),
-                reason: format!("{error:?}"),
-            })?;
+        IndexObjectInput::Message { text } => {
+            let message =
+                Message::try_from(text.clone()).map_err(|error| WriteError::Precondition {
+                    what: "message".to_owned(),
+                    reason: format!("{error:?}"),
+                })?;
             index
                 .write_message(&message)
                 .map_err(|error| WriteError::Index {
                     reason: format!("{error:?}"),
-                })
+                })?
         }
-    }
+    };
+
+    Ok(WriteIndexObject { key })
 }
 
 /// The digest a request's key names.
@@ -290,9 +360,10 @@ mod tests {
     use std::fs;
 
     use rorolala_utils_location::Locate as _;
+    use rorolala_vcs::view::ReadObjectView;
     use rorolala_vcs::{ROOT_VERSION, VCSIndex};
 
-    use super::{write_file_version, write_object_json};
+    use super::{IndexObjectInput, write_file_version, write_object};
 
     #[test]
     fn a_file_version_names_its_variant_and_creator() {
@@ -319,12 +390,10 @@ mod tests {
         .unwrap();
 
         assert_ne!(written.version.to_string(), "");
-        assert!(
-            index
-                .object_json(&written.version.to_string())
-                .unwrap()
-                .contains("\"kind\":\"version\"")
-        );
+        assert!(matches!(
+            index.object_view(&written.version.to_string()).unwrap(),
+            ReadObjectView::Version { .. }
+        ));
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -337,11 +406,31 @@ mod tests {
         let _ = rorolala_workspace::Workspace::create(&dir);
         let index = VCSIndex::locate(&dir).unwrap();
 
-        let creator = write_object_json(&dir, r#"{"kind":"creator","text":"alice"}"#).unwrap();
-        assert!(index.object_json(&creator).unwrap().contains("\"alice\""));
+        let creator = write_object(
+            &dir,
+            IndexObjectInput::Creator {
+                text: "alice".to_owned(),
+            },
+        )
+        .unwrap()
+        .key();
+        assert!(matches!(
+            index.object_view(&creator).unwrap(),
+            ReadObjectView::Creator { text } if text == "alice"
+        ));
 
-        let message = write_object_json(&dir, r#"{"kind":"message","text":"first"}"#).unwrap();
-        assert!(index.object_json(&message).unwrap().contains("\"first\""));
+        let message = write_object(
+            &dir,
+            IndexObjectInput::Message {
+                text: "first".to_owned(),
+            },
+        )
+        .unwrap()
+        .key();
+        assert!(matches!(
+            index.object_view(&message).unwrap(),
+            ReadObjectView::Message { text } if text == "first"
+        ));
 
         let _ = fs::remove_dir_all(&dir);
     }

@@ -37,7 +37,6 @@ internal static class WriteResults
             NativeWriteTag.RolaWriteError_Storage => RolaWriteErrorKind.Storage,
             NativeWriteTag.RolaWriteError_Index => RolaWriteErrorKind.Index,
             NativeWriteTag.RolaWriteError_Io => RolaWriteErrorKind.Io,
-            NativeWriteTag.RolaWriteError_Json => RolaWriteErrorKind.Json,
             NativeWriteTag.RolaWriteError_Tree => RolaWriteErrorKind.Tree,
             NativeWriteTag.RolaWriteError_NotAtree => RolaWriteErrorKind.NotATree,
             NativeWriteTag.RolaWriteError_NoVault => RolaWriteErrorKind.NoVault,
@@ -131,10 +130,6 @@ internal static class WriteResults
             NativeWriteTag.RolaWriteError_Io => (
                 NativeText.Taken(error.payload.Io.path),
                 NativeText.Taken(error.payload.Io.reason)
-            ),
-            NativeWriteTag.RolaWriteError_Json => (
-                null,
-                NativeText.Taken(error.payload.Json.reason)
             ),
             NativeWriteTag.RolaWriteError_Internal => (
                 null,

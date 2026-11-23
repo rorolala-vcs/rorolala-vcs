@@ -1082,7 +1082,6 @@ dependencies = [
  "rorolala-utils-configure",
  "rorolala-utils-location",
  "rorolala-utils-sandbox",
- "serde_json",
  "tokio",
  "uuid",
 ]
@@ -2024,8 +2023,6 @@ dependencies = [
  "rorolala-vcs",
  "rorolala-workspace",
  "rorolala-workspace-analyze",
- "serde",
- "serde_json",
  "tokio",
  "uuid",
 ]

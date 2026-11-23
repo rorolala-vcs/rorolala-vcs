@@ -9,6 +9,7 @@
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
 
 use super::layout_remote::{batched, create_remote, remote_write};
+use super::write_remote_entries::EntryWriteOutcome;
 
 /// An Action that creates an entry of the Vault's Layout.
 ///
@@ -19,9 +20,9 @@ use super::layout_remote::{batched, create_remote, remote_write};
 ///
 /// # Output
 ///
-/// What became of it, as JSON: the entry is there, the `Uuid` already was, the path already names
-/// something, or something could not be read. It crosses as text for the reason an ownership
-/// outcome does, see `request-ownership`.
+/// What became of it: the entry is there, the `Uuid` already was, the path already names something,
+/// or something could not be read. [`EntryWriteOutcome`](super::write_remote_entries::EntryWriteOutcome)
+/// is what a C caller reads.
 pub struct ActionCreateRemoteEntry;
 
 impl Action for ActionCreateRemoteEntry {
@@ -34,7 +35,7 @@ impl Action for ActionCreateRemoteEntry {
     /// - uuid: String
     /// - version: String
     type Input = (String, String, String);
-    type Output = String;
+    type Output = EntryWriteOutcome;
 
     /// Asks the Vault to create the entry, and answers with what it said.
     ///
@@ -43,7 +44,7 @@ impl Action for ActionCreateRemoteEntry {
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
     /// Vault, or the Vault holds no member to act as, [`ActionError::Codec`] if an input or an
     /// outcome will not cross, [`ActionError::Store`] if the Vault's Layout could not be written,
-    /// [`ActionError::Json`] if the outcome will not encode, and whatever the exchange fails with.
+    /// and whatever the exchange fails with.
     async fn process(
         input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
@@ -59,6 +60,6 @@ impl Action for ActionCreateRemoteEntry {
         )
         .await?;
 
-        serde_json::to_string(&outcome).map_err(|error| ActionError::Json(error.into()))
+        Ok(EntryWriteOutcome::from(outcome))
     }
 }

@@ -1,4 +1,4 @@
-﻿//! Making a directory a tree, and taking the files it held into its first staged structure.
+//! Making a directory a tree, and taking the files it held into its first staged structure.
 
 use std::path::{Path, PathBuf};
 
@@ -8,7 +8,6 @@ use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::{Locate as _, normalize};
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
-use serde::Serialize;
 use uuid::Uuid;
 
 use crate::write::WriteError;
@@ -27,7 +26,7 @@ pub struct TreePlan {
 }
 
 /// What making a tree did.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct TreeInit {
     /// The tree's path, or `.` for the Workspace root.
     pub path: String,
@@ -35,6 +34,56 @@ pub struct TreeInit {
     pub collapsed: usize,
     /// Whether the tree is the Workspace root.
     pub is_root: bool,
+}
+
+/// What making a tree did, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteTreeInit *` the caller releases with `free_rola_write_tree_init`. `_path` returns a
+/// `char *` the caller releases with `free_string`; `_collapsed` is how many entries stopped being
+/// files, and `_is_root` says whether the tree is the Workspace root.
+#[lazyffi(export = RolaWriteTreeInit)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTreeInit {
+    /// The tree's path, or `.` for the Workspace root.
+    path: String,
+    /// How many entries stopped being files.
+    collapsed: u64,
+    /// Whether the tree is the Workspace root.
+    is_root: bool,
+}
+
+impl WriteTreeInit {
+    /// The answer a made tree is handed over as.
+    fn of(init: &TreeInit) -> Self {
+        Self {
+            path: init.path.clone(),
+            collapsed: u64::try_from(init.collapsed).unwrap_or(u64::MAX),
+            is_root: init.is_root,
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTreeInit {
+    /// The tree's path, or `.` for the Workspace root.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// How many entries stopped being files.
+    #[must_use]
+    pub const fn collapsed(&self) -> u64 {
+        self.collapsed
+    }
+
+    /// Whether the tree is the Workspace root.
+    #[must_use]
+    pub const fn is_root(&self) -> bool {
+        self.is_root
+    }
 }
 
 /// What making a tree of `directory` would do, or nothing when it cannot be one.
@@ -230,21 +279,18 @@ pub fn init(
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"path":".","collapsed":0,
-/// "is_root":true}`, or a `RolaWriteError *` the caller releases with `free_rola_write_error`.
-/// `target` is the tree's path, empty for the directory itself, and `force` says the caller has
-/// agreed to the collapse.
+/// A `RolaWriteTreeInit *` the caller releases with `free_rola_write_tree_init`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `target` is the tree's
+/// path, empty for the directory itself, and `force` says the caller has agreed to the collapse.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, and the failures
 /// [`init`] names.
 #[lazyffi(export = rola_write_tree_init)]
-pub fn init_at(directory: &Path, target: &str, force: bool) -> Result<String, WriteError> {
+pub fn init_at(directory: &Path, target: &str, force: bool) -> Result<WriteTreeInit, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let init = init(&workspace, directory, target, force)?;
 
-    serde_json::to_string(&init).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteTreeInit::of(&init))
 }

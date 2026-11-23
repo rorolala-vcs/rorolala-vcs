@@ -21,10 +21,9 @@ pub async fn action_<<<stem>>>_async(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    <<<params>>>,
-    progress: Progress,
+<<<params>>>    progress: Progress,
 ) -> Result<<<<output>>>, ActionError> {
-    proc_action::<<<<type_name>>>>(workspace, account, target, <<<argument>>>, progress).await
+    proc_action::<<<<type_name>>>>(workspace, account, target<<<argument>>>, progress).await
 }
 
 /// Runs the [`<<<type_name>>>`](crate::<<<type_name>>>) action, blocking until it has.
@@ -40,15 +39,14 @@ pub async fn action_<<<stem>>>_async(
 ///
 /// Returns [`ActionError`](rorolala_protocol::ActionError) once the action can be
 /// carried out but the exchange fails, or if the runtime cannot be built.
-#[rorolala_utils_lazyffi::lazyffi(export = do_action_<<<stem>>>)]
+#[rorolala_utils_lazyffi::lazyffi(export = rola_daemon_action_<<<stem>>>)]
 pub fn action_<<<stem>>>(
     workspace: &Workspace,
     account: &Account,
     target: String,
-    <<<params>>>,
-) -> Result<<<<output>>>, ActionError> {
+<<<request_params>>>) -> Result<<<<output>>>, ActionError> {
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(action_<<<stem>>>_async(workspace, account, target, <<<call_args>>>, Progress::silent()))
+    runtime.block_on(action_<<<stem>>>_async(workspace, account, target<<<request_args>>>, Progress::silent()))
 }
 
 @@@ <<<

@@ -18,7 +18,7 @@ use crate::natural::natural;
 ///
 /// # FFI
 ///
-/// Opaque: C takes a pointer from `load_rola_ignore_rules` and gives it back with
+/// Opaque: C takes a pointer from `rola_ignore_rules_load` and gives it back with
 /// `free_rola_ignore_rules`.
 #[lazyffi(export = RolaIgnoreRules)]
 #[derive(Clone)]

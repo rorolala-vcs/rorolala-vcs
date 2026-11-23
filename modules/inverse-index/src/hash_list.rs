@@ -48,7 +48,7 @@ impl HashList {
 ///
 /// The count, as a `uintptr_t`.
 #[must_use]
-#[lazyffi(export = rola_hash_list_len)]
+#[lazyffi(export = rola_hash_list_count)]
 pub fn len(list: &HashList) -> usize {
     list.count()
 }
@@ -59,7 +59,7 @@ pub fn len(list: &HashList) -> usize {
 ///
 /// An owned string the caller releases with `free_string`, an empty one past the end.
 #[must_use]
-#[lazyffi(export = read_rola_hash_list_by_index)]
+#[lazyffi(export = rola_hash_list_at)]
 pub fn at(list: &HashList, index: usize) -> String {
     list.hashes().nth(index).unwrap_or_default().to_owned()
 }

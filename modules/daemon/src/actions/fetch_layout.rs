@@ -32,6 +32,7 @@ use rorolala_errors::IoError;
 use rorolala_layout::Layout;
 use rorolala_protocol::{Action, ActionContext, ActionError, Encodable as _, OnlyWorkspace};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
+use rorolala_utils_lazyffi::lazyffi;
 use rorolala_workspace::LayoutCopy;
 use serde::{Deserialize, Serialize};
 
@@ -53,11 +54,24 @@ use super::sync_storage::{Side, carry_blob};
 /// to say where it landed says it in its own words.
 pub struct ActionFetchLayout;
 
+/// The name the Workspace keeps the fetched Layout under.
+///
+/// # FFI
+///
+/// A `RolaDaemonFetchLayoutRequest` the caller fills. `name` is borrowed for the call and released
+/// by the caller, and is the name the Workspace bound the Vault by.
+#[lazyffi(export = RolaDaemonFetchLayoutRequest, input)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FetchLayoutRequest {
+    /// The name the Workspace keeps the fetched Layout under.
+    pub name: String,
+}
+
 impl Action for ActionFetchLayout {
     /// The fetch is id 10: the first thing asked of a Vault that is not a store or an index.
     const ID: u32 = 10;
 
-    type Input = String;
+    type Input = FetchLayoutRequest;
     type Output = ();
 
     /// Asks the Vault for its Layout, and writes what it answers into the Workspace's cache.
@@ -74,7 +88,7 @@ impl Action for ActionFetchLayout {
     ) -> Result<Self::Output, ActionError> {
         // Which directory the copy lands in is the Workspace's own business, so the name is read
         // here and never looked at on the Vault.
-        let cache = input.into_inner().unwrap_or_default();
+        let cache = input.into_inner().map_or_default(|request| request.name);
 
         // What the copy here is, in the terms the Vault can compare with its own. The Vault side has
         // no Workspace to look at, so its wrapper is empty and it is told this one value.

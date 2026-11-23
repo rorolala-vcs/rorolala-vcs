@@ -19,18 +19,97 @@ use rorolala_workspace::Workspace;
 use uuid::Uuid;
 
 use crate::daemon::{
-    EntryWrite, RemoteWrites, action_sync_index_all_async, action_write_remote_entries,
+    EntryWrite, RemoteCreate, RemoteSet, action_sync_index_all_async, action_write_remote_entries,
 };
 use crate::fetch::Sources;
 use crate::write::bring::write_worktree;
 use crate::write::checkout::Checkout;
 use crate::write::layout::{add_cached_entry, cached_copy, set_cached_version};
 use crate::write::progress::WriteProgress;
-use crate::write::sync::{self, Entry, Kind, SyncRequest};
+use crate::write::sync::{self, Entry, Kind, SyncInput, SyncRequest};
 use crate::write::tree_remove::prune_empty;
 use crate::write::{Cancellation, WriteError};
 use rorolala_utils_location::Locate as _;
-use serde::{Deserialize, Serialize};
+
+/// The plan an apply was handed, read only for what it promised to move.
+#[derive(Debug, Clone)]
+struct GivenPlan {
+    /// One entry per entry the plan named, which is none for a plan of nothing.
+    entries: Vec<GivenEntry>,
+}
+
+/// One entry the handed plan named, as an apply reads it back.
+#[derive(Debug, Clone)]
+pub struct GivenEntry {
+    /// The `Uuid` it is known by.
+    pub uuid: String,
+    /// The path this Layout names it by.
+    pub local_path: Option<String>,
+    /// The path the Vault's Layout names it by.
+    pub remote_path: Option<String>,
+    /// The name the Vault's Layout is to give it.
+    pub planned_path: Option<String>,
+    /// The version this Layout is at.
+    pub local_version: Option<String>,
+    /// The version the Vault is at.
+    pub remote_version: Option<String>,
+    /// What the plan means to do with it.
+    pub kind: Kind,
+}
+
+/// One entry a plan promised to move, as a C caller hands it back.
+///
+/// # FFI
+///
+/// A `RolaWriteSyncAgreed` the caller fills from what a plan answered. Every `const char *` is
+/// borrowed for the call and released by the caller; an empty path or version says the plan named
+/// none, and `kind` is the word the plan's entry answered `_kind` with.
+#[lazyffi(export = RolaWriteSyncAgreed, input)]
+#[derive(Debug, Clone)]
+pub struct SyncAgreed {
+    /// The `Uuid` the entry is known by.
+    pub uuid: String,
+    /// The path this Layout names it by, empty when it names none.
+    pub local_path: String,
+    /// The path the Vault's Layout names it by, empty when it names none.
+    pub remote_path: String,
+    /// The name the Vault's Layout is to give it, empty when this creates none.
+    pub planned_path: String,
+    /// The version this Layout is at, empty when it is at none.
+    pub local_version: String,
+    /// The version the Vault is at, empty when the Vault holds none.
+    pub remote_version: String,
+    /// What the plan means to do with it, as the plan's `_kind` word.
+    pub kind: String,
+}
+
+impl SyncAgreed {
+    /// The entry this names, or why its `kind` names nothing this build writes.
+    fn given(&self) -> Result<GivenEntry, WriteError> {
+        let kind = Kind::from_word(&self.kind).ok_or_else(|| WriteError::Precondition {
+            what: "the sync plan".to_owned(),
+            reason: format!(
+                "its entry kind `{}` is not one this build writes",
+                self.kind
+            ),
+        })?;
+
+        Ok(GivenEntry {
+            uuid: self.uuid.clone(),
+            local_path: none_if_empty(&self.local_path),
+            remote_path: none_if_empty(&self.remote_path),
+            planned_path: none_if_empty(&self.planned_path),
+            local_version: none_if_empty(&self.local_version),
+            remote_version: none_if_empty(&self.remote_version),
+            kind,
+        })
+    }
+}
+
+/// The text, or nothing when it names none.
+fn none_if_empty(text: &str) -> Option<String> {
+    (!text.is_empty()).then(|| text.to_owned())
+}
 
 /// Which sides a sync run leaves alone.
 #[derive(Debug, Clone, Copy, Default)]
@@ -364,7 +443,7 @@ fn sources_of<'a>(
 /// It is the shape the one-shot `rola_write_sync` export has always answered with, and it keeps
 /// it: the request-shaped apply answers a [`Report`] instead, which is the shape the command line's
 /// `--json` writes.
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct Applied {
     /// How many entries were written to the Vault.
     pub applied: usize,
@@ -383,7 +462,7 @@ pub struct Applied {
 }
 
 /// What carrying a plan out came to, in the shape the command line's `--json` writes it.
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct Report {
     /// The Layout the run was about.
     pub layout: String,
@@ -421,9 +500,6 @@ fn sync_index(carry: &Carry<'_>, options: Options, progress: &Progress) -> Resul
             carry.workspace,
             carry.account,
             carry.target.to_string(),
-            // The exchange has one answer whichever side asks: a full sync is everything either side
-            // holds, and an input names nothing, see `ActionSyncIndexAll`.
-            String::new(),
             progress.clone(),
         ))
         .map_err(|error| error.to_string())
@@ -818,9 +894,9 @@ fn apply_entries(
     failed: &mut Vec<String>,
 ) -> Result<(), String> {
     // What is asked for, paired with the entry it is asked for, so an answer can be put back to it.
-    let mut creates: Vec<(String, String, String, String)> = Vec::new();
+    let mut creates: Vec<RemoteCreate> = Vec::new();
     let mut create_entries: Vec<&Entry> = Vec::new();
-    let mut sets: Vec<(String, String)> = Vec::new();
+    let mut sets: Vec<RemoteSet> = Vec::new();
     let mut setting: Vec<&Entry> = Vec::new();
 
     for entry in ups {
@@ -833,12 +909,12 @@ fn apply_entries(
                     continue;
                 };
 
-                creates.push((
-                    path.to_owned(),
-                    entry.uuid.clone(),
-                    version.to_owned(),
-                    entry.item_kind.unwrap_or("file").to_owned(),
-                ));
+                creates.push(RemoteCreate {
+                    path: path.to_owned(),
+                    uuid: entry.uuid.clone(),
+                    version: version.to_owned(),
+                    kind: entry.item_kind.unwrap_or("file").to_owned(),
+                });
                 create_entries.push(entry);
             }
             Kind::Send | Kind::Diverged => {
@@ -852,7 +928,10 @@ fn apply_entries(
                     continue;
                 };
 
-                sets.push((entry.uuid.clone(), version.to_owned()));
+                sets.push(RemoteSet {
+                    uuid: entry.uuid.clone(),
+                    version: version.to_owned(),
+                });
                 setting.push(entry);
             }
             Kind::Refused => {
@@ -869,19 +948,16 @@ fn apply_entries(
         return Ok(());
     }
 
-    let writes = serde_json::to_string(&RemoteWrites { creates, sets })
-        .map_err(|error| error.to_string())?;
-
     let answer = action_write_remote_entries(
         carry.workspace,
         carry.account,
         carry.target.to_string(),
-        writes,
+        &creates,
+        &sets,
     )
     .map_err(|error| error.to_string())?;
 
-    let outcomes: Vec<EntryWrite> =
-        serde_json::from_str(&answer).map_err(|error| error.to_string())?;
+    let outcomes = answer.outcomes();
 
     // The outcomes come back in the order asked for: the creates first, then the sets.
     let mut outcomes = outcomes.into_iter();
@@ -1041,10 +1117,10 @@ fn write_reason(outcome: EntryWrite, messages: &Messages) -> String {
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, the run's numbers, or a
-/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `direction` is `up`, `down`
-/// or `both`; `layout` says whether the Vault's Layout is read and written. `key_path` is the
-/// private key the run signs with.
+/// A `RolaWriteSync *` the caller releases with `free_rola_write_sync`, or a `RolaWriteError *`
+/// the caller releases with `free_rola_write_error`. `direction` is `up`, `down` or `both`;
+/// `layout` says whether the Vault's Layout is read and written. `key_path` is the private key the
+/// run signs with.
 ///
 /// # Errors
 ///
@@ -1068,7 +1144,7 @@ pub fn sync_at(
     storage: bool,
     index: bool,
     layout: bool,
-) -> Result<String, WriteError> {
+) -> Result<WriteSync, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let read_layout = workspace.layout().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
@@ -1148,41 +1224,148 @@ pub fn sync_at(
         &Cancellation::new(),
     )?;
 
-    serde_json::to_string(&applied).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteSync::of(&applied))
 }
 
-/// The plan an apply was handed, read only for what it promised to move.
-#[derive(Debug, Deserialize)]
-struct GivenPlan {
-    /// One entry per entry the plan named, which is none for a plan of nothing.
-    #[serde(default)]
-    entries: Vec<GivenEntry>,
+/// What a sync run came to, as the one-shot export hands it over.
+///
+/// The run it answers has no plan the caller agreed to, so it says what it did rather than what it
+/// was to do: how much each side moved, what was not done, and which Vaults handed something over.
+///
+/// # FFI
+///
+/// A `RolaWriteSync *` the caller releases with `free_rola_write_sync`. `_applied`, `_received`,
+/// `_index_objects` and `_storage_objects` are the numbers, `_missing_layout` says whether the
+/// Vault's Layout was read, `_failed_count` and `_failed_at` hold one line per entry that was not
+/// written, and `_took_count` and `_took_at` name what each Vault handed over, a
+/// `RolaWriteSyncTook *` released with `free_rola_write_sync_took`. Every `char *` is released with
+/// `free_string`.
+#[lazyffi(export = RolaWriteSync)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteSync {
+    /// How many entries were written to the Vault.
+    applied: u64,
+    /// How many versions were brought down from the Vault.
+    received: u64,
+    /// What was not done, one line each.
+    failed: Vec<String>,
+    /// How many stored objects the index named.
+    index_objects: u64,
+    /// How many units of stored content the run sent.
+    storage_objects: u64,
+    /// Whether the Vault's Layout was not read.
+    missing_layout: bool,
+    /// What each Vault handed over.
+    took: Vec<WriteSyncTook>,
 }
 
-/// One entry the handed plan named, as an apply reads it back.
-#[derive(Debug, Deserialize)]
-struct GivenEntry {
-    /// The `Uuid` it is known by.
-    uuid: String,
-    /// The path this Layout names it by.
-    #[serde(default)]
-    local_path: Option<String>,
-    /// The path the Vault's Layout names it by.
-    #[serde(default)]
-    remote_path: Option<String>,
-    /// The name the Vault's Layout is to give it.
-    #[serde(default)]
-    planned_path: Option<String>,
-    /// The version this Layout is at.
-    #[serde(default)]
-    local_version: Option<String>,
-    /// The version the Vault is at.
-    #[serde(default)]
-    remote_version: Option<String>,
-    /// What the plan means to do with it.
-    kind: Kind,
+impl WriteSync {
+    /// The answer a one-shot sync run is handed over as.
+    fn of(applied: &Applied) -> Self {
+        Self {
+            applied: u64::try_from(applied.applied).unwrap_or(u64::MAX),
+            received: u64::try_from(applied.received).unwrap_or(u64::MAX),
+            failed: applied.failed.clone(),
+            index_objects: u64::try_from(applied.index_objects).unwrap_or(u64::MAX),
+            storage_objects: u64::try_from(applied.storage_objects).unwrap_or(u64::MAX),
+            missing_layout: applied.missing_layout,
+            took: applied
+                .took
+                .iter()
+                .map(|(vault, count)| WriteSyncTook {
+                    vault: vault.clone(),
+                    count: u64::try_from(*count).unwrap_or(u64::MAX),
+                })
+                .collect(),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteSync {
+    /// How many entries were written to the Vault.
+    #[must_use]
+    pub const fn applied(&self) -> u64 {
+        self.applied
+    }
+
+    /// How many versions were brought down from the Vault.
+    #[must_use]
+    pub const fn received(&self) -> u64 {
+        self.received
+    }
+
+    /// How many entries were not written.
+    #[must_use]
+    pub const fn failed_count(&self) -> usize {
+        self.failed.len()
+    }
+
+    /// One entry that was not written, or an empty string past the end.
+    #[must_use]
+    pub fn failed_at(&self, index: usize) -> String {
+        self.failed.get(index).cloned().unwrap_or_default()
+    }
+
+    /// How many stored objects the index named.
+    #[must_use]
+    pub const fn index_objects(&self) -> u64 {
+        self.index_objects
+    }
+
+    /// How many units of stored content the run sent.
+    #[must_use]
+    pub const fn storage_objects(&self) -> u64 {
+        self.storage_objects
+    }
+
+    /// Whether the Vault's Layout was not read, so the copy still says what it said.
+    #[must_use]
+    pub const fn missing_layout(&self) -> bool {
+        self.missing_layout
+    }
+
+    /// How many Vaults handed something over.
+    #[must_use]
+    pub const fn took_count(&self) -> usize {
+        self.took.len()
+    }
+
+    /// One Vault that handed something over, or null past the end.
+    #[must_use]
+    pub fn took_at(&self, index: usize) -> Option<WriteSyncTook> {
+        self.took.get(index).cloned()
+    }
+}
+
+/// How many objects one Vault handed over, as a sync run reports it.
+///
+/// # FFI
+///
+/// A `RolaWriteSyncTook *` the caller releases with `free_rola_write_sync_took`. `_vault` returns
+/// a `char *` the caller releases with `free_string`, and `_count` the objects it handed over.
+#[lazyffi(export = RolaWriteSyncTook)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteSyncTook {
+    /// The Vault's name.
+    vault: String,
+    /// The objects it handed over.
+    count: u64,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteSyncTook {
+    /// The Vault's name.
+    #[must_use]
+    pub fn vault(&self) -> String {
+        self.vault.clone()
+    }
+
+    /// How many objects it handed over.
+    #[must_use]
+    pub const fn objects(&self) -> u64 {
+        self.count
+    }
 }
 
 /// Whether a plan made now names the entries a plan was handed, in the same order and with the
@@ -1225,14 +1408,14 @@ impl SyncRequest {
     /// # Errors
     ///
     /// Returns [`WriteError::Cancelled`] when `cancellation` was set before the run or between two
-    /// of its entries, [`WriteError::Json`] when `plan_json` does not read, what
+    /// of its entries, what
     /// [`SyncRequest::request_plan`](crate::write::sync::SyncRequest::request_plan) names when the
     /// parts do not resolve, [`WriteError::Precondition`] when the plan no longer matches the work
     /// or holds a blocked entry the run was not forced past, and [`WriteError::Internal`] when an
     /// exchange or a write fails.
     pub fn request_apply(
         &self,
-        plan_json: &str,
+        given: Option<&[GivenEntry]>,
         progress: &Progress,
         cancellation: &Cancellation,
     ) -> Result<Report, WriteError> {
@@ -1244,11 +1427,9 @@ impl SyncRequest {
         // A request that reads no Layout has no plan a caller could have agreed to, so there is
         // nothing to compare and the run is the index-and-store one `--no-layout` names.
         let given = if self.layout {
-            Some(
-                serde_json::from_str::<GivenPlan>(plan_json).map_err(|error| WriteError::Json {
-                    reason: error.to_string(),
-                })?,
-            )
+            given.map(|entries| GivenPlan {
+                entries: entries.to_vec(),
+            })
         } else {
             None
         };
@@ -1328,39 +1509,160 @@ impl SyncRequest {
 ///
 /// # FFI
 ///
-/// `request` is a JSON object of the shape [`SyncRequest`] reads, the same document
-/// `rola_write_sync_plan` takes. `plan` is the JSON that call answered with, which this one reads
-/// again and compares with the work before writing. The answer is an owned JSON string the caller
-/// releases with `free_string`:
-/// `{"layout":"main","vault":"default","applied":0,"received":0,"up_to_date":0,"failed":[],"layout_read":true,"index_objects":0,"storage_objects":0}`.
-/// `failed` holds one line per entry that was not written, and `layout_read` is false for a request
-/// that leaves the Vault's Layout alone. `progress` is the handle the caller polls with
-/// `rola_progress_next_json`, and `cancellation` is the flag it sets with
-/// `rola_cancellation_cancel`.
+/// `request` is a `RolaWriteSyncRequest` the caller fills, the same one `rola_write_sync_plan`
+/// takes. `entries` and `entries_len` are the caller's array of the entries the plan promised to
+/// move, borrowed for the call, and a length of zero lets the run make its own plan. Every
+/// `const char *` is borrowed for the call and released by the caller.
+///
+/// A `RolaWriteSyncApply *` the caller releases with `free_rola_write_sync_apply` answers it:
+/// `_layout` and `_vault` say what the run was about, `_applied`, `_received`, `_up_to_date`,
+/// `_index_objects` and `_storage_objects` are the numbers, `_layout_read` says whether the Vault's
+/// Layout was read, and `_failed_count` and `_failed_at` hold one line per entry that was not
+/// written. `progress` is the handle the caller polls with `rola_progress_next`, and `cancellation`
+/// is the flag it sets with `rola_cancellation_cancel`.
 ///
 /// # Errors
 ///
 /// Returns a `RolaWriteError *` the caller releases with `free_rola_write_error`, with the tag
-/// [`WriteError`]'s: `Json` when `request` or `plan` does not read, `Precondition` when the plan no
-/// longer matches the work or holds a blocked entry the run was not forced past, `Cancelled` when
-/// `cancellation` was set, and every failure [`SyncRequest::request_apply`] names when the run
+/// [`WriteError`]'s: `Precondition` when the plan no longer matches the work, names an entry kind
+/// this build does not write, or holds a blocked entry the run was not forced past, `Cancelled`
+/// when `cancellation` was set, and every failure [`SyncRequest::request_apply`] names when the run
 /// cannot be carried out.
 #[lazyffi(export = rola_write_sync_apply)]
 pub fn sync_apply_at(
-    request: &str,
-    plan: &str,
+    request: &SyncInput,
+    entries: &[SyncAgreed],
     progress: &WriteProgress,
     cancellation: &Cancellation,
-) -> Result<String, WriteError> {
-    let request: SyncRequest = serde_json::from_str(request).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })?;
+) -> Result<WriteSyncApply, WriteError> {
+    let request: SyncRequest = request.clone().into();
+    let agreed: Vec<GivenEntry> = entries
+        .iter()
+        .map(SyncAgreed::given)
+        .collect::<Result<_, _>>()?;
     let watched = crate::write::progress::watching(progress);
-    let report = request.request_apply(plan, &watched, cancellation)?;
+    let report = request.request_apply(
+        (!agreed.is_empty()).then_some(agreed.as_slice()),
+        &watched,
+        cancellation,
+    )?;
 
-    serde_json::to_string(&report).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WriteSyncApply::of(&report))
+}
+
+/// What carrying a plan out came to, as the C ABI hands it over.
+///
+/// It is the shape the command line's `--json` writes: what the run was about, how much each side
+/// moved, and what was not done.
+///
+/// # FFI
+///
+/// A `RolaWriteSyncApply *` the caller releases with `free_rola_write_sync_apply`. `_layout` and
+/// `_vault` return a `char *` the caller releases with `free_string`; `_applied`, `_received`,
+/// `_up_to_date`, `_index_objects` and `_storage_objects` are the numbers; `_layout_read` says
+/// whether the Vault's Layout was read; and `_failed_count` and `_failed_at` hold one line per
+/// entry that was not written.
+#[lazyffi(export = RolaWriteSyncApply)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteSyncApply {
+    /// The Layout the run was about.
+    layout: String,
+    /// The Vault it tracks.
+    vault: String,
+    /// How many entries were written to the Vault.
+    applied: u64,
+    /// How many versions were brought down from the Vault.
+    received: u64,
+    /// How many entries both sides already held at the same version.
+    up_to_date: u64,
+    /// What was not done, one line each.
+    failed: Vec<String>,
+    /// Whether the Vault's Layout was read at all.
+    layout_read: bool,
+    /// How many stored objects the index named.
+    index_objects: u64,
+    /// How many units of stored content the run sent.
+    storage_objects: u64,
+}
+
+impl WriteSyncApply {
+    /// The answer a carried-out plan is handed over as.
+    fn of(report: &Report) -> Self {
+        Self {
+            layout: report.layout.clone(),
+            vault: report.vault.clone(),
+            applied: u64::try_from(report.applied).unwrap_or(u64::MAX),
+            received: u64::try_from(report.received).unwrap_or(u64::MAX),
+            up_to_date: u64::try_from(report.up_to_date).unwrap_or(u64::MAX),
+            failed: report.failed.clone(),
+            layout_read: report.layout_read,
+            index_objects: u64::try_from(report.index_objects).unwrap_or(u64::MAX),
+            storage_objects: u64::try_from(report.storage_objects).unwrap_or(u64::MAX),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteSyncApply {
+    /// The Layout the run was about.
+    #[must_use]
+    pub fn layout(&self) -> String {
+        self.layout.clone()
+    }
+
+    /// The Vault it tracks.
+    #[must_use]
+    pub fn vault(&self) -> String {
+        self.vault.clone()
+    }
+
+    /// How many entries were written to the Vault.
+    #[must_use]
+    pub const fn applied(&self) -> u64 {
+        self.applied
+    }
+
+    /// How many versions were brought down from the Vault.
+    #[must_use]
+    pub const fn received(&self) -> u64 {
+        self.received
+    }
+
+    /// How many entries both sides already held at the same version.
+    #[must_use]
+    pub const fn up_to_date(&self) -> u64 {
+        self.up_to_date
+    }
+
+    /// How many entries were not written.
+    #[must_use]
+    pub const fn failed_count(&self) -> usize {
+        self.failed.len()
+    }
+
+    /// One entry that was not written, or an empty string past the end.
+    #[must_use]
+    pub fn failed_at(&self, index: usize) -> String {
+        self.failed.get(index).cloned().unwrap_or_default()
+    }
+
+    /// Whether the Vault's Layout was read at all.
+    #[must_use]
+    pub const fn layout_read(&self) -> bool {
+        self.layout_read
+    }
+
+    /// How many stored objects the index named.
+    #[must_use]
+    pub const fn index_objects(&self) -> u64 {
+        self.index_objects
+    }
+
+    /// How many units of stored content the run sent.
+    #[must_use]
+    pub const fn storage_objects(&self) -> u64 {
+        self.storage_objects
+    }
 }
 
 #[cfg(test)]
@@ -1392,9 +1694,8 @@ mod tests {
             false,
         )
         .unwrap();
-        let read: serde_json::Value = serde_json::from_str(&answer).unwrap();
-        assert_eq!(read["applied"], 0);
-        assert_eq!(read["received"], 0);
+        assert_eq!(answer.applied(), 0);
+        assert_eq!(answer.received(), 0);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

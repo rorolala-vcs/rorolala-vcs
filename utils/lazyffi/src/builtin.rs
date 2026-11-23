@@ -48,9 +48,14 @@ macro_rules! impl_scalar {
             impl InputRef for $ty {
                 type From = $ty;
 
+                type Ref<'a>
+                    = &'a Self
+                where
+                    Self: 'a;
+
                 // SAFETY: this impl obeys the trait's contract stated in `convert.rs`, and the
                 // borrow it takes carries its own argument.
-                unsafe fn input_ref<'a>(input: *const Self::From) -> &'a Self {
+                unsafe fn input_ref<'a>(input: *const Self::From) -> Self::Ref<'a> {
                     // SAFETY: the caller guarantees a valid, aligned, readable pointer
                     // that stays readable for the duration of the borrow.
                     unsafe { &*input }

@@ -9,36 +9,70 @@
 //! one session, one entry at a time, which is what a run that names a directory wants.
 
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
+use rorolala_utils_lazyffi::{StrSpan, lazyffi};
 
-use super::layout_remote::{ownership_batch, take};
+use super::layout_remote::{OwnershipChange, Ownerships, ownership_batch, take};
 
 /// An Action that names the Vault's entries as held by the account that asks.
 ///
 /// # Input
 ///
-/// What to take, as JSON: an array of the words the bar is drawn under and the `Uuid`s of the entries,
-/// as text. The `Uuid`s belong to the caller, so they are read on the Workspace and cross to the Vault,
-/// which is the side that has a Layout to name them in; the words cross with them because the caller is
-/// the side that has them, see `ownership_batch`. A list is not a thing the C ABI can hand over, so the
-/// pair crosses as one JSON string, the same way a sync's batch of writes does. Which account asks is
-/// not input: the session already says, and a name sent beside it would be a claim the Vault could not
-/// hold the caller to.
+/// What to take: the words the bar is drawn under and the `Uuid`s of the entries, as text. The
+/// `Uuid`s belong to the caller, so they are read on the Workspace and cross to the Vault, which is
+/// the side that has a Layout to name them in; the words cross with them because the caller is the
+/// side that has them, see `ownership_batch`. Which account asks is not input: the session already
+/// says, and a name sent beside it would be a claim the Vault could not hold the caller to.
 ///
 /// # Output
 ///
-/// What became of each, as JSON: an array of outcomes, one per `Uuid`, in the order they were asked
-/// for. Each is what one request answers on its own, the entry is now held by the caller, the Vault
-/// holds no such entry, or another account holds it. It crosses as text because an action's output is
-/// what the C ABI hands back, and an outcome is not a type a C caller reads, [`Ownership`](super::layout_remote::Ownership)
-/// is.
+/// What became of each, one outcome per `Uuid`, in the order they were asked for. Each is what one
+/// request answers on its own: the entry is now held by the caller, the Vault holds no such entry,
+/// or another account holds it. [`Ownerships`](super::layout_remote::Ownerships) is what a C caller
+/// reads.
 pub struct ActionRequestOwnership;
+
+/// What to take, and under what words the bar is drawn.
+///
+/// # FFI
+///
+/// A `RolaDaemonRequestOwnershipRequest` the caller fills. `name` is borrowed for the call and
+/// released by the caller. `uuids` is a `RolaStrSpan` of the `Uuid`s to take, each read as text and
+/// borrowed for the call.
+#[lazyffi(export = RolaDaemonRequestOwnershipRequest, input)]
+#[derive(Debug, Clone, Default)]
+pub struct RequestOwnershipRequest {
+    /// The words the bar is drawn under, or empty for none.
+    pub name: String,
+    /// The `Uuid`s of the entries to take, in the order they are answered.
+    pub uuids: StrSpan,
+}
+
+impl RequestOwnershipRequest {
+    /// The request a run inside Rust fills, taking the `Uuid`s as strings.
+    #[must_use]
+    pub fn new(name: String, uuids: Vec<String>) -> Self {
+        Self {
+            name,
+            uuids: StrSpan::from(uuids),
+        }
+    }
+}
+
+impl From<RequestOwnershipRequest> for OwnershipChange {
+    fn from(request: RequestOwnershipRequest) -> Self {
+        Self {
+            name: request.name,
+            uuids: request.uuids.into_vec(),
+        }
+    }
+}
 
 impl Action for ActionRequestOwnership {
     /// Taking entries is id 11: the first half of the ownership exchange.
     const ID: u32 = 11;
 
-    type Input = String;
-    type Output = String;
+    type Input = OwnershipChange;
+    type Output = Ownerships;
 
     /// Asks the Vault to name the caller as the holder of each entry, and answers with what it said.
     ///
@@ -47,14 +81,13 @@ impl Action for ActionRequestOwnership {
     /// Returns [`ActionError::MissingValue`] if this side was handed neither a Workspace nor a
     /// Vault, or the Vault holds no member to act as, [`ActionError::Codec`] if a `Uuid` does not
     /// read or a payload will not cross, [`ActionError::Store`] if the Vault's Layout could not be
-    /// written, [`ActionError::Json`] if the outcomes will not encode, and whatever the exchange
-    /// fails with.
+    /// written, and whatever the exchange fails with.
     async fn process(
         input: OnlyWorkspace<Self::Input>,
         mut ctx: ActionContext<'_>,
     ) -> Result<Self::Output, ActionError> {
         let outcomes = ownership_batch(&mut ctx, input, take).await?;
 
-        serde_json::to_string(&outcomes).map_err(|error| ActionError::Json(error.into()))
+        Ok(Ownerships::from(outcomes))
     }
 }

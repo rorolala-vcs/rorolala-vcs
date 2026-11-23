@@ -8,7 +8,9 @@
 
 use rorolala_errors::Failure as _;
 use rorolala_protocol::{Action, ActionContext, ActionError, OnlyWorkspace};
+use rorolala_utils_lazyffi::lazyffi;
 use rorolala_vcs::{VCSIndex, VCSIndexKind};
+use serde::{Deserialize, Serialize};
 
 use super::sync_index::local_index;
 use super::sync_storage::{Side, carry_blob};
@@ -29,11 +31,25 @@ use super::sync_storage::{Side, carry_blob};
 /// caller that wants hashes apart reads it the way it was written, a line at a time.
 pub struct ActionListRemoteIndex;
 
+/// The word that names the index listing wanted.
+///
+/// # FFI
+///
+/// A `RolaDaemonListRemoteIndexRequest` the caller fills. `which` is borrowed for the call and
+/// released by the caller; `variants`, `versions` and `str` name one kind of object, and any other
+/// word, empty included, asks for every object.
+#[lazyffi(export = RolaDaemonListRemoteIndexRequest, input)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ListRemoteIndexRequest {
+    /// Which listing is wanted, or empty for every object.
+    pub which: String,
+}
+
 impl Action for ActionListRemoteIndex {
     /// The listing is id 8.
     const ID: u32 = 8;
 
-    type Input = String;
+    type Input = ListRemoteIndexRequest;
     type Output = String;
 
     /// Asks the other end what its index holds, and answers with what it said.
@@ -51,7 +67,7 @@ impl Action for ActionListRemoteIndex {
 
         // What listing is wanted is the caller's word, so it belongs to the Workspace and crosses to
         // the Vault first, the Vault is the side with an index of its own to answer with.
-        let here = input.into_inner();
+        let here = input.into_inner().map(|request| request.which);
         let to_vault = here.clone().map(String::into_bytes);
         let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;
         let which = arrived

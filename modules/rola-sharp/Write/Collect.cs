@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 namespace RolaSharp.Write;
 
@@ -25,24 +24,31 @@ internal static class Collects
 {
     /// <summary>Reads one side's numbers.</summary>
     /// <param name="root">The answer.</param>
-    /// <param name="name">The side's name.</param>
+    /// <param name="index">Whether the side is the index rather than the store.</param>
     /// <returns>The numbers, or nothing when the side was not swept.</returns>
-    public static CollectSide? Side(JsonElement root, string name)
+    public static CollectSide? Side(nint root, bool index)
     {
-        if (
-            !root.TryGetProperty(name, out var side)
-            || side.ValueKind is JsonValueKind.Null
-        )
+        var side = index
+            ? RorolalaBinding.rola_write_collect_index(root)
+            : RorolalaBinding.rola_write_collect_storage(root);
+        if (side == 0)
         {
             return null;
         }
 
-        return new CollectSide(
-            RolaJson.Number(side, "removed") ?? 0,
-            RolaJson.Number(side, "bytes") ?? 0,
-            RolaJson.Number(side, "kept") ?? 0,
-            RolaJson.Flag(side, "changed")
-        );
+        try
+        {
+            return new CollectSide(
+                RorolalaBinding.rola_write_collect_side_removed(side),
+                RorolalaBinding.rola_write_collect_side_bytes(side),
+                RorolalaBinding.rola_write_collect_side_kept(side),
+                RorolalaBinding.rola_write_collect_side_changed(side)
+            );
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_collect_side(side);
+        }
     }
 }
 
@@ -71,12 +77,18 @@ internal static class Collector
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new CollectPlan(
-                Collects.Side(document.RootElement, "index"),
-                Collects.Side(document.RootElement, "storage")
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new CollectPlan(
+                    Collects.Side(handle, true),
+                    Collects.Side(handle, false)
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_collect(handle);
+            }
         }
         finally
         {
@@ -106,12 +118,18 @@ internal static class Collector
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new CollectReport(
-                Collects.Side(document.RootElement, "index"),
-                Collects.Side(document.RootElement, "storage")
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new CollectReport(
+                    Collects.Side(handle, true),
+                    Collects.Side(handle, false)
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_collect(handle);
+            }
         }
         finally
         {

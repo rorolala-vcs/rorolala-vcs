@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 namespace RolaSharp;
 
@@ -62,30 +61,56 @@ public sealed class StorageScope : Scope
         var hash = Utf8(key);
         try
         {
-            var answer = RorolalaBinding.rola_storage_manifest_json(directory, hash);
+            var answer = RorolalaBinding.rola_storage_manifest(directory, hash);
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
                 throw ReadResults.Storage(answer.payload);
             }
 
-            var json = NativeText.Taken(answer.payload);
-            if (string.IsNullOrEmpty(json) || json == "null")
+            var handle = answer.payload;
+            if (handle == 0)
             {
                 return null;
             }
 
-            using var document = JsonDocument.Parse(json);
-            var chunks = RolaJson
-                .Items(document.RootElement, "chunks")
-                ?.EnumerateArray()
-                .Select(item => new Chunk(
-                    RolaJson.Text(item, "key") ?? string.Empty,
-                    RolaJson.Number(item, "len") ?? 0
-                ))
-                .ToArray()
-                ?? [];
+            try
+            {
+                var count = RorolalaBinding.rola_storage_manifest_chunk_count(handle);
+                if (count == 0)
+                {
+                    return null;
+                }
 
-            return new Manifest(chunks);
+                var chunks = new List<Chunk>();
+                for (nuint index = 0; index < count; index++)
+                {
+                    var chunk = RorolalaBinding.rola_storage_manifest_chunk_at(handle, index);
+                    if (chunk == 0)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        chunks.Add(
+                            new Chunk(
+                                NativeText.Taken(RorolalaBinding.rola_storage_chunk_key(chunk)),
+                                RorolalaBinding.rola_storage_chunk_len(chunk)
+                            )
+                        );
+                    }
+                    finally
+                    {
+                        RorolalaBinding.free_rola_storage_chunk(chunk);
+                    }
+                }
+
+                return new Manifest(chunks);
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_storage_manifest(handle);
+            }
         }
         finally
         {
@@ -110,11 +135,11 @@ public sealed class StorageScope : Scope
     /// <inheritdoc/>
     protected override void Load(CancellationToken cancellationToken)
     {
-        _keys = ReadList(RorolalaBinding.rola_storage_objects_json, cancellationToken);
-        _manifests = ReadList(RorolalaBinding.rola_storage_manifests_json, cancellationToken);
+        _keys = ReadKeys(RorolalaBinding.rola_storage_objects, cancellationToken);
+        _manifests = ReadKeys(RorolalaBinding.rola_storage_manifests, cancellationToken);
     }
 
-    private IReadOnlyList<string> ReadList(
+    private IReadOnlyList<string> ReadKeys(
         Func<nint, RorolalaResult> read,
         CancellationToken cancellationToken
     )
@@ -131,20 +156,33 @@ public sealed class StorageScope : Scope
                 throw ReadResults.Storage(answer.payload);
             }
 
-            var json = NativeText.Taken(answer.payload);
-            if (string.IsNullOrEmpty(json) || json == "null")
+            var handle = answer.payload;
+            if (handle == 0)
             {
                 return [];
             }
 
-            using var document = JsonDocument.Parse(json);
-            return RolaJson
-                    .Items(document.RootElement, "keys")
-                    ?.EnumerateArray()
-                    .Select(item => item.GetString() ?? string.Empty)
-                    .Where(key => key.Length > 0)
-                    .ToArray()
-                ?? [];
+            try
+            {
+                var count = RorolalaBinding.rola_storage_keys_count(handle);
+                var keys = new List<string>();
+                for (nuint index = 0; index < count; index++)
+                {
+                    var key = NativeText.Taken(
+                        RorolalaBinding.rola_storage_keys_at(handle, index)
+                    );
+                    if (!string.IsNullOrEmpty(key))
+                    {
+                        keys.Add(key);
+                    }
+                }
+
+                return keys;
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_storage_keys(handle);
+            }
         }
         finally
         {

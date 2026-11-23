@@ -24,14 +24,21 @@ public sealed class VaultWriter : Writer
         var at = Marshal.StringToCoTaskMemUTF8(storage.FullName);
         try
         {
-            var answer = RorolalaBinding.rola_vault_bind_storage(vault, at);
+            var answer = RorolalaBinding.rola_vault_storage_bind(vault, at);
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-            return StorageBound.From(document.RootElement);
+            var handle = answer.payload;
+            try
+            {
+                return StorageBound.From(handle);
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_storage_bind(handle);
+            }
         }
         finally
         {
@@ -168,12 +175,18 @@ public sealed class VaultWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new Restored(
-                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
-                RolaJson.Text(document.RootElement, "version") ?? string.Empty
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new Restored(
+                    Guid.Parse(NativeText.Taken(RorolalaBinding.rola_write_restore_id(handle))),
+                    NativeText.Taken(RorolalaBinding.rola_write_restore_version(handle))
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_restore(handle);
+            }
         }
         finally
         {
@@ -224,12 +237,18 @@ public sealed class VaultWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new Retracked(
-                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
-                RolaJson.Text(document.RootElement, "version") ?? string.Empty
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new Retracked(
+                    Guid.Parse(NativeText.Taken(RorolalaBinding.rola_write_restore_id(handle))),
+                    NativeText.Taken(RorolalaBinding.rola_write_restore_version(handle))
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_restore(handle);
+            }
         }
         finally
         {
@@ -259,12 +278,18 @@ public sealed class VaultWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new Restored(
-                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
-                RolaJson.Text(document.RootElement, "version") ?? string.Empty
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new Restored(
+                    Guid.Parse(NativeText.Taken(RorolalaBinding.rola_write_restore_id(handle))),
+                    NativeText.Taken(RorolalaBinding.rola_write_restore_version(handle))
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_restore(handle);
+            }
         }
         finally
         {
@@ -318,14 +343,20 @@ public sealed class VaultWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new TrackedFile(
-                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
-                RolaJson.Text(document.RootElement, "storage") ?? string.Empty,
-                RolaJson.Text(document.RootElement, "variant") ?? string.Empty,
-                RolaJson.Text(document.RootElement, "version") ?? string.Empty
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new TrackedFile(
+                    Guid.Parse(NativeText.Taken(RorolalaBinding.rola_write_tracked_file_id(handle))),
+                    NativeText.Taken(RorolalaBinding.rola_write_tracked_file_storage(handle)),
+                    NativeText.Taken(RorolalaBinding.rola_write_tracked_file_variant(handle)),
+                    NativeText.Taken(RorolalaBinding.rola_write_tracked_file_version(handle))
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_tracked_file(handle);
+            }
         }
         finally
         {
@@ -354,9 +385,15 @@ public sealed class VaultWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new Packed(RolaJson.Flag(document.RootElement, "changed"));
+            var handle = answer.payload;
+            try
+            {
+                return new Packed(RorolalaBinding.rola_write_pack_changed(handle));
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_pack(handle);
+            }
         }
         finally
         {
@@ -368,7 +405,7 @@ public sealed class VaultWriter : Writer
     /// <returns>The guard, or nothing when the Vault was locked already.</returns>
     public VaultLock? Lock()
     {
-        var guard = RorolalaBinding.RolaVault_get_locking_guard(_vault.Handle);
+        var guard = RorolalaBinding.rola_vault_lock_acquire(_vault.Handle);
 
         return guard == 0 ? null : new VaultLock(guard);
     }
@@ -390,7 +427,7 @@ public sealed class VaultLock : IDisposable
     {
         if (_guard != 0)
         {
-            RorolalaBinding.RolaVault_drop_locking_guard(_guard);
+            RorolalaBinding.rola_vault_lock_release(_guard);
             _guard = 0;
         }
 

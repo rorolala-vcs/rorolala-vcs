@@ -78,7 +78,7 @@ pub struct VCSIndex {
 /// makes a directory a Vault or a Workspace, and answers with the index directory that
 /// marker names; see [`Locate::locate`]. `None` if neither is found all the way up.
 #[must_use]
-#[lazyffi(export = locate_rola_vcs_index)]
+#[lazyffi(export = rola_vcs_index_locate)]
 pub fn locate_vcs_index(index_dir: &Path) -> Option<VCSIndex> {
     VCSIndex::locate(index_dir)
 }
@@ -152,7 +152,7 @@ impl VCSIndexObject {
     /// # Errors
     ///
     /// Returns [`ParseVCSIndexObjectError::ExpectVariant`] if this object is another kind.
-    #[lazyffi(export = expect_object_is_variant)]
+    #[lazyffi(export = rola_vcs_index_object_variant_read)]
     pub fn expect_variant(self) -> Result<Variant, ParseVCSIndexObjectError> {
         match self {
             Self::Variant(variant) => Ok(variant),
@@ -165,7 +165,7 @@ impl VCSIndexObject {
     /// # Errors
     ///
     /// Returns [`ParseVCSIndexObjectError::ExpectVersion`] if this object is another kind.
-    #[lazyffi(export = expect_object_is_version)]
+    #[lazyffi(export = rola_vcs_index_object_version_read)]
     pub fn expect_version(self) -> Result<Version, ParseVCSIndexObjectError> {
         match self {
             Self::Version(version) => Ok(version),
@@ -178,7 +178,7 @@ impl VCSIndexObject {
     /// # Errors
     ///
     /// Returns [`ParseVCSIndexObjectError::ExpectCreator`] if this object is another kind.
-    #[lazyffi(export = expect_object_is_creator)]
+    #[lazyffi(export = rola_vcs_index_object_creator_read)]
     pub fn expect_creator(self) -> Result<Creator, ParseVCSIndexObjectError> {
         match self {
             Self::Creator(creator) => Ok(creator),
@@ -191,7 +191,7 @@ impl VCSIndexObject {
     /// # Errors
     ///
     /// Returns [`ParseVCSIndexObjectError::ExpectMessage`] if this object is another kind.
-    #[lazyffi(export = expect_object_is_message)]
+    #[lazyffi(export = rola_vcs_index_object_message_read)]
     pub fn expect_message(self) -> Result<Message, ParseVCSIndexObjectError> {
         match self {
             Self::Message(message) => Ok(message),
@@ -199,54 +199,30 @@ impl VCSIndexObject {
         }
     }
 
-    /// The Variant this object is, or an error if it is not one
-    ///
-    /// The same as [`expect_variant`](Self::expect_variant), under the name a `try_` reads by.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ParseVCSIndexObjectError::ExpectVariant`] if this object is another kind.
-    #[lazyffi(export = try_get_variant_from_object)]
-    pub fn variant(self) -> Result<Variant, ParseVCSIndexObjectError> {
-        self.expect_variant()
-    }
-
-    /// The Version this object is, or an error if it is not one
-    ///
-    /// The same as [`expect_version`](Self::expect_version), under the name a `try_` reads by.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ParseVCSIndexObjectError::ExpectVersion`] if this object is another kind.
-    #[lazyffi(export = try_get_version_from_object)]
-    pub fn version(self) -> Result<Version, ParseVCSIndexObjectError> {
-        self.expect_version()
-    }
-
     /// Whether this object is a Variant
     #[must_use]
-    #[lazyffi(export = is_object_variant)]
+    #[lazyffi(export = rola_vcs_index_object_is_variant)]
     pub fn is_variant(self) -> bool {
         matches!(self, Self::Variant(_))
     }
 
     /// Whether this object is a Version
     #[must_use]
-    #[lazyffi(export = is_object_version)]
+    #[lazyffi(export = rola_vcs_index_object_is_version)]
     pub fn is_version(self) -> bool {
         matches!(self, Self::Version(_))
     }
 
     /// Whether this object is a Creator
     #[must_use]
-    #[lazyffi(export = is_object_creator)]
+    #[lazyffi(export = rola_vcs_index_object_is_creator)]
     pub fn is_creator(self) -> bool {
         matches!(self, Self::Creator(_))
     }
 
     /// Whether this object is a Message
     #[must_use]
-    #[lazyffi(export = is_object_message)]
+    #[lazyffi(export = rola_vcs_index_object_is_message)]
     pub fn is_message(self) -> bool {
         matches!(self, Self::Message(_))
     }
@@ -869,7 +845,7 @@ impl VCSIndex {
     /// # FFI
     /// Blocks until the write is done, and answers with a `char *` the caller releases with
     /// `free_string`.
-    #[lazyffi(export = write_variant_into_index)]
+    #[lazyffi(export = rola_vcs_index_variant_write)]
     pub fn write_variant(&self, variant: &Variant) -> Result<String, VCSIndexWritingError> {
         let key = run(self.write(variant.clone()))
             .map_err(|error| VCSIndexWritingError::Io(error.into()))??;
@@ -886,7 +862,7 @@ impl VCSIndex {
     /// # FFI
     /// Blocks until the write is done, and answers with a `char *` the caller releases with
     /// `free_string`.
-    #[lazyffi(export = write_version_into_index)]
+    #[lazyffi(export = rola_vcs_index_version_write)]
     pub fn write_version(&self, version: &Version) -> Result<String, VCSIndexWritingError> {
         let key = run(self.write(version.clone()))
             .map_err(|error| VCSIndexWritingError::Io(error.into()))??;
@@ -903,7 +879,7 @@ impl VCSIndex {
     ///
     /// # FFI
     /// Blocks until the read is done.
-    #[lazyffi(export = read_variant_from_index)]
+    #[lazyffi(export = rola_vcs_index_variant_read)]
     pub fn read_variant(&self, hash: &str) -> Result<Variant, VCSIndexReadingError> {
         let key = Hash::from_str(hash).map_err(|_| VCSIndexReadingError::Malformed)?;
         let object =
@@ -923,7 +899,7 @@ impl VCSIndex {
     ///
     /// # FFI
     /// Blocks until the read is done.
-    #[lazyffi(export = read_version_from_index)]
+    #[lazyffi(export = rola_vcs_index_version_read)]
     pub fn read_version(&self, hash: &str) -> Result<Version, VCSIndexReadingError> {
         let key = Hash::from_str(hash).map_err(|_| VCSIndexReadingError::Malformed)?;
         let object =
@@ -943,7 +919,7 @@ impl VCSIndex {
     /// # FFI
     /// Blocks until the write is done, and answers with a `char *` the caller releases with
     /// `free_string`.
-    #[lazyffi(export = write_creator_into_index)]
+    #[lazyffi(export = rola_vcs_index_creator_write)]
     pub fn write_creator(&self, creator: &Creator) -> Result<String, VCSIndexWritingError> {
         let key = run(self.write(creator.clone()))
             .map_err(|error| VCSIndexWritingError::Io(error.into()))??;
@@ -960,7 +936,7 @@ impl VCSIndex {
     /// # FFI
     /// Blocks until the write is done, and answers with a `char *` the caller releases with
     /// `free_string`.
-    #[lazyffi(export = write_message_into_index)]
+    #[lazyffi(export = rola_vcs_index_message_write)]
     pub fn write_message(&self, message: &Message) -> Result<String, VCSIndexWritingError> {
         let key = run(self.write(message.clone()))
             .map_err(|error| VCSIndexWritingError::Io(error.into()))??;
@@ -977,7 +953,7 @@ impl VCSIndex {
     ///
     /// # FFI
     /// Blocks until the read is done.
-    #[lazyffi(export = read_creator_from_index)]
+    #[lazyffi(export = rola_vcs_index_creator_read)]
     pub fn read_creator(&self, hash: &str) -> Result<Creator, VCSIndexReadingError> {
         let key = Hash::from_str(hash).map_err(|_| VCSIndexReadingError::Malformed)?;
         let object =
@@ -997,7 +973,7 @@ impl VCSIndex {
     ///
     /// # FFI
     /// Blocks until the read is done.
-    #[lazyffi(export = read_message_from_index)]
+    #[lazyffi(export = rola_vcs_index_message_read)]
     pub fn read_message(&self, hash: &str) -> Result<Message, VCSIndexReadingError> {
         let key = Hash::from_str(hash).map_err(|_| VCSIndexReadingError::Malformed)?;
         let object =
@@ -1008,10 +984,10 @@ impl VCSIndex {
             .map_err(|_| VCSIndexReadingError::Malformed)
     }
 
-    /// One index object, as `rola vcs-index read --json` writes it.
+    /// One index object, as `rola vcs-index read` shows it.
     ///
-    /// The object is read whole and written as the view the command writes, so a caller parses the
-    /// same document whether it asked the command line or the library.
+    /// The object is read whole and handed over as the view the command shows, so a caller reads the
+    /// same fields whether it asked the command line or the library.
     ///
     /// # Errors
     ///
@@ -1020,11 +996,15 @@ impl VCSIndex {
     ///
     /// # FFI
     ///
-    /// Blocks until the read is done. The answer is an owned JSON string the caller releases with
+    /// Blocks until the read is done. The answer is a `RolaVCSIndexObjectView *` the caller releases
+    /// with `free_rola_vcs_index_object_view` after releasing each `char *` it carries with
     /// `free_string`; a failure is a `RolaVCSIndexReadingError *` the caller releases with
-    /// `free_rola_vcsindex_reading_error`.
-    #[lazyffi(export = rola_vcsindex_object_json)]
-    pub fn object_json(&self, hash: &str) -> Result<String, VCSIndexReadingError> {
+    /// `free_rola_vcs_index_reading_error`.
+    #[lazyffi(export = rola_vcs_index_object_view)]
+    pub fn object_view(
+        &self,
+        hash: &str,
+    ) -> Result<crate::view::ReadObjectView, VCSIndexReadingError> {
         let key = Hash::from_str(hash).map_err(|_| VCSIndexReadingError::Malformed)?;
         let object =
             run(self.read(key)).map_err(|error| VCSIndexReadingError::Io(error.into()))??;
@@ -1035,11 +1015,7 @@ impl VCSIndex {
             _ => None,
         };
 
-        // Writing this view cannot fail: it is strings, numbers and lists of them, with no map key
-        // that is not a string and no float. A failure would answer `null`, which a caller reads as
-        // no object rather than as a document, and is unreachable besides.
-        Ok(serde_json::to_string(&view::view_of(object, number))
-            .unwrap_or_else(|_| "null".to_owned()))
+        Ok(view::ReadObjectView::of(view::view_of(object, number)))
     }
 
     /// Every object the index holds, as the three listings `rola vcs-index ls-*` write.
@@ -1050,22 +1026,19 @@ impl VCSIndex {
     ///
     /// # FFI
     ///
-    /// Blocks until the listing is read. The answer is an owned JSON string the caller releases
-    /// with `free_string`, `{"versions":[...],"variants":[...],"string_hashes":[...]}`, or the JSON
-    /// `null` when the keys cannot be listed or an object cannot be read.
+    /// Blocks until the listing is read. A `RolaVCSIndexListing *` the caller releases with
+    /// `free_rola_vcs_index_listing`, whose `_version_*`, `_variant_*` and `_string_*` accessors
+    /// answer each array; a null is answered when the keys cannot be listed or an object cannot be
+    /// read.
     #[must_use]
-    #[lazyffi(export = rola_vcsindex_list_json)]
-    pub fn list_json(&self) -> String {
-        let Ok(runtime) = tokio::runtime::Runtime::new() else {
-            return "null".to_owned();
-        };
-        let Ok(objects) = runtime.block_on(self.read_objects()) else {
-            return "null".to_owned();
-        };
+    #[lazyffi(export = rola_vcs_index_list)]
+    pub fn list(&self) -> Option<VCSIndexListing> {
+        let runtime = tokio::runtime::Runtime::new().ok()?;
+        let objects = runtime.block_on(self.read_objects()).ok()?;
 
         let mut versions = Vec::new();
         let mut variants = Vec::new();
-        let mut string_hashes = Vec::new();
+        let mut strings = Vec::new();
 
         for (key, object) in objects {
             match object {
@@ -1075,10 +1048,10 @@ impl VCSIndex {
                         .block_on(self.read(Hash::new(*version.variant())))
                         .ok()
                         .and_then(|object| object.expect_variant().ok());
-                    versions.push(ItemVersion {
-                        version_num: number,
-                        version,
-                        variant,
+                    versions.push(VCSIndexVersionItem {
+                        number,
+                        version: version.hash().hex(),
+                        variant: variant.map_or_else(String::new, |variant| variant.hash().hex()),
                     });
                 }
                 VCSIndexObject::Variant(variant) => {
@@ -1086,21 +1059,22 @@ impl VCSIndex {
                         .block_on(self.read(Hash::new(*variant.base_version())))
                         .ok()
                         .and_then(|object| object.expect_version().ok());
-                    variants.push(ItemVariant { variant, version });
+                    variants.push(VCSIndexVariantItem {
+                        variant: variant.hash().hex(),
+                        version: version.map_or_else(String::new, |version| version.hash().hex()),
+                    });
                 }
                 VCSIndexObject::Creator(_) | VCSIndexObject::Message(_) => {
-                    string_hashes.push(key.hex());
+                    strings.push(key.hex());
                 }
             }
         }
 
-        let answer = ListAnswer {
+        Some(VCSIndexListing {
             versions,
             variants,
-            string_hashes,
-        };
-
-        serde_json::to_string(&answer).unwrap_or_else(|_| "null".to_owned())
+            strings,
+        })
     }
 
     /// The root version's hash, as the hex it is written down by.
@@ -1110,7 +1084,7 @@ impl VCSIndex {
     /// An owned string the caller releases with `free_string`, the hex of the root version, or the
     /// JSON `null` when the index does not hold it.
     #[must_use]
-    #[lazyffi(export = rola_vcsindex_rootver)]
+    #[lazyffi(export = rola_vcs_index_root_version)]
     pub fn rootver(&self) -> String {
         let hash = Version::root().hash();
 
@@ -1121,36 +1095,123 @@ impl VCSIndex {
     }
 }
 
-/// The three listings one index has, as `vcs-index ls-versions`, `ls-variants` and `ls-str` write
+/// The three listings one index has, as `vcs-index ls-versions`, `ls-variants` and `ls-str` name
 /// them.
-#[derive(Debug, Serialize)]
-struct ListAnswer {
+#[lazyffi(export = RolaVCSIndexListing)]
+#[derive(Debug, Clone, Default)]
+pub struct VCSIndexListing {
     /// The versions, with the number traced for each and the variant it points at.
-    versions: Vec<ItemVersion>,
+    versions: Vec<VCSIndexVersionItem>,
     /// The variants, with the version each is based on.
-    variants: Vec<ItemVariant>,
+    variants: Vec<VCSIndexVariantItem>,
     /// The hashes of the text objects, which is what `ls-str` lists.
-    string_hashes: Vec<String>,
+    strings: Vec<String>,
+}
+
+#[lazyffi(export = rola_)]
+impl VCSIndexListing {
+    /// How many versions the index holds.
+    #[must_use]
+    pub const fn version_count(&self) -> usize {
+        self.versions.len()
+    }
+
+    /// The version at `index`, or null past the end.
+    #[must_use]
+    pub fn version_at(&self, index: usize) -> Option<VCSIndexVersionItem> {
+        self.versions.get(index).cloned()
+    }
+
+    /// How many variants the index holds.
+    #[must_use]
+    pub const fn variant_count(&self) -> usize {
+        self.variants.len()
+    }
+
+    /// The variant at `index`, or null past the end.
+    #[must_use]
+    pub fn variant_at(&self, index: usize) -> Option<VCSIndexVariantItem> {
+        self.variants.get(index).cloned()
+    }
+
+    /// How many text objects the index holds.
+    #[must_use]
+    pub const fn string_count(&self) -> usize {
+        self.strings.len()
+    }
+
+    /// The text object's hash at `index`, or an empty string past the end.
+    #[must_use]
+    pub fn string_at(&self, index: usize) -> String {
+        self.strings.get(index).cloned().unwrap_or_default()
+    }
 }
 
 /// One version, its number, and the variant it points at when it can be read.
-#[derive(Debug, Serialize)]
-struct ItemVersion {
+#[lazyffi(export = RolaVCSIndexVersionItem)]
+#[derive(Debug, Clone)]
+pub struct VCSIndexVersionItem {
     /// The number worked out for the version, or nothing when the chain could not be traced.
-    version_num: Option<u64>,
-    /// The version.
-    version: Version,
-    /// The variant it points at, when one is stored.
-    variant: Option<Variant>,
+    number: Option<u64>,
+    /// The version's hash, as hex.
+    version: String,
+    /// The variant it points at, as hex, or an empty string when none is stored.
+    variant: String,
+}
+
+#[lazyffi(export = rola_)]
+impl VCSIndexVersionItem {
+    /// Whether a number was traced for the version.
+    #[must_use]
+    pub const fn version_num_present(&self) -> bool {
+        self.number.is_some()
+    }
+
+    /// The number worked out for the version, or 0 when the chain could not be traced.
+    #[must_use]
+    pub const fn version_num(&self) -> u64 {
+        match self.number {
+            Some(number) => number,
+            None => 0,
+        }
+    }
+
+    /// The version's hash, as hex.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
+
+    /// The variant it points at, as hex, or an empty string when none is stored.
+    #[must_use]
+    pub fn variant(&self) -> String {
+        self.variant.clone()
+    }
 }
 
 /// One variant, with the version it is based on when it can be read.
-#[derive(Debug, Serialize)]
-struct ItemVariant {
-    /// The variant.
-    variant: Variant,
-    /// The version it is based on, when one is stored.
-    version: Option<Version>,
+#[lazyffi(export = RolaVCSIndexVariantItem)]
+#[derive(Debug, Clone)]
+pub struct VCSIndexVariantItem {
+    /// The variant's hash, as hex.
+    variant: String,
+    /// The version it is based on, as hex, or an empty string when none is stored.
+    version: String,
+}
+
+#[lazyffi(export = rola_)]
+impl VCSIndexVariantItem {
+    /// The variant's hash, as hex.
+    #[must_use]
+    pub fn variant(&self) -> String {
+        self.variant.clone()
+    }
+
+    /// The version it is based on, as hex, or an empty string when none is stored.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
 }
 
 /// The Variant `object` is, or a read that did not hold one.

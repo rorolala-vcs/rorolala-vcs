@@ -12,6 +12,7 @@ use rorolala_layout::Layout;
 use rorolala_protocol::VaultAddress;
 use rorolala_storage::StorageSet;
 use rorolala_utils_configure::Configure as _;
+use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::{Config as WorkspaceConfig, Workspace};
@@ -73,6 +74,138 @@ pub struct Common {
 /// It is re-exported here so a caller of the write workflows keeps reading it under the path
 /// the request is written in, while there is one definition of it in [`crate::remote`].
 pub use crate::remote::Reached;
+
+/// The Vault a request reaches for, as a C caller names it.
+///
+/// It mirrors [`Target`] field for field: a unit variant names the tracked Vault, and the other
+/// two carry the name or the address they reach for.
+///
+/// # FFI
+///
+/// A `RolaWriteTarget` the caller fills: `tag` selects the variant and the payload companion it
+/// names holds that variant's string. The string is borrowed for the call and released by the
+/// caller, so nothing here is freed when the call returns.
+#[lazyffi(export = RolaWriteTarget)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum WriteTarget {
+    /// The Vault the Layout being worked in tracks.
+    #[default]
+    Tracked,
+    /// A Vault the Workspace knows, under this name.
+    Named {
+        /// The name the Workspace bound it to.
+        name: String,
+    },
+    /// An address, which is a Vault the Workspace never named.
+    Address {
+        /// Where it answers.
+        address: String,
+    },
+}
+
+impl From<WriteTarget> for Target {
+    fn from(target: WriteTarget) -> Self {
+        match target {
+            WriteTarget::Tracked => Self::Tracked,
+            WriteTarget::Named { name } => Self::Named { name },
+            WriteTarget::Address { address } => Self::Address { address },
+        }
+    }
+}
+
+/// The words a write uses while it runs, as a C caller fills them.
+///
+/// # FFI
+///
+/// A `RolaWriteLabels` the caller fills; every `const char *` is borrowed for the call. A field
+/// left as the empty string keeps the native word, so a caller translates only what it shows.
+#[lazyffi(export = RolaWriteLabels, input)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteLabels {
+    /// Reading the tree, a Layout or an index.
+    pub reading: String,
+    /// Writing content into the store.
+    pub writing: String,
+    /// Reaching the Vault for a Layout or an object.
+    pub fetching: String,
+    /// Carrying content to the Vault.
+    pub uploading: String,
+    /// Carrying content from the Vault.
+    pub downloading: String,
+    /// Checking the work before writing it.
+    pub checking: String,
+    /// Carrying out a plan.
+    pub applying: String,
+}
+
+impl From<WriteLabels> for Labels {
+    fn from(input: WriteLabels) -> Self {
+        let default = Self::default();
+
+        Self {
+            reading: pick(input.reading, default.reading),
+            writing: pick(input.writing, default.writing),
+            fetching: pick(input.fetching, default.fetching),
+            uploading: pick(input.uploading, default.uploading),
+            downloading: pick(input.downloading, default.downloading),
+            checking: pick(input.checking, default.checking),
+            applying: pick(input.applying, default.applying),
+        }
+    }
+}
+
+/// The fields every write request carries, as a C caller fills them.
+///
+/// It mirrors [`Common`] field for field. The Workspace is a path rather than a [`PathBuf`], so a
+/// C caller writes one string.
+///
+/// # FFI
+///
+/// A `RolaWriteCommon` the caller fills beside a request's own fields. Every `const char *` is
+/// borrowed for the call and released by the caller, so nothing here is freed when the call
+/// returns. A zeroed `concurrency` leaves the choice to the native side, and an empty `account`
+/// names none.
+#[lazyffi(export = RolaWriteCommon, input)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteCommon {
+    /// The Workspace the write is made in, by its root.
+    pub workspace: String,
+    /// The account the write acts as, by name, empty for none.
+    pub account: String,
+    /// The Vault it reaches for.
+    pub target: WriteTarget,
+    /// Whether the run may reach a Vault at all.
+    pub offline: bool,
+    /// Whether the run is told to go past a gate.
+    pub force: bool,
+    /// How many reads a transfer keeps in flight, zero for the native side's own choice.
+    pub concurrency: usize,
+    /// What the write calls the work while it does it.
+    pub labels: WriteLabels,
+}
+
+impl From<WriteCommon> for Common {
+    fn from(input: WriteCommon) -> Self {
+        Self {
+            workspace: PathBuf::from(input.workspace),
+            account: input.account,
+            target: input.target.into(),
+            offline: input.offline,
+            force: input.force,
+            concurrency: input.concurrency,
+            labels: input.labels.into(),
+        }
+    }
+}
+
+/// The word a field carries, or the native default when it names none.
+fn pick(written: String, fallback: String) -> String {
+    if written.is_empty() {
+        fallback
+    } else {
+        written
+    }
+}
 
 impl Common {
     /// The Workspace the request names.

@@ -226,7 +226,7 @@ impl IoError {
     }
 }
 
-#[lazyffi(export = rola_io_error_)]
+#[lazyffi(export = rola_)]
 impl IoError {
     /// The kind of failure this was.
     #[must_use]
@@ -291,7 +291,7 @@ impl BincodeError {
     }
 }
 
-#[lazyffi(export = rola_bincode_error_)]
+#[lazyffi(export = rola_)]
 impl BincodeError {
     /// What the failure said.
     #[must_use]
@@ -314,14 +314,12 @@ impl From<bincode2::Error> for BincodeError {
     }
 }
 
-/// A failure to turn a value into JSON, as it crosses the C ABI.
+/// A failure to turn a value into JSON.
 ///
-/// As [`BincodeError`], `serde_json`'s error is foreign and has no repr-C sibling, so
-/// what crosses is what it said *and where*, a line and a column, which is what a
-/// caller needs to find the value that would not encode. Going back is
-/// [`into_json`](JsonError::into_json): `serde_json` hands out no way to rebuild the
-/// syntax error it describes, so what comes back is an I/O one carrying the message.
-#[lazyffi(export = RolaJsonError)]
+/// `serde_json`'s error is foreign and says where it happened, so this keeps what it
+/// said and where: a line and a column, which is what a caller needs to find the value
+/// that would not encode. It stays inside the library, since the actions exchange their
+/// payloads as documents; nothing on the C ABI carries it.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct JsonError {
     /// What the failure said.
@@ -343,6 +341,12 @@ impl JsonError {
         }
     }
 
+    /// Takes what the failure said and where it said it.
+    #[must_use]
+    pub fn into_parts(self) -> (String, usize, usize) {
+        (self.message, self.line, self.column)
+    }
+
     /// The failure as `serde_json` spells it, as far as one can be built: an I/O error
     /// carrying the message.
     #[must_use]
@@ -351,7 +355,6 @@ impl JsonError {
     }
 }
 
-#[lazyffi(export = rola_json_error_)]
 impl JsonError {
     /// What the failure said.
     #[must_use]
@@ -402,7 +405,7 @@ impl AddrError {
     }
 }
 
-#[lazyffi(export = rola_addr_error_)]
+#[lazyffi(export = rola_)]
 impl AddrError {
     /// The target that would not read as an address.
     #[must_use]

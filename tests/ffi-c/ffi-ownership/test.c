@@ -45,20 +45,20 @@ int main(void) {
     }
 
     want(
-        locate_rola_ownership(plain) == NULL,
+        rola_ownership_locate(plain) == NULL,
         "a directory no Workspace holds answers with nothing"
     );
 
-    RorolalaResult made = create_workspace(dir);
+    RorolalaResult made = rola_workspace_create(dir);
     want(made.tag == RorolalaResult_Ok, "a Workspace is made for the read to be asked of");
 
     want(
-        locate_rola_ownership(dir) == NULL,
+        rola_ownership_locate(dir) == NULL,
         "a Workspace that works in no Layout answers with nothing"
     );
 
     /* The account is an owned string whether or not one is bound, so it is always there to release. */
-    char *account = rola_current_account();
+    char *account = rola_account_current();
     want(account != NULL, "the account the work acts as crosses as a string");
     if (account != NULL) {
         free_string(account);

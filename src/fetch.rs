@@ -29,7 +29,9 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 
 use crate::auth::Account;
-use crate::daemon::{action_list_remote_async, action_sync_hashes_async};
+use crate::daemon::{
+    ListRemoteRequest, SyncHashesRequest, action_list_remote_async, action_sync_hashes_async,
+};
 use crate::protocol::VaultAddress;
 use crate::storage::{Key, StorageSet};
 use crate::workspace::Workspace;
@@ -303,7 +305,9 @@ impl<'a> Sources<'a> {
             self.workspace,
             self.account,
             address.to_string(),
-            String::new(),
+            ListRemoteRequest {
+                which: String::new(),
+            },
             self.progress.clone(),
         ));
 
@@ -368,7 +372,7 @@ impl<'a> Sources<'a> {
                 self.workspace,
                 self.account,
                 address.to_owned(),
-                input,
+                SyncHashesRequest { units: input },
                 self.progress.clone(),
             ))
             .map(|_granted| ())

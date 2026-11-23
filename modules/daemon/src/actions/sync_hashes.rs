@@ -9,6 +9,8 @@ use std::str::FromStr as _;
 
 use rorolala_protocol::{Action, ActionContext, ActionError, Both, OnlyVault, OnlyWorkspace};
 use rorolala_storage::Key;
+use rorolala_utils_lazyffi::lazyffi;
+use serde::{Deserialize, Serialize};
 
 use super::sync_all::local_stores;
 use super::sync_storage::{
@@ -33,11 +35,24 @@ use super::sync_storage::{
 /// at once by default.
 pub struct ActionSyncHashes;
 
+/// The units a named sync carries, and the ask for how much is read at once.
+///
+/// # FFI
+///
+/// A `RolaDaemonSyncHashesRequest` the caller fills. `units` is borrowed for the call and released
+/// by the caller; it holds the units separated by whitespace, one a line as a listing prints them.
+#[lazyffi(export = RolaDaemonSyncHashesRequest, input)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SyncHashesRequest {
+    /// The units to carry, and the `c:<n>` ask, as a listing prints them.
+    pub units: String,
+}
+
 impl Action for ActionSyncHashes {
     /// The named sync is id 7.
     const ID: u32 = 7;
 
-    type Input = String;
+    type Input = SyncHashesRequest;
     type Output = String;
 
     /// Has the two stores carry the named units, with as many reads at once as the Vault serves.
@@ -56,7 +71,7 @@ impl Action for ActionSyncHashes {
         // The list is the caller's, so it belongs to the Workspace and crosses to the Vault first:
         // both sides must name the same units, or the carrying that follows would say two different
         // things on the two ends.
-        let here = input.into_inner();
+        let here = input.into_inner().map(|request| request.units);
         let to_vault = here.clone().map(String::into_bytes);
         let arrived = carry_blob(&mut ctx, Side::Vault, to_vault.clone()).await?;
         let text = arrived

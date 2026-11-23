@@ -1,11 +1,11 @@
 /*
- * The one-shot write workflows across the ABI: a request document, a JSON answer, and the tagged
- * failure a refused run leaves with the caller.
+ * The one-shot write workflows across the ABI: a request a caller fills, a typed answer, and the
+ * tagged failure a refused run leaves with the caller.
  *
  * A Workspace of this program's own is the subject of every call, so an answer is read against a
  * store and a Layout this run made rather than one another run left behind. The progress and
- * cancellation handles are made once and handed in uncancelled, because a check that reads a JSON
- * answer would otherwise be answered with a cancellation instead.
+ * cancellation handles are made once and handed in uncancelled, because a check that reads an answer
+ * would otherwise be answered with a cancellation instead.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -21,12 +21,24 @@
 
 #include "harness.h"
 
-static void release_answer(RorolalaResult answer) {
-    if (answer.tag == RorolalaResult_Ok) {
-        free_string(answer.payload);
-    } else {
-        free_rola_write_error(answer.payload);
-    }
+/* The fields every write request carries, naming a Workspace and no account. */
+static RolaWriteCommon common_of(const char *workspace, const char *account) {
+    RolaWriteCommon common;
+    memset(&common, 0, sizeof common);
+    common.workspace = workspace;
+    common.account = account;
+    common.target.tag = RolaWriteTarget_Tracked;
+
+    return common;
+}
+
+/* A list of strings as C hands one over. */
+static RolaStrSpan span_of(const char **items, size_t count) {
+    RolaStrSpan span;
+    span.items = items;
+    span.count = count;
+
+    return span;
 }
 
 int main(void) {
@@ -47,7 +59,7 @@ int main(void) {
         return 2;
     }
 
-    RorolalaResult made = create_workspace(dir);
+    RorolalaResult made = rola_workspace_create(dir);
     want(made.tag == RorolalaResult_Ok, "a Workspace is made");
 
     RolaProgress *progress = rola_progress_new();
@@ -61,14 +73,17 @@ int main(void) {
         return finish();
     }
 
-    RorolalaResult refused = rola_write_bring("", progress, cancellation);
-    want(refused.tag == RorolalaResult_Err, "an empty request is refused");
+    /* A request that names no Workspace is refused before anything is read. */
+    RolaWriteBringRequest empty;
+    memset(&empty, 0, sizeof empty);
+    RorolalaResult refused = rola_write_bring(&empty, progress, cancellation);
+    want(refused.tag == RorolalaResult_Err, "a request that names no Workspace is refused");
     want(refused.payload != NULL, "the refusal carries an error");
     if (refused.tag == RorolalaResult_Err && refused.payload != NULL) {
         RolaWriteError *error = refused.payload;
-        want(error->tag == RolaWriteError_Json, "an empty request is a JSON failure");
+        want(error->tag == RolaWriteError_NoWorkspace, "the refusal names a missing Workspace");
     }
-    release_answer(refused);
+    free_rola_write_error(refused.payload);
 
     char path[1024];
     snprintf(path, sizeof path, "%s/a.txt", dir);
@@ -89,25 +104,37 @@ int main(void) {
         ""
     );
     want(first.tag == RorolalaResult_Ok, "a.txt is tracked");
-    release_answer(first);
+    if (first.tag == RorolalaResult_Ok && first.payload != NULL) {
+        free_rola_write_tracked_file(first.payload);
+    }
 
     want(unlink(path) == 0, "a.txt is taken away from disk");
 
-    char request[2048];
-    snprintf(
-        request,
-        sizeof request,
-        "{\"workspace\":\"%s\",\"path\":\"a.txt\",\"mode\":{\"kind\":\"delete\"}}",
-        dir
-    );
-    RorolalaResult aligned = rola_write_align(request, progress, cancellation);
+    RolaWriteAlignRequest aligned_request;
+    memset(&aligned_request, 0, sizeof aligned_request);
+    aligned_request.common = common_of(dir, "");
+    aligned_request.path = "a.txt";
+    aligned_request.mode.tag = RolaWriteAlignMode_Delete;
+
+    RorolalaResult aligned = rola_write_align(&aligned_request, progress, cancellation);
     want(aligned.tag == RorolalaResult_Ok, "deleting a lost path succeeds");
     want(aligned.payload != NULL, "the deletion answers with what it settled");
     if (aligned.tag == RorolalaResult_Ok && aligned.payload != NULL) {
-        const char *json = aligned.payload;
-        want(strstr(json, "a.txt") != NULL, "the deletion names the path");
+        RolaWriteAlign *answer = aligned.payload;
+        char *kind = rola_write_align_kind(answer);
+        want(kind != NULL && strcmp(kind, "paths") == 0, "the deletion is a list of paths");
+        free_string(kind);
+        want(rola_write_align_paths_count(answer) == 1, "the deletion names its path");
+        RolaWriteAlignEntry *entry = rola_write_align_paths_at(answer, 0);
+        want(entry != NULL, "the settled path is there");
+        if (entry != NULL) {
+            char *what = rola_write_align_entry_what(entry);
+            want(what != NULL && strcmp(what, "a.txt") == 0, "the deletion names a.txt");
+            free_string(what);
+            free_rola_write_align_entry(entry);
+        }
+        free_rola_write_align(answer);
     }
-    release_answer(aligned);
 
     snprintf(path, sizeof path, "%s/b.txt", dir);
     file = fopen(path, "wb");
@@ -127,7 +154,9 @@ int main(void) {
         ""
     );
     want(second.tag == RorolalaResult_Ok, "b.txt is tracked");
-    release_answer(second);
+    if (second.tag == RorolalaResult_Ok && second.payload != NULL) {
+        free_rola_write_tracked_file(second.payload);
+    }
 
     file = fopen(path, "wb");
     want(file != NULL, "b.txt is edited");
@@ -146,28 +175,39 @@ int main(void) {
         ""
     );
     want(again.tag == RorolalaResult_Ok, "b.txt is tracked again");
-    release_answer(again);
+    if (again.tag == RorolalaResult_Ok && again.payload != NULL) {
+        free_rola_write_tracked_file(again.payload);
+    }
 
     /* An empty record moves one version back, which is only a change because the second track made
        a second version to move from. */
-    snprintf(request, sizeof request, "{\"workspace\":\"%s\",\"file\":\"b.txt\"}", dir);
-    RorolalaResult retracked = rola_write_retrack(request, progress, cancellation);
+    RolaWriteRetrackRequest retrack_request;
+    memset(&retrack_request, 0, sizeof retrack_request);
+    retrack_request.common = common_of(dir, "");
+    retrack_request.file = "b.txt";
+
+    RorolalaResult retracked = rola_write_retrack(&retrack_request, progress, cancellation);
     want(retracked.tag == RorolalaResult_Ok, "retracking a path succeeds");
     want(retracked.payload != NULL, "the retrack answers with the record it moved");
     if (retracked.tag == RorolalaResult_Ok && retracked.payload != NULL) {
-        const char *json = retracked.payload;
-        want(strstr(json, "\"kind\":\"path\"") != NULL, "the answer is a path's record");
-        want(strstr(json, "\"changed\":true") != NULL, "the record moved to another version");
+        RolaWriteRetrack *answer = retracked.payload;
+        char *kind = rola_write_retrack_kind(answer);
+        want(kind != NULL && strcmp(kind, "path") == 0, "the answer is a path's record");
+        free_string(kind);
+        want(rola_write_retrack_changed(answer), "the record moved to another version");
+        free_rola_write_retrack(answer);
     }
-    release_answer(retracked);
 
     /*
      * A Workspace with no account bound and no tracked Vault leaves two gates in the way. Which one
      * stops a run first is the request layer's order rather than a promise to a caller, so either
      * tag answers these checks.
      */
-    snprintf(request, sizeof request, "{\"workspace\":\"%s\",\"refs\":[]}", dir);
-    RorolalaResult unbrought = rola_write_bring(request, progress, cancellation);
+    RolaWriteBringRequest bring_request;
+    memset(&bring_request, 0, sizeof bring_request);
+    bring_request.common = common_of(dir, "");
+
+    RorolalaResult unbrought = rola_write_bring(&bring_request, progress, cancellation);
     want(
         unbrought.tag == RorolalaResult_Err,
         "a bring with neither an account nor a tracked Vault is refused"
@@ -180,15 +220,15 @@ int main(void) {
             "the bring names a missing account or Vault"
         );
     }
-    release_answer(unbrought);
+    free_rola_write_error(unbrought.payload);
 
-    snprintf(
-        request,
-        sizeof request,
-        "{\"workspace\":\"%s\",\"kind\":\"hold\",\"paths\":[]}",
-        dir
-    );
-    RorolalaResult unplanned = rola_write_ownership_plan(request, progress, cancellation);
+    RolaWriteOwnershipRequest ownership_request;
+    memset(&ownership_request, 0, sizeof ownership_request);
+    ownership_request.common = common_of(dir, "");
+    ownership_request.kind = RolaWriteOwnershipKind_Hold;
+
+    RorolalaResult unplanned =
+        rola_write_ownership_plan(&ownership_request, progress, cancellation);
     want(
         unplanned.tag == RorolalaResult_Err,
         "an ownership plan with neither an account nor a tracked Vault is refused"
@@ -201,13 +241,19 @@ int main(void) {
             "the ownership plan names a missing account or Vault"
         );
     }
-    release_answer(unplanned);
+    free_rola_write_error(unplanned.payload);
 
     /* Track's plan and apply speak for an account, so the key is looked for before anything is read:
-       a Workspace without one is refused the same way, and an empty plan is a document the caller
-       can send rather than a shape this side invents. */
-    snprintf(request, sizeof request, "{\"workspace\":\"%s\",\"files\":[\"a.txt\"]}", dir);
-    RorolalaResult unplanned_track = rola_write_track_plan(request, progress, cancellation);
+       a Workspace without one is refused the same way, and an empty array is a plan the caller can
+       send rather than a shape this side invents. */
+    const char *files[] = {"a.txt"};
+    RolaWriteTrackRequest track_request;
+    memset(&track_request, 0, sizeof track_request);
+    track_request.common = common_of(dir, "");
+    track_request.files = span_of(files, 1);
+
+    RorolalaResult unplanned_track =
+        rola_write_track_plan(&track_request, progress, cancellation);
     want(unplanned_track.tag == RorolalaResult_Err, "a track plan with no account is refused");
     want(unplanned_track.payload != NULL, "the track plan failure carries an error");
     if (unplanned_track.tag == RorolalaResult_Err && unplanned_track.payload != NULL) {
@@ -217,12 +263,14 @@ int main(void) {
             "the track plan names a missing account"
         );
     }
-    release_answer(unplanned_track);
+    free_rola_write_error(unplanned_track.payload);
 
     RorolalaResult unapplied_track = rola_write_track_apply(
-        request,
-        "{\"subjects\":[]}",
-        "{}",
+        &track_request,
+        NULL,
+        0,
+        NULL,
+        0,
         progress,
         cancellation
     );
@@ -235,15 +283,21 @@ int main(void) {
             "the track apply names a missing account"
         );
     }
-    release_answer(unapplied_track);
+    free_rola_write_error(unapplied_track.payload);
 
-    RorolalaResult empty_track = rola_write_track_plan("", progress, cancellation);
-    want(empty_track.tag == RorolalaResult_Err, "an empty track request is refused");
+    RolaWriteTrackRequest no_workspace;
+    memset(&no_workspace, 0, sizeof no_workspace);
+
+    RorolalaResult empty_track = rola_write_track_plan(&no_workspace, progress, cancellation);
+    want(empty_track.tag == RorolalaResult_Err, "a track request with no Workspace is refused");
     if (empty_track.tag == RorolalaResult_Err && empty_track.payload != NULL) {
         RolaWriteError *error = empty_track.payload;
-        want(error->tag == RolaWriteError_Json, "an empty track request is a JSON failure");
+        want(
+            error->tag == RolaWriteError_NoWorkspace,
+            "the track request names a missing Workspace"
+        );
     }
-    release_answer(empty_track);
+    free_rola_write_error(empty_track.payload);
 
     /*
      * An account is located by the name of its key file, so a file this test never signs with is
@@ -273,36 +327,68 @@ int main(void) {
         fclose(later);
     }
 
-    snprintf(
-        request,
-        sizeof request,
-        "{\"workspace\":\"%s\",\"account\":\"alice\",\"files\":[\"c.txt\"]}",
-        dir
-    );
-    RorolalaResult planned_track = rola_write_track_plan(request, progress, cancellation);
+    const char *named_files[] = {"c.txt"};
+    track_request.common = common_of(dir, "alice");
+    track_request.files = span_of(named_files, 1);
+
+    RorolalaResult planned_track =
+        rola_write_track_plan(&track_request, progress, cancellation);
     want(planned_track.tag == RorolalaResult_Ok, "a track plan with an account succeeds");
     want(planned_track.payload != NULL, "the plan names what it read");
     if (planned_track.tag == RorolalaResult_Ok && planned_track.payload != NULL) {
-        const char *plan = (const char *)planned_track.payload;
-        want(strstr(plan, "\"subjects\"") != NULL, "the plan lists its subjects");
-        want(strstr(plan, "\"c.txt\"") != NULL, "the plan names the file it read");
+        RolaWriteTrackPlan *plan = planned_track.payload;
+        want(rola_write_track_plan_subject_count(plan) == 1, "the plan names its subject");
+        RolaWriteTrackSubject *subject = rola_write_track_plan_subject_at(plan, 0);
+        want(subject != NULL, "the subject is there");
+        if (subject != NULL) {
+            char *named = rola_write_track_subject_path(subject);
+            char *digest = rola_write_track_subject_digest(subject);
+            want(named != NULL && strcmp(named, "c.txt") == 0, "the plan names c.txt");
 
-        RorolalaResult applied_track = rola_write_track_apply(
-            request,
-            plan,
-            "{\"c.txt\":\"first\"}",
-            progress,
-            cancellation
-        );
-        want(applied_track.tag == RorolalaResult_Ok, "a track apply with a plan succeeds");
-        want(applied_track.payload != NULL, "the apply answers what it recorded");
-        if (applied_track.tag == RorolalaResult_Ok && applied_track.payload != NULL) {
-            const char *drawn = (const char *)applied_track.payload;
-            want(strstr(drawn, "\"action\":\"added\"") != NULL, "the recording is a gain");
+            /* An apply reads back what the plan promised to record, so the arrays it is handed
+               name each subject's path and the digest the plan read. */
+            RolaWriteTrackAgreed agreed[1];
+            agreed[0].path = named;
+            agreed[0].digest = digest;
+
+            RolaWriteTrackMessage words[1];
+            words[0].path = "c.txt";
+            words[0].text = "first";
+
+            free_string(named);
+            free_string(digest);
+            free_rola_write_track_subject(subject);
+
+            RorolalaResult applied_track = rola_write_track_apply(
+                &track_request,
+                agreed,
+                1,
+                words,
+                1,
+                progress,
+                cancellation
+            );
+            want(applied_track.tag == RorolalaResult_Ok, "a track apply with a plan succeeds");
+            want(applied_track.payload != NULL, "the apply answers what it recorded");
+            if (applied_track.tag == RorolalaResult_Ok && applied_track.payload != NULL) {
+                RolaWriteTrackApply *applied = applied_track.payload;
+                want(rola_write_track_apply_item_count(applied) == 1, "one subject is recorded");
+                RolaWriteTrackItem *item = rola_write_track_apply_item_at(applied, 0);
+                want(item != NULL, "the recorded item is there");
+                if (item != NULL) {
+                    char *action = rola_write_track_item_action(item);
+                    want(
+                        action != NULL && strcmp(action, "added") == 0,
+                        "the recording is a gain"
+                    );
+                    free_string(action);
+                    free_rola_write_track_item(item);
+                }
+                free_rola_write_track_apply(applied);
+            }
         }
-        release_answer(applied_track);
+        free_rola_write_track_plan(plan);
     }
-    release_answer(planned_track);
 
     /* Cancelling is a flag the caller sets, so a handle cancelled before the call is answered at the
        first check rather than after the work. What the signal does is set the same flag. */
@@ -310,7 +396,7 @@ int main(void) {
     want(stopped != NULL, "a cancellation handle is made for the stopped run");
     if (stopped != NULL) {
         rola_cancellation_cancel(stopped);
-        RorolalaResult cancelled = rola_write_track_plan(request, progress, stopped);
+        RorolalaResult cancelled = rola_write_track_plan(&track_request, progress, stopped);
         want(cancelled.tag == RorolalaResult_Err, "a cancelled plan is refused");
         if (cancelled.tag == RorolalaResult_Err && cancelled.payload != NULL) {
             RolaWriteError *error = cancelled.payload;
@@ -319,22 +405,21 @@ int main(void) {
                 "the cancelled plan says it was cancelled"
             );
         }
-        release_answer(cancelled);
+        free_rola_write_error(cancelled.payload);
         free_rola_cancellation(stopped);
     }
 
     /*
-     * A variant merge takes the same request document with a `join`, and the variant itself named as
-     * well: what the words mean is the Vault's to say, so a bad one is refused rather than guessed.
+     * A variant merge takes the same request with a `join`, and the variant itself named as well:
+     * what the words mean is the Vault's to say, so a bad one is refused rather than guessed.
      */
-    snprintf(
-        request,
-        sizeof request,
-        "{\"workspace\":\"%s\",\"join\":\"not-a-variant\",\"variant\":\"not-a-variant\","
-        "\"file\":\"c.txt\"}",
-        dir
-    );
-    RorolalaResult unjoined = rola_write_bring(request, progress, cancellation);
+    memset(&bring_request, 0, sizeof bring_request);
+    bring_request.common = common_of(dir, "");
+    bring_request.join = "not-a-variant";
+    bring_request.variant = "not-a-variant";
+    bring_request.file = "c.txt";
+
+    RorolalaResult unjoined = rola_write_bring(&bring_request, progress, cancellation);
     want(unjoined.tag == RorolalaResult_Err, "a variant that is not a hash is refused");
     want(unjoined.payload != NULL, "the variant failure carries an error");
     if (unjoined.tag == RorolalaResult_Err && unjoined.payload != NULL) {
@@ -346,7 +431,7 @@ int main(void) {
             "the variant failure is a refused name, not a transport failure"
         );
     }
-    release_answer(unjoined);
+    free_rola_write_error(unjoined.payload);
 
     want(
         !rola_cancellation_is_cancelled(cancellation),

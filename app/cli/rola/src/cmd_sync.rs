@@ -22,7 +22,7 @@
 // where it covers the one signature that needs it.
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
-use librorolala::daemon::action_fetch_layout;
+use librorolala::daemon::{FetchLayoutRequest, action_fetch_layout};
 use librorolala::layout::Layout;
 use librorolala::storage::StorageSet;
 use librorolala::vcs::VCSIndex;
@@ -436,7 +436,9 @@ fn plan_with(
         carry.workspace,
         carry.account,
         carry.target.to_string(),
-        vault_name.to_owned(),
+        &FetchLayoutRequest {
+            name: vault_name.to_owned(),
+        },
     )
     .map_err(|error| PlanRefusal::Failed(error.to_string()))?;
     bar.advance_by(1);

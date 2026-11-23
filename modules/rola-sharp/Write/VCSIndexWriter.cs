@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 using RolaSharp;
 
@@ -22,18 +21,25 @@ public sealed class VCSIndexWriter : Writer
     {
         ArgumentNullException.ThrowIfNull(variant);
 
-        return WriteJson(
-            JsonSerializer.Serialize(
-                new
+        using var memory = new NativeRequest();
+
+        return WriteObject(
+            memory,
+            new RolaWriteIndexObjectRequest
+            {
+                tag = RolaWriteIndexObjectRequestTag.RolaWriteIndexObjectRequest_Variant,
+                payload = new RolaWriteIndexObjectRequestPayload
                 {
-                    kind = "variant",
-                    storage = variant.Storage,
-                    base_version = variant.BaseVersion,
-                    join = variant.Join,
-                    creator = variant.Creator,
-                    message = variant.Message,
-                }
-            )
+                    Variant = new RolaWriteIndexObjectRequestVariant
+                    {
+                        storage = memory.Text(variant.Storage),
+                        base_version = memory.Text(variant.BaseVersion),
+                        join = memory.Text(variant.Join),
+                        creator = memory.Text(variant.Creator),
+                        message = memory.Text(variant.Message),
+                    },
+                },
+            }
         );
     }
 
@@ -44,7 +50,22 @@ public sealed class VCSIndexWriter : Writer
     {
         ArgumentNullException.ThrowIfNull(version);
 
-        return WriteJson(JsonSerializer.Serialize(new { kind = "version", variant = version.Variant }));
+        using var memory = new NativeRequest();
+
+        return WriteObject(
+            memory,
+            new RolaWriteIndexObjectRequest
+            {
+                tag = RolaWriteIndexObjectRequestTag.RolaWriteIndexObjectRequest_Version,
+                payload = new RolaWriteIndexObjectRequestPayload
+                {
+                    Version = new RolaWriteIndexObjectRequestVersion
+                    {
+                        variant = memory.Text(version.Variant),
+                    },
+                },
+            }
+        );
     }
 
     /// <summary>Writes one creator.</summary>
@@ -54,7 +75,22 @@ public sealed class VCSIndexWriter : Writer
     {
         ArgumentNullException.ThrowIfNull(name);
 
-        return WriteJson(JsonSerializer.Serialize(new { kind = "creator", text = name }));
+        using var memory = new NativeRequest();
+
+        return WriteObject(
+            memory,
+            new RolaWriteIndexObjectRequest
+            {
+                tag = RolaWriteIndexObjectRequestTag.RolaWriteIndexObjectRequest_Creator,
+                payload = new RolaWriteIndexObjectRequestPayload
+                {
+                    Creator = new RolaWriteIndexObjectRequestCreator
+                    {
+                        text = memory.Text(name),
+                    },
+                },
+            }
+        );
     }
 
     /// <summary>Writes one message.</summary>
@@ -64,7 +100,22 @@ public sealed class VCSIndexWriter : Writer
     {
         ArgumentNullException.ThrowIfNull(text);
 
-        return WriteJson(JsonSerializer.Serialize(new { kind = "message", text }));
+        using var memory = new NativeRequest();
+
+        return WriteObject(
+            memory,
+            new RolaWriteIndexObjectRequest
+            {
+                tag = RolaWriteIndexObjectRequestTag.RolaWriteIndexObjectRequest_Message,
+                payload = new RolaWriteIndexObjectRequestPayload
+                {
+                    Message = new RolaWriteIndexObjectRequestMessage
+                    {
+                        text = memory.Text(text),
+                    },
+                },
+            }
+        );
     }
 
     /// <summary>Lays the index out afresh.</summary>
@@ -80,9 +131,15 @@ public sealed class VCSIndexWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new Packed(RolaJson.Flag(document.RootElement, "changed"));
+            var handle = answer.payload;
+            try
+            {
+                return new Packed(RorolalaBinding.rola_write_pack_changed(handle));
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_pack(handle);
+            }
         }
         finally
         {
@@ -131,12 +188,18 @@ public sealed class VCSIndexWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new FileVersion(
-                RolaJson.Text(document.RootElement, "variant") ?? string.Empty,
-                RolaJson.Text(document.RootElement, "version") ?? string.Empty
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new FileVersion(
+                    NativeText.Taken(RorolalaBinding.rola_write_file_version_variant(handle)),
+                    NativeText.Taken(RorolalaBinding.rola_write_file_version_version(handle))
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_file_version(handle);
+            }
         }
         finally
         {
@@ -149,26 +212,39 @@ public sealed class VCSIndexWriter : Writer
         }
     }
 
+    /// <summary>The UTF-8 text of a string, in memory the caller frees.</summary>
+    /// <param name="text">The text.</param>
+    /// <returns>The pointer.</returns>
     private static nint Utf8(string text) => Marshal.StringToCoTaskMemUTF8(text);
 
-    private string WriteJson(string request)
+    /// <summary>Writes one object into the index and answers the key it was written under.</summary>
+    /// <param name="memory">Where the request's strings are held.</param>
+    /// <param name="request">The object.</param>
+    /// <returns>The key.</returns>
+    private string WriteObject(NativeRequest memory, RolaWriteIndexObjectRequest request)
     {
         var directory = Marshal.StringToCoTaskMemUTF8(_index.Root.FullName);
-        var json = Marshal.StringToCoTaskMemUTF8(request);
         try
         {
-            var answer = RorolalaBinding.rola_write_index_object_json(directory, json);
+            var answer = RorolalaBinding.rola_write_index_object(directory, request);
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
                 throw WriteResults.From(answer.payload);
             }
 
-            return NativeText.Taken(answer.payload);
+            var handle = answer.payload;
+            try
+            {
+                return NativeText.Taken(RorolalaBinding.rola_write_index_object_key(handle));
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_index_object(handle);
+            }
         }
         finally
         {
             Marshal.FreeCoTaskMem(directory);
-            Marshal.FreeCoTaskMem(json);
         }
     }
 }

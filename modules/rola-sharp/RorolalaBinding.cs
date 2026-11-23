@@ -44,6 +44,18 @@ internal struct RorolalaResult
     public nint payload;
 }
 
+/// <summary>
+/// A list of strings as C passes one.
+///
+/// The strings are borrowed for the call and belong to the caller.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaStrSpan
+{
+    public nint items;
+    public nuint count;
+}
+
 internal enum RolaLayoutErrorTag : int
 {
     /// <summary>
@@ -99,85 +111,6 @@ internal struct RolaLayoutError
     public RolaLayoutErrorPayload payload;
 }
 
-internal enum RolaV2ReadErrorTag : int
-{
-    /// <summary>
-    /// The request is not one this build knows, or not one of its fields reads.
-    /// </summary>
-    RolaV2ReadError_InvalidRequest = 0,
-    /// <summary>
-    /// No Workspace holds the directory.
-    /// </summary>
-    RolaV2ReadError_NoWorkspace = 1,
-    /// <summary>
-    /// No Layout is there.
-    /// </summary>
-    RolaV2ReadError_NoLayout = 2,
-    /// <summary>
-    /// No store is there.
-    /// </summary>
-    RolaV2ReadError_NoStore = 3,
-    /// <summary>
-    /// No index is there.
-    /// </summary>
-    RolaV2ReadError_NoIndex = 4,
-    /// <summary>
-    /// What the request names is not there.
-    /// </summary>
-    RolaV2ReadError_NotFound = 5,
-    /// <summary>
-    /// What is there did not read.
-    /// </summary>
-    RolaV2ReadError_Unreadable = 6,
-    /// <summary>
-    /// The caller asked the read to stop.
-    /// </summary>
-    RolaV2ReadError_Cancelled = 7,
-}
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct RolaV2ReadErrorInvalidRequest
-{
-    /// <summary>
-    /// Why it did not read.
-    /// </summary>
-    public nint reason;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct RolaV2ReadErrorUnreadable
-{
-    /// <summary>
-    /// Why it did not.
-    /// </summary>
-    public nint reason;
-}
-
-[StructLayout(LayoutKind.Explicit)]
-internal struct RolaV2ReadErrorPayload
-{
-    /// <summary>
-    /// The request is not one this build knows, or not one of its fields reads.
-    /// </summary>
-    [FieldOffset(0)]
-    public RolaV2ReadErrorInvalidRequest InvalidRequest;
-    /// <summary>
-    /// What is there did not read.
-    /// </summary>
-    [FieldOffset(0)]
-    public RolaV2ReadErrorUnreadable Unreadable;
-}
-
-/// <summary>
-/// Why an aggregate read did not produce a document.
-/// </summary>
-[StructLayout(LayoutKind.Sequential)]
-internal struct RolaV2ReadError
-{
-    public RolaV2ReadErrorTag tag;
-    public RolaV2ReadErrorPayload payload;
-}
-
 internal enum RolaStorageErrorTag : int
 {
     /// <summary>
@@ -197,9 +130,13 @@ internal enum RolaStorageErrorTag : int
     /// </summary>
     RolaStorageError_Malformed = 3,
     /// <summary>
+    /// The content is not a tree structure this build reads.
+    /// </summary>
+    RolaStorageError_NotAstructure = 4,
+    /// <summary>
     /// The store itself failed, or what it holds does not read.
     /// </summary>
-    RolaStorageError_Read = 4,
+    RolaStorageError_Read = 5,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -260,6 +197,298 @@ internal struct RolaStorageError
 {
     public RolaStorageErrorTag tag;
     public RolaStorageErrorPayload payload;
+}
+
+internal enum RolaWriteAlignModeTag : int
+{
+    /// <summary>
+    /// Confirm that a path the Layout names but the tree does not hold is gone.
+    /// </summary>
+    RolaWriteAlignMode_Delete = 0,
+    /// <summary>
+    /// Confirm the move the path is a side of.
+    /// </summary>
+    RolaWriteAlignMode_Rename = 1,
+    /// <summary>
+    /// Take back the move the path is a side of, leaving a loss and a gain.
+    /// </summary>
+    RolaWriteAlignMode_Break = 2,
+    /// <summary>
+    /// Assert that the path moved to the path named here.
+    /// </summary>
+    RolaWriteAlignMode_MoveTo = 3,
+    /// <summary>
+    /// Put a moved file back where the Layout names it.
+    /// </summary>
+    RolaWriteAlignMode_RestoreMove = 4,
+    /// <summary>
+    /// Put a changed file back to the version the Layout names.
+    /// </summary>
+    RolaWriteAlignMode_RestoreModify = 5,
+    /// <summary>
+    /// Put a file inside a tree back to what the tree has staged for it.
+    /// </summary>
+    RolaWriteAlignMode_RestoreStaged = 6,
+    /// <summary>
+    /// Put a deleted file back, taking the version the Layout names out of the store.
+    /// </summary>
+    RolaWriteAlignMode_RestoreDelete = 7,
+    /// <summary>
+    /// Do whichever of the three a path put back needs.
+    /// </summary>
+    RolaWriteAlignMode_Restore = 8,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteAlignModeMoveTo
+{
+    /// <summary>
+    /// Where the path moved to, read against the Workspace root.
+    /// </summary>
+    public nint path;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaWriteAlignModePayload
+{
+    /// <summary>
+    /// Assert that the path moved to the path named here.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteAlignModeMoveTo MoveTo;
+}
+
+/// <summary>
+/// What an alignment is to do with the one path a run named, as a request document names it.
+///
+/// A `RolaWriteAlignMode` the caller fills: `tag` selects the variant and the payload companion
+/// it names holds `move_to`'s path. The path is borrowed for the call and released by the caller.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteAlignMode
+{
+    public RolaWriteAlignModeTag tag;
+    public RolaWriteAlignModePayload payload;
+}
+
+/// <summary>
+/// The words a write uses while it runs, as a C caller fills them.
+///
+/// A `RolaWriteLabels` the caller fills; every `const char *` is borrowed for the call. A field
+/// left as the empty string keeps the native word, so a caller translates only what it shows.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLabels
+{
+    /// <summary>
+    /// Reading the tree, a Layout or an index.
+    /// </summary>
+    public nint reading;
+    /// <summary>
+    /// Writing content into the store.
+    /// </summary>
+    public nint writing;
+    /// <summary>
+    /// Reaching the Vault for a Layout or an object.
+    /// </summary>
+    public nint fetching;
+    /// <summary>
+    /// Carrying content to the Vault.
+    /// </summary>
+    public nint uploading;
+    /// <summary>
+    /// Carrying content from the Vault.
+    /// </summary>
+    public nint downloading;
+    /// <summary>
+    /// Checking the work before writing it.
+    /// </summary>
+    public nint checking;
+    /// <summary>
+    /// Carrying out a plan.
+    /// </summary>
+    public nint applying;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteTargetAddress
+{
+    /// <summary>
+    /// Where it answers.
+    /// </summary>
+    public nint address;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteTargetNamed
+{
+    /// <summary>
+    /// The name the Workspace bound it to.
+    /// </summary>
+    public nint name;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaWriteTargetPayload
+{
+    /// <summary>
+    /// A Vault the Workspace knows, under this name.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteTargetNamed Named;
+    /// <summary>
+    /// An address, which is a Vault the Workspace never named.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteTargetAddress Address;
+}
+
+internal enum RolaWriteTargetTag : int
+{
+    /// <summary>
+    /// The Vault the Layout being worked in tracks.
+    /// </summary>
+    RolaWriteTarget_Tracked = 0,
+    /// <summary>
+    /// A Vault the Workspace knows, under this name.
+    /// </summary>
+    RolaWriteTarget_Named = 1,
+    /// <summary>
+    /// An address, which is a Vault the Workspace never named.
+    /// </summary>
+    RolaWriteTarget_Address = 2,
+}
+
+/// <summary>
+/// The Vault a request reaches for, as a C caller names it.
+///
+/// A `RolaWriteTarget` the caller fills: `tag` selects the variant and the payload companion it
+/// names holds that variant's string. The string is borrowed for the call and released by the
+/// caller, so nothing here is freed when the call returns.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteTarget
+{
+    public RolaWriteTargetTag tag;
+    public RolaWriteTargetPayload payload;
+}
+
+/// <summary>
+/// The fields every write request carries, as a C caller fills them.
+///
+/// A `RolaWriteCommon` the caller fills beside a request's own fields. Every `const char *` is
+/// borrowed for the call and released by the caller, so nothing here is freed when the call
+/// returns. A zeroed `concurrency` leaves the choice to the native side, and an empty `account`
+/// names none.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteCommon
+{
+    /// <summary>
+    /// The Workspace the write is made in, by its root.
+    /// </summary>
+    public nint workspace;
+    /// <summary>
+    /// The account the write acts as, by name, empty for none.
+    /// </summary>
+    public nint account;
+    /// <summary>
+    /// The Vault it reaches for.
+    /// </summary>
+    public RolaWriteTarget target;
+    /// <summary>
+    /// Whether the run may reach a Vault at all.
+    /// </summary>
+    public byte offline;
+    /// <summary>
+    /// Whether the run is told to go past a gate.
+    /// </summary>
+    public byte force;
+    /// <summary>
+    /// How many reads a transfer keeps in flight, zero for the native side's own choice.
+    /// </summary>
+    public nuint concurrency;
+    /// <summary>
+    /// What the write calls the work while it does it.
+    /// </summary>
+    public RolaWriteLabels labels;
+}
+
+/// <summary>
+/// An alignment a C caller asks for.
+///
+/// A `RolaWriteAlignRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. A relative `path`, and a
+/// relative path in a `move_to` mode, is read against the Workspace root.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteAlignRequest
+{
+    /// <summary>
+    /// The Workspace, the account, the target and the rest of what every write shares.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// The path the run acts on, read against the Workspace root.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// What the run does with the path.
+    /// </summary>
+    public RolaWriteAlignMode mode;
+    /// <summary>
+    /// Whether a move is put back in content as well as in place.
+    /// </summary>
+    public byte completely;
+    /// <summary>
+    /// Whether an entry the ignore rules govern may be selected anyway.
+    /// </summary>
+    public byte include_ignored;
+}
+
+/// <summary>
+/// A bring a C caller asks for.
+///
+/// A `RolaWriteBringRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `refs` is a
+/// `RolaStrSpan` of the references to bring in, and an empty `to` lands each at the path the Vault's
+/// Layout names it by.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteBringRequest
+{
+    /// <summary>
+    /// The fields every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// The references to bring in.
+    /// </summary>
+    public RolaStrSpan refs;
+    /// <summary>
+    /// Where the references land, empty to land each at the path the Vault names it by.
+    /// </summary>
+    public nint to;
+    /// <summary>
+    /// Whether each reference keeps only its own name under a destination.
+    /// </summary>
+    public byte by_name;
+    /// <summary>
+    /// The marker that asks for a variant merge, empty for a bring of entries.
+    /// </summary>
+    public nint join;
+    /// <summary>
+    /// The variant to bring in, for a variant merge.
+    /// </summary>
+    public nint variant;
+    /// <summary>
+    /// The file it is to be joined into, for a variant merge.
+    /// </summary>
+    public nint file;
+    /// <summary>
+    /// Whether a tree variant is merged into its tree, for a variant merge.
+    /// </summary>
+    public byte tree_merge;
 }
 
 internal enum RolaWriteErrorTag : int
@@ -345,25 +574,21 @@ internal enum RolaWriteErrorTag : int
     /// </summary>
     RolaWriteError_Io = 19,
     /// <summary>
-    /// A JSON document did not read as the shape a request or a plan has.
-    /// </summary>
-    RolaWriteError_Json = 20,
-    /// <summary>
     /// The write stopped for a reason this build does not name.
     /// </summary>
-    RolaWriteError_Internal = 21,
+    RolaWriteError_Internal = 20,
     /// <summary>
     /// A tree could not be read or written.
     /// </summary>
-    RolaWriteError_Tree = 22,
+    RolaWriteError_Tree = 21,
     /// <summary>
     /// No tree holds the path.
     /// </summary>
-    RolaWriteError_NotAtree = 23,
+    RolaWriteError_NotAtree = 22,
     /// <summary>
     /// No Vault holds the directory.
     /// </summary>
-    RolaWriteError_NoVault = 24,
+    RolaWriteError_NoVault = 23,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -486,15 +711,6 @@ internal struct RolaWriteErrorIo
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct RolaWriteErrorJson
-{
-    /// <summary>
-    /// Why it did not.
-    /// </summary>
-    public nint reason;
-}
-
-[StructLayout(LayoutKind.Sequential)]
 internal struct RolaWriteErrorInternal
 {
     /// <summary>
@@ -580,11 +796,6 @@ internal struct RolaWriteErrorPayload
     [FieldOffset(0)]
     public RolaWriteErrorIo Io;
     /// <summary>
-    /// A JSON document did not read as the shape a request or a plan has.
-    /// </summary>
-    [FieldOffset(0)]
-    public RolaWriteErrorJson Json;
-    /// <summary>
     /// The write stopped for a reason this build does not name.
     /// </summary>
     [FieldOffset(0)]
@@ -609,6 +820,734 @@ internal struct RolaWriteError
 {
     public RolaWriteErrorTag tag;
     public RolaWriteErrorPayload payload;
+}
+
+/// <summary>
+/// A content fetch a C caller asks for.
+///
+/// A `RolaWriteFetchRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `words` is a
+/// `RolaStrSpan` of the paths, directories, `Uuid`s and hashes whose content comes, and an empty
+/// `layout` reads the one being worked in.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteFetchRequest
+{
+    /// <summary>
+    /// The fields every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// The Layout the words are read in, empty for the one being worked in.
+    /// </summary>
+    public nint layout;
+    /// <summary>
+    /// The paths, directories, `Uuid`s and hashes whose content comes.
+    /// </summary>
+    public RolaStrSpan words;
+    /// <summary>
+    /// Whether each target comes with the chain behind it or alone.
+    /// </summary>
+    public byte recursive;
+}
+
+internal enum RolaWriteIndexObjectRequestTag : int
+{
+    /// <summary>
+    /// A variant: the stored entry it points at, its base, and what made it.
+    /// </summary>
+    RolaWriteIndexObjectRequest_Variant = 0,
+    /// <summary>
+    /// A version: the variant it points at.
+    /// </summary>
+    RolaWriteIndexObjectRequest_Version = 1,
+    /// <summary>
+    /// A creator: the name it is.
+    /// </summary>
+    RolaWriteIndexObjectRequest_Creator = 2,
+    /// <summary>
+    /// A message: the text it is.
+    /// </summary>
+    RolaWriteIndexObjectRequest_Message = 3,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteIndexObjectRequestVariant
+{
+    /// <summary>
+    /// The content key the variant points at.
+    /// </summary>
+    public nint storage;
+    /// <summary>
+    /// The base version's content key.
+    /// </summary>
+    public nint base_version;
+    /// <summary>
+    /// The variant it merges in, empty when it merges none.
+    /// </summary>
+    public nint join;
+    /// <summary>
+    /// The creator's content key.
+    /// </summary>
+    public nint creator;
+    /// <summary>
+    /// The message's content key.
+    /// </summary>
+    public nint message;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteIndexObjectRequestVersion
+{
+    /// <summary>
+    /// The variant's content key.
+    /// </summary>
+    public nint variant;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteIndexObjectRequestCreator
+{
+    /// <summary>
+    /// The name.
+    /// </summary>
+    public nint text;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteIndexObjectRequestMessage
+{
+    /// <summary>
+    /// The text.
+    /// </summary>
+    public nint text;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaWriteIndexObjectRequestPayload
+{
+    /// <summary>
+    /// A variant: the stored entry it points at, its base, and what made it.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteIndexObjectRequestVariant Variant;
+    /// <summary>
+    /// A version: the variant it points at.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteIndexObjectRequestVersion Version;
+    /// <summary>
+    /// A creator: the name it is.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteIndexObjectRequestCreator Creator;
+    /// <summary>
+    /// A message: the text it is.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteIndexObjectRequestMessage Message;
+}
+
+/// <summary>
+/// One object, as a C caller names it.
+///
+/// A `RolaWriteIndexObjectRequest` the caller fills: `tag` selects the object and the payload
+/// companion it names holds that object's strings. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteIndexObjectRequest
+{
+    public RolaWriteIndexObjectRequestTag tag;
+    public RolaWriteIndexObjectRequestPayload payload;
+}
+
+internal enum RolaWriteLayoutOpTag : int
+{
+    /// <summary>
+    /// Makes an entry.
+    /// </summary>
+    RolaWriteLayoutOp_CreateEntry = 0,
+    /// <summary>
+    /// Changes what an entry holds.
+    /// </summary>
+    RolaWriteLayoutOp_UpdateEntry = 1,
+    /// <summary>
+    /// Removes an entry.
+    /// </summary>
+    RolaWriteLayoutOp_RemoveEntry = 2,
+    /// <summary>
+    /// Binds a path.
+    /// </summary>
+    RolaWriteLayoutOp_CreatePath = 3,
+    /// <summary>
+    /// Moves a path.
+    /// </summary>
+    RolaWriteLayoutOp_MovePath = 4,
+    /// <summary>
+    /// Removes a path.
+    /// </summary>
+    RolaWriteLayoutOp_RemovePath = 5,
+    /// <summary>
+    /// Changes who holds an entry.
+    /// </summary>
+    RolaWriteLayoutOp_ChangeOwnership = 6,
+    /// <summary>
+    /// Changes an entry's `Uuid`.
+    /// </summary>
+    RolaWriteLayoutOp_ChangeUuid = 7,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLayoutOpCreateEntry
+{
+    /// <summary>
+    /// The entry's `Uuid`, as text.
+    /// </summary>
+    public nint uuid;
+    /// <summary>
+    /// The path it is named at, empty to leave it unplaced.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// The version it holds.
+    /// </summary>
+    public nint version;
+    /// <summary>
+    /// The account that holds it, empty for none.
+    /// </summary>
+    public nint owner;
+    /// <summary>
+    /// What the entry says about itself, empty for nothing.
+    /// </summary>
+    public nint description;
+    /// <summary>
+    /// `tree` to make a tree entry, empty for a file.
+    /// </summary>
+    public nint kind;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLayoutOpUpdateEntry
+{
+    /// <summary>
+    /// The entry's `Uuid`, as text.
+    /// </summary>
+    public nint uuid;
+    /// <summary>
+    /// The version it now holds.
+    /// </summary>
+    public nint version;
+    /// <summary>
+    /// The account that holds it, empty for none.
+    /// </summary>
+    public nint owner;
+    /// <summary>
+    /// What the entry says about itself, empty for nothing.
+    /// </summary>
+    public nint description;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLayoutOpRemoveEntry
+{
+    /// <summary>
+    /// The entry's `Uuid`, as text.
+    /// </summary>
+    public nint uuid;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLayoutOpCreatePath
+{
+    /// <summary>
+    /// The path.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// The entry's `Uuid`, as text.
+    /// </summary>
+    public nint uuid;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLayoutOpMovePath
+{
+    /// <summary>
+    /// The path it is at.
+    /// </summary>
+    public nint from;
+    /// <summary>
+    /// The path it is to be at.
+    /// </summary>
+    public nint to;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLayoutOpRemovePath
+{
+    /// <summary>
+    /// The path.
+    /// </summary>
+    public nint path;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLayoutOpChangeOwnership
+{
+    /// <summary>
+    /// The entry's `Uuid`, as text.
+    /// </summary>
+    public nint uuid;
+    /// <summary>
+    /// The account that holds it, empty for none.
+    /// </summary>
+    public nint owner;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLayoutOpChangeUuid
+{
+    /// <summary>
+    /// The `Uuid` it is at, as text.
+    /// </summary>
+    public nint from;
+    /// <summary>
+    /// The `Uuid` it is to be at, as text.
+    /// </summary>
+    public nint to;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaWriteLayoutOpPayload
+{
+    /// <summary>
+    /// Makes an entry.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteLayoutOpCreateEntry CreateEntry;
+    /// <summary>
+    /// Changes what an entry holds.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteLayoutOpUpdateEntry UpdateEntry;
+    /// <summary>
+    /// Removes an entry.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteLayoutOpRemoveEntry RemoveEntry;
+    /// <summary>
+    /// Binds a path.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteLayoutOpCreatePath CreatePath;
+    /// <summary>
+    /// Moves a path.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteLayoutOpMovePath MovePath;
+    /// <summary>
+    /// Removes a path.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteLayoutOpRemovePath RemovePath;
+    /// <summary>
+    /// Changes who holds an entry.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteLayoutOpChangeOwnership ChangeOwnership;
+    /// <summary>
+    /// Changes an entry's `Uuid`.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteLayoutOpChangeUuid ChangeUuid;
+}
+
+/// <summary>
+/// One change, as a C caller names it.
+///
+/// A `RolaWriteLayoutOp` the caller fills: `tag` selects the change and the payload companion it
+/// names holds that change's strings. Every `const char *` is borrowed for the call and released by
+/// the caller, so nothing here is freed when the call returns.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLayoutOp
+{
+    public RolaWriteLayoutOpTag tag;
+    public RolaWriteLayoutOpPayload payload;
+}
+
+/// <summary>
+/// Which way an ownership request moves.
+///
+/// A `RolaWriteOwnershipKind` the caller fills, one `tag` naming which way the ownership moves.
+/// </summary>
+internal enum RolaWriteOwnershipKind : int
+{
+    /// <summary>
+    /// Take the entry for this account.
+    /// </summary>
+    RolaWriteOwnershipKind_Hold = 0,
+    /// <summary>
+    /// Let the entry go.
+    /// </summary>
+    RolaWriteOwnershipKind_Giveup = 1,
+}
+
+/// <summary>
+/// An ownership request a C caller fills.
+///
+/// A `RolaWriteOwnershipRequest` the caller fills. Every `const char *` is borrowed for the call
+/// and released by the caller, so nothing here is freed when the call returns. `paths` is a
+/// `RolaStrSpan` of the names to move the ownership for, each read from the Workspace root.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteOwnershipRequest
+{
+    /// <summary>
+    /// The Workspace, the account, the Vault and the words every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// Which way the ownership moves.
+    /// </summary>
+    public RolaWriteOwnershipKind kind;
+    /// <summary>
+    /// The names to move the ownership for.
+    /// </summary>
+    public RolaStrSpan paths;
+    /// <summary>
+    /// Whether what can be moved is moved when not every name passes its gates.
+    /// </summary>
+    public byte allow_partial;
+}
+
+/// <summary>
+/// One entry a plan promised to move, as an apply is handed it back.
+///
+/// A `RolaWriteOwnershipAgreed` the caller fills from what a plan answered. Both strings are
+/// borrowed for the call and released by the caller.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteOwnershipAgreed
+{
+    /// <summary>
+    /// Where the entry sits in the Layout.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// The `Uuid` ownership is about, as text.
+    /// </summary>
+    public nint uuid;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaProgressSignalAdvance
+{
+    /// <summary>
+    /// The task that moved.
+    /// </summary>
+    public ulong id;
+    /// <summary>
+    /// How much of the task is done.
+    /// </summary>
+    public ulong done;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaProgressSignalBegin
+{
+    /// <summary>
+    /// What the task is named by.
+    /// </summary>
+    public ulong id;
+    /// <summary>
+    /// Whether it is part of another task.
+    /// </summary>
+    public byte parent_present;
+    /// <summary>
+    /// The task it is part of, or 0 when it is part of none.
+    /// </summary>
+    public ulong parent;
+    /// <summary>
+    /// What the task is called.
+    /// </summary>
+    public nint what;
+    /// <summary>
+    /// Which way its work moves, `up` or `down`, or empty when it moves no data.
+    /// </summary>
+    public nint direction;
+    /// <summary>
+    /// Whether how much of the task there is in all is known.
+    /// </summary>
+    public byte total_present;
+    /// <summary>
+    /// How much of the task there is in all, or 0 when it is not known.
+    /// </summary>
+    public ulong total;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaProgressSignalFinish
+{
+    /// <summary>
+    /// The task that is over.
+    /// </summary>
+    public ulong id;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaProgressSignalPayload
+{
+    /// <summary>
+    /// A task has begun.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaProgressSignalBegin Begin;
+    /// <summary>
+    /// A task has moved.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaProgressSignalAdvance Advance;
+    /// <summary>
+    /// A task is over.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaProgressSignalFinish Finish;
+}
+
+internal enum RolaProgressSignalTag : int
+{
+    /// <summary>
+    /// A task has begun.
+    /// </summary>
+    RolaProgressSignal_Begin = 0,
+    /// <summary>
+    /// A task has moved.
+    /// </summary>
+    RolaProgressSignal_Advance = 1,
+    /// <summary>
+    /// A task is over.
+    /// </summary>
+    RolaProgressSignal_Finish = 2,
+}
+
+/// <summary>
+/// One thing a write has said about itself, as the C ABI reads it.
+///
+/// A tagged union: `RolaProgressSignalTag` says which event it is, and `RolaProgressSignalPayload`
+/// holds its fields. Every `char *` is owned by the caller and released with `free_string`.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaProgressSignal
+{
+    public RolaProgressSignalTag tag;
+    public RolaProgressSignalPayload payload;
+}
+
+/// <summary>
+/// A retrack a C caller asks for.
+///
+/// A `RolaWriteRetrackRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `file` is a path in the
+/// Workspace, relative to its root or absolute, and an empty `record` moves one version back.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteRetrackRequest
+{
+    /// <summary>
+    /// The fields every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// The one file or tree to retrack.
+    /// </summary>
+    public nint file;
+    /// <summary>
+    /// What the path is to record, empty for one version back.
+    /// </summary>
+    public nint record;
+    /// <summary>
+    /// Whether the record moves and the work on disk is left alone.
+    /// </summary>
+    public byte only_index;
+    /// <summary>
+    /// Whether a version or an entry off the way to what the path records is refused.
+    /// </summary>
+    public byte deny_jump;
+    /// <summary>
+    /// Whether the path is given a fresh `Uuid` holding what it records now.
+    /// </summary>
+    public byte fork;
+}
+
+/// <summary>
+/// How far a run is to go.
+///
+/// A `RolaWriteDirection` the caller fills, one `tag` naming which way content may move.
+/// </summary>
+internal enum RolaWriteDirection : int
+{
+    /// <summary>
+    /// Only what this Layout holds goes up.
+    /// </summary>
+    RolaWriteDirection_Up = 0,
+    /// <summary>
+    /// Only what the Vault holds comes down.
+    /// </summary>
+    RolaWriteDirection_Down = 1,
+    /// <summary>
+    /// Both directions.
+    /// </summary>
+    RolaWriteDirection_Both = 2,
+}
+
+/// <summary>
+/// A sync a C caller asks for.
+///
+/// A `RolaWriteSyncRequest` the caller fills. Every `const char *` is borrowed for the call and
+/// released by the caller, so nothing here is freed when the call returns. `storage`, `index` and
+/// `layout` say which sides move: a caller that fills them with true moves every side, which is
+/// what the command line does when nothing is said, and a zeroed struct moves none of the three.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteSyncRequest
+{
+    /// <summary>
+    /// The fields every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// How far the run goes.
+    /// </summary>
+    public RolaWriteDirection direction;
+    /// <summary>
+    /// Whether a version whose chain moved apart may go up anyway.
+    /// </summary>
+    public byte forced;
+    /// <summary>
+    /// Whether the store moves.
+    /// </summary>
+    public byte storage;
+    /// <summary>
+    /// Whether the index moves.
+    /// </summary>
+    public byte index;
+    /// <summary>
+    /// Whether the Vault's Layout is read and written.
+    /// </summary>
+    public byte layout;
+}
+
+/// <summary>
+/// One entry a plan promised to move, as a C caller hands it back.
+///
+/// A `RolaWriteSyncAgreed` the caller fills from what a plan answered. Every `const char *` is
+/// borrowed for the call and released by the caller; an empty path or version says the plan named
+/// none, and `kind` is the word the plan's entry answered `_kind` with.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteSyncAgreed
+{
+    /// <summary>
+    /// The `Uuid` the entry is known by.
+    /// </summary>
+    public nint uuid;
+    /// <summary>
+    /// The path this Layout names it by, empty when it names none.
+    /// </summary>
+    public nint local_path;
+    /// <summary>
+    /// The path the Vault's Layout names it by, empty when it names none.
+    /// </summary>
+    public nint remote_path;
+    /// <summary>
+    /// The name the Vault's Layout is to give it, empty when this creates none.
+    /// </summary>
+    public nint planned_path;
+    /// <summary>
+    /// The version this Layout is at, empty when it is at none.
+    /// </summary>
+    public nint local_version;
+    /// <summary>
+    /// The version the Vault is at, empty when the Vault holds none.
+    /// </summary>
+    public nint remote_version;
+    /// <summary>
+    /// What the plan means to do with it, as the plan's `_kind` word.
+    /// </summary>
+    public nint kind;
+}
+
+/// <summary>
+/// A batch recording a C caller asks for.
+///
+/// A `RolaWriteTrackRequest` the caller fills. Every `const char *` is borrowed for the call
+/// and released by the caller, so nothing here is freed when the call returns. `files` is a
+/// `RolaStrSpan` of the names to record, each read from the Workspace root, and an empty
+/// `policy` leaves the cut to the store.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteTrackRequest
+{
+    /// <summary>
+    /// The fields every write request carries.
+    /// </summary>
+    public RolaWriteCommon common;
+    /// <summary>
+    /// The names to record.
+    /// </summary>
+    public RolaStrSpan files;
+    /// <summary>
+    /// Whether each file's version is replaced rather than added after it.
+    /// </summary>
+    public byte replace;
+    /// <summary>
+    /// The cut every file this run writes is made with, empty for the store's own choice.
+    /// </summary>
+    public nint policy;
+    /// <summary>
+    /// Whether a file the ignore rules govern may be named anyway.
+    /// </summary>
+    public byte include_ignored;
+}
+
+/// <summary>
+/// One subject a plan promised to record, as a C caller hands it back.
+///
+/// A `RolaWriteTrackAgreed` the caller fills from what a plan answered. Both strings are
+/// borrowed for the call and released by the caller.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteTrackAgreed
+{
+    /// <summary>
+    /// The path the plan named.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// The digest the plan read, which the content has to still have.
+    /// </summary>
+    public nint digest;
+}
+
+/// <summary>
+/// The words one subject's version carries, as a C caller hands them back.
+///
+/// A `RolaWriteTrackMessage` the caller fills. Both strings are borrowed for the call and
+/// released by the caller.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteTrackMessage
+{
+    /// <summary>
+    /// The path the plan named the subject by.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// The words the subject's version carries.
+    /// </summary>
+    public nint text;
 }
 
 internal enum RolaAuthErrorTag : int
@@ -761,6 +1700,348 @@ internal struct RolaBookError
 {
     public RolaBookErrorTag tag;
     public RolaBookErrorPayload payload;
+}
+
+/// <summary>
+/// The hash of the version to bring the chain of.
+///
+/// A `RolaDaemonBringRemoteIndexRequest` the caller fills. `hash` is borrowed for the call and
+/// released by the caller, and is read as hex or named with `blake3:` in front of it.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonBringRemoteIndexRequest
+{
+    /// <summary>
+    /// The hash of the version to start from.
+    /// </summary>
+    public nint hash;
+}
+
+/// <summary>
+/// Which outcome a walk of a chain reached.
+/// </summary>
+internal enum RolaDaemonChainKind : int
+{
+    /// <summary>
+    /// The chain was brought, and is written into this index.
+    /// </summary>
+    RolaDaemonChainKind_Brought = 0,
+    /// <summary>
+    /// The Vault holds an object under the hash, and it is not the version a chain starts from.
+    /// </summary>
+    RolaDaemonChainKind_NotAversion = 1,
+    /// <summary>
+    /// The object under a hash is not the variant the version above it names.
+    /// </summary>
+    RolaDaemonChainKind_NotAvariant = 2,
+    /// <summary>
+    /// The Vault holds nothing under a hash the chain needs.
+    /// </summary>
+    RolaDaemonChainKind_Missing = 3,
+}
+
+/// <summary>
+/// The name the Workspace keeps this Vault's rules under.
+///
+/// A `RolaDaemonFetchIgnoreRulesRequest` the caller fills. `name` is borrowed for the call and
+/// released by the caller, and is the name the Workspace bound the Vault by.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonFetchIgnoreRulesRequest
+{
+    /// <summary>
+    /// The name the Workspace keeps this Vault's rules under.
+    /// </summary>
+    public nint name;
+}
+
+/// <summary>
+/// The name the Workspace keeps the fetched Layout under.
+///
+/// A `RolaDaemonFetchLayoutRequest` the caller fills. `name` is borrowed for the call and released
+/// by the caller, and is the name the Workspace bound the Vault by.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonFetchLayoutRequest
+{
+    /// <summary>
+    /// The name the Workspace keeps the fetched Layout under.
+    /// </summary>
+    public nint name;
+}
+
+/// <summary>
+/// What to let go of, and under what words the bar is drawn.
+///
+/// A `RolaDaemonGiveupOwnershipRequest` the caller fills. `name` is borrowed for the call and
+/// released by the caller. `uuids` is a `RolaStrSpan` of the `Uuid`s to let go of, each read as text
+/// and borrowed for the call.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonGiveupOwnershipRequest
+{
+    /// <summary>
+    /// The words the bar is drawn under, or empty for none.
+    /// </summary>
+    public nint name;
+    /// <summary>
+    /// The `Uuid`s of the entries to let go of, in the order they are answered.
+    /// </summary>
+    public RolaStrSpan uuids;
+}
+
+/// <summary>
+/// Which outcome an ownership request reached.
+/// </summary>
+internal enum RolaDaemonOwnershipKind : int
+{
+    /// <summary>
+    /// The entry is now held by the account `owner` names, or by nobody when it is empty.
+    /// </summary>
+    RolaDaemonOwnershipKind_Owner = 0,
+    /// <summary>
+    /// The Vault holds no entry by that `Uuid`.
+    /// </summary>
+    RolaDaemonOwnershipKind_Missing = 1,
+    /// <summary>
+    /// Another account holds it, and `owner` names it.
+    /// </summary>
+    RolaDaemonOwnershipKind_HeldBy = 2,
+}
+
+/// <summary>
+/// The word that names the index listing wanted.
+///
+/// A `RolaDaemonListRemoteIndexRequest` the caller fills. `which` is borrowed for the call and
+/// released by the caller; `variants`, `versions` and `str` name one kind of object, and any other
+/// word, empty included, asks for every object.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonListRemoteIndexRequest
+{
+    /// <summary>
+    /// Which listing is wanted, or empty for every object.
+    /// </summary>
+    public nint which;
+}
+
+/// <summary>
+/// The word that names the listing wanted.
+///
+/// A `RolaDaemonListRemoteRequest` the caller fills. `which` is borrowed for the call and released by
+/// the caller; `manifests` asks for the contents the store keeps cut, and any other word, empty
+/// included, asks for the objects it holds.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonListRemoteRequest
+{
+    /// <summary>
+    /// Which listing is wanted, `manifests` or anything else for the objects.
+    /// </summary>
+    public nint which;
+}
+
+/// <summary>
+/// Which outcome a move reached.
+/// </summary>
+internal enum RolaDaemonPathMoveKind : int
+{
+    /// <summary>
+    /// The entry is now at the path it was moved to.
+    /// </summary>
+    RolaDaemonPathMoveKind_Moved = 0,
+    /// <summary>
+    /// The Vault's Layout names nothing at the path that was to move.
+    /// </summary>
+    RolaDaemonPathMoveKind_Missing = 1,
+    /// <summary>
+    /// The path it was to move to already names something.
+    /// </summary>
+    RolaDaemonPathMoveKind_Taken = 2,
+    /// <summary>
+    /// A path is not one a remote Layout may name.
+    /// </summary>
+    RolaDaemonPathMoveKind_Malformed = 3,
+}
+
+/// <summary>
+/// The hash of the index object to read.
+///
+/// A `RolaDaemonReadRemoteIndexRequest` the caller fills. `hash` is borrowed for the call and
+/// released by the caller, and is read as hex or named with `blake3:` in front of it.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonReadRemoteIndexRequest
+{
+    /// <summary>
+    /// The hash of the object, as hex or named with `blake3:`.
+    /// </summary>
+    public nint hash;
+}
+
+/// <summary>
+/// The path whose entry is to be removed.
+///
+/// A `RolaDaemonRemoveRemotePathRequest` the caller fills. `path` is borrowed for the call and
+/// released by the caller, and is read as the Vault's own Layout writes it.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonRemoveRemotePathRequest
+{
+    /// <summary>
+    /// The path to remove.
+    /// </summary>
+    public nint path;
+}
+
+/// <summary>
+/// Which outcome a removal reached.
+/// </summary>
+internal enum RolaDaemonEntryRemoveKind : int
+{
+    /// <summary>
+    /// The Vault's Layout no longer holds the entry, or names a path for it.
+    /// </summary>
+    RolaDaemonEntryRemoveKind_Removed = 0,
+    /// <summary>
+    /// The Vault's Layout names nothing at that path, or holds no entry by it.
+    /// </summary>
+    RolaDaemonEntryRemoveKind_Missing = 1,
+    /// <summary>
+    /// The account does not hold the entry and does not administrate the Vault.
+    /// </summary>
+    RolaDaemonEntryRemoveKind_Refused = 2,
+    /// <summary>
+    /// A path is not one a remote Layout may name.
+    /// </summary>
+    RolaDaemonEntryRemoveKind_Malformed = 3,
+}
+
+/// <summary>
+/// What to take, and under what words the bar is drawn.
+///
+/// A `RolaDaemonRequestOwnershipRequest` the caller fills. `name` is borrowed for the call and
+/// released by the caller. `uuids` is a `RolaStrSpan` of the `Uuid`s to take, each read as text and
+/// borrowed for the call.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonRequestOwnershipRequest
+{
+    /// <summary>
+    /// The words the bar is drawn under, or empty for none.
+    /// </summary>
+    public nint name;
+    /// <summary>
+    /// The `Uuid`s of the entries to take, in the order they are answered.
+    /// </summary>
+    public RolaStrSpan uuids;
+}
+
+/// <summary>
+/// The ask a full sync is handed.
+///
+/// A `RolaDaemonSyncAllRequest` the caller fills. `ask` is borrowed for the call and released by the
+/// caller; an empty `ask` leaves both ends on the default window.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonSyncAllRequest
+{
+    /// <summary>
+    /// How much the sending side reads at once, `c:&lt;n&gt;`, or empty for the default.
+    /// </summary>
+    public nint ask;
+}
+
+/// <summary>
+/// The units a named sync carries, and the ask for how much is read at once.
+///
+/// A `RolaDaemonSyncHashesRequest` the caller fills. `units` is borrowed for the call and released
+/// by the caller; it holds the units separated by whitespace, one a line as a listing prints them.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonSyncHashesRequest
+{
+    /// <summary>
+    /// The units to carry, and the `c:&lt;n&gt;` ask, as a listing prints them.
+    /// </summary>
+    public nint units;
+}
+
+/// <summary>
+/// One entry a sync asks the Vault to create.
+///
+/// A `RolaDaemonRemoteCreate *` array the caller fills. Every `const char *` is borrowed for the
+/// call and released by the caller; `kind` is `tree` for a tree and anything else for a file.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonRemoteCreate
+{
+    /// <summary>
+    /// The path to make the entry at.
+    /// </summary>
+    public nint path;
+    /// <summary>
+    /// The `Uuid` the entry is known by.
+    /// </summary>
+    public nint uuid;
+    /// <summary>
+    /// The version to hold it at.
+    /// </summary>
+    public nint version;
+    /// <summary>
+    /// What it is, `tree` or anything else for a file.
+    /// </summary>
+    public nint kind;
+}
+
+/// <summary>
+/// One version a sync asks the Vault to set.
+///
+/// A `RolaDaemonRemoteSet *` array the caller fills. Every `const char *` is borrowed for the call
+/// and released by the caller.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaDaemonRemoteSet
+{
+    /// <summary>
+    /// The `Uuid` of the entry to set.
+    /// </summary>
+    public nint uuid;
+    /// <summary>
+    /// The version to set it at.
+    /// </summary>
+    public nint version;
+}
+
+/// <summary>
+/// Which outcome a write reached.
+/// </summary>
+internal enum RolaDaemonEntryWriteKind : int
+{
+    /// <summary>
+    /// The Vault's Layout now holds what was asked for.
+    /// </summary>
+    RolaDaemonEntryWriteKind_Written = 0,
+    /// <summary>
+    /// The Vault already holds an entry by that `Uuid`.
+    /// </summary>
+    RolaDaemonEntryWriteKind_Exists = 1,
+    /// <summary>
+    /// The Vault already names something at that path.
+    /// </summary>
+    RolaDaemonEntryWriteKind_Taken = 2,
+    /// <summary>
+    /// The Vault holds no entry by that `Uuid`.
+    /// </summary>
+    RolaDaemonEntryWriteKind_Missing = 3,
+    /// <summary>
+    /// The account does not hold the entry and does not administrate the Vault.
+    /// </summary>
+    RolaDaemonEntryWriteKind_Refused = 4,
+    /// <summary>
+    /// A path, a `Uuid`, or a version is not one this can read.
+    /// </summary>
+    RolaDaemonEntryWriteKind_Malformed = 5,
 }
 
 /// <summary>
@@ -1194,6 +2475,23 @@ internal enum RolaActionErrorTag : int
     RolaActionError_Transport = 13,
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaActionErrorJson
+{
+    /// <summary>
+    /// What the failure said.
+    /// </summary>
+    public nint message;
+    /// <summary>
+    /// The line it was found on.
+    /// </summary>
+    public nuint line;
+    /// <summary>
+    /// The column it was found on.
+    /// </summary>
+    public nuint column;
+}
+
 [StructLayout(LayoutKind.Explicit)]
 internal struct RolaActionErrorPayload
 {
@@ -1221,7 +2519,7 @@ internal struct RolaActionErrorPayload
     /// What an action produced could not be turned into JSON.
     /// </summary>
     [FieldOffset(0)]
-    public nint Json;
+    public RolaActionErrorJson Json;
     /// <summary>
     /// The target a caller named would not read as an address.
     /// </summary>
@@ -1259,6 +2557,83 @@ internal struct RolaActionError
     public RolaActionErrorPayload payload;
 }
 
+internal enum RolaSearchTargetTag : int
+{
+    /// <summary>
+    /// A variant, by its key in hex.
+    /// </summary>
+    RolaSearchTarget_Variant = 0,
+    /// <summary>
+    /// A version, by its key in hex.
+    /// </summary>
+    RolaSearchTarget_Version = 1,
+    /// <summary>
+    /// A Layout entry, by the path it is at.
+    /// </summary>
+    RolaSearchTarget_Entry = 2,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaSearchTargetVariant
+{
+    /// <summary>
+    /// The variant's key, as hex, with or without `blake3:` in front of it.
+    /// </summary>
+    public nint hash;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaSearchTargetVersion
+{
+    /// <summary>
+    /// The version's key, as hex, with or without `blake3:` in front of it.
+    /// </summary>
+    public nint hash;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaSearchTargetEntry
+{
+    /// <summary>
+    /// The path, as the Layout writes it.
+    /// </summary>
+    public nint path;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaSearchTargetPayload
+{
+    /// <summary>
+    /// A variant, by its key in hex.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaSearchTargetVariant Variant;
+    /// <summary>
+    /// A version, by its key in hex.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaSearchTargetVersion Version;
+    /// <summary>
+    /// A Layout entry, by the path it is at.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaSearchTargetEntry Entry;
+}
+
+/// <summary>
+/// One target a reading asks about, as the C ABI carries it.
+///
+/// A `RolaSearchTarget` the caller fills: `tag` selects the variant and the payload companion it
+/// names holds that variant's strings. Every string is borrowed for the call and released by the
+/// caller, so nothing here is freed when the call returns.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaSearchTarget
+{
+    public RolaSearchTargetTag tag;
+    public RolaSearchTargetPayload payload;
+}
+
 internal enum RolaExistenceErrorTag : int
 {
     /// <summary>
@@ -1274,11 +2649,11 @@ internal enum RolaExistenceErrorTag : int
     /// </summary>
     RolaExistenceError_NoIndex = 2,
     /// <summary>
-    /// The request does not read as one this build knows.
+    /// The target names a hash or a path this build cannot read.
     /// </summary>
     RolaExistenceError_BadRequest = 3,
     /// <summary>
-    /// The reading, or the answer it was written as, could not be made.
+    /// The reading could not be made.
     /// </summary>
     RolaExistenceError_Read = 4,
     /// <summary>
@@ -1322,12 +2697,12 @@ internal struct RolaExistenceErrorNoAccount
 internal struct RolaExistenceErrorPayload
 {
     /// <summary>
-    /// The request does not read as one this build knows.
+    /// The target names a hash or a path this build cannot read.
     /// </summary>
     [FieldOffset(0)]
     public RolaExistenceErrorBadRequest BadRequest;
     /// <summary>
-    /// The reading, or the answer it was written as, could not be made.
+    /// The reading could not be made.
     /// </summary>
     [FieldOffset(0)]
     public RolaExistenceErrorRead Read;
@@ -1468,6 +2843,102 @@ internal enum RolaPathState : int
     RolaPathState_Merging = 7,
 }
 
+/// <summary>
+/// What a variant graph is asked for besides its entries.
+///
+/// A `RolaVariantGraphWindow` the caller fills. Every field is the walk's, as the graph reads it; a
+/// caller that leaves them zero draws nothing rather than taking a default, so it writes the window
+/// it wants.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVariantGraphWindow
+{
+    /// <summary>
+    /// How many variants back towards the root to walk from each focus.
+    /// </summary>
+    public uint back;
+    /// <summary>
+    /// How many variants forward from each focus to walk.
+    /// </summary>
+    public uint forward;
+    /// <summary>
+    /// Whether to walk into what a variant merges in.
+    /// </summary>
+    public byte joins;
+    /// <summary>
+    /// Whether to take in a variant based on a version in the window, one hop.
+    /// </summary>
+    public byte branches;
+    /// <summary>
+    /// How many variants the window holds at most.
+    /// </summary>
+    public uint max_nodes;
+}
+
+internal enum RolaVariantGraphSideTag : int
+{
+    /// <summary>
+    /// The Layout the Workspace works in.
+    /// </summary>
+    RolaVariantGraphSide_Local = 0,
+    /// <summary>
+    /// The copy a fetch left of a Vault's Layout, named by the Vault it is of.
+    /// </summary>
+    RolaVariantGraphSide_Vault = 1,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVariantGraphSideVault
+{
+    /// <summary>
+    /// The Vault whose copy the entry is read from.
+    /// </summary>
+    public nint name;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaVariantGraphSidePayload
+{
+    /// <summary>
+    /// The copy a fetch left of a Vault's Layout, named by the Vault it is of.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaVariantGraphSideVault Vault;
+}
+
+/// <summary>
+/// The side an entry a graph is centred on is named on.
+///
+/// A `RolaVariantGraphSide` the caller fills: `tag` selects the variant and the payload companion it
+/// names holds the Vault's name. The name is borrowed for the call and released by the caller.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVariantGraphSide
+{
+    public RolaVariantGraphSideTag tag;
+    public RolaVariantGraphSidePayload payload;
+}
+
+/// <summary>
+/// One entry a graph is centred on: the side it is named on, and the path it is at.
+///
+/// A `RolaVariantGraphFocus` the caller fills, whose strings and Vault name are borrowed for the
+/// call and released by the caller. `focus` and `focus_len` on `rola_variant_graph_locate` are an
+/// array of these.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVariantGraphFocus
+{
+    /// <summary>
+    /// The side the entry is named on.
+    /// </summary>
+    public RolaVariantGraphSide side;
+    /// <summary>
+    /// The path the entry is at, as the Layout names it.
+    /// </summary>
+    public nint path;
+}
+
 internal enum RolaVariantGraphErrorTag : int
 {
     /// <summary>
@@ -1483,22 +2954,9 @@ internal enum RolaVariantGraphErrorTag : int
     /// </summary>
     RolaVariantGraphError_NoIndex = 2,
     /// <summary>
-    /// The request does not read as one this build knows.
-    /// </summary>
-    RolaVariantGraphError_BadRequest = 3,
-    /// <summary>
     /// The index, or the records beside it, could not be read.
     /// </summary>
-    RolaVariantGraphError_Read = 4,
-}
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct RolaVariantGraphErrorBadRequest
-{
-    /// <summary>
-    /// Why it does not.
-    /// </summary>
-    public nint reason;
+    RolaVariantGraphError_Read = 3,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -1513,11 +2971,6 @@ internal struct RolaVariantGraphErrorRead
 [StructLayout(LayoutKind.Explicit)]
 internal struct RolaVariantGraphErrorPayload
 {
-    /// <summary>
-    /// The request does not read as one this build knows.
-    /// </summary>
-    [FieldOffset(0)]
-    public RolaVariantGraphErrorBadRequest BadRequest;
     /// <summary>
     /// The index, or the records beside it, could not be read.
     /// </summary>
@@ -1538,67 +2991,67 @@ internal struct RolaVariantGraphError
 /// <summary>
 /// Represents an error that occurs during the creation of a Vault
 /// </summary>
-internal enum VaultCreationError : int
+internal enum RolaVaultCreationError : int
 {
     /// <summary>
     /// Failure when the directory the Vault keeps its configuration in cannot be created
     /// </summary>
-    VaultCreationError_DirCreateFailed = 0,
+    RolaVaultCreationError_DirCreateFailed = 0,
     /// <summary>
     /// Failure when the Layout the Vault keeps cannot be made
     /// </summary>
-    VaultCreationError_LayoutCreateFailed = 1,
+    RolaVaultCreationError_LayoutCreateFailed = 1,
     /// <summary>
     /// Failure when reading the staging file to check if it already exists
     /// </summary>
-    VaultCreationError_ConfigLocked = 2,
+    RolaVaultCreationError_ConfigLocked = 2,
     /// <summary>
     /// Failure when rendering the default value into the configuration format
     /// </summary>
-    VaultCreationError_ConfigRenderFailed = 3,
+    RolaVaultCreationError_ConfigRenderFailed = 3,
     /// <summary>
     /// Failure when writing the staging file
     /// </summary>
-    VaultCreationError_ConfigStageFailed = 4,
+    RolaVaultCreationError_ConfigStageFailed = 4,
     /// <summary>
     /// Failure when publishing (copying) the staging file to the configuration file
     /// </summary>
-    VaultCreationError_ConfigPublishFailed = 5,
+    RolaVaultCreationError_ConfigPublishFailed = 5,
     /// <summary>
     /// Failure when the staging file cannot be rendered
     /// </summary>
-    VaultCreationError_ConfigWriteRenderFailed = 6,
+    RolaVaultCreationError_ConfigWriteRenderFailed = 6,
     /// <summary>
     /// Failure when the staging file cannot be written
     /// </summary>
-    VaultCreationError_ConfigWriteStageFailed = 7,
+    RolaVaultCreationError_ConfigWriteStageFailed = 7,
     /// <summary>
     /// Failure with an unknown or unclassified cause
     /// </summary>
-    VaultCreationError_UnknownError = 8,
+    RolaVaultCreationError_UnknownError = 8,
 }
 
 /// <summary>
 /// The error of reading an index object as a kind it is not
 /// </summary>
-internal enum RolaParseVCSIndexObjectError : int
+internal enum RolaVCSIndexObjectParseError : int
 {
     /// <summary>
     /// A Variant was expected, but a Version was found
     /// </summary>
-    RolaParseVCSIndexObjectError_ExpectVariant = 0,
+    RolaVCSIndexObjectParseError_ExpectVariant = 0,
     /// <summary>
     /// A Version was expected, but a Variant was found
     /// </summary>
-    RolaParseVCSIndexObjectError_ExpectVersion = 1,
+    RolaVCSIndexObjectParseError_ExpectVersion = 1,
     /// <summary>
     /// A Creator was expected, but another kind of object was found
     /// </summary>
-    RolaParseVCSIndexObjectError_ExpectCreator = 2,
+    RolaVCSIndexObjectParseError_ExpectCreator = 2,
     /// <summary>
     /// A Message was expected, but another kind of object was found
     /// </summary>
-    RolaParseVCSIndexObjectError_ExpectMessage = 3,
+    RolaVCSIndexObjectParseError_ExpectMessage = 3,
 }
 
 internal enum RolaVCSIndexWritingErrorTag : int
@@ -1703,43 +3156,163 @@ internal enum RolaVariantType : int
     RolaVariantType_Merge = 1,
 }
 
+internal enum RolaVCSIndexObjectViewTag : int
+{
+    /// <summary>
+    /// A Creator: the name it is.
+    /// </summary>
+    RolaVCSIndexObjectView_Creator = 0,
+    /// <summary>
+    /// A Message: the text it is.
+    /// </summary>
+    RolaVCSIndexObjectView_Message = 1,
+    /// <summary>
+    /// A Variant: the hashes it carries.
+    /// </summary>
+    RolaVCSIndexObjectView_Variant = 2,
+    /// <summary>
+    /// A Version: its hash, the variant it points at, and the number traced for it.
+    /// </summary>
+    RolaVCSIndexObjectView_Version = 3,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVCSIndexObjectViewCreator
+{
+    /// <summary>
+    /// The name, as text.
+    /// </summary>
+    public nint text;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVCSIndexObjectViewMessage
+{
+    /// <summary>
+    /// The text, as text.
+    /// </summary>
+    public nint text;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVCSIndexObjectViewVariant
+{
+    /// <summary>
+    /// The variant's hash, as hex.
+    /// </summary>
+    public nint hash;
+    /// <summary>
+    /// The hash of the version it is based on, as hex.
+    /// </summary>
+    public nint base_version;
+    /// <summary>
+    /// The hash of the storage entry it points at, as hex.
+    /// </summary>
+    public nint storage;
+    /// <summary>
+    /// The hash of the variant it merges in, as hex, or an empty string when it merges none.
+    /// </summary>
+    public nint join;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVCSIndexObjectViewVersion
+{
+    /// <summary>
+    /// Whether a number was traced for the version.
+    /// </summary>
+    public byte number_present;
+    /// <summary>
+    /// The version's number, or 0 when none was traced.
+    /// </summary>
+    public ulong number;
+    /// <summary>
+    /// The version's hash, as hex.
+    /// </summary>
+    public nint hash;
+    /// <summary>
+    /// The hash of the variant it points at, as hex.
+    /// </summary>
+    public nint variant;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+internal struct RolaVCSIndexObjectViewPayload
+{
+    /// <summary>
+    /// A Creator: the name it is.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaVCSIndexObjectViewCreator Creator;
+    /// <summary>
+    /// A Message: the text it is.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaVCSIndexObjectViewMessage Message;
+    /// <summary>
+    /// A Variant: the hashes it carries.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaVCSIndexObjectViewVariant Variant;
+    /// <summary>
+    /// A Version: its hash, the variant it points at, and the number traced for it.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaVCSIndexObjectViewVersion Version;
+}
+
+/// <summary>
+/// One index object, as the C ABI hands it over: which kind it is, and what it holds.
+///
+/// A tagged union: `RolaVCSIndexObjectViewTag` says which case it is, and
+/// `RolaVCSIndexObjectViewPayload` holds its fields. Every `char *` is owned by the caller and
+/// released with `free_string`, one by one; the value itself, when it came back as a result
+/// payload, is released with `free_rola_vcs_index_object_view`.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct RolaVCSIndexObjectView
+{
+    public RolaVCSIndexObjectViewTag tag;
+    public RolaVCSIndexObjectViewPayload payload;
+}
+
 /// <summary>
 /// Represents an error that occurs during the creation of a Workspace
 /// </summary>
-internal enum WorkspaceCreationError : int
+internal enum RolaWorkspaceCreationError : int
 {
     /// <summary>
     /// Failure when the directory the Workspace keeps its data in cannot be created
     /// </summary>
-    WorkspaceCreationError_DataDirCreateFailed = 0,
+    RolaWorkspaceCreationError_DataDirCreateFailed = 0,
     /// <summary>
     /// Failure when reading the staging file to check if it already exists
     /// </summary>
-    WorkspaceCreationError_ConfigLocked = 1,
+    RolaWorkspaceCreationError_ConfigLocked = 1,
     /// <summary>
     /// Failure when rendering the default value into the configuration format
     /// </summary>
-    WorkspaceCreationError_ConfigRenderFailed = 2,
+    RolaWorkspaceCreationError_ConfigRenderFailed = 2,
     /// <summary>
     /// Failure when writing the staging file
     /// </summary>
-    WorkspaceCreationError_ConfigStageFailed = 3,
+    RolaWorkspaceCreationError_ConfigStageFailed = 3,
     /// <summary>
     /// Failure when publishing (copying) the staging file to the configuration file
     /// </summary>
-    WorkspaceCreationError_ConfigPublishFailed = 4,
+    RolaWorkspaceCreationError_ConfigPublishFailed = 4,
     /// <summary>
     /// Failure when the staging file cannot be rendered
     /// </summary>
-    WorkspaceCreationError_ConfigWriteRenderFailed = 5,
+    RolaWorkspaceCreationError_ConfigWriteRenderFailed = 5,
     /// <summary>
     /// Failure when the staging file cannot be written
     /// </summary>
-    WorkspaceCreationError_ConfigWriteStageFailed = 6,
+    RolaWorkspaceCreationError_ConfigWriteStageFailed = 6,
     /// <summary>
     /// Failure with an unknown or unclassified cause
     /// </summary>
-    WorkspaceCreationError_UnknownError = 7,
+    RolaWorkspaceCreationError_UnknownError = 7,
 }
 
 internal enum RolaEntryLockTag : int
@@ -1789,60 +3362,60 @@ internal struct RolaEntryLock
 /// <summary>
 /// Why the filesystem refused, as far as this crate tells the reasons apart.
 /// </summary>
-internal enum ConfigureErrorReason : int
+internal enum RolaConfigureErrorReason : int
 {
     /// <summary>
     /// Nothing is there.
     /// </summary>
-    ConfigureErrorReason_Missing = 0,
+    RolaConfigureErrorReason_Missing = 0,
     /// <summary>
     /// There, but not allowed.
     /// </summary>
-    ConfigureErrorReason_Denied = 1,
+    RolaConfigureErrorReason_Denied = 1,
     /// <summary>
     /// There, but not what the operation needed, a directory where a file was wanted,
     /// </summary>
-    ConfigureErrorReason_WrongKind = 2,
+    RolaConfigureErrorReason_WrongKind = 2,
     /// <summary>
     /// There, but in use, or otherwise busy.
     /// </summary>
-    ConfigureErrorReason_Busy = 3,
+    RolaConfigureErrorReason_Busy = 3,
     /// <summary>
     /// Something else, which this crate does not tell apart.
     /// </summary>
-    ConfigureErrorReason_Other = 4,
+    RolaConfigureErrorReason_Other = 4,
 }
 
-internal enum ConfigureErrorTag : int
+internal enum RolaConfigureErrorTag : int
 {
     /// <summary>
     /// The file could not be read.
     /// </summary>
-    ConfigureError_Read = 0,
+    RolaConfigureError_Read = 0,
     /// <summary>
     /// The staging file could not be written.
     /// </summary>
-    ConfigureError_Stage = 1,
+    RolaConfigureError_Stage = 1,
     /// <summary>
     /// The staging file could not replace the original.
     /// </summary>
-    ConfigureError_Publish = 2,
+    RolaConfigureError_Publish = 2,
     /// <summary>
     /// The file's contents do not parse as the configuration type.
     /// </summary>
-    ConfigureError_Parse = 3,
+    RolaConfigureError_Parse = 3,
     /// <summary>
     /// The configuration could not be rendered in the file's format.
     /// </summary>
-    ConfigureError_Render = 4,
+    RolaConfigureError_Render = 4,
     /// <summary>
     /// A staging file was already there, so an earlier edit was never published.
     /// </summary>
-    ConfigureError_Locked = 5,
+    RolaConfigureError_Locked = 5,
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct ConfigureErrorRead
+internal struct RolaConfigureErrorRead
 {
     /// <summary>
     /// The file that could not be read.
@@ -1851,11 +3424,11 @@ internal struct ConfigureErrorRead
     /// <summary>
     /// Why not.
     /// </summary>
-    public ConfigureErrorReason reason;
+    public RolaConfigureErrorReason reason;
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct ConfigureErrorStage
+internal struct RolaConfigureErrorStage
 {
     /// <summary>
     /// The file that was being read, or edited.
@@ -1868,11 +3441,11 @@ internal struct ConfigureErrorStage
     /// <summary>
     /// Why not.
     /// </summary>
-    public ConfigureErrorReason reason;
+    public RolaConfigureErrorReason reason;
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct ConfigureErrorPublish
+internal struct RolaConfigureErrorPublish
 {
     /// <summary>
     /// The file that was left as it was.
@@ -1885,11 +3458,11 @@ internal struct ConfigureErrorPublish
     /// <summary>
     /// Why not.
     /// </summary>
-    public ConfigureErrorReason reason;
+    public RolaConfigureErrorReason reason;
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct ConfigureErrorParse
+internal struct RolaConfigureErrorParse
 {
     /// <summary>
     /// The file that does not parse.
@@ -1906,7 +3479,7 @@ internal struct ConfigureErrorParse
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct ConfigureErrorRender
+internal struct RolaConfigureErrorRender
 {
     /// <summary>
     /// The file the rendering was for.
@@ -1915,7 +3488,7 @@ internal struct ConfigureErrorRender
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct ConfigureErrorLocked
+internal struct RolaConfigureErrorLocked
 {
     /// <summary>
     /// The file the read was for.
@@ -1928,48 +3501,48 @@ internal struct ConfigureErrorLocked
 }
 
 [StructLayout(LayoutKind.Explicit)]
-internal struct ConfigureErrorPayload
+internal struct RolaConfigureErrorPayload
 {
     /// <summary>
     /// The file could not be read.
     /// </summary>
     [FieldOffset(0)]
-    public ConfigureErrorRead Read;
+    public RolaConfigureErrorRead Read;
     /// <summary>
     /// The staging file could not be written.
     /// </summary>
     [FieldOffset(0)]
-    public ConfigureErrorStage Stage;
+    public RolaConfigureErrorStage Stage;
     /// <summary>
     /// The staging file could not replace the original.
     /// </summary>
     [FieldOffset(0)]
-    public ConfigureErrorPublish Publish;
+    public RolaConfigureErrorPublish Publish;
     /// <summary>
     /// The file's contents do not parse as the configuration type.
     /// </summary>
     [FieldOffset(0)]
-    public ConfigureErrorParse Parse;
+    public RolaConfigureErrorParse Parse;
     /// <summary>
     /// The configuration could not be rendered in the file's format.
     /// </summary>
     [FieldOffset(0)]
-    public ConfigureErrorRender Render;
+    public RolaConfigureErrorRender Render;
     /// <summary>
     /// A staging file was already there, so an earlier edit was never published.
     /// </summary>
     [FieldOffset(0)]
-    public ConfigureErrorLocked Locked;
+    public RolaConfigureErrorLocked Locked;
 }
 
 /// <summary>
 /// What can go wrong while reading, staging or publishing a configuration file.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
-internal struct ConfigureError
+internal struct RolaConfigureError
 {
-    public ConfigureErrorTag tag;
-    public ConfigureErrorPayload payload;
+    public RolaConfigureErrorTag tag;
+    public RolaConfigureErrorPayload payload;
 }
 
 internal static partial class RorolalaBinding
@@ -2206,22 +3779,232 @@ internal static partial class RorolalaBinding
     internal static extern nint ROLA_PRIVATE_KEY_EXTENSION();
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_chunking_policies(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_storage_bindings(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_storage_binding(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_vaults(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_vault(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_search_source(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_search_sources(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_layout_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_rola_v2read_error(nint value);
+    internal static extern void free_rola_layouts(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_layout(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_layout_entries(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_layout_entry(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_tree_entries(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_tree_entry(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_tree_status(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_tree_change(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_tree_untracked(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_tree_conflict(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_tree_mark(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_storage_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_storage_keys(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_storage_manifest(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_storage_chunk(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_storage_bind(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_storage_connected(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_align_mode(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_target(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_align_entry(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_align_refusal(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_align(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_bring_entry(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_bring(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_cancellation(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_restore(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_collect_side(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_collect(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_write_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_fetch_entry(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_fetch_source(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_fetch(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_file_version(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_index_object_request(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_index_object(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_layout_op(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_ownership_kind(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_ownership_wanted(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_ownership_refusal(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_ownership_plan(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_ownership_entry(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_ownership_apply(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_pack(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_progress(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_progress_signal(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_progress_event(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_retrack_took(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_retrack(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_storage_put(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_direction(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_sync_entry(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_sync_plan(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_sync_took(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_sync(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_sync_apply(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_tracked_file(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_track_subject(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_track_item(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_track_refusal(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_track_plan(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_track_apply(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_tree_description(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_tree_add_change(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_tree_add(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_tree_init(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_tree_remove(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_tree_reset(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_write_workspace_cache(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_account(nint value);
@@ -2260,6 +4043,42 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_book_search(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_chain_outcome(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_chain_kind(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_ownership_outcome(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_ownerships(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_ownership_kind(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_path_move_outcome(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_path_move_kind(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_entry_remove_outcome(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_entry_remove_kind(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_entry_write_outcome(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_entry_writes(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_daemon_entry_write_kind(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_daemon_exit(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -2267,9 +4086,6 @@ internal static partial class RorolalaBinding
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_bincode_error(nint value);
-
-    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_rola_json_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_addr_error(nint value);
@@ -2281,7 +4097,7 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_inverse_edge(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_rola_vcsindex_reading_error(nint value);
+    internal static extern void free_rola_vcs_index_reading_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_inverse_index_error(nint value);
@@ -2308,6 +4124,15 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_action_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_search_target(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_existence_target(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_existence_targets(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_existence_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -2326,19 +4151,49 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_status(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph_side(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph_focus_resolution(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph_node(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph_version(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph_edge(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph_missing(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph_entry(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph_merging(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_variant_graph_text(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_variant_graph_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_vault_config(nint value);
+    internal static extern void free_rola_vault_config(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_vault_meta_config(nint value);
+    internal static extern void free_rola_vault_meta_config(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_vault_daemon_config(nint value);
+    internal static extern void free_rola_vault_daemon_config(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_vault_creation_error(nint value);
+    internal static extern void free_rola_vault_creation_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_vault(nint value);
@@ -2347,13 +4202,13 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_creator(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_rola_parse_vcsindex_object_error(nint value);
+    internal static extern void free_rola_vcs_index_object_parse_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_rola_vcsindex_writing_error(nint value);
+    internal static extern void free_rola_vcs_index_writing_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_rola_vcsindex(nint value);
+    internal static extern void free_rola_vcs_index(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_message(nint value);
@@ -2365,16 +4220,31 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_version(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_rola_vcsindex_object(nint value);
+    internal static extern void free_rola_vcs_index_object(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_vcs_index_listing(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_vcs_index_version_item(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_vcs_index_variant_item(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_variant_type(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_workspace_config(nint value);
+    internal static extern void free_rola_vcs_index_object_view(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_workspace_creation_error(nint value);
+    internal static extern void free_rola_workspace_config(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_workspace_vault(nint value);
+
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void free_rola_workspace_creation_error(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void free_rola_workspace(nint value);
@@ -2386,10 +4256,10 @@ internal static partial class RorolalaBinding
     internal static extern void free_rola_ownership(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_configure_error_reason(nint value);
+    internal static extern void free_rola_configure_error_reason(nint value);
 
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void free_configure_error(nint value);
+    internal static extern void free_rola_configure_error(nint value);
 
     /// <summary>
     /// Parses `text` as the address a Vault answers at.
@@ -2403,99 +4273,92 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaAddrError *`, owned; release it with `free_rola_addr_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult parse_rola_vault_address(nint text);
+    internal static extern RorolalaResult rola_vault_address_parse(nint text);
 
     /// <summary>
-    /// Every chunking policy this build carries, in name order.
-    ///
-    /// An owned JSON array the caller releases with `free_string`,
-    /// `[{"name":"psd-basic","extensions":["psd","psb"]}]`. The order is the names', which is the order
-    /// a report, a completion list and a refusal name the policies in.
+    /// Makes the list of this build's chunking policies.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_chunking_policies_json();
+    internal static extern nint rola_chunking_policies_new();
 
     /// <summary>
-    /// The Vaults the Workspace holding `directory` knows, as `rola vault ls --json` writes them.
+    /// The stores a Workspace works on, read from the Workspace holding `directory`.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"vaults":[{"name","address","is_default"}],"default":null,"gc":null}`, or `null` when there is
-    /// no configuration to read. `vaults` is in name order, `is_default` marks the one `default` names,
-    /// and `gc` is `null` or `{"grace":N}`.
+    /// A `RolaStorageBindings *` the caller releases with `free_rola_storage_bindings`, or null when a
+    /// directory no Workspace holds.
+    ///
+    /// Returns an owned `RolaStorageBindings *`, or `NULL` when there is nothing; release it with `free_rola_storage_bindings`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_workspace_config_json(nint directory);
+    internal static extern nint rola_workspace_storages_new(nint directory);
 
     /// <summary>
-    /// What the Vault holding `directory` says about itself, as one JSON document.
+    /// The stores a Vault works on, read from the Vault holding `directory`.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"name","description","admins":[...],"max_concurrency":N}`, or `null` when there is no Vault or
-    /// no configuration to read.
+    /// A `RolaStorageBindings *` the caller releases with `free_rola_storage_bindings`, or null when a
+    /// directory no Vault holds.
+    ///
+    /// Returns an owned `RolaStorageBindings *`, or `NULL` when there is nothing; release it with `free_rola_storage_bindings`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_vault_config_json(nint directory);
+    internal static extern nint rola_vault_storages_new(nint directory);
 
     /// <summary>
     /// The Vaults the machine's daemon serves, by namespace.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"vaults":[{"name":"default","path":"/vaults/default"}]}`, or `null` when the table cannot be
-    /// read.
+    /// A `RolaDaemonVaults *` the caller releases with `free_rola_daemon_vaults`, or null when the
+    /// table cannot be read. Its Vaults are read by index, each an owned `RolaDaemonVault`.
+    ///
+    /// Returns an owned `RolaDaemonVaults *`, or `NULL` when there is nothing; release it with `free_rola_daemon_vaults`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_daemon_vaults_json();
+    internal static extern nint rola_daemon_vaults_new();
 
     /// <summary>
     /// Which Vaults can provide what a variant, a version or a Layout entry names.
     ///
-    /// `directory` is the directory the Workspace is searched upwards from, and `request` is a UTF-8
-    /// JSON document of this shape:
-    ///
-    /// ```json
-    /// {"targets": [{"kind": "version", "hash": "blake3:..."}], "account": "alice"}
-    /// ```
-    ///
-    /// `account` is optional. The answer is an owned JSON string the caller releases with
-    /// `free_string`, `{"targets": [...]}` in the order asked, each with `kind`, the `hash` or `path`,
-    /// `version`, `variant`, `storage`, `offline`, `tree`, `expanded`, `sources` and `unreachable`. A
-    /// failure is a `RolaExistenceError *` the caller releases with `free_rola_existence_error`.
+    /// `directory` is the directory the Workspace is searched upwards from. `targets` and `targets_len`
+    /// are the caller's array and its length, borrowed for the call and released by the caller, and
+    /// `account` is the account to ask as, or an empty string for the user's current account. A
+    /// `RolaSearchSources *` the caller releases with `free_rola_search_sources` answers with one target
+    /// per entry asked about, in the same order. A failure is a `RolaExistenceError *` the caller
+    /// releases with `free_rola_existence_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaSearchSources *`, owned; release it with `free_rola_search_sources`
     /// - `Err`: `RolaExistenceError *`, owned; release it with `free_rola_existence_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_search_source_json(nint directory, nint request);
+    internal static extern RorolalaResult rola_search_source(nint directory, nint targets, nuint targets_len, nint account);
 
     /// <summary>
-    /// Which Layouts the place holding `directory` has, as `rola layout ls --json` writes them.
+    /// Which Layouts the place holding `directory` has, as `rola layout ls` shows them.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"layouts":[{"name","is_current",
-    /// "tracking"}]}`. `name` is `main` for a Workspace and `truth` for a Vault, `tracking` is empty
-    /// when it tracks none, and `null` is answered when neither holds the directory or a Workspace
-    /// holds no Layout.
+    /// A `RolaLayouts *` the caller releases with `free_rola_layouts`, or null when neither a Workspace
+    /// nor a Vault holds the directory. Its `_count` and `_at` answer with the Layouts, each a
+    /// `RolaLayout *` the caller releases with `free_rola_layout` after reading its fields.
+    ///
+    /// Returns an owned `RolaLayouts *`, or `NULL` when there is nothing; release it with `free_rola_layouts`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_layouts_json(nint directory);
+    internal static extern nint rola_layouts(nint directory);
 
     /// <summary>
-    /// What a Layout's entries hold, as `rola layout entries --json` writes it.
+    /// What a Layout's entries hold, as `rola layout entries` shows them.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"entries":[{"path","uuid",
-    /// "version","owner","description","preference","deprecated"}]}`, in path order and then `Uuid`
-    /// order. `path` is
-    /// `.` for the root entry, `version` is the hex the version is stored under, `owner` is empty when
-    /// no account holds it, `preference` is empty when the store may choose, and `deprecated` says
-    /// whether the Vault moved it under `@/removed/`. A
+    /// A `RolaLayoutEntries *` the caller releases with `free_rola_layout_entries`, in path order and
+    /// then `Uuid` order. Its `_count` and `_at` answer with the entries, each a `RolaLayoutEntry *` the
+    /// caller releases with `free_rola_layout_entry`. `path` is `.` for the root entry, `version` is the
+    /// hex the version is stored under, `owner` is empty when no account holds it, `preference` is empty
+    /// when the store may choose, and `deprecated` says whether the Vault moved it under `@/removed/`. A
     /// failure is a `RolaLayoutError *` the caller releases with `free_rola_layout_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaLayoutEntries *`, owned; release it with `free_rola_layout_entries`
     /// - `Err`: `RolaLayoutError *`, owned; release it with `free_rola_layout_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_layout_entries_json(nint directory, nint layout);
+    internal static extern RorolalaResult rola_layout_entries(nint directory, nint layout);
 
     /// <summary>
     /// Every member whose public key `rule` finds, highest priority first.
@@ -2554,10 +4417,15 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_account_find(nint account_name, nint rule);
 
     /// <summary>
-    /// The entries of a tree's structure, as the JSON a caller reads.
+    /// The entries of a tree's structure, decoded from the hex a caller holds.
+    ///
+    /// A `RolaTreeEntries *` the caller releases with `free_rola_tree_entries`, or null when the text is
+    /// not hex or the bytes are not a structure this build reads.
+    ///
+    /// Returns an owned `RolaTreeEntries *`, or `NULL` when there is nothing; release it with `free_rola_tree_entries`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_tree_entries_json(nint structure_hex);
+    internal static extern nint rola_tree_entries(nint structure_hex);
 
     /// <summary>
     /// Prepares a Workspace's ownership answers for the directory `directory` sits in.
@@ -2568,7 +4436,7 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaOwnership *`, or `NULL` when there is nothing; release it with `free_rola_ownership`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint locate_rola_ownership(nint directory);
+    internal static extern nint rola_ownership_locate(nint directory);
 
     /// <summary>
     /// The account the work acts as, as Rorolala's own file for the user names it.
@@ -2577,21 +4445,7 @@ internal static partial class RorolalaBinding
     /// releases it with `free_string`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_current_account();
-
-    /// <summary>
-    /// Runs one read named by a request document.
-    ///
-    /// An owned JSON string the caller releases with `free_string`, or a `RolaV2ReadError *` the caller
-    /// releases with `free_rola_v2read_error`. The request is one object,
-    /// `{"kind":"tree_status","path":"..."}`, and the cancellation is checked before the read starts.
-    ///
-    /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
-    /// - `Err`: `RolaV2ReadError *`, owned; release it with `free_rola_v2read_error`
-    /// </summary>
-    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_v2_read_json(nint directory, nint request, nint cancellation);
+    internal static extern nint rola_account_current();
 
     /// <summary>
     /// Reads how the work under `directory` stands beside the Layout it works from.
@@ -2603,17 +4457,19 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaStatus *`, or `NULL` when there is nothing; release it with `free_rola_status`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint locate_rola_status(nint directory);
+    internal static extern nint rola_status_locate(nint directory);
 
     /// <summary>
-    /// How the rola-tree holding `directory` stands, as the JSON a caller reads.
+    /// How the rola-tree holding `directory` stands.
     ///
-    /// An owned JSON string the caller releases with `free_string`, or `null` when there is nothing to read:
-    /// no Workspace holds the directory, the directory is not inside a tree, the Workspace works in no Layout,
-    /// the index or the store is not there, or the tree cannot be read.
+    /// A `RolaTreeStatus *` the caller releases with `free_rola_tree_status`, or null when there is nothing to
+    /// read: no Workspace holds the directory, the directory is not inside a tree, the Workspace works in no
+    /// Layout, the index or the store is not there, or the tree cannot be read.
+    ///
+    /// Returns an owned `RolaTreeStatus *`, or `NULL` when there is nothing; release it with `free_rola_tree_status`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_tree_status_json(nint directory);
+    internal static extern nint rola_tree_status(nint directory);
 
     /// <summary>
     /// Whether `directory` is the root of a tree.
@@ -2623,46 +4479,45 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool rola_is_tree(nint directory);
+    internal static extern bool rola_tree_is_tree(nint directory);
 
     /// <summary>
-    /// The id of the tree at `directory` and the description staged for it, as one JSON document.
+    /// The id of a tree and the description staged for it.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"id":"&lt;uuid&gt;","described":true,"description":"..."}`, or `null` when the directory is not the
-    /// root of a tree. `id` is empty when the file is there and cannot be read, and `description` is
-    /// empty when none is staged.
+    /// A `RolaTreeMark *` the caller releases with `free_rola_tree_mark`, or null when the directory is
+    /// not the root of a tree. The id is empty when the file is there and cannot be read, and the
+    /// description is empty when none is staged.
+    ///
+    /// Returns an owned `RolaTreeMark *`, or `NULL` when there is nothing; release it with `free_rola_tree_mark`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_tree_mark_json(nint directory);
+    internal static extern nint rola_tree_mark(nint directory);
 
     /// <summary>
-    /// Every object the store holding `directory` holds, as `rola storage ls-storaged --json` writes it.
+    /// Every object the store holding `directory` holds, as `rola storage ls-storaged` lists them.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"keys":["blake3:..."]}`, in the
-    /// order the store answers. A failure is a `RolaStorageError *` the caller releases with
-    /// `free_rola_storage_error`.
+    /// A `RolaStorageKeys *` the caller releases with `free_rola_storage_keys`, in the order the store
+    /// answers. A failure is a `RolaStorageError *` the caller releases with `free_rola_storage_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaStorageKeys *`, owned; release it with `free_rola_storage_keys`
     /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_storage_objects_json(nint directory);
+    internal static extern RorolalaResult rola_storage_objects(nint directory);
 
     /// <summary>
     /// Every content key the store holding `directory` keeps as a manifest, as
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"keys":["blake3:..."]}`, in the
-    /// order the store answers. A failure is a `RolaStorageError *` the caller releases with
-    /// `free_rola_storage_error`.
+    /// A `RolaStorageKeys *` the caller releases with `free_rola_storage_keys`, in the order the store
+    /// answers. A failure is a `RolaStorageError *` the caller releases with `free_rola_storage_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaStorageKeys *`, owned; release it with `free_rola_storage_keys`
     /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_storage_manifests_json(nint directory);
+    internal static extern RorolalaResult rola_storage_manifests(nint directory);
 
     /// <summary>
     /// Writes the content stored under `hash` to `destination`.
@@ -2680,30 +4535,29 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// The chunks a manifest names, when the content under `hash` was stored chunked.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"chunks":[{"key":"blake3:...","len":N}]}`, or `null` when the content is not chunked. A failure
-    /// is a `RolaStorageError *` the caller releases with `free_rola_storage_error`.
+    /// A `RolaStorageManifest *` the caller releases with `free_rola_storage_manifest`. A manifest with
+    /// no chunks means the content is kept whole. A failure is a `RolaStorageError *` the caller
+    /// releases with `free_rola_storage_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaStorageManifest *`, owned; release it with `free_rola_storage_manifest`
     /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_storage_manifest_json(nint directory, nint hash);
+    internal static extern RorolalaResult rola_storage_manifest(nint directory, nint hash);
 
     /// <summary>
     /// The structure stored under `hash`, as the entries a tree version names.
     ///
-    /// An owned JSON string the caller releases with `free_string`, or `null` when the content does not
-    /// decode as a tree structure. A failure is a `RolaStorageError *` the caller releases with
-    /// `free_rola_storage_error`.
+    /// A `RolaTreeEntries *` the caller releases with `free_rola_tree_entries`. A failure is a
+    /// `RolaStorageError *` the caller releases with `free_rola_storage_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaTreeEntries *`, owned; release it with `free_rola_tree_entries`
     /// - `Err`: `RolaStorageError *`, owned; release it with `free_rola_storage_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_tree_structure_json(nint directory, nint hash);
+    internal static extern RorolalaResult rola_tree_structure(nint directory, nint hash);
 
     /// <summary>
     /// Makes the directory at `root` a store.
@@ -2720,55 +4574,54 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Binds a store to the Workspace rooted at `workspace_root`.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"bound_workspace":true,"bound_vault":false,"reverse_recorded":true,"read_only":false,"warnings":[]}`,
-    /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    /// A `RolaWriteStorageBind *` the caller releases with `free_rola_write_storage_bind`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteStorageBind *`, owned; release it with `free_rola_write_storage_bind`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_workspace_bind_storage(nint workspace_root, nint store_root);
+    internal static extern RorolalaResult rola_workspace_storage_bind(nint workspace_root, nint store_root);
 
     /// <summary>
     /// Binds a store to the Vault rooted at `vault_root`.
     ///
-    /// The same JSON as [`workspace_bind_storage`], with `bound_vault` set instead.
+    /// The same `RolaWriteStorageBind *` as [`workspace_bind_storage`], with `_bound_vault` set
+    /// instead.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteStorageBind *`, owned; release it with `free_rola_write_storage_bind`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_vault_bind_storage(nint vault_root, nint store_root);
+    internal static extern RorolalaResult rola_vault_storage_bind(nint vault_root, nint store_root);
 
     /// <summary>
     /// The places the store rooted at `store_root` records as writing to it.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"workspaces":["..."],"vaults":["..."]}`, or a `RolaWriteError *` the caller releases with
-    /// `free_rola_write_error`.
+    /// A `RolaStorageConnected *` the caller releases with `free_rola_storage_connected`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaStorageConnected *`, owned; release it with `free_rola_storage_connected`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_storage_connected_json(nint store_root);
+    internal static extern RorolalaResult rola_storage_connected(nint store_root);
 
     /// <summary>
     /// Puts a path under a Workspace on one version and writes what the record says about it.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-    /// `free_rola_write_error`. `owner` and `preference` are empty when the entry has none.
+    /// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `owner` and `preference`
+    /// are empty when the entry has none.
     ///
     /// It is the single-entry form: it aligns one path with one version. The `rola_write_align` export
     /// is the whole `rola align` workflow, which takes a request document instead.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteRestore *`, owned; release it with `free_rola_write_restore`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -2777,37 +4630,29 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Puts a path under a Vault on one version and writes what the record says about it.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-    /// `free_rola_write_error`. `owner` and `preference` are empty when the entry has none.
+    /// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `owner` and `preference`
+    /// are empty when the entry has none.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteRestore *`, owned; release it with `free_rola_write_restore`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_write_align_vault(nint directory, nint path, nint version, nint owner, nint description, nint preference);
 
     /// <summary>
-    /// Runs the whole `rola align` workflow for a request document and answers what it came to.
+    /// Runs the whole `rola align` workflow for a request a C caller fills and answers what it came
     ///
-    /// `request` is an owned JSON document the caller keeps; it names the Workspace, the path and the
-    /// mode, and carries the `Common` fields beside them:
-    /// `{"workspace":"D:/work","path":"a.txt","mode":{"kind":"delete"}}`. The mode is one of `delete`,
-    /// `rename`, `break`, `move_to`, `restore_move`, `restore_modify`, `restore_staged`,
-    /// `restore_delete` and `restore`, where `move_to` also carries `path`. Relative paths in `path`
-    /// and in a `move_to` mode resolve against the Workspace root. `completely` and `include_ignored`
-    /// are false when left out.
-    ///
-    /// `progress` is the `RolaProgress *` the run says its events to, and `cancellation` is the
-    /// `RolaCancellation *` it checks. The outcome is an owned JSON string the caller releases with
-    /// `free_string`, tagged by `kind`: `{"kind":"paths","paths":[{"did":"...","what":"..."}]}`,
-    /// `{"kind":"tree","path":"..."}`, `{"kind":"tree_file","path":"...","staged":...}` or
-    /// `{"kind":"refused","refusal":{...}}`. A failure is a `RolaWriteError *` the caller releases with
+    /// `request` is a `RolaWriteAlignRequest` the caller fills and keeps; every `const char *` in it is
+    /// borrowed for the call and released by the caller. `progress` is the `RolaProgress *` the run
+    /// says its events to, and `cancellation` is the `RolaCancellation *` it checks. The outcome is a
+    /// `RolaWriteAlign *` the caller releases with `free_rola_write_align`, whose `_kind` says which of
+    /// the four answers it is. A failure is a `RolaWriteError *` the caller releases with
     /// `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteAlign *`, owned; release it with `free_rola_write_align`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -2816,31 +4661,22 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Brings what a Vault holds and a Layout does not into it, or a variant the index holds in to be
     ///
-    /// An owned JSON string the caller releases with `free_string`, or a `RolaWriteError *` the caller
-    /// releases with `free_rola_write_error`. `progress` is the handle the caller polls with
-    /// `rola_progress_next_json`, and `cancellation` is the flag it sets with
+    /// `request` is a `RolaWriteBringRequest` the caller fills and keeps; every `const char *` in it is
+    /// borrowed for the call and released by the caller. A `RolaWriteBring *` the caller releases with
+    /// `free_rola_write_bring` answers both forms: `_joined` says which one came back. Nothing else in
+    /// the answer means anything for the form that did not come back. A failure is a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `progress` is the handle the
+    /// caller polls with `rola_progress_next`, and `cancellation` is the flag it sets with
     /// `rola_cancellation_cancel`.
     ///
-    /// A request that names no `join` brings entries in, and the answer is
-    /// `{"entries":[{"uuid":"...","remote_path":"...","local_path":"..."}],"failed":["..."]}`.
-    /// `remote_path` is null when the Vault's Layout names no path for the entry, and `failed` holds
-    /// one line per entry that could not come in. Its document is the fields every write request
-    /// carries (`workspace`, `account`, `target`, `offline`, `force`, `concurrency` and `labels`) at
-    /// the top level, `refs` as an array of strings, `to` as a string or null, and `by_name` as a
-    /// bool. The references are paths of the Vault's Layout and are never read as filesystem paths;
-    /// `to` is where this side writes, and a relative one is read against the Workspace's root, not
-    /// against a process directory.
-    ///
-    /// A request that carries `join` brings a variant in, and the answer is
-    /// `{"target":"...","variant":"...","path":"..."}`, the file it waits to be joined into, the
-    /// variant that came in and the path its file was written to. Its document is the same fields
-    /// every write request carries, `join` as the marker that asks for this form and whose value is not
-    /// read, `variant` as the variant to bring in, `file` as the file it is joined into, `to` as where
-    /// the variant file is to lie or null for the place the convention gives it, and `tree_merge` as a
-    /// bool. `refs` and `by_name` are not part of it.
+    /// An empty `join` brings entries in. `_entry_count` and `_entry_at` name each one, with
+    /// `remote_path` empty when the Vault's Layout names no path for the entry, and `_failed_count` and
+    /// `_failed_at` hold one line per entry that could not come in. A non-empty `join` brings a variant
+    /// in, and `_joined` is true with `_target`, `_variant` and `_path` naming the file it waits to be
+    /// joined into, the variant that came in and the path its file was written to.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteBring *`, owned; release it with `free_rola_write_bring`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -2877,12 +4713,11 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Puts a version's content back at a path under a Workspace.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-    /// `free_rola_write_error`.
+    /// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteRestore *`, owned; release it with `free_rola_write_restore`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -2891,12 +4726,11 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Puts a version's content back at a path under a Vault.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-    /// `free_rola_write_error`.
+    /// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteRestore *`, owned; release it with `free_rola_write_restore`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -2931,12 +4765,12 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Reads what a collecting run would take away under a directory.
     ///
-    /// An owned JSON string the caller releases with `free_string`, the plan's numbers, or a
+    /// A `RolaWriteCollect *` the caller releases with `free_rola_write_collect`, or a
     /// `RolaWriteError *` the caller releases with `free_rola_write_error`. A grace of zero means the
     /// default.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteCollect *`, owned; release it with `free_rola_write_collect`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -2945,54 +4779,51 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Carries out a collecting run under a directory, reading its plan afresh.
     ///
-    /// An owned JSON string the caller releases with `free_string`, the sweep's numbers, or a
+    /// A `RolaWriteCollect *` the caller releases with `free_rola_write_collect`, or a
     /// `RolaWriteError *` the caller releases with `free_rola_write_error`. A grace of zero means the
     /// default.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteCollect *`, owned; release it with `free_rola_write_collect`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_write_collect_apply(nint directory, [MarshalAs(UnmanagedType.U1)] bool storage, [MarshalAs(UnmanagedType.U1)] bool index, ulong grace);
 
     /// <summary>
-    /// The content fetch a JSON request asks for.
+    /// The content fetch a request a C caller fills asks for.
     ///
-    /// An owned JSON string the caller releases with `free_string`, or a `RolaWriteError *` the caller
-    /// releases with `free_rola_write_error`. `progress` is the handle the caller polls with
-    /// `rola_progress_next_json`, and `cancellation` is the flag it sets with
-    /// `rola_cancellation_cancel`.
+    /// `request` is a `RolaWriteFetchRequest` the caller fills and keeps; every `const char *` in it is
+    /// borrowed for the call and released by the caller. A `RolaWriteFetch *` the caller releases with
+    /// `free_rola_write_fetch` answers it, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `progress` is the handle the caller polls with `rola_progress_next`,
+    /// and `cancellation` is the flag it sets with `rola_cancellation_cancel`.
     ///
-    /// The answer is `{"entries":[{"target","path","version"}],"brought":[{"vault","count"}]}`: the
-    /// targets whose content is here, in the order they were named, and how many objects each Vault
-    /// handed over. `target` is the `Uuid` an entry is known by, a variant's hash, or a version's hash;
-    /// `path` is `.` for anything that is not an entry; `version` is the version the content is of. Its
-    /// document is the fields every write request carries (`workspace`, `account`, `target`, `offline`,
-    /// `force`, `concurrency` and `labels`) at the top level, `target` written the way the other write
-    /// requests write one, `layout` as the name `rola layout` commands take, `words` as an array of
-    /// strings, and `recursive` as a bool.
+    /// `_entry_count` and `_entry_at` name the targets whose content is here, in the order they were
+    /// named, and `_brought_count` and `_brought_at` say how many objects each Vault handed over.
+    /// `target` is the `Uuid` an entry is known by, a variant's hash, or a version's hash; `path` is
+    /// `.` for anything that is not an entry; `version` is the version the content is of.
     ///
     /// The copy of a Vault's Layout a path word reads is the one a fetch left, so a caller outside the
-    /// command line fetches that copy first, with `do_action_fetch_layout`, and calls this after it. A
-    /// run that names only hashes reads no Layout.
+    /// command line fetches that copy first, with `rola_daemon_action_fetch_layout`, and calls this
+    /// after it. A run that names only hashes reads no Layout.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteFetch *`, owned; release it with `free_rola_write_fetch`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_write_fetch_with(nint request, nint progress, nint cancellation);
+    internal static extern RorolalaResult rola_write_fetch(nint request, nint progress, nint cancellation);
 
     /// <summary>
     /// Records a file's content as a variant and a version in the index a directory is in.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"variant":"blake3:...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases
-    /// with `free_rola_write_error`. `join` is the empty string when the variant merges nothing.
+    /// A `RolaWriteFileVersion *` the caller releases with `free_rola_write_file_version`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `join` is the empty string
+    /// when the variant merges nothing.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteFileVersion *`, owned; release it with `free_rola_write_file_version`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3001,17 +4832,18 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Writes one object into the index a directory is in.
     ///
-    /// An owned string the caller releases with `free_string`, the key the object was written under,
-    /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. The request is one
-    /// object, `{"kind":"variant",...}`, `{"kind":"version",...}`, `{"kind":"creator",...}` or
-    /// `{"kind":"message",...}`.
+    /// `directory` is borrowed for the call, and `request` is a `RolaWriteIndexObjectRequest` the
+    /// caller fills and keeps, with every `const char *` in it borrowed for the call. A
+    /// `RolaWriteIndexObject *` the caller releases with `free_rola_write_index_object` answers it,
+    /// whose `_key` is the key the object was written under, or a `RolaWriteError *` the caller
+    /// releases with `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteIndexObject *`, owned; release it with `free_rola_write_index_object`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_write_index_object_json(nint directory, nint request);
+    internal static extern RorolalaResult rola_write_index_object(nint directory, RolaWriteIndexObjectRequest request);
 
     /// <summary>
     /// Moves one path of a Layout a directory holds.
@@ -3162,17 +4994,19 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_layout_switch_entry(nint directory, nint layout, nint path, nint uuid, nint version, nint owner, nint description, nint preference);
 
     /// <summary>
-    /// Applies a batch of changes named as JSON to the Layout a directory is in.
+    /// Applies a batch of changes to the Layout a directory is in.
     ///
-    /// An empty string on success, or a `RolaWriteError *` the caller releases with
-    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    /// `directory` and `layout` are borrowed for the call, and `layout` is `main`, `truth`, or empty
+    /// for the one being worked in. `ops` and `ops_len` are the caller's array of changes, borrowed for
+    /// the call and released by the caller. An empty answer on success, or a `RolaWriteError *` the
+    /// caller releases with `free_rola_write_error`.
     ///
     /// Returns a result:
     /// - `Ok`: nothing; the payload is null
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_write_layout_apply(nint directory, nint layout, nint ops);
+    internal static extern RorolalaResult rola_write_layout_apply(nint directory, nint layout, nint ops, nuint ops_len);
 
     /// <summary>
     /// Moves a path in the fetched copy of a Vault's own Layout.
@@ -3205,46 +5039,52 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_layout_remove_fetched_entry(nint directory, nint layout, nint uuid);
 
     /// <summary>
-    /// Plans the ownership moves a JSON request names, without moving any.
+    /// Plans the ownership moves a request names, without moving any.
     ///
-    /// `request` is a JSON object of the shape [`OwnershipRequest`] reads: `workspace`, `account`,
-    /// `target`, `offline`, `force`, `concurrency`, `labels`, `kind`, `paths` and `allow_partial`. A
-    /// relative name in `paths` is read from the Workspace's root, not from the process's working
-    /// directory, and an absolute one is taken as it stands. The answer is a JSON string the caller
-    /// releases with `free_string`, the shape [`OwnershipPlanReport`] writes:
-    /// `{"wanted":[{"path":"...","uuid":"..."}],"refused":[...],"skipped":0}`.
+    /// `request` is a `RolaWriteOwnershipRequest` the caller fills and keeps; every `const char *` in
+    /// it is borrowed for the call and released by the caller. A relative name in `paths` is read from
+    /// the Workspace's root, not from the process's working directory, and an absolute one is taken as
+    /// it stands.
+    ///
+    /// A `RolaWriteOwnershipPlan *` the caller releases with `free_rola_write_ownership_plan` answers
+    /// it: `_wanted_count` and `_wanted_at` name each entry the move would act on, `_refused_count` and
+    /// `_refused_at` name why the gates refuse one, and `_skipped` is how many files a directory
+    /// brought in that the Layout does not name.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteOwnershipPlan *`, owned; release it with `free_rola_write_ownership_plan`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_write_ownership_plan(nint request, nint progress, nint cancellation);
 
     /// <summary>
-    /// Moves the ownership a JSON request names and a plan agreed to.
+    /// Moves the ownership a request names and a plan agreed to.
     ///
-    /// `request` is the JSON object [`ownership_plan_at`] reads, with the same rule for a relative
-    /// `paths` entry. `plan` is the JSON that call answered with, or an empty string for a run that
-    /// wants the plan re-made and applied without comparing. The answer is a JSON string the caller
-    /// releases with `free_string`, the shape [`Outcome`] writes:
-    /// `{"entries":[{"path":"...","uuid":"...","owner":"..."}],"failed":[...]}`.
+    /// `request` is the `RolaWriteOwnershipRequest` [`ownership_plan_at`] reads, with the same rule for
+    /// a relative `paths` entry. `wanted` and `wanted_len` are the caller's array of the entries the
+    /// plan promised to move, borrowed for the call, and a length of zero asks for the plan to be made
+    /// again and applied without comparing.
+    ///
+    /// A `RolaWriteOwnershipApply *` the caller releases with `free_rola_write_ownership_apply`
+    /// answers it: `_entry_count` and `_entry_at` name each entry the Vault moved, with `owner` empty
+    /// when nobody holds it, and `_failed_count` and `_failed_at` name what was refused.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteOwnershipApply *`, owned; release it with `free_rola_write_ownership_apply`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_write_ownership_apply(nint request, nint plan, nint progress, nint cancellation);
+    internal static extern RorolalaResult rola_write_ownership_apply(nint request, nint wanted, nuint wanted_len, nint progress, nint cancellation);
 
     /// <summary>
     /// Lays the store a directory is in out afresh.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
-    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    /// A `RolaWritePack *` the caller releases with `free_rola_write_pack`, or a `RolaWriteError *`
+    /// the caller releases with `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWritePack *`, owned; release it with `free_rola_write_pack`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3253,11 +5093,11 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Lays the VCS index a directory is in out afresh.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
-    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    /// A `RolaWritePack *` the caller releases with `free_rola_write_pack`, or a `RolaWriteError *`
+    /// the caller releases with `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWritePack *`, owned; release it with `free_rola_write_pack`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3266,11 +5106,11 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Lays the store and index of the Workspace a directory is in out afresh.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
-    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    /// A `RolaWritePack *` the caller releases with `free_rola_write_pack`, or a `RolaWriteError *`
+    /// the caller releases with `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWritePack *`, owned; release it with `free_rola_write_pack`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3279,11 +5119,11 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Lays the store and index of the Vault a directory is in out afresh.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
-    /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+    /// A `RolaWritePack *` the caller releases with `free_rola_write_pack`, or a `RolaWriteError *`
+    /// the caller releases with `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWritePack *`, owned; release it with `free_rola_write_pack`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3301,25 +5141,28 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_progress_new();
 
     /// <summary>
-    /// The next event a write has said, as JSON.
+    /// The next event a write has said.
     ///
-    /// An owned string the caller releases with `free_string`, or the JSON `null` when nothing is
-    /// waiting. The shape is `rorolala_utils_progress::Signal`'s serde output.
+    /// A `RolaProgressEvent *` the caller releases with `free_rola_progress_event`, or null when nothing
+    /// is waiting. What it carries is read with `rola_progress_event_signal`, a `RolaProgressSignal` by
+    /// value whose `char *` fields the caller releases with `free_string`.
+    ///
+    /// Returns an owned `RolaProgressEvent *`, or `NULL` when there is nothing; release it with `free_rola_progress_event`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_progress_next_json(nint progress);
+    internal static extern nint rola_progress_next(nint progress);
 
     /// <summary>
     /// Moves the record of a path under a Workspace to a version.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-    /// `free_rola_write_error`. An empty `target` moves one version back, `fork` gives the path a fresh
-    /// `Uuid`, and `only_index` leaves the work on disk alone. `force` goes past changes the record does
-    /// not name, and `deny_jump` refuses a target off the path's chain.
+    /// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. An empty `target` moves one
+    /// version back, `fork` gives the path a fresh `Uuid`, and `only_index` leaves the work on disk
+    /// alone. `force` goes past changes the record does not name, and `deny_jump` refuses a target off
+    /// the path's chain.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteRestore *`, owned; release it with `free_rola_write_restore`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3328,40 +5171,37 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Moves the record of a path under a Vault to a version.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"id":"...","version":"blake3:..."}`, or a `RolaWriteError *` the caller releases with
-    /// `free_rola_write_error`. An empty `target` moves one version back, `fork` gives the path a fresh
-    /// `Uuid`, and `only_index` leaves the work on disk alone. `force` goes past changes the record does
-    /// not name, and `deny_jump` refuses a target off the path's chain.
+    /// A `RolaWriteRestore *` the caller releases with `free_rola_write_restore`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. An empty `target` moves one
+    /// version back, `fork` gives the path a fresh `Uuid`, and `only_index` leaves the work on disk
+    /// alone. `force` goes past changes the record does not name, and `deny_jump` refuses a target off
+    /// the path's chain.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteRestore *`, owned; release it with `free_rola_write_restore`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_write_retrack_vault_file(nint directory, nint path, nint target, [MarshalAs(UnmanagedType.U1)] bool fork, [MarshalAs(UnmanagedType.U1)] bool only_index, [MarshalAs(UnmanagedType.U1)] bool force, [MarshalAs(UnmanagedType.U1)] bool deny_jump);
 
     /// <summary>
-    /// Retracks one path of a Workspace from a JSON request.
+    /// Retracks one path of a Workspace from a request a C caller fills.
     ///
-    /// An owned JSON string the caller releases with `free_string`, or a `RolaWriteError *` the caller
-    /// releases with `free_rola_write_error`. A path is answered as
-    /// `{"kind":"path","path":"art/a.psd","version":"0f0f0f","number":3,"changed":true,
-    /// "switched":true,"from":null,"to":null,"forked":false,"took":[["origin",2]]}`, and a tree as
-    /// `{"kind":"tree","path":"art","version":"0f0f0f","took":[]}`. `version` is the digest in hex, and
-    /// `number` is the version's number in its chain, or null when the run does not know it; `from` and
-    /// `to` are the `Uuid`s a run that recorded another entry moved between, or null; and `took` names
-    /// each Vault that handed content over and how many objects it brought. `progress` is the handle the
-    /// caller polls with `rola_progress_next_json`, and `cancellation` is the flag it sets with
-    /// `rola_cancellation_cancel`.
-    ///
-    /// `request` is the JSON of a [`RetrackRequest`]: its flattened `common` fields at the top level,
-    /// `file` and `record` as strings, and `only_index`, `deny_jump` and `fork` as bools. `file` is a
-    /// path in the Workspace, relative to its root or absolute. An empty or missing `record` moves one
-    /// version back.
+    /// `request` is a `RolaWriteRetrackRequest` the caller fills and keeps; every `const char *` in it
+    /// is borrowed for the call and released by the caller. A `RolaWriteRetrack *` the caller releases
+    /// with `free_rola_write_retrack` answers it, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `_kind` says whether the record that moved belongs to a path or to a
+    /// tree. `_path` and `_version` name what moved; `_number_present` and `_number` say the version's
+    /// number in its chain, which a run that does not know it says with a false `_number_present`;
+    /// `_changed`, `_switched` and `_forked` say what the run did; `_from` and `_to` name the `Uuid`s a
+    /// run that recorded another entry moved between, empty when it moved between none; and
+    /// `_took_count` and `_took_at` name each Vault that handed content over and how many objects it
+    /// brought. A tree answers no number, no change and no `Uuid`, so those fields say nothing for it.
+    /// `progress` is the handle the caller polls with `rola_progress_next`, and `cancellation` is the
+    /// flag it sets with `rola_cancellation_cancel`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteRetrack *`, owned; release it with `free_rola_write_retrack`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3370,33 +5210,29 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Puts a file's content into the store a directory works on.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"key":"blake3:...","chunked":false}`,
-    /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is the empty
+    /// A `RolaWriteStoragePut *` the caller releases with `free_rola_write_storage_put`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is the empty
     /// string when the store is to choose the cut.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteStoragePut *`, owned; release it with `free_rola_write_storage_put`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_write_storage_put_file(nint directory, nint file, nint policy);
 
     /// <summary>
-    /// Builds a sync plan from a JSON request.
+    /// Builds a sync plan from a request a C caller fills.
     ///
-    /// `request` is a JSON object of the shape [`SyncRequest`] reads: the fields every write request
-    /// carries (`workspace`, `account`, `target`, `offline`, `force`, `concurrency` and `labels`) at
-    /// the top level, and `direction` (`up`, `down` or `both`), `forced`, `storage`, `index` and
-    /// `layout` when they are needed. The answer is an owned JSON string the caller releases with
-    /// `free_string`:
-    /// `{"layout":"main","vault":"default","forced":false,"entries":[...],"up_to_date":0,"layout_read":true,"index":true,"storage":true}`.
-    /// An entry is
-    /// `{"uuid":"...","local_path":"...","remote_path":"...","planned_path":null,"local_version":"...","remote_version":"...","owner":"...","deprecated":false,"item_kind":"file","modified":false,"kind":"send"}`.
-    /// `progress` is the handle the caller polls with `rola_progress_next_json`, and `cancellation` is
+    /// `request` is a `RolaWriteSyncRequest` the caller fills and keeps; every `const char *` in it is
+    /// borrowed for the call and released by the caller. A `RolaWriteSyncPlan *` the caller releases
+    /// with `free_rola_write_sync_plan` answers it: `_layout`, `_vault`, `_forced`, `_up_to_date`,
+    /// `_layout_read`, `_index`, `_storage`, and each entry through `_entry_count` and `_entry_at`.
+    /// `progress` is the handle the caller polls with `rola_progress_next`, and `cancellation` is
     /// the flag it sets with `rola_cancellation_cancel`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteSyncPlan *`, owned; release it with `free_rola_write_sync_plan`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3405,13 +5241,13 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Carries a sync run out under a Workspace.
     ///
-    /// An owned JSON string the caller releases with `free_string`, the run's numbers, or a
-    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `direction` is `up`, `down`
-    /// or `both`; `layout` says whether the Vault's Layout is read and written. `key_path` is the
-    /// private key the run signs with.
+    /// A `RolaWriteSync *` the caller releases with `free_rola_write_sync`, or a `RolaWriteError *`
+    /// the caller releases with `free_rola_write_error`. `direction` is `up`, `down` or `both`;
+    /// `layout` says whether the Vault's Layout is read and written. `key_path` is the private key the
+    /// run signs with.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteSync *`, owned; release it with `free_rola_write_sync`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3420,33 +5256,35 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Carries out a sync plan a caller agreed to.
     ///
-    /// `request` is a JSON object of the shape [`SyncRequest`] reads, the same document
-    /// `rola_write_sync_plan` takes. `plan` is the JSON that call answered with, which this one reads
-    /// again and compares with the work before writing. The answer is an owned JSON string the caller
-    /// releases with `free_string`:
-    /// `{"layout":"main","vault":"default","applied":0,"received":0,"up_to_date":0,"failed":[],"layout_read":true,"index_objects":0,"storage_objects":0}`.
-    /// `failed` holds one line per entry that was not written, and `layout_read` is false for a request
-    /// that leaves the Vault's Layout alone. `progress` is the handle the caller polls with
-    /// `rola_progress_next_json`, and `cancellation` is the flag it sets with
-    /// `rola_cancellation_cancel`.
+    /// `request` is a `RolaWriteSyncRequest` the caller fills, the same one `rola_write_sync_plan`
+    /// takes. `entries` and `entries_len` are the caller's array of the entries the plan promised to
+    /// move, borrowed for the call, and a length of zero lets the run make its own plan. Every
+    /// `const char *` is borrowed for the call and released by the caller.
+    ///
+    /// A `RolaWriteSyncApply *` the caller releases with `free_rola_write_sync_apply` answers it:
+    /// `_layout` and `_vault` say what the run was about, `_applied`, `_received`, `_up_to_date`,
+    /// `_index_objects` and `_storage_objects` are the numbers, `_layout_read` says whether the Vault's
+    /// Layout was read, and `_failed_count` and `_failed_at` hold one line per entry that was not
+    /// written. `progress` is the handle the caller polls with `rola_progress_next`, and `cancellation`
+    /// is the flag it sets with `rola_cancellation_cancel`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteSyncApply *`, owned; release it with `free_rola_write_sync_apply`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_write_sync_apply(nint request, nint plan, nint progress, nint cancellation);
+    internal static extern RorolalaResult rola_write_sync_apply(nint request, nint entries, nuint entries_len, nint progress, nint cancellation);
 
     /// <summary>
     /// Records one file's content as a version in the Workspace a directory is in.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"id":"...","storage":"...","variant":"...","version":"..."}`, or a `RolaWriteError *` the
-    /// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice,
-    /// `owner` is empty when the entry has no owner, and `description` is the entry's description.
+    /// A `RolaWriteTrackedFile *` the caller releases with `free_rola_write_tracked_file`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is empty for the
+    /// store's own choice, `owner` is empty when the entry has no owner, and `description` is the
+    /// entry's description.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteTrackedFile *`, owned; release it with `free_rola_write_tracked_file`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3455,13 +5293,13 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Records one file's content as a version in the Vault a directory is in.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"id":"...","storage":"...","variant":"...","version":"..."}`, or a `RolaWriteError *` the
-    /// caller releases with `free_rola_write_error`. `policy` is empty for the store's own choice,
-    /// `owner` is empty when the entry has no owner, and `description` is the entry's description.
+    /// A `RolaWriteTrackedFile *` the caller releases with `free_rola_write_tracked_file`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `policy` is empty for the
+    /// store's own choice, `owner` is empty when the entry has no owner, and `description` is the
+    /// entry's description.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteTrackedFile *`, owned; release it with `free_rola_write_tracked_file`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3470,21 +5308,17 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Reads what a batch recording would record, without writing anything.
     ///
-    /// `request` is a JSON object of the shape [`batch::TrackRequest`] reads: the fields every write
-    /// request carries (`workspace`, `account`, `target`, `offline`, `force`, `concurrency` and
-    /// `labels`) at the top level, `files` as an array of strings, and `replace`, `policy` and
-    /// `include_ignored` when they are needed. A relative name in `files` is read from the Workspace
-    /// root, not from the process directory. The answer is an owned JSON string the caller releases
-    /// with `free_string`,
-    /// `{"subjects":[{"tree":false,"key":"...","path":"a.txt","digest":"..."}],"unchanged":0,"prefill":[],"refused":null}`.
-    /// `digest` is the content's digest in lowercase hex, and empty for a tree. `key` is the subject's
-    /// section key, and `path` is the name the messages object maps. `refused` is null or an externally
-    /// tagged refusal object. `progress` is the handle the caller polls with
-    /// `rola_progress_next_json`, and `cancellation` is the flag it sets with
-    /// `rola_cancellation_cancel`.
+    /// `request` is a `RolaWriteTrackRequest` the caller fills and keeps; every `const char *` in it
+    /// is borrowed for the call and released by the caller. A relative name in `files` is read from
+    /// the Workspace root, not from the process directory. A `RolaWriteTrackPlan *` the caller
+    /// releases with `free_rola_write_track_plan` answers it: `_subject_count` and `_subject_at` name
+    /// the subjects, `_unchanged` and `_prefill_count` say how many files are already recorded and how
+    /// many words are prefilled, and `_refused` answers the refusal that stops the run, or null.
+    /// `progress` is the handle the caller polls with `rola_progress_next`, and `cancellation` is the
+    /// flag it sets with `rola_cancellation_cancel`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteTrackPlan *`, owned; release it with `free_rola_write_track_plan`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3493,30 +5327,30 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Records what a plan named, once the caller has said what each subject did.
     ///
-    /// `request` is the JSON object [`track_plan_at`] reads. `plan` is the JSON that call answered
-    /// with. `messages` is a JSON object mapping each subject's `path` to the words its version
-    /// carries, as `{"a.txt":"first","art":"tree structure"}`. The answer is an owned JSON string the
-    /// caller releases with `free_string`,
-    /// `{"items":[{"path":"a.txt","action":"added"}],"refused":[]}`. `action` is `added`, `updated` or
-    /// `replaced`. `refused` is the same externally tagged shape the plan answers with, and `items` is
-    /// empty when it is not.
+    /// `request` is the `RolaWriteTrackRequest` [`track_plan_at`] reads. `subjects` and
+    /// `subjects_len` are the caller's array of the subjects the plan promised to record, and
+    /// `messages` and `messages_len` are its array of the words each subject's version carries, by the
+    /// path the plan names it by. Both arrays are borrowed for the call. A `RolaWriteTrackApply *` the
+    /// caller releases with `free_rola_write_track_apply` answers it: `_item_count` and `_item_at` name
+    /// each subject recorded, with `_action` among `added`, `updated` and `replaced`, and
+    /// `_refused_count` and `_refused_at` name what stopped the run.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteTrackApply *`, owned; release it with `free_rola_write_track_apply`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_write_track_apply(nint request, nint plan, nint messages, nint progress, nint cancellation);
+    internal static extern RorolalaResult rola_write_track_apply(nint request, nint subjects, nuint subjects_len, nint messages, nuint messages_len, nint progress, nint cancellation);
 
     /// <summary>
     /// Writes the description of the tree a directory is in.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"bytes":N}`, or a
+    /// A `RolaWriteTreeDescription *` the caller releases with `free_rola_write_tree_description`, or a
     /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `target` is the tree's
     /// path, relative to `directory`, and empty for the directory itself.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteTreeDescription *`, owned; release it with `free_rola_write_tree_description`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3525,28 +5359,27 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Stages work into the tree a directory is in.
     ///
-    /// An owned JSON string the caller releases with `free_string`,
-    /// `{"changes":[{"path":"a","kind":"added"}]}`, or a `RolaWriteError *` the caller releases with
-    /// `free_rola_write_error`. `paths` is a JSON array of strings, and `target` is the tree's path,
-    /// empty for the directory itself.
+    /// A `RolaWriteTreeAdd *` the caller releases with `free_rola_write_tree_add`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a
+    /// `RolaStrSpan` of the paths to stage, and `target` is the tree's path, empty for the directory
+    /// itself.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteTreeAdd *`, owned; release it with `free_rola_write_tree_add`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_write_tree_add(nint directory, nint target, nint paths, [MarshalAs(UnmanagedType.U1)] bool include_ignored);
+    internal static extern RorolalaResult rola_write_tree_add(nint directory, nint target, RolaStrSpan paths, [MarshalAs(UnmanagedType.U1)] bool include_ignored);
 
     /// <summary>
     /// Makes the tree a directory is in.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"path":".","collapsed":0,
-    /// "is_root":true}`, or a `RolaWriteError *` the caller releases with `free_rola_write_error`.
-    /// `target` is the tree's path, empty for the directory itself, and `force` says the caller has
-    /// agreed to the collapse.
+    /// A `RolaWriteTreeInit *` the caller releases with `free_rola_write_tree_init`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `target` is the tree's
+    /// path, empty for the directory itself, and `force` says the caller has agreed to the collapse.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteTreeInit *`, owned; release it with `free_rola_write_tree_init`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3555,30 +5388,32 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Stages the removal of paths from the tree a directory is in.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"paths":[...],"cached":false}`,
-    /// or a `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a JSON array
-    /// of strings, and `target` is the tree's path, empty for the directory itself.
+    /// A `RolaWriteTreeRemove *` the caller releases with `free_rola_write_tree_remove`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a
+    /// `RolaStrSpan` of the paths to remove, and `target` is the tree's path, empty for the directory
+    /// itself.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteTreeRemove *`, owned; release it with `free_rola_write_tree_remove`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_write_tree_remove_paths(nint directory, nint target, nint paths, [MarshalAs(UnmanagedType.U1)] bool cached, [MarshalAs(UnmanagedType.U1)] bool recursive, [MarshalAs(UnmanagedType.U1)] bool force);
+    internal static extern RorolalaResult rola_write_tree_remove_paths(nint directory, nint target, RolaStrSpan paths, [MarshalAs(UnmanagedType.U1)] bool cached, [MarshalAs(UnmanagedType.U1)] bool recursive, [MarshalAs(UnmanagedType.U1)] bool force);
 
     /// <summary>
     /// Resets the staging area of the tree a directory is in.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"whole":false,"paths":[...]}`, or
-    /// a `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a JSON array of
-    /// strings, and `target` is the tree's path, empty for the directory itself.
+    /// A `RolaWriteTreeReset *` the caller releases with `free_rola_write_tree_reset`, or a
+    /// `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a
+    /// `RolaStrSpan` of the paths to reset, empty for the whole staging area, and `target` is the
+    /// tree's path, empty for the directory itself.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteTreeReset *`, owned; release it with `free_rola_write_tree_reset`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_write_tree_reset(nint directory, nint target, nint paths);
+    internal static extern RorolalaResult rola_write_tree_reset(nint directory, nint target, RolaStrSpan paths);
 
     /// <summary>
     /// Makes the Layout of the Workspace holding a directory track a Vault.
@@ -3609,11 +5444,11 @@ internal static partial class RorolalaBinding
     /// <summary>
     /// Rebuilds the tree cache of the Workspace holding a directory.
     ///
-    /// An owned JSON string the caller releases with `free_string`, `{"paths":N,"bytes":N}`, or a
+    /// A `RolaWriteWorkspaceCache *` the caller releases with `free_rola_write_workspace_cache`, or a
     /// `RolaWriteError *` the caller releases with `free_rola_write_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaWriteWorkspaceCache *`, owned; release it with `free_rola_write_workspace_cache`
     /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -3630,7 +5465,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaBookError *`, owned; release it with `free_rola_book_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult open_rola_book_search(nint path);
+    internal static extern RorolalaResult rola_book_search_open(nint path);
 
     /// <summary>
     /// The book laid beside the programs under `start`, if there is one.
@@ -3641,7 +5476,7 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaBookSearch *`, or `NULL` when there is nothing; release it with `free_rola_book_search`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint locate_rola_book_search(nint start);
+    internal static extern nint rola_book_search_locate(nint start);
 
     /// <summary>
     /// Runs the [`ActionHandshake`](crate::ActionHandshake) action, blocking until it has.
@@ -3651,7 +5486,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_handshake(nint workspace, nint account, nint target, nint name);
+    internal static extern RorolalaResult rola_daemon_action_handshake(nint workspace, nint account, nint target, nint name);
 
     /// <summary>
     /// Runs the [`ActionSyncAll`](crate::ActionSyncAll) action, blocking until it has.
@@ -3661,7 +5496,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_sync_all(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_sync_all(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Runs the [`ActionSyncIndexAll`](crate::ActionSyncIndexAll) action, blocking until it has.
@@ -3671,7 +5506,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_sync_index_all(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_sync_index_all(nint workspace, nint account, nint target);
 
     /// <summary>
     /// Runs the [`ActionListRemote`](crate::ActionListRemote) action, blocking until it has.
@@ -3681,7 +5516,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_list_remote(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_list_remote(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Runs the [`ActionSyncHashes`](crate::ActionSyncHashes) action, blocking until it has.
@@ -3691,7 +5526,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_sync_hashes(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_sync_hashes(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Runs the [`ActionListRemoteIndex`](crate::ActionListRemoteIndex) action, blocking until it has.
@@ -3701,17 +5536,17 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_list_remote_index(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_list_remote_index(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Runs the [`ActionReadRemoteIndex`](crate::ActionReadRemoteIndex) action, blocking until it has.
     ///
     /// Returns a result:
-    /// - `Ok`: `RolaVCSIndexObject *`, owned; release it with `free_rola_vcsindex_object`
+    /// - `Ok`: `RolaVCSIndexObject *`, owned; release it with `free_rola_vcs_index_object`
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_read_remote_index(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_read_remote_index(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Runs the [`ActionFetchLayout`](crate::ActionFetchLayout) action, blocking until it has.
@@ -3721,77 +5556,77 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_fetch_layout(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_fetch_layout(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Runs the [`ActionRequestOwnership`](crate::ActionRequestOwnership) action, blocking until it has.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaDaemonOwnerships *`, owned; release it with `free_rola_daemon_ownerships`
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_request_ownership(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_request_ownership(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Runs the [`ActionGiveupOwnership`](crate::ActionGiveupOwnership) action, blocking until it has.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaDaemonOwnerships *`, owned; release it with `free_rola_daemon_ownerships`
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_giveup_ownership(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_giveup_ownership(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Runs the [`ActionMoveRemotePath`](crate::ActionMoveRemotePath) action, blocking until it has.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaDaemonPathMoveOutcome *`, owned; release it with `free_rola_daemon_path_move_outcome`
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_move_remote_path(nint workspace, nint account, nint target, nint from, nint to);
+    internal static extern RorolalaResult rola_daemon_action_move_remote_path(nint workspace, nint account, nint target, nint from, nint to);
 
     /// <summary>
     /// Runs the [`ActionCreateRemoteEntry`](crate::ActionCreateRemoteEntry) action, blocking until it has.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaDaemonEntryWriteOutcome *`, owned; release it with `free_rola_daemon_entry_write_outcome`
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_create_remote_entry(nint workspace, nint account, nint target, nint path, nint uuid, nint version);
+    internal static extern RorolalaResult rola_daemon_action_create_remote_entry(nint workspace, nint account, nint target, nint path, nint uuid, nint version);
 
     /// <summary>
     /// Runs the [`ActionSetRemoteVersion`](crate::ActionSetRemoteVersion) action, blocking until it has.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaDaemonEntryWriteOutcome *`, owned; release it with `free_rola_daemon_entry_write_outcome`
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_set_remote_version(nint workspace, nint account, nint target, nint uuid, nint version);
+    internal static extern RorolalaResult rola_daemon_action_set_remote_version(nint workspace, nint account, nint target, nint uuid, nint version);
 
     /// <summary>
     /// Runs the [`ActionWriteRemoteEntries`](crate::ActionWriteRemoteEntries) action, blocking until it has.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaDaemonEntryWrites *`, owned; release it with `free_rola_daemon_entry_writes`
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_write_remote_entries(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_write_remote_entries(nint workspace, nint account, nint target, nint creates, nuint creates_len, nint sets, nuint sets_len);
 
     /// <summary>
     /// Runs the [`ActionBringRemoteIndex`](crate::ActionBringRemoteIndex) action, blocking until it has.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaDaemonChainOutcome *`, owned; release it with `free_rola_daemon_chain_outcome`
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_bring_remote_index(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_bring_remote_index(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Runs the [`ActionFetchIgnoreRules`](crate::ActionFetchIgnoreRules) action, blocking until it has.
@@ -3801,17 +5636,17 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_fetch_ignore_rules(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_fetch_ignore_rules(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Runs the [`ActionRemoveRemotePath`](crate::ActionRemoveRemotePath) action, blocking until it has.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaDaemonEntryRemoveOutcome *`, owned; release it with `free_rola_daemon_entry_remove_outcome`
     /// - `Err`: `RolaActionError *`, owned; release it with `free_rola_action_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult do_action_remove_remote_path(nint workspace, nint account, nint target, nint input);
+    internal static extern RorolalaResult rola_daemon_action_remove_remote_path(nint workspace, nint account, nint target, nint request);
 
     /// <summary>
     /// Entry logic for the Rorolala Daemon, driven by a Tokio multi-threaded
@@ -3834,7 +5669,7 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaIgnoreRules *`, or `NULL` when there is nothing; release it with `free_rola_ignore_rules`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint load_rola_ignore_rules(nint rules, nint root);
+    internal static extern nint rola_ignore_rules_load(nint rules, nint root);
 
     /// <summary>
     /// The inverse index of the Vault or Workspace `dir` is inside, if it is inside one.
@@ -3842,7 +5677,7 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaInverseIndex *`, or `NULL` when there is nothing; release it with `free_rola_inverse_index`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint locate_rola_inverse_index(nint dir);
+    internal static extern nint rola_inverse_index_locate(nint dir);
 
     /// <summary>
     /// How many hashes the list holds.
@@ -3850,7 +5685,7 @@ internal static partial class RorolalaBinding
     /// The count, as a `uintptr_t`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nuint rola_hash_list_len(nint list);
+    internal static extern nuint rola_hash_list_count(nint list);
 
     /// <summary>
     /// The hash at `index`, counting from zero.
@@ -3858,33 +5693,23 @@ internal static partial class RorolalaBinding
     /// An owned string the caller releases with `free_string`, an empty one past the end.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint read_rola_hash_list_by_index(nint list, nuint index);
+    internal static extern nint rola_hash_list_at(nint list, nuint index);
 
     /// <summary>
     /// Whether the objects a variant, a version or a Layout entry names are stored here.
     ///
-    /// `directory` is the directory the Workspace is searched upwards from, and `request` is a UTF-8
-    /// JSON document of this shape:
-    ///
-    /// ```json
-    /// {"targets": [
-    /// {"kind": "variant", "hash": "blake3:..."},
-    /// {"kind": "version", "hash": "..."},
-    /// {"kind": "entry", "path": "art.psd"}
-    /// ]}
-    /// ```
-    ///
-    /// The answer is an owned JSON string the caller releases with `free_string`. It is
-    /// `{"targets": [...]}`, one answer per target in the order asked, each with `kind`, the `hash` or
-    /// `path` it was asked about, `version`, `variant`, `storage`, `offline`, `tree` and `missing`. A
-    /// failure is a `RolaExistenceError *` the caller releases with `free_rola_existence_error`.
+    /// `directory` is the directory the Workspace is searched upwards from. `targets` and `targets_len`
+    /// are the caller's array and its length, borrowed for the call and released by the caller. A
+    /// `RolaExistenceTargets *` the caller releases with `free_rola_existence_targets` answers with one
+    /// target per entry asked about, in the same order. A failure is a `RolaExistenceError *` the caller
+    /// releases with `free_rola_existence_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaExistenceTargets *`, owned; release it with `free_rola_existence_targets`
     /// - `Err`: `RolaExistenceError *`, owned; release it with `free_rola_existence_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_can_retrack_offline_json(nint directory, nint request);
+    internal static extern RorolalaResult rola_can_retrack_offline(nint directory, nint targets, nuint targets_len);
 
     /// <summary>
     /// Reads the chain of the file `target` as the Version Graph shows it.
@@ -3896,21 +5721,33 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaVersionGraph *`, or `NULL` when there is nothing; release it with `free_rola_version_graph`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint locate_rola_version_graph(nint directory, nint target);
+    internal static extern nint rola_version_graph_locate(nint directory, nint target);
 
     /// <summary>
-    /// The variant graph around the entries `request` names, as one JSON document.
+    /// The variant graph around the entries `focus` names.
     ///
-    /// `directory` and `request` cross as UTF-8 strings. The answer is an owned JSON string the caller
-    /// releases with `free_string`; a failure is a `RolaVariantGraphError *` the caller releases with
-    /// `free_rola_variant_graph_error`.
+    /// `directory` is the directory the Workspace is searched upwards from. `window` and `focus` are the
+    /// caller's, borrowed for the call and released by the caller, and `focus_len` is how many entries
+    /// `focus` holds. A `RolaVariantGraph *` the caller releases with `free_rola_variant_graph` answers;
+    /// a failure is a `RolaVariantGraphError *` the caller releases with `free_rola_variant_graph_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
+    /// - `Ok`: `RolaVariantGraph *`, owned; release it with `free_rola_variant_graph`
     /// - `Err`: `RolaVariantGraphError *`, owned; release it with `free_rola_variant_graph_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult locate_rola_variant_graph_json(nint directory, nint request);
+    internal static extern RorolalaResult rola_variant_graph_locate(nint directory, nint window, nint focus, nuint focus_len);
+
+    /// <summary>
+    /// A Vault's configuration, read from the Vault holding `directory`.
+    ///
+    /// A `RolaVaultConfig *` the caller releases with `free_rola_vault_config`, or null when a directory
+    /// no Vault holds, or when the configuration cannot be read.
+    ///
+    /// Returns an owned `RolaVaultConfig *`, or `NULL` when there is nothing; release it with `free_rola_vault_config`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vault_config_read(nint directory);
 
     /// <summary>
     /// Locates a [`Vault`] by searching upwards from the given directory
@@ -3918,15 +5755,26 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaVault *`, or `NULL` when there is nothing; release it with `free_rola_vault`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint locate_rola_vault(nint vault_dir);
+    internal static extern nint rola_vault_locate(nint vault_dir);
 
     /// <summary>
     /// Locates the [`VCSIndex`] the given directory is inside
     ///
-    /// Returns an owned `RolaVCSIndex *`, or `NULL` when there is nothing; release it with `free_rola_vcsindex`.
+    /// Returns an owned `RolaVCSIndex *`, or `NULL` when there is nothing; release it with `free_rola_vcs_index`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint locate_rola_vcs_index(nint index_dir);
+    internal static extern nint rola_vcs_index_locate(nint index_dir);
+
+    /// <summary>
+    /// A Workspace's configuration, read from the Workspace holding `directory`.
+    ///
+    /// A `RolaWorkspaceConfig *` the caller releases with `free_rola_workspace_config`, or null when a
+    /// directory no Workspace holds, or when the configuration cannot be read.
+    ///
+    /// Returns an owned `RolaWorkspaceConfig *`, or `NULL` when there is nothing; release it with `free_rola_workspace_config`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_workspace_config_read(nint directory);
 
     /// <summary>
     /// Locates a [`Workspace`] by searching upwards from the given directory
@@ -3934,32 +5782,1659 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaWorkspace *`, or `NULL` when there is nothing; release it with `free_rola_workspace`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint locate_rola_workspace(nint workspace_dir);
+    internal static extern nint rola_workspace_locate(nint workspace_dir);
+
+    /// <summary>
+    /// How many policies this build carries.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_chunking_policies_count(nint self);
+
+    /// <summary>
+    /// The name of the policy at `index`, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_chunking_policies_name_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many containers the policy at `index` claims, or zero past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_chunking_policies_extension_count(nint self, nuint index);
+
+    /// <summary>
+    /// The container the policy at `index` claims at `extension`, or an empty string past either end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_chunking_policies_extension_at(nint self, nuint index, nuint extension);
+
+    /// <summary>
+    /// How many stores the place works on.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_storage_bindings_count(nint self);
+
+    /// <summary>
+    /// The store at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaStorageBinding *`, or `NULL` when there is nothing; release it with `free_rola_storage_binding`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_storage_bindings_at(nint self, nuint index);
+
+    /// <summary>
+    /// The path as the configuration wrote it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_storage_binding_path(nint self);
+
+    /// <summary>
+    /// The resolved, absolute path.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_storage_binding_root(nint self);
+
+    /// <summary>
+    /// Whether this is the place's own store.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_storage_binding_own(nint self);
+
+    /// <summary>
+    /// Whether the directory is a store this build can open.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_storage_binding_present(nint self);
+
+    /// <summary>
+    /// Whether the store would accept a write.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_storage_binding_writable(nint self);
+
+    /// <summary>
+    /// Why it cannot be used, or an empty string when it can.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_storage_binding_reason(nint self);
+
+    /// <summary>
+    /// How many Vaults the daemon serves.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_daemon_vaults_count(nint self);
+
+    /// <summary>
+    /// The Vault at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaDaemonVault *`, or `NULL` when there is nothing; release it with `free_rola_daemon_vault`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_daemon_vaults_at(nint self, nuint index);
+
+    /// <summary>
+    /// The namespace the Vault answers under.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_daemon_vault_name(nint self);
+
+    /// <summary>
+    /// The directory the Vault sits at.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_daemon_vault_path(nint self);
+
+    /// <summary>
+    /// How many targets were answered.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_search_sources_count(nint self);
+
+    /// <summary>
+    /// The answer at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaSearchSource *`, or `NULL` when there is nothing; release it with `free_rola_search_source`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_search_sources_at(nint self, nuint index);
+
+    /// <summary>
+    /// What kind the target was: `variant`, `version` or `entry`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_search_source_kind(nint self);
+
+    /// <summary>
+    /// The hash it was written with, for a variant or a version, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_search_source_hash(nint self);
+
+    /// <summary>
+    /// The path it was written with, for an entry, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_search_source_path(nint self);
+
+    /// <summary>
+    /// The version it names or records, as hex, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_search_source_version(nint self);
+
+    /// <summary>
+    /// The variant that version fixes, as hex, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_search_source_variant(nint self);
+
+    /// <summary>
+    /// The key of the content, as hex, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_search_source_storage(nint self);
+
+    /// <summary>
+    /// Whether every object it needs is held here.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_search_source_offline(nint self);
+
+    /// <summary>
+    /// Whether its content is a tree structure.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_search_source_tree(nint self);
+
+    /// <summary>
+    /// Whether a tree's files were checked, which needs its structure to be here.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_search_source_expanded(nint self);
+
+    /// <summary>
+    /// How many Vaults hold every object it needs.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_search_source_source_count(nint self);
+
+    /// <summary>
+    /// The name of the Vault at `index`, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_search_source_source_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many Vaults could not be asked.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_search_source_unreachable_count(nint self);
+
+    /// <summary>
+    /// The name of the Vault at `index`, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_search_source_unreachable_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many Layouts the place holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_layouts_count(nint self);
+
+    /// <summary>
+    /// The Layout at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaLayout *`, or `NULL` when there is nothing; release it with `free_rola_layout`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layouts_at(nint self, nuint index);
+
+    /// <summary>
+    /// The label the Layout is listed under: `main` for a Workspace and `truth` for a Vault.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layout_name(nint self);
+
+    /// <summary>
+    /// Whether it is the one the run is working in.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_layout_is_current(nint self);
+
+    /// <summary>
+    /// The Vault upstream it tracks, or an empty string when it tracks none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layout_tracking(nint self);
+
+    /// <summary>
+    /// How many entries the Layout holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_layout_entries_count(nint self);
+
+    /// <summary>
+    /// The entry at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaLayoutEntry *`, or `NULL` when there is nothing; release it with `free_rola_layout_entry`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layout_entries_at(nint self, nuint index);
+
+    /// <summary>
+    /// The path it is at, or `.` when it is at none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layout_entry_path(nint self);
+
+    /// <summary>
+    /// The `Uuid` it is known by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layout_entry_uuid(nint self);
+
+    /// <summary>
+    /// The version it is at, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layout_entry_version(nint self);
+
+    /// <summary>
+    /// The account that holds it, or an empty string when none does.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layout_entry_owner(nint self);
+
+    /// <summary>
+    /// What it says about itself.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layout_entry_description(nint self);
+
+    /// <summary>
+    /// The cut it prefers, or an empty string when none is named.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_layout_entry_preference(nint self);
+
+    /// <summary>
+    /// Whether the Vault has deprecated it, by moving it under `@/removed/`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_layout_entry_deprecated(nint self);
+
+    /// <summary>
+    /// How many entries the structure holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_tree_entries_count(nint self);
+
+    /// <summary>
+    /// The entry at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaTreeEntry *`, or `NULL` when there is nothing; release it with `free_rola_tree_entry`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_entries_at(nint self, nuint index);
+
+    /// <summary>
+    /// The path, tree-root relative and `/` separated.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_entry_path(nint self);
+
+    /// <summary>
+    /// What the path is: `file`, `directory` or `symlink`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_entry_kind(nint self);
+
+    /// <summary>
+    /// The mode, when the entry is a file: `regular` or `executable`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_entry_mode(nint self);
+
+    /// <summary>
+    /// The key a file's content is stored under, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_entry_storage(nint self);
+
+    /// <summary>
+    /// What a symbolic link points at, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_entry_target(nint self);
+
+    /// <summary>
+    /// Whether nothing is staged, changed or in conflict.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_tree_status_is_clean(nint self);
+
+    /// <summary>
+    /// Whether the tree's own Layout entry makes the reading the wrong one to record.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_tree_status_wrong(nint self);
+
+    /// <summary>
+    /// How many paths differ between the recorded version and the staged structure.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_tree_status_staged_count(nint self);
+
+    /// <summary>
+    /// One staged change, or null past the end.
+    ///
+    /// Returns an owned `RolaTreeChange *`, or `NULL` when there is nothing; release it with `free_rola_tree_change`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_status_staged_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many paths differ between the staged structure and the work on disk.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_tree_status_unstaged_count(nint self);
+
+    /// <summary>
+    /// One unstaged change, or null past the end.
+    ///
+    /// Returns an owned `RolaTreeChange *`, or `NULL` when there is nothing; release it with `free_rola_tree_change`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_status_unstaged_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many paths the work holds and the staged structure does not.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_tree_status_untracked_count(nint self);
+
+    /// <summary>
+    /// One untracked path, or null past the end.
+    ///
+    /// Returns an owned `RolaTreeUntracked *`, or `NULL` when there is nothing; release it with `free_rola_tree_untracked`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_status_untracked_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many paths a merge left in conflict.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_tree_status_conflict_count(nint self);
+
+    /// <summary>
+    /// One conflict, or null past the end.
+    ///
+    /// Returns an owned `RolaTreeConflict *`, or `NULL` when there is nothing; release it with `free_rola_tree_conflict`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_status_conflict_at(nint self, nuint index);
+
+    /// <summary>
+    /// The path in the later structure, or where it was for a deletion.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_change_path(nint self);
+
+    /// <summary>
+    /// What the path is.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_change_kind(nint self);
+
+    /// <summary>
+    /// What happened to it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_change_change(nint self);
+
+    /// <summary>
+    /// Where it was, for a rename, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_change_old_path(nint self);
+
+    /// <summary>
+    /// The path.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_untracked_path(nint self);
+
+    /// <summary>
+    /// What it is.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_untracked_kind(nint self);
+
+    /// <summary>
+    /// The path the two sides disagree about.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_conflict_path(nint self);
+
+    /// <summary>
+    /// The conflict copy that holds the other side.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_conflict_theirs(nint self);
+
+    /// <summary>
+    /// The Layout entry id the tree keeps, or an empty string when the file says nothing.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_mark_id(nint self);
+
+    /// <summary>
+    /// Whether a description is staged for the next version.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_tree_mark_described(nint self);
+
+    /// <summary>
+    /// The description itself, or an empty string when none is staged.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_tree_mark_description(nint self);
+
+    /// <summary>
+    /// How many keys the store answered with.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_storage_keys_count(nint self);
+
+    /// <summary>
+    /// The key at `index`, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_storage_keys_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many chunks the manifest names, or 0 when the content is kept whole.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_storage_manifest_chunk_count(nint self);
+
+    /// <summary>
+    /// The chunk at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaStorageChunk *`, or `NULL` when there is nothing; release it with `free_rola_storage_chunk`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_storage_manifest_chunk_at(nint self, nuint index);
+
+    /// <summary>
+    /// The key the chunk is stored under.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_storage_chunk_key(nint self);
+
+    /// <summary>
+    /// How many bytes the chunk holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_storage_chunk_len(nint self);
+
+    /// <summary>
+    /// Whether the chunk holds no bytes.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_storage_chunk_is_empty(nint self);
+
+    /// <summary>
+    /// Whether a Workspace was bound.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_storage_bind_bound_workspace(nint self);
+
+    /// <summary>
+    /// Whether a Vault was bound.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_storage_bind_bound_vault(nint self);
+
+    /// <summary>
+    /// Whether the store recorded the binding back.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_storage_bind_reverse_recorded(nint self);
+
+    /// <summary>
+    /// Whether the store can only be read.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_storage_bind_read_only(nint self);
+
+    /// <summary>
+    /// How many lines a caller should be told.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_storage_bind_warning_count(nint self);
+
+    /// <summary>
+    /// One line a caller should be told, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_storage_bind_warning_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many Workspaces write to the store.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_storage_connected_workspace_count(nint self);
+
+    /// <summary>
+    /// The Workspace at `index`, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_storage_connected_workspace_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many Vaults write to the store.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_storage_connected_vault_count(nint self);
+
+    /// <summary>
+    /// The Vault at `index`, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_storage_connected_vault_at(nint self, nuint index);
+
+    /// <summary>
+    /// Which of the four shapes the run answered with.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_kind(nint self);
+
+    /// <summary>
+    /// How many paths the run acted on, which is zero for the kinds that acted on none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_align_paths_count(nint self);
+
+    /// <summary>
+    /// One path the run acted on, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteAlignEntry *`, or `NULL` when there is nothing; release it with `free_rola_write_align_entry`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_paths_at(nint self, nuint index);
+
+    /// <summary>
+    /// The tree or tree file the run put back, or an empty string for the kinds that put none back.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_path(nint self);
+
+    /// <summary>
+    /// Whether a tree file came from what the tree has staged, which is false for every other kind.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_align_staged(nint self);
+
+    /// <summary>
+    /// Why the run refused to act, or null for a run that acted.
+    ///
+    /// Returns an owned `RolaWriteAlignRefusal *`, or `NULL` when there is nothing; release it with `free_rola_write_align_refusal`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_refusal(nint self);
+
+    /// <summary>
+    /// What was done with the path.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_entry_did(nint self);
+
+    /// <summary>
+    /// What it was done to.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_entry_what(nint self);
+
+    /// <summary>
+    /// What the refusal is, as `snake_case`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_refusal_kind(nint self);
+
+    /// <summary>
+    /// What was named, or an empty string for a refusal that names nothing.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_refusal_path(nint self);
+
+    /// <summary>
+    /// Where the Layout named the move, or an empty string for every other refusal.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_refusal_from(nint self);
+
+    /// <summary>
+    /// Where the tree holds the move, or an empty string for every other refusal.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_refusal_to(nint self);
+
+    /// <summary>
+    /// What is wrong with a move's destination, or an empty string for every other refusal.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_refusal_move_kind(nint self);
+
+    /// <summary>
+    /// What the Layout or the run said, or an empty string for a refusal that carries no words.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_align_refusal_cause(nint self);
+
+    /// <summary>
+    /// Whether the answer is a variant merge rather than a bring of entries.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_bring_joined(nint self);
+
+    /// <summary>
+    /// How many entries came in, which is zero for a variant merge.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_bring_entry_count(nint self);
+
+    /// <summary>
+    /// One entry that came in, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteBringEntry *`, or `NULL` when there is nothing; release it with `free_rola_write_bring_entry`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_bring_entry_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many entries could not come in, which is zero for a variant merge.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_bring_failed_count(nint self);
+
+    /// <summary>
+    /// One entry that could not come in, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_bring_failed_at(nint self, nuint index);
+
+    /// <summary>
+    /// The file the variant waits to be joined into, or an empty string for a bring of entries.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_bring_target(nint self);
+
+    /// <summary>
+    /// The variant that came in, or an empty string for a bring of entries.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_bring_variant(nint self);
+
+    /// <summary>
+    /// The path the variant's file was written to, or an empty string for a bring of entries.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_bring_path(nint self);
+
+    /// <summary>
+    /// The `Uuid` it is known by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_bring_entry_uuid(nint self);
+
+    /// <summary>
+    /// The path the Vault's Layout names it by, or an empty string when it names none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_bring_entry_remote_path(nint self);
+
+    /// <summary>
+    /// The path this Layout now names it by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_bring_entry_local_path(nint self);
+
+    /// <summary>
+    /// The Layout entry the path names, as its `Uuid`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_restore_id(nint self);
+
+    /// <summary>
+    /// The version the Layout now records, as a key.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_restore_version(nint self);
+
+    /// <summary>
+    /// The index side, or null when the run did not sweep the index.
+    ///
+    /// Returns an owned `RolaWriteCollectSide *`, or `NULL` when there is nothing; release it with `free_rola_write_collect_side`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_collect_index(nint self);
+
+    /// <summary>
+    /// The store side, or null when the run did not sweep the store.
+    ///
+    /// Returns an owned `RolaWriteCollectSide *`, or `NULL` when there is nothing; release it with `free_rola_write_collect_side`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_collect_storage(nint self);
+
+    /// <summary>
+    /// How many entries the side would take or took away.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_collect_side_removed(nint self);
+
+    /// <summary>
+    /// How many bytes those entries occupy.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_collect_side_bytes(nint self);
+
+    /// <summary>
+    /// How many entries the grace keeps.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_collect_side_kept(nint self);
+
+    /// <summary>
+    /// Whether the side changed.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_collect_side_changed(nint self);
+
+    /// <summary>
+    /// How many targets the run fetched.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_fetch_entry_count(nint self);
+
+    /// <summary>
+    /// One target the run fetched, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteFetchEntry *`, or `NULL` when there is nothing; release it with `free_rola_write_fetch_entry`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_fetch_entry_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many Vaults handed something over.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_fetch_brought_count(nint self);
+
+    /// <summary>
+    /// One Vault that handed something over, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteFetchSource *`, or `NULL` when there is nothing; release it with `free_rola_write_fetch_source`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_fetch_brought_at(nint self, nuint index);
+
+    /// <summary>
+    /// What it was fetched by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_fetch_entry_target(nint self);
+
+    /// <summary>
+    /// The path it is at, or `.` when it is at none or is not an entry.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_fetch_entry_path(nint self);
+
+    /// <summary>
+    /// The version the content is of, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_fetch_entry_version(nint self);
+
+    /// <summary>
+    /// The Vault's name.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_fetch_source_vault(nint self);
+
+    /// <summary>
+    /// The objects it handed over.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_fetch_source_count(nint self);
+
+    /// <summary>
+    /// The variant the version points at.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_file_version_variant(nint self);
+
+    /// <summary>
+    /// The version the Layout records.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_file_version_version(nint self);
+
+    /// <summary>
+    /// The key the object was written under.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_index_object_key(nint self);
+
+    /// <summary>
+    /// Where the entry sits in the Layout.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_wanted_path(nint self);
+
+    /// <summary>
+    /// The `Uuid` ownership is about, as text.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_wanted_uuid(nint self);
+
+    /// <summary>
+    /// The kind of refusal, as its word.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_refusal_kind(nint self);
+
+    /// <summary>
+    /// The path the refusal names, or an empty string when it names none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_refusal_path(nint self);
+
+    /// <summary>
+    /// The account that holds the entry, or an empty string when it names none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_refusal_owner(nint self);
+
+    /// <summary>
+    /// The failure's words, or an empty string when the refusal carries none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_refusal_cause(nint self);
+
+    /// <summary>
+    /// How many entries a move would act on.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_ownership_plan_wanted_count(nint self);
+
+    /// <summary>
+    /// One entry a move would act on, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteOwnershipWanted *`, or `NULL` when there is nothing; release it with `free_rola_write_ownership_wanted`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_plan_wanted_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many entries the gates refuse.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_ownership_plan_refused_count(nint self);
+
+    /// <summary>
+    /// One refusal, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteOwnershipRefusal *`, or `NULL` when there is nothing; release it with `free_rola_write_ownership_refusal`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_plan_refused_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many files a directory brought in that the Layout does not name.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_ownership_plan_skipped(nint self);
+
+    /// <summary>
+    /// The path the entry is named at.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_entry_path(nint self);
+
+    /// <summary>
+    /// The entry's `Uuid`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_entry_uuid(nint self);
+
+    /// <summary>
+    /// The owner the Vault answered with, or an empty string when nobody holds it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_entry_owner(nint self);
+
+    /// <summary>
+    /// How many entries the Vault moved.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_ownership_apply_entry_count(nint self);
+
+    /// <summary>
+    /// One entry the Vault moved, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteOwnershipEntry *`, or `NULL` when there is nothing; release it with `free_rola_write_ownership_entry`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_apply_entry_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many entries were refused.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_ownership_apply_failed_count(nint self);
+
+    /// <summary>
+    /// One refusal, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteOwnershipRefusal *`, or `NULL` when there is nothing; release it with `free_rola_write_ownership_refusal`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_ownership_apply_failed_at(nint self, nuint index);
+
+    /// <summary>
+    /// Whether anything was rewritten.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_pack_changed(nint self);
+
+    /// <summary>
+    /// What the write said.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaProgressSignal rola_progress_event_signal(nint self);
+
+    /// <summary>
+    /// Whether the record that moved belongs to one path or to a tree.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_retrack_kind(nint self);
+
+    /// <summary>
+    /// Where the entry sits in the Layout.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_retrack_path(nint self);
+
+    /// <summary>
+    /// The version it records now, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_retrack_version(nint self);
+
+    /// <summary>
+    /// Whether the version's number in its chain is known.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_retrack_number_present(nint self);
+
+    /// <summary>
+    /// That version's number in its chain, or 0 when it is not known.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_retrack_number(nint self);
+
+    /// <summary>
+    /// Whether what the path records is not what it recorded before.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_retrack_changed(nint self);
+
+    /// <summary>
+    /// Whether the version's content was written back over the file.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_retrack_switched(nint self);
+
+    /// <summary>
+    /// The `Uuid` the path recorded before, or an empty string when the run recorded no entry.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_retrack_from(nint self);
+
+    /// <summary>
+    /// The `Uuid` the path records now, or an empty string when the run recorded no entry.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_retrack_to(nint self);
+
+    /// <summary>
+    /// Whether the run gave the entry a fresh `Uuid`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_retrack_forked(nint self);
+
+    /// <summary>
+    /// How many Vaults handed content over.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_retrack_took_count(nint self);
+
+    /// <summary>
+    /// One Vault that handed content over, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteRetrackTook *`, or `NULL` when there is nothing; release it with `free_rola_write_retrack_took`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_retrack_took_at(nint self, nuint index);
+
+    /// <summary>
+    /// The Vault's name.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_retrack_took_vault(nint self);
+
+    /// <summary>
+    /// How many objects it handed over.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_retrack_took_objects(nint self);
+
+    /// <summary>
+    /// The key the content is kept under.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_storage_put_key(nint self);
+
+    /// <summary>
+    /// Whether the content is kept as a manifest of chunks.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_storage_put_chunked(nint self);
+
+    /// <summary>
+    /// The Layout being worked in.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_plan_layout(nint self);
+
+    /// <summary>
+    /// The Vault it tracks.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_plan_vault(nint self);
+
+    /// <summary>
+    /// Whether the run was told to change history rather than refuse.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_sync_plan_forced(nint self);
+
+    /// <summary>
+    /// How many entries are to move.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_sync_plan_entry_count(nint self);
+
+    /// <summary>
+    /// One entry that is to move, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteSyncEntry *`, or `NULL` when there is nothing; release it with `free_rola_write_sync_entry`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_plan_entry_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many entries both sides already hold at the same version.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_plan_up_to_date(nint self);
+
+    /// <summary>
+    /// Whether the Vault's Layout was read.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_sync_plan_layout_read(nint self);
+
+    /// <summary>
+    /// Whether the index is to move.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_sync_plan_index(nint self);
+
+    /// <summary>
+    /// Whether the store is to move.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_sync_plan_storage(nint self);
+
+    /// <summary>
+    /// The `Uuid` it is known by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_entry_uuid(nint self);
+
+    /// <summary>
+    /// The path this Layout names it by, or an empty string when it names none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_entry_local_path(nint self);
+
+    /// <summary>
+    /// The path the Vault's Layout names it by, or an empty string when it names none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_entry_remote_path(nint self);
+
+    /// <summary>
+    /// The name the Vault's Layout is to give it, or an empty string when this creates none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_entry_planned_path(nint self);
+
+    /// <summary>
+    /// The version this Layout is at, as hex, or an empty string when it is at none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_entry_local_version(nint self);
+
+    /// <summary>
+    /// The version the Vault is at, as hex, or an empty string when the Vault holds none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_entry_remote_version(nint self);
+
+    /// <summary>
+    /// The account the Vault names as its holder, or an empty string when nobody holds it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_entry_owner(nint self);
+
+    /// <summary>
+    /// Whether the Vault has moved it under `@/removed/`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_sync_entry_deprecated(nint self);
+
+    /// <summary>
+    /// What the entry is, a file or a tree, or an empty string when the plan names none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_entry_item_kind(nint self);
+
+    /// <summary>
+    /// Whether the file this Layout names has been changed in the tree.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_sync_entry_modified(nint self);
+
+    /// <summary>
+    /// What the plan means to do with it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_entry_kind(nint self);
+
+    /// <summary>
+    /// How many entries were written to the Vault.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_applied(nint self);
+
+    /// <summary>
+    /// How many versions were brought down from the Vault.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_received(nint self);
+
+    /// <summary>
+    /// How many entries were not written.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_sync_failed_count(nint self);
+
+    /// <summary>
+    /// One entry that was not written, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_failed_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many stored objects the index named.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_index_objects(nint self);
+
+    /// <summary>
+    /// How many units of stored content the run sent.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_storage_objects(nint self);
+
+    /// <summary>
+    /// Whether the Vault's Layout was not read, so the copy still says what it said.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_sync_missing_layout(nint self);
+
+    /// <summary>
+    /// How many Vaults handed something over.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_sync_took_count(nint self);
+
+    /// <summary>
+    /// One Vault that handed something over, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteSyncTook *`, or `NULL` when there is nothing; release it with `free_rola_write_sync_took`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_took_at(nint self, nuint index);
+
+    /// <summary>
+    /// The Vault's name.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_took_vault(nint self);
+
+    /// <summary>
+    /// How many objects it handed over.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_took_objects(nint self);
+
+    /// <summary>
+    /// The Layout the run was about.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_apply_layout(nint self);
+
+    /// <summary>
+    /// The Vault it tracks.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_apply_vault(nint self);
+
+    /// <summary>
+    /// How many entries were written to the Vault.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_apply_applied(nint self);
+
+    /// <summary>
+    /// How many versions were brought down from the Vault.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_apply_received(nint self);
+
+    /// <summary>
+    /// How many entries both sides already held at the same version.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_apply_up_to_date(nint self);
+
+    /// <summary>
+    /// How many entries were not written.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_sync_apply_failed_count(nint self);
+
+    /// <summary>
+    /// One entry that was not written, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_sync_apply_failed_at(nint self, nuint index);
+
+    /// <summary>
+    /// Whether the Vault's Layout was read at all.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_sync_apply_layout_read(nint self);
+
+    /// <summary>
+    /// How many stored objects the index named.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_apply_index_objects(nint self);
+
+    /// <summary>
+    /// How many units of stored content the run sent.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_sync_apply_storage_objects(nint self);
+
+    /// <summary>
+    /// The Layout entry the path names, as its `Uuid`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tracked_file_id(nint self);
+
+    /// <summary>
+    /// The content's key.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tracked_file_storage(nint self);
+
+    /// <summary>
+    /// The variant the version points at.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tracked_file_variant(nint self);
+
+    /// <summary>
+    /// The version the Layout records.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tracked_file_version(nint self);
+
+    /// <summary>
+    /// Whether the subject is a tree's structure rather than a file's content.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_track_subject_tree(nint self);
+
+    /// <summary>
+    /// The key the editing file names the subject's section by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_subject_key(nint self);
+
+    /// <summary>
+    /// The path as a person knows it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_subject_path(nint self);
+
+    /// <summary>
+    /// The content's digest in lowercase hex, or an empty string for a tree.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_subject_digest(nint self);
+
+    /// <summary>
+    /// Where it sits in the Layout.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_item_path(nint self);
+
+    /// <summary>
+    /// What happened to it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_item_action(nint self);
+
+    /// <summary>
+    /// What the refusal is, as `snake_case`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_refusal_kind(nint self);
+
+    /// <summary>
+    /// The path the refusal is about, or an empty string when it names none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_refusal_path(nint self);
+
+    /// <summary>
+    /// How many paths the refusal names, which is zero for the kinds that name none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_track_refusal_paths_count(nint self);
+
+    /// <summary>
+    /// One path the refusal names, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_refusal_paths_at(nint self, nuint index);
+
+    /// <summary>
+    /// The name a preference holds, or an empty string for every other refusal.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_refusal_name(nint self);
+
+    /// <summary>
+    /// What is wrong with a name, or an empty string for every other refusal.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_refusal_file_kind(nint self);
+
+    /// <summary>
+    /// What the Layout said, or an empty string for every other refusal.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_refusal_cause(nint self);
+
+    /// <summary>
+    /// How many subjects a message is asked for.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_track_plan_subject_count(nint self);
+
+    /// <summary>
+    /// One subject a message is asked for, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteTrackSubject *`, or `NULL` when there is nothing; release it with `free_rola_write_track_subject`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_plan_subject_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many files hold what the Layout already names.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_track_plan_unchanged(nint self);
+
+    /// <summary>
+    /// How many words the plan prefills, one per subject.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_track_plan_prefill_count(nint self);
+
+    /// <summary>
+    /// One word the plan prefills, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_plan_prefill_at(nint self, nuint index);
+
+    /// <summary>
+    /// What stops the run before anything is written, or null when the plan goes ahead.
+    ///
+    /// Returns an owned `RolaWriteTrackRefusal *`, or `NULL` when there is nothing; release it with `free_rola_write_track_refusal`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_plan_refused(nint self);
+
+    /// <summary>
+    /// How many subjects were recorded.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_track_apply_item_count(nint self);
+
+    /// <summary>
+    /// One subject that was recorded, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteTrackItem *`, or `NULL` when there is nothing; release it with `free_rola_write_track_item`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_apply_item_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many refusals stopped the run, which is at most one.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_track_apply_refused_count(nint self);
+
+    /// <summary>
+    /// One refusal that stopped the run, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteTrackRefusal *`, or `NULL` when there is nothing; release it with `free_rola_write_track_refusal`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_track_apply_refused_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many bytes the description is.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_tree_description_bytes(nint self);
+
+    /// <summary>
+    /// How many paths the staging changed.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_tree_add_change_count(nint self);
+
+    /// <summary>
+    /// One path the staging changed, or null past the end.
+    ///
+    /// Returns an owned `RolaWriteTreeAddChange *`, or `NULL` when there is nothing; release it with `free_rola_write_tree_add_change`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tree_add_change_at(nint self, nuint index);
+
+    /// <summary>
+    /// The path, as the tree writes it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tree_add_change_path(nint self);
+
+    /// <summary>
+    /// What happened to it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tree_add_change_kind(nint self);
+
+    /// <summary>
+    /// The tree's path, or `.` for the Workspace root.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tree_init_path(nint self);
+
+    /// <summary>
+    /// How many entries stopped being files.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_tree_init_collapsed(nint self);
+
+    /// <summary>
+    /// Whether the tree is the Workspace root.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_tree_init_is_root(nint self);
+
+    /// <summary>
+    /// How many paths left the staged structure.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_tree_remove_path_count(nint self);
+
+    /// <summary>
+    /// One path that left the staged structure, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tree_remove_path_at(nint self, nuint index);
+
+    /// <summary>
+    /// Whether the work was left where it was.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_tree_remove_cached(nint self);
+
+    /// <summary>
+    /// Whether the whole staging area was cleared.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_write_tree_reset_whole(nint self);
+
+    /// <summary>
+    /// How many paths the run reset.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_write_tree_reset_path_count(nint self);
+
+    /// <summary>
+    /// One path the run reset, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_write_tree_reset_path_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many paths were written down.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_workspace_cache_paths(nint self);
+
+    /// <summary>
+    /// How many bytes the paths hold.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_write_workspace_cache_bytes(nint self);
 
     /// <summary>
     /// The account's name, which is the stem of its private key file.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_account_account_name(nint self);
+    internal static extern nint rola_account_name(nint self);
 
     /// <summary>
     /// Where the account's private key file was found.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_account_account_key_path(nint self);
+    internal static extern nint rola_account_key_path(nint self);
 
     /// <summary>
     /// How many accounts the search found.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nuint rola_accounts_len(nint self);
+    internal static extern nuint rola_accounts_count(nint self);
 
     /// <summary>
     /// Whether the search found no accounts at all.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool is_rola_accounts_empty(nint self);
+    internal static extern bool rola_accounts_is_empty(nint self);
 
     /// <summary>
     /// The account at `index`, counting from zero.
@@ -3967,32 +7442,32 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaAccount *`, or `NULL` when there is nothing; release it with `free_rola_account`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint read_rola_accounts_by_index(nint self, nuint index);
+    internal static extern nint rola_accounts_at(nint self, nuint index);
 
     /// <summary>
     /// The member's name, which is the stem of its public key file.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_member_member_name(nint self);
+    internal static extern nint rola_member_name(nint self);
 
     /// <summary>
     /// Where the member's public key file was found.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_member_member_key_path(nint self);
+    internal static extern nint rola_member_key_path(nint self);
 
     /// <summary>
     /// How many members the search found.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nuint rola_members_len(nint self);
+    internal static extern nuint rola_members_count(nint self);
 
     /// <summary>
     /// Whether the search found no members at all.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool is_rola_members_empty(nint self);
+    internal static extern bool rola_members_is_empty(nint self);
 
     /// <summary>
     /// The member at `index`, counting from zero.
@@ -4000,65 +7475,65 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaMember *`, or `NULL` when there is nothing; release it with `free_rola_member`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint read_rola_members_by_index(nint self, nuint index);
+    internal static extern nint rola_members_at(nint self, nuint index);
 
     /// <summary>
     /// A rule that searches every directory.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_key_locate_rule_key_locate_rule_new();
+    internal static extern nint rola_key_locate_rule_new();
 
     /// <summary>
     /// Whether the filesystem-root keys are searched.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool rola_key_locate_rule_key_locate_rule_find_global(nint self);
+    internal static extern bool rola_key_locate_rule_find_global(nint self);
 
     /// <summary>
     /// Turns the filesystem-root keys on or off.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void rola_key_locate_rule_key_locate_rule_set_find_global(nint self, [MarshalAs(UnmanagedType.U1)] bool value);
+    internal static extern void rola_key_locate_rule_set_find_global(nint self, [MarshalAs(UnmanagedType.U1)] bool value);
 
     /// <summary>
     /// Whether the keys beside the current Vault are searched.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool rola_key_locate_rule_key_locate_rule_find_local(nint self);
+    internal static extern bool rola_key_locate_rule_find_local(nint self);
 
     /// <summary>
     /// Turns the keys beside the current Vault on or off.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void rola_key_locate_rule_key_locate_rule_set_find_local(nint self, [MarshalAs(UnmanagedType.U1)] bool value);
+    internal static extern void rola_key_locate_rule_set_find_local(nint self, [MarshalAs(UnmanagedType.U1)] bool value);
 
     /// <summary>
     /// Whether the user's local data keys are searched.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool rola_key_locate_rule_key_locate_rule_find_user(nint self);
+    internal static extern bool rola_key_locate_rule_find_user(nint self);
 
     /// <summary>
     /// Turns the user's local data keys on or off.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void rola_key_locate_rule_key_locate_rule_set_find_user(nint self, [MarshalAs(UnmanagedType.U1)] bool value);
+    internal static extern void rola_key_locate_rule_set_find_user(nint self, [MarshalAs(UnmanagedType.U1)] bool value);
 
     /// <summary>
     /// Whether the keys named by `ROLA_HOME` are searched.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool rola_key_locate_rule_key_locate_rule_find_env(nint self);
+    internal static extern bool rola_key_locate_rule_find_env(nint self);
 
     /// <summary>
     /// Turns the keys named by `ROLA_HOME` on or off.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void rola_key_locate_rule_key_locate_rule_set_find_env(nint self, [MarshalAs(UnmanagedType.U1)] bool value);
+    internal static extern void rola_key_locate_rule_set_find_env(nint self, [MarshalAs(UnmanagedType.U1)] bool value);
 
     /// <summary>
     /// The articles `query` finds, best first, at most `limit` of them.
@@ -4067,13 +7542,13 @@ internal static partial class RorolalaBinding
     /// matched is an empty list rather than a failure.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint search_rola_book(nint self, nint query, nuint limit);
+    internal static extern nint rola_book_search_run(nint self, nint query, nuint limit);
 
     /// <summary>
     /// How many articles the book holds.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nuint count_rola_book_articles(nint self);
+    internal static extern nuint rola_book_articles_count(nint self);
 
     /// <summary>
     /// How many articles the search found.
@@ -4090,7 +7565,7 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaBookHit *`, or `NULL` when there is nothing; release it with `free_rola_book_hit`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_book_results_hit(nint self, nuint index);
+    internal static extern nint rola_book_results_at(nint self, nuint index);
 
     /// <summary>
     /// The article's name, which finds it again through the book.
@@ -4137,7 +7612,7 @@ internal static partial class RorolalaBinding
     /// Returns an owned `RolaBookSnippet *`, or `NULL` when there is nothing; release it with `free_rola_book_snippet`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_book_hit_snippet(nint self, nuint index);
+    internal static extern nint rola_book_hit_snippet_at(nint self, nuint index);
 
     /// <summary>
     /// The field the fragment was cut from: `content`, `description`, `keywords`, `title` or
@@ -4179,46 +7654,110 @@ internal static partial class RorolalaBinding
     internal static extern nuint rola_book_snippet_range_length(nint self, nuint index);
 
     /// <summary>
+    /// Which outcome the walk reached.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaDaemonChainKind rola_daemon_chain_outcome_kind(nint self);
+
+    /// <summary>
+    /// The hash the walk stopped at, or an empty string when the outcome names none.
+    ///
+    /// The caller releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_daemon_chain_outcome_key(nint self);
+
+    /// <summary>
+    /// How many outcomes the batch answered.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_daemon_ownerships_count(nint self);
+
+    /// <summary>
+    /// The outcome at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaDaemonOwnershipOutcome *`, or `NULL` when there is nothing; release it with `free_rola_daemon_ownership_outcome`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_daemon_ownerships_at(nint self, nuint index);
+
+    /// <summary>
+    /// Which outcome the request reached.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaDaemonOwnershipKind rola_daemon_ownership_outcome_kind(nint self);
+
+    /// <summary>
+    /// The account the outcome names, or an empty string when it names none.
+    ///
+    /// The caller releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_daemon_ownership_outcome_owner(nint self);
+
+    /// <summary>
+    /// Which outcome the move reached.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaDaemonPathMoveKind rola_daemon_path_move_outcome_kind(nint self);
+
+    /// <summary>
+    /// Which outcome the removal reached.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaDaemonEntryRemoveKind rola_daemon_entry_remove_outcome_kind(nint self);
+
+    /// <summary>
+    /// The account that holds the entry, or an empty string when nobody does.
+    ///
+    /// The caller releases it with `free_string`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_daemon_entry_remove_outcome_owner(nint self);
+
+    /// <summary>
+    /// How many outcomes the batch answered.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_daemon_entry_writes_count(nint self);
+
+    /// <summary>
+    /// The outcome at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaDaemonEntryWriteOutcome *`, or `NULL` when there is nothing; release it with `free_rola_daemon_entry_write_outcome`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_daemon_entry_writes_at(nint self, nuint index);
+
+    /// <summary>
+    /// Which outcome the write reached.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RolaDaemonEntryWriteKind rola_daemon_entry_write_outcome_kind(nint self);
+
+    /// <summary>
     /// The kind of failure this was.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RolaIoErrorKind rola_io_error_io_error_kind(nint self);
+    internal static extern RolaIoErrorKind rola_io_error_kind(nint self);
 
     /// <summary>
     /// What the failure said.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_io_error_io_error_message(nint self);
+    internal static extern nint rola_io_error_message(nint self);
 
     /// <summary>
     /// What the failure said.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_bincode_error_bincode_error_message(nint self);
-
-    /// <summary>
-    /// What the failure said.
-    /// </summary>
-    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_json_error_json_error_message(nint self);
-
-    /// <summary>
-    /// The line it was found on.
-    /// </summary>
-    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nuint rola_json_error_json_error_line(nint self);
-
-    /// <summary>
-    /// The column it was found on.
-    /// </summary>
-    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nuint rola_json_error_json_error_column(nint self);
+    internal static extern nint rola_bincode_error_message(nint self);
 
     /// <summary>
     /// The target that would not read as an address.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_addr_error_addr_error_target(nint self);
+    internal static extern nint rola_addr_error_target(nint self);
 
     /// <summary>
     /// Whether `path` is ignored: the last rule that matches it says it is.
@@ -4227,7 +7766,7 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool rola_ignore_rules_is_ignore(nint self, nint path, [MarshalAs(UnmanagedType.U1)] bool is_dir);
+    internal static extern bool rola_ignore_rules_is_ignored(nint self, nint path, [MarshalAs(UnmanagedType.U1)] bool is_dir);
 
     /// <summary>
     /// Brings the records up to date with the objects the index holds, reading only what is new.
@@ -4239,7 +7778,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaInverseIndexError *`, owned; release it with `free_rola_inverse_index_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rebuild_rola_inverse_index(nint self);
+    internal static extern RorolalaResult rola_inverse_index_rebuild(nint self);
 
     /// <summary>
     /// Builds the records afresh from every object the index holds, and writes them.
@@ -4251,7 +7790,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaInverseIndexError *`, owned; release it with `free_rola_inverse_index_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rebuild_full_rola_inverse_index(nint self);
+    internal static extern RorolalaResult rola_inverse_index_full_rebuild(nint self);
 
     /// <summary>
     /// The variants made from the content stored under `hash`.
@@ -4263,7 +7802,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaInverseIndexReadingError *`, owned; release it with `free_rola_inverse_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult get_store_dependents(nint self, nint hash);
+    internal static extern RorolalaResult rola_inverse_index_store_dependents(nint self, nint hash);
 
     /// <summary>
     /// The versions that fix the variant named `hash`.
@@ -4275,7 +7814,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaInverseIndexReadingError *`, owned; release it with `free_rola_inverse_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult get_variant_dependents(nint self, nint hash);
+    internal static extern RorolalaResult rola_inverse_index_variant_dependents(nint self, nint hash);
 
     /// <summary>
     /// The variants based on the version named `hash`.
@@ -4287,7 +7826,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaInverseIndexReadingError *`, owned; release it with `free_rola_inverse_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult get_version_dependents(nint self, nint hash);
+    internal static extern RorolalaResult rola_inverse_index_version_dependents(nint self, nint hash);
 
     /// <summary>
     /// The versions based on the version named `hash`.
@@ -4299,7 +7838,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaInverseIndexReadingError *`, owned; release it with `free_rola_inverse_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult get_child_versions(nint self, nint hash);
+    internal static extern RorolalaResult rola_inverse_index_child_versions(nint self, nint hash);
 
     /// <summary>
     /// The variants made by the creator named `hash`.
@@ -4311,7 +7850,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaInverseIndexReadingError *`, owned; release it with `free_rola_inverse_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult get_creator_dependents(nint self, nint hash);
+    internal static extern RorolalaResult rola_inverse_index_creator_dependents(nint self, nint hash);
 
     /// <summary>
     /// The variants that say what the message named `hash` says.
@@ -4323,7 +7862,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaInverseIndexReadingError *`, owned; release it with `free_rola_inverse_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult get_message_dependents(nint self, nint hash);
+    internal static extern RorolalaResult rola_inverse_index_message_dependents(nint self, nint hash);
 
     /// <summary>
     /// The variants that merge in the variant named `hash`.
@@ -4335,7 +7874,7 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaInverseIndexReadingError *`, owned; release it with `free_rola_inverse_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult get_join_dependents(nint self, nint hash);
+    internal static extern RorolalaResult rola_inverse_index_join_dependents(nint self, nint hash);
 
     /// <summary>
     /// The number of the version named `hash`.
@@ -4347,115 +7886,191 @@ internal static partial class RorolalaBinding
     /// - `Err`: `RolaInverseIndexReadingError *`, owned; release it with `free_rola_inverse_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult get_version_number(nint self, nint hash);
+    internal static extern RorolalaResult rola_inverse_index_version_number(nint self, nint hash);
 
     /// <summary>
     /// What the rebuild had to do: `fresh`, `incremental` or `full`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint inverse_index_report_mode(nint self);
+    internal static extern nint rola_inverse_index_report_mode(nint self);
 
     /// <summary>
     /// How many objects the index holds, as the build left it.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ulong inverse_index_report_objects(nint self);
+    internal static extern ulong rola_inverse_index_report_objects(nint self);
 
     /// <summary>
     /// How many objects this rebuild read.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ulong inverse_index_report_objects_read(nint self);
+    internal static extern ulong rola_inverse_index_report_objects_read(nint self);
 
     /// <summary>
     /// How many of them are variants.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ulong inverse_index_report_variants(nint self);
+    internal static extern ulong rola_inverse_index_report_variants(nint self);
 
     /// <summary>
     /// How many are versions.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ulong inverse_index_report_versions(nint self);
+    internal static extern ulong rola_inverse_index_report_versions(nint self);
 
     /// <summary>
     /// How many are creators.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ulong inverse_index_report_creators(nint self);
+    internal static extern ulong rola_inverse_index_report_creators(nint self);
 
     /// <summary>
     /// How many are messages.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ulong inverse_index_report_messages(nint self);
+    internal static extern ulong rola_inverse_index_report_messages(nint self);
 
     /// <summary>
     /// How many versions this rebuild numbered itself, the root's own number included.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ulong inverse_index_report_versions_numbered(nint self);
+    internal static extern ulong rola_inverse_index_report_versions_numbered(nint self);
 
     /// <summary>
     /// How many records the inverse index has.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ulong inverse_index_report_entries(nint self);
+    internal static extern ulong rola_inverse_index_report_entries(nint self);
 
     /// <summary>
     /// How many dependents are noted across the records.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ulong inverse_index_report_dependents(nint self);
+    internal static extern ulong rola_inverse_index_report_dependents(nint self);
 
     /// <summary>
     /// The digest of what was written, as hex.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint inverse_index_report_fingerprint(nint self);
+    internal static extern nint rola_inverse_index_report_fingerprint(nint self);
 
     /// <summary>
     /// The number itself.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ulong version_number_value(nint self);
+    internal static extern ulong rola_version_number_value(nint self);
 
     /// <summary>
     /// The link the caller wrote, as it was written.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint vault_address_read_raw(nint self);
+    internal static extern nint rola_vault_address_raw(nint self);
 
     /// <summary>
     /// The link's host, as the ABI spells it.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint vault_address_read_addr(nint self);
+    internal static extern nint rola_vault_address_addr(nint self);
 
     /// <summary>
     /// The link's port, as the ABI spells it.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern ushort vault_address_read_port(nint self);
+    internal static extern ushort rola_vault_address_port(nint self);
 
     /// <summary>
     /// Which kind of link the address names, as the ABI spells it.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern byte vault_address_read_kind(nint self);
+    internal static extern byte rola_vault_address_kind(nint self);
 
     /// <summary>
     /// The account an SSH address names, as the ABI spells it.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint vault_address_read_ssh_user(nint self);
+    internal static extern nint rola_vault_address_ssh_user(nint self);
 
     /// <summary>
     /// The directory an SSH address names, as the ABI spells it.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint vault_address_read_ssh_path(nint self);
+    internal static extern nint rola_vault_address_ssh_path(nint self);
+
+    /// <summary>
+    /// How many targets were answered.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_existence_targets_count(nint self);
+
+    /// <summary>
+    /// The answer at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaExistenceTarget *`, or `NULL` when there is nothing; release it with `free_rola_existence_target`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_existence_targets_at(nint self, nuint index);
+
+    /// <summary>
+    /// What kind the target was: `variant`, `version` or `entry`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_existence_target_kind(nint self);
+
+    /// <summary>
+    /// The hash it was written with, for a variant or a version, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_existence_target_hash(nint self);
+
+    /// <summary>
+    /// The path it was written with, for an entry, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_existence_target_path(nint self);
+
+    /// <summary>
+    /// The version it names or records, as hex, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_existence_target_version(nint self);
+
+    /// <summary>
+    /// The variant that version fixes, as hex, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_existence_target_variant(nint self);
+
+    /// <summary>
+    /// The key of the content, as hex, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_existence_target_storage(nint self);
+
+    /// <summary>
+    /// Whether every object it needs is held, so it can be used offline.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_existence_target_offline(nint self);
+
+    /// <summary>
+    /// Whether its content is a tree structure.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_existence_target_tree(nint self);
+
+    /// <summary>
+    /// How many keys it needs that are not held.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_existence_target_missing_count(nint self);
+
+    /// <summary>
+    /// The key that is not held at `index`, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_existence_target_missing_at(nint self, nuint index);
 
     /// <summary>
     /// How many paths the Layout names that the tree does not hold.
@@ -4919,102 +8534,474 @@ internal static partial class RorolalaBinding
     internal static extern nint rola_version_graph_upstream_vault(nint self);
 
     /// <summary>
+    /// How many entries the graph was centred on.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_variant_graph_focus_count(nint self);
+
+    /// <summary>
+    /// What the entry at `index` resolved to, or null past the end.
+    ///
+    /// Returns an owned `RolaVariantGraphFocusResolution *`, or `NULL` when there is nothing; release it with `free_rola_variant_graph_focus_resolution`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_focus_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many variants the window holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_variant_graph_node_count(nint self);
+
+    /// <summary>
+    /// The variant at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaVariantGraphNode *`, or `NULL` when there is nothing; release it with `free_rola_variant_graph_node`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_node_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many versions fix the variants in the window.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_variant_graph_version_count(nint self);
+
+    /// <summary>
+    /// The version at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaVariantGraphVersion *`, or `NULL` when there is nothing; release it with `free_rola_variant_graph_version`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_version_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many edges the window holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_variant_graph_edge_count(nint self);
+
+    /// <summary>
+    /// The edge at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaVariantGraphEdge *`, or `NULL` when there is nothing; release it with `free_rola_variant_graph_edge`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_edge_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many keys the window names that the index does not hold.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_variant_graph_missing_count(nint self);
+
+    /// <summary>
+    /// The missing key at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaVariantGraphMissing *`, or `NULL` when there is nothing; release it with `free_rola_variant_graph_missing`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_missing_at(nint self, nuint index);
+
+    /// <summary>
+    /// Whether the window was cut short by its cap rather than walked out.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_variant_graph_truncated(nint self);
+
+    /// <summary>
+    /// How many entries the window names.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_variant_graph_entry_count(nint self);
+
+    /// <summary>
+    /// The entry at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaVariantGraphEntry *`, or `NULL` when there is nothing; release it with `free_rola_variant_graph_entry`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_entry_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many merges are in progress.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_variant_graph_merging_count(nint self);
+
+    /// <summary>
+    /// The merge at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaVariantGraphMerging *`, or `NULL` when there is nothing; release it with `free_rola_variant_graph_merging`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_merging_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many creators the window's variants name.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_variant_graph_creator_count(nint self);
+
+    /// <summary>
+    /// The creator's text at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaVariantGraphText *`, or `NULL` when there is nothing; release it with `free_rola_variant_graph_text`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_creator_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many messages the window's variants name.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_variant_graph_message_count(nint self);
+
+    /// <summary>
+    /// The message's text at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaVariantGraphText *`, or `NULL` when there is nothing; release it with `free_rola_variant_graph_text`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_message_at(nint self, nuint index);
+
+    /// <summary>
+    /// The side it is named on: `local` or the Vault's own name.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_focus_resolution_side(nint self);
+
+    /// <summary>
+    /// The path it is at.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_focus_resolution_path(nint self);
+
+    /// <summary>
+    /// The variant the version it records fixes, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_focus_resolution_variant(nint self);
+
+    /// <summary>
+    /// The version it records, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_focus_resolution_version(nint self);
+
+    /// <summary>
+    /// The variant's own key, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_node_hash(nint self);
+
+    /// <summary>
+    /// The version it is based on, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_node_base_version(nint self);
+
+    /// <summary>
+    /// The variant that version fixes, or an empty string when the index does not hold it.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_node_base_variant(nint self);
+
+    /// <summary>
+    /// The variant it merges in, or an empty string when it is no merge.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_node_join(nint self);
+
+    /// <summary>
+    /// The content it was made of, as the store's key in hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_node_storage(nint self);
+
+    /// <summary>
+    /// Whether every object the content needs is held here.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_variant_graph_node_offline(nint self);
+
+    /// <summary>
+    /// Who made it, as the key of the Creator index object.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_node_creator(nint self);
+
+    /// <summary>
+    /// What it says was done, as the key of the Message index object.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_node_message(nint self);
+
+    /// <summary>
+    /// The base variant, or the version it is based on, is not in the window.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_variant_graph_node_frontier_parents(nint self);
+
+    /// <summary>
+    /// A variant based on one of the node's versions is not in the window.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_variant_graph_node_frontier_children(nint self);
+
+    /// <summary>
+    /// A variant the node merges in is not in the window.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_variant_graph_node_frontier_joined(nint self);
+
+    /// <summary>
+    /// The version's own key, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_version_hash(nint self);
+
+    /// <summary>
+    /// The variant it fixes, as hex; the zero hash for the root.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_version_variant(nint self);
+
+    /// <summary>
+    /// Whether its number in its chain is known.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_variant_graph_version_number_present(nint self);
+
+    /// <summary>
+    /// Its number in its chain, or 0 when it is not known.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_variant_graph_version_number(nint self);
+
+    /// <summary>
+    /// Whether it is the root, numbered before the first.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_variant_graph_version_is_root(nint self);
+
+    /// <summary>
+    /// The variant the edge is walked from.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_edge_from(nint self);
+
+    /// <summary>
+    /// The variant it names.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_edge_to(nint self);
+
+    /// <summary>
+    /// What the edge is: `base` or `join`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_edge_kind(nint self);
+
+    /// <summary>
+    /// The key, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_missing_hash(nint self);
+
+    /// <summary>
+    /// What it would have been: `version` or `variant`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_missing_kind(nint self);
+
+    /// <summary>
+    /// The side it is named on.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_entry_side(nint self);
+
+    /// <summary>
+    /// The path it is at.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_entry_path(nint self);
+
+    /// <summary>
+    /// The `Uuid` it is held by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_entry_uuid(nint self);
+
+    /// <summary>
+    /// The version it records, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_entry_version(nint self);
+
+    /// <summary>
+    /// The account that holds it, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_entry_owner(nint self);
+
+    /// <summary>
+    /// Whether it was moved under the deprecated marker.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_variant_graph_entry_deprecated(nint self);
+
+    /// <summary>
+    /// The variant that was brought in, as the hex it is named by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_merging_variant(nint self);
+
+    /// <summary>
+    /// The `Uuid` of the file it is to be joined into.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_merging_target(nint self);
+
+    /// <summary>
+    /// The path that file is at, or an empty string.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_merging_path(nint self);
+
+    /// <summary>
+    /// Where the variant file lies.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_merging_file(nint self);
+
+    /// <summary>
+    /// The hash the variant names it by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_text_hash(nint self);
+
+    /// <summary>
+    /// What it says.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_variant_graph_text_text(nint self);
+
+    /// <summary>
+    /// The name this Vault goes by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vault_config_name(nint self);
+
+    /// <summary>
+    /// What this Vault says about itself.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vault_config_description(nint self);
+
+    /// <summary>
+    /// How many administrators this Vault names.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_vault_config_admin_count(nint self);
+
+    /// <summary>
+    /// The administrator at `index`, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vault_config_admin_at(nint self, nuint index);
+
+    /// <summary>
+    /// The most transfers this Vault's daemon carries at once.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ushort rola_vault_config_max_concurrency(nint self);
+
+    /// <summary>
     /// Creates a Vault in the specified directory
     ///
     /// Returns a result:
     /// - `Ok`: nothing; the payload is null
-    /// - `Err`: `VaultCreationError *`, owned; release it with `free_vault_creation_error`
+    /// - `Err`: `RolaVaultCreationError *`, owned; release it with `free_rola_vault_creation_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult create_vault(nint dir);
+    internal static extern RorolalaResult rola_vault_create(nint dir);
 
     /// <summary>
     /// The Variant this object is, or an error if it is not one
     ///
     /// Returns a result:
     /// - `Ok`: `RolaVariant *`, owned; release it with `free_rola_variant`
-    /// - `Err`: `RolaParseVCSIndexObjectError *`, owned; release it with `free_rola_parse_vcsindex_object_error`
+    /// - `Err`: `RolaVCSIndexObjectParseError *`, owned; release it with `free_rola_vcs_index_object_parse_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult expect_object_is_variant(RolaVCSIndexObject self);
+    internal static extern RorolalaResult rola_vcs_index_object_variant_read(RolaVCSIndexObject self);
 
     /// <summary>
     /// The Version this object is, or an error if it is not one
     ///
     /// Returns a result:
     /// - `Ok`: `RolaVersion *`, owned; release it with `free_rola_version`
-    /// - `Err`: `RolaParseVCSIndexObjectError *`, owned; release it with `free_rola_parse_vcsindex_object_error`
+    /// - `Err`: `RolaVCSIndexObjectParseError *`, owned; release it with `free_rola_vcs_index_object_parse_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult expect_object_is_version(RolaVCSIndexObject self);
+    internal static extern RorolalaResult rola_vcs_index_object_version_read(RolaVCSIndexObject self);
 
     /// <summary>
     /// The Creator this object is, or an error if it is not one
     ///
     /// Returns a result:
     /// - `Ok`: `RolaCreator *`, owned; release it with `free_rola_creator`
-    /// - `Err`: `RolaParseVCSIndexObjectError *`, owned; release it with `free_rola_parse_vcsindex_object_error`
+    /// - `Err`: `RolaVCSIndexObjectParseError *`, owned; release it with `free_rola_vcs_index_object_parse_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult expect_object_is_creator(RolaVCSIndexObject self);
+    internal static extern RorolalaResult rola_vcs_index_object_creator_read(RolaVCSIndexObject self);
 
     /// <summary>
     /// The Message this object is, or an error if it is not one
     ///
     /// Returns a result:
     /// - `Ok`: `RolaMessage *`, owned; release it with `free_rola_message`
-    /// - `Err`: `RolaParseVCSIndexObjectError *`, owned; release it with `free_rola_parse_vcsindex_object_error`
+    /// - `Err`: `RolaVCSIndexObjectParseError *`, owned; release it with `free_rola_vcs_index_object_parse_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult expect_object_is_message(RolaVCSIndexObject self);
-
-    /// <summary>
-    /// The Variant this object is, or an error if it is not one
-    ///
-    /// Returns a result:
-    /// - `Ok`: `RolaVariant *`, owned; release it with `free_rola_variant`
-    /// - `Err`: `RolaParseVCSIndexObjectError *`, owned; release it with `free_rola_parse_vcsindex_object_error`
-    /// </summary>
-    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult try_get_variant_from_object(RolaVCSIndexObject self);
-
-    /// <summary>
-    /// The Version this object is, or an error if it is not one
-    ///
-    /// Returns a result:
-    /// - `Ok`: `RolaVersion *`, owned; release it with `free_rola_version`
-    /// - `Err`: `RolaParseVCSIndexObjectError *`, owned; release it with `free_rola_parse_vcsindex_object_error`
-    /// </summary>
-    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult try_get_version_from_object(RolaVCSIndexObject self);
+    internal static extern RorolalaResult rola_vcs_index_object_message_read(RolaVCSIndexObject self);
 
     /// <summary>
     /// Whether this object is a Variant
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool is_object_variant(RolaVCSIndexObject self);
+    internal static extern bool rola_vcs_index_object_is_variant(RolaVCSIndexObject self);
 
     /// <summary>
     /// Whether this object is a Version
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool is_object_version(RolaVCSIndexObject self);
+    internal static extern bool rola_vcs_index_object_is_version(RolaVCSIndexObject self);
 
     /// <summary>
     /// Whether this object is a Creator
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool is_object_creator(RolaVCSIndexObject self);
+    internal static extern bool rola_vcs_index_object_is_creator(RolaVCSIndexObject self);
 
     /// <summary>
     /// Whether this object is a Message
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool is_object_message(RolaVCSIndexObject self);
+    internal static extern bool rola_vcs_index_object_is_message(RolaVCSIndexObject self);
 
     /// <summary>
     /// Writes `variant` into the index, answering with the key it is stored under.
@@ -5024,10 +9011,10 @@ internal static partial class RorolalaBinding
     ///
     /// Returns a result:
     /// - `Ok`: `char *`, owned; release it with `free_string`
-    /// - `Err`: `RolaVCSIndexWritingError *`, owned; release it with `free_rola_vcsindex_writing_error`
+    /// - `Err`: `RolaVCSIndexWritingError *`, owned; release it with `free_rola_vcs_index_writing_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult write_variant_into_index(nint self, nint variant);
+    internal static extern RorolalaResult rola_vcs_index_variant_write(nint self, nint variant);
 
     /// <summary>
     /// Writes `version` into the index, answering with the key it is stored under.
@@ -5037,10 +9024,10 @@ internal static partial class RorolalaBinding
     ///
     /// Returns a result:
     /// - `Ok`: `char *`, owned; release it with `free_string`
-    /// - `Err`: `RolaVCSIndexWritingError *`, owned; release it with `free_rola_vcsindex_writing_error`
+    /// - `Err`: `RolaVCSIndexWritingError *`, owned; release it with `free_rola_vcs_index_writing_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult write_version_into_index(nint self, nint version);
+    internal static extern RorolalaResult rola_vcs_index_version_write(nint self, nint version);
 
     /// <summary>
     /// Reads the Variant stored under `hash`, which is the hex a write answered with.
@@ -5049,10 +9036,10 @@ internal static partial class RorolalaBinding
     ///
     /// Returns a result:
     /// - `Ok`: `RolaVariant *`, owned; release it with `free_rola_variant`
-    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcsindex_reading_error`
+    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcs_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult read_variant_from_index(nint self, nint hash);
+    internal static extern RorolalaResult rola_vcs_index_variant_read(nint self, nint hash);
 
     /// <summary>
     /// Reads the Version stored under `hash`, which is the hex a write answered with.
@@ -5061,10 +9048,10 @@ internal static partial class RorolalaBinding
     ///
     /// Returns a result:
     /// - `Ok`: `RolaVersion *`, owned; release it with `free_rola_version`
-    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcsindex_reading_error`
+    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcs_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult read_version_from_index(nint self, nint hash);
+    internal static extern RorolalaResult rola_vcs_index_version_read(nint self, nint hash);
 
     /// <summary>
     /// Writes `creator` into the index, answering with the key it is stored under.
@@ -5074,10 +9061,10 @@ internal static partial class RorolalaBinding
     ///
     /// Returns a result:
     /// - `Ok`: `char *`, owned; release it with `free_string`
-    /// - `Err`: `RolaVCSIndexWritingError *`, owned; release it with `free_rola_vcsindex_writing_error`
+    /// - `Err`: `RolaVCSIndexWritingError *`, owned; release it with `free_rola_vcs_index_writing_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult write_creator_into_index(nint self, nint creator);
+    internal static extern RorolalaResult rola_vcs_index_creator_write(nint self, nint creator);
 
     /// <summary>
     /// Writes `message` into the index, answering with the key it is stored under.
@@ -5087,10 +9074,10 @@ internal static partial class RorolalaBinding
     ///
     /// Returns a result:
     /// - `Ok`: `char *`, owned; release it with `free_string`
-    /// - `Err`: `RolaVCSIndexWritingError *`, owned; release it with `free_rola_vcsindex_writing_error`
+    /// - `Err`: `RolaVCSIndexWritingError *`, owned; release it with `free_rola_vcs_index_writing_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult write_message_into_index(nint self, nint message);
+    internal static extern RorolalaResult rola_vcs_index_message_write(nint self, nint message);
 
     /// <summary>
     /// Reads the Creator stored under `hash`, which is the hex a write answered with.
@@ -5099,10 +9086,10 @@ internal static partial class RorolalaBinding
     ///
     /// Returns a result:
     /// - `Ok`: `RolaCreator *`, owned; release it with `free_rola_creator`
-    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcsindex_reading_error`
+    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcs_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult read_creator_from_index(nint self, nint hash);
+    internal static extern RorolalaResult rola_vcs_index_creator_read(nint self, nint hash);
 
     /// <summary>
     /// Reads the Message stored under `hash`, which is the hex a write answered with.
@@ -5111,34 +9098,38 @@ internal static partial class RorolalaBinding
     ///
     /// Returns a result:
     /// - `Ok`: `RolaMessage *`, owned; release it with `free_rola_message`
-    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcsindex_reading_error`
+    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcs_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult read_message_from_index(nint self, nint hash);
+    internal static extern RorolalaResult rola_vcs_index_message_read(nint self, nint hash);
 
     /// <summary>
-    /// One index object, as `rola vcs-index read --json` writes it.
+    /// One index object, as `rola vcs-index read` shows it.
     ///
-    /// Blocks until the read is done. The answer is an owned JSON string the caller releases with
+    /// Blocks until the read is done. The answer is a `RolaVCSIndexObjectView *` the caller releases
+    /// with `free_rola_vcs_index_object_view` after releasing each `char *` it carries with
     /// `free_string`; a failure is a `RolaVCSIndexReadingError *` the caller releases with
-    /// `free_rola_vcsindex_reading_error`.
+    /// `free_rola_vcs_index_reading_error`.
     ///
     /// Returns a result:
-    /// - `Ok`: `char *`, owned; release it with `free_string`
-    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcsindex_reading_error`
+    /// - `Ok`: `RolaVCSIndexObjectView *`, owned; release it with `free_rola_vcs_index_object_view`
+    /// - `Err`: `RolaVCSIndexReadingError *`, owned; release it with `free_rola_vcs_index_reading_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult rola_vcsindex_object_json(nint self, nint hash);
+    internal static extern RorolalaResult rola_vcs_index_object_view(nint self, nint hash);
 
     /// <summary>
     /// Every object the index holds, as the three listings `rola vcs-index ls-*` write.
     ///
-    /// Blocks until the listing is read. The answer is an owned JSON string the caller releases
-    /// with `free_string`, `{"versions":[...],"variants":[...],"string_hashes":[...]}`, or the JSON
-    /// `null` when the keys cannot be listed or an object cannot be read.
+    /// Blocks until the listing is read. A `RolaVCSIndexListing *` the caller releases with
+    /// `free_rola_vcs_index_listing`, whose `_version_*`, `_variant_*` and `_string_*` accessors
+    /// answer each array; a null is answered when the keys cannot be listed or an object cannot be
+    /// read.
+    ///
+    /// Returns an owned `RolaVCSIndexListing *`, or `NULL` when there is nothing; release it with `free_rola_vcs_index_listing`.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_vcsindex_list_json(nint self);
+    internal static extern nint rola_vcs_index_list(nint self);
 
     /// <summary>
     /// The root version's hash, as the hex it is written down by.
@@ -5147,23 +9138,152 @@ internal static partial class RorolalaBinding
     /// JSON `null` when the index does not hold it.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint rola_vcsindex_rootver(nint self);
+    internal static extern nint rola_vcs_index_root_version(nint self);
+
+    /// <summary>
+    /// How many versions the index holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_vcs_index_listing_version_count(nint self);
+
+    /// <summary>
+    /// The version at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaVCSIndexVersionItem *`, or `NULL` when there is nothing; release it with `free_rola_vcs_index_version_item`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vcs_index_listing_version_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many variants the index holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_vcs_index_listing_variant_count(nint self);
+
+    /// <summary>
+    /// The variant at `index`, or null past the end.
+    ///
+    /// Returns an owned `RolaVCSIndexVariantItem *`, or `NULL` when there is nothing; release it with `free_rola_vcs_index_variant_item`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vcs_index_listing_variant_at(nint self, nuint index);
+
+    /// <summary>
+    /// How many text objects the index holds.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_vcs_index_listing_string_count(nint self);
+
+    /// <summary>
+    /// The text object's hash at `index`, or an empty string past the end.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vcs_index_listing_string_at(nint self, nuint index);
+
+    /// <summary>
+    /// Whether a number was traced for the version.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_vcs_index_version_item_version_num_present(nint self);
+
+    /// <summary>
+    /// The number worked out for the version, or 0 when the chain could not be traced.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern ulong rola_vcs_index_version_item_version_num(nint self);
+
+    /// <summary>
+    /// The version's hash, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vcs_index_version_item_version(nint self);
+
+    /// <summary>
+    /// The variant it points at, as hex, or an empty string when none is stored.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vcs_index_version_item_variant(nint self);
+
+    /// <summary>
+    /// The variant's hash, as hex.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vcs_index_variant_item_variant(nint self);
+
+    /// <summary>
+    /// The version it is based on, as hex, or an empty string when none is stored.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_vcs_index_variant_item_version(nint self);
 
     /// <summary>
     /// The kind of this variant
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RolaVariantType get_rola_variant_type(nint self);
+    internal static extern RolaVariantType rola_variant_type_read(nint self);
+
+    /// <summary>
+    /// The name the Workspace knows it by.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_workspace_vault_name(nint self);
+
+    /// <summary>
+    /// The address it answers at.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_workspace_vault_address(nint self);
+
+    /// <summary>
+    /// Whether it is the Vault the Workspace reaches for.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_workspace_vault_is_default(nint self);
+
+    /// <summary>
+    /// How many Vaults this Workspace knows.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nuint rola_workspace_config_vault_count(nint self);
+
+    /// <summary>
+    /// The Vault at `index`, in name order, or null past the end.
+    ///
+    /// Returns an owned `RolaWorkspaceVault *`, or `NULL` when there is nothing; release it with `free_rola_workspace_vault`.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_workspace_config_vault_at(nint self, nuint index);
+
+    /// <summary>
+    /// The name of the Vault this Workspace reaches for, or an empty string when it names none.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern nint rola_workspace_config_default_vault(nint self);
+
+    /// <summary>
+    /// Whether the configuration tells a collecting run what to keep.
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool rola_workspace_config_gc_present(nint self);
+
+    /// <summary>
+    /// How long a collecting run keeps what nothing references, in seconds, or -1 when the
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern long rola_workspace_config_gc_grace(nint self);
 
     /// <summary>
     /// Creates a Workspace in the specified directory
     ///
     /// Returns a result:
     /// - `Ok`: nothing; the payload is null
-    /// - `Err`: `WorkspaceCreationError *`, owned; release it with `free_workspace_creation_error`
+    /// - `Err`: `RolaWorkspaceCreationError *`, owned; release it with `free_rola_workspace_creation_error`
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern RorolalaResult create_workspace(nint dir);
+    internal static extern RorolalaResult rola_workspace_create(nint dir);
 
     /// <summary>
     /// The account the work acts as, or an empty string when none is named.
@@ -5250,30 +9370,30 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool RolaVault_is_locking(nint vault);
+    internal static extern bool rola_vault_is_locking(nint vault);
 
     /// <summary>
     /// Locks the Vault, handing back the guard the lock is held by.
     ///
-    /// Returns a pointer the caller releases with `RolaVault_drop_locking_guard`, and null when nothing
+    /// Returns a pointer the caller releases with `rola_vault_lock_release`, and null when nothing
     /// was locked. The lock is held until then, a caller that keeps the pointer keeps the lock,
     /// whatever else it does.
     ///
     /// A Vault that is locked already is not waited for: nothing is handed back and it is the caller's
     /// to decide what to do about it. Whether it was locked already or its lock file could not be made
-    /// is not told here; `RolaVault_is_locking` is what says which.
+    /// is not told here; `rola_vault_is_locking` is what says which.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint RolaVault_get_locking_guard(nint vault);
+    internal static extern nint rola_vault_lock_acquire(nint vault);
 
     /// <summary>
-    /// Releases a guard `RolaVault_get_locking_guard` handed out, unlocking the Vault.
+    /// Releases a guard `rola_vault_lock_acquire` handed out, unlocking the Vault.
     ///
     /// Frees the pointer and gives the lock back with it, so the Vault is unlocked by the time this
     /// returns. A null pointer is nothing to release and does nothing.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void RolaVault_drop_locking_guard(nint guard);
+    internal static extern void rola_vault_lock_release(nint guard);
 
     /// <summary>
     /// Whether the Workspace is locked.
@@ -5284,29 +9404,29 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
-    internal static extern bool RolaWorkspace_is_locking(nint workspace);
+    internal static extern bool rola_workspace_is_locking(nint workspace);
 
     /// <summary>
     /// Locks the Workspace, handing back the guard the lock is held by.
     ///
-    /// Returns a pointer the caller releases with `RolaWorkspace_drop_locking_guard`, and null when
+    /// Returns a pointer the caller releases with `rola_workspace_lock_release`, and null when
     /// nothing was locked. The lock is held until then, a caller that keeps the pointer keeps the lock,
     /// whatever else it does.
     ///
     /// A Workspace that is locked already is not waited for: nothing is handed back and it is the
     /// caller's to decide what to do about it. Whether it was locked already or its lock file could not
-    /// be made is not told here; `RolaWorkspace_is_locking` is what says which.
+    /// be made is not told here; `rola_workspace_is_locking` is what says which.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern nint RolaWorkspace_get_locking_guard(nint workspace);
+    internal static extern nint rola_workspace_lock_acquire(nint workspace);
 
     /// <summary>
-    /// Releases a guard `RolaWorkspace_get_locking_guard` handed out, unlocking the Workspace.
+    /// Releases a guard `rola_workspace_lock_acquire` handed out, unlocking the Workspace.
     ///
     /// Frees the pointer and gives the lock back with it, so the Workspace is unlocked by the time this
     /// returns. A null pointer is nothing to release and does nothing.
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    internal static extern void RolaWorkspace_drop_locking_guard(nint guard);
+    internal static extern void rola_workspace_lock_release(nint guard);
 
 }

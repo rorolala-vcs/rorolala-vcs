@@ -1,6 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
 namespace RolaSharp.Write;
 
 /// <summary>One entry a bring put in.</summary>
@@ -95,7 +92,7 @@ public sealed record TrackSubject(bool Tree, string Key, string Path, string Dig
 /// <param name="Subjects">The subjects a message is asked for, in the order the run named them.</param>
 /// <param name="Unchanged">How many files hold what the Layout already names.</param>
 /// <param name="Prefill">What each subject is to be asked with, one per subject.</param>
-/// <param name="Refused">The refusal that stops the run, as its raw JSON, or nothing when the plan goes ahead.</param>
+/// <param name="Refused">The refusal that stops the run, described in words, or nothing when the plan goes ahead.</param>
 public sealed record TrackPlan(
     IReadOnlyList<TrackSubject> Subjects,
     int Unchanged,
@@ -103,8 +100,8 @@ public sealed record TrackPlan(
     string? Refused
 )
 {
-    /// <summary>The plan's own JSON, which an apply sends back unchanged.</summary>
-    internal string Json { get; init; } = string.Empty;
+    /// <summary>Whether the plan came from the native side, which an apply requires.</summary>
+    internal bool Agreed { get; init; }
 }
 
 /// <summary>What happened to one subject a track applied.</summary>
@@ -127,24 +124,28 @@ public sealed record TrackItem(string Path, TrackAction Action);
 
 /// <summary>What a track came to.</summary>
 /// <param name="Items">The subjects recorded, in the order the run named them.</param>
-/// <param name="Refused">What stopped the run after the plan was made, one raw JSON object each.</param>
+/// <param name="Refused">What stopped the run after the plan was made, described in words.</param>
 public sealed record TrackResult(IReadOnlyList<TrackItem> Items, IReadOnlyList<string> Refused);
 
 /// <summary>One entry an ownership plan means to move.</summary>
 /// <param name="Path">Where the entry sits in the Layout.</param>
 /// <param name="Uuid">The entry's Uuid.</param>
-public sealed record OwnershipWanted(
-    [property: JsonPropertyName("path")] string Path,
-    [property: JsonPropertyName("uuid")] string Uuid
-);
+public sealed record OwnershipWanted(string Path, string Uuid);
+
+/// <summary>Why an entry's ownership may not be moved.</summary>
+/// <param name="Kind">The kind of refusal, such as `path`, `taken` or `failed`.</param>
+/// <param name="Path">The path the refusal names, or an empty string when it names none.</param>
+/// <param name="Owner">The account that holds the entry, or an empty string when none does.</param>
+/// <param name="Cause">The failure's words, or an empty string when the refusal carries none.</param>
+public sealed record OwnershipRefusal(string Kind, string Path, string Owner, string Cause);
 
 /// <summary>What an ownership plan would move, what it refused, and what it skipped.</summary>
 /// <param name="Wanted">The entries a move would act on, in path order.</param>
-/// <param name="Refused">Why the gates refuse an entry, one raw JSON object each.</param>
+/// <param name="Refused">Why the gates refuse an entry.</param>
 /// <param name="Skipped">How many files a directory brought in that the Layout does not name.</param>
 public sealed record OwnershipPlan(
     IReadOnlyList<OwnershipWanted> Wanted,
-    IReadOnlyList<string> Refused,
+    IReadOnlyList<OwnershipRefusal> Refused,
     ulong Skipped
 );
 
@@ -156,153 +157,126 @@ public sealed record OwnershipEntry(string Path, string Uuid, string? Owner);
 
 /// <summary>What an ownership move came to.</summary>
 /// <param name="Entries">The entries the Vault moved.</param>
-/// <param name="Failed">What was refused, one raw JSON object each.</param>
+/// <param name="Failed">What was refused.</param>
 public sealed record OwnershipResult(
     IReadOnlyList<OwnershipEntry> Entries,
-    IReadOnlyList<string> Failed
+    IReadOnlyList<OwnershipRefusal> Failed
 );
-
-/// <summary>Reads shapes the workflows share out of the JSON the native side writes.</summary>
-internal static class WorkflowJson
-{
-    /// <summary>The strings under an array member, in the order they came.</summary>
-    /// <param name="root">The answer.</param>
-    /// <param name="name">The member holding the array.</param>
-    /// <returns>The strings, or nothing when the member holds none.</returns>
-    public static List<string> Texts(JsonElement root, string name)
-    {
-        var texts = new List<string>();
-        if (RolaJson.Items(root, name) is { } items)
-        {
-            foreach (var item in items.EnumerateArray())
-            {
-                if (item.ValueKind is JsonValueKind.String)
-                {
-                    texts.Add(item.GetString() ?? string.Empty);
-                }
-            }
-        }
-
-        return texts;
-    }
-
-    /// <summary>The raw JSON of every entry of an array member, in the order they came.</summary>
-    /// <param name="root">The answer.</param>
-    /// <param name="name">The member holding the array.</param>
-    /// <returns>The raw JSON, or nothing when the member holds none.</returns>
-    public static List<string> Raw(JsonElement root, string name)
-    {
-        var texts = new List<string>();
-        if (RolaJson.Items(root, name) is { } items)
-        {
-            foreach (var item in items.EnumerateArray())
-            {
-                texts.Add(item.GetRawText());
-            }
-        }
-
-        return texts;
-    }
-
-    /// <summary>The Vaults and counts under the `took` member, in the order they came.</summary>
-    /// <param name="root">The answer.</param>
-    /// <returns>What each Vault handed over.</returns>
-    public static List<(string Vault, ulong Count)> Took(JsonElement root)
-    {
-        var took = new List<(string Vault, ulong Count)>();
-        if (RolaJson.Items(root, "took") is { } items)
-        {
-            foreach (var item in items.EnumerateArray())
-            {
-                if (item.ValueKind is not JsonValueKind.Array)
-                {
-                    continue;
-                }
-
-                var parts = item.EnumerateArray().ToArray();
-                if (parts.Length == 2 && parts[0].ValueKind is JsonValueKind.String)
-                {
-                    took.Add((parts[0].GetString() ?? string.Empty, parts[1].GetUInt64()));
-                }
-            }
-        }
-
-        return took;
-    }
-}
 
 /// <summary>Reads what a bring answered with.</summary>
 internal static class Brings
 {
-    /// <summary>Reads a bring's answer.</summary>
-    /// <param name="root">The answer's JSON.</param>
+    /// <summary>Reads a bring of entries.</summary>
+    /// <param name="answer">The answer, which this does not release.</param>
     /// <returns>What came in, and what could not.</returns>
-    public static BringResult Parse(JsonElement root)
+    public static BringResult Read(nint answer)
     {
         var entries = new List<BringEntry>();
-        if (RolaJson.Items(root, "entries") is { } items)
+        var count = RorolalaBinding.rola_write_bring_entry_count(answer);
+        for (nuint index = 0; index < count; index++)
         {
-            foreach (var item in items.EnumerateArray())
+            var item = RorolalaBinding.rola_write_bring_entry_at(answer, index);
+            if (item == 0)
             {
-                if (item.ValueKind is not JsonValueKind.Object)
-                {
-                    continue;
-                }
+                continue;
+            }
 
+            try
+            {
                 entries.Add(
                     new BringEntry(
-                        RolaJson.Text(item, "uuid") ?? string.Empty,
-                        RolaJson.Text(item, "remote_path"),
-                        RolaJson.Text(item, "local_path") ?? string.Empty
+                        NativeText.Taken(RorolalaBinding.rola_write_bring_entry_uuid(item)),
+                        Optional(
+                            NativeText.Taken(RorolalaBinding.rola_write_bring_entry_remote_path(item))
+                        ),
+                        NativeText.Taken(RorolalaBinding.rola_write_bring_entry_local_path(item))
                     )
                 );
             }
+            finally
+            {
+                RorolalaBinding.free_rola_write_bring_entry(item);
+            }
         }
 
-        return new BringResult(entries, WorkflowJson.Texts(root, "failed"));
+        var failed = new List<string>();
+        var failedCount = RorolalaBinding.rola_write_bring_failed_count(answer);
+        for (nuint index = 0; index < failedCount; index++)
+        {
+            failed.Add(
+                NativeText.Taken(RorolalaBinding.rola_write_bring_failed_at(answer, index))
+            );
+        }
+
+        return new BringResult(entries, failed);
     }
 
-    /// <summary>Reads a variant merge's answer.</summary>
-    /// <param name="root">The answer's JSON.</param>
+    /// <summary>Reads a variant merge.</summary>
+    /// <param name="answer">The answer, which this does not release.</param>
     /// <returns>The file it waits to be joined into, the variant, and where its file was written.</returns>
-    public static BringVariantResult ParseVariant(JsonElement root) =>
+    public static BringVariantResult ReadVariant(nint answer) =>
         new(
-            RolaJson.Text(root, "target") ?? string.Empty,
-            RolaJson.Text(root, "variant") ?? string.Empty,
-            RolaJson.Text(root, "path") ?? string.Empty
+            NativeText.Taken(RorolalaBinding.rola_write_bring_target(answer)),
+            NativeText.Taken(RorolalaBinding.rola_write_bring_variant(answer)),
+            NativeText.Taken(RorolalaBinding.rola_write_bring_path(answer))
         );
+
+    private static string? Optional(string text) => text.Length == 0 ? null : text;
 }
 
 /// <summary>Reads what a retrack answered with.</summary>
 internal static class Retracks
 {
     /// <summary>Reads a retrack's answer.</summary>
-    /// <param name="root">The answer's JSON.</param>
+    /// <param name="answer">The answer, which this does not release.</param>
     /// <returns>What the record moved to.</returns>
-    public static RetrackResult Parse(JsonElement root)
+    /// <exception cref="RolaWriteError">The answer names a kind this build does not know.</exception>
+    public static RetrackResult Read(nint answer)
     {
-        var path = RolaJson.Text(root, "path") ?? string.Empty;
-        var version = RolaJson.Text(root, "version") ?? string.Empty;
-        var took = WorkflowJson.Took(root);
+        var kind = NativeText.Taken(RorolalaBinding.rola_write_retrack_kind(answer));
+        var took = new List<(string Vault, ulong Count)>();
+        var tookCount = RorolalaBinding.rola_write_retrack_took_count(answer);
+        for (nuint index = 0; index < tookCount; index++)
+        {
+            var item = RorolalaBinding.rola_write_retrack_took_at(answer, index);
+            if (item == 0)
+            {
+                continue;
+            }
 
-        return RolaJson.Text(root, "kind") switch
+            try
+            {
+                took.Add(
+                    (
+                        NativeText.Taken(RorolalaBinding.rola_write_retrack_took_vault(item)),
+                        RorolalaBinding.rola_write_retrack_took_objects(item)
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_retrack_took(item);
+            }
+        }
+
+        return kind switch
         {
             "path" => new RetrackResult(
                 RetrackKind.Path,
-                path,
-                version,
-                Number(root),
-                RolaJson.Flag(root, "changed"),
-                RolaJson.Flag(root, "switched"),
-                RolaJson.Text(root, "from"),
-                RolaJson.Text(root, "to"),
-                RolaJson.Flag(root, "forked"),
+                NativeText.Taken(RorolalaBinding.rola_write_retrack_path(answer)),
+                NativeText.Taken(RorolalaBinding.rola_write_retrack_version(answer)),
+                Number(answer),
+                RorolalaBinding.rola_write_retrack_changed(answer),
+                RorolalaBinding.rola_write_retrack_switched(answer),
+                Optional(NativeText.Taken(RorolalaBinding.rola_write_retrack_from(answer))),
+                Optional(NativeText.Taken(RorolalaBinding.rola_write_retrack_to(answer))),
+                RorolalaBinding.rola_write_retrack_forked(answer),
                 took
             ),
             "tree" => new RetrackResult(
                 RetrackKind.Tree,
-                path,
-                version,
+                NativeText.Taken(RorolalaBinding.rola_write_retrack_path(answer)),
+                NativeText.Taken(RorolalaBinding.rola_write_retrack_version(answer)),
                 null,
                 false,
                 false,
@@ -319,46 +293,53 @@ internal static class Retracks
         };
     }
 
-    /// <summary>The version's number in its chain, when it is known.</summary>
-    /// <param name="root">The answer.</param>
-    /// <returns>The number, or nothing.</returns>
-    private static int? Number(JsonElement root) =>
-        RolaJson.Number(root, "number") is { } number && number <= int.MaxValue
-            ? (int)number
+    /// <summary>The version's number in its chain, when the run knows it.</summary>
+    private static int? Number(nint answer) =>
+        RorolalaBinding.rola_write_retrack_number_present(answer)
+        && RorolalaBinding.rola_write_retrack_number(answer) <= int.MaxValue
+            ? (int)RorolalaBinding.rola_write_retrack_number(answer)
             : null;
+
+    private static string? Optional(string text) => text.Length == 0 ? null : text;
 }
 
 /// <summary>Reads what an alignment answered with.</summary>
 internal static class Aligns
 {
     /// <summary>Reads an alignment's answer.</summary>
-    /// <param name="root">The answer's JSON.</param>
+    /// <param name="answer">The answer, which this does not release.</param>
     /// <returns>What the run did.</returns>
     /// <exception cref="RolaWriteError">
     /// The run refused to act, or answered with no kind this build knows.
     /// </exception>
-    public static AlignResult Parse(JsonElement root)
+    public static AlignResult Read(nint answer)
     {
-        switch (RolaJson.Text(root, "kind"))
+        switch (NativeText.Taken(RorolalaBinding.rola_write_align_kind(answer)))
         {
             case "paths":
             {
                 var paths = new List<AlignChange>();
-                if (RolaJson.Items(root, "paths") is { } items)
+                var count = RorolalaBinding.rola_write_align_paths_count(answer);
+                for (nuint index = 0; index < count; index++)
                 {
-                    foreach (var item in items.EnumerateArray())
+                    var item = RorolalaBinding.rola_write_align_paths_at(answer, index);
+                    if (item == 0)
                     {
-                        if (item.ValueKind is not JsonValueKind.Object)
-                        {
-                            continue;
-                        }
+                        continue;
+                    }
 
+                    try
+                    {
                         paths.Add(
                             new AlignChange(
-                                RolaJson.Text(item, "did") ?? string.Empty,
-                                RolaJson.Text(item, "what") ?? string.Empty
+                                NativeText.Taken(RorolalaBinding.rola_write_align_entry_did(item)),
+                                NativeText.Taken(RorolalaBinding.rola_write_align_entry_what(item))
                             )
                         );
+                    }
+                    finally
+                    {
+                        RorolalaBinding.free_rola_write_align_entry(item);
                     }
                 }
 
@@ -368,18 +349,18 @@ internal static class Aligns
                 return new AlignResult(
                     AlignKind.Tree,
                     [],
-                    RolaJson.Text(root, "path"),
+                    NativeText.Taken(RorolalaBinding.rola_write_align_path(answer)),
                     false
                 );
             case "tree_file":
                 return new AlignResult(
                     AlignKind.TreeFile,
                     [],
-                    RolaJson.Text(root, "path"),
-                    RolaJson.Flag(root, "staged")
+                    NativeText.Taken(RorolalaBinding.rola_write_align_path(answer)),
+                    RorolalaBinding.rola_write_align_staged(answer)
                 );
             case "refused":
-                throw Refused(root);
+                throw Refused(answer);
             default:
                 throw new RolaWriteError(
                     RolaWriteErrorKind.Internal,
@@ -390,11 +371,12 @@ internal static class Aligns
     }
 
     /// <summary>The failure a refused alignment is reported as.</summary>
-    /// <param name="root">The answer.</param>
-    /// <returns>The failure, whose reason is the refusal's own JSON.</returns>
-    private static RolaWriteError Refused(JsonElement root)
+    /// <param name="answer">The answer, which this does not release.</param>
+    /// <returns>The failure, whose reason is the refusal's words.</returns>
+    private static RolaWriteError Refused(nint answer)
     {
-        if (!root.TryGetProperty("refusal", out var refusal))
+        var refusal = RorolalaBinding.rola_write_align_refusal(answer);
+        if (refusal == 0)
         {
             return new RolaWriteError(
                 RolaWriteErrorKind.Internal,
@@ -403,16 +385,42 @@ internal static class Aligns
             );
         }
 
-        var path =
-            RolaJson.Text(refusal, "path")
-            ?? RolaJson.Text(refusal, "from")
-            ?? RolaJson.Text(refusal, "to");
+        try
+        {
+            var kind = NativeText.Taken(RorolalaBinding.rola_write_align_refusal_kind(refusal));
+            var path = NativeText.Taken(RorolalaBinding.rola_write_align_refusal_path(refusal));
+            if (path.Length == 0)
+            {
+                path = NativeText.Taken(RorolalaBinding.rola_write_align_refusal_from(refusal));
+            }
 
-        return new RolaWriteError(
-            RolaWriteErrorKind.Precondition,
-            path,
-            refusal.GetRawText()
-        );
+            if (path.Length == 0)
+            {
+                path = NativeText.Taken(RorolalaBinding.rola_write_align_refusal_to(refusal));
+            }
+
+            var cause = NativeText.Taken(RorolalaBinding.rola_write_align_refusal_cause(refusal));
+            var move = NativeText.Taken(
+                RorolalaBinding.rola_write_align_refusal_move_kind(refusal)
+            );
+            var reason = cause.Length > 0 && move.Length > 0
+                ? $"{kind}: {cause} ({move})"
+                : cause.Length > 0
+                    ? $"{kind}: {cause}"
+                    : move.Length > 0
+                        ? $"{kind}: {move}"
+                        : kind;
+
+            return new RolaWriteError(
+                RolaWriteErrorKind.Precondition,
+                path.Length == 0 ? null : path,
+                reason
+            );
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_align_refusal(refusal);
+        }
     }
 }
 
@@ -420,82 +428,165 @@ internal static class Aligns
 internal static class Tracks
 {
     /// <summary>Reads a plan's answer.</summary>
-    /// <param name="root">The answer's JSON.</param>
+    /// <param name="answer">The answer, which this does not release.</param>
     /// <returns>What a run would record, and what stops it.</returns>
-    public static TrackPlan ParsePlan(JsonElement root)
+    public static TrackPlan ReadPlan(nint answer)
     {
         var subjects = new List<TrackSubject>();
-        if (RolaJson.Items(root, "subjects") is { } items)
+        var count = RorolalaBinding.rola_write_track_plan_subject_count(answer);
+        for (nuint index = 0; index < count; index++)
         {
-            foreach (var item in items.EnumerateArray())
+            var item = RorolalaBinding.rola_write_track_plan_subject_at(answer, index);
+            if (item == 0)
             {
-                if (item.ValueKind is not JsonValueKind.Object)
-                {
-                    continue;
-                }
+                continue;
+            }
 
+            try
+            {
                 subjects.Add(
                     new TrackSubject(
-                        RolaJson.Flag(item, "tree"),
-                        RolaJson.Text(item, "key") ?? string.Empty,
-                        RolaJson.Text(item, "path") ?? string.Empty,
-                        RolaJson.Text(item, "digest") ?? string.Empty
+                        RorolalaBinding.rola_write_track_subject_tree(item),
+                        NativeText.Taken(RorolalaBinding.rola_write_track_subject_key(item)),
+                        NativeText.Taken(RorolalaBinding.rola_write_track_subject_path(item)),
+                        NativeText.Taken(RorolalaBinding.rola_write_track_subject_digest(item))
                     )
                 );
             }
+            finally
+            {
+                RorolalaBinding.free_rola_write_track_subject(item);
+            }
         }
 
-        return new TrackPlan(
+        var prefill = new List<string>();
+        var prefillCount = RorolalaBinding.rola_write_track_plan_prefill_count(answer);
+        for (nuint index = 0; index < prefillCount; index++)
+        {
+            prefill.Add(
+                NativeText.Taken(RorolalaBinding.rola_write_track_plan_prefill_at(answer, index))
+            );
+        }
+
+        var refused = Refusal(RorolalaBinding.rola_write_track_plan_refused(answer));
+        var plan = new TrackPlan(
             subjects,
-            (int)(RolaJson.Number(root, "unchanged") ?? 0),
-            WorkflowJson.Texts(root, "prefill"),
-            Refusal(root)
+            (int)RorolalaBinding.rola_write_track_plan_unchanged(answer),
+            prefill,
+            refused
         );
+
+        // The apply reads back only the subjects the plan promised to record, so what this side
+        // keeps is each subject's path and the digest the plan read.
+        return plan with { Agreed = true };
     }
 
     /// <summary>Reads an apply's answer.</summary>
-    /// <param name="root">The answer's JSON.</param>
+    /// <param name="answer">The answer, which this does not release.</param>
     /// <returns>The subjects recorded, and what was refused.</returns>
     /// <exception cref="RolaWriteError">The answer names an action this build does not know.</exception>
-    public static TrackResult ParseApply(JsonElement root)
+    public static TrackResult ReadApply(nint answer)
     {
         var items = new List<TrackItem>();
-        if (RolaJson.Items(root, "items") is { } entries)
+        var count = RorolalaBinding.rola_write_track_apply_item_count(answer);
+        for (nuint index = 0; index < count; index++)
         {
-            foreach (var item in entries.EnumerateArray())
+            var item = RorolalaBinding.rola_write_track_apply_item_at(answer, index);
+            if (item == 0)
             {
-                if (item.ValueKind is not JsonValueKind.Object)
-                {
-                    continue;
-                }
+                continue;
+            }
 
+            try
+            {
                 items.Add(
                     new TrackItem(
-                        RolaJson.Text(item, "path") ?? string.Empty,
-                        ActionOf(RolaJson.Text(item, "action"))
+                        NativeText.Taken(RorolalaBinding.rola_write_track_item_path(item)),
+                        ActionOf(NativeText.Taken(RorolalaBinding.rola_write_track_item_action(item)))
                     )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_track_item(item);
+            }
+        }
+
+        var refused = new List<string>();
+        var refusedCount = RorolalaBinding.rola_write_track_apply_refused_count(answer);
+        for (nuint index = 0; index < refusedCount; index++)
+        {
+            var item = RorolalaBinding.rola_write_track_apply_refused_at(answer, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                refused.Add(Describe(item));
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_track_refusal(item);
+            }
+        }
+
+        return new TrackResult(items, refused);
+    }
+
+    /// <summary>The refusal a plan carries, in words, or nothing when it goes ahead.</summary>
+    private static string? Refusal(nint refusal)
+    {
+        if (refusal == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Describe(refusal);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_track_refusal(refusal);
+        }
+    }
+
+    /// <summary>One refusal, in the words its own fields say.</summary>
+    private static string Describe(nint refusal)
+    {
+        var kind = NativeText.Taken(RorolalaBinding.rola_write_track_refusal_kind(refusal));
+        var path = NativeText.Taken(RorolalaBinding.rola_write_track_refusal_path(refusal));
+        if (path.Length == 0)
+        {
+            path = NativeText.Taken(RorolalaBinding.rola_write_track_refusal_name(refusal));
+        }
+
+        if (path.Length == 0)
+        {
+            var count = RorolalaBinding.rola_write_track_refusal_paths_count(refusal);
+            if (count > 0)
+            {
+                path = NativeText.Taken(
+                    RorolalaBinding.rola_write_track_refusal_paths_at(refusal, 0)
                 );
             }
         }
 
-        return new TrackResult(items, WorkflowJson.Raw(root, "refused"));
-    }
+        if (path.Length == 0)
+        {
+            path = NativeText.Taken(RorolalaBinding.rola_write_track_refusal_cause(refusal));
+        }
 
-    /// <summary>The refusal a plan carries, as its raw JSON, or nothing when it goes ahead.</summary>
-    /// <param name="root">The answer.</param>
-    /// <returns>The refusal's JSON, or nothing.</returns>
-    private static string? Refusal(JsonElement root) =>
-        root.ValueKind is JsonValueKind.Object
-        && root.TryGetProperty("refused", out var refused)
-        && refused.ValueKind is JsonValueKind.Object
-            ? refused.GetRawText()
-            : null;
+        return path.Length == 0 ? kind : $"{kind}: {path}";
+    }
 
     /// <summary>What an action name means.</summary>
     /// <param name="text">The action as the native side names it.</param>
     /// <returns>The action.</returns>
     /// <exception cref="RolaWriteError">The name is not one this build knows.</exception>
-    private static TrackAction ActionOf(string? text) =>
+    private static TrackAction ActionOf(string text) =>
         text switch
         {
             "added" => TrackAction.Added,
@@ -513,61 +604,137 @@ internal static class Tracks
 internal static class Ownerships
 {
     /// <summary>Reads a plan's answer.</summary>
-    /// <param name="root">The answer's JSON.</param>
+    /// <param name="answer">The answer, which this does not release.</param>
     /// <returns>What a move would act on, what it refused, and what it skipped.</returns>
-    public static OwnershipPlan ParsePlan(JsonElement root)
+    public static OwnershipPlan ReadPlan(nint answer)
     {
         var wanted = new List<OwnershipWanted>();
-        if (RolaJson.Items(root, "wanted") is { } items)
+        var count = RorolalaBinding.rola_write_ownership_plan_wanted_count(answer);
+        for (nuint index = 0; index < count; index++)
         {
-            foreach (var item in items.EnumerateArray())
+            var item = RorolalaBinding.rola_write_ownership_plan_wanted_at(answer, index);
+            if (item == 0)
             {
-                if (item.ValueKind is not JsonValueKind.Object)
-                {
-                    continue;
-                }
+                continue;
+            }
 
+            try
+            {
                 wanted.Add(
                     new OwnershipWanted(
-                        RolaJson.Text(item, "path") ?? string.Empty,
-                        RolaJson.Text(item, "uuid") ?? string.Empty
+                        NativeText.Taken(RorolalaBinding.rola_write_ownership_wanted_path(item)),
+                        NativeText.Taken(RorolalaBinding.rola_write_ownership_wanted_uuid(item))
                     )
                 );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_ownership_wanted(item);
             }
         }
 
         return new OwnershipPlan(
             wanted,
-            WorkflowJson.Raw(root, "refused"),
-            RolaJson.Number(root, "skipped") ?? 0
+            Refusals(
+                answer,
+                RorolalaBinding.rola_write_ownership_plan_refused_count,
+                RorolalaBinding.rola_write_ownership_plan_refused_at
+            ),
+            RorolalaBinding.rola_write_ownership_plan_skipped(answer)
         );
     }
 
     /// <summary>Reads an apply's answer.</summary>
-    /// <param name="root">The answer's JSON.</param>
+    /// <param name="answer">The answer, which this does not release.</param>
     /// <returns>The entries moved, and what was refused.</returns>
-    public static OwnershipResult ParseApply(JsonElement root)
+    public static OwnershipResult ReadApply(nint answer)
     {
         var entries = new List<OwnershipEntry>();
-        if (RolaJson.Items(root, "entries") is { } items)
+        var count = RorolalaBinding.rola_write_ownership_apply_entry_count(answer);
+        for (nuint index = 0; index < count; index++)
         {
-            foreach (var item in items.EnumerateArray())
+            var item = RorolalaBinding.rola_write_ownership_apply_entry_at(answer, index);
+            if (item == 0)
             {
-                if (item.ValueKind is not JsonValueKind.Object)
-                {
-                    continue;
-                }
+                continue;
+            }
 
+            try
+            {
                 entries.Add(
                     new OwnershipEntry(
-                        RolaJson.Text(item, "path") ?? string.Empty,
-                        RolaJson.Text(item, "uuid") ?? string.Empty,
-                        RolaJson.Text(item, "owner")
+                        NativeText.Taken(RorolalaBinding.rola_write_ownership_entry_path(item)),
+                        NativeText.Taken(RorolalaBinding.rola_write_ownership_entry_uuid(item)),
+                        Optional(
+                            NativeText.Taken(RorolalaBinding.rola_write_ownership_entry_owner(item))
+                        )
                     )
                 );
             }
+            finally
+            {
+                RorolalaBinding.free_rola_write_ownership_entry(item);
+            }
         }
 
-        return new OwnershipResult(entries, WorkflowJson.Raw(root, "failed"));
+        return new OwnershipResult(
+            entries,
+            Refusals(
+                answer,
+                RorolalaBinding.rola_write_ownership_apply_failed_count,
+                RorolalaBinding.rola_write_ownership_apply_failed_at
+            )
+        );
     }
+
+    /// <summary>The refusals an answer lists.</summary>
+    /// <param name="answer">The answer, which this does not release.</param>
+    /// <param name="count">How many refusals there are.</param>
+    /// <param name="at">One refusal, or zero past the end.</param>
+    /// <returns>The refusals.</returns>
+    private static List<OwnershipRefusal> Refusals(
+        nint answer,
+        Func<nint, nuint> count,
+        Func<nint, nuint, nint> at
+    )
+    {
+        var refusals = new List<OwnershipRefusal>();
+        var total = count(answer);
+        for (nuint index = 0; index < total; index++)
+        {
+            var item = at(answer, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                refusals.Add(
+                    new OwnershipRefusal(
+                        NativeText.Taken(
+                            RorolalaBinding.rola_write_ownership_refusal_kind(item)
+                        ),
+                        NativeText.Taken(
+                            RorolalaBinding.rola_write_ownership_refusal_path(item)
+                        ),
+                        NativeText.Taken(
+                            RorolalaBinding.rola_write_ownership_refusal_owner(item)
+                        ),
+                        NativeText.Taken(
+                            RorolalaBinding.rola_write_ownership_refusal_cause(item)
+                        )
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_ownership_refusal(item);
+            }
+        }
+
+        return refusals;
+    }
+
+    private static string? Optional(string text) => text.Length == 0 ? null : text;
 }

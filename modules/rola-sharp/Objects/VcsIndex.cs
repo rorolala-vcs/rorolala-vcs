@@ -18,16 +18,16 @@ public sealed record VcsVariant(
 /// <param name="Variant">The variant's key.</param>
 public sealed record VcsVersion(string Variant);
 
-/// <summary>One version in a listing, with its traced number and its variant.</summary>
+/// <summary>One version in a listing, with its traced number and the variant it points at.</summary>
 /// <param name="Number">The number the chain traced, when it could.</param>
-/// <param name="Version">The version.</param>
-/// <param name="Variant">The variant it points at, when one is stored.</param>
-public sealed record VcsVersionItem(ulong? Number, VcsVersion Version, VcsVariant? Variant);
+/// <param name="Version">The version's key.</param>
+/// <param name="Variant">The variant's key, or nothing when none is stored.</param>
+public sealed record VcsVersionItem(ulong? Number, string Version, string? Variant);
 
 /// <summary>One variant in a listing, with the version it is based on.</summary>
-/// <param name="Variant">The variant.</param>
-/// <param name="Version">The version it is based on, when one is stored.</param>
-public sealed record VcsVariantItem(VcsVariant Variant, VcsVersion? Version);
+/// <param name="Variant">The variant's key.</param>
+/// <param name="Version">The version it is based on, or nothing when none is stored.</param>
+public sealed record VcsVariantItem(string Variant, string? Version);
 
 /// <summary>Everything a VCS index holds, as its three listings name it.</summary>
 /// <param name="Versions">The versions.</param>
@@ -38,3 +38,33 @@ public sealed record VcsIndexListing(
     IReadOnlyList<VcsVariantItem> Variants,
     IReadOnlyList<string> StringHashes
 );
+
+/// <summary>One index object as the ABI reads it: which kind it is, and what it holds.</summary>
+public abstract record VcsIndexObjectView;
+
+/// <summary>A Creator: the name it is.</summary>
+/// <param name="Text">The name.</param>
+public sealed record VcsIndexCreatorView(string Text) : VcsIndexObjectView;
+
+/// <summary>A Message: the text it is.</summary>
+/// <param name="Text">The text.</param>
+public sealed record VcsIndexMessageView(string Text) : VcsIndexObjectView;
+
+/// <summary>A Variant: the hashes it carries.</summary>
+/// <param name="Hash">The variant's key.</param>
+/// <param name="BaseVersion">The key of the version it is based on.</param>
+/// <param name="Storage">The key of the storage entry it points at.</param>
+/// <param name="Join">The key of the variant it merges in, or nothing when it merges none.</param>
+public sealed record VcsIndexVariantView(
+    string Hash,
+    string BaseVersion,
+    string Storage,
+    string? Join
+) : VcsIndexObjectView;
+
+/// <summary>A Version: its key, the variant it points at, and the number traced for it.</summary>
+/// <param name="Number">The number the chain traced, when it could.</param>
+/// <param name="Hash">The version's key.</param>
+/// <param name="Variant">The key of the variant it points at.</param>
+public sealed record VcsIndexVersionView(ulong? Number, string Hash, string Variant)
+    : VcsIndexObjectView;

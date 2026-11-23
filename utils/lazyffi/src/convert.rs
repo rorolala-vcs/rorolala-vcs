@@ -21,7 +21,7 @@
 //! | Trait | Direction | Transport |
 //! | --- | --- | --- |
 //! | [`InputType`] | C → Rust | by value |
-//! | [`InputRef`] | C → Rust | borrowed where it lies (never taken) |
+//! | [`InputRef`] | C → Rust | borrowed in place, or built and held for the call |
 //! | [`InputPtr`] | C → Rust | through a pointer (both halves of a mutable pass) |
 //! | [`ReturnType`] | Rust → C | by value |
 //! | [`ReturnPtr`] | Rust → C | through an owning pointer |
@@ -32,10 +32,16 @@
 //! between `Self` and its repr, and an opaque one is moved in and out of place.
 //!
 //! A `&` parameter is borrowed with [`InputRef::input_ref`] instead and never taken,
-//! so the repr stays C's for the whole call.
+//! so the repr stays C's for the whole call. What that returns is not always a
+//! reference: an opaque handle borrows where it lies, while a transparent input struct
+//! has no such place, because its value is built out of C's fields. [`InputRef::Ref`]
+//! is what lets both cross the same way, a borrow or an owned value the wrapper keeps
+//! for the call and derefs to the callee's `&T`.
 //!
 //! The input conversions are `unsafe`: the value comes from C, so the caller is
 //! responsible for it being valid (a readable pointer, a live string, and so on).
+
+use core::ops::Deref;
 
 /// Receives a value from C by value.
 pub trait InputType {
@@ -51,28 +57,56 @@ pub trait InputType {
     unsafe fn input_type(input: Self::From) -> Self;
 }
 
-/// Borrows a value from C while leaving it where C put it.
+/// Borrows a value from C for the duration of the call.
 ///
 /// This is how a `&T` parameter or a `&self` receiver crosses: C points at the repr
 /// with a `const` pointer, and the borrow lasts for the call and no longer.
 ///
-/// Nothing is taken, which is what makes the borrow a borrow, and that is only
-/// possible where the repr *is* the value in place, as an opaque handle's is. A
-/// transparent type has no such conversion: a borrow of one would have to point at a
-/// value this side had to build, which is a copy wearing a reference's clothes. So a
-/// `&Enum` parameter does not compile, rather than borrowing something else entirely.
+/// [`Ref`](InputRef::Ref) is what the wrapper actually holds. An opaque handle's repr
+/// *is* its value in place, so it is borrowed there and nothing is taken. A transparent
+/// input struct has no such place: its value is built out of C's fields, so the wrapper
+/// owns it for the call and derefs to it. Both give the callee the `&T` it asked for.
 pub trait InputRef {
     /// The repr-C sibling: what C points at.
     type From;
 
-    /// Borrows `Self` from the repr C owns.
+    /// What the wrapper holds: a borrow where the repr is the value in place, or the
+    /// value built from the repr where it is not.
+    type Ref<'a>: Deref<Target = Self>
+    where
+        Self: 'a;
+
+    /// Borrows `Self` from the repr C owns, or builds it when there is nothing to borrow.
     ///
     /// # Safety
     ///
     /// `input` must be valid, aligned and readable for `Self::From`, and the storage
-    /// must stay readable for as long as the borrow is used, which the generated
+    /// must stay readable for as long as the function is called, which the generated
     /// wrapper limits to the call itself.
-    unsafe fn input_ref<'a>(input: *const Self::From) -> &'a Self;
+    unsafe fn input_ref<'a>(input: *const Self::From) -> Self::Ref<'a>;
+}
+
+/// An owned value standing in for a borrow.
+///
+/// [`InputRef::input_ref`] cannot return a reference to a value it had to build, so a
+/// transparent input type hands the wrapper one of these instead. It derefs to the value
+/// the callee sees, and lives no longer than the call.
+pub struct OwnedRef<T>(T);
+
+impl<T> OwnedRef<T> {
+    /// Holds `value` for as long as this does.
+    #[must_use]
+    pub const fn new(value: T) -> Self {
+        Self(value)
+    }
+}
+
+impl<T> Deref for OwnedRef<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 /// Passes a value across the boundary through a pointer, in both directions.

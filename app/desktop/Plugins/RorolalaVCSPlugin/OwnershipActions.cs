@@ -359,15 +359,15 @@ internal static class OwnershipActions
 
             if (plan.Refused.Count > 0 && !request.AllowPartial)
             {
-                return new Outcome(false, string.Join('\n', plan.Refused), plan.Refused);
+                return new Outcome(false, string.Join('\n', Words(plan.Refused)), Words(plan.Refused));
             }
 
-            // The plan itself is not handed back: its wanted entries cross as `Path` and `Uuid`, which the native
-            // plan reader does not read, so a plan given to the apply is refused as JSON. The apply re-makes the
-            // plan and re-reads every gate, which is what the command line does, so nothing stale is applied.
+            // The plan itself is not handed back: its wanted entries cross as `Path` and `Uuid`, and
+            // the apply rebuilds that list from them. The apply re-makes the plan and re-reads every
+            // gate, which is what the command line does, so nothing stale is applied.
             var result = writer.ApplyOwnership(request, plan: null, progress: native);
 
-            return new Outcome(true, string.Empty, result.Failed);
+            return new Outcome(true, string.Empty, Words(result.Failed));
         }
         catch (RolaWriteError error)
         {
@@ -383,6 +383,22 @@ internal static class OwnershipActions
             return new Outcome(false, error.Message, []);
         }
     }
+
+    /// <summary>One refusal, in the words its own fields say.</summary>
+    /// <param name="refusals">The refusals an ownership run answered with.</param>
+    /// <returns>One line per refusal.</returns>
+    private static List<string> Words(IReadOnlyList<OwnershipRefusal> refusals) =>
+        refusals
+            .Select(refusal =>
+                refusal.Cause.Length > 0
+                    ? $"{refusal.Kind}: {refusal.Cause}"
+                    : refusal.Owner.Length > 0
+                        ? $"{refusal.Kind}: {refusal.Path} ({refusal.Owner})"
+                        : refusal.Path.Length > 0
+                            ? $"{refusal.Kind}: {refusal.Path}"
+                            : refusal.Kind
+            )
+            .ToList();
 
     /// <summary>What a path is, made absolute against the directory the run is made in.</summary>
     /// <remarks>

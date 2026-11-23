@@ -46,7 +46,7 @@ impl Action for ActionSyncIndexAll {
     /// The index sync is id 2: what a peer asks for after the store's.
     const ID: u32 = 2;
 
-    type Input = String;
+    type Input = ();
     type Output = ();
 
     /// Works out what a full sync of the indexes is, and has the two carry it out.

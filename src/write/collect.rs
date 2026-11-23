@@ -18,7 +18,6 @@ use rorolala_utils_progress::Progress;
 use rorolala_vault::Vault;
 use rorolala_vcs::{CollectPlan as IndexPlan, CollectReport as IndexReport, VCSIndex};
 use rorolala_workspace::Workspace;
-use serde::Serialize;
 
 use crate::gc::Live;
 use crate::write::WriteError;
@@ -136,25 +135,25 @@ pub fn sweep(
 }
 
 /// One side's numbers, as a plan or a sweep answers them.
-#[derive(Serialize)]
-struct Side {
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Side {
     /// How many entries the side would take or took away.
-    removed: usize,
+    pub removed: usize,
     /// How many bytes those entries occupy.
-    bytes: u64,
+    pub bytes: u64,
     /// How many entries the grace keeps.
-    kept: usize,
+    pub kept: usize,
     /// Whether the side changed, which a plan never says.
-    changed: bool,
+    pub changed: bool,
 }
 
 /// Both sides, as a plan or a sweep answers them.
-#[derive(Serialize)]
-struct Summary {
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Summary {
     /// The index side, when it is swept.
-    index: Option<Side>,
+    pub index: Option<Side>,
     /// The store side, when it is swept.
-    storage: Option<Side>,
+    pub storage: Option<Side>,
 }
 
 /// The Layout a collecting run stands in, and the stores it works on.
@@ -190,7 +189,7 @@ const fn grace_of(seconds: u64) -> Duration {
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, the plan's numbers, or a
+/// A `RolaWriteCollect *` the caller releases with `free_rola_write_collect`, or a
 /// `RolaWriteError *` the caller releases with `free_rola_write_error`. A grace of zero means the
 /// default.
 ///
@@ -204,7 +203,7 @@ pub fn plan_at(
     storage: bool,
     index: bool,
     grace: u64,
-) -> Result<String, WriteError> {
+) -> Result<WriteCollect, WriteError> {
     let (layout, set) = roots(directory)?;
     let vcs = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
     let runtime = runtime()?;
@@ -239,14 +238,14 @@ pub fn plan_at(
             changed: false,
         }),
     };
-    json(&summary)
+    Ok(WriteCollect::of(&summary))
 }
 
 /// Carries out a collecting run under a directory, reading its plan afresh.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, the sweep's numbers, or a
+/// A `RolaWriteCollect *` the caller releases with `free_rola_write_collect`, or a
 /// `RolaWriteError *` the caller releases with `free_rola_write_error`. A grace of zero means the
 /// default.
 ///
@@ -260,7 +259,7 @@ pub fn collect_at(
     storage: bool,
     index: bool,
     grace: u64,
-) -> Result<String, WriteError> {
+) -> Result<WriteCollect, WriteError> {
     let (layout, set) = roots(directory)?;
     let vcs = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
     let runtime = runtime()?;
@@ -303,19 +302,116 @@ pub fn collect_at(
             changed: report.changed(),
         }),
     };
-    json(&summary)
+    Ok(WriteCollect::of(&summary))
+}
+
+/// What a collecting run would take away or took, as the C ABI hands it over.
+///
+/// One export answers a plan and another a sweep, and the two answer the same shape: what each side
+/// of the run holds. A side the run did not sweep is absent, and a caller reaches it through
+/// `_index` or `_storage` and reads nothing when it is null.
+///
+/// # FFI
+///
+/// A `RolaWriteCollect *` the caller releases with `free_rola_write_collect`. `_index` and
+/// `_storage` each return a `RolaWriteCollectSide *` the caller releases with
+/// `free_rola_write_collect_side`, or null when the run did not sweep that side.
+#[lazyffi(export = RolaWriteCollect)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteCollect {
+    /// The index side, when it is swept.
+    index: Option<WriteCollectSide>,
+    /// The store side, when it is swept.
+    storage: Option<WriteCollectSide>,
+}
+
+impl WriteCollect {
+    /// The answer a collecting run is handed over as.
+    fn of(summary: &Summary) -> Self {
+        Self {
+            index: summary.index.as_ref().map(WriteCollectSide::of),
+            storage: summary.storage.as_ref().map(WriteCollectSide::of),
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteCollect {
+    /// The index side, or null when the run did not sweep the index.
+    #[must_use]
+    pub const fn index(&self) -> Option<WriteCollectSide> {
+        self.index
+    }
+
+    /// The store side, or null when the run did not sweep the store.
+    #[must_use]
+    pub const fn storage(&self) -> Option<WriteCollectSide> {
+        self.storage
+    }
+}
+
+/// What one side of a collecting run would take away, or took.
+///
+/// # FFI
+///
+/// A `RolaWriteCollectSide *` the caller releases with `free_rola_write_collect_side`. `_removed`,
+/// `_bytes` and `_kept` say what the numbers are, and `_changed` says whether the side changed,
+/// which a plan never does.
+#[lazyffi(export = RolaWriteCollectSide)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WriteCollectSide {
+    /// How many entries the side would take or took away.
+    removed: u64,
+    /// How many bytes those entries occupy.
+    bytes: u64,
+    /// How many entries the grace keeps.
+    kept: u64,
+    /// Whether the side changed, which a plan never says.
+    changed: bool,
+}
+
+impl WriteCollectSide {
+    /// The answer one side is handed over as.
+    fn of(side: &Side) -> Self {
+        Self {
+            removed: u64::try_from(side.removed).unwrap_or(u64::MAX),
+            bytes: side.bytes,
+            kept: u64::try_from(side.kept).unwrap_or(u64::MAX),
+            changed: side.changed,
+        }
+    }
+}
+
+#[lazyffi(export = rola_)]
+impl WriteCollectSide {
+    /// How many entries the side would take or took away.
+    #[must_use]
+    pub const fn removed(&self) -> u64 {
+        self.removed
+    }
+
+    /// How many bytes those entries occupy.
+    #[must_use]
+    pub const fn bytes(&self) -> u64 {
+        self.bytes
+    }
+
+    /// How many entries the grace keeps.
+    #[must_use]
+    pub const fn kept(&self) -> u64 {
+        self.kept
+    }
+
+    /// Whether the side changed.
+    #[must_use]
+    pub const fn changed(&self) -> bool {
+        self.changed
+    }
 }
 
 /// The runtime the blocking exports wait on.
 fn runtime() -> Result<tokio::runtime::Runtime, WriteError> {
     tokio::runtime::Runtime::new().map_err(|error| WriteError::Internal {
-        reason: error.to_string(),
-    })
-}
-
-/// Serializes an answer.
-fn json(summary: &Summary) -> Result<String, WriteError> {
-    serde_json::to_string(summary).map_err(|error| WriteError::Json {
         reason: error.to_string(),
     })
 }
@@ -350,17 +446,19 @@ mod tests {
         .unwrap();
 
         let plan = plan_at(&dir, true, true, 0).unwrap();
-        assert!(plan.contains("\"index\""), "{plan}");
-        assert!(plan.contains("\"storage\""), "{plan}");
+        assert!(plan.index().is_some(), "{plan:?}");
+        assert!(plan.storage().is_some(), "{plan:?}");
 
         let neither = plan_at(&dir, false, false, 0).unwrap();
-        assert_eq!(neither, r#"{"index":null,"storage":null}"#);
+        assert!(neither.index().is_none());
+        assert!(neither.storage().is_none());
 
         let report = collect_at(&dir, true, true, 0).unwrap();
-        assert!(report.contains("\"removed\":0"), "{report}");
+        assert_eq!(report.index().expect("the index is swept").removed(), 0);
 
         let neither = collect_at(&dir, false, false, 0).unwrap();
-        assert_eq!(neither, r#"{"index":null,"storage":null}"#);
+        assert!(neither.index().is_none());
+        assert!(neither.storage().is_none());
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -385,11 +483,11 @@ mod tests {
         .unwrap();
 
         let plan = plan_at(&dir, true, true, 0).unwrap();
-        assert!(plan.contains("\"index\""), "{plan}");
-        assert!(plan.contains("\"storage\""), "{plan}");
+        assert!(plan.index().is_some(), "{plan:?}");
+        assert!(plan.storage().is_some(), "{plan:?}");
 
         let report = collect_at(&dir, true, true, 0).unwrap();
-        assert!(report.contains("\"index\""), "{report}");
+        assert!(report.index().is_some(), "{report:?}");
 
         let _ = fs::remove_dir_all(&dir);
     }

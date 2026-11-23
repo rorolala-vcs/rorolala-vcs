@@ -63,7 +63,7 @@ public sealed class BookScope : Scope, IDisposable
         var text = Utf8(query);
         try
         {
-            var results = RorolalaBinding.search_rola_book(_handle, text, (nuint)limit);
+            var results = RorolalaBinding.rola_book_search_run(_handle, text, (nuint)limit);
             if (results == 0)
             {
                 return [];
@@ -75,7 +75,7 @@ public sealed class BookScope : Scope, IDisposable
                 var hits = new List<BookHit>(count);
                 for (var index = 0; index < count; index++)
                 {
-                    var hit = RorolalaBinding.rola_book_results_hit(results, (nuint)index);
+                    var hit = RorolalaBinding.rola_book_results_at(results, (nuint)index);
                     if (hit == 0)
                     {
                         continue;
@@ -137,7 +137,7 @@ public sealed class BookScope : Scope, IDisposable
             nint handle;
             if (_direct)
             {
-                var answer = RorolalaBinding.open_rola_book_search(start);
+                var answer = RorolalaBinding.rola_book_search_open(start);
                 if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
                 {
                     throw ReadResults.Book(answer.payload);
@@ -147,7 +147,7 @@ public sealed class BookScope : Scope, IDisposable
             }
             else
             {
-                handle = RorolalaBinding.locate_rola_book_search(start);
+                handle = RorolalaBinding.rola_book_search_locate(start);
             }
 
             if (handle == 0)
@@ -166,7 +166,7 @@ public sealed class BookScope : Scope, IDisposable
             Marshal.FreeCoTaskMem(start);
         }
 
-        ArticleCount = (int)RorolalaBinding.count_rola_book_articles(_handle);
+        ArticleCount = (int)RorolalaBinding.rola_book_articles_count(_handle);
     }
 
     /// <summary>Gives the native book back.</summary>
@@ -187,7 +187,7 @@ public sealed class BookScope : Scope, IDisposable
         var snippets = new List<BookSnippet>(count);
         for (var index = 0; index < count; index++)
         {
-            var snippet = RorolalaBinding.rola_book_hit_snippet(hit, (nuint)index);
+            var snippet = RorolalaBinding.rola_book_hit_snippet_at(hit, (nuint)index);
             if (snippet == 0)
             {
                 continue;

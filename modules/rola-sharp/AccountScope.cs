@@ -29,12 +29,12 @@ public sealed class AccountScope : IDisposable
 
         try
         {
-            if (RorolalaBinding.is_rola_accounts_empty(accounts))
+            if (RorolalaBinding.rola_accounts_is_empty(accounts))
             {
                 return null;
             }
 
-            var handle = RorolalaBinding.read_rola_accounts_by_index(accounts, 0);
+            var handle = RorolalaBinding.rola_accounts_at(accounts, 0);
 
             return handle == 0 ? null : new AccountScope(handle);
         }
@@ -83,7 +83,7 @@ public sealed class AccountScope : IDisposable
         {
             ObjectDisposedException.ThrowIf(_handle == 0, this);
 
-            return NativeText.Taken(RorolalaBinding.rola_account_account_name(_handle));
+            return NativeText.Taken(RorolalaBinding.rola_account_name(_handle));
         }
     }
 
@@ -94,7 +94,7 @@ public sealed class AccountScope : IDisposable
         {
             ObjectDisposedException.ThrowIf(_handle == 0, this);
 
-            return NativeText.Taken(RorolalaBinding.rola_account_account_key_path(_handle));
+            return NativeText.Taken(RorolalaBinding.rola_account_key_path(_handle));
         }
     }
 

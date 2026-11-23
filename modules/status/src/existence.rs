@@ -26,7 +26,6 @@ use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::{VCSIndex, VCSIndexObject, Version};
 use rorolala_workspace::Workspace;
-use serde::{Deserialize, Serialize};
 
 /// What an existence check asks about.
 ///
@@ -52,7 +51,7 @@ pub enum Target {
 }
 
 /// What one target came to.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Existence {
     /// The version the target names or records, when one was read or named.
     pub version: Option<Key>,
@@ -370,10 +369,16 @@ async fn sniff_structure(store: &StorageSet, key: Key) -> Option<TreeStructure> 
     read_structure(store, key).await
 }
 
-/// One target as a request writes it.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
-pub enum AskedTarget {
+/// One target a reading asks about, as the C ABI carries it.
+///
+/// # FFI
+///
+/// A `RolaSearchTarget` the caller fills: `tag` selects the variant and the payload companion it
+/// names holds that variant's strings. Every string is borrowed for the call and released by the
+/// caller, so nothing here is freed when the call returns.
+#[lazyffi(export = RolaSearchTarget)]
+#[derive(Debug, Clone)]
+pub enum SearchTarget {
     /// A variant, by its key in hex.
     Variant {
         /// The variant's key, as hex, with or without `blake3:` in front of it.
@@ -391,7 +396,7 @@ pub enum AskedTarget {
     },
 }
 
-impl AskedTarget {
+impl SearchTarget {
     /// The target this names, or why it names none.
     ///
     /// # Errors
@@ -439,38 +444,59 @@ fn key_of(hash: &str) -> Result<Key, ExistenceError> {
     })
 }
 
-/// The request the C ABI carries.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-struct Request {
-    /// The targets, in the order the answer keeps.
-    targets: Vec<AskedTarget>,
-}
-
-/// What the C ABI answers with.
-#[derive(Debug, Serialize)]
-struct Answer {
+/// What each target a reading asked about came to, in the order asked.
+///
+/// # FFI
+///
+/// A `RolaExistenceTargets *` the caller releases with `free_rola_existence_targets`. `_count`
+/// answers how many targets there are, and `_at` answers one of them, a `RolaExistenceTarget *`
+/// the caller releases with `free_rola_existence_target`.
+#[lazyffi(export = RolaExistenceTargets)]
+#[derive(Debug, Clone, Default)]
+pub struct ExistenceTargets {
     /// One answer per target, in the order they were asked about.
-    targets: Vec<AnswerTarget>,
+    targets: Vec<ExistenceTarget>,
 }
 
-/// What one target came to, as the C ABI writes it.
-#[derive(Debug, Serialize)]
-struct AnswerTarget {
+#[lazyffi(export = rola_)]
+impl ExistenceTargets {
+    /// How many targets were answered.
+    #[must_use]
+    pub const fn count(&self) -> usize {
+        self.targets.len()
+    }
+
+    /// The answer at `index`, or null past the end.
+    #[must_use]
+    pub fn at(&self, index: usize) -> Option<ExistenceTarget> {
+        self.targets.get(index).cloned()
+    }
+}
+
+/// What one target came to.
+///
+/// # FFI
+///
+/// A `RolaExistenceTarget *` the caller releases with `free_rola_existence_target`. `_kind`,
+/// `_hash`, `_path`, `_version`, `_variant`, `_storage` and each entry of `_missing_at` return a
+/// `char *` the caller releases with `free_string`. `_hash` is empty for an entry target and
+/// `_path` is empty for a variant or a version, and `_version`, `_variant` and `_storage` are empty
+/// when the reading did not reach them.
+#[lazyffi(export = RolaExistenceTarget)]
+#[derive(Debug, Clone)]
+pub struct ExistenceTarget {
     /// What kind the target was.
-    kind: &'static str,
-    /// The hash it was written with, for a variant or a version.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    hash: Option<String>,
-    /// The path it was written with, for an entry.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    path: Option<String>,
-    /// The version it names or records, as hex.
-    version: Option<String>,
-    /// The variant that version fixes, as hex.
-    variant: Option<String>,
-    /// The key of the content, as hex.
-    storage: Option<String>,
+    kind: String,
+    /// The hash it was written with, for a variant or a version, or an empty string.
+    hash: String,
+    /// The path it was written with, for an entry, or an empty string.
+    path: String,
+    /// The version it names or records, as hex, or an empty string.
+    version: String,
+    /// The variant that version fixes, as hex, or an empty string.
+    variant: String,
+    /// The key of the content, as hex, or an empty string.
+    storage: String,
     /// Whether every object it needs is held, so it can be used offline.
     offline: bool,
     /// Whether its content is a tree structure.
@@ -479,23 +505,23 @@ struct AnswerTarget {
     missing: Vec<String>,
 }
 
-impl AnswerTarget {
+impl ExistenceTarget {
     /// One answer for `asked`, from what the reading came to.
-    fn new(asked: &AskedTarget, existence: &Existence) -> Self {
+    fn new(asked: &SearchTarget, existence: &Existence) -> Self {
         let (hash, path) = match asked {
-            AskedTarget::Variant { hash } | AskedTarget::Version { hash } => {
-                (Some(hash.clone()), None)
+            SearchTarget::Variant { hash } | SearchTarget::Version { hash } => {
+                (hash.clone(), String::new())
             }
-            AskedTarget::Entry { path } => (None, Some(path.clone())),
+            SearchTarget::Entry { path } => (String::new(), path.clone()),
         };
 
         Self {
-            kind: asked.kind(),
+            kind: asked.kind().to_owned(),
             hash,
             path,
-            version: existence.version.map(|key| key.hex()),
-            variant: existence.variant.map(|key| key.hex()),
-            storage: existence.storage.map(|key| key.hex()),
+            version: existence.version.map_or_else(String::new, |key| key.hex()),
+            variant: existence.variant.map_or_else(String::new, |key| key.hex()),
+            storage: existence.storage.map_or_else(String::new, |key| key.hex()),
             offline: existence.held,
             tree: existence.tree,
             missing: existence.missing.iter().map(Key::hex).collect(),
@@ -503,41 +529,98 @@ impl AnswerTarget {
     }
 }
 
+#[lazyffi(export = rola_)]
+impl ExistenceTarget {
+    /// What kind the target was: `variant`, `version` or `entry`.
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    /// The hash it was written with, for a variant or a version, or an empty string.
+    #[must_use]
+    pub fn hash(&self) -> String {
+        self.hash.clone()
+    }
+
+    /// The path it was written with, for an entry, or an empty string.
+    #[must_use]
+    pub fn path(&self) -> String {
+        self.path.clone()
+    }
+
+    /// The version it names or records, as hex, or an empty string.
+    #[must_use]
+    pub fn version(&self) -> String {
+        self.version.clone()
+    }
+
+    /// The variant that version fixes, as hex, or an empty string.
+    #[must_use]
+    pub fn variant(&self) -> String {
+        self.variant.clone()
+    }
+
+    /// The key of the content, as hex, or an empty string.
+    #[must_use]
+    pub fn storage(&self) -> String {
+        self.storage.clone()
+    }
+
+    /// Whether every object it needs is held, so it can be used offline.
+    #[must_use]
+    pub const fn offline(&self) -> bool {
+        self.offline
+    }
+
+    /// Whether its content is a tree structure.
+    #[must_use]
+    pub const fn tree(&self) -> bool {
+        self.tree
+    }
+
+    /// How many keys it needs that are not held.
+    #[must_use]
+    pub const fn missing_count(&self) -> usize {
+        self.missing.len()
+    }
+
+    /// The key that is not held at `index`, or an empty string past the end.
+    #[must_use]
+    pub fn missing_at(&self, index: usize) -> String {
+        self.missing.get(index).cloned().unwrap_or_default()
+    }
+}
+
 /// Whether the objects a variant, a version or a Layout entry names are stored here.
 ///
-/// The request names the targets, and the answer is one entry per target in the same order. A
-/// variant is followed to the content its `storage` field names, a version to the variant it fixes,
-/// and a Layout entry to the version it records. An object that is missing on the way is answered as
-/// not held, with the key that is missing named beside it; content kept cut is held when every chunk
-/// it names is, and a tree is held when its structure, its description and every file it names are.
+/// The targets are read in the order given, and the answer is one entry per target in the same
+/// order. A variant is followed to the content its `storage` field names, a version to the variant
+/// it fixes, and a Layout entry to the version it records. An object that is missing on the way is
+/// answered as not held, with the key that is missing named beside it; content kept cut is held when
+/// every chunk it names is, and a tree is held when its structure, its description and every file it
+/// names are.
 ///
 /// # FFI
 ///
-/// `directory` is the directory the Workspace is searched upwards from, and `request` is a UTF-8
-/// JSON document of this shape:
-///
-/// ```json
-/// {"targets": [
-///   {"kind": "variant", "hash": "blake3:..."},
-///   {"kind": "version", "hash": "..."},
-///   {"kind": "entry", "path": "art.psd"}
-/// ]}
-/// ```
-///
-/// The answer is an owned JSON string the caller releases with `free_string`. It is
-/// `{"targets": [...]}`, one answer per target in the order asked, each with `kind`, the `hash` or
-/// `path` it was asked about, `version`, `variant`, `storage`, `offline`, `tree` and `missing`. A
-/// failure is a `RolaExistenceError *` the caller releases with `free_rola_existence_error`.
+/// `directory` is the directory the Workspace is searched upwards from. `targets` and `targets_len`
+/// are the caller's array and its length, borrowed for the call and released by the caller. A
+/// `RolaExistenceTargets *` the caller releases with `free_rola_existence_targets` answers with one
+/// target per entry asked about, in the same order. A failure is a `RolaExistenceError *` the caller
+/// releases with `free_rola_existence_error`.
 ///
 /// # Errors
 ///
 /// Returns [`ExistenceError::NoWorkspace`] when no Workspace holds `directory`,
 /// [`ExistenceError::NoLayout`] when the Workspace works in no Layout,
 /// [`ExistenceError::NoIndex`] when it holds no version control index,
-/// [`ExistenceError::BadRequest`] when `request` names a target this build cannot read, and
+/// [`ExistenceError::BadRequest`] when a target names a hash or a path this build cannot read, and
 /// [`ExistenceError::Read`] when the reading could not be made.
-#[lazyffi(export = rola_can_retrack_offline_json)]
-pub fn can_retrack_offline_json(directory: &Path, request: &str) -> Result<String, ExistenceError> {
+#[lazyffi(export = rola_can_retrack_offline)]
+pub fn can_retrack_offline(
+    directory: &Path,
+    targets: &[SearchTarget],
+) -> Result<ExistenceTargets, ExistenceError> {
     let workspace = Workspace::locate(directory).ok_or(ExistenceError::NoWorkspace)?;
     let layout = workspace
         .layout_readonly()
@@ -546,14 +629,10 @@ pub fn can_retrack_offline_json(directory: &Path, request: &str) -> Result<Strin
         })?
         .ok_or(ExistenceError::NoLayout)?;
     let index = VCSIndex::locate(directory).ok_or(ExistenceError::NoIndex)?;
-    let request: Request =
-        serde_json::from_str(request).map_err(|error| ExistenceError::BadRequest {
-            reason: error.to_string(),
-        })?;
 
-    let mut targets = Vec::with_capacity(request.targets.len());
-    for asked in &request.targets {
-        targets.push(asked.target()?);
+    let mut asked = Vec::with_capacity(targets.len());
+    for target in targets {
+        asked.push(target.target()?);
     }
 
     let runtime = tokio::runtime::Runtime::new().map_err(|error| ExistenceError::Read {
@@ -564,18 +643,14 @@ pub fn can_retrack_offline_json(directory: &Path, request: &str) -> Result<Strin
         .map_err(|error| ExistenceError::Read {
             reason: error.to_string(),
         })?;
-    let answers = runtime.block_on(local(&layout, &index, Some(&set), &targets));
+    let answers = runtime.block_on(local(&layout, &index, Some(&set), &asked));
 
-    serde_json::to_string(&Answer {
-        targets: request
-            .targets
+    Ok(ExistenceTargets {
+        targets: targets
             .iter()
             .zip(&answers)
-            .map(|(asked, existence)| AnswerTarget::new(asked, existence))
+            .map(|(asked, existence)| ExistenceTarget::new(asked, existence))
             .collect(),
-    })
-    .map_err(|error| ExistenceError::Read {
-        reason: error.to_string(),
     })
 }
 
@@ -589,12 +664,12 @@ pub enum ExistenceError {
     NoLayout,
     /// The Workspace holds no version control index.
     NoIndex,
-    /// The request does not read as one this build knows.
+    /// The target names a hash or a path this build cannot read.
     BadRequest {
         /// Why it does not.
         reason: String,
     },
-    /// The reading, or the answer it was written as, could not be made.
+    /// The reading could not be made.
     Read {
         /// Why it could not.
         reason: String,
@@ -649,7 +724,7 @@ mod tests {
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
 
-    use super::{Target, can_retrack_offline_json, local};
+    use super::{SearchTarget, Target, can_retrack_offline, local};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -882,30 +957,40 @@ mod tests {
         let (_variant, version) = held.version(&Version::root(), here, 5);
         let there = Key::new([0xcd; 32]);
 
-        let request = format!(
-            r#"{{"targets":[
-                {{"kind":"version","hash":"{}"}},
-                {{"kind":"variant","hash":"{}"}},
-                {{"kind":"entry","path":"art.psd"}}
-            ]}}"#,
-            version.hash().hex(),
-            there.hex()
+        let asked = vec![
+            SearchTarget::Version {
+                hash: version.hash().hex(),
+            },
+            SearchTarget::Variant { hash: there.hex() },
+            SearchTarget::Entry {
+                path: "art.psd".to_owned(),
+            },
+        ];
+        let answer = can_retrack_offline(&held.dir, &asked).unwrap();
+
+        assert_eq!(answer.count(), 3);
+
+        let first = answer.at(0).unwrap();
+        assert_eq!(first.kind(), "version");
+        assert!(first.offline());
+
+        let second = answer.at(1).unwrap();
+        assert_eq!(second.kind(), "variant");
+        assert!(!second.offline());
+        assert_eq!(second.missing_count(), 1);
+        assert_eq!(second.missing_at(0), there.hex());
+
+        let third = answer.at(2).unwrap();
+        assert_eq!(third.kind(), "entry");
+        assert_eq!(third.path(), "art.psd");
+        assert!(!third.offline());
+
+        let refused = can_retrack_offline(
+            &held.dir,
+            &[SearchTarget::Version {
+                hash: "neither-hex-nor-a-key".to_owned(),
+            }],
         );
-        let answer = can_retrack_offline_json(&held.dir, &request).unwrap();
-        let json: serde_json::Value = serde_json::from_str(&answer).unwrap();
-        let targets = json["targets"].as_array().unwrap();
-
-        assert_eq!(targets.len(), 3);
-        assert_eq!(targets[0]["kind"], "version");
-        assert_eq!(targets[0]["offline"], true);
-        assert_eq!(targets[1]["kind"], "variant");
-        assert_eq!(targets[1]["offline"], false);
-        assert_eq!(targets[1]["missing"][0], there.hex());
-        assert_eq!(targets[2]["kind"], "entry");
-        assert_eq!(targets[2]["path"], "art.psd");
-        assert_eq!(targets[2]["offline"], false);
-
-        let refused = can_retrack_offline_json(&held.dir, r#"{"targets":[{"kind":"nope"}]}"#);
         assert!(matches!(
             refused,
             Err(super::ExistenceError::BadRequest { .. })

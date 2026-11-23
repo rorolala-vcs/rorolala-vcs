@@ -106,6 +106,7 @@ fn generate_c_header() {
     let config = rorolala_dev_bindgen::Config {
         source_roots: &source_roots,
         output_dir: &output_dir,
+        enforce_naming: true,
     };
 
     if let Err(error) = rorolala_dev_bindgen::generate(&config) {

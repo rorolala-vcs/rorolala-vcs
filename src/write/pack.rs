@@ -9,12 +9,11 @@ use rorolala_utils_progress::Progress;
 use rorolala_vault::Vault;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
-use serde::Serialize;
 
 use crate::write::{WriteError, progress::WriteProgress};
 
 /// What a pack changed.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy)]
 pub struct Packed {
     /// Whether anything was rewritten.
     pub changed: bool,
@@ -138,62 +137,58 @@ pub fn pack_vault(vault: &Vault, storage: bool, index: bool) -> Result<Packed, W
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
-/// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+/// A `RolaWritePack *` the caller releases with `free_rola_write_pack`, or a `RolaWriteError *`
+/// the caller releases with `free_rola_write_error`.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::NoStore`] when no store is there, and the failures [`pack_storage`] names.
 #[lazyffi(export = rola_write_pack_storage)]
-pub fn pack_storage_at(directory: &Path) -> Result<String, WriteError> {
+pub fn pack_storage_at(directory: &Path) -> Result<WritePack, WriteError> {
     let set = crate::storage_set::for_directory(directory)
         .map_err(WriteError::from)?
         .ok_or(WriteError::NoStore)?;
     let changed = pack_storage(set.write_target())?;
 
-    serde_json::to_string(&Packed { changed }).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WritePack { changed })
 }
 
 /// Lays the VCS index a directory is in out afresh.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
-/// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+/// A `RolaWritePack *` the caller releases with `free_rola_write_pack`, or a `RolaWriteError *`
+/// the caller releases with `free_rola_write_error`.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::NoIndex`] when no index is there, and the failures [`pack_index`] names.
 #[lazyffi(export = rola_write_pack_index)]
-pub fn pack_index_at(directory: &Path) -> Result<String, WriteError> {
+pub fn pack_index_at(directory: &Path) -> Result<WritePack, WriteError> {
     let index = VCSIndex::locate(directory).ok_or(WriteError::NoIndex)?;
     let changed = pack_index(&index)?;
 
-    serde_json::to_string(&Packed { changed }).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })
+    Ok(WritePack { changed })
 }
 
 /// Lays the store and index of the Workspace a directory is in out afresh.
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
-/// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+/// A `RolaWritePack *` the caller releases with `free_rola_write_pack`, or a `RolaWriteError *`
+/// the caller releases with `free_rola_write_error`.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, and the failures
 /// [`pack_workspace`] names.
 #[lazyffi(export = rola_write_pack)]
-pub fn pack_at(directory: &Path, storage: bool, index: bool) -> Result<String, WriteError> {
+pub fn pack_at(directory: &Path, storage: bool, index: bool) -> Result<WritePack, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
     let packed = pack_workspace(&workspace, storage, index)?;
 
-    serde_json::to_string(&packed).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
+    Ok(WritePack {
+        changed: packed.changed,
     })
 }
 
@@ -201,21 +196,47 @@ pub fn pack_at(directory: &Path, storage: bool, index: bool) -> Result<String, W
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"changed":false}`, or a
-/// `RolaWriteError *` the caller releases with `free_rola_write_error`.
+/// A `RolaWritePack *` the caller releases with `free_rola_write_pack`, or a `RolaWriteError *`
+/// the caller releases with `free_rola_write_error`.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::NoVault`] when no Vault holds `directory`, and the failures
 /// [`pack_vault`] names.
 #[lazyffi(export = rola_write_pack_vault)]
-pub fn pack_vault_at(directory: &Path, storage: bool, index: bool) -> Result<String, WriteError> {
+pub fn pack_vault_at(
+    directory: &Path,
+    storage: bool,
+    index: bool,
+) -> Result<WritePack, WriteError> {
     let vault = Vault::locate(directory).ok_or(WriteError::NoVault)?;
     let packed = pack_vault(&vault, storage, index)?;
 
-    serde_json::to_string(&packed).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
+    Ok(WritePack {
+        changed: packed.changed,
     })
+}
+
+/// What a pack changed, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWritePack *` the caller releases with `free_rola_write_pack`. `_changed` says whether
+/// anything was rewritten.
+#[lazyffi(export = RolaWritePack)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WritePack {
+    /// Whether anything was rewritten.
+    changed: bool,
+}
+
+#[lazyffi(export = rola_)]
+impl WritePack {
+    /// Whether anything was rewritten.
+    #[must_use]
+    pub const fn changed(&self) -> bool {
+        self.changed
+    }
 }
 
 #[cfg(test)]

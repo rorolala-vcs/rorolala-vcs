@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Writes the C header for Rorolala's `#[lazyffi]` exports and raw `#[no_mangle]` symbols, reading the Rust sources directly, and is the build dependency the root `build.rs` runs to put `rorolala_ffi.h` in the target directory.
+Writes the C header for Rorolala's `#[lazyffi]` exports and raw `#[no_mangle]` symbols, reading the Rust sources directly, and is the build dependency the root `build.rs` runs to put `rorolala_ffi.h` in the target directory. It also states the ABI version, as macros and as a run-time symbol, and pins every transparent layout with size and field-offset assertions.
 
 ## Boundary
 

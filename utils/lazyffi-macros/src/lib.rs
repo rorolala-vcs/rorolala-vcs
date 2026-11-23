@@ -9,7 +9,7 @@ use proc_macro::TokenStream;
 use proc_macro2::{Literal, Span, TokenStream as TokenStream2};
 use quote::{ToTokens, format_ident, quote};
 use rorolala_utils_lazyffi_core::{
-    DEFAULT_METHOD_PREFIX, PAYLOAD_UNIT_FIELD, VariantFields, free_name, method_name,
+    DEFAULT_METHOD_PREFIX, PAYLOAD_UNIT_FIELD, VariantFields, free_name, length_name, method_name,
     payload_type_name, tag_type_name, type_name, value_name, variant_needs_companion,
     variant_type_name,
 };
@@ -45,6 +45,8 @@ const SAFETY_DOC: &str = "# Safety\n\nEvery pointer argument must be valid, alig
 struct LazyFfiArgs {
     /// Explicit name for the generated FFI item.
     export: Option<Ident>,
+    /// Whether a `struct` is a transparent input type rather than an opaque handle.
+    input: bool,
 }
 
 impl Parse for LazyFfiArgs {
@@ -56,6 +58,20 @@ impl Parse for LazyFfiArgs {
         }
 
         for meta in Punctuated::<Meta, Token![,]>::parse_terminated(input)? {
+            // `input` is a bare flag: it says the struct is a value C fills, not a handle it
+            // only points at, and there is nothing to name it with.
+            if let Meta::Path(path) = &meta {
+                if path.is_ident("input") {
+                    args.input = true;
+                    continue;
+                }
+
+                return Err(syn::Error::new_spanned(
+                    path,
+                    "unknown `lazyffi` flag; the only supported one is `input`",
+                ));
+            }
+
             let Meta::NameValue(name_value) = &meta else {
                 return Err(syn::Error::new_spanned(
                     &meta,
@@ -113,12 +129,16 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 ///   begins with it, and a method's own `export` names itself whole and is left alone, so
 ///   it is a way of naming a whole `impl` at once, not of naming any one method.
 ///
+/// - `input`, a bare flag on a `struct`: it makes the struct a **transparent input**
+///   type. C fills every field and passes the value, by value or by pointer, instead of
+///   holding an opaque handle it can only point at. See [`lazyffi`] above for the shape.
+///
 /// # Supported items
 ///
 /// | Item | Behaviour |
 /// | --- | --- |
 /// | `const` | Supported: `&str`, `char`, `bool` and numeric primitives. |
-/// | `struct` | Supported: exported as an **opaque handle**. C is told the type exists and nothing about what is in it. No generics. |
+/// | `struct` | Supported: exported as an **opaque handle**, or, with `input`, as a transparent value C fills. No generics. |
 /// | `enum` | Supported: unit-only becomes a `#[repr(C)]` enum, variants with data become a tag plus a payload union. |
 /// | `fn` | Supported: by-value, `&mut`, `&str` and `&Path` parameters, by-value return. |
 /// | `impl` | Supported: inherent impls, flattened into free functions whose first parameter is the receiver. |
@@ -128,6 +148,36 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// return hands out an owning pointer that C releases with `free_<type>`. This is
 /// also the only reason a resource whose fields have no repr-C sibling (a `PathBuf`,
 /// say) can be exported at all, its fields are never converted.
+///
+/// With `input`, the opposite holds. The struct's fields are its interface, so the
+/// generated `#[repr(C)]` struct has one visible field per Rust field, each typed the
+/// way that field's own input conversion takes it (`String` becomes a `char *`, a scalar
+/// stays itself, a `bool` stays a `bool`). The type gets those two conversions and no
+/// others: a value C fills is read, never handed back, so it has no return and no
+/// release.
+///
+/// ```
+/// use rorolala_utils_lazyffi::{StrSpan, lazyffi};
+///
+/// /// What a caller asks for.
+/// #[lazyffi(export = RolaAskRequest, input)]
+/// pub struct AskRequest {
+///     /// Where to look.
+///     pub workspace: String,
+///     /// The files to ask about.
+///     pub files: StrSpan,
+///     /// Whether to stay off the network.
+///     pub offline: bool,
+/// }
+///
+/// /// Answers a request.
+/// #[lazyffi(export = rola_ask_request)]
+/// pub fn ask_request(request: &AskRequest) -> bool {
+///     !request.offline
+/// }
+///
+/// fn main() {}
+/// ```
 ///
 /// An `enum`'s repr is transparent, because its tag and payload *are* its interface:
 /// C has to be able to read them. The original item is always kept and the FFI item is
@@ -185,10 +235,13 @@ fn export_name(expr: &Expr) -> syn::Result<Ident> {
 /// `&mut`, and the result is written back through the same pointer.
 ///
 /// `&T` parameters and a `&self` receiver are supported too, as read-only borrows: the
-/// value is never taken, so C keeps it and the borrow ends with the call. A borrow needs
-/// a repr that *is* the value in place, which an exported `struct` has and a scalar has;
-/// a `&enum` therefore does not compile, because a borrow of one would have to point at
-/// a copy the wrapper had to build.
+/// value is never taken, so C keeps it and the borrow ends with the call. An opaque type
+/// is borrowed where it lies; a transparent input struct is built from C's fields and
+/// held for the call, which is why both are given to the callee as `&T`.
+///
+/// A `&[T]` parameter crosses as a pointer to the first element and a count beside it,
+/// named `<param>_len` in C. Each element is converted with its own input conversion, so
+/// the callee receives an owned slice built for the call.
 ///
 /// ```
 /// use rorolala_utils_lazyffi::lazyffi;
@@ -288,6 +341,15 @@ pub fn lazyffi(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Dispatches on the annotated item.
 fn expand(args: &LazyFfiArgs, item: &Item) -> syn::Result<TokenStream2> {
+    // The flag describes a struct's repr, so anywhere else it is a mistake worth naming
+    // rather than a word quietly ignored.
+    if args.input && !matches!(item, Item::Struct(_)) {
+        return Err(syn::Error::new_spanned(
+            item,
+            "`input` only applies to a `struct`",
+        ));
+    }
+
     match item {
         Item::Const(konst) => expand_const(args, konst),
         Item::Enum(item) => expand_enum(args, item),
@@ -464,6 +526,11 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
 
     let rust_name = &item.ident;
     let ffi_name = exported_name(args, rust_name, DefaultName::Type)?;
+
+    if args.input {
+        return expand_input_struct(item, rust_name, &ffi_name);
+    }
+
     let release = Ident::new(
         &free_name(&mirrored_name(args, rust_name)),
         rust_name.span(),
@@ -543,11 +610,16 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
         impl ::rorolala_utils_lazyffi::InputRef for #rust_name {
             type From = #ffi_name;
 
+            type Ref<'a>
+                = &'a Self
+            where
+                Self: 'a;
+
             /// Borrows the value C points at, without taking it.
             ///
             /// The handle is `repr(transparent)` over the value, so a borrow of the
             /// one is a borrow of the other. C keeps both.
-            unsafe fn input_ref<'a>(input: *const Self::From) -> &'a Self {
+            unsafe fn input_ref<'a>(input: *const Self::From) -> Self::Ref<'a> {
                 // SAFETY: the caller guarantees a valid, aligned, readable pointer
                 // that stays readable for the duration of the borrow.
                 unsafe { &(*input).0 }
@@ -595,6 +667,101 @@ fn expand_struct(args: &LazyFfiArgs, item: &ItemStruct) -> syn::Result<TokenStre
             // SAFETY: the caller guarantees `value` is a pointer this export handed
             // out and has not been released yet.
             drop(unsafe { ::std::boxed::Box::from_raw(value) });
+        }
+    })
+}
+
+/// Expands `#[lazyffi(input)]` on a `struct` into a value C fills and Rust reads.
+///
+/// An opaque handle is only ever pointed at, so its fields never cross. An input struct
+/// is the opposite: C lays it out, writes each field, and passes it by value or by
+/// pointer. Every field therefore has a repr of its own, taken from the field type's
+/// [`InputType`] the same way a payload companion takes its [`ReturnType`], and the
+/// conversions rebuild the Rust value from those fields.
+///
+/// `// SAFETY:` markers cannot travel with generated code, a comment inside `quote!` is
+/// dropped with the token stream, so the reasons are written here instead: an
+/// `input_type` reads only the fields the caller filled, and an `input_ref` reads a copy
+/// of a repr that holds no owning Rust value, leaving C's storage untouched.
+fn expand_input_struct(
+    item: &ItemStruct,
+    rust_name: &Ident,
+    ffi_name: &Ident,
+) -> syn::Result<TokenStream2> {
+    let Fields::Named(named) = &item.fields else {
+        return Err(syn::Error::new_spanned(
+            &item.fields,
+            "`#[lazyffi(input)]` needs a struct with named fields, since each field is one C can fill",
+        ));
+    };
+
+    let mut fields = Vec::new();
+    let mut conversions = Vec::new();
+    for field in &named.named {
+        let Some(name) = field.ident.as_ref() else {
+            continue;
+        };
+        let ty = &field.ty;
+        let docs = docs_or_fallback(&format!("field `{name}`"), &field.attrs);
+
+        fields.push(quote! {
+            #(#docs)*
+            pub #name: <#ty as ::rorolala_utils_lazyffi::InputType>::From,
+        });
+        conversions.push(quote! {
+            #name: unsafe {
+                <#ty as ::rorolala_utils_lazyffi::InputType>::input_type(input.#name)
+            },
+        });
+    }
+
+    let struct_docs = mirrored_attrs(&format!("`{rust_name}`"), &item.attrs);
+
+    // The emitted struct is named and stocked from C: `#[lazyffi(export = ...)]` fixes its
+    // name and each field keeps its Rust name, so `nonstandard_style` is emitted with it.
+    // The attribute is emitted with the item, and the reason cannot be: a comment written
+    // inside `quote!` is dropped with the token stream, which is why it is written here.
+    Ok(quote! {
+        #item
+
+        #(#struct_docs)*
+        /// Transparent to C, which fills every field.
+        #[doc(hidden)]
+        #[repr(C)]
+        #[allow(nonstandard_style)]
+        pub struct #ffi_name {
+            #(#fields)*
+        }
+
+        #[doc(hidden)]
+        impl ::rorolala_utils_lazyffi::InputType for #rust_name {
+            type From = #ffi_name;
+
+            unsafe fn input_type(input: Self::From) -> Self {
+                Self { #(#conversions)* }
+            }
+        }
+
+        #[doc(hidden)]
+        impl ::rorolala_utils_lazyffi::InputRef for #rust_name {
+            type From = #ffi_name;
+
+            type Ref<'a>
+                = ::rorolala_utils_lazyffi::OwnedRef<Self>
+            where
+                Self: 'a;
+
+            unsafe fn input_ref<'a>(input: *const Self::From) -> Self::Ref<'a> {
+                // SAFETY: the caller guarantees a valid, aligned, readable pointer that
+                // stays readable for the call, so a copy of the repr can be read from it.
+                let repr = unsafe { ::core::ptr::read(input) };
+
+                // SAFETY: the copy is the repr the caller filled, so converting it reads
+                // only what that contract promised.
+                ::rorolala_utils_lazyffi::OwnedRef::new(unsafe {
+                    <Self as ::rorolala_utils_lazyffi::InputType>::input_type(repr)
+                })
+            }
         }
     })
 }
@@ -1275,6 +1442,52 @@ fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnPart
                     continue;
                 }
 
+                // A slice has no C value of its own: it crosses as a pointer to the
+                // first element and a count beside it. Each element is converted on its
+                // own, so the callee is handed an owned slice built here.
+                if let Type::Slice(slice) = &*reference.elem {
+                    let elem = &slice.elem;
+                    let len = Ident::new(&length_name(&name.to_string()), name.span());
+                    let local = format_ident!("__lazyffi_{name}");
+
+                    parts.params.push(quote! {
+                        #name: *const <#elem as ::rorolala_utils_lazyffi::InputType>::From,
+                        #len: usize
+                    });
+                    // SAFETY: the pointer and the count are the pair the wrapper's `# Safety`
+                    // doc (`SAFETY_DOC`) has the caller hand over as `len` readable elements
+                    // that stay readable for the call, and each element is read as a copy
+                    // before being converted with that element's own `InputType`.
+                    parts.prelude.push(quote! {
+                        let #local: ::std::vec::Vec<#elem> = if #len == 0 {
+                            ::std::vec::Vec::new()
+                        } else {
+                            // SAFETY: the caller guarantees `#len` readable elements behind
+                            // `#name`, and a null pointer is never read because a count of
+                            // zero took the other arm.
+                            let __lazyffi_slice =
+                                unsafe { ::core::slice::from_raw_parts(#name, #len) };
+
+                            __lazyffi_slice
+                                .iter()
+                                .map(|__lazyffi_element| {
+                                    // SAFETY: `__lazyffi_element` points into the caller's
+                                    // readable array, and the repr is copied out before the
+                                    // element's own conversion reads it.
+                                    unsafe {
+                                        <#elem as ::rorolala_utils_lazyffi::InputType>::input_type(
+                                            ::core::ptr::read(__lazyffi_element),
+                                        )
+                                    }
+                                })
+                                .collect()
+                        };
+                    });
+                    parts.call_args.push(quote! { &*#local });
+
+                    continue;
+                }
+
                 // Any other shared reference borrows the value in place and never
                 // takes it: C keeps its value, and the borrow ends with the call.
                 let inner = &reference.elem;
@@ -1290,7 +1503,7 @@ fn expand_fn_params(inputs: &Punctuated<FnArg, Token![,]>) -> syn::Result<FnPart
                         <#inner as ::rorolala_utils_lazyffi::InputRef>::input_ref(#name)
                     };
                 });
-                parts.call_args.push(quote! { #name });
+                parts.call_args.push(quote! { &*#name });
 
                 continue;
             }
@@ -1614,7 +1827,7 @@ fn expand_receiver(receiver: &Receiver) -> syn::Result<FnParts> {
                         <Self as ::rorolala_utils_lazyffi::InputRef>::input_ref(#param)
                     };
                 });
-                parts.call_args.push(quote! { #local });
+                parts.call_args.push(quote! { &*#local });
 
                 return Ok(parts);
             }
@@ -1740,4 +1953,105 @@ fn is_scalar(ty: &Type) -> bool {
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LazyFfiArgs, expand};
+    use proc_macro2::Span;
+    use syn::parse_str;
+
+    /// Expands `source` as an item under `args`.
+    fn expanded(source: &str, args: &LazyFfiArgs) -> String {
+        let item: syn::Item = parse_str(source).expect("the source is an item");
+        expand(args, &item).expect("the item expands").to_string()
+    }
+
+    #[test]
+    fn input_is_a_bare_flag_beside_export() {
+        let args: LazyFfiArgs =
+            parse_str("export = RolaThing, input").expect("the arguments parse");
+
+        assert!(args.input);
+        assert_eq!(
+            args.export.map(|name| name.to_string()),
+            Some("RolaThing".to_owned())
+        );
+    }
+
+    #[test]
+    fn an_unknown_flag_is_refused() {
+        let error = parse_str::<LazyFfiArgs>("output").expect_err("an unknown flag is refused");
+
+        assert!(
+            error.to_string().contains("unknown `lazyffi` flag"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn an_input_struct_expands_to_a_repr_c_that_owns_what_it_builds() {
+        let args = LazyFfiArgs {
+            export: Some(syn::Ident::new("RolaThing", Span::call_site())),
+            input: true,
+        };
+
+        let tokens = expanded(
+            "pub struct Thing { pub name: String, pub count: u64, pub span: Span }",
+            &args,
+        );
+
+        // The struct C fills, one field per Rust field, typed by each input conversion.
+        assert!(tokens.contains("pub struct RolaThing"));
+        assert!(tokens.contains(":: rorolala_utils_lazyffi :: InputType > :: From"));
+        // Both conversions, the borrow building an owned value the wrapper keeps.
+        assert!(tokens.contains("InputType for Thing"));
+        assert!(tokens.contains("InputRef for Thing"));
+        assert!(tokens.contains("OwnedRef"));
+        // An input struct is read, never handed back, so it has no release.
+        assert!(!tokens.contains("free_rola_thing"));
+    }
+
+    #[test]
+    fn a_slice_parameter_expands_to_a_pointer_and_a_count() {
+        let args = LazyFfiArgs {
+            export: Some(syn::Ident::new("rola_apply", Span::call_site())),
+            input: false,
+        };
+
+        let tokens = expanded("pub fn apply(ops: &[Op]) {}", &args);
+
+        assert!(tokens.contains("ops_len : usize"));
+        assert!(tokens.contains("from_raw_parts"));
+        assert!(tokens.contains("Vec < Op >"));
+    }
+
+    #[test]
+    fn input_on_a_function_is_refused() {
+        let args = LazyFfiArgs {
+            export: None,
+            input: true,
+        };
+        let item: syn::Item = parse_str("pub fn goes() {}").expect("an item");
+
+        let error = expand(&args, &item).expect_err("the flag is refused");
+
+        assert!(
+            error.to_string().contains("only applies to a `struct`"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn an_input_struct_needs_named_fields() {
+        let args = LazyFfiArgs {
+            export: None,
+            input: true,
+        };
+        let item: syn::Item = parse_str("pub struct Thing(String);").expect("an item");
+
+        let error = expand(&args, &item).expect_err("a tuple struct is refused");
+
+        assert!(error.to_string().contains("named fields"), "{error}");
+    }
 }

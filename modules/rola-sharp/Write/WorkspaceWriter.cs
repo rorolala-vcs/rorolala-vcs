@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 using RolaSharp;
 
@@ -34,14 +33,21 @@ public sealed partial class WorkspaceWriter : Writer
         var at = Utf8(storage.FullName);
         try
         {
-            var answer = RorolalaBinding.rola_workspace_bind_storage(workspace, at);
+            var answer = RorolalaBinding.rola_workspace_storage_bind(workspace, at);
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-            return StorageBound.From(document.RootElement);
+            var handle = answer.payload;
+            try
+            {
+                return StorageBound.From(handle);
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_storage_bind(handle);
+            }
         }
         finally
         {
@@ -63,11 +69,18 @@ public sealed partial class WorkspaceWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-            return new CacheReport(
-                (int)(RolaJson.Number(document.RootElement, "paths") ?? 0),
-                RolaJson.Number(document.RootElement, "bytes") ?? 0
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new CacheReport(
+                    (int)RorolalaBinding.rola_write_workspace_cache_paths(handle),
+                    RorolalaBinding.rola_write_workspace_cache_bytes(handle)
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_workspace_cache(handle);
+            }
         }
         finally
         {
@@ -112,12 +125,18 @@ public sealed partial class WorkspaceWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new Retracked(
-                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
-                RolaJson.Text(document.RootElement, "version") ?? string.Empty
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new Retracked(
+                    Guid.Parse(NativeText.Taken(RorolalaBinding.rola_write_restore_id(handle))),
+                    NativeText.Taken(RorolalaBinding.rola_write_restore_version(handle))
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_restore(handle);
+            }
         }
         finally
         {
@@ -245,9 +264,15 @@ public sealed partial class WorkspaceWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return SyncReports.Parse(document.RootElement);
+            var handle = answer.payload;
+            try
+            {
+                return SyncReports.OfRun(handle);
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_sync(handle);
+            }
         }
         finally
         {
@@ -279,16 +304,23 @@ public sealed partial class WorkspaceWriter : Writer
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var json = Invoke(
-            JsonSerializer.Serialize(request with { Workspace = _workspace.Root.FullName }),
+        using var memory = new NativeRequest();
+        var native = memory.Pointer(SyncFields(memory, request));
+
+        var answer = Call(
+            RorolalaBinding.rola_write_sync_plan,
+            native,
             progress,
-            cancellation,
-            RorolalaBinding.rola_write_sync_plan
+            cancellation
         );
-
-        using var document = JsonDocument.Parse(json);
-
-        return SyncPlans.Parse(document.RootElement) with { Json = json };
+        try
+        {
+            return SyncPlans.Read(answer);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_sync_plan(answer);
+        }
     }
 
     /// <summary>Carries out a sync plan a caller agreed to.</summary>
@@ -322,9 +354,9 @@ public sealed partial class WorkspaceWriter : Writer
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(plan);
 
-        // A plan built by hand holds no JSON the native side could read back, and applying an
+        // A plan built by hand holds no entries the native side could read back, and applying an
         // empty one would write what nobody previewed.
-        if (string.IsNullOrEmpty(plan.Json))
+        if (!plan.Agreed)
         {
             throw new RolaWriteError(
                 RolaWriteErrorKind.Precondition,
@@ -333,18 +365,60 @@ public sealed partial class WorkspaceWriter : Writer
             );
         }
 
-        using var document = JsonDocument.Parse(
-            Invoke(
-                JsonSerializer.Serialize(request with { Workspace = _workspace.Root.FullName }),
-                plan.Json,
-                progress,
-                cancellation,
-                RorolalaBinding.rola_write_sync_apply
-            )
+        using var memory = new NativeRequest();
+        var native = memory.Pointer(SyncFields(memory, request));
+        var entries = memory.Array(
+            plan.Entries
+                .Select(entry => new RolaWriteSyncAgreed
+                {
+                    uuid = memory.Text(entry.Uuid),
+                    local_path = memory.Text(entry.LocalPath),
+                    remote_path = memory.Text(entry.RemotePath),
+                    planned_path = memory.Text(entry.PlannedPath),
+                    local_version = memory.Text(entry.LocalVersion),
+                    remote_version = memory.Text(entry.RemoteVersion),
+                    kind = memory.Text(entry.Kind),
+                })
+                .ToList()
         );
 
-        return SyncReports.Parse(document.RootElement);
+        var answer = Call(
+            RorolalaBinding.rola_write_sync_apply,
+            native,
+            entries.Items,
+            entries.Count,
+            progress,
+            cancellation
+        );
+        try
+        {
+            return SyncReports.OfApply(answer);
+        }
+        finally
+        {
+            RorolalaBinding.free_rola_write_sync_apply(answer);
+        }
     }
+
+    /// <summary>The fields a sync sends, which a plan and an apply share.</summary>
+    /// <param name="memory">Where the request's strings are held.</param>
+    /// <param name="request">The sync.</param>
+    /// <returns>The native request.</returns>
+    private RolaWriteSyncRequest SyncFields(NativeRequest memory, SyncRequest request) =>
+        new()
+        {
+            common = memory.Common(request, _workspace.Root.FullName),
+            direction = request.Direction switch
+            {
+                SyncDirection.Up => RolaWriteDirection.RolaWriteDirection_Up,
+                SyncDirection.Down => RolaWriteDirection.RolaWriteDirection_Down,
+                _ => RolaWriteDirection.RolaWriteDirection_Both,
+            },
+            forced = NativeRequest.Flag(request.Forced),
+            storage = NativeRequest.Flag(request.Storage),
+            index = NativeRequest.Flag(request.Index),
+            layout = NativeRequest.Flag(request.Layout),
+        };
 
     /// <summary>Writes what an entry says, in one call.</summary>
     /// <param name="id">The entry's id.</param>
@@ -407,12 +481,18 @@ public sealed partial class WorkspaceWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new Restored(
-                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
-                RolaJson.Text(document.RootElement, "version") ?? string.Empty
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new Restored(
+                    Guid.Parse(NativeText.Taken(RorolalaBinding.rola_write_restore_id(handle))),
+                    NativeText.Taken(RorolalaBinding.rola_write_restore_version(handle))
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_restore(handle);
+            }
         }
         finally
         {
@@ -445,12 +525,18 @@ public sealed partial class WorkspaceWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new Restored(
-                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
-                RolaJson.Text(document.RootElement, "version") ?? string.Empty
-            );
+            var handle = answer.payload;
+            try
+            {
+                return new Restored(
+                    Guid.Parse(NativeText.Taken(RorolalaBinding.rola_write_restore_id(handle))),
+                    NativeText.Taken(RorolalaBinding.rola_write_restore_version(handle))
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_restore(handle);
+            }
         }
         finally
         {
@@ -568,9 +654,15 @@ public sealed partial class WorkspaceWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            return new Packed(RolaJson.Flag(document.RootElement, "changed"));
+            var handle = answer.payload;
+            try
+            {
+                return new Packed(RorolalaBinding.rola_write_pack_changed(handle));
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_pack(handle);
+            }
         }
         finally
         {
@@ -623,14 +715,20 @@ public sealed partial class WorkspaceWriter : Writer
                 throw WriteResults.From(answer.payload);
             }
 
-            using var document = JsonDocument.Parse(NativeText.Taken(answer.payload));
-
-            tracked = new TrackedFile(
-                Guid.Parse(RolaJson.Text(document.RootElement, "id") ?? string.Empty),
-                RolaJson.Text(document.RootElement, "storage") ?? string.Empty,
-                RolaJson.Text(document.RootElement, "variant") ?? string.Empty,
-                RolaJson.Text(document.RootElement, "version") ?? string.Empty
-            );
+            var handle = answer.payload;
+            try
+            {
+                tracked = new TrackedFile(
+                    Guid.Parse(NativeText.Taken(RorolalaBinding.rola_write_tracked_file_id(handle))),
+                    NativeText.Taken(RorolalaBinding.rola_write_tracked_file_storage(handle)),
+                    NativeText.Taken(RorolalaBinding.rola_write_tracked_file_variant(handle)),
+                    NativeText.Taken(RorolalaBinding.rola_write_tracked_file_version(handle))
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_write_tracked_file(handle);
+            }
         }
         finally
         {
@@ -683,7 +781,7 @@ public sealed partial class WorkspaceWriter : Writer
     /// <returns>The guard, or nothing when the Workspace was locked already.</returns>
     public WorkspaceLock? Lock()
     {
-        var guard = RorolalaBinding.RolaWorkspace_get_locking_guard(_workspace.Handle);
+        var guard = RorolalaBinding.rola_workspace_lock_acquire(_workspace.Handle);
 
         return guard == 0 ? null : new WorkspaceLock(guard);
     }
@@ -713,7 +811,7 @@ public sealed class WorkspaceLock : IDisposable
     {
         if (_guard != 0)
         {
-            RorolalaBinding.RolaWorkspace_drop_locking_guard(_guard);
+            RorolalaBinding.rola_workspace_lock_release(_guard);
             _guard = 0;
         }
 

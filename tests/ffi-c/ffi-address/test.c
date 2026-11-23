@@ -17,17 +17,17 @@
 
 int main(void) {
     /* A bare address names a daemon and a port, and reads as what was written. */
-    RorolalaResult daemon = parse_rola_vault_address("127.0.0.1:9270");
+    RorolalaResult daemon = rola_vault_address_parse("127.0.0.1:9270");
     want(daemon.tag == RorolalaResult_Ok, "a bare address reads");
     if (daemon.tag == RorolalaResult_Ok) {
         const RolaVaultAddress *address = daemon.payload;
         want(address != NULL, "the address crosses as a handle");
 
-        char *raw = vault_address_read_raw(address);
+        char *raw = rola_vault_address_raw(address);
         want(raw != NULL && strcmp(raw, "127.0.0.1:9270") == 0, "the link is what was written");
         free_string(raw);
 
-        want(vault_address_read_port(address) == 9270, "the port is read");
+        want(rola_vault_address_port(address) == 9270, "the port is read");
 
         free_rola_vault_address(daemon.payload);
     } else if (daemon.payload != NULL) {
@@ -35,16 +35,16 @@ int main(void) {
     }
 
     /* An SSH address names the account and the directory, and its parts read back. */
-    RorolalaResult ssh = parse_rola_vault_address("alice@example.test:/srv/vault");
+    RorolalaResult ssh = rola_vault_address_parse("alice@example.test:/srv/vault");
     want(ssh.tag == RorolalaResult_Ok, "an SSH address reads");
     if (ssh.tag == RorolalaResult_Ok) {
         const RolaVaultAddress *address = ssh.payload;
 
-        char *user = vault_address_read_ssh_user(address);
+        char *user = rola_vault_address_ssh_user(address);
         want(user != NULL && strcmp(user, "alice") == 0, "the account is read");
         free_string(user);
 
-        char *path = vault_address_read_ssh_path(address);
+        char *path = rola_vault_address_ssh_path(address);
         want(path != NULL && strcmp(path, "/srv/vault") == 0, "the directory is read");
         free_string(path);
 
@@ -54,12 +54,12 @@ int main(void) {
     }
 
     /* What is not an address is a failure that names what was written. */
-    RorolalaResult bad = parse_rola_vault_address("not an address");
+    RorolalaResult bad = rola_vault_address_parse("not an address");
     want(bad.tag == RorolalaResult_Err, "what is not an address is a failure");
     if (bad.tag == RorolalaResult_Err) {
         const RolaAddrError *error = bad.payload;
 
-        char *target = rola_addr_error_addr_error_target(error);
+        char *target = rola_addr_error_target(error);
         want(target != NULL && strcmp(target, "not an address") == 0,
              "the error names what was written");
         free_string(target);

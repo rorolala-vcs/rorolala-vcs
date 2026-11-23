@@ -14,6 +14,7 @@ use rorolala_layout::{Batch, EntryKind, Layout, LayoutError, LayoutPath, Mutable
 use rorolala_protocol::{ActionContext, ActionError, Encodable as _, OnlyWorkspace};
 use rorolala_storage::Key;
 use rorolala_utils_constants::VAULT_LAYOUT_DIR;
+use rorolala_utils_lazyffi::lazyffi;
 use rorolala_utils_location::Locate as _;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -61,6 +62,142 @@ pub enum Ownership {
     Missing,
     /// Another account holds it, so nothing was changed.
     HeldBy(String),
+}
+
+/// What a batch of ownership requests changes, as the action reads it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct OwnershipChange {
+    /// The words the bar is drawn under, or empty for none.
+    pub name: String,
+    /// The `Uuid`s to change, in the order they are answered.
+    pub uuids: Vec<String>,
+}
+
+/// What became of a batch of ownership requests, as a C caller reads them.
+///
+/// # FFI
+///
+/// A `RolaDaemonOwnerships *` the caller releases with `free_rola_daemon_ownerships`. Its `_count`
+/// and `_at` answer with the outcomes, one per `Uuid`, in the order they were asked for. Each is a
+/// `RolaDaemonOwnershipOutcome *` the caller releases with `free_rola_daemon_ownership_outcome`.
+#[lazyffi(export = RolaDaemonOwnerships)]
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Ownerships {
+    /// Each outcome, in the order the `Uuid`s were asked for.
+    outcomes: Vec<OwnershipOutcome>,
+}
+
+#[lazyffi(export = rola_daemon_)]
+impl Ownerships {
+    /// How many outcomes the batch answered.
+    #[must_use]
+    pub const fn count(&self) -> usize {
+        self.outcomes.len()
+    }
+
+    /// The outcome at `index`, or null past the end.
+    #[must_use]
+    pub fn at(&self, index: usize) -> Option<OwnershipOutcome> {
+        self.outcomes.get(index).cloned()
+    }
+}
+
+impl From<Vec<Ownership>> for Ownerships {
+    fn from(outcomes: Vec<Ownership>) -> Self {
+        Self {
+            outcomes: outcomes.into_iter().map(OwnershipOutcome::from).collect(),
+        }
+    }
+}
+
+/// One outcome of an ownership request, as a C caller reads it.
+///
+/// # FFI
+///
+/// A `RolaDaemonOwnershipOutcome *` the caller releases with `free_rola_daemon_ownership_outcome`. `kind` says which
+/// outcome it was, and `owner` is the account named: the holder it now has, or the other account
+/// that holds it and refused the change. `owner` is empty when the outcome names nobody.
+#[lazyffi(export = RolaDaemonOwnershipOutcome)]
+#[derive(Debug, Clone, Serialize)]
+pub struct OwnershipOutcome {
+    /// Which outcome the request reached.
+    kind: OwnershipKind,
+    /// The account the outcome names, empty when it names none.
+    owner: String,
+}
+
+/// Which outcome an ownership request reached.
+#[lazyffi(export = RolaDaemonOwnershipKind)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum OwnershipKind {
+    /// The entry is now held by the account `owner` names, or by nobody when it is empty.
+    Owner,
+    /// The Vault holds no entry by that `Uuid`.
+    Missing,
+    /// Another account holds it, and `owner` names it.
+    HeldBy,
+}
+
+#[lazyffi(export = rola_daemon_)]
+impl OwnershipOutcome {
+    /// Which outcome the request reached.
+    #[must_use]
+    pub const fn kind(&self) -> OwnershipKind {
+        self.kind
+    }
+
+    /// The account the outcome names, or an empty string when it names none.
+    ///
+    /// # FFI
+    ///
+    /// The caller releases it with `free_string`.
+    #[must_use]
+    pub fn owner(&self) -> String {
+        self.owner.clone()
+    }
+}
+
+impl From<Ownership> for OwnershipOutcome {
+    fn from(outcome: Ownership) -> Self {
+        match outcome {
+            Ownership::Owner(owner) => Self {
+                kind: OwnershipKind::Owner,
+                owner: owner.unwrap_or_default(),
+            },
+            Ownership::Missing => Self {
+                kind: OwnershipKind::Missing,
+                owner: String::new(),
+            },
+            Ownership::HeldBy(owner) => Self {
+                kind: OwnershipKind::HeldBy,
+                owner,
+            },
+        }
+    }
+}
+
+impl Ownerships {
+    /// The outcomes as the action made them, for a caller inside Rust.
+    #[must_use]
+    pub fn outcomes(&self) -> Vec<Ownership> {
+        self.outcomes
+            .iter()
+            .map(OwnershipOutcome::outcome)
+            .collect()
+    }
+}
+
+impl OwnershipOutcome {
+    /// The outcome as the action made it, for a caller inside Rust.
+    #[must_use]
+    pub fn outcome(&self) -> Ownership {
+        match self.kind {
+            OwnershipKind::Owner if self.owner.is_empty() => Ownership::Owner(None),
+            OwnershipKind::Owner => Ownership::Owner(Some(self.owner.clone())),
+            OwnershipKind::Missing => Ownership::Missing,
+            OwnershipKind::HeldBy => Ownership::HeldBy(self.owner.clone()),
+        }
+    }
 }
 
 /// The Vault's own Layout, made if the Vault has not one yet.
@@ -142,17 +279,12 @@ fn compact_if_stale(layout: &Layout) {
 /// fails with.
 pub(crate) async fn ownership_batch(
     ctx: &mut ActionContext<'_>,
-    input: OnlyWorkspace<String>,
+    input: OnlyWorkspace<OwnershipChange>,
     decide: impl Fn(&mut Batch<'_>, Uuid, &str) -> Result<Ownership, ActionError>,
 ) -> Result<Vec<Ownership>, ActionError> {
-    // What to change crosses as JSON (the name the bar is drawn under, and the `Uuid`s) because a
-    // list is not a thing the C ABI can hand over, and JSON is how the other batched action carries
-    // its own. The Workspace holds it; the Vault is told the list as one value.
-    let (name, ids) = match input.into_inner() {
-        Some(json) => serde_json::from_str::<(String, Vec<String>)>(&json)
-            .map_err(|error| ActionError::Json(error.into()))?,
-        None => (String::new(), Vec::new()),
-    };
+    // What to change is the words the bar is drawn under and the `Uuid`s, both the caller's: the
+    // Workspace holds them and the Vault is told the list as one value.
+    let OwnershipChange { name, uuids: ids } = input.into_inner().unwrap_or_default();
 
     // The `Uuid`s cross up whole: both ends come out holding the same list rather than counting it
     // out one entry at a time.

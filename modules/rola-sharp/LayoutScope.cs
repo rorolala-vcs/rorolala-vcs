@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 namespace RolaSharp;
 
@@ -73,14 +72,27 @@ public class LayoutScope : Scope
         var name = _name is null ? 0 : Utf8(_name);
         try
         {
-            var answer = RorolalaBinding.rola_layout_entries_json(directory, name);
+            var answer = RorolalaBinding.rola_layout_entries(directory, name);
             if (answer.tag is RorolalaResultTag.RorolalaResult_Err)
             {
                 throw ReadResults.Layout(answer.payload);
             }
 
-            var json = NativeText.Taken(answer.payload);
-            _entries = Parse(json);
+            var handle = answer.payload;
+            if (handle == 0)
+            {
+                _entries = [];
+                return;
+            }
+
+            try
+            {
+                _entries = Read(handle);
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_layout_entries(handle);
+            }
         }
         finally
         {
@@ -92,40 +104,43 @@ public class LayoutScope : Scope
         }
     }
 
-    private static IReadOnlyList<LayoutEntry> Parse(string json)
+    private static IReadOnlyList<LayoutEntry> Read(nint handle)
     {
-        if (string.IsNullOrEmpty(json) || json == "null")
-        {
-            return [];
-        }
+        var count = RorolalaBinding.rola_layout_entries_count(handle);
+        var entries = new List<LayoutEntry>();
 
-        using var document = JsonDocument.Parse(json);
-        var items = RolaJson.Items(document.RootElement, "entries");
-        if (items is null)
+        for (nuint index = 0; index < count; index++)
         {
-            return [];
-        }
-
-        var entries = new List<LayoutEntry>(items.Value.GetArrayLength());
-        foreach (var item in items.Value.EnumerateArray())
-        {
-            var uuid = RolaJson.Text(item, "uuid");
-            if (string.IsNullOrEmpty(uuid))
+            var item = RorolalaBinding.rola_layout_entries_at(handle, index);
+            if (item == 0)
             {
                 continue;
             }
 
-            entries.Add(
-                new LayoutEntry(
-                    RolaJson.Text(item, "path") ?? string.Empty,
-                    uuid,
-                    RolaJson.Text(item, "version") ?? string.Empty,
-                    RolaJson.Text(item, "owner") ?? string.Empty,
-                    RolaJson.Text(item, "description") ?? string.Empty,
-                    RolaJson.Text(item, "preference") ?? string.Empty,
-                    RolaJson.Flag(item, "deprecated")
-                )
-            );
+            try
+            {
+                var uuid = NativeText.Taken(RorolalaBinding.rola_layout_entry_uuid(item));
+                if (string.IsNullOrEmpty(uuid))
+                {
+                    continue;
+                }
+
+                entries.Add(
+                    new LayoutEntry(
+                        NativeText.Taken(RorolalaBinding.rola_layout_entry_path(item)),
+                        uuid,
+                        NativeText.Taken(RorolalaBinding.rola_layout_entry_version(item)),
+                        NativeText.Taken(RorolalaBinding.rola_layout_entry_owner(item)),
+                        NativeText.Taken(RorolalaBinding.rola_layout_entry_description(item)),
+                        NativeText.Taken(RorolalaBinding.rola_layout_entry_preference(item)),
+                        RorolalaBinding.rola_layout_entry_deprecated(item)
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_layout_entry(item);
+            }
         }
 
         return entries;

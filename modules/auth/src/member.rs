@@ -47,7 +47,7 @@ impl Member {
     }
 }
 
-#[lazyffi(export = rola_member_)]
+#[lazyffi(export = rola_)]
 impl Member {
     /// The member's name, which is the stem of its public key file.
     #[must_use]
@@ -94,14 +94,14 @@ impl Members {
 impl Members {
     /// How many members the search found.
     #[must_use]
-    #[lazyffi(export = rola_members_len)]
+    #[lazyffi(export = rola_members_count)]
     pub const fn len(&self) -> usize {
         self.members.len()
     }
 
     /// Whether the search found no members at all.
     #[must_use]
-    #[lazyffi(export = is_rola_members_empty)]
+    #[lazyffi(export = rola_members_is_empty)]
     pub const fn is_empty(&self) -> bool {
         self.members.is_empty()
     }
@@ -111,7 +111,7 @@ impl Members {
     /// The handle is a copy of the member the set holds, so releasing it releases only
     /// that copy, the set is read again for the next one.
     #[must_use]
-    #[lazyffi(export = read_rola_members_by_index)]
+    #[lazyffi(export = rola_members_at)]
     pub fn at(&self, index: usize) -> Option<Member> {
         self.members.get(index).cloned()
     }

@@ -6,16 +6,15 @@ use std::path::Path;
 use rorolala_layout::Layout;
 use rorolala_storage::{Lockable as _, StorageSet};
 use rorolala_tree::{EntryKind, Staging, Tree, TreeEntry, TreeStructure, conflict_copy};
-use rorolala_utils_lazyffi::lazyffi;
+use rorolala_utils_lazyffi::{StrSpan, lazyffi};
 use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
-use serde::Serialize;
 
 use crate::write::{WriteError, tree::relative_to};
 
 /// What a reset did.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Reset {
     /// Whether the whole staging area was cleared.
     pub whole: bool,
@@ -300,20 +299,23 @@ fn under(scope: &str, path: &str) -> bool {
 ///
 /// # FFI
 ///
-/// An owned JSON string the caller releases with `free_string`, `{"whole":false,"paths":[...]}`, or
-/// a `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a JSON array of
-/// strings, and `target` is the tree's path, empty for the directory itself.
+/// A `RolaWriteTreeReset *` the caller releases with `free_rola_write_tree_reset`, or a
+/// `RolaWriteError *` the caller releases with `free_rola_write_error`. `paths` is a
+/// `RolaStrSpan` of the paths to reset, empty for the whole staging area, and `target` is the
+/// tree's path, empty for the directory itself.
 ///
 /// # Errors
 ///
 /// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, and the failures
 /// [`reset`] names.
 #[lazyffi(export = rola_write_tree_reset)]
-pub fn reset_at(directory: &Path, target: &str, paths: &str) -> Result<String, WriteError> {
+pub fn reset_at(
+    directory: &Path,
+    target: &str,
+    paths: StrSpan,
+) -> Result<WriteTreeReset, WriteError> {
     let workspace = Workspace::locate(directory).ok_or(WriteError::NoWorkspace)?;
-    let paths: Vec<String> = serde_json::from_str(paths).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
-    })?;
+    let paths = paths.into_vec();
     let tree_root = if target.is_empty() {
         directory.to_path_buf()
     } else {
@@ -326,7 +328,45 @@ pub fn reset_at(directory: &Path, target: &str, paths: &str) -> Result<String, W
     };
     let reset = reset(&workspace, &tree_root, "", &paths)?;
 
-    serde_json::to_string(&reset).map_err(|error| WriteError::Json {
-        reason: error.to_string(),
+    Ok(WriteTreeReset {
+        whole: reset.whole,
+        paths: reset.paths,
     })
+}
+
+/// What a reset did, as the C ABI hands it over.
+///
+/// # FFI
+///
+/// A `RolaWriteTreeReset *` the caller releases with `free_rola_write_tree_reset`. `_whole` says
+/// whether the whole staging area was cleared, and `_path_count` and `_path_at` answer the paths
+/// as the run wrote them, each a `char *` the caller releases with `free_string`.
+#[lazyffi(export = RolaWriteTreeReset)]
+#[derive(Debug, Clone, Default)]
+pub struct WriteTreeReset {
+    /// Whether the whole staging area was cleared.
+    whole: bool,
+    /// The paths as the run wrote them, or `.` for the whole area.
+    paths: Vec<String>,
+}
+
+#[lazyffi(export = rola_)]
+impl WriteTreeReset {
+    /// Whether the whole staging area was cleared.
+    #[must_use]
+    pub const fn whole(&self) -> bool {
+        self.whole
+    }
+
+    /// How many paths the run reset.
+    #[must_use]
+    pub const fn path_count(&self) -> usize {
+        self.paths.len()
+    }
+
+    /// One path the run reset, or an empty string past the end.
+    #[must_use]
+    pub fn path_at(&self, index: usize) -> String {
+        self.paths.get(index).cloned().unwrap_or_default()
+    }
 }

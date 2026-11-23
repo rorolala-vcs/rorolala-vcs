@@ -1,6 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace RolaSharp;
 
@@ -160,26 +158,28 @@ public sealed record VariantGraphTexts(
 /// </remarks>
 public sealed class VariantGraphReading
 {
-    /// <summary>How requests and answers are named: the native side spells its fields in snake case.</summary>
-    private static readonly JsonSerializerOptions Format = new()
+    /// <summary>Makes a reading from what the native side answered.</summary>
+    private VariantGraphReading(
+        IReadOnlyList<VariantGraphFocusResolution> focus,
+        IReadOnlyList<VariantGraphNode> nodes,
+        IReadOnlyList<VariantGraphVersion> versions,
+        IReadOnlyList<VariantGraphEdge> edges,
+        IReadOnlyList<VariantGraphMissing> missing,
+        bool truncated,
+        IReadOnlyList<VariantGraphEntry> entries,
+        IReadOnlyList<VariantGraphMerging> merging,
+        VariantGraphTexts texts
+    )
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
-
-    /// <summary>Makes a reading from the answer the native side gave.</summary>
-    /// <param name="payload">The answer, which must not be null.</param>
-    private VariantGraphReading(Payload payload)
-    {
-        Focus = payload.Focus;
-        Nodes = payload.Nodes;
-        Versions = payload.Versions;
-        Edges = payload.Edges;
-        Missing = payload.Missing;
-        Truncated = payload.Truncated;
-        Entries = payload.Entries;
-        Merging = payload.Merging;
-        Texts = payload.Texts;
+        Focus = focus;
+        Nodes = nodes;
+        Versions = versions;
+        Edges = edges;
+        Missing = missing;
+        Truncated = truncated;
+        Entries = entries;
+        Merging = merging;
+        Texts = texts;
     }
 
     /// <summary>What each entry the request stood on resolved to, in the order asked.</summary>
@@ -223,20 +223,61 @@ public sealed class VariantGraphReading
     /// Workspace works in no Layout, or it holds no version control index.
     /// </returns>
     /// <exception cref="InvalidOperationException">
-    /// The native side could not read the request, the index, or the records beside it.
+    /// The native side could not read the index, or the records beside it.
     /// </exception>
     public static VariantGraphReading? Locate(string directory, VariantGraphRequest? request = null)
     {
         ArgumentNullException.ThrowIfNull(directory);
 
+        var asked = request ?? new VariantGraphRequest();
         var at = Marshal.StringToCoTaskMemUTF8(directory);
-        var asked = Marshal.StringToCoTaskMemUTF8(
-            JsonSerializer.Serialize(request ?? new VariantGraphRequest(), Format)
-        );
+        var borrowed = new List<nint>();
+        nint window = 0;
+        nint focus = 0;
 
         try
         {
-            var answer = RorolalaBinding.locate_rola_variant_graph_json(at, asked);
+            var focuses = asked.Focus ?? [];
+            var size = Marshal.SizeOf<RolaVariantGraphFocus>();
+
+            if (focuses.Count > 0)
+            {
+                focus = Marshal.AllocCoTaskMem(size * focuses.Count);
+
+                for (var index = 0; index < focuses.Count; index++)
+                {
+                    var one = focuses[index];
+                    var path = Hold(borrowed, one.Path);
+                    var name = one.Side == "local" ? 0 : Hold(borrowed, one.Side);
+
+                    Marshal.StructureToPtr(
+                        new RolaVariantGraphFocus { side = Side(name), path = path },
+                        focus + (index * size),
+                        false
+                    );
+                }
+            }
+
+            window = Marshal.AllocCoTaskMem(Marshal.SizeOf<RolaVariantGraphWindow>());
+            Marshal.StructureToPtr(
+                new RolaVariantGraphWindow
+                {
+                    back = asked.Back,
+                    forward = asked.Forward,
+                    joins = (byte)(asked.Joins ? 1 : 0),
+                    branches = (byte)(asked.Branches ? 1 : 0),
+                    max_nodes = asked.MaxNodes,
+                },
+                window,
+                false
+            );
+
+            var answer = RorolalaBinding.rola_variant_graph_locate(
+                at,
+                window,
+                focus,
+                (nuint)focuses.Count
+            );
 
             if (answer.tag != RorolalaResultTag.RorolalaResult_Ok)
             {
@@ -245,19 +286,63 @@ public sealed class VariantGraphReading
                 return nothing ? null : throw new InvalidOperationException(reason);
             }
 
-            var json = NativeText.Taken(answer.payload);
+            var handle = answer.payload;
+            if (handle == 0)
+            {
+                throw new InvalidOperationException("the variant graph read as nothing");
+            }
 
-            return new VariantGraphReading(
-                JsonSerializer.Deserialize<Payload>(json, Format)
-                    ?? throw new InvalidOperationException("the variant graph read as nothing")
-            );
+            try
+            {
+                return Read(handle);
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_variant_graph(handle);
+            }
         }
         finally
         {
             Marshal.FreeCoTaskMem(at);
-            Marshal.FreeCoTaskMem(asked);
+
+            if (window != 0)
+            {
+                Marshal.FreeCoTaskMem(window);
+            }
+
+            if (focus != 0)
+            {
+                Marshal.FreeCoTaskMem(focus);
+            }
+
+            foreach (var text in borrowed)
+            {
+                Marshal.FreeCoTaskMem(text);
+            }
         }
     }
+
+    /// <summary>Keeps a string in unmanaged memory for the call, answering where it lies.</summary>
+    private static nint Hold(List<nint> borrowed, string text)
+    {
+        var held = Marshal.StringToCoTaskMemUTF8(text);
+        borrowed.Add(held);
+
+        return held;
+    }
+
+    /// <summary>The side a focus is named on, with the Vault's name when it names one.</summary>
+    private static RolaVariantGraphSide Side(nint name) =>
+        name == 0
+            ? new RolaVariantGraphSide { tag = RolaVariantGraphSideTag.RolaVariantGraphSide_Local }
+            : new RolaVariantGraphSide
+            {
+                tag = RolaVariantGraphSideTag.RolaVariantGraphSide_Vault,
+                payload = new RolaVariantGraphSidePayload
+                {
+                    Vault = new RolaVariantGraphSideVault { name = name },
+                },
+            };
 
     /// <summary>Reads what the native side failed with, and gives the failure back.</summary>
     /// <param name="error">The failure, which this takes ownership of.</param>
@@ -266,18 +351,12 @@ public sealed class VariantGraphReading
     {
         var read = Marshal.PtrToStructure<RolaVariantGraphError>(error);
 
-        // The reasons are copied before the failure is given back: they are the failure's to release,
-        // and a pointer into it read afterwards would be a pointer into what was given back.
-        var reason = read.tag switch
-        {
-            RolaVariantGraphErrorTag.RolaVariantGraphError_BadRequest => NativeText.Copied(
-                read.payload.BadRequest.reason
-            ),
-            RolaVariantGraphErrorTag.RolaVariantGraphError_Read => NativeText.Copied(
-                read.payload.Read.reason
-            ),
-            _ => string.Empty,
-        };
+        // The reason is copied before the failure is given back: it is the failure's to release, and
+        // a pointer into it read afterwards would be a pointer into what was given back.
+        var reason =
+            read.tag is RolaVariantGraphErrorTag.RolaVariantGraphError_Read
+                ? NativeText.Copied(read.payload.Read.reason)
+                : string.Empty;
 
         RorolalaBinding.free_rola_variant_graph_error(error);
 
@@ -289,25 +368,318 @@ public sealed class VariantGraphReading
         return (nothing, reason);
     }
 
-    /// <summary>The answer the native side wrote, read as fields.</summary>
-    /// <param name="Focus">What each entry the request stood on resolved to.</param>
-    /// <param name="Nodes">The variants in the window.</param>
-    /// <param name="Versions">The versions fixing them.</param>
-    /// <param name="Edges">The edges between variants in the window.</param>
-    /// <param name="Missing">The keys the window names but the index does not hold.</param>
-    /// <param name="Truncated">Whether the window was cut short by its cap.</param>
-    /// <param name="Entries">Every entry of every side.</param>
-    /// <param name="Merging">The merges in progress.</param>
-    /// <param name="Texts">The words of what the window's variants name.</param>
-    private sealed record Payload(
-        IReadOnlyList<VariantGraphFocusResolution> Focus,
-        IReadOnlyList<VariantGraphNode> Nodes,
-        IReadOnlyList<VariantGraphVersion> Versions,
-        IReadOnlyList<VariantGraphEdge> Edges,
-        IReadOnlyList<VariantGraphMissing> Missing,
-        bool Truncated,
-        IReadOnlyList<VariantGraphEntry> Entries,
-        IReadOnlyList<VariantGraphMerging> Merging,
-        VariantGraphTexts Texts
-    );
+    /// <summary>Reads the answer the native side wrote, releasing the handle's items one by one.</summary>
+    private static VariantGraphReading Read(nint handle) =>
+        new(
+            ReadFocus(handle),
+            ReadNodes(handle),
+            ReadVersions(handle),
+            ReadEdges(handle),
+            ReadMissing(handle),
+            RorolalaBinding.rola_variant_graph_truncated(handle),
+            ReadEntries(handle),
+            ReadMerging(handle),
+            new VariantGraphTexts(ReadTexts(handle, creators: true), ReadTexts(handle, creators: false))
+        );
+
+    /// <summary>What each entry the request stood on resolved to.</summary>
+    private static IReadOnlyList<VariantGraphFocusResolution> ReadFocus(nint handle)
+    {
+        var count = RorolalaBinding.rola_variant_graph_focus_count(handle);
+        var focus = new List<VariantGraphFocusResolution>((int)count);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_variant_graph_focus_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                focus.Add(
+                    new VariantGraphFocusResolution(
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_focus_resolution_side(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_focus_resolution_path(item)),
+                        Optional(
+                            NativeText.Taken(
+                                RorolalaBinding.rola_variant_graph_focus_resolution_version(item)
+                            )
+                        ),
+                        Optional(
+                            NativeText.Taken(
+                                RorolalaBinding.rola_variant_graph_focus_resolution_variant(item)
+                            )
+                        )
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_variant_graph_focus_resolution(item);
+            }
+        }
+
+        return focus;
+    }
+
+    /// <summary>The variants in the window.</summary>
+    private static IReadOnlyList<VariantGraphNode> ReadNodes(nint handle)
+    {
+        var count = RorolalaBinding.rola_variant_graph_node_count(handle);
+        var nodes = new List<VariantGraphNode>((int)count);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_variant_graph_node_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                nodes.Add(
+                    new VariantGraphNode(
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_node_hash(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_node_base_version(item)),
+                        Optional(
+                            NativeText.Taken(
+                                RorolalaBinding.rola_variant_graph_node_base_variant(item)
+                            )
+                        ),
+                        Optional(NativeText.Taken(RorolalaBinding.rola_variant_graph_node_join(item))),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_node_storage(item)),
+                        RorolalaBinding.rola_variant_graph_node_offline(item),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_node_creator(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_node_message(item)),
+                        new VariantGraphFrontier(
+                            RorolalaBinding.rola_variant_graph_node_frontier_parents(item),
+                            RorolalaBinding.rola_variant_graph_node_frontier_children(item),
+                            RorolalaBinding.rola_variant_graph_node_frontier_joined(item)
+                        )
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_variant_graph_node(item);
+            }
+        }
+
+        return nodes;
+    }
+
+    /// <summary>The versions fixing the window's variants.</summary>
+    private static IReadOnlyList<VariantGraphVersion> ReadVersions(nint handle)
+    {
+        var count = RorolalaBinding.rola_variant_graph_version_count(handle);
+        var versions = new List<VariantGraphVersion>((int)count);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_variant_graph_version_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var number = RorolalaBinding.rola_variant_graph_version_number_present(item)
+                    ? RorolalaBinding.rola_variant_graph_version_number(item)
+                    : (ulong?)null;
+
+                versions.Add(
+                    new VariantGraphVersion(
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_version_hash(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_version_variant(item)),
+                        number,
+                        RorolalaBinding.rola_variant_graph_version_is_root(item)
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_variant_graph_version(item);
+            }
+        }
+
+        return versions;
+    }
+
+    /// <summary>The edges between the window's variants.</summary>
+    private static IReadOnlyList<VariantGraphEdge> ReadEdges(nint handle)
+    {
+        var count = RorolalaBinding.rola_variant_graph_edge_count(handle);
+        var edges = new List<VariantGraphEdge>((int)count);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_variant_graph_edge_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                edges.Add(
+                    new VariantGraphEdge(
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_edge_from(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_edge_to(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_edge_kind(item))
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_variant_graph_edge(item);
+            }
+        }
+
+        return edges;
+    }
+
+    /// <summary>The keys the window names that the index does not hold.</summary>
+    private static IReadOnlyList<VariantGraphMissing> ReadMissing(nint handle)
+    {
+        var count = RorolalaBinding.rola_variant_graph_missing_count(handle);
+        var missing = new List<VariantGraphMissing>((int)count);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_variant_graph_missing_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                missing.Add(
+                    new VariantGraphMissing(
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_missing_hash(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_missing_kind(item))
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_variant_graph_missing(item);
+            }
+        }
+
+        return missing;
+    }
+
+    /// <summary>The entries whose version the window holds.</summary>
+    private static IReadOnlyList<VariantGraphEntry> ReadEntries(nint handle)
+    {
+        var count = RorolalaBinding.rola_variant_graph_entry_count(handle);
+        var entries = new List<VariantGraphEntry>((int)count);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_variant_graph_entry_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                entries.Add(
+                    new VariantGraphEntry(
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_entry_side(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_entry_path(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_entry_uuid(item)),
+                        Optional(
+                            NativeText.Taken(RorolalaBinding.rola_variant_graph_entry_version(item))
+                        ),
+                        Optional(
+                            NativeText.Taken(RorolalaBinding.rola_variant_graph_entry_owner(item))
+                        ),
+                        RorolalaBinding.rola_variant_graph_entry_deprecated(item)
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_variant_graph_entry(item);
+            }
+        }
+
+        return entries;
+    }
+
+    /// <summary>The merges in progress.</summary>
+    private static IReadOnlyList<VariantGraphMerging> ReadMerging(nint handle)
+    {
+        var count = RorolalaBinding.rola_variant_graph_merging_count(handle);
+        var merging = new List<VariantGraphMerging>((int)count);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = RorolalaBinding.rola_variant_graph_merging_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                merging.Add(
+                    new VariantGraphMerging(
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_merging_variant(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_merging_target(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_merging_path(item)),
+                        NativeText.Taken(RorolalaBinding.rola_variant_graph_merging_file(item))
+                    )
+                );
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_variant_graph_merging(item);
+            }
+        }
+
+        return merging;
+    }
+
+    /// <summary>The text of each creator or message the window's variants name.</summary>
+    private static IReadOnlyDictionary<string, string> ReadTexts(nint handle, bool creators)
+    {
+        var count = creators
+            ? RorolalaBinding.rola_variant_graph_creator_count(handle)
+            : RorolalaBinding.rola_variant_graph_message_count(handle);
+        var texts = new Dictionary<string, string>((int)count);
+
+        for (nuint index = 0; index < count; index++)
+        {
+            var item = creators
+                ? RorolalaBinding.rola_variant_graph_creator_at(handle, index)
+                : RorolalaBinding.rola_variant_graph_message_at(handle, index);
+            if (item == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                texts[NativeText.Taken(RorolalaBinding.rola_variant_graph_text_hash(item))] =
+                    NativeText.Taken(RorolalaBinding.rola_variant_graph_text_text(item));
+            }
+            finally
+            {
+                RorolalaBinding.free_rola_variant_graph_text(item);
+            }
+        }
+
+        return texts;
+    }
+
+    /// <summary>The text, or nothing when the native side answered an empty string.</summary>
+    private static string? Optional(string text) => string.IsNullOrEmpty(text) ? null : text;
 }
