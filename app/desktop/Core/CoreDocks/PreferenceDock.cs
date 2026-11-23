@@ -263,6 +263,38 @@ internal sealed class PreferenceView : UserControl
             _theme.Save();
             Show();
         }));
+
+        var levels = new[] { MotionLevel.Full, MotionLevel.Reduced, MotionLevel.Off };
+
+        var motion = new ComboBox
+        {
+            ItemsSource = levels
+                .Select(level => _i18n.Get($"core.setting.motion_level.{level.ToString().ToLowerInvariant()}"))
+                .ToArray(),
+            SelectedIndex = Array.IndexOf(levels, theme.MotionOrDefault),
+            MinWidth = 200,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        motion.SelectionChanged += (_, _) =>
+        {
+            if (motion.SelectedIndex >= 0 && levels[motion.SelectedIndex] != theme.MotionOrDefault)
+            {
+                theme.Motion = levels[motion.SelectedIndex];
+                _theme.Save();
+
+                // Drawn again so that Reset appears with something to remove, the same as the mode above.
+                Show();
+            }
+        };
+
+        rows.Children.Add(Row("core.setting.motion", motion, () =>
+        {
+            theme.Motion = null;
+            _theme.Save();
+            Show();
+        }));
+
         rows.Children.Add(
             new TextBlock
             {

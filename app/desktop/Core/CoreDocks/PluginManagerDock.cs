@@ -66,9 +66,6 @@ internal sealed class PluginManagerView : UserControl
     /// <summary>How far the pointer travels before a press becomes a drag.</summary>
     private const double DragThreshold = 4.0;
 
-    /// <summary>How long a card takes to settle, or to step aside for one being dragged.</summary>
-    private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(150);
-
     /// <summary>The column of cards, which is also the load order.</summary>
     private readonly StackPanel _list = new() { Spacing = 8 };
 
@@ -730,7 +727,7 @@ internal sealed class PluginManagerView : UserControl
         // it made room for, so there is nowhere for it to go: sending it back to where it came from
         // and letting the move in `Commit` put it right again is two movements where the user asked
         // for none.
-        _settle = new DispatcherTimer { Interval = Settle };
+        _settle = new DispatcherTimer { Interval = Motion.TravelTime(Motion.State) };
         _settle.Tick += (_, _) => Commit(card, source, target);
         _settle.Start();
     }
@@ -898,11 +895,7 @@ internal sealed class PluginCard
         // that one card following the pointer does not animate every other one with it.
         Slide = new Transitions
         {
-            new DoubleTransition
-            {
-                Property = TranslateTransform.YProperty,
-                Duration = TimeSpan.FromMilliseconds(150),
-            },
+            Motion.Travel(TranslateTransform.YProperty, Motion.State),
         };
 
         Shift = new TranslateTransform { Transitions = Slide };

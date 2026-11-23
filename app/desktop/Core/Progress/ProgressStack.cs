@@ -12,6 +12,7 @@ using System.Diagnostics.CodeAnalysis;
 using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
+using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktop.Progress;
 
@@ -38,9 +39,6 @@ public sealed class ProgressStack : StackPanel
 {
     /// <summary>How wide the stack is, which is what a name and a bar are read in.</summary>
     private const double WidthOfStack = 300;
-
-    /// <summary>How long a capsule takes to leave the stack after its run ends.</summary>
-    private static readonly TimeSpan Leaving = TimeSpan.FromMilliseconds(230);
 
     /// <summary>The pictures the capsule heads are drawn with.</summary>
     private readonly IIconLibrary _icons;
@@ -255,11 +253,7 @@ public sealed class ProgressStack : StackPanel
                 Opacity = 0,
                 Transitions = new Transitions
                 {
-                    new DoubleTransition
-                    {
-                        Property = OpacityProperty,
-                        Duration = TimeSpan.FromMilliseconds(180),
-                    },
+                    Motion.Fade(OpacityProperty, Motion.State),
                 },
             };
             _root[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Bright);
@@ -326,7 +320,7 @@ public sealed class ProgressStack : StackPanel
             _root.IsHitTestVisible = false;
             _root.Opacity = 0;
 
-            var timer = new DispatcherTimer { Interval = Leaving };
+            var timer = new DispatcherTimer { Interval = Motion.FadeTime(Motion.Panel) };
             timer.Tick += (_, _) =>
             {
                 timer.Stop();

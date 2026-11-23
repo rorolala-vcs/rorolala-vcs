@@ -51,14 +51,15 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 21. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Fetch a version's content from the Version Graph's node menu. [See details](dev/CHANGELOG-DETAILS.md#21-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-fetch-a-versions-content-from-the-version-graphs-node-menu)
 22. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner. [See details](dev/CHANGELOG-DETAILS.md#22-app-rorolaladesktop-plugins-rorolala-vcs-version-graph-show-the-whole-version-graph-again-from-its-corner)
 23. [`app`] [`RorolalaDesktop`] [`ROLALauncher`] [`theme`] Follow the look's file while the other program is open. [See details](dev/CHANGELOG-DETAILS.md#23-app-rorolaladesktop-rolalauncher-theme-follow-the-looks-file-while-the-other-program-is-open)
-24. [`app`] [`RorolalaDesktop`] [`theme`] State the light look's semantic colours in the bright set. [See details](dev/CHANGELOG-DETAILS.md#24-app-rorolaladesktop-theme-state-the-light-looks-semantic-colours-in-the-bright-set)
-25. [`librorolala`] [`write`] Export the content fetch as rola_write_fetch_with. [See details](dev/CHANGELOG-DETAILS.md#25-librorolala-write-export-the-content-fetch-as-rola_write_fetch_with)
-26. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#26-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
-27. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#27-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
-28. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#28-modules-rola-sharp-add-the-c-bindings)
-29. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#29-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
-30. [`modules`] [`storage`] [`fsck`] Answer whether a store holds together. [See details](dev/CHANGELOG-DETAILS.md#30-modules-storage-fsck-answer-whether-a-store-holds-together)
-31. [`utils`] [`constants`] [`abi`] State the ABI version and pin every transparent layout. [See details](dev/CHANGELOG-DETAILS.md#31-utils-constants-abi-state-the-abi-version-and-pin-every-transparent-layout)
+24. [`app`] [`RorolalaDesktop`] [`theme`] Draw the program's motion at the level the look states. [See details](dev/CHANGELOG-DETAILS.md#24-app-rorolaladesktop-theme-draw-the-programs-motion-at-the-level-the-look-states)
+25. [`app`] [`RorolalaDesktop`] [`theme`] State the light look's semantic colours in the bright set. [See details](dev/CHANGELOG-DETAILS.md#25-app-rorolaladesktop-theme-state-the-light-looks-semantic-colours-in-the-bright-set)
+26. [`librorolala`] [`write`] Export the content fetch as rola_write_fetch_with. [See details](dev/CHANGELOG-DETAILS.md#26-librorolala-write-export-the-content-fetch-as-rola_write_fetch_with)
+27. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala. [See details](dev/CHANGELOG-DETAILS.md#27-librorolala-write-move-the-layout-storage-and-index-writes-into-librorolala)
+28. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry. [See details](dev/CHANGELOG-DETAILS.md#28-librorolala-write-layout-write-a-fetched-vault-copy-and-fork-an-entry)
+29. [`modules`] [`rola-sharp`] Add the C# bindings. [See details](dev/CHANGELOG-DETAILS.md#29-modules-rola-sharp-add-the-c-bindings)
+30. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores. [See details](dev/CHANGELOG-DETAILS.md#30-modules-storage-bind-a-workspace-a-vault-or-a-git-rola-project-to-separate-stores)
+31. [`modules`] [`storage`] [`fsck`] Answer whether a store holds together. [See details](dev/CHANGELOG-DETAILS.md#31-modules-storage-fsck-answer-whether-a-store-holds-together)
+32. [`utils`] [`constants`] [`abi`] State the ABI version and pin every transparent layout. [See details](dev/CHANGELOG-DETAILS.md#32-utils-constants-abi-state-the-abi-version-and-pin-every-transparent-layout)
 
 ## Refactor
 

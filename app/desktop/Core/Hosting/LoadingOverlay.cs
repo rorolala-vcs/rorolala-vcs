@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktop.Hosting;
 
@@ -29,9 +30,6 @@ namespace RorolalaDesktop.Hosting;
 /// </remarks>
 internal sealed class LoadingOverlay : Border
 {
-    /// <summary>How long the covering takes to go once the work is done, matching the look's own fades.</summary>
-    private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(200);
-
     /// <summary>
     /// The ink the mark is drawn in.
     /// </summary>
@@ -59,7 +57,7 @@ internal sealed class LoadingOverlay : Border
 
         // The covering goes rather than being taken away in one turn: what is under it arriving is what the
         // fade is for, and the window that was black is seen becoming the window.
-        Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = Fade } };
+        Transitions = new Transitions { Motion.Fade(OpacityProperty, Motion.Panel) };
 
         _mark = new TurningMark(Ink, Diameter);
 
@@ -86,7 +84,7 @@ internal sealed class LoadingOverlay : Border
         // starts to fade would be a flash of the work rather than the work arriving, and a transparent covering
         // left over the window would go on taking its presses. The mark goes with it, which is what stops it
         // turning for a window that is no longer loading anything.
-        var gone = new DispatcherTimer { Interval = Fade };
+        var gone = new DispatcherTimer { Interval = Motion.FadeTime(Motion.Panel) };
 
         gone.Tick += (_, _) =>
         {

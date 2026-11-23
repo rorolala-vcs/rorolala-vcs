@@ -18,15 +18,34 @@ internal enum ColorMode
     Dark,
 }
 
+/// <summary>How much of the program's motion is drawn.</summary>
+/// <remarks>
+/// It is a choice about the look rather than a preference of the panel's, which is why it is kept in
+/// <c>theme.json</c> beside the colours: a person who needs less motion needs it in every surface at once, and
+/// the look is what every surface is drawn from.
+/// </remarks>
+internal enum MotionLevel
+{
+    /// <summary>Every movement the program has.</summary>
+    Full,
+
+    /// <summary>The fades, without the travel and the scaling.</summary>
+    Reduced,
+
+    /// <summary>Nothing is animated: every change arrives at once.</summary>
+    Off,
+}
+
 /// <summary>
-/// <c>theme.json</c>: what the user chooses about how the program looks.
+/// <c>theme.json</c>: what the user chooses about how the program looks and moves.
 /// </summary>
 /// <remarks>
 /// The look itself is not one of them. It is the program's own, rectangles, one-pixel edges, hover in
 /// the variant's ink and the two colours spent on what is selected and what asks for attention, and it
 /// is what makes the program look like one thing rather than like whatever it was assembled out of. What
 /// is left to choose is the variant it is drawn in, the two colours it is drawn with, the ten
-/// grounds the two variants are made of, and the twelve semantic states the program says.
+/// grounds the two variants are made of, the twelve semantic states the program says, and how much
+/// of its motion is drawn.
 /// <para>
 /// Every field is optional, and a field that is not there is the default: the file holds only what the
 /// user chose, so taking a choice back is removing it rather than writing the default down.
@@ -52,6 +71,9 @@ internal sealed class ThemeConfiguration
 
     /// <summary>The variant used when the file names none.</summary>
     public const ColorMode DefaultMode = ColorMode.System;
+
+    /// <summary>The motion used when the file names none.</summary>
+    public const MotionLevel DefaultMotion = MotionLevel.Full;
 
     /// <summary>
     /// The ink the look used to ship with the primary it used to ship, which a file written then may hold.
@@ -132,6 +154,9 @@ internal sealed class ThemeConfiguration
     /// <summary>The variant the program is drawn in, or nothing when the file names none.</summary>
     public ColorMode? Mode { get; set; }
 
+    /// <summary>How much of the program's motion is drawn, or nothing when the file names none.</summary>
+    public MotionLevel? Motion { get; set; }
+
     /// <summary>The colour the brand and everything selected is drawn in, or nothing.</summary>
     public Color? Primary { get; set; }
 
@@ -204,6 +229,9 @@ internal sealed class ThemeConfiguration
     /// <summary>The variant in force, which is the default when the file names none.</summary>
     public ColorMode ModeOrDefault => Mode ?? DefaultMode;
 
+    /// <summary>The motion in force, which is the default when the file names none.</summary>
+    public MotionLevel MotionOrDefault => Motion ?? DefaultMotion;
+
     /// <summary>The primary in force, which is the default when the file names none.</summary>
     public Color PrimaryOrDefault => Primary ?? ThemePalette.DefaultPrimary;
 
@@ -224,6 +252,7 @@ internal sealed class ThemeConfiguration
         ArgumentNullException.ThrowIfNull(other);
 
         Mode = other.Mode;
+        Motion = other.Motion;
         Primary = other.Primary;
         PrimaryText = other.PrimaryText;
         Accent = other.Accent;

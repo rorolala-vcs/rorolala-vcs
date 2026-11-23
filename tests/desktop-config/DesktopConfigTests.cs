@@ -98,6 +98,20 @@ public sealed class DesktopConfigTests
         Assert.Contains("#RRGGBB", run.Error, StringComparison.Ordinal);
     }
 
+    /// <summary>A motion level this program does not know stops with code four.</summary>
+    [Fact]
+    public void AMotionLevelThisProgramDoesNotKnowStopsWithCodeFour()
+    {
+        var run = Start(
+            plugins: null,
+            preference: null,
+            theme: """{"_version": 1, "motion": "sideways"}"""
+        );
+
+        Assert.Equal(4, run.ExitCode);
+        Assert.Contains("`motion` must be full, reduced or off", run.Error, StringComparison.Ordinal);
+    }
+
     /// <summary>The program under test, where it was built beside the solution.</summary>
     private static string Program { get; } =
         typeof(DesktopConfigTests)

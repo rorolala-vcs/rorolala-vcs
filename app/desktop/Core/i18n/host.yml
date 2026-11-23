@@ -169,6 +169,21 @@ core:
       dark:
         en: Dark
         zh-CN: 暗色
+    motion:
+      en: Motion
+      zh-CN: 动态效果
+    # The three the motion may be, answered from `core.setting.motion_level.<level>`: a field cannot be both
+    # the row's name and the choice's parent, so the two levels of key are kept apart the same way the mode's are.
+    motion_level:
+      full:
+        en: Full
+        zh-CN: 完整
+      reduced:
+        en: Reduced
+        zh-CN: 精简
+      off:
+        en: Off
+        zh-CN: 关闭
     primary:
       en: Primary colour
       zh-CN: 主色

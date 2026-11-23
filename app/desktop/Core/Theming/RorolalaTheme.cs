@@ -295,9 +295,6 @@ internal sealed class RorolalaTheme
     /// <inheritdoc cref="TreeRowHeight" />
     private const double TreeRowRoom = 3.0;
 
-    /// <summary>How long the arrow of a step takes to say the step was opened or closed.</summary>
-    private static readonly TimeSpan TreeTurn = TimeSpan.FromMilliseconds(150);
-
     /// <summary>
     /// The name the base theme gives the arrow of a step.
     /// </summary>
@@ -329,17 +326,6 @@ internal sealed class RorolalaTheme
 
     /// <summary>The one edge a surface wears.</summary>
     private static readonly Thickness Edge = new(1);
-
-    /// <summary>How long a surface answers the pointer with.</summary>
-    private static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(120);
-
-    /// <summary>How long a bar takes to reach a new step, which is long enough to be read as a slide.</summary>
-    /// <remarks>
-    /// Longer than a fade on purpose: a fill that slides is a movement the eye follows, while a colour that
-    /// takes as long would read as a lag. A run reports itself in jumps, so this is what makes the jumps one
-    /// movement rather than a stutter.
-    /// </remarks>
-    private static readonly TimeSpan ProgressSlide = TimeSpan.FromMilliseconds(280);
 
     /// <summary>
     /// The typeface the program is set in.
@@ -1223,11 +1209,7 @@ internal sealed class RorolalaTheme
                     Visual.TransitionsProperty,
                     new Transitions
                     {
-                        new TransformOperationsTransition
-                        {
-                            Property = Visual.RenderTransformProperty,
-                            Duration = TreeTurn,
-                        },
+                        Motion.Transform(Visual.RenderTransformProperty, Motion.State),
                     }
                 )
             ),
@@ -1250,11 +1232,7 @@ internal sealed class RorolalaTheme
                     Visual.TransitionsProperty,
                     new Transitions
                     {
-                        new DoubleTransition
-                        {
-                            Property = Visual.OpacityProperty,
-                            Duration = TreeTurn,
-                        },
+                        Motion.Fade(Visual.OpacityProperty, Motion.State),
                     }
                 )
             ),
@@ -2528,7 +2506,7 @@ internal sealed class RorolalaTheme
     }
 
     /// <summary>The fade a surface takes a new colour with.</summary>
-    private static Transitions Fading() => Fading(Fade);
+    private static Transitions Fading() => Fading(Motion.Feedback);
 
     /// <summary>
     /// No transition at all, for the one surface a change must reach at once.
@@ -2545,17 +2523,9 @@ internal sealed class RorolalaTheme
     private static Transitions Fading(TimeSpan duration) =>
         new()
         {
-            new BrushTransition
-            {
-                Property = TemplatedControl.BackgroundProperty,
-                Duration = duration,
-            },
-            new BrushTransition
-            {
-                Property = TemplatedControl.BorderBrushProperty,
-                Duration = duration,
-            },
-            new DoubleTransition { Property = Visual.OpacityProperty, Duration = duration },
+            Motion.Brush(TemplatedControl.BackgroundProperty, duration),
+            Motion.Brush(TemplatedControl.BorderBrushProperty, duration),
+            Motion.Fade(Visual.OpacityProperty, duration),
         };
 
     /// <summary>
@@ -2570,7 +2540,7 @@ internal sealed class RorolalaTheme
     private static Transitions Tweening() =>
         new()
         {
-            new DoubleTransition { Property = Layoutable.WidthProperty, Duration = ProgressSlide },
+            Motion.Travel(Layoutable.WidthProperty, Motion.Bar),
         };
 
     /// <summary>A brush of one colour.</summary>

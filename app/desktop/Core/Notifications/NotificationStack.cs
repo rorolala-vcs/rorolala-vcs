@@ -1,9 +1,9 @@
 using Avalonia;
 using Avalonia.Animation;
-using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
+using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktop.Notifications;
 
@@ -29,9 +29,6 @@ internal sealed class NotificationStack : Panel
     /// <summary>How far one notification stands from the next.</summary>
     private const double Gap = 10;
 
-    /// <summary>How far a notification slides while it arrives or leaves.</summary>
-    private const double Slide = 28;
-
     /// <summary>Where the layout put each card last time, so a move can be animated from there.</summary>
     private readonly Dictionary<Control, double> _tops = new(ReferenceEqualityComparer.Instance);
 
@@ -46,12 +43,7 @@ internal sealed class NotificationStack : Panel
         _slide =
             new Transitions
             {
-                new DoubleTransition
-                {
-                    Property = TranslateTransform.YProperty,
-                    Duration = TimeSpan.FromMilliseconds(180),
-                    Easing = new CubicEaseOut(),
-                },
+                Motion.Travel(TranslateTransform.YProperty, Motion.State),
             };
     }
 
@@ -61,7 +53,7 @@ internal sealed class NotificationStack : Panel
     {
         ArgumentNullException.ThrowIfNull(card);
 
-        var shift = new TranslateTransform { Y = Slide, Transitions = _slide };
+        var shift = new TranslateTransform { Y = Motion.Far, Transitions = _slide };
 
         card.RenderTransform = shift;
         card.Opacity = 0;
@@ -142,12 +134,12 @@ internal sealed class NotificationStack : Panel
 
         if (card.RenderTransform is TranslateTransform shift)
         {
-            shift.Y = Slide;
+            shift.Y = Motion.Far;
         }
 
         // The room is given back after the card has finished leaving it, so that the cards below do not
         // move at the same time as the one that is going: two movements at once read as a shuffle.
-        var settle = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
+        var settle = new DispatcherTimer { Interval = Motion.FadeTime(Motion.State) };
         settle.Tick += (_, _) =>
         {
             settle.Stop();

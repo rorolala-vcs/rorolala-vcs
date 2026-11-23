@@ -93,6 +93,7 @@ internal static class ConfigurationLoader
             var defaults = new ThemeConfiguration
             {
                 Mode = ThemeConfiguration.DefaultMode,
+                Motion = ThemeConfiguration.DefaultMotion,
                 Primary = ThemePalette.DefaultPrimary,
                 Accent = ThemePalette.DefaultAccent,
                 ThemeDarkBright = ThemePalette.DefaultDark.Bright,
@@ -274,6 +275,11 @@ internal static class ConfigurationLoader
             dto.Mode = Name(mode);
         }
 
+        if (config.Motion is { } motion)
+        {
+            dto.Motion = Name(motion);
+        }
+
         // What is in force rather than what the file said: an ink that belongs to the primary the look ships
         // with, held beside another primary, is written out of the file rather than carried along in it.
         if (config.PrimaryTextOrDefault is { } ink)
@@ -436,6 +442,16 @@ internal static class ConfigurationLoader
             config.Mode = ParseMode(mode.GetString()!, path);
         }
 
+        if (root.TryGetProperty("motion", out var motion))
+        {
+            if (motion.ValueKind != JsonValueKind.String)
+            {
+                throw Fail(ExitCode.Theme, path, "`motion` must be a string");
+            }
+
+            config.Motion = ParseMotion(motion.GetString()!, path);
+        }
+
         if (root.TryGetProperty("primary", out var primary))
         {
             config.Primary = ParseColour(primary, "primary", path);
@@ -525,6 +541,26 @@ internal static class ConfigurationLoader
         };
 
     /// <summary>
+    /// The motion a name stands for, refusing a name that is none of them.
+    /// </summary>
+    /// <remarks>
+    /// Compared without case: the three are words a person types, and a capital letter is not a
+    /// different level to be refused over.
+    /// </remarks>
+    private static MotionLevel ParseMotion(string name, string path) =>
+        name.ToLowerInvariant() switch
+        {
+            "full" => MotionLevel.Full,
+            "reduced" => MotionLevel.Reduced,
+            "off" => MotionLevel.Off,
+            _ => throw Fail(
+                ExitCode.Theme,
+                path,
+                $"`motion` must be full, reduced or off, not `{name}`"
+            ),
+        };
+
+    /// <summary>
     /// The colour a field's text stands for, refusing text that is not one.
     /// </summary>
     /// <remarks>
@@ -578,6 +614,15 @@ internal static class ConfigurationLoader
             ColorMode.Light => "light",
             ColorMode.Dark => "dark",
             _ => "system",
+        };
+
+    /// <summary>The name a motion level is written under, which is one of the three the file accepts.</summary>
+    private static string Name(MotionLevel level) =>
+        level switch
+        {
+            MotionLevel.Reduced => "reduced",
+            MotionLevel.Off => "off",
+            _ => "full",
         };
 
     /// <summary>The colour as the file writes it: six digits, whatever the colour's alpha is.</summary>
@@ -756,6 +801,10 @@ internal static class ConfigurationLoader
         [JsonPropertyName("mode")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Mode { get; set; }
+
+        [JsonPropertyName("motion")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Motion { get; set; }
 
         [JsonPropertyName(ThemeConfiguration.DarkBrightKey)]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

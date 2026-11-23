@@ -9,6 +9,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
+using RorolalaDesktop.Theming;
 
 namespace RorolalaDesktop.Notifications;
 
@@ -151,11 +152,7 @@ internal sealed class NotificationCard : Border
         Transitions =
             new Transitions
             {
-                new DoubleTransition
-                {
-                    Property = Visual.OpacityProperty,
-                    Duration = TimeSpan.FromMilliseconds(160),
-                },
+                Motion.Fade(Visual.OpacityProperty, Motion.State),
             };
     }
 

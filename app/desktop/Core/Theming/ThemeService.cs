@@ -115,6 +115,10 @@ internal sealed class ThemeService : IDisposable
     /// </remarks>
     public void Apply()
     {
+        // Set before anything is built, so the transitions the look puts in its styles are made at the level in
+        // force, and set on every apply so a change made in the panel retunes the ones already made.
+        Motion.Level = _theme.MotionOrDefault;
+
         if (_application is null)
         {
             return;
