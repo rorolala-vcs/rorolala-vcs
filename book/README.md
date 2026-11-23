@@ -13,8 +13,9 @@ article, including this one, which is the book's own page about contributing to 
 
 - An article. It begins with a YAML front matter block holding `title`, `description` and
   `keywords`, and its body is plain text, because images and HTML are not recognised.
-- A correction to an article under `book/vcs-knowledge/`, which explains the objects a version
-  control system works in and the cuts a Store keeps them in.
+- A correction to an article under `book/`. `book/app/` describes what a program offers,
+  `book/concepts/` the places and records it works with, `book/reference/` the words this book
+  uses, and `book/vcs-knowledge/` the version control objects and the cuts a Store keeps them in.
 
 ## What it needs
 

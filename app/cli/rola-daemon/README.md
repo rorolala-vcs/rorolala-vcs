@@ -6,4 +6,4 @@
 
 ## Boundary
 
-It owns the commands that read and change the namespace table, the port the daemon listens on, and the words and output shapes those commands answer with. It does not own the registry's path or format, nor the protocol and the content exchange, which are `rorolala-daemon` in `modules/daemon`, nor a Vault's layout and store, which are `librorolala`. It has no stop subcommand, so a caller ends it with the platform's own signal, which is what the `daemon-linux` and `daemon-win` windows do.
+It owns the commands that read and change the namespace table, the port the daemon listens on, and the words and output shapes those commands answer with. It does not own the registry's path or format, nor the protocol and the content exchange, which are `rorolala-daemon` in `modules/daemon`, nor a Vault's layout and store, which are `librorolala`. It has no stop subcommand, so a caller ends it with the platform's own signal, which is what the `daemon-linux` and `daemon-win` windows do. The actions it hands to a Vault are described in `book/app/daemon/actions`; a change to what an action does updates that article in the same change.
