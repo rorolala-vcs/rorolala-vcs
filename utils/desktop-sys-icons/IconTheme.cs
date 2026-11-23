@@ -53,6 +53,33 @@ internal static class IconTheme
     private static readonly string[] Renderers =
         ["/usr/bin/rsvg-convert", "/usr/local/bin/rsvg-convert"];
 
+    /// <summary>What the caches are guarded by, since a listing is drawn on one thread while a preview reads on another.</summary>
+    private static readonly object Gate = new();
+
+    /// <summary>What the desktop says its icon theme is, once it has been asked.</summary>
+    private static string? _named;
+
+    /// <summary>Whether <see cref="_named"/> was read, which is what makes an answer of nothing final.</summary>
+    private static bool _namedRead;
+
+    /// <summary>The theme and what it inherits, once the chain has been built.</summary>
+    private static IReadOnlyList<string>? _themes;
+
+    /// <summary>How many times the theme name was resolved, which is what a test counts.</summary>
+    internal static int Resolutions { get; private set; }
+
+    /// <summary>Lets go of what was read, for a test that needs the first read again.</summary>
+    internal static void ResetForTest()
+    {
+        lock (Gate)
+        {
+            _named = null;
+            _namedRead = false;
+            _themes = null;
+            Resolutions = 0;
+        }
+    }
+
     /// <summary>The icon for one kind of thing, at a size, or nothing when the desktop has none.</summary>
     /// <param name="kind">The kind of thing the icon is for.</param>
     /// <param name="name">The file's name, which is what says what kind of file it is.</param>
@@ -201,6 +228,16 @@ internal static class IconTheme
     /// <summary>The themes to look in: the one in use, what it inherits, and hicolor last.</summary>
     private static IReadOnlyList<string> Themes()
     {
+        lock (Gate)
+        {
+            return _themes ??= BuildThemes();
+        }
+    }
+
+    /// <summary>The theme chain, built once from what the desktop and its theme files say.</summary>
+    /// <returns>The themes to look in, in the order they are worth trying.</returns>
+    private static IReadOnlyList<string> BuildThemes()
+    {
         var chain = new List<string>();
 
         Adding(Named() ?? "hicolor");
@@ -236,6 +273,25 @@ internal static class IconTheme
     /// which is where a GNOME desktop keeps its answer and keeps it nowhere a file can be read.
     /// </remarks>
     private static string? Named()
+    {
+        lock (Gate)
+        {
+            if (_namedRead)
+            {
+                return _named;
+            }
+
+            _named = ReadNamed();
+            _namedRead = true;
+            Resolutions++;
+
+            return _named;
+        }
+    }
+
+    /// <summary>Reads the theme name out of the files a desktop writes it in, and then asks GSettings.</summary>
+    /// <returns>The theme the desktop says it is using, or nothing when it does not say.</returns>
+    private static string? ReadNamed()
     {
         var settings = Path.Combine(Home(), ".config/gtk-3.0/settings.ini");
 

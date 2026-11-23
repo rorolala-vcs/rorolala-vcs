@@ -33,6 +33,13 @@ public sealed class PreviewService : IPreviewService, IPreviewRegistry, IDisposa
     /// <summary>What has been answered, by path and the file it was answered for.</summary>
     private readonly ConcurrentDictionary<PreviewKey, Lazy<Task<PreviewImage?>>> _cache = new();
 
+    /// <summary>The order the answers were added in, which is what the oldest is dropped by.</summary>
+    /// <remarks>
+    /// The dictionary is not ordered, so the oldest answer is the queue's first. A key a delete removed
+    /// is left in the queue and dropped when it reaches the front.
+    /// </remarks>
+    private readonly ConcurrentQueue<PreviewKey> _order = new();
+
     /// <summary>How many previews may be made at once.</summary>
     private readonly SemaphoreSlim _workers = new(Math.Clamp(Environment.ProcessorCount / 2, 1, 4));
 
@@ -105,11 +112,12 @@ public sealed class PreviewService : IPreviewService, IPreviewRegistry, IDisposa
 
         if (!_cache.TryGetValue(key, out var lazy))
         {
-            // An entry over the limit is dropped whole rather than by a second clock: the cache is a convenience,
-            // and a preview that has to be made again is a preview, while a second policy to keep in step is not.
-            if (_cache.Count >= Kept)
+            // An entry over the limit drops the oldest answer rather than the whole cache: a reader who
+            // scrolled away and back again is served the answer it already has, and one long directory
+            // read keeps the answers for the tiles it just left.
+            while (_cache.Count >= Kept && _order.TryDequeue(out var oldest))
             {
-                _cache.Clear();
+                _cache.TryRemove(oldest, out _);
             }
 
             lazy = _cache.GetOrAdd(
@@ -119,6 +127,8 @@ public sealed class PreviewService : IPreviewService, IPreviewRegistry, IDisposa
                     LazyThreadSafetyMode.ExecutionAndPublication
                 )
             );
+
+            _order.Enqueue(key);
 
             Started();
         }

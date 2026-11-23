@@ -155,6 +155,18 @@ internal static class IconSets
     /// <summary>What each set's generation is doing.</summary>
     private static readonly Dictionary<string, Progress> States = new(StringComparer.Ordinal);
 
+    /// <summary>The pictures each size asks for, nearest first, as the sizes were asked for.</summary>
+    private static readonly Dictionary<(IReadOnlyList<int> Sizes, int Wanted), int[]> NearestOrder = [];
+
+    /// <summary>Where a set's picture is read from, by the source and the size it was drawn at.</summary>
+    private static readonly Dictionary<(string Set, string Relative, int Size), string> Paths = [];
+
+    /// <summary>The set in force, as an object, or nothing when the system's own icons are.</summary>
+    private static IconSet? _chosen;
+
+    /// <summary>The id <see cref="_chosen"/> was found for, or nothing when it has not been found yet.</summary>
+    private static string? _chosenFor;
+
     /// <summary>Every set that was found when the program started.</summary>
     private static IReadOnlyList<IconSet> _sets = [];
 
@@ -273,6 +285,10 @@ internal static class IconSets
             _selected = System;
             States.Clear();
             Read.Clear();
+            NearestOrder.Clear();
+            Paths.Clear();
+            _chosen = null;
+            _chosenFor = null;
         }
     }
 
@@ -293,6 +309,8 @@ internal static class IconSets
         {
             chosen = id is null ? null : _sets.FirstOrDefault(set => string.Equals(set.Id, id, StringComparison.Ordinal));
             _selected = chosen?.Id ?? System;
+            _chosen = null;
+            _chosenFor = null;
         }
 
         if (chosen is null)
@@ -374,7 +392,7 @@ internal static class IconSets
 
         lock (Gate)
         {
-            set = _sets.FirstOrDefault(candidate => string.Equals(candidate.Id, _selected, StringComparison.Ordinal));
+            set = Chosen();
 
             if (set is null || !States.TryGetValue(set.Id, out var progress) || !progress.Ready)
             {
@@ -418,17 +436,56 @@ internal static class IconSets
     /// <returns>The picture, or nothing when its cache is not there.</returns>
     private static Bitmap? Cached(IconSet set, string relativePath, int size)
     {
-        var folder = CacheDirectory(set.Id);
-
         foreach (var candidate in Nearest(set.Sizes, size))
         {
-            if (Loaded(Path.Combine(folder, NameOf(relativePath, candidate))) is { } picture)
+            if (Loaded(PathOf(set, relativePath, candidate)) is { } picture)
             {
                 return picture;
             }
         }
 
         return null;
+    }
+
+    /// <summary>The set in force as an object, found once for each selection.</summary>
+    /// <returns>The set, or nothing when the system's own icons are used.</returns>
+    private static IconSet? Chosen()
+    {
+        if (string.Equals(_chosenFor, _selected, StringComparison.Ordinal))
+        {
+            return _chosen;
+        }
+
+        _chosen = _sets.FirstOrDefault(candidate =>
+            string.Equals(candidate.Id, _selected, StringComparison.Ordinal)
+        );
+        _chosenFor = _selected;
+
+        return _chosen;
+    }
+
+    /// <summary>Where one source's picture of one size is read from.</summary>
+    /// <param name="set">The set the source belongs to.</param>
+    /// <param name="relativePath">The source's path within the set.</param>
+    /// <param name="size">The size the picture was drawn at.</param>
+    /// <returns>The path, which may not exist.</returns>
+    private static string PathOf(IconSet set, string relativePath, int size)
+    {
+        lock (Gate)
+        {
+            var key = (set.Id, relativePath, size);
+
+            if (Paths.TryGetValue(key, out var known))
+            {
+                return known;
+            }
+
+            var path = Path.Combine(CacheDirectory(set.Id), NameOf(relativePath, size));
+
+            Paths[key] = path;
+
+            return path;
+        }
     }
 
     /// <summary>The file name a source is drawn to at one size.</summary>
@@ -785,8 +842,24 @@ internal static class IconSets
     /// <param name="sizes">The sizes the set states.</param>
     /// <param name="wanted">The size a control asks for.</param>
     /// <returns>The sizes to try, in order.</returns>
-    private static IEnumerable<int> Nearest(IReadOnlyList<int> sizes, int wanted) =>
-        sizes.OrderBy(size => Math.Abs(size - wanted)).ThenBy(size => size);
+    private static int[] Nearest(IReadOnlyList<int> sizes, int wanted)
+    {
+        lock (Gate)
+        {
+            var key = (sizes, wanted);
+
+            if (NearestOrder.TryGetValue(key, out var known))
+            {
+                return known;
+            }
+
+            var order = sizes.OrderBy(size => Math.Abs(size - wanted)).ThenBy(size => size).ToArray();
+
+            NearestOrder[key] = order;
+
+            return order;
+        }
+    }
 
     /// <summary>The SHA-1 of a file.</summary>
     /// <remarks>

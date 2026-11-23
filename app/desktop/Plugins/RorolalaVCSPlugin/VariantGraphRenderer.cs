@@ -218,6 +218,40 @@ internal sealed class VariantGraphRenderer
     /// <summary>The zoom <see cref="_texts"/> was shaped at.</summary>
     private double _shapedAt = double.NaN;
 
+    /// <summary>The broken lines an edge or a card is drawn with, made once.</summary>
+    private static readonly DashStyle SameDash = new([2, 4], 0);
+
+    /// <inheritdoc cref="SameDash" />
+    private static readonly DashStyle MergingDash = new([3.5, 3], 0);
+
+    /// <inheritdoc cref="SameDash" />
+    private static readonly DashStyle DraftDash = new([3, 3], 0);
+
+    /// <inheritdoc cref="SameDash" />
+    private static readonly DashStyle DangerDash = new([2.5, 2.5], 0);
+
+    /// <inheritdoc cref="SameDash" />
+    private static readonly DashStyle CardDash = new([3, 2.5], 0);
+
+    /// <inheritdoc cref="SameDash" />
+    private static readonly DashStyle CardBaseDash = new([2.5, 2.5], 0);
+
+    /// <inheritdoc cref="SameDash" />
+    private static readonly DashStyle CardJoinDash = new([3.5, 2.5], 0);
+
+    /// <inheritdoc cref="SameDash" />
+    private static readonly DashStyle GhostDash = new([3, 3], 0);
+
+    /// <inheritdoc cref="SameDash" />
+    private static readonly DashStyle PillDash = new([2, 2], 0);
+
+    /// <summary>The brushes in use, by the colour they draw.</summary>
+    private readonly Dictionary<uint, IBrush> _brushes = [];
+
+    /// <summary>The pens in use, by the colour, width and brokenness they draw.</summary>
+    private readonly Dictionary<(uint Colour, int Width, DashStyle? Dash, bool Round), IPen> _pens =
+        [];
+
     /// <summary>Makes a renderer.</summary>
     /// <param name="words">The words the layout's edges and cards are named with.</param>
     internal VariantGraphRenderer(GraphVocabulary words)
@@ -226,8 +260,65 @@ internal sealed class VariantGraphRenderer
         _words = words;
     }
 
-    /// <summary>Lets go of the text shaped for a look that has changed.</summary>
-    internal void Invalidate() => _texts.Clear();
+    /// <summary>Lets go of the text shaped for a look that has changed, and of the brushes and pens.</summary>
+    internal void Invalidate()
+    {
+        _texts.Clear();
+        _brushes.Clear();
+        _pens.Clear();
+    }
+
+    /// <summary>The brush one colour is drawn with, made once.</summary>
+    /// <param name="colour">The colour.</param>
+    /// <returns>The brush.</returns>
+    private IBrush Brush(Color colour)
+    {
+        var key = GraphTint.Key(colour);
+
+        if (_brushes.TryGetValue(key, out var known))
+        {
+            return known;
+        }
+
+        var brush = new SolidColorBrush(colour);
+
+        _brushes[key] = brush;
+
+        return brush;
+    }
+
+    /// <summary>The pen one colour, width and brokenness are drawn with, made once.</summary>
+    /// <param name="colour">The colour.</param>
+    /// <param name="width">How thick the line is.</param>
+    /// <param name="dash">How the line is broken, or nothing for a whole one.</param>
+    /// <param name="round">Whether the ends and joins are round.</param>
+    /// <returns>The pen.</returns>
+    private IPen PenFor(Color colour, double width, DashStyle? dash, bool round = false)
+    {
+        var key = (GraphTint.Key(colour), (int)Math.Round(width * 100), dash, round);
+
+        if (_pens.TryGetValue(key, out var known))
+        {
+            return known;
+        }
+
+        var pen = new Pen(Brush(colour), width);
+
+        if (round)
+        {
+            pen.LineCap = PenLineCap.Round;
+            pen.LineJoin = PenLineJoin.Round;
+        }
+
+        if (dash is not null)
+        {
+            pen.DashStyle = dash;
+        }
+
+        _pens[key] = pen;
+
+        return pen;
+    }
 
     /// <summary>Draws the graph.</summary>
     /// <param name="context">Where to draw.</param>
@@ -277,7 +368,7 @@ internal sealed class VariantGraphRenderer
 
         DrawGrid(context, size, ink, frame);
         DrawEdges(context, ink, frame, drawing, screen, active, frame.Edge);
-        DrawGhosts(context, ink, frame, drawing);
+        DrawGhosts(context, ink, frame, drawing, screen);
         DrawCards(context, ink, frame, drawing, visible, active, focused, frame.Edge);
     }
 
@@ -313,7 +404,7 @@ internal sealed class VariantGraphRenderer
     /// <param name="size">How large the control is.</param>
     /// <param name="ink">The colours in force.</param>
     /// <param name="frame">Where the graph is drawn.</param>
-    private static void DrawGrid(DrawingContext context, Size size, GraphInk ink, VariantGraphFrame frame)
+    private void DrawGrid(DrawingContext context, Size size, GraphInk ink, VariantGraphFrame frame)
     {
         var step = 20 * frame.Zoom;
 
@@ -323,8 +414,8 @@ internal sealed class VariantGraphRenderer
         }
 
         var showMinor = step >= 8;
-        var minor = new Pen(new SolidColorBrush(ink.GridMinor), 1);
-        var major = new Pen(new SolidColorBrush(ink.GridMajor), 1);
+        var minor = PenFor(ink.GridMinor, 1, null);
+        var major = PenFor(ink.GridMajor, 1, null);
         var right = size.Width;
         var bottom = size.Height;
 
@@ -375,7 +466,7 @@ internal sealed class VariantGraphRenderer
     /// <param name="screen">The control's own rectangle, which the edges are drawn in.</param>
     /// <param name="active">The cards to keep in full, or nothing when nothing is emphasised.</param>
     /// <param name="hovered">The edge the pointer is on, when it is on one.</param>
-    private static void DrawEdges(
+    private void DrawEdges(
         DrawingContext context,
         GraphInk ink,
         VariantGraphFrame frame,
@@ -416,23 +507,14 @@ internal sealed class VariantGraphRenderer
 
             IDisposable? undo = faint ? context.PushOpacity(0.14) : null;
 
-            var pen = new Pen(new SolidColorBrush(colour), width)
-            {
-                LineCap = PenLineCap.Round,
-                LineJoin = PenLineJoin.Round,
-            };
-
-            if (dash is not null)
-            {
-                pen.DashStyle = dash;
-            }
+            var pen = PenFor(colour, width, dash, round: true);
 
             var path = Curve(start, control1, control2, end);
             context.DrawGeometry(null, pen, path);
 
             if (arrow)
             {
-                context.DrawGeometry(new SolidColorBrush(colour), null, Arrow(end, control2, frame.Zoom));
+                context.DrawGeometry(Brush(colour), null, Arrow(end, control2, frame.Zoom));
             }
 
             undo?.Dispose();
@@ -448,18 +530,18 @@ internal sealed class VariantGraphRenderer
         {
             GraphLinkKind.Same => (
                 ink.Same,
-                new DashStyle([2, 4], 0),
+                SameDash,
                 Math.Max(0.8, 1.1)
             ),
             GraphLinkKind.Base => (ink.BaseEdge, null, Math.Max(0.9, 1.3)),
             GraphLinkKind.Join => (ink.JoinEdge, null, Math.Max(0.9, 1.3)),
-            GraphLinkKind.Merging => (ink.Pending, new DashStyle([3.5, 3], 0), Math.Max(1, 1.3)),
+            GraphLinkKind.Merging => (ink.Pending, MergingDash, Math.Max(1, 1.3)),
             GraphLinkKind.Draft => (
                 GraphTint.Mix(ink.Local, ink.Muted, 0.28),
-                new DashStyle([3, 3], 0),
+                DraftDash,
                 Math.Max(0.9, 1.2)
             ),
-            _ => (ink.Danger, new DashStyle([2.5, 2.5], 0), Math.Max(0.9, 1.2)),
+            _ => (ink.Danger, DangerDash, Math.Max(0.9, 1.2)),
         };
 
     /// <summary>The two ends and the two control points of an edge, in screen units.</summary>
@@ -531,30 +613,36 @@ internal sealed class VariantGraphRenderer
     /// <param name="ink">The colours in force.</param>
     /// <param name="frame">Where the graph is drawn.</param>
     /// <param name="drawing">The graph.</param>
+    /// <param name="screen">The control's own rectangle, which a ghost outside it is not drawn in.</param>
     private void DrawGhosts(
         DrawingContext context,
         GraphInk ink,
         VariantGraphFrame frame,
-        VariantGraphDrawing drawing
+        VariantGraphDrawing drawing,
+        Rect screen
     )
     {
         foreach (var ghost in drawing.Ghosts)
         {
             var at = Screen(frame, ghost.X, ghost.Y);
             var target = drawing.Cards[ghost.Target];
+            var end = Screen(frame, target.CardLeft, target.Y);
             var radius = 18 * frame.Zoom;
-            var pen = new Pen(new SolidColorBrush(ink.GhostEdge), Math.Max(0.9, 1.2 * frame.Zoom))
-            {
-                DashStyle = new DashStyle([3, 3], 0),
-            };
+            var left = Math.Min(at.X, end.X) - (40 * frame.Zoom);
+            var top = Math.Min(at.Y, end.Y) - (40 * frame.Zoom);
+            var reach = Math.Abs(at.X - end.X) + (80 * frame.Zoom);
+            var tall = Math.Abs(at.Y - end.Y) + (80 * frame.Zoom);
 
-            context.DrawEllipse(
-                new SolidColorBrush(ink.GhostFill),
-                pen,
-                at,
-                radius,
-                radius
-            );
+            // A ghost carries its label and an edge to the card it names, so what is culled is the box that
+            // holds both rather than the circle alone.
+            if (!new Rect(left, top, reach, tall).Intersects(screen))
+            {
+                continue;
+            }
+
+            var pen = PenFor(ink.GhostEdge, Math.Max(0.9, 1.2 * frame.Zoom), GhostDash);
+
+            context.DrawEllipse(Brush(ink.GhostFill), pen, at, radius, radius);
 
             if (frame.Zoom >= DetailZoom)
             {
@@ -571,7 +659,6 @@ internal sealed class VariantGraphRenderer
                 );
             }
 
-            var end = Screen(frame, target.CardLeft, target.Y);
             var start = new Point(at.X + radius, at.Y);
             var path = Curve(
                 start,
@@ -582,10 +669,7 @@ internal sealed class VariantGraphRenderer
 
             context.DrawGeometry(
                 null,
-                new Pen(new SolidColorBrush(ink.GhostEdge), Math.Max(0.8, 1 * frame.Zoom))
-                {
-                    DashStyle = new DashStyle([3, 4], 0),
-                },
+                PenFor(ink.GhostEdge, Math.Max(0.8, 1 * frame.Zoom), GhostDash),
                 path
             );
         }
@@ -744,13 +828,13 @@ internal sealed class VariantGraphRenderer
         else if (beside && !onChain)
         {
             stroke = GraphTint.Mix(ink.Muted, ink.CardEdge, 0.4);
-            dash = new DashStyle([3, 2.5], 0);
+            dash = CardDash;
         }
 
         if (zoom >= DetailZoom)
         {
             context.DrawRectangle(
-                new SolidColorBrush(ink.Shadow),
+                Brush(ink.Shadow),
                 null,
                 new Rect(left, top + (4 * zoom), width, height),
                 radius,
@@ -758,14 +842,9 @@ internal sealed class VariantGraphRenderer
             );
         }
 
-        var pen = new Pen(new SolidColorBrush(stroke), thickness);
+        var pen = PenFor(stroke, thickness, dash);
 
-        if (dash is not null)
-        {
-            pen.DashStyle = dash;
-        }
-
-        context.DrawRectangle(new SolidColorBrush(fill), pen, new Rect(left, top, width, height), radius, radius);
+        context.DrawRectangle(Brush(fill), pen, new Rect(left, top, width, height), radius, radius);
 
         // The file's colour runs down the card's left edge, so a lane is readable from any card of it.
         // It is a short line rather than the whole edge: a band of colour beside the content would
@@ -775,7 +854,7 @@ internal sealed class VariantGraphRenderer
             var stripe = (VariantGraphDrawing.CardHeight - 18) * 0.7;
 
             context.DrawRectangle(
-                new SolidColorBrush(card.LaneColour),
+                Brush(card.LaneColour),
                 null,
                 new Rect(
                     left + (2 * zoom),
@@ -875,7 +954,7 @@ internal sealed class VariantGraphRenderer
             return (
                 GraphTint.Mix(ink.Card, wrong ? ink.Danger : ink.Local, wrong ? 0.11 : 0.07),
                 GraphTint.Mix(wrong ? ink.Danger : ink.Local, ink.CardEdge, wrong ? 0.68 : 0.62),
-                new DashStyle([3, 2.5], 0),
+                CardDash,
                 1.1
             );
         }
@@ -885,7 +964,7 @@ internal sealed class VariantGraphRenderer
             return (
                 GraphTint.Mix(ink.Card, ink.Pending, 0.14),
                 ink.Pending,
-                new DashStyle([3.5, 2.5], 0),
+                CardJoinDash,
                 1.2
             );
         }
@@ -897,12 +976,12 @@ internal sealed class VariantGraphRenderer
 
         if (card.Number is null && !card.MissingBase)
         {
-            return (ink.Card, ink.CardEdge, new DashStyle([2.5, 2.5], 0), 1.1);
+            return (ink.Card, ink.CardEdge, CardBaseDash, 1.1);
         }
 
         if (card.MissingBase)
         {
-            return (ink.Card, ink.CardEdge, new DashStyle([2.5, 2.5], 0), 1.1);
+            return (ink.Card, ink.CardEdge, CardBaseDash, 1.1);
         }
 
         return (ink.Card, ink.CardEdge, null, 1.1);
@@ -1096,7 +1175,7 @@ internal sealed class VariantGraphRenderer
             GraphChipKind.Badge => (
                 Colors.Transparent,
                 chip.Wrong ? ink.Danger : chip.Warn ? ink.Pending : ink.ChipEdge,
-                new DashStyle([2, 2], 0)
+                PillDash
             ),
             _ => (
                 ink.ChipFill,
@@ -1104,17 +1183,13 @@ internal sealed class VariantGraphRenderer
                 (DashStyle?)null
             ),
         };
-        var pen = new Pen(
-            new SolidColorBrush(stroke),
-            Math.Max(chip.Tracked ? 1 : 0.7, (chip.Tracked ? 1.2 : 0.9) * zoom)
+        var pen = PenFor(
+            stroke,
+            Math.Max(chip.Tracked ? 1 : 0.7, (chip.Tracked ? 1.2 : 0.9) * zoom),
+            dash
         );
 
-        if (dash is not null)
-        {
-            pen.DashStyle = dash;
-        }
-
-        context.DrawRectangle(new SolidColorBrush(fill), pen, rect, radius, radius);
+        context.DrawRectangle(Brush(fill), pen, rect, radius, radius);
 
         if (!readable)
         {
@@ -1201,7 +1276,7 @@ internal sealed class VariantGraphRenderer
             FlowDirection.LeftToRight,
             typeface,
             size / 10.0,
-            new SolidColorBrush(colour)
+            Brush(colour)
         );
 
         _texts[key] = shaped;

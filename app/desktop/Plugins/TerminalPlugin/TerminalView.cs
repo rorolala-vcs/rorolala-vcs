@@ -3,8 +3,10 @@ using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using RolaSharp;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.I18n;
@@ -76,6 +78,9 @@ internal sealed class TerminalView : Control, IDisposable
     /// <summary>The timer that polls the terminal while the view is on screen.</summary>
     private readonly DispatcherTimer _timer = new() { Interval = Every };
 
+    /// <summary>What each visible row was shaped into, kept so an unchanged row is not shaped again.</summary>
+    private readonly TerminalRowRuns _rowRuns;
+
     /// <summary>How far back the view is scrolled, which is zero at the screen the shell is drawing on.</summary>
     private int _scrolled;
 
@@ -143,6 +148,8 @@ internal sealed class TerminalView : Control, IDisposable
         _arguments = arguments;
         _directory = directory;
         _why = RolaI18N.Get("rorolala_terminal.cannot_start", program);
+
+        _rowRuns = new TerminalRowRuns(_size, Face, cell => Colours(cell), _groundBrush);
 
         _timer.Tick += (_, _) => Pump();
 
@@ -235,7 +242,13 @@ internal sealed class TerminalView : Control, IDisposable
         // A program that asks where the cursor is gets the answer written back, which is how a shell works
         // out where its prompt ends.
         _screen.Respond += Reply;
-        _timer.Start();
+        Watch();
+
+        if (IsEffectivelyVisible)
+        {
+            _timer.Start();
+        }
+
         Focus();
     }
 
@@ -245,8 +258,55 @@ internal sealed class TerminalView : Control, IDisposable
     {
         _timer.Stop();
         _screen.Respond -= Reply;
+        Unwatch();
 
         base.OnDetachedFromVisualTree(detached);
+    }
+
+    /// <summary>Starts or stops the polling when the dock behind another tab stops being drawn.</summary>
+    /// <param name="sender">The view or an ancestor.</param>
+    /// <param name="e">What changed.</param>
+    private void VisibilityChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != IsVisibleProperty)
+        {
+            return;
+        }
+
+        if (IsEffectivelyVisible)
+        {
+            Pump();
+            _timer.Start();
+
+            return;
+        }
+
+        _timer.Stop();
+    }
+
+    /// <summary>Listens to every control whose hiding would hide this one.</summary>
+    private void Watch()
+    {
+        PropertyChanged += VisibilityChanged;
+
+        foreach (var ancestor in this.GetVisualAncestors())
+        {
+            ancestor.PropertyChanged += VisibilityChanged;
+            _watched.Add(ancestor);
+        }
+    }
+
+    /// <summary>Stops listening to the controls that were watched.</summary>
+    private void Unwatch()
+    {
+        PropertyChanged -= VisibilityChanged;
+
+        foreach (var ancestor in _watched)
+        {
+            ancestor.PropertyChanged -= VisibilityChanged;
+        }
+
+        _watched.Clear();
     }
 
     /// <summary>What the terminal wants to be: a terminal's own eighty by twenty-four.</summary>
@@ -254,6 +314,12 @@ internal sealed class TerminalView : Control, IDisposable
     /// <returns>The size asked for.</returns>
     protected override Size MeasureOverride(Size availableSize) =>
         new(80 * _cellWidth, 24 * _cellHeight);
+
+    /// <summary>The clock the timer runs on, and the ancestors whose hiding stops it.</summary>
+    private readonly List<Visual> _watched = [];
+
+    /// <summary>Whether the terminal is asking the shell for what it has printed.</summary>
+    internal bool Polling => _timer.IsEnabled;
 
     /// <summary>Says how large the view is, which is what the shell lays its screen out by.</summary>
     /// <param name="finalSize">The size it was given.</param>
@@ -300,6 +366,8 @@ internal sealed class TerminalView : Control, IDisposable
 
         var rows = Math.Min(_screen.Rows, (int)(Bounds.Height / _cellHeight) + 1);
 
+        _rowRuns.Trim(rows);
+
         for (var row = 0; row < rows; row++)
         {
             var line = _screen.Line(row, _scrolled);
@@ -307,65 +375,18 @@ internal sealed class TerminalView : Control, IDisposable
 
             Grounds(context, line, ground);
 
-            for (var at = 0; at < line.Length;)
+            foreach (var run in _rowRuns.Row(row, line))
             {
-                var cell = line[at];
+                context.DrawText(run.Text, new Point(run.Column * _cellWidth, ground));
 
-                // The right half of a wide character is drawn by the character it belongs to.
-                if (cell.Continuation)
-                {
-                    at++;
-
-                    continue;
-                }
-
-                var start = at;
-                var face = Face(cell.Marks);
-                var (fore, _) = Colours(cell);
-
-                var run = new StringBuilder();
-                run.Append(Character(cell));
-
-                at++;
-
-                while (at < line.Length)
-                {
-                    var next = line[at];
-
-                    if (next.Continuation || !Same(next, cell))
-                    {
-                        break;
-                    }
-
-                    run.Append(Character(next));
-                    at++;
-                }
-
-                if (at == start + 1 && cell.Blank && ReferenceEquals(Colours(cell).Back, _groundBrush))
-                {
-                    continue;
-                }
-
-                context.DrawText(
-                    new FormattedText(
-                        run.ToString(),
-                        CultureInfo.InvariantCulture,
-                        FlowDirection.LeftToRight,
-                        face,
-                        _size,
-                        fore
-                    ),
-                    new Point(start * _cellWidth, ground)
-                );
-
-                if (cell.Marks.HasFlag(CellMarks.Underline))
+                if (run.Underline)
                 {
                     context.FillRectangle(
-                        fore,
+                        run.Ink,
                         new Rect(
-                            start * _cellWidth,
+                            run.Column * _cellWidth,
                             ground + _cellHeight - 1,
-                            (at - start) * _cellWidth,
+                            run.Columns * _cellWidth,
                             1
                         )
                     );
@@ -416,7 +437,7 @@ internal sealed class TerminalView : Control, IDisposable
 
         context.DrawText(
             new FormattedText(
-                Character(line[_screen.CursorX]),
+                TerminalRowRuns.Character(line[_screen.CursorX]),
                 CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight,
                 Face(line[_screen.CursorX].Marks),
@@ -473,26 +494,6 @@ internal sealed class TerminalView : Control, IDisposable
     /// <returns>Whether the ground is the same.</returns>
     private bool SameGround(TerminalCell cell, in TerminalCell of) =>
         ReferenceEquals(Colours(cell).Back, Colours(of).Back);
-
-    /// <summary>Whether two cells are drawn the same, which is what makes one run of them.</summary>
-    /// <param name="cell">One cell.</param>
-    /// <param name="of">The other.</param>
-    /// <returns>Whether they are one run.</returns>
-    private bool Same(TerminalCell cell, in TerminalCell of)
-    {
-        var (fore, back) = Colours(cell);
-        var (otherFore, otherBack) = Colours(of);
-
-        return cell.Marks == of.Marks
-            && ReferenceEquals(fore, otherFore)
-            && ReferenceEquals(back, otherBack);
-    }
-
-    /// <summary>What a cell's character is, as text.</summary>
-    /// <param name="cell">The cell.</param>
-    /// <returns>The character, or a space for a blank one.</returns>
-    private static string Character(in TerminalCell cell) =>
-        cell.Blank ? " " : char.ConvertFromUtf32(cell.Codepoint);
 
     /// <summary>
     /// The ink and the ground a cell is drawn in.

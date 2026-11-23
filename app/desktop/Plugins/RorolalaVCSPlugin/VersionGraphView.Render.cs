@@ -87,8 +87,10 @@ internal sealed partial class VersionGraphView
 
         ClampPan();
 
-        var lineage = _hover?.Card is { } hovered ? LineageOf(hovered) : null;
-        var stats = Stats();
+        Derive();
+
+        var lineage = _lineage;
+        var stats = _stats;
         var frame = new VariantGraphFrame(
             _zoom,
             new Point(_panX, _panY),
@@ -104,6 +106,38 @@ internal sealed partial class VersionGraphView
         DrawTruncated(context, ink);
         DrawZoom(context, ink);
         DrawStats(context, ink, stats);
+    }
+
+    /// <summary>Reads the counts and the hover's lineage once for the frame they are shown in.</summary>
+    /// <remarks>
+    /// Both are about the drawing and the pointer rather than about the frame, and a frame can be asked for
+    /// on every turn of a glide or a drag: making them again for each one is the cost this avoids.
+    /// </remarks>
+    private void Derive()
+    {
+        if (!ReferenceEquals(_statsFor, _drawing))
+        {
+            _statsFor = _drawing;
+            _stats = Stats();
+            StatsBuilds++;
+        }
+
+        var hover = _hover?.Card?.Index;
+
+        if (
+            ReferenceEquals(_lineageFor, _drawing)
+            && _lineageHover == hover
+            && _lineageFocus == _showFocus
+        )
+        {
+            return;
+        }
+
+        _lineageFor = _drawing;
+        _lineageHover = hover;
+        _lineageFocus = _showFocus;
+        _lineage = _hover?.Card is { } card ? LineageOf(card) : null;
+        LineageBuilds++;
     }
 
     /// <summary>The control that draws the hover table over the switch in the corner.</summary>
@@ -342,7 +376,7 @@ internal sealed partial class VersionGraphView
     /// <returns>The hover answer.</returns>
     private Hover? HitTest(Point at)
     {
-        if (_drawing is null)
+        if (_drawing is not { } drawing)
         {
             return null;
         }
@@ -350,9 +384,41 @@ internal sealed partial class VersionGraphView
         var x = (at.X - _panX) / _zoom;
         var y = (at.Y - _panY) / _zoom;
 
-        for (var index = 0; index < _drawing.Ghosts.Count; index++)
+        // The reach is a reader's, given in screen units, while everything here is in the content's.
+        var reach = EdgeReach / _zoom;
+        var (cards, ghosts, links) = drawing.Hits.Near(x, y, reach);
+
+        return Resolve(drawing, cards, ghosts, links, x, y, reach);
+    }
+
+    /// <summary>The thing under a content point, asked of the items a search has left.</summary>
+    /// <remarks>
+    /// The answer is the same whether the indexes given are those around the point or the whole drawing,
+    /// which is what the tests compare: whatever the grid leaves out was never the answer. The frame is
+    /// the content's own, so an edge's distance is measured in content units and a zoom only changes the
+    /// reach it is compared with.
+    /// </remarks>
+    /// <param name="drawing">The graph.</param>
+    /// <param name="cards">The cards to ask, by index, ascending.</param>
+    /// <param name="ghosts">The ghosts to ask, by index, ascending.</param>
+    /// <param name="links">The edges to ask, by index, ascending.</param>
+    /// <param name="x">The point's content x.</param>
+    /// <param name="y">The point's content y.</param>
+    /// <param name="reach">How far from an edge a point is still on it, in content units.</param>
+    /// <returns>The hover answer.</returns>
+    internal static Hover? Resolve(
+        VariantGraphDrawing drawing,
+        IReadOnlyList<int> cards,
+        IReadOnlyList<int> ghosts,
+        IReadOnlyList<int> links,
+        double x,
+        double y,
+        double reach
+    )
+    {
+        foreach (var index in ghosts)
         {
-            var ghost = _drawing.Ghosts[index];
+            var ghost = drawing.Ghosts[index];
             var dx = x - ghost.X;
             var dy = y - ghost.Y;
 
@@ -362,8 +428,10 @@ internal sealed partial class VersionGraphView
             }
         }
 
-        foreach (var card in _drawing.Cards)
+        foreach (var index in cards)
         {
+            var card = drawing.Cards[index];
+
             if (
                 x < card.CardLeft
                 || x > card.CardRight
@@ -396,7 +464,8 @@ internal sealed partial class VersionGraphView
                 return new Hover(card, HoverPart.Card, null, null, -1);
             }
 
-            var rowTop = card.CardTop + VariantGraphDrawing.CardHeight + VariantGraphDrawing.PillGap;
+            var rowTop =
+                card.CardTop + VariantGraphDrawing.CardHeight + VariantGraphDrawing.PillGap;
 
             foreach (var row in card.Rows)
             {
@@ -425,32 +494,39 @@ internal sealed partial class VersionGraphView
 
         // Edges are drawn under the cards, so the cards are asked first and an edge is met only in the
         // ground between them. The curve is sampled rather than measured: an edge is a cubic, and a
-        // reader's reach of seven pixels around it does not need the exact nearest point.
-        var frame = new VariantGraphFrame(
-            _zoom,
-            new Point(_panX, _panY),
-            null,
-            null,
-            string.Empty,
-            _drawing.Truncated,
-            _showFocus,
-            null
-        );
-        var nearest = EdgeReach;
+        // reader's reach of a few pixels around it does not need the exact nearest point.
+        var frame = new VariantGraphFrame(1, default, null, null, string.Empty, false, false, null);
+        var point = new Point(x, y);
+        var nearest = reach;
         Hover? onEdge = null;
 
-        for (var index = 0; index < _drawing.Links.Count; index++)
+        foreach (var index in links)
         {
-            var link = _drawing.Links[index];
-            var from = _drawing.Cards[link.From];
-            var to = _drawing.Cards[link.To];
+            var link = drawing.Links[index];
+            var from = drawing.Cards[link.From];
+            var to = drawing.Cards[link.To];
             var (start, end, control1, control2, _) = VariantGraphRenderer.GeometryOf(
                 from,
                 to,
                 link.Kind,
                 frame
             );
-            var distance = DistanceToCurve(at, start, control1, control2, end);
+
+            // The curve lies inside the hull of its four points, so a point outside that hull can answer
+            // no before the curve is sampled at all.
+            var left = Math.Min(Math.Min(start.X, end.X), Math.Min(control1.X, control2.X)) - reach;
+            var top = Math.Min(Math.Min(start.Y, end.Y), Math.Min(control1.Y, control2.Y)) - reach;
+            var right =
+                Math.Max(Math.Max(start.X, end.X), Math.Max(control1.X, control2.X)) + reach;
+            var bottom =
+                Math.Max(Math.Max(start.Y, end.Y), Math.Max(control1.Y, control2.Y)) + reach;
+
+            if (!new Rect(left, top, right - left, bottom - top).Contains(point))
+            {
+                continue;
+            }
+
+            var distance = DistanceToCurve(point, start, control1, control2, end);
 
             if (distance <= nearest)
             {

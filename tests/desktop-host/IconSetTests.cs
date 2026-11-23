@@ -95,7 +95,11 @@ public sealed class IconSetTests
             // What is answered is the cache's own picture and not one this test made: disposing it here would
             // leave the cache handing a disposed picture to whatever draws that set next, a listing of the
             // entries this very set is for, so the pictures are left to the cache that owns them.
-            Assert.NotNull(IconSets.Picture(new Entry("scene.ma", EntryKind.File), 16));
+            var first = IconSets.Picture(new Entry("scene.ma", EntryKind.File), 16);
+            var second = IconSets.Picture(new Entry("scene.ma", EntryKind.File), 16);
+
+            Assert.NotNull(first);
+            Assert.Same(first, second);
             Assert.NotNull(IconSets.Picture(new Entry("notes.txt", EntryKind.File), 16));
         }
         finally

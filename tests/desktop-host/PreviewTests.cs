@@ -201,11 +201,49 @@ public sealed class PreviewTests
         }
     }
 
+    /// <summary>The oldest answer is the only one dropped when the cache reaches its limit.</summary>
+    [Fact]
+    public void TheOldestAnswerIsTheOnlyOneDropped()
+    {
+        var services = Host.Services();
+        var source = new FakeSource("it.evict", cares: true, Picture(PreviewOrigin.Plugin));
+        var previews = new PreviewService(services.Log.For("it.previews"), services.Progress, source);
+        var directory = Scratch.New("preview-evict");
+        var path = Path.Combine(directory, "hero.psd");
+
+        File.WriteAllText(path, "x");
+
+        for (var at = 0; at < 300; at++)
+        {
+            previews.Get(Request(path, 64 + at), CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        Assert.Equal(300, source.Asked);
+
+        for (var at = 0; at < 44; at++)
+        {
+            previews.Get(Request(path, 64 + at), CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        Assert.Equal(344, source.Asked);
+
+        previews.Get(Request(path, 64 + 299), CancellationToken.None).GetAwaiter().GetResult();
+
+        Assert.Equal(344, source.Asked);
+    }
+
     /// <summary>A fixed request.</summary>
     /// <param name="path">The file.</param>
     /// <returns>The request.</returns>
     private static PreviewRequest Request(string path) =>
         new(path, EntryKind.File, new PreviewSize(64, 64), PreviewPurpose.Tile);
+
+    /// <summary>A fixed request at a size, which is what tells two answers for one file apart.</summary>
+    /// <param name="path">The file.</param>
+    /// <param name="size">How wide and tall the preview is.</param>
+    /// <returns>The request.</returns>
+    private static PreviewRequest Request(string path, int size) =>
+        new(path, EntryKind.File, new PreviewSize(size, size), PreviewPurpose.Tile);
 
     /// <summary>A two by two picture, with the given origin.</summary>
     /// <param name="origin">Which layer made it.</param>

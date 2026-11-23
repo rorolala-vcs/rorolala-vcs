@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 
+using Avalonia;
 using Avalonia.Media;
 using RolaSharp;
 
@@ -397,6 +398,103 @@ internal sealed class VariantGraphDrawing
     /// <summary>How many characters of a hash a pill shows.</summary>
     private const int HashLength = 7;
 
+    /// <summary>A string that changes when the drawing would, so a read that says the same thing is told from one that does not.</summary>
+    /// <remarks>
+    /// A reading is a new object on every turn of the timer, so the graph is laid out again on every read
+    /// unless the reading is compared by what it says. The parts that decide the drawing are the versions,
+    /// the entries, the nodes, the merges in progress and the drafts; the words and the numbers are read
+    /// from those, and a message whose words changed has another hash.
+    /// </remarks>
+    /// <param name="graph">The reading.</param>
+    /// <param name="drafts">The drafts read from the work.</param>
+    /// <param name="emphasized">Whether the graph stands on chosen entries.</param>
+    /// <returns>The fingerprint.</returns>
+    internal static string Fingerprint(
+        VariantGraphReading graph,
+        IReadOnlyList<DraftFact> drafts,
+        bool emphasized
+    )
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(drafts);
+
+        var text = new StringBuilder();
+
+        text.Append(emphasized ? '1' : '0').Append(graph.Truncated ? '1' : '0').Append('\n');
+
+        foreach (var version in graph.Versions)
+        {
+            text.Append(version.Hash)
+                .Append('|')
+                .Append(version.Variant)
+                .Append('|')
+                .Append(version.Number)
+                .Append('|')
+                .Append(version.IsRoot)
+                .Append('\n');
+        }
+
+        foreach (var entry in graph.Entries)
+        {
+            text.Append(entry.Side)
+                .Append('|')
+                .Append(entry.Path)
+                .Append('|')
+                .Append(entry.Version)
+                .Append('|')
+                .Append(entry.Deprecated)
+                .Append('\n');
+        }
+
+        foreach (var node in graph.Nodes)
+        {
+            text.Append(node.Hash)
+                .Append('|')
+                .Append(node.BaseVersion)
+                .Append('|')
+                .Append(node.BaseVariant)
+                .Append('|')
+                .Append(node.Join)
+                .Append('|')
+                .Append(node.Creator)
+                .Append('|')
+                .Append(node.Message)
+                .Append('|')
+                .Append(node.Storage)
+                .Append('|')
+                .Append(node.Offline)
+                .Append('\n');
+        }
+
+        foreach (var merge in graph.Merging)
+        {
+            text.Append(merge.Variant)
+                .Append('|')
+                .Append(merge.Path)
+                .Append('|')
+                .Append(merge.File)
+                .Append('\n');
+        }
+
+        foreach (var draft in drafts)
+        {
+            text.Append(draft.Path)
+                .Append('|')
+                .Append(draft.VersionHash)
+                .Append('|')
+                .Append(draft.Wrong)
+                .Append('|')
+                .Append(draft.Unowned)
+                .Append('|')
+                .Append(draft.ShouldBeVersionHash)
+                .Append('|')
+                .Append(draft.Tree)
+                .Append('\n');
+        }
+
+        return text.ToString();
+    }
+
     /// <summary>Makes a drawing from its pieces.</summary>
     /// <param name="cards">The cards, in column order.</param>
     /// <param name="byHash">The card each variant hash stands at.</param>
@@ -439,6 +537,7 @@ internal sealed class VariantGraphDrawing
         ByHash = byHash;
         Links = links;
         Ghosts = ghosts;
+        Hits = new VariantGraphHitIndex(cards, links, ghosts);
         FocusChain = focusChain;
         FocusRelated = focusRelated;
         Truncated = truncated;
@@ -465,6 +564,9 @@ internal sealed class VariantGraphDrawing
 
     /// <summary>The base versions the index does not hold.</summary>
     internal IReadOnlyList<GraphGhost> Ghosts { get; }
+
+    /// <summary>What could be under a point, read from a grid rather than by walking everything.</summary>
+    internal VariantGraphHitIndex Hits { get; }
 
     /// <summary>The cards on the focused entries' own chains.</summary>
     internal IReadOnlySet<int> FocusChain { get; }
@@ -1694,6 +1796,196 @@ internal sealed class VariantGraphDrawing
                 MessageHash
             );
         }
+    }
+}
+
+/// <summary>Which cards, ghosts and edges may be under a point, read from cells of a grid.</summary>
+/// <remarks>
+/// A pointer move asks once, and a graph of a thousand versions would otherwise be a thousand card
+/// boxes and as many curves. The grid is in content units, so it does not move with the pan and does
+/// not bend with the zoom: the card boxes are the boxes the layout gave them, and an edge is
+/// registered in every cell its curve may reach, which is the hull of the four points the renderer
+/// draws it with. The hull is the same shape at every zoom, since the bend grows with the distance
+/// between the two cards and the zoom scales both, so it can be measured once here.
+/// </remarks>
+internal sealed class VariantGraphHitIndex
+{
+    /// <summary>The side of one cell, in content units: one version column, so a card spans one or two.</summary>
+    internal const double CellSize = VariantGraphDrawing.ColumnPitch;
+
+    /// <summary>The cards in each cell their box overlaps.</summary>
+    private readonly Dictionary<(int Column, int Row), List<int>> _cards = [];
+
+    /// <summary>The ghosts in each cell their reach overlaps.</summary>
+    private readonly Dictionary<(int Column, int Row), List<int>> _ghosts = [];
+
+    /// <summary>The edges in each cell their curve may reach.</summary>
+    private readonly Dictionary<(int Column, int Row), List<int>> _links = [];
+
+    /// <summary>Files every card, ghost and edge into the cells it may be met in.</summary>
+    /// <param name="cards">The cards, as the drawing holds them.</param>
+    /// <param name="links">The edges, between the cards' indexes.</param>
+    /// <param name="ghosts">The missing base versions.</param>
+    internal VariantGraphHitIndex(
+        IReadOnlyList<GraphCard> cards,
+        IReadOnlyList<GraphLink> links,
+        IReadOnlyList<GraphGhost> ghosts
+    )
+    {
+        for (var index = 0; index < cards.Count; index++)
+        {
+            var card = cards[index];
+
+            File(
+                _cards,
+                index,
+                new Rect(
+                    card.CardLeft,
+                    card.CardTop,
+                    card.CardRight - card.CardLeft,
+                    card.ContentBottom - card.CardTop
+                )
+            );
+        }
+
+        for (var index = 0; index < ghosts.Count; index++)
+        {
+            var ghost = ghosts[index];
+
+            File(_ghosts, index, new Rect(ghost.X - GhostReach, ghost.Y - GhostReach, GhostReach * 2, GhostReach * 2));
+        }
+
+        for (var index = 0; index < links.Count; index++)
+        {
+            var link = links[index];
+
+            File(_links, index, Hull(cards[link.From], cards[link.To], link.Kind));
+        }
+    }
+
+    /// <summary>How far a ghost is met from its centre, in content units.</summary>
+    private const double GhostReach = 24;
+
+    /// <summary>What a point could be on, within a reach of it.</summary>
+    /// <remarks>
+    /// The cells of the answer are merged and sorted, so that a caller walking them meets the same items
+    /// in the same order the drawing holds them, which is what keeps the answer of one pointer move the
+    /// same as one found by walking the whole graph.
+    /// </remarks>
+    /// <param name="x">The point's content x.</param>
+    /// <param name="y">The point's content y.</param>
+    /// <param name="reach">How far around it is still met, in content units.</param>
+    /// <returns>The cards, ghosts and edges, each sorted by their index.</returns>
+    internal (int[] Cards, int[] Ghosts, int[] Links) Near(double x, double y, double reach)
+    {
+        // A point within the reach of a curve may sit in a neighbouring cell, and the reach of a pointer
+        // is a few dozen content units at the closest zoom, so one cell of margin would do; it is counted
+        // rather than assumed, since the reach is the caller's to give.
+        var span = Math.Max(1, (int)Math.Ceiling(reach / CellSize));
+        var column = (int)Math.Floor(x / CellSize);
+        var row = (int)Math.Floor(y / CellSize);
+        var cards = new HashSet<int>();
+        var ghosts = new HashSet<int>();
+        var links = new HashSet<int>();
+
+        for (var dx = -span; dx <= span; dx++)
+        {
+            for (var dy = -span; dy <= span; dy++)
+            {
+                var cell = (column + dx, row + dy);
+
+                Gather(_cards, cell, cards);
+                Gather(_ghosts, cell, ghosts);
+                Gather(_links, cell, links);
+            }
+        }
+
+        return (Sorted(cards), Sorted(ghosts), Sorted(links));
+    }
+
+    /// <summary>The box an edge is met in: the hull of the four points it is drawn through.</summary>
+    /// <param name="from">The card the edge is walked from.</param>
+    /// <param name="to">The card it reaches.</param>
+    /// <param name="kind">What the edge means.</param>
+    /// <returns>The box, in content units.</returns>
+    private static Rect Hull(GraphCard from, GraphCard to, GraphLinkKind kind)
+    {
+        // One to one: the renderer's points are the content's own when the frame neither shifts nor
+        // scales them, so the hull measured here is the one drawn at every zoom.
+        var frame = new VariantGraphFrame(1, default, null, null, string.Empty, false, false, null);
+        var (start, end, control1, control2, _) = VariantGraphRenderer.GeometryOf(
+            from,
+            to,
+            kind,
+            frame
+        );
+        var left = Math.Min(Math.Min(start.X, end.X), Math.Min(control1.X, control2.X));
+        var top = Math.Min(Math.Min(start.Y, end.Y), Math.Min(control1.Y, control2.Y));
+        var right = Math.Max(Math.Max(start.X, end.X), Math.Max(control1.X, control2.X));
+        var bottom = Math.Max(Math.Max(start.Y, end.Y), Math.Max(control1.Y, control2.Y));
+
+        return new Rect(left, top, right - left, bottom - top);
+    }
+
+    /// <summary>Files one index into every cell a box overlaps.</summary>
+    /// <param name="cells">The table of the kind being filed.</param>
+    /// <param name="index">What to file.</param>
+    /// <param name="box">The box it may be met in.</param>
+    private static void File(
+        Dictionary<(int Column, int Row), List<int>> cells,
+        int index,
+        Rect box
+    )
+    {
+        var firstColumn = (int)Math.Floor(box.Left / CellSize);
+        var lastColumn = (int)Math.Floor(box.Right / CellSize);
+        var firstRow = (int)Math.Floor(box.Top / CellSize);
+        var lastRow = (int)Math.Floor(box.Bottom / CellSize);
+
+        for (var column = firstColumn; column <= lastColumn; column++)
+        {
+            for (var row = firstRow; row <= lastRow; row++)
+            {
+                var cell = (column, row);
+
+                if (!cells.TryGetValue(cell, out var bucket))
+                {
+                    bucket = [];
+                    cells[cell] = bucket;
+                }
+
+                bucket.Add(index);
+            }
+        }
+    }
+
+    /// <summary>Adds what one cell holds to the answer.</summary>
+    /// <param name="cells">The table of one kind.</param>
+    /// <param name="cell">The cell asked about.</param>
+    /// <param name="found">Where the indexes are collected.</param>
+    private static void Gather(
+        Dictionary<(int Column, int Row), List<int>> cells,
+        (int Column, int Row) cell,
+        HashSet<int> found
+    )
+    {
+        if (cells.TryGetValue(cell, out var bucket))
+        {
+            found.UnionWith(bucket);
+        }
+    }
+
+    /// <summary>One answer as an array in the order the drawing holds them.</summary>
+    /// <param name="found">The indexes, once each.</param>
+    /// <returns>The indexes, ascending.</returns>
+    private static int[] Sorted(HashSet<int> found)
+    {
+        var answer = new int[found.Count];
+
+        found.CopyTo(answer);
+        Array.Sort(answer);
+
+        return answer;
     }
 }
 

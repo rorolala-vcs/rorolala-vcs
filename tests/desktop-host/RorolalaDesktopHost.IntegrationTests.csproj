@@ -17,7 +17,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <IncludeAssets
+            >runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Avalonia" Version="12.1.3" />
@@ -31,41 +32,67 @@
          the registries, the log, rather than only the contract it publishes. -->
     <ProjectReference Include="../../app/desktop/Core/RorolalaDesktop.csproj" />
     <!-- The face the programs are drawn in, which the suites measure text with. -->
-    <ProjectReference Include="../../utils/desktop-fonts/RorolalaDesktopFonts.csproj" />
+    <ProjectReference
+            Include="../../utils/desktop-fonts/RorolalaDesktopFonts.csproj"
+        />
+    <!-- The system icons the File System plugin draws with, whose theme chain is read once. -->
+    <ProjectReference
+            Include="../../utils/desktop-sys-icons/RorolalaDesktopSysIcons.csproj"
+        />
     <!-- The plugins that ship with the program, so that one plugin's contribution to another's
          extension point is checked in process: what is exercised is the catalogue the two share, which
          the load context is only there to make one copy of. -->
-    <ProjectReference Include="../../app/desktop/Plugins/FileSystemPlugin/FileSystemPlugin.csproj" />
-    <ProjectReference Include="../../app/desktop/Plugins/GitVCSPlugin/GitVCSPlugin.csproj" />
+    <ProjectReference
+            Include="../../app/desktop/Plugins/FileSystemPlugin/FileSystemPlugin.csproj"
+        />
+    <ProjectReference
+            Include="../../app/desktop/Plugins/GitVCSPlugin/GitVCSPlugin.csproj"
+        />
     <!-- And the one that shows docks of its own, which are read against where the File System plugin
          is rooted: the two are one plugin depending on another, which is what this checks. -->
-    <ProjectReference Include="../../app/desktop/Plugins/RorolalaVCSPlugin/RorolalaVCSPlugin.csproj" />
+    <ProjectReference
+            Include="../../app/desktop/Plugins/RorolalaVCSPlugin/RorolalaVCSPlugin.csproj"
+        />
     <!-- The Terminal, whose one dock names a picture the host's library holds: what is checked is that a
          plugin's mark reaches the library at all, which its own start-up is what does. -->
-    <ProjectReference Include="../../app/desktop/Plugins/TerminalPlugin/TerminalPlugin.csproj" />
+    <ProjectReference
+            Include="../../app/desktop/Plugins/TerminalPlugin/TerminalPlugin.csproj"
+        />
   </ItemGroup>
 
   <ItemGroup>
     <!-- The fixture plugins are built with this suite and laid out beside it, so the assemblies the
          host loads are real ones rather than stand-ins for the contract. -->
     <PluginProject Include="../desktop-plugins/*/*.csproj" />
-    <ProjectReference Include="@(PluginProject)" ReferenceOutputAssembly="false" />
+    <ProjectReference
+            Include="@(PluginProject)"
+            ReferenceOutputAssembly="false"
+        />
   </ItemGroup>
 
-  <Target Name="CollectPluginAssemblies" DependsOnTargets="ResolveProjectReferences">
+  <Target
+        Name="CollectPluginAssemblies"
+        DependsOnTargets="ResolveProjectReferences"
+    >
     <MSBuild
-      Projects="@(PluginProject)"
-      Targets="GetTargetPath"
-      Properties="Configuration=$(Configuration)">
+            Projects="@(PluginProject)"
+            Targets="GetTargetPath"
+            Properties="Configuration=$(Configuration)"
+        >
       <Output TaskParameter="TargetOutputs" ItemName="PluginAssembly" />
     </MSBuild>
   </Target>
 
-  <Target Name="CopyPluginAssemblies" AfterTargets="Build" DependsOnTargets="CollectPluginAssemblies">
+  <Target
+        Name="CopyPluginAssemblies"
+        AfterTargets="Build"
+        DependsOnTargets="CollectPluginAssemblies"
+    >
     <Copy
-      SourceFiles="@(PluginAssembly)"
-      DestinationFolder="$(OutDir)plugins"
-      SkipUnchangedFiles="true" />
+            SourceFiles="@(PluginAssembly)"
+            DestinationFolder="$(OutDir)plugins"
+            SkipUnchangedFiles="true"
+        />
   </Target>
 
 </Project>

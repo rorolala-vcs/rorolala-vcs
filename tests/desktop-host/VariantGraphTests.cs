@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using Avalonia;
 using FileSystemPlugin;
 using RolaSharp;
 using RorolalaDesktop.Contract;
@@ -279,6 +280,25 @@ public sealed class VariantGraphTests
         Assert.Contains("alice", graph.Texts.Creators.Values);
         Assert.Contains("first", graph.Texts.Messages.Values);
         Assert.Contains("second", graph.Texts.Messages.Values);
+    }
+
+    /// <summary>A fingerprint says what the drawing was made from, and nothing else.</summary>
+    [Fact]
+    public void AFingerprintChangesOnlyWhenTheReadingDoes()
+    {
+        var workspace = Recorded("fingerprint");
+        var graph = Graph(workspace);
+
+        Assert.NotNull(graph);
+
+        var first = VariantGraphDrawing.Fingerprint(graph, [], false);
+
+        Assert.Equal(first, VariantGraphDrawing.Fingerprint(graph, [], false));
+
+        var draft = new DraftFact("art.txt", graph.Nodes[0].Hash, false, false, null);
+
+        Assert.NotEqual(first, VariantGraphDrawing.Fingerprint(graph, [draft], false));
+        Assert.NotEqual(first, VariantGraphDrawing.Fingerprint(graph, [], true));
     }
 
     /// <summary>A window holds what the request asked for, and says where it stopped.</summary>
@@ -697,6 +717,215 @@ public sealed class VariantGraphTests
         // window as well: the fork itself, what was built on it, and that version's own child.
         Assert.Equal(6, graph.Nodes.Count);
         Assert.False(graph.Truncated);
+    }
+
+    /// <summary>The grid finds the same thing under a point as walking the whole drawing does.</summary>
+    /// <remarks>
+    /// The points are fixed by a seed, and a third of them are placed on a card's box, a third beside
+    /// an edge's curve within a pointer's reach, and the rest anywhere around the drawing: the first
+    /// two are where an answer is found, the third is where it is not, and every one of them must be
+    /// answered by the cells alone as a whole walk answers it.
+    /// </remarks>
+    [Fact]
+    public void TheHitIndexAgreesWithAWholeWalk()
+    {
+        var drawing = RecordedDrawing("hit-index");
+
+        // The reach of a pointer on an edge at the closest zoom a drawing is read at, in content units:
+        // seven screen pixels over the least scale.
+        const double reach = 7 / 0.18;
+        var random = new Random(20261124);
+        var left = drawing.Left - 40;
+        var top = drawing.Top - 40;
+        var width = drawing.Right - drawing.Left + 80;
+        var height = drawing.Bottom - drawing.Top + 80;
+        int[] allCards = [.. Enumerable.Range(0, drawing.Cards.Count)];
+        int[] allGhosts = [.. Enumerable.Range(0, drawing.Ghosts.Count)];
+        int[] allLinks = [.. Enumerable.Range(0, drawing.Links.Count)];
+
+        for (var turn = 0; turn < 500; turn++)
+        {
+            var (x, y) = (turn % 3) switch
+            {
+                0 => (left + (random.NextDouble() * width), top + (random.NextDouble() * height)),
+                1 => OverCard(drawing.Cards[random.Next(drawing.Cards.Count)], random),
+                _ => OverLink(
+                    drawing,
+                    drawing.Links[random.Next(drawing.Links.Count)],
+                    random,
+                    reach
+                ),
+            };
+
+            var (cards, ghosts, links) = drawing.Hits.Near(x, y, reach);
+            var found = VersionGraphView.Resolve(drawing, cards, ghosts, links, x, y, reach);
+            var whole = VersionGraphView.Resolve(
+                drawing,
+                allCards,
+                allGhosts,
+                allLinks,
+                x,
+                y,
+                reach
+            );
+
+            Assert.True(
+                Summary(whole) == Summary(found),
+                $"the cells and a whole walk differ at ({x}, {y})"
+            );
+        }
+    }
+
+    /// <summary>A card, an edge and the empty ground are answered as they always were.</summary>
+    [Fact]
+    public void TheHitIndexAnswersACardAnEdgeAndTheGround()
+    {
+        var drawing = RecordedDrawing("hit-answer");
+        const double reach = 7 / 0.18;
+
+        var card = drawing.Cards[0];
+        var onCard = HitAt(drawing, card.X, card.Y, reach);
+
+        Assert.Equal(card.Index, onCard?.Card?.Index);
+
+        var edge = drawing.Links.First(link => link.Kind == GraphLinkKind.Base);
+        var at = Halfway(drawing, edge);
+        var onEdge = HitAt(drawing, at.X, at.Y, reach);
+
+        Assert.Equal(HoverPart.Edge, onEdge?.Part);
+        Assert.Equal(drawing.Links.ToList().IndexOf(edge), onEdge?.EdgeIndex);
+
+        Assert.Null(HitAt(drawing, drawing.Left - 5000, drawing.Bottom + 5000, reach));
+    }
+
+    /// <summary>Lays out the graph of a workspace holding two files, one of them being edited.</summary>
+    /// <param name="label">What the workspace is for, for a person reading the path.</param>
+    /// <returns>The drawing.</returns>
+    private static VariantGraphDrawing RecordedDrawing(string label)
+    {
+        var workspace = Recorded(label);
+
+        File.WriteAllText(Path.Combine(workspace, "other.txt"), "other\n");
+        Given(workspace, "track", "other.txt", "--message", "other", "--no-editor");
+
+        var graph = Graph(workspace);
+
+        Assert.NotNull(graph);
+
+        var art = graph.Entries.Single(entry => entry.Path == "art.txt");
+        var words = new GraphVocabulary(
+            "DRAFT",
+            "unrecorded",
+            "unrecorded tree",
+            "wrong",
+            "unowned",
+            "draft",
+            "wrong-draft",
+            "unowned-draft",
+            "merging into %{file}",
+            "no entries",
+            "unknown base"
+        );
+
+        return VariantGraphDrawing.From(
+            graph,
+            [new DraftFact("art.txt", art.Version!, false, false, null)],
+            words,
+            new GraphMeasure(),
+            emphasized: false
+        );
+    }
+
+    /// <summary>What a hover is, as a value two walks can be compared by.</summary>
+    /// <param name="hover">The answer.</param>
+    /// <returns>The answer's parts.</returns>
+    private static (int? Card, HoverPart Part, string? Chip, int Ghost, int Link) Summary(
+        Hover? hover
+    ) =>
+        hover is null
+            ? (null, HoverPart.Card, null, -1, -1)
+            : (hover.Card?.Index, hover.Part, hover.Chip?.Text, hover.GhostIndex, hover.EdgeIndex);
+
+    /// <summary>The answer the grid gives at a content point.</summary>
+    /// <param name="drawing">The graph.</param>
+    /// <param name="x">The point's x.</param>
+    /// <param name="y">The point's y.</param>
+    /// <param name="reach">How far a point is still on an edge.</param>
+    /// <returns>The hover answer.</returns>
+    private static Hover? HitAt(VariantGraphDrawing drawing, double x, double y, double reach)
+    {
+        var (cards, ghosts, links) = drawing.Hits.Near(x, y, reach);
+
+        return VersionGraphView.Resolve(drawing, cards, ghosts, links, x, y, reach);
+    }
+
+    /// <summary>A point anywhere inside a card's box, pills and all.</summary>
+    /// <param name="card">The card.</param>
+    /// <param name="random">The seeded source of places.</param>
+    /// <returns>The point.</returns>
+    private static (double X, double Y) OverCard(GraphCard card, Random random) =>
+        (
+            card.CardLeft + (random.NextDouble() * (card.CardRight - card.CardLeft)),
+            card.CardTop + (random.NextDouble() * (card.ContentBottom - card.CardTop))
+        );
+
+    /// <summary>A point within a pointer's reach of an edge's curve.</summary>
+    /// <param name="drawing">The graph.</param>
+    /// <param name="link">The edge.</param>
+    /// <param name="random">The seeded source of places.</param>
+    /// <param name="reach">How far the point may be placed from the curve.</param>
+    /// <returns>The point.</returns>
+    private static (double X, double Y) OverLink(
+        VariantGraphDrawing drawing,
+        GraphLink link,
+        Random random,
+        double reach
+    )
+    {
+        var (x, y) = Halfway(drawing, link);
+
+        return (
+            x + ((random.NextDouble() - 0.5) * 2 * reach),
+            y + ((random.NextDouble() - 0.5) * 2 * reach)
+        );
+    }
+
+    /// <summary>The middle of an edge's curve, in content units.</summary>
+    /// <param name="drawing">The graph.</param>
+    /// <param name="link">The edge.</param>
+    /// <returns>The point halfway along it.</returns>
+    private static (double X, double Y) Halfway(VariantGraphDrawing drawing, GraphLink link)
+    {
+        var frame = new VariantGraphFrame(
+            1,
+            new Point(0, 0),
+            null,
+            null,
+            string.Empty,
+            false,
+            false,
+            null
+        );
+        var (start, end, control1, control2, _) = VariantGraphRenderer.GeometryOf(
+            drawing.Cards[link.From],
+            drawing.Cards[link.To],
+            link.Kind,
+            frame
+        );
+        const double t = 0.5;
+        const double rest = 0.5;
+        var x =
+            (rest * rest * rest * start.X)
+            + (3 * rest * rest * t * control1.X)
+            + (3 * rest * t * t * control2.X)
+            + (t * t * t * end.X);
+        var y =
+            (rest * rest * rest * start.Y)
+            + (3 * rest * rest * t * control1.Y)
+            + (3 * rest * t * t * control2.Y)
+            + (t * t * t * end.Y);
+
+        return (x, y);
     }
 
     /// <summary>Reads a window of the variant graph, or nothing when there is none to draw.</summary>

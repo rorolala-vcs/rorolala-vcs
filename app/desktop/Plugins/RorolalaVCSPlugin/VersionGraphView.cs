@@ -311,6 +311,33 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>The graph on screen, or nothing while a read is going or when there is none.</summary>
     private VariantGraphDrawing? _drawing;
 
+    /// <summary>What the drawing on screen was made from, so a read that says the same thing is not laid out again.</summary>
+    private string _fingerprint = string.Empty;
+
+    /// <summary>The counts the drawing is described by, made once for it.</summary>
+    private string _stats = string.Empty;
+
+    /// <summary>The drawing <see cref="_stats"/> was made from.</summary>
+    private VariantGraphDrawing? _statsFor;
+
+    /// <summary>The cards the hover keeps in full, made once for the hover.</summary>
+    private IReadOnlySet<int>? _lineage;
+
+    /// <summary>The drawing and the hover <see cref="_lineage"/> was made from.</summary>
+    private VariantGraphDrawing? _lineageFor;
+
+    /// <summary>The card <see cref="_lineage"/> was made from, or nothing when no card is hovered.</summary>
+    private int? _lineageHover;
+
+    /// <summary>Whether the focused chains were emphasised when <see cref="_lineage"/> was made.</summary>
+    private bool _lineageFocus;
+
+    /// <summary>How many times the counts were made, which a test reads.</summary>
+    internal int StatsBuilds { get; private set; }
+
+    /// <summary>How many times the hover's lineage was made, which a test reads.</summary>
+    internal int LineageBuilds { get; private set; }
+
     /// <summary>Draws the graph, made once with the words its edges are labelled with.</summary>
     private VariantGraphRenderer? _renderer;
 
@@ -893,16 +920,27 @@ internal sealed partial class VersionGraphView : Control
                 {
                     var subject = $"{directory}|{emphasized}|{string.Join('|', files)}";
                     var moved = !string.Equals(subject, _subject, StringComparison.Ordinal);
+                    var fingerprint = VariantGraphDrawing.Fingerprint(graph, drafts, emphasized);
 
-                    _drawing = VariantGraphDrawing.From(graph, drafts, Words, _measure, emphasized);
-                    _renderer?.Invalidate();
-                    _emptyText = null;
-                    _showFocus = emphasized;
-                    _hover = null;
-                    RedrawInfo();
                     _target = files.Length == 1 ? files[0] : null;
                     _root = root;
                     _subject = subject;
+
+                    if (_drawing is not null && string.Equals(fingerprint, _fingerprint, StringComparison.Ordinal))
+                    {
+                        // The reading says what the drawing on screen was made from, which is the answer
+                        // most reads of a work that did not change come to.
+                    }
+                    else
+                    {
+                        _fingerprint = fingerprint;
+                        _drawing = VariantGraphDrawing.From(graph, drafts, Words, _measure, emphasized);
+                        _renderer?.Invalidate();
+                        _emptyText = null;
+                        _showFocus = emphasized;
+                        _hover = null;
+                        RedrawInfo();
+                    }
 
                     if (moved || _fitted.Length == 0)
                     {
@@ -1233,6 +1271,7 @@ internal sealed partial class VersionGraphView : Control
     private void ShowMessage(string? said)
     {
         _drawing = null;
+        _fingerprint = string.Empty;
         _emptyText = said;
         _hover = null;
         _glide.Stop();

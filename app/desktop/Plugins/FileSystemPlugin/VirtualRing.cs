@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 
 namespace FileSystemPlugin;
@@ -62,6 +63,9 @@ internal sealed class VirtualRing : Control
 
     /// <summary>Whether the entry is being listened to, which is only while the ring is in a tree.</summary>
     private bool _listening;
+
+    /// <summary>The ancestors whose hiding stops the turn.</summary>
+    private readonly List<Visual> _watched = [];
 
     /// <summary>Draws the ring in the look's own colours, and has the look reach it when it changes.</summary>
     static VirtualRing() => AffectsRender<VirtualRing>(ArcBrushProperty);
@@ -181,6 +185,7 @@ internal sealed class VirtualRing : Control
     {
         _listening = true;
         _entry.PropertyChanged += Told;
+        Watch();
         Spin(_entry.State == VirtualEntryState.Pending);
 
         base.OnAttachedToVisualTree(e);
@@ -191,9 +196,49 @@ internal sealed class VirtualRing : Control
     {
         _listening = false;
         _entry.PropertyChanged -= Told;
+        Unwatch();
         _clock.Stop();
 
         base.OnDetachedFromVisualTree(e);
+    }
+
+    /// <summary>Whether the ring is turning.</summary>
+    internal bool Spinning => _clock.IsEnabled;
+
+    /// <summary>Starts or stops the turn when the dock behind another tab stops being drawn.</summary>
+    /// <param name="sender">The ring or an ancestor.</param>
+    /// <param name="e">What changed.</param>
+    private void VisibilityChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == IsVisibleProperty)
+        {
+            Spin(_entry.State == VirtualEntryState.Pending);
+        }
+    }
+
+    /// <summary>Listens to every control whose hiding would hide this one.</summary>
+    private void Watch()
+    {
+        PropertyChanged += VisibilityChanged;
+
+        foreach (var ancestor in this.GetVisualAncestors())
+        {
+            ancestor.PropertyChanged += VisibilityChanged;
+            _watched.Add(ancestor);
+        }
+    }
+
+    /// <summary>Stops listening to the controls that were watched.</summary>
+    private void Unwatch()
+    {
+        PropertyChanged -= VisibilityChanged;
+
+        foreach (var ancestor in _watched)
+        {
+            ancestor.PropertyChanged -= VisibilityChanged;
+        }
+
+        _watched.Clear();
     }
 
     /// <summary>Says that what the ring draws may be different.</summary>
@@ -223,21 +268,16 @@ internal sealed class VirtualRing : Control
     /// <param name="on">Whether it is to turn.</param>
     private void Spin(bool on)
     {
-        if (!_listening)
+        if (!_listening || !on || !IsEffectivelyVisible)
         {
+            _clock.Stop();
+            _turned = 0;
+            _turning.Angle = 0;
+
             return;
         }
 
-        if (on)
-        {
-            _clock.Start();
-
-            return;
-        }
-
-        _clock.Stop();
-        _turned = 0;
-        _turning.Angle = 0;
+        _clock.Start();
     }
 
     /// <summary>A point on the ring, around its centre.</summary>

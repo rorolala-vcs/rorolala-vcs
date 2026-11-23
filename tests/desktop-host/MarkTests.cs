@@ -1,5 +1,6 @@
 using FileSystemPlugin;
 using RorolalaDesktop.Contract;
+using FileSystem = global::FileSystemPlugin.FileSystemPlugin;
 
 namespace RorolalaDesktopHost.IntegrationTests;
 
@@ -77,6 +78,40 @@ public sealed class MarkTests
         Assert.Equal(1, second.Forgotten);
     }
 
+    /// <summary>A provider is asked about the directory once, however many rows are drawn from it.</summary>
+    /// <remarks>
+    /// The contract says a provider answers for a directory rather than for an entry, and a listing is one
+    /// directory: what a row asks is what the provider already answered for the directory it sits in.
+    /// </remarks>
+    [Fact]
+    public void AProviderIsAskedOnceForADirectoryHoweverManyRowsAreDrawn()
+    {
+        var root = Scratch.New("mark-once");
+
+        for (var at = 0; at < 20; at++)
+        {
+            File.WriteAllText(Path.Combine(root, $"file-{at}.txt"), "x");
+        }
+
+        var services = Host.Services();
+        var host = services.For(new PluginId(FileSystem.Identity), 1);
+        var shared = new Shared(root, new HideRegistry(host.Config), host.Config, host.Files);
+        var browser = new Browser(host.Log, shared, root, host.LogicalViews);
+        var clip = new Clip(host.Log);
+        var files = new Files(host, browser, new BrowserActions(host, browser, clip), clip);
+        var counting = new CountingMarkProvider(root);
+
+        EntryMarkProviders.Register(counting);
+
+        foreach (var entry in files.Items)
+        {
+            files.Badges(entry);
+        }
+
+        Assert.Equal(1, counting.AppliesCount);
+        Assert.Equal(20, counting.MarkCount);
+    }
+
     /// <summary>A provider that speaks for one directory and says one thing about an entry.</summary>
     /// <param name="id">The identity it is offered under.</param>
     /// <param name="directory">The directory it answers for.</param>
@@ -96,5 +131,37 @@ public sealed class MarkTests
 
         /// <inheritdoc />
         public void Forget() => Forgotten++;
+    }
+
+    /// <summary>A provider that counts how often it was asked, and says nothing about any entry.</summary>
+    private sealed class CountingMarkProvider(string directory) : IEntryMarkProvider
+    {
+        /// <inheritdoc />
+        public string Id => "it.mark.counting";
+
+        /// <summary>How many times the provider was asked whether it speaks for a directory.</summary>
+        public int AppliesCount { get; private set; }
+
+        /// <summary>How many entries it was asked about.</summary>
+        public int MarkCount { get; private set; }
+
+        /// <inheritdoc />
+        public bool Applies(string at)
+        {
+            AppliesCount++;
+
+            return string.Equals(at, directory, StringComparison.Ordinal);
+        }
+
+        /// <inheritdoc />
+        public EntryMark Mark(Entry entry)
+        {
+            MarkCount++;
+
+            return new EntryMark();
+        }
+
+        /// <inheritdoc />
+        public void Forget() { }
     }
 }

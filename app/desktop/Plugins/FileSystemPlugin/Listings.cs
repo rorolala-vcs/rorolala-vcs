@@ -1032,6 +1032,14 @@ internal abstract class EntryView<TItem> : EntryView
             }
         }
 
+        // Where each entry stands now, so that one that moved is moved rather than searched for.
+        var position = new Dictionary<object, int>(_listed.Count);
+
+        for (var at = 0; at < _listed.Count; at++)
+        {
+            position[KeyOf(_listed[at])] = at;
+        }
+
         // What is new, and what moved, and what the watcher named: the listing is in the order it is shown, so
         // walking it puts each entry where it belongs and leaves every entry that is already there where it is.
         for (var at = 0; at < wanted.Count; at++)
@@ -1049,17 +1057,28 @@ internal abstract class EntryView<TItem> : EntryView
                 continue;
             }
 
-            for (var other = at + 1; other < _listed.Count; other++)
+            if (position.TryGetValue(key, out var current))
             {
-                if (Equals(KeyOf(_listed[other]), key))
-                {
-                    _listed.RemoveAt(other);
+                _listed.Move(current, at);
 
-                    break;
+                var from = Math.Min(current, at);
+                var to = Math.Max(current, at);
+
+                for (var move = from; move <= to; move++)
+                {
+                    position[KeyOf(_listed[move])] = move;
                 }
+
+                continue;
             }
 
             _listed.Insert(at, item);
+            position[key] = at;
+
+            for (var move = at + 1; move < _listed.Count; move++)
+            {
+                position[KeyOf(_listed[move])] = move;
+            }
         }
 
         _lead = -1;
@@ -3355,7 +3374,7 @@ internal sealed class ListBrowser<TItem> : EntryView<TItem>
 
 /// <summary>The entries of a listing as tiles, wrapping across the width.</summary>
 /// <typeparam name="TItem">What one entry is.</typeparam>
-internal sealed class GridBrowser<TItem> : EntryView<TItem>
+internal sealed class GridBrowser<TItem> : EntryView<TItem>, IGridTileSource
     where TItem : class
 {
     /// <summary>How much room is left around a tile's icon and name, at the least.</summary>
@@ -3382,6 +3401,15 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     /// <summary>How many pixels wide and tall a tile's icon is, and so how wide its name is too.</summary>
     private readonly int _icon;
 
+    /// <summary>A caption that is never drawn, whose font is copied from one that is.</summary>
+    private readonly TextBlock _measure = new() { TextWrapping = TextWrapping.Wrap };
+
+    /// <summary>The width and height of a tile, read without a tile being made.</summary>
+    private readonly GridTileMetrics<TItem> _metrics;
+
+    /// <summary>The panel that packs the tiles into lines, once the list has made it.</summary>
+    private JustifiedVirtualizingPanel? _panel;
+
     /// <summary>How large this grid draws an icon, which a retarget is only allowed to keep.</summary>
     internal int IconSize => _icon;
 
@@ -3397,8 +3425,13 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
         // The tiles of a wrapped line fill the width it is given, so that the grid's outer inset is the room
         // around it and stays put however wide the dock is, the room a line has to spare is spent between
         // its tiles rather than at its ends, and the last line keeps that same room so a short one stands in
-        // the columns above. A grid that never wrapped reads from its start (see JustifiedPanel).
-        List.ItemsPanel = new FuncTemplate<Panel?>(() => new JustifiedPanel { Gap = Gap });
+        // the columns above. A grid that never wrapped reads from its start (see JustifiedLayout).
+        List.ItemsPanel = new FuncTemplate<Panel?>(() =>
+        {
+            _panel = new JustifiedVirtualizingPanel { Gap = Gap, Source = this };
+
+            return _panel;
+        });
 
         // A wrapping grid needs a width to wrap against, and the base theme gives a list a horizontal
         // scrollbar instead: with one, the panel is measured at an unbounded width, lays every tile on one
@@ -3414,7 +3447,7 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
         // A tile at rest is its icon and its name on the dock's own ground: the surface a tile wears is what the
         // choice draws, so it arrives with the selection and leaves with it. What is left on the
         // item is the room above and below a tile, the room across is the panel's, which is what makes the
-        // outermost room the grid's own padding and nothing else (see JustifiedPanel), and the corner the
+        // outermost room the grid's own padding and nothing else (see JustifiedLayout), and the corner the
         // surface is rounded by, which is kept for every state so that a choice does not change the shape of
         // what it is drawn on.
         List.Styles.Add(
@@ -3450,12 +3483,54 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
         );
 
         Present(List);
+
+        // The measuring block is not in the tree: the font it measures with is copied from a caption that
+        // was made for real, so the styles have already reached the block the font came from.
+        _metrics = new GridTileMetrics<TItem>(
+            _measure,
+            icon,
+            Math.Max(Around, BadgeArc.Reach(icon)),
+            item => Source.Name(item),
+            item => Source.Key(item)
+        );
     }
+
+    /// <summary>The width a tile is arranged at, which a panel lays its lines out by.</summary>
+    internal double TileWidth => _metrics.Width;
+
+    /// <summary>How tall one entry's tile is, which a panel lays its lines out by.</summary>
+    /// <param name="item">The entry.</param>
+    /// <returns>The height.</returns>
+    internal double HeightOf(TItem item) => _metrics.HeightOf(item);
+
+    /// <summary>Takes the fixed part of a tile from one that was made for real.</summary>
+    /// <param name="item">The container, as it was measured.</param>
+    /// <param name="source">The entry it stands for.</param>
+    internal void Calibrate(Control item, TItem source)
+    {
+        if (item.GetVisualDescendants().OfType<TileSlot>().FirstOrDefault() is { } slot)
+        {
+            _metrics.Calibrate(item, source, slot.Caption);
+        }
+    }
+
+    /// <inheritdoc />
+    double IGridTileSource.TileWidth => TileWidth;
+
+    /// <inheritdoc />
+    double IGridTileSource.HeightOf(int index) => HeightOf(Source.Items[index]);
+
+    /// <inheritdoc />
+    void IGridTileSource.Calibrate(Control item, int index) => Calibrate(item, Source.Items[index]);
 
     /// <summary>Reads another listing into the same grid.</summary>
     /// <param name="source">The listing the grid is to show now.</param>
     /// <param name="keepScroll">Whether the reader keeps the place they had scrolled to.</param>
-    internal void Retarget(Listing<TItem> source, bool keepScroll) => Rebind(source, keepScroll);
+    internal void Retarget(Listing<TItem> source, bool keepScroll)
+    {
+        _metrics.Forget();
+        Rebind(source, keepScroll);
+    }
 
     /// <summary>One entry as a tile: its picture above its name, the name wrapped rather than cut off.</summary>
     /// <remarks>
@@ -3463,45 +3538,18 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     /// than as a picture with a caption under it that happens to start somewhere else. A name that does not
     /// fit on one line is carried onto the next, since a name cut short is a name the reader has to open the
     /// entry to read: the tile is as tall as its name needs, and the line it stands on is as tall as its
-    /// tallest tile (see <see cref="JustifiedPanel"/>).
+    /// tallest tile (see <see cref="JustifiedLayout"/>).
     /// </remarks>
     /// <param name="item">The entry to draw.</param>
     protected override Control Item(TItem item) => Prepared(item, Tile(item));
 
-    /// <summary>
-    /// How many tiles the layout put on a line.
-    /// </summary>
+    /// <summary>How many tiles the layout put on a line.</summary>
     /// <remarks>
-    /// Read from where the tiles actually landed rather than worked out from a width, because how wide a
-    /// tile is is this view's own business and the layout has already decided. The first line is on screen
-    /// whenever anything is, so the break is found by walking until one tile stands lower than the first.
+    /// The panel packs the lines, so the panel is what says how many tiles a line holds: a scan of the
+    /// containers would only read the same answer back, and could not read it at all for a line that is not
+    /// on screen.
     /// </remarks>
-    protected override int Columns()
-    {
-        var count = Items.Count;
-
-        if (count <= 1 || List.ContainerFromIndex(0) is not { } first)
-        {
-            return 1;
-        }
-
-        var top = first.Bounds.Y;
-
-        for (var at = 1; at < count; at++)
-        {
-            if (List.ContainerFromIndex(at) is not { } next)
-            {
-                return at;
-            }
-
-            if (next.Bounds.Y > top + 0.5)
-            {
-                return at;
-            }
-        }
-
-        return count;
-    }
+    protected override int Columns() => _panel is { Columns: > 0 } panel ? panel.Columns : 1;
 
     /// <inheritdoc />
     private Control Tile(TItem item)
@@ -3515,18 +3563,10 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
         // past that box is not drawn at all, and what stands in it is not pointed at.
         var room = Math.Max(Around, BadgeArc.Reach(_icon));
 
-        var tile = new Border
-        {
-            Padding = new Thickness(room),
-            CornerRadius = new CornerRadius(8),
-            Child = new StackPanel
-            {
-                Spacing = 8,
-                Children = { Source.Marked(item, _icon), Caption(item) },
-            },
-        };
-
-        return tile;
+        // The picture is built when the tile comes near the viewport, so a directory of thousands does not ask
+        // for thousands of previews before its first frame. The caption is made at once because it is what
+        // decides the tile's height.
+        return new TileSlot(() => Source.Marked(item, _icon), Caption(item), _icon, room);
     }
 
     /// <summary>
@@ -3546,7 +3586,7 @@ internal sealed class GridBrowser<TItem> : EntryView<TItem>
     /// </remarks>
     /// <param name="item">The entry to draw.</param>
     /// <returns>What to draw where the name goes.</returns>
-    private Control Caption(TItem item)
+    private TextBlock Caption(TItem item)
     {
         var name = new TextBlock
         {

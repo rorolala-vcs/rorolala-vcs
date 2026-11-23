@@ -100,7 +100,15 @@ program is asked for, and the Overview's own timer goes on reading the work whil
 
 `rola storage sync-all` now carries content with as many reads in flight as `--concurrency` names, held to what the Vault is set to serve, which is what every command that moves content already does. What carries the ask is the action's input, which was empty until now and read by neither end. A Workspace and a Vault of different versions therefore cannot run `rola storage sync-all` against each other: upgrade both ends together. A caller that reaches the action through the C ABI is unaffected, since an empty input still means the default window.
 
-### 3. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event
+### 3. [`app`] [`RorolalaDesktop`] Draw a large directory, the Version Graph and the terminal with less work
+
+The file browser's grid now realizes only the lines its viewport reaches. A tile's picture, its preview and the badges it wears are built when the tile comes near the viewport and let go when it is far from it, so opening a directory of thousands of entries no longer makes a tile, a preview request and a provider walk for every one of them before the first frame. The grid keeps the line packing, the room around a picture, the wrapped name and the scroll extent of the grid it replaces, and a small tile still measures the same. The providers that speak for a directory are asked once for that directory rather than once per row, the preview cache drops its oldest answer instead of all of them, the system icon theme is resolved once per run rather than once per kind of file, and a reordered listing is aligned by a lookup rather than by a search.
+
+The Version Graph computes the counts and the hover's lineage when the drawing or the pointer changes rather than on every frame, reuses its brushes, pens and broken lines, culls the ghost nodes outside the viewport, and skips an edge whose hull the pointer is not in before sampling it. The terminal and the ring over a pending entry stop their clocks while the dock holding them is behind another tab.
+
+Nothing about what is drawn changes: the same tiles, the same cards, the same words and the same colours, at the same places and the same scroll extents.
+
+### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Redraw a dock once for a change instead of once per event
 
 The File System plugin's directory dock and folder tree hand what a change asks for to one queue,
 `Frame`, which runs it once at the end of the turn. Several events raised by one step, one read or
@@ -113,15 +121,15 @@ to. What an eye, a hide rule or a badge strip says is redrawn only when the answ
 
 The navigation bar asks for one toolbar update per turn as well.
 
-### 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing
+### 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing
 
 A background fetch that brings the Vault's Layout already here no longer tells the listing and the readings that the files changed. The run fingerprints the copy's generation pointer and the fetched ignore rules before and after the exchange; when both are the same, the view is left as it is. A foreground change still reads once its next fetch ends, and a refresh the user asked for still reads when it finishes.
 
-### 5. [`modules`] [`daemon`] [`sync_storage`] Read a content's chunks with the window in flight again
+### 6. [`modules`] [`daemon`] [`sync_storage`] Read a content's chunks with the window in flight again
 
 A sync's sending side read a chunked content one chunk at a time, opening every pack afresh for each of them, after the window it was granted stopped being passed down. The chunks are once again read through one batch per store with that many reads in flight, in the manifest's order, and the sending side no longer hashes what the receiving side checks on arrival. This is the carrying every command that moves content goes through, `rola bring`, `rola sync`, `rola align`, `rola retrack` and `rola fetch` included.
 
-### 6. [`modules`] [`storage`] [`content`] Publish a content into packs instead of a file apiece
+### 7. [`modules`] [`storage`] [`content`] Publish a content into packs instead of a file apiece
 
 A store publishing another store's content wrote one file for each chunk, and read each chunk through a batch of its own. The content is now read through one batch of the source and written through one batch of the target, so a content of ten thousand chunks is two packs rather than ten thousand files.
 

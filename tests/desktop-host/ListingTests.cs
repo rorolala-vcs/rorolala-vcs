@@ -1,3 +1,5 @@
+using Avalonia.Controls;
+using Avalonia.VisualTree;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
 using FileSystemPlugin;
@@ -169,6 +171,76 @@ public sealed class ListingTests
 
         Assert.False(shared.Dims(new Entry(hidden, EntryKind.File)));
         Assert.True(shared.Dims(new Entry(hiddenDirectory, EntryKind.Directory)));
+    }
+
+    /// <summary>A listing read again in another order keeps the entries it drew, and only moves them.</summary>
+    /// <remarks>
+    /// Every read of a directory is a new list of new entries, and what a view holds is the entries from the
+    /// read before. Aligning the two by a lookup rather than a scan is what keeps a reordered listing from
+    /// being a square of comparisons; the entries that did not change are still the same objects.
+    /// </remarks>
+    [Fact]
+    public void AReorderedListingMovesItsEntriesRatherThanMakingThemAgain()
+    {
+        var root = Scratch.New("listing-order");
+        var entries = Enumerable
+            .Range(0, 100)
+            .Select(at => new Entry(Path.Combine(root, $"file-{at:000}.txt"), EntryKind.File))
+            .ToArray();
+
+        var services = Host.Services();
+        var host = services.For(new PluginId(FileSystem.Identity), 1);
+        var grid = new GridBrowser<Entry>(host, new PlainListing(host, entries), 64);
+        var window = new Window { Width = 900, Height = 600, Content = grid };
+
+        window.Show();
+
+        try
+        {
+            var list = grid.GetVisualDescendants().OfType<ListBox>().First();
+
+            grid.Assign(new PlainListing(host, [.. Enumerable.Reverse(entries)]));
+            grid.Apply();
+
+            var shown = list.Items.OfType<Entry>().ToArray();
+
+            Assert.Equal(entries.Length, shown.Length);
+
+            for (var at = 0; at < shown.Length; at++)
+            {
+                Assert.Same(entries[entries.Length - 1 - at], shown[at]);
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>A listing of entries that draws nothing, for what a view does with the order alone.</summary>
+    private sealed class PlainListing(IPluginHost host, IReadOnlyList<Entry> items)
+        : Listing<Entry>(host, items)
+    {
+        /// <inheritdoc />
+        public override object Key(Entry item) => item.Path;
+
+        /// <inheritdoc />
+        public override string Name(Entry item) => Path.GetFileName(item.Path);
+
+        /// <inheritdoc />
+        public override Control Icon(Entry item, int size) => new Border { Width = size, Height = size };
+
+        /// <inheritdoc />
+        public override void Open(Entry item) { }
+
+        /// <inheritdoc />
+        public override void Fill(
+            ContextMenu menu,
+            Control from,
+            IReadOnlyList<Entry> chosen,
+            bool force,
+            string? words = null
+        ) { }
     }
 
     /// <summary>What a listing shows, by name, in the order it shows it.</summary>

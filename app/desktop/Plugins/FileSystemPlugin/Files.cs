@@ -68,6 +68,18 @@ internal sealed class Files : Listing<Entry>
     /// </remarks>
     private readonly Dictionary<Entry, Facts> _facts = [];
 
+    /// <summary>
+    /// The providers that speak for the directory the rows are drawn for, resolved once.
+    /// </summary>
+    /// <remarks>
+    /// A provider answers for a directory rather than for one entry, and a listing is all of one directory:
+    /// asking every provider again for every row would repeat the same walk of the tree for every tile.
+    /// </remarks>
+    private IReadOnlyList<IEntryMarkProvider>? _providers;
+
+    /// <summary>The directory <see cref="_providers"/> was resolved for.</summary>
+    private string? _providersFor;
+
     /// <summary>Makes the listing of a directory the location is looking at.</summary>
     /// <param name="host">The host, for what cannot be done.</param>
     /// <param name="browser">The location, which is where the entries are read from.</param>
@@ -168,7 +180,7 @@ internal sealed class Files : Listing<Entry>
         // says something about the entry it is worn by rather than about the view it is worn in.
         var directory = Path.GetDirectoryName(item.Path) is { Length: > 0 } parent ? parent : _browser.Current;
 
-        foreach (var provider in EntryMarkProviders.For(directory))
+        foreach (var provider in Providers(directory))
         {
             if (
                 provider.Mark(item) is { IconKey: { Length: > 0 } key } mark
@@ -180,6 +192,22 @@ internal sealed class Files : Listing<Entry>
         }
 
         return badges;
+    }
+
+    /// <summary>The providers that speak for a directory, resolved once for the listing.</summary>
+    /// <param name="directory">The directory the entries belong to.</param>
+    /// <returns>The providers, in the order they were registered.</returns>
+    private IReadOnlyList<IEntryMarkProvider> Providers(string directory)
+    {
+        if (_providers is not null && string.Equals(_providersFor, directory, StringComparison.Ordinal))
+        {
+            return _providers;
+        }
+
+        _providers = EntryMarkProviders.For(directory);
+        _providersFor = directory;
+
+        return _providers;
     }
 
     /// <inheritdoc />
