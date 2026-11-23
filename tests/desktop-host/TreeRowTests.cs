@@ -319,7 +319,14 @@ public sealed class TreeRowTests
         var nested = Path.Combine(directory, "one", "two");
 
         Directory.CreateDirectory(nested);
+
+        // A level's line runs through the rows below it only while its step has a row after it, and
+        // closes on the last one. Every level here therefore needs a sibling after it, or its line
+        // would stop at the turn and the row would not draw one guide per level above it.
+        Directory.CreateDirectory(Path.Combine(directory, "one-b"));
+        Directory.CreateDirectory(Path.Combine(directory, "one", "two-b"));
         File.WriteAllText(Path.Combine(nested, "hero.psd"), "x");
+        File.WriteAllText(Path.Combine(nested, "z.psd"), "x");
 
         var (window, _) = OpenAt(directory, width: 400);
 
