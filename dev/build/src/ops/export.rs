@@ -205,6 +205,19 @@ pub fn export_artifacts(userdata_name: &str, self_contained: bool) -> Result<(),
     let header = workspace.header()?;
     fs::copy_file(&header, &library.join("rorolala.h"))?;
 
+    // The C++ layer: the hand-written headers, the generated layer beside them, and the C header
+    // under the include root the generated files include it from. The generator runs here rather
+    // than in a consumer's build, and its own compile step is what makes a generated header that
+    // does not compile fail this export.
+    crate::cpp::lay_out_includes(
+        &workspace,
+        &build.join("include"),
+        &library.join("rorolala.h"),
+    )?;
+
+    // The package a CMake consumer finds, naming the same headers and the library laid out above.
+    crate::cpp::write_package(&workspace, &library)?;
+
     // Every program is laid down beside the others, so that a word of `rola`'s reaches the program
     // it names, `rola jj` is `rola-jj`.
     for program in PROGRAMS.into_iter().chain(PROGRAMS_WITHOUT_COMPLETIONS) {

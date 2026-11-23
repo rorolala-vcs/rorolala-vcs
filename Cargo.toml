@@ -11,6 +11,7 @@ members = [
     "dev/bindgen",
     "dev/book-index",
     "dev/chunker-harness",
+    "dev/cpp-bindgen",
     "dev/i18n-check",
     "dev/icons",
     "dev/rsharp-bindgen",

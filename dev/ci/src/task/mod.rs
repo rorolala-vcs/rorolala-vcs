@@ -10,6 +10,7 @@ use crate::reporter::Reporter;
 
 pub mod check;
 pub mod clippy;
+pub mod cpp_header;
 pub mod doc;
 pub mod doc_open;
 pub mod dotnet_check;
@@ -27,8 +28,9 @@ pub mod test;
 // reason they are there.
 #[allow(clippy::wildcard_imports, clippy::redundant_pub_crate)]
 pub(crate) use {
-    check::*, clippy::*, doc::*, doc_open::*, dotnet_check::*, dotnet_integration_test::*,
-    dotnet_lint::*, fmt::*, fmt_check::*, generated::*, i18n::*, integration_test::*, test::*,
+    check::*, clippy::*, cpp_header::*, doc::*, doc_open::*, dotnet_check::*,
+    dotnet_integration_test::*, dotnet_lint::*, fmt::*, fmt_check::*, generated::*, i18n::*,
+    integration_test::*, test::*,
 };
 
 /// Runs one check, records how it ended, and gives its status to the run.

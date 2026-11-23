@@ -45,6 +45,9 @@ const COMPLETION_DIR_IN_TARGET: &str = "mingling";
 /// The directory inside cargo's output that release artifacts are written to.
 const RELEASE_DIR_IN_TARGET: &str = "release";
 
+/// The directory inside cargo's output that a development build's artifacts are written to.
+const DEBUG_DIR_IN_TARGET: &str = "debug";
+
 /// The variable cargo reads the triple a build is for from.
 const CARGO_BUILD_TARGET: &str = "CARGO_BUILD_TARGET";
 
@@ -163,16 +166,26 @@ impl Workspace {
             .filter(|triple| !triple.is_empty())
     }
 
+    /// Where cargo writes one profile's artifacts, `debug` or `release`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::target_dir`].
+    pub fn profile_dir(&self, profile: &str) -> Result<PathBuf, Error> {
+        Ok(profile_dir_in(
+            self.target_dir()?,
+            self.target_triple().as_deref(),
+            profile,
+        ))
+    }
+
     /// Where cargo writes the release artifacts.
     ///
     /// # Errors
     ///
     /// As [`Self::target_dir`].
     pub fn release_dir(&self) -> Result<PathBuf, Error> {
-        Ok(release_dir_in(
-            self.target_dir()?,
-            self.target_triple().as_deref(),
-        ))
+        self.profile_dir(RELEASE_DIR_IN_TARGET)
     }
 
     /// The generated C header, written by the root build script while the library builds.
@@ -182,6 +195,18 @@ impl Workspace {
     /// As [`Self::target_dir`].
     pub fn header(&self) -> Result<PathBuf, Error> {
         Ok(self.release_dir()?.join(HEADER_IN_RELEASE))
+    }
+
+    /// The same header as a development build writes it, which is what a by-hand C++ generation
+    /// reads rather than waiting for a release build.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::target_dir`].
+    pub fn debug_header(&self) -> Result<PathBuf, Error> {
+        Ok(self
+            .profile_dir(DEBUG_DIR_IN_TARGET)?
+            .join(HEADER_IN_RELEASE))
     }
 
     /// The directory mingling writes the completion scripts into while the programs compile.
@@ -589,16 +614,17 @@ fn plugin_names(entries: &[(String, bool)]) -> Vec<String> {
     names
 }
 
-/// Where cargo writes release artifacts, given its target directory and the triple a build is for.
+/// Where cargo writes one profile's artifacts, given its target directory and the triple a build
+/// is for.
 ///
 /// Cargo puts a named triple between the target directory and the profile; a build for the machine it
 /// runs on has no such directory, so nothing is added.
-fn release_dir_in(mut target: PathBuf, triple: Option<&str>) -> PathBuf {
+fn profile_dir_in(mut target: PathBuf, triple: Option<&str>, profile: &str) -> PathBuf {
     if let Some(triple) = triple {
         target.push(triple);
     }
 
-    target.join(RELEASE_DIR_IN_TARGET)
+    target.join(profile)
 }
 
 /// A directory a build writes to, from an override or the default, refused when it does not stay
@@ -650,7 +676,7 @@ mod tests {
 
     use super::{
         checked_relative, declares_a_workspace, description_of, homepage_of, license_of,
-        maintainer_of, plugin_names, publisher_of, release_dir_in, version_of,
+        maintainer_of, plugin_names, profile_dir_in, publisher_of, version_of,
     };
 
     #[test]
@@ -729,14 +755,20 @@ mod tests {
 
         // A build for this machine: cargo writes straight into the target directory.
         assert_eq!(
-            release_dir_in(target.clone(), None),
+            profile_dir_in(target.clone(), None, "release"),
             PathBuf::from(".cache/rs-target/release")
         );
 
         // A build for another: cargo puts the triple in between, and so must the lookup.
         assert_eq!(
-            release_dir_in(target, Some("x86_64-unknown-linux-musl")),
+            profile_dir_in(target.clone(), Some("x86_64-unknown-linux-musl"), "release"),
             PathBuf::from(".cache/rs-target/x86_64-unknown-linux-musl/release")
+        );
+
+        // A development build sits beside it, under the same rule.
+        assert_eq!(
+            profile_dir_in(target, None, "debug"),
+            PathBuf::from(".cache/rs-target/debug")
         );
     }
 

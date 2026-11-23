@@ -12,6 +12,7 @@ CHECKS:
    doc            Build the API documentation of every crate
    doc-open       Build the API documentation, then open it
    generated      Check that the files the build writes into the tree are the sources' own
+   cpp-header     Compile the C++ umbrella header as a translation unit of its own
    integration-test  Run every integration suite under `tests/`, cargo and .NET
    dotnet-lint    Lint the .NET side of the workspace, with every analyzer rule
    dotnet-check   Build and test the .NET side of the workspace

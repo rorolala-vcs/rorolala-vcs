@@ -1,0 +1,21 @@
+[package]
+name = "it-ffi-cxx"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+# The Workspace and tree fixtures are made through the library, so what a C++ program reads is what
+# the commands would have left there rather than a hand-written copy of the formats.
+librorolala = { path = "../.." }
+rorolala-utils-configure = { path = "../../utils/configure" }
+rorolala-utils-location = { path = "../../utils/location" }
+rorolala-utils-sandbox = { path = "../../utils/sandbox" }
+# The daemon area needs an account, which is a private key file. The key is made here from a fixed
+# seed rather than committed, so the fixture says where it came from.
+ed25519-dalek = { version = "2.2.0", features = ["pkcs8", "pem"] }
+# The PKCS#8 encoding the auth crate's keys are written in. The type of the line ending is the
+# crate's own, so it is named directly rather than through the re-export that omits it.
+pkcs8 = { version = "0.10.2", features = ["pem"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread"] }
+uuid = "1"

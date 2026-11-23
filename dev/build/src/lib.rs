@@ -30,6 +30,7 @@ use mingling::{
 };
 
 pub mod appimagetool;
+pub mod cpp;
 pub mod dotnet;
 pub mod error;
 mod fs;

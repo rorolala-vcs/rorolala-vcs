@@ -5,7 +5,8 @@
 //! it is the one that is forgotten, `fmt` rewrites the sources in place, so nothing else here would
 //! notice a crate that was left unformatted. The i18n check follows it for the same reason, and
 //! `generated` after the build rather than before it: what it checks is whether the build changed
-//! the files it generates, which only a build can answer.
+//! the files it generates, which only a build can answer. `cpp-header` follows it, because the
+//! generated C++ layer it compiles is written from the header the build produces.
 //!
 //! A step that fails stops the run, which is what a shell's `set -e` gave the scripts this replaces:
 //! the status handed on is the step's own. What the run recorded is rendered afterwards, so a failed
@@ -18,11 +19,11 @@ use mingling::{
 };
 
 use super::{
-    StateClippy, StateDoc, StateDotnetCheck, StateDotnetLint, StateFmtCheck, StateGenerated,
-    StateI18n, StateIntegrationTest, StateTest, clippy::handle_clippy, doc::handle_doc,
-    dotnet_check::handle_dotnet_check, dotnet_lint::handle_dotnet_lint,
-    fmt_check::handle_fmt_check, generated::handle_generated, i18n::handle_i18n,
-    integration_test::handle_integration_test, run_check, test::handle_test,
+    StateClippy, StateCppHeader, StateDoc, StateDotnetCheck, StateDotnetLint, StateFmtCheck,
+    StateGenerated, StateI18n, StateIntegrationTest, StateTest, clippy::handle_clippy,
+    cpp_header::handle_cpp_header, doc::handle_doc, dotnet_check::handle_dotnet_check,
+    dotnet_lint::handle_dotnet_lint, fmt_check::handle_fmt_check, generated::handle_generated,
+    i18n::handle_i18n, integration_test::handle_integration_test, run_check, test::handle_test,
 };
 use crate::{Next, reporter::Reporter};
 
@@ -61,7 +62,7 @@ pub fn handle_check(_state: StateCheck, ec: &mut ResExitCode) -> Next {
     // The report is of this run rather than of the runs before it.
     Reporter::new().clean();
 
-    let steps: [Step; 10] = [
+    let steps: [Step; 11] = [
         |ec| {
             handle_fmt_check(StateFmtCheck, ec);
         },
@@ -74,6 +75,9 @@ pub fn handle_check(_state: StateCheck, ec: &mut ResExitCode) -> Next {
         build,
         |ec| {
             handle_generated(StateGenerated, ec);
+        },
+        |ec| {
+            handle_cpp_header(StateCppHeader, ec);
         },
         |ec| {
             handle_clippy(StateClippy, ec);

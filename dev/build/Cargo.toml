@@ -22,6 +22,10 @@ mingling = { git = "https://github.com/mingling-rs/mingling", rev = "09c2205267f
 # while the header itself is gone. The build tool writes it itself before handing the ABI over.
 rorolala-dev-bindgen = { path = "../bindgen" }
 
+# The C++ layer's generated headers are produced by the same program a person runs by hand, so an
+# export and a check cannot disagree about what the generated layer says.
+rororala-dev-cpp-bindgen = { path = "../cpp-bindgen" }
+
 # What a build's user data directory is called and what sits under it. The C windows are told the
 # same paths this crate composes, so the layout is not restated in their scripts.
 rorolala-utils-constants = { path = "../../utils/constants" }

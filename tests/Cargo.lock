@@ -1087,6 +1087,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "it-ffi-cxx"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "librorolala",
+ "pkcs8 0.10.2",
+ "rorolala-utils-configure",
+ "rorolala-utils-location",
+ "rorolala-utils-sandbox",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "it-git-rola"
 version = "0.1.0"
 dependencies = [

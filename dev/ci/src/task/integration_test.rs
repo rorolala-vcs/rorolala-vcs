@@ -36,6 +36,10 @@ pub struct StateIntegrationTest;
 /// The suite that compiles C against the built shared library, and so needs one to exist.
 const FFI_SUITE: &str = "ffi-c";
 
+/// The suite that compiles C++ against the generated and hand-written headers, and needs the same
+/// library.
+const CXX_SUITE: &str = "ffi-cxx";
+
 /// Whether this build is for a musl target, which has no shared library to link against.
 fn is_musl(workspace: &Workspace) -> bool {
     workspace
@@ -45,10 +49,11 @@ fn is_musl(workspace: &Workspace) -> bool {
 
 /// Why a suite is not run here, when it is not.
 ///
-/// Only the C ABI suite has a reason, and it has two: it links the shared library, which a musl
-/// target does not make, and it is POSIX C, which a platform whose C toolchain is not is not.
+/// Only the two compiled-against-the-library suites have a reason, and they share it: both link the
+/// shared library, which a musl target does not make, and both are POSIX programs, which a platform
+/// whose C and C++ toolchains are not is not.
 fn skipped(suite: &str, workspace: &Workspace) -> Option<&'static str> {
-    if suite != FFI_SUITE {
+    if suite != FFI_SUITE && suite != CXX_SUITE {
         return None;
     }
 
@@ -57,7 +62,11 @@ fn skipped(suite: &str, workspace: &Workspace) -> Option<&'static str> {
     }
 
     if cfg!(windows) {
-        return Some("the suite is POSIX C, and this platform's C toolchain is not");
+        return Some(if suite == FFI_SUITE {
+            "the suite is POSIX C, and this platform's C toolchain is not"
+        } else {
+            "the suite is POSIX C++, and this platform's C++ toolchain is not"
+        });
     }
 
     None
@@ -81,12 +90,13 @@ fn run_integration_test() -> Result<(), Error> {
             .unwrap_or_default()
             .to_owned();
 
-        // The C ABI is met by compiling C against the built shared library and linking it, and that
-        // needs two things this run may not have: a shared library, which a musl build does not make
-        // (rustc refuses a `cdylib` whose C runtime is static, and the dynamic one needs a musl
-        // `libgcc_s` a glibc machine does not carry, see `rola_build::ops::library`), and a POSIX C
-        // toolchain, which the suite is written for: `mkdtemp`, `cc -std=c11`, `-Wl,-rpath,`. The
-        // suite is skipped where either is missing and run where both hold.
+        // The C and C++ ABI suites are met by compiling programs against the built shared library
+        // and linking it, and that needs two things this run may not have: a shared library, which
+        // a musl build does not make (rustc refuses a `cdylib` whose C runtime is static, and the
+        // dynamic one needs a musl `libgcc_s` a glibc machine does not carry, see
+        // `rola_build::ops::library`), and a POSIX C or C++ toolchain, which the suites are written
+        // for: `mkdtemp`, `cc -std=c11`, `c++ -std=c++23`, `-Wl,-rpath,`. A suite is skipped where
+        // either is missing and run where both hold.
         if let Some(reason) = skipped(&name, &workspace) {
             println!("==> {name}/ skipped: {reason}");
             continue;

@@ -1,0 +1,8 @@
+[package]
+name = "rororala-dev-cpp-bindgen"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "cpp-bindgen"
+path = "src/main.rs"

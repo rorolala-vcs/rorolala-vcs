@@ -125,6 +125,7 @@ dependencies = [
  "mingling",
  "rorolala-dev-bindgen",
  "rorolala-utils-constants",
+ "rororala-dev-cpp-bindgen",
  "serde",
  "serde_yaml",
  "toml",
@@ -173,6 +174,10 @@ dependencies = [
  "rorolala-utils-lazyffi-core",
  "syn 3.0.9",
 ]
+
+[[package]]
+name = "rororala-dev-cpp-bindgen"
+version = "0.4.0"
 
 [[package]]
 name = "ryu"

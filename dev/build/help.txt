@@ -10,6 +10,7 @@ BUILD:
    icons         Draw the Desktop's pictures from the icon sets the tree carries
    fonts         Fetch the Noto Sans face the Desktop is drawn in, at its pinned commit
    adwaita       Fetch the Adwaita pictures the file listing draws with, at the release the set pins
+   cpp-bindgen   Write the C++ generated headers from the development build's C header
    chunker       Run the chunking harness: its own options are passed through unchanged
    desktop       Lay the Desktop program, its launcher and its plugins out (--userdata-name=<name>)
    export        Lay the build out for hand-off under `build/` (--userdata-name=<name>, default develop)

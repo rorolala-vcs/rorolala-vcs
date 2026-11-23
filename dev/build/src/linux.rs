@@ -507,6 +507,23 @@ fn dev_package(
         &build.join("lib/rorolala.h"),
         &root.join("usr/include/rorolala.h"),
     )?;
+
+    // The C++ layer is headers and a CMake package, so it is installed beside the C header rather
+    // than built: what a consumer compiles is the same layer an export lays out. The umbrella at
+    // the include root is the name a consumer includes, and the directory beside it holds the
+    // headers it names.
+    fs::copy_file(
+        &build.join("include/rola_plus_plus.hpp"),
+        &root.join("usr/include/rola_plus_plus.hpp"),
+    )?;
+    fs::copy_directory(
+        &build.join("include/rola_plus_plus"),
+        &root.join("usr/include/rola_plus_plus"),
+    )?;
+    fs::copy_directory(
+        &build.join("lib/cmake/rola_plus_plus"),
+        &root.join("usr/lib/cmake/rola_plus_plus"),
+    )?;
     // A musl build has no shared library: a `cdylib` needs a dynamic C runtime, and the musl
     // target makes the static one alone (see `ops/library.rs`). What is there is copied; what is
     // not is the desktop tree's own, which was built for the machine that runs it.
