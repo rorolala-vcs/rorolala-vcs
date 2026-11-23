@@ -81,11 +81,19 @@ public sealed class FolderColourTests
             var markedEntry = Assert.Single(list.Items.OfType<Entry>(), item => item.Path == marked);
             var markedTile = Assert.IsType<ListBoxItem>(list.ContainerFromItem(markedEntry));
 
-            // The colour is the marked entry's own answer, and it is taken as the hue of the entry's picture.
-            Assert.Contains(
-                markedTile.GetVisualDescendants().OfType<Image>(),
-                image => image.BlendMode == BitmapBlendingMode.Hue
-            );
+            // The colour is the marked entry's own answer: the hue of it over the entry's picture, or, on a
+            // machine whose theme holds no picture for the entry, the colour of the square that stands in
+            // for it. Both are the icon saying the folder's own colour rather than a colour under it.
+            var icon = markedTile.GetVisualDescendants().ToArray();
+            var wearing =
+                icon.OfType<Image>().Any(image => image.BlendMode == BitmapBlendingMode.Hue)
+                || icon
+                    .OfType<Border>()
+                    .Any(border =>
+                        border.Background is ISolidColorBrush brush && brush.Color == Colors.Red
+                    );
+
+            Assert.True(wearing, "the marked folder wears no colour on its icon");
 
             // A row under it inherits the colour, and an inherited row carries neither a tint nor a line under
             // its name: the colour belongs to the folder it was given to.

@@ -154,18 +154,34 @@ internal static partial class Icons
             return Virtual(drawn, picture, virtualEntry, size, mark);
         }
 
-        // A directory a provider marks carries the colour on its own picture: the hue of that colour over the
+        // A directory a provider marks carries the colour on its own icon: the hue of that colour over the
         // set's or the system's picture, the same blend a lost entry takes its red from. A row that only
         // inherits a colour is not tinted, since the colour is the marked entry's own answer rather than a
         // second one about everything under it.
-        if (picture is not null && FolderColours.Mark(entry) is { } tint)
+        //
+        // A machine whose theme holds no picture for the entry draws this plugin's own square instead, and
+        // that square has no colours of its own to keep: it is drawn in the mark's colour, as the fallback
+        // mark of a lost entry is drawn in its red.
+        if (FolderColours.Mark(entry) is { } tint)
         {
-            var ringed = new Grid { Width = size, Height = size };
+            if (drawn is Border fallback)
+            {
+                // The fallback square is this plugin's own rather than a picture, so it has no colours
+                // of its own to keep: it takes the mark's colour, as a lost entry's takes its red.
+                fallback.Background = new SolidColorBrush(tint);
 
-            ringed.Children.Add(drawn);
-            ringed.Children.Add(Hue(picture, tint, size));
+                return fallback;
+            }
 
-            return ringed;
+            if (picture is not null)
+            {
+                var ringed = new Grid { Width = size, Height = size };
+
+                ringed.Children.Add(drawn);
+                ringed.Children.Add(Hue(picture, tint, size));
+
+                return ringed;
+            }
         }
 
         return drawn;

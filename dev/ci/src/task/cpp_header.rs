@@ -100,12 +100,13 @@ fn lays_out_and_compiles(
     ])
 }
 
-/// The C++23 compiler the check runs, from `CXX`, `c++`, `clang++`, or the LLVM install Windows
-/// does not put on the path.
+/// The C++23 compiler the check runs, from `CXX`, the compiler the platform pairs with its own
+/// standard library, the other of the two, or the LLVM install Windows does not put on the path.
 ///
-/// Each candidate is asked to compile an empty translation unit at C++23 before it is chosen. A
-/// name on the path that is a compiler but a C++17 one answers the same way a missing one does, and
-/// which is which is the candidate's own reply rather than a version number read off text.
+/// Each candidate is asked to compile a C++23 program that uses `std::expected` before it is chosen,
+/// not an empty translation unit: a compiler can accept `-std=c++23` while the standard library
+/// behind it has no `<expected>`, and the layer does. Which is which is the candidate's own reply
+/// rather than a version number read off text.
 fn find_compiler() -> Option<Tool> {
     let mut candidates: Vec<OsString> = Vec::new();
 
@@ -113,18 +114,31 @@ fn find_compiler() -> Option<Tool> {
         candidates.push(cxx);
     }
 
-    candidates.push(OsString::from("c++"));
-    candidates.push(OsString::from("clang++"));
-
     #[cfg(windows)]
-    candidates.push(OsString::from(r"C:\Program Files\LLVM\bin\clang++.exe"));
+    {
+        candidates.push(OsString::from("clang++"));
+        candidates.push(OsString::from("c++"));
+        candidates.push(OsString::from(r"C:\Program Files\LLVM\bin\clang++.exe"));
+    }
+
+    #[cfg(not(windows))]
+    {
+        candidates.push(OsString::from("c++"));
+        candidates.push(OsString::from("clang++"));
+    }
 
     candidates
         .into_iter()
         .find_map(|candidate| supports_cxx23(&candidate).then(|| Tool::at(candidate)))
 }
 
-/// Whether a program compiles an empty translation unit at C++23.
+/// A translation unit that needs what the layer needs: `<expected>` and an `unexpected`.
+const PROBE: &str = "\
+#include <expected>\n\
+std::expected<int, int> probe() { return std::unexpected(1); }\n\
+int main() { return probe().has_value() ? 1 : 0; }\n";
+
+/// Whether a program compiles C++23 with `std::expected`.
 fn supports_cxx23(candidate: &OsStr) -> bool {
     let mut probe = Command::new(candidate);
     probe
@@ -147,7 +161,7 @@ fn supports_cxx23(candidate: &OsStr) -> bool {
     };
 
     if let Some(mut input) = child.stdin.take() {
-        let _ = input.write_all(b"int main() {}\n");
+        let _ = input.write_all(PROBE.as_bytes());
     }
 
     child.wait().is_ok_and(|status| status.success())

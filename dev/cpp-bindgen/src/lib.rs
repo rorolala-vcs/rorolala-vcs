@@ -22,8 +22,9 @@ use std::error::Error as StdError;
 use std::fmt::{self, Write as _};
 use std::fs;
 use std::io;
+use std::io::Write as _;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 /// The files the generator writes, in the order the umbrella includes them.
 const FILES: [&str; 6] = [
@@ -181,12 +182,20 @@ pub fn generate(config: &Config<'_>) -> Result<Counts, Error> {
 /// Compiles every header just written, and the umbrella, so nothing unbuilt is kept.
 fn compile(config: &Config<'_>) -> Result<(), Error> {
     let compiler = find_compiler().ok_or_else(|| Error::Tool {
-        reason: "no `clang++` found, looked at `C:\\Program Files\\LLVM\\bin` and `PATH`"
+        reason: "no C++23 compiler whose standard library has `std::expected`; looked at `CXX`, \
+                 `c++`, `clang++`, and the LLVM install under `C:\\Program Files\\LLVM\\bin`"
             .to_owned(),
     })?;
 
     let header_dir = config.header.parent().unwrap_or_else(|| Path::new("."));
     let check = config.gen_dir.join("__cpp_bindgen_check.cpp");
+
+    // Said rather than assumed: which compiler answered the probe decides what the generated layer
+    // is checked against, and a machine with two toolchains can keep only one of them working.
+    eprintln!(
+        "the C++ headers are checked with {} (`CXX` names another)",
+        compiler.display()
+    );
 
     for name in FILES {
         let text = format!("#include \"{name}\"\n");
@@ -257,27 +266,74 @@ fn run(
 }
 
 /// The compiler the generated headers are checked with.
+///
+/// `CXX` first, then the compiler the platform pairs with its own standard library, then the other
+/// of the two, then the LLVM install Windows does not put on the path. On Windows that library is the
+/// MSVC one, which clang is the compiler for; elsewhere it is the system's own, which `c++` names.
+/// Each candidate is asked to compile a C++23 program that uses `std::expected`, not an empty one: a
+/// compiler may accept `-std=c++23` while the library behind it has no `<expected>`, and the
+/// generated layer returns one from every fallible call, so that is what the probe compiles.
 fn find_compiler() -> Option<PathBuf> {
-    let candidates = [
-        PathBuf::from(r"C:\Program Files\LLVM\bin\clang++.exe"),
-        PathBuf::from("clang++"),
-    ];
+    let mut candidates: Vec<PathBuf> = Vec::new();
 
-    for candidate in candidates {
-        if candidate.components().count() > 1 && !candidate.exists() {
-            continue;
-        }
-
-        if Command::new(&candidate)
-            .arg("--version")
-            .output()
-            .is_ok_and(|output| output.status.success())
-        {
-            return Some(candidate);
-        }
+    if let Some(cxx) = std::env::var_os("CXX").filter(|value| !value.is_empty()) {
+        candidates.push(PathBuf::from(cxx));
     }
 
-    None
+    #[cfg(windows)]
+    {
+        candidates.push(PathBuf::from("clang++"));
+        candidates.push(PathBuf::from("c++"));
+        candidates.push(PathBuf::from(r"C:\Program Files\LLVM\bin\clang++.exe"));
+    }
+
+    #[cfg(not(windows))]
+    {
+        candidates.push(PathBuf::from("c++"));
+        candidates.push(PathBuf::from("clang++"));
+    }
+
+    candidates
+        .into_iter()
+        .find(|candidate| supports_cxx23(candidate))
+}
+
+/// A translation unit that needs what the generated headers need: `<expected>` and an `unexpected`.
+const PROBE: &str = "\
+#include <expected>\n\
+std::expected<int, int> probe() { return std::unexpected(1); }\n\
+int main() { return probe().has_value() ? 1 : 0; }\n";
+
+/// Whether a program compiles C++23 with `std::expected`.
+///
+/// The flag set is the one the check itself runs, so a compiler that answers yes here is a compiler
+/// the check can use rather than one that merely exists.
+fn supports_cxx23(candidate: &Path) -> bool {
+    let mut probe = Command::new(candidate);
+    probe
+        .args([
+            "-std=c++23",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-fsyntax-only",
+            "-x",
+            "c++",
+            "-",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    let Ok(mut child) = probe.spawn() else {
+        return false;
+    };
+
+    if let Some(mut input) = child.stdin.take() {
+        let _ = input.write_all(PROBE.as_bytes());
+    }
+
+    child.wait().is_ok_and(|status| status.success())
 }
 
 /// The parts of the header the generator reads.
@@ -1310,11 +1366,20 @@ RorolalaResult rola_thing_write(const char *path);
     #[test]
     fn generates_and_compiles_the_real_header() {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let header = manifest.join("../../build/lib/rorolala.h");
+        let found = generated_header(manifest);
         let gen_dir = manifest.join("../../__cpp_bindgen_test");
         let umbrella = gen_dir.join("rola_plus_plus.hpp");
 
         let _ = fs::remove_dir_all(&gen_dir);
+
+        // Every generated header includes `"rorolala.h"` by name, as it does in an export's layout,
+        // where the C header is copied beside them: the same is done here, from whichever copy of
+        // the header was found, so what is checked is the include a consumer's compiler meets.
+        fs::create_dir_all(&gen_dir).unwrap_or_else(|error| panic!("{error}"));
+
+        let header = gen_dir.join("rorolala.h");
+
+        fs::copy(&found, &header).unwrap_or_else(|error| panic!("{}: {error}", found.display()));
 
         let config = Config {
             header: &header,
@@ -1334,5 +1399,44 @@ RorolalaResult rola_thing_write(const char *path);
         assert!(umbrella.exists());
 
         let _ = fs::remove_dir_all(&gen_dir);
+    }
+
+    /// The C header the workspace's build wrote, wherever this checkout keeps it.
+    ///
+    /// The root build script writes `ffi_bindings/rorolala_ffi.h` in the profile a build was made in,
+    /// and this test binary is laid somewhere under that same profile, so walking up from the binary
+    /// finds it without the test having to be told where cargo's output is. An export's copy,
+    /// `build/lib/rorolala.h`, is the fallback for a tree where the export ran and the build that
+    /// writes it has not.
+    ///
+    /// # Panics
+    ///
+    /// Panics when neither exists, since then there is no header to check the generator against and
+    /// a run that quietly skipped it would say nothing about the real surface.
+    fn generated_header(manifest: &Path) -> PathBuf {
+        let mut built = None;
+
+        if let Ok(exe) = std::env::current_exe() {
+            for ancestor in exe.ancestors() {
+                let candidate = ancestor.join("ffi_bindings").join("rorolala_ffi.h");
+
+                if candidate.is_file() {
+                    built = Some(candidate);
+
+                    break;
+                }
+            }
+        }
+
+        built
+            .into_iter()
+            .chain([manifest.join("../../build/lib/rorolala.h")])
+            .find(|path| path.is_file())
+            .unwrap_or_else(|| {
+                panic!(
+                    "no generated C header found above this test's binary or in `build/lib`; \
+                     build the workspace first"
+                )
+            })
     }
 }
