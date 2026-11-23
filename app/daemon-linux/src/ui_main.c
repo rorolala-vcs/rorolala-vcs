@@ -202,23 +202,43 @@ static void activate(GtkApplication *application, gpointer user_data) {
 
   if (g_app.main) {
     gtk_window_present(GTK_WINDOW(g_app.main));
-    return;
+  } else {
+    if (!app_daemon_file_exists()) {
+      show_error(NULL, "rola-daemon was not found next to rola-daemon-gui.\n\n"
+                       "Put rola-daemon in the same folder and start again.");
+      g_application_quit(G_APPLICATION(application));
+      return;
+    }
+    app_refresh_rola_path();
+
+    window = build_window(application);
+    gtk_window_present(GTK_WINDOW(window));
+
+    show_page(0);
+    g_app.timer_id = g_timeout_add(750, tick, NULL);
+    app_set_status("Ready.");
   }
 
-  if (!app_daemon_file_exists()) {
-    show_error(NULL, "rola-daemon was not found next to rola-daemon-gui.\n\n"
-                     "Put rola-daemon in the same folder and start again.");
-    g_application_quit(G_APPLICATION(application));
-    return;
+  /* `--run` is the run the launcher does not ask for: a person asked for the daemon
+     to be up as the window appeared, so Start is pressed once here. */
+  if (g_app.start_on_open) {
+    g_app.start_on_open = FALSE;
+    daemon_page_start();
   }
-  app_refresh_rola_path();
+}
 
-  window = build_window(application);
-  gtk_window_present(GTK_WINDOW(window));
+/* `--run` is the only argument this program reads. It is the word the launcher
+   passes when the daemon is to be started as the window opens; any other word is
+   left alone, which is what a run that only wants the window passes. */
+static gboolean command_line_wants_start(int argc, char **argv) {
+  int index;
 
-  show_page(0);
-  g_app.timer_id = g_timeout_add(750, tick, NULL);
-  app_set_status("Ready.");
+  for (index = 1; index < argc; ++index) {
+    if (strcmp(argv[index], "--run") == 0) {
+      return TRUE;
+    }
+  }
+  return FALSE;
 }
 
 int main(int argc, char **argv) {
@@ -226,6 +246,7 @@ int main(int argc, char **argv) {
   int status;
 
   fix_daemon_path();
+  g_app.start_on_open = command_line_wants_start(argc, argv);
 
   application = gtk_application_new("org.rorolala.DaemonGui",
                                     G_APPLICATION_DEFAULT_FLAGS);

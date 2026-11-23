@@ -53,6 +53,12 @@ launcher:
     add:
       en: Add a Vault
       zh-CN: 添加保险库
+    open_daemon:
+      en: Open daemon
+      zh-CN: 打开守护进程
+    open_daemon_failed:
+      en: "The daemon window could not be started from %{program}"
+      zh-CN: "无法从 %{program} 启动守护进程窗口"
     check:
       en: Check connection
       zh-CN: 检查连接性

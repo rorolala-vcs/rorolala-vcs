@@ -151,6 +151,8 @@ static void start_daemon(void) {
   daemon_page_sync_status();
 }
 
+void daemon_page_start(void) { start_daemon(); }
+
 static void stop_daemon(void) {
   if (!daemon_is_running()) {
     app_set_status(L"rola-daemon is not running.");

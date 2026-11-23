@@ -12,6 +12,8 @@ typedef struct AppState {
   char daemon_exe[PATH_CCH];
   char rola_exe[PATH_CCH];
   guint timer_id;
+  /* Set when the run was asked to start the daemon once the window is up. */
+  gboolean start_on_open;
 } AppState;
 
 extern AppState g_app;
@@ -28,6 +30,7 @@ GtkWidget *keys_page_new(void);
 GtkWidget *admins_page_new(void);
 
 void daemon_page_sync_status(void);
+void daemon_page_start(void);
 void daemon_page_append_output(const char *text);
 void registry_page_reload(void);
 void keys_page_reload(void);

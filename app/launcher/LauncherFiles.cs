@@ -52,6 +52,9 @@ internal sealed record LauncherFiles(string Root, string Beside)
     /// <summary>The daemon program, beside the command line program in the same layout.</summary>
     public string Daemon => Path.Combine(Beside, "..", "rola-daemon" + Suffix);
 
+    /// <summary>The daemon's window, which is the program that starts and stops it.</summary>
+    public string DaemonGui => Path.Combine(Beside, "..", "rola-daemon-gui" + Suffix);
+
     /// <summary>The Desktop program, in the same directory as this one.</summary>
     public string Desktop => Path.Combine(Beside, "RorolalaDesktop" + Suffix);
 

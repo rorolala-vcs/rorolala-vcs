@@ -1,10 +1,12 @@
 #include "ui.h"
 
 #include <commctrl.h>
+#include <shellapi.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 #include "daemon.h"
 #include "messages.h"
@@ -249,6 +251,13 @@ static INT_PTR CALLBACK MainDialogProc(HWND dialog, UINT message, WPARAM wparam,
 
     SetTimer(dialog, 1, 750, NULL);
     app_set_status(L"Ready.");
+
+    /* Starting here would begin the daemon before this window is on the screen,
+       so the press of Start is posted rather than made. */
+    if (g_app.start_on_open) {
+      g_app.start_on_open = FALSE;
+      PostMessageW(dialog, WM_APP_START, 0, 0);
+    }
     return TRUE;
 
   case WM_NOTIFY: {
@@ -279,6 +288,10 @@ static INT_PTR CALLBACK MainDialogProc(HWND dialog, UINT message, WPARAM wparam,
     return TRUE;
   }
 
+  case WM_APP_START:
+    daemon_page_start();
+    return TRUE;
+
   case WM_APP_SET_STATUS: {
     WCHAR *text = (WCHAR *)lparam;
     if (text) {
@@ -306,6 +319,30 @@ static INT_PTR CALLBACK MainDialogProc(HWND dialog, UINT message, WPARAM wparam,
   }
 }
 
+/* `--run` is the only argument this program reads. It is the word the launcher
+   passes when the daemon is to be started as the window opens; any other word is
+   left alone, which is what a run that only wants the window passes. */
+static BOOL command_line_wants_start(void) {
+  int argc = 0;
+  LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+  BOOL found = FALSE;
+  int index;
+
+  if (!argv) {
+    return FALSE;
+  }
+
+  for (index = 1; index < argc; ++index) {
+    if (wcscmp(argv[index], L"--run") == 0) {
+      found = TRUE;
+      break;
+    }
+  }
+
+  LocalFree(argv);
+  return found;
+}
+
 int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE previous,
                     _In_ LPWSTR command_line, _In_ int show) {
   INITCOMMONCONTROLSEX controls;
@@ -314,6 +351,8 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE previous,
   (void)previous;
   (void)command_line;
   (void)show;
+
+  g_app.start_on_open = command_line_wants_start();
 
   controls.dwSize = sizeof(controls);
   controls.dwICC = ICC_TAB_CLASSES | ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES;

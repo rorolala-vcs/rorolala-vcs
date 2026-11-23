@@ -13,6 +13,8 @@ typedef struct AppState {
   HWND pages[4];
   WCHAR daemon_exe[PATH_CCH];
   WCHAR rola_exe[PATH_CCH];
+  /* Set when the run was asked to start the daemon once the window is up. */
+  BOOL start_on_open;
 } AppState;
 
 extern AppState g_app;
@@ -33,6 +35,7 @@ INT_PTR CALLBACK AdminsPageProc(HWND dialog, UINT message, WPARAM wparam,
                                 LPARAM lparam);
 
 void daemon_page_sync_status(void);
+void daemon_page_start(void);
 void daemon_page_append_output(const char *utf8);
 void registry_page_reload(void);
 void keys_page_reload(void);

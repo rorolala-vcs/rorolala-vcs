@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
@@ -1255,6 +1256,28 @@ internal sealed class LauncherWindow : Window
 
         items.Children.Add(
             MenuItem(
+                RolaI18N.Get("launcher.vaults.open_daemon"),
+                Marks.Vault(_skin.Muted, 13),
+                () =>
+                {
+                    _vaultMenu.IsOpen = false;
+                    OpenDaemon();
+                },
+                danger: false
+            )
+        );
+
+        items.Children.Add(
+            new Border
+            {
+                Height = 1,
+                Margin = new Thickness(4, 4, 4, 4),
+                Background = _skin.Splitter,
+            }
+        );
+
+        items.Children.Add(
+            MenuItem(
                 RolaI18N.Get("launcher.vaults.check"),
                 Marks.Refresh(_skin.Muted, 13),
                 () =>
@@ -1417,6 +1440,39 @@ internal sealed class LauncherWindow : Window
         FillVaults();
 
         Toast(RolaI18N.Get("launcher.vaults.removed", name));
+    }
+
+    /// <summary>
+    /// Opens the daemon's window, which is where the daemon is started and stopped.
+    /// </summary>
+    /// <remarks>
+    /// The window is a program of its own beside this one rather than a command of the command line, so it is
+    /// started and left behind: what is opened is a window, and this launcher has no answer to wait for.
+    /// <c>--run</c> is what it is asked with, which is the word for a window that starts the daemon as it
+    /// opens.
+    /// </remarks>
+    private void OpenDaemon()
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = _files.DaemonGui,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+
+        start.ArgumentList.Add("--run");
+
+        try
+        {
+            using var process = Process.Start(start);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            _ = Notice(
+                RolaI18N.Get("launcher.vaults.title"),
+                RolaI18N.Get("launcher.vaults.open_daemon_failed", _files.DaemonGui)
+            );
+        }
     }
 
     /// <summary>Writes the hosted addresses, saying so when they could not be written.</summary>
