@@ -260,6 +260,26 @@ cmd_layout_tree_diff:
     zh-CN: 展示工作树相对于布局的内容
 
 cmd_layout_entry:
+  help:
+    en: |
+        # Work with the entries in a Layout
+        **Usage**: rola layout [[GREEN]]__entry__[[/]] <COMMAND>
+        **Commands**:
+            create <UUID> <VERSION>    Make an entry hold data
+            update <UUID> <VERSION>    Change what an entry holds
+            remove <UUID>              Drop an entry, and the path that named it
+    zh-CN: |
+        # 操作布局中的条目
+        **用法**：rola layout [[GREEN]]__entry__[[/]] <子命令>
+        **命令**：
+            create <UUID> <版本>    让条目持有数据
+            update <UUID> <版本>    修改条目所持有的数据
+            remove <UUID>           删除条目，以及命名它的路径
+
+  description:
+    en: Work with the entries in a Layout
+    zh-CN: 操作布局中的条目
+
   complete:
     owner:
       en: The account the entry is held by
@@ -339,6 +359,30 @@ cmd_layout_entry:
     zh-CN: "条目 `%{what}` 已删除"
 
 cmd_layout_path:
+  help:
+    en: |
+        # Work with the paths in a Layout
+        **Usage**: rola layout [[GREEN]]__path__[[/]] <COMMAND>
+        **Commands**:
+            create <PATH> <UUID>       Make a path name an entry
+            remove <PATH>              Make a path name no entry
+            move <FROM> <TO>           Move the entry at one path to another
+            change-uuid <PATH> <UUID>  Make a path name another entry
+            new-uuid <PATH>            Give a path's entry a new Uuid
+    zh-CN: |
+        # 操作布局中的路径
+        **用法**：rola layout [[GREEN]]__path__[[/]] <子命令>
+        **命令**：
+            create <路径> <UUID>       让路径指向一个条目
+            remove <路径>              让路径不再指向任何条目
+            move <源路径> <目标路径>   把条目从旧路径移到新路径
+            change-uuid <路径> <UUID>  让路径改指另一个条目
+            new-uuid <路径>            给路径上的条目换一个新的 Uuid
+
+  description:
+    en: Work with the paths in a Layout
+    zh-CN: 操作布局中的路径
+
   complete:
     layout:
       en: The Layout to work on; the one being worked in when none is named

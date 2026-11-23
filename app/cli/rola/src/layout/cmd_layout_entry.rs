@@ -11,7 +11,10 @@ use std::str::FromStr as _;
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
-    macros::{arg, buffer, chain, command, completion, help, metadata, r_eprintln, suggest},
+    macros::{
+        arg, buffer, chain, command, completion, dispatcher, help, metadata, r_eprintln, renderer,
+        suggest,
+    },
     metadata::Description,
     picker::{EntryPicker, PickerArg},
     res::ResExitCode,
@@ -40,6 +43,39 @@ const ARG_DESCRIPTION: PickerArg<'static, Option<String>> = arg![description: Op
 
 /// The Layout to work on; the one being worked in when none is named.
 const ARG_LAYOUT: PickerArg<'static, Option<String>> = arg![layout: Option<String>];
+
+dispatcher!("layout.entry", EntryLayoutEntry);
+
+#[help(buffer)]
+pub fn help_layout_entry(_: EntryLayoutEntry, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("cmd_layout_entry.help")).trim());
+    ec.exit_code = EC_HELP;
+}
+
+#[metadata(EntryLayoutEntry)]
+pub fn desc_layout_entry() -> Description {
+    t!("cmd_layout_entry.description").to_string().into()
+}
+
+/// Names what `layout entry` holds.
+///
+/// A command the namespace has is matched before this is reached, so what arrives here is a run that
+/// named none of them, or one it does not have. Both are a question about the namespace, and both are
+/// answered the way [`help_layout_entry`] answers.
+#[chain]
+pub fn handle_layout_entry_namespace(_: EntryLayoutEntry) -> Next {
+    ResultLayoutEntryHelp.into()
+}
+
+/// Result: what `layout entry` holds was named.
+#[derive(Grouped)]
+pub struct ResultLayoutEntryHelp;
+
+#[renderer(buffer)]
+pub fn render_result_layout_entry_help(_: ResultLayoutEntryHelp, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("cmd_layout_entry.help")).trim());
+    ec.exit_code = EC_HELP;
+}
 
 /// The `Uuid` `text` names, or the argument failure.
 fn uuid_of(text: &str) -> Result<Uuid, Next> {

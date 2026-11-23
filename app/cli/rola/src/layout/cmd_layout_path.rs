@@ -13,7 +13,8 @@ use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
     macros::{
-        arg, buffer, chain, command, completion, help, metadata, r_eprintln, routeify, suggest,
+        arg, buffer, chain, command, completion, dispatcher, help, metadata, r_eprintln, renderer,
+        routeify, suggest,
     },
     metadata::Description,
     picker::EntryPicker,
@@ -38,6 +39,39 @@ use crate::layout::{
     ErrorLayoutPathTaken, LayoutDid, ResultLayoutContent, chosen_writable, failed_write, path_of,
     remote_spec, set_cached_path, set_cached_removed, uuid_of,
 };
+
+dispatcher!("layout.path", EntryLayoutPath);
+
+#[help(buffer)]
+pub fn help_layout_path(_: EntryLayoutPath, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("cmd_layout_path.help")).trim());
+    ec.exit_code = EC_HELP;
+}
+
+#[metadata(EntryLayoutPath)]
+pub fn desc_layout_path() -> Description {
+    t!("cmd_layout_path.description").to_string().into()
+}
+
+/// Names what `layout path` holds.
+///
+/// A command the namespace has is matched before this is reached, so what arrives here is a run that
+/// named none of them, or one it does not have. Both are a question about the namespace, and both are
+/// answered the way [`help_layout_path`] answers.
+#[chain]
+pub fn handle_layout_path(_: EntryLayoutPath) -> Next {
+    ResultLayoutPathHelp.into()
+}
+
+/// Result: what `layout path` holds was named.
+#[derive(Grouped)]
+pub struct ResultLayoutPathHelp;
+
+#[renderer(buffer)]
+pub fn render_result_layout_path_help(_: ResultLayoutPathHelp, ec: &mut ResExitCode) {
+    r_eprintln!("{}", trd!(t!("cmd_layout_path.help")).trim());
+    ec.exit_code = EC_HELP;
+}
 
 #[help(buffer)]
 pub fn help_layout_path_create(_: EntryLayoutPathCreate, ec: &mut ResExitCode) {
