@@ -99,7 +99,8 @@ internal sealed partial class VersionGraphView
             stats,
             _drawing.Truncated,
             _showFocus,
-            _hover?.EdgeIndex is >= 0 ? _hover.EdgeIndex : null
+            _hover?.EdgeIndex is >= 0 ? _hover.EdgeIndex : null,
+            _hoverWeight
         );
 
         Renderer.Render(context, Bounds.Size, _drawing, ink, frame);

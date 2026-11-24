@@ -46,7 +46,7 @@ progress:
 menu:
   window:
     en: Window
-    zh-CN: 窗口  # What the Window menu holds besides the docks, which the window is built with rather than registered
+    zh-CN: 窗口 # What the Window menu holds besides the docks, which the window is built with rather than registered
   # under a key of its own: the way back to the main window, and what a dock's own tab offers.
   window_items:
     open_main:
@@ -193,6 +193,9 @@ core:
     immediate:
       en: Takes effect at once.
       zh-CN: 立即生效。
+    debug_aim:
+      en: Draw the drop answers
+      zh-CN: 绘制停靠判定区
 
 setting:
   none:

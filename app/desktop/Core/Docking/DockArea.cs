@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Data;
@@ -8,9 +10,11 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 using RorolalaDesktop.Hosting;
 using RorolalaDesktop.Menus;
+using RorolalaDesktop.Theming;
 using MenuItem = Avalonia.Controls.MenuItem;
 
 namespace RorolalaDesktop.Docking;
@@ -40,11 +44,13 @@ namespace RorolalaDesktop.Docking;
 /// </para>
 /// <para>
 /// A header press becomes the toolkit's own drag (<see cref="DockDrag"/>), which is what lets a dock leave the
-/// window it was picked up in. The area a drag is carried over answers in two steps: carried anywhere into a
-/// group, the group is <em>approached</em> and the five points a dock may be put on are drawn, four isosceles
-/// trapezoids around a centre rectangle, filling the group, one for each way it may be split and one for joining
-/// its tabs, and the pointer is always on one of them once it is in the group, so the release is what decides.
-/// The points are what a drop would do; the release is what does it.
+/// window it was picked up in. What the area answers a drag with depends on how much of its motion the look
+/// draws. A level that draws travel answers it with the layout itself: the groups make room for the dock while
+/// the pointer is on an answer, and nothing is drawn over them, since a second set of shapes would say the same
+/// thing twice. A level that does not answers it with the five points a dock may be put on, four isosceles
+/// trapezoids around a centre rectangle, one for each way the group may be split and one for joining its tabs,
+/// because a layout that changes at once is a layout nothing was read from. The points are what a drop would do;
+/// the release is what does it.
 /// </para>
 /// </remarks>
 internal sealed class DockArea : UserControl
@@ -159,6 +165,16 @@ internal sealed class DockArea : UserControl
     /// <summary>The class the button that closes the dock a region is showing carries.</summary>
     public const string CloseClass = "dock-close";
 
+    /// <summary>
+    /// The class the room a dragged dock would take carries, while the layout is showing it.
+    /// </summary>
+    /// <remarks>
+    /// The one surface a drag draws while the groups are making room: the gap the dock would land in, washed with
+    /// the accent so that what is opened reads as the dock's place rather than as a hole in the arrangement. What
+    /// it is drawn on is a shape of the area's own, since the group that will fill it does not exist yet.
+    /// </remarks>
+    public const string IncomingClass = "dock-incoming";
+
     /// <summary>How many characters of a dock's name a tab says before its front is left out.</summary>
     /// <remarks>
     /// A dock named by where it is (a browser, whose name is a path) would otherwise make a tab as long as the path
@@ -205,6 +221,17 @@ internal sealed class DockArea : UserControl
     /// </para>
     /// </remarks>
     private const double DockPointEdge = 120;
+
+    /// <summary>
+    /// How far inside a group a drop is aimed, in pixels.
+    /// </summary>
+    /// <remarks>
+    /// A distance rather than a share of the group: what keeps a group's own edge from answering for it is a band of
+    /// the pointer's own scale, and the edge of a large group is as near the group beside it as the edge of a small
+    /// one. A group too narrow to give that much keeps a quarter of its shorter side instead, so that the aim is
+    /// never so small that a drop cannot be aimed at all.
+    /// </remarks>
+    private const double DockPointPadding = 24;
 
     /// <summary>How near the pane's own edge a drag has to be to dock against the whole window edge.</summary>
     private const double EdgeReach = 28;
@@ -295,8 +322,107 @@ internal sealed class DockArea : UserControl
     /// <remarks>
     /// A canvas rather than a grid, because the dock points are trapezoids rather than boxes: a shape is drawn
     /// where its own outline says, and where that is changes with the size of the group under the pointer.
+    /// <para>
+    /// Drawn only where the look does not draw travel, since a layout that moves says where a drop would land by
+    /// moving, and shapes over the rooms it is making would be the same answer twice.
+    /// </para>
     /// </remarks>
     private readonly Canvas _zones = new();
+
+    /// <summary>
+    /// The layer the regions are taken into while a drag makes room for itself.
+    /// </summary>
+    /// <remarks>
+    /// The tree the layout is drawn as says how big each group is by star sizes, which are a share of the room and
+    /// not a place: moving one is a new layout of the tree, and the split a drop opens does not exist in the tree
+    /// at all. The regions are therefore taken out of the tree for as long as a drag is showing where it would land
+    /// and placed here, where a place and a size are numbers that can be eased.
+    /// <para>
+    /// It takes the pointer only while it is arranging, and only for the reason it has a face at all then: a drag
+    /// is answered by whatever is under it bubbling to this area, so a layer that let the pointer through in the
+    /// room between two regions would be a hole in the middle of a drag. The rest of the time it draws nothing and
+    /// has no face, since a transparent one would be a layer over every tab that is not this layer's to take.
+    /// </para>
+    /// </remarks>
+    private readonly Canvas _arrange = new();
+
+    /// <summary>The room a dragged dock would take, drawn while the regions are making room for it.</summary>
+    private readonly Rectangle _incoming = new() { IsVisible = false, Classes = { IncomingClass } };
+
+    /// <summary>What a region moves with while the layout is arranged, which is the drag itself and nothing else.</summary>
+    private readonly Transitions _arrangeTravel = new()
+    {
+        Motion.Travel(Canvas.LeftProperty, Motion.Panel),
+        Motion.Travel(Canvas.TopProperty, Motion.Panel),
+        Motion.Travel(Layoutable.WidthProperty, Motion.Panel),
+        Motion.Travel(Layoutable.HeightProperty, Motion.Panel),
+        Motion.Fade(Visual.OpacityProperty, Motion.State),
+    };
+
+    /// <summary>What the area is arranged to show, or nothing while it is drawn as the layout stands.</summary>
+    private Arrangement? _arranged;
+
+    /// <summary>
+    /// The rectangles the groups stand in while a drag is being answered, taken once and kept.
+    /// </summary>
+    /// <remarks>
+    /// The answers a drag can land on are fixed for as long as the layout is, which is the whole of the gesture: a
+    /// room opening under the pointer moves the groups on screen, and it must not move what the pointer is aiming
+    /// at, or the answer under it would change as the answer was being shown. They are taken when the drag first
+    /// reaches the area and dropped when the layout is drawn again, which is the only thing that may move them.
+    /// </remarks>
+    private Dictionary<string, Rect>? _aim;
+
+    /// <summary>The way back to the layout as it stands, while the regions are returning to it.</summary>
+    private DispatcherTimer? _recede;
+
+    /// <summary>What the drop points arrive with, and nothing they leave with: the answer to a drag is transient.</summary>
+    private readonly Transitions _zoneFade = new()
+    {
+        Motion.Fade(Visual.OpacityProperty, Motion.Feedback),
+    };
+
+    /// <summary>The scale a carried dock is drawn at, which is what says it has been lifted off its region.</summary>
+    private const double LiftScale = 0.7;
+
+    /// <summary>The dock being carried, drawn from a picture taken when the drag began.</summary>
+    private readonly Border _lifted = new() { IsHitTestVisible = false, IsVisible = false };
+
+    /// <summary>The layer the carried dock is drawn in, over the points.</summary>
+    private readonly Canvas _liftLayer = new() { IsHitTestVisible = false, IsVisible = false };
+
+    /// <summary>The picture of the dock the lifted frame holds.</summary>
+    private readonly Image _carried = new() { Stretch = Stretch.Fill };
+
+    /// <summary>How the carried dock is scaled, from whole to lifted.</summary>
+    private readonly ScaleTransform _liftScale = new();
+
+    /// <summary>How the carried dock grows into its lift, which is the pickup the pointer asks for.</summary>
+    private readonly Transitions _liftGrow = new()
+    {
+        Motion.Travel(ScaleTransform.ScaleXProperty, Motion.Feedback),
+        Motion.Travel(ScaleTransform.ScaleYProperty, Motion.Feedback),
+    };
+
+    /// <summary>The content flight of a dropped dock, while it is running.</summary>
+    private DispatcherTimer? _flight;
+
+    /// <summary>
+    /// How many frames a landed dock waits for the layout to give its region a room before the flight is given up.
+    /// </summary>
+    /// <remarks>
+    /// One frame is the usual answer, since the layout that places a region runs before the next tick. The rest is
+    /// for a window that is not drawing, and the end is a flight given up rather than one aimed at a stale place.
+    /// </remarks>
+    private const int ArrivalWaits = 6;
+
+    /// <summary>The region whose content is waiting under a flight, while it runs.</summary>
+    private Region? _flying;
+
+    /// <summary>
+    /// Whether the carried dock has been drawn for the drag in flight, which is what its pickup is played on.
+    /// </summary>
+    private bool _picked;
 
     /// <summary>What the drag in flight is over, or nothing while it is over no group.</summary>
     private Approach? _approaching;
@@ -319,6 +445,12 @@ internal sealed class DockArea : UserControl
 
     /// <summary>What each dock that is placed in a region was given, by the dock.</summary>
     private readonly Dictionary<DockInstance, Placed> _placed = [];
+
+    /// <summary>The dock this area is keeping its place empty for, while the pointer carries it.</summary>
+    private DockInstance? _carriedDock;
+
+    /// <summary>The region that dock was taken out of, which is the one left empty while it is carried.</summary>
+    private Region? _sourceRegion;
 
     /// <summary>The regions, by the id of the group each draws.</summary>
     private readonly Dictionary<string, Region> _regions = new(StringComparer.Ordinal);
@@ -460,6 +592,10 @@ internal sealed class DockArea : UserControl
     {
         base.OnDetachedFromVisualTree(e);
 
+        StopFlight();
+        HideLifted();
+        Reset();
+
         if (!_listening)
         {
             return;
@@ -468,7 +604,10 @@ internal sealed class DockArea : UserControl
         _listening = false;
         _manager.Changed -= Rebuild;
         _manager.Renamed -= Retitled;
+        DockDrag.LiftedChanged -= Lifted;
         _windows.DragEnded -= Clear;
+        _carriedDock = null;
+        _sourceRegion = null;
 
         // A window of one dock places nothing: what it draws is the one dock it was made for, put straight into
         // the border that holds it, and the letting go of that is here rather than in the loop below because it
@@ -498,10 +637,16 @@ internal sealed class DockArea : UserControl
         _listening = true;
         _manager.Changed += Rebuild;
         _manager.Renamed += Retitled;
+        DockDrag.LiftedChanged += Lifted;
 
         // A drag that ends by being called off (Esc, or a release nowhere) leaves this area with the points it
         // drew and no event left to take them down, since a cancelled drag has no drop to be told about.
         _windows.DragEnded += Clear;
+
+        // The dock a drag already has in the air is this area's to keep empty, if it was picked up here. The
+        // rebuild below places it, and Show asks this field before it draws it.
+        _carriedDock = null;
+        _sourceRegion = null;
 
         // A dock may be in this window, in another one, or in none: what makes an instance this window's is the
         // window it names, which is not a question about the control. So the layer is brought in step as soon
@@ -580,10 +725,16 @@ internal sealed class DockArea : UserControl
             DockPanel.SetDock(Strip, Dock.Top);
             Panel.Children.Add(Strip);
             Panel.Children.Add(Content);
+
+            Content.Transitions = Fade;
         }
 
         /// <summary>The id of the group this region draws.</summary>
         public string Id { get; }
+
+        /// <summary>What the content arrives with when the tab it shows changes.</summary>
+        public Transitions Fade { get; } =
+            new() { Motion.Fade(Visual.OpacityProperty, Motion.State) };
 
         /// <summary>The region itself: headers above, docks below.</summary>
         public DockPanel Panel { get; } = new();
@@ -741,6 +892,30 @@ internal sealed class DockArea : UserControl
     /// <param name="Outline">The outline, in the area's coordinates.</param>
     internal readonly record struct DockPointShape(DockSide Side, IReadOnlyList<Point> Outline);
 
+    /// <summary>
+    /// What a drag would make of the layout: the tree the drop would leave, and the room the dock would take.
+    /// </summary>
+    /// <remarks>
+    /// The tree is the live layout with the dock taken out of where it is and put where the drop names (see
+    /// <see cref="DockManager.Ahead"/>), and the room is the group that stands for the dock in it. What is kept
+    /// besides is the split that has to open to make the room, and the share it has while the room is closed: a
+    /// preview of a split that is already at its share would jump to it rather than open into it.
+    /// </remarks>
+    /// <param name="Root">The tree, as the drop would leave it.</param>
+    /// <param name="Incoming">The group in that tree that stands for the dock being carried.</param>
+    /// <param name="Opening">The split that opens to make room for it.</param>
+    /// <param name="From">The share <paramref name="Opening"/> has while the room is closed.</param>
+    /// <param name="Target">The group the drop is on, or nothing for the edge of the whole area.</param>
+    /// <param name="Side">The side the drop is on.</param>
+    private sealed record Arrangement(
+        LayoutNode Root,
+        string Incoming,
+        LayoutSplit Opening,
+        double From,
+        string? Target,
+        DockSide Side
+    );
+
     /// <summary>Lays the area out once: the structure to draw the tree in, and the boxes over it.</summary>
     private void Build()
     {
@@ -762,13 +937,34 @@ internal sealed class DockArea : UserControl
 
         _zones.IsHitTestVisible = false;
         _zones.IsVisible = false;
+        _zones.Transitions = _zoneFade;
 
         _surface.Children.Add(_structure);
+
+        // The arrangement stands over the tree the regions were taken out of, which stays under it: the seams the
+        // splitters sit on, and the crossings read from them, are the tree's and not the arrangement's, and the
+        // tree keeps its shape while the regions are out of it.
+        _arrange.Children.Add(_incoming);
+        _surface.Children.Add(_arrange);
 
         // The crossing grips stand over the docks, under the points a dragged dock may be put on: a drag that
         // is looking for a place to land is about the docks, and the seams are not something to catch.
         _surface.Children.Add(_crossLayer);
         _surface.Children.Add(_zones);
+
+        // The carried dock stands over the points rather than under them: it is what the hand is holding, and the
+        // points are what it could be put on. The picture is a snapshot taken when the drag began, so the frame
+        // is a picture of the dock and not a second live copy of it.
+        _lifted.Child = _carried;
+        _lifted.RenderTransform = _liftScale;
+        _lifted[!Border.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Bright);
+        _lifted[!Border.BorderBrushProperty] = new DynamicResourceExtension(PaletteKeys.Splitter);
+        _lifted[!Border.BoxShadowProperty] = new DynamicResourceExtension(PaletteKeys.Shadow);
+        _lifted.BorderThickness = new Thickness(1);
+        _lifted.CornerRadius = new CornerRadius(8);
+        _lifted.ClipToBounds = true;
+        _liftLayer.Children.Add(_lifted);
+        _surface.Children.Add(_liftLayer);
 
         Content = new Grid { Children = { _ground, _surface } };
     }
@@ -813,7 +1009,7 @@ internal sealed class DockArea : UserControl
 
         if (shown is not null)
         {
-            shown.View.View.IsVisible = shown.IsOpen;
+            shown.View.View.IsVisible = shown.IsOpen && !ReferenceEquals(shown, _carriedDock);
 
             // The one dock of a window of its own is worked in on the same two moments as any dock, a press
             // landing in it and the keyboard reaching it, and there is no region here to have done it (see
@@ -1281,6 +1477,17 @@ internal sealed class DockArea : UserControl
     /// </remarks>
     private void Render()
     {
+        // A room a drag has opened outlives the tree being drawn again: a layout that changes while the pointer is
+        // still holding a dock is the docks moving and not the answer, so what is arranged is put back where it was
+        // without being played again.
+        var arranged = _arranged;
+
+        Reset();
+
+        // The answers the pointer aims at are taken again from the tree that is drawn, which is the one thing that
+        // may move them: a room opening under the pointer is not part of the layout.
+        _aim = null;
+
         foreach (var region in _regions.Values)
         {
             if (region.Panel.Parent is Panel parent)
@@ -1302,6 +1509,12 @@ internal sealed class DockArea : UserControl
         if (Draw(Layout.Root) is { } root)
         {
             _structure.Children.Add(root);
+        }
+
+        if (arranged is not null)
+        {
+            _arranged = arranged;
+            Restage();
         }
     }
 
@@ -1868,8 +2081,12 @@ internal sealed class DockArea : UserControl
         foreach (var (instance, placed) in _placed)
         {
             var shown = instance.IsOpen && ReferenceEquals(placed.Region.Selected, instance);
+            var lifted =
+                ReferenceEquals(instance, _carriedDock)
+                && _sourceRegion is not null
+                && ReferenceEquals(placed.Region, _sourceRegion);
 
-            placed.View.IsVisible = shown;
+            placed.View.IsVisible = shown && !lifted;
             placed.Title.IsVisible = instance.IsOpen;
 
             // Which dock the region is showing is a class rather than a weight, so that what a selected header
@@ -1984,8 +2201,15 @@ internal sealed class DockArea : UserControl
             _manager.SelectTab(group.Id, at >= 0 ? at : group.Active);
         }
 
+        var changed = !ReferenceEquals(placed.Region.Selected, instance);
+
         placed.Region.Selected = instance;
         Show();
+
+        if (changed)
+        {
+            Reveal(placed.Region);
+        }
 
         // Choosing a tab is working in that dock. Told here as well because the tab may have been chosen from
         // a menu or a test rather than by a press the dock itself heard.
@@ -1995,6 +2219,28 @@ internal sealed class DockArea : UserControl
         // belongs to this strip rather than to the dock, while a dock answers its own keys inside itself, so
         // choosing one and then typing would otherwise say nothing at all.
         instance.View.View.Focus();
+    }
+
+    /// <summary>Brings a region's content in with a fade after another dock became the one it shows.</summary>
+    /// <param name="region">The region whose content changed.</param>
+    /// <remarks>
+    /// What changes is the panel rather than a dock's own control: a plugin's view is not this file's to animate,
+    /// and the panel holds only the one view that is visible. The opacity is put to nothing without a transition
+    /// and then brought up with one, so the frame that hides the dock that was shown is not itself a movement.
+    /// With motion off the two states are the same duration, and the switch is left as a cut.
+    /// </remarks>
+    private static void Reveal(Region region)
+    {
+        if (Motion.FadeTime(Motion.State) <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        region.Content.Transitions = null;
+        region.Content.Opacity = 0;
+        region.Content.Transitions = region.Fade;
+
+        Dispatcher.UIThread.Post(() => region.Content.Opacity = 1);
     }
 
     /// <summary>
@@ -2062,10 +2308,14 @@ internal sealed class DockArea : UserControl
 
     /// <summary>Shows what a dragged dock could do here, and says whether it may land yet.</summary>
     /// <remarks>
-    /// A drag is answered in two steps. Carried anywhere into a group, the drag <em>approaches</em> it: the group is
-    /// outlined and the five points a dock could be put on are drawn. The second step is the pointer being over one
-    /// of those points, which is the only place a drop can land, so what the area says is "may be dropped" only
-    /// when the pointer is on an answer, and merely "still here" while it is only near one.
+    /// A drag is answered in two steps. Carried anywhere into a group, the drag <em>approaches</em> it, which says
+    /// how far it has come rather than where it would land. The second step is the pointer being over an answer:
+    /// a side of the group, or its middle, which is what a drop can land on. So what the area says is "may be
+    /// dropped" only when the pointer is on an answer, and merely "still here" while it is only near one.
+    /// <para>
+    /// What an answer looks like is the level of motion's to decide (see <see cref="ShowsRoom"/>): the groups make
+    /// room for the dock, or the five points are drawn over the group.
+    /// </para>
     /// <para>
     /// A drag this area did not begin is answered here as much as one it did: a dock is carried out of one window
     /// and let go of in another, and the window it arrives in is the one that has to say where it goes. A drag
@@ -2092,7 +2342,7 @@ internal sealed class DockArea : UserControl
             return;
         }
 
-        if (DockDrag.Carried(_manager, e.DataTransfer) is null)
+        if (DockDrag.Carried(_manager, e.DataTransfer) is not { } carried)
         {
             return;
         }
@@ -2101,8 +2351,10 @@ internal sealed class DockArea : UserControl
         var approach = Approached(at);
         var side = approach is { } here ? SideAt(here, at) : null;
 
+        ShowLifted(at);
+
         _zonesUp = true;
-        Preview(approach, side);
+        Preview(approach, side, carried);
 
         // A group takes the drag wherever in it the pointer is: what is being offered is reached by aiming, and a
         // platform that is told "no drop" does not say a drop happened, so the release could not be told apart from
@@ -2118,24 +2370,37 @@ internal sealed class DockArea : UserControl
         _windows.OverArea = approach is not null;
     }
 
-    /// <summary>Takes the points down when a drag leaves, and says the pointer is over no place.</summary>
+    /// <summary>Takes the answers down when a drag leaves, and says the pointer is over no place.</summary>
+    /// <remarks>
+    /// A leave is raised for the control the drag left and bubbles, so a drag that has moved from one group of this
+    /// area to another arrives here as well: what is asked is where the pointer is, and the area has lost the drag
+    /// only when the pointer is outside it. Reading a child's leave as the area's would tear the drag down and put
+    /// it up again on every change of what is under the pointer, which is the carried dock jumping back to the size
+    /// it had and the room opening a second time.
+    /// </remarks>
     /// <param name="sender">The area.</param>
     /// <param name="e">The drag.</param>
     private void Off(object? sender, DragEventArgs e)
     {
+        if (new Rect(Bounds.Size).Contains(e.GetPosition(this)))
+        {
+            return;
+        }
+
         Clear();
         _windows.OverArea = false;
     }
 
     /// <summary>
-    /// Lands a dragged dock on the point it was let go of, or does nothing where there is no point.
+    /// Lands a dragged dock on the answer it was let go of, or does nothing where there is no answer.
     /// </summary>
     /// <remarks>
-    /// The release is the second half of the two-step gesture: hovering a point only says what would happen, and
-    /// this is where the layout is written. A release in a group without a point is a release with no answer, it
-    /// does nothing rather than guessing, and it is still a release the area took: what the host does with a drag
-    /// whose drop landed nowhere is decided by where the release was, and a drop delivered here was delivered over
-    /// this area.
+    /// The release is the second half of the two-step gesture: hovering only says what would happen, and this is
+    /// where the layout is written. What was drawn while the drag was over the area is not carried over: the layout
+    /// is asked for the same answer again, so a drag that is let go of changes the tree once and in one way. A
+    /// release in a group without an answer is a release with no answer, it does nothing rather than guessing, and
+    /// it is still a release the area took: what the host does with a drag whose drop landed nowhere is decided by
+    /// where the release was, and a drop delivered here was delivered over this area.
     /// </remarks>
     /// <param name="sender">The area.</param>
     /// <param name="e">The drop.</param>
@@ -2147,11 +2412,16 @@ internal sealed class DockArea : UserControl
         var side = approach is { } here ? SideAt(here, at) : null;
         var target = approach is { } place && side is { } chosen ? TargetOf(place, chosen) : (DockTarget?)null;
 
-        Clear();
+        // The points go, the carried picture stays: a drop is where it flies from. The room a drag was making goes
+        // as well, since what lands is the layout itself rather than a preview of it.
+        ClearZones();
+        Reset();
         _windows.OverArea = false;
 
         if (instance is null)
         {
+            HideLifted();
+
             return;
         }
 
@@ -2162,6 +2432,7 @@ internal sealed class DockArea : UserControl
 
         if (target is not { } landed)
         {
+            HideLifted();
             e.DragEffects = DragDropEffects.None;
             e.Handled = true;
 
@@ -2175,12 +2446,91 @@ internal sealed class DockArea : UserControl
         // and let go of over the main window is moved into the main window, and one let go of where it already
         // was is not moved at all. What a window may not show twice is the windows' own answer.
         _windows.Land(instance, landed, _window);
+
+        // The place the dock landed in is what the carried picture flies into. What waits under the picture is the
+        // dock's own content, at the place it now belongs, so the flight is one image rather than a live tree. A
+        // dock that landed where it already was is flown too: its view is hidden because it is the one being
+        // carried, and the flight is what puts it back.
+        if (_placed.TryGetValue(instance, out var arrived))
+        {
+            Fly(arrived.Region);
+        }
+        else
+        {
+            HideLifted();
+        }
     }
 
-    /// <summary>Takes the points down, whether a drag ended, left, or was called off.</summary>
+    /// <summary>Empties the place a dock was picked up from, so a drag reads as the dock being taken away.</summary>
+    /// <remarks>
+    /// A region keeps its room while its dock is in the air: what goes is the view, not the column. The dock's
+    /// tab stays, because the strip belongs to the region and the dock is still one of its tabs, and the content
+    /// below is what is left blank until the drag lands or is called off.
+    /// </remarks>
+    /// <param name="sender">The drag.</param>
+    /// <param name="e">Not read.</param>
+    private void Lifted(object? sender, EventArgs e)
+    {
+        var source = DockDrag.Source;
+
+        _carriedDock = source is { } given && Owns(given) ? given : null;
+        _sourceRegion =
+            _carriedDock is { } carried && _placed.TryGetValue(carried, out var placed)
+                ? placed.Region
+                : null;
+
+        // A drag that has ended is drawn back into the layout by the return that is already running, or by the one
+        // its end begins: the room it was making closes into the place the dock stands in again, and the tree is
+        // drawn once it has. What changes meanwhile is which dock is shown, which is said here rather than by
+        // drawing the tree again.
+        if (_recede is not null || _arranged is not null)
+        {
+            Show();
+        }
+        else
+        {
+            Rebuild();
+        }
+    }
+
+    /// <summary>Whether this area draws one dock, which is what makes it the place a drag was picked up from.</summary>
+    /// <param name="instance">The dock being carried.</param>
+    /// <returns>Whether it is one of this area's.</returns>
+    private bool Owns(DockInstance instance) =>
+        _placed.ContainsKey(instance)
+        || (Alone && ReferenceEquals(_alone.Child, instance.View.View));
+
+    /// <summary>Takes the answers down, whether a drag ended, left, or was called off.</summary>
     private void Clear()
     {
+        Release();
+        ClearZones();
+
+        // A flight is drawing the carried picture towards the place it landed: the drag is over, but the picture
+        // is not, and taking it down here would leave the region blank until the flight's timer ends.
+        if (_flight is null)
+        {
+            HideLifted();
+        }
+    }
+
+    /// <summary>Takes the points down but leaves the carried dock up, which is what a drop does.</summary>
+    private void ClearZones()
+    {
         _zonesUp = false;
+        _aim = null;
+        _picked = false;
+
+        HidePoints();
+    }
+
+    /// <summary>Takes the points down but leaves the drag on, which is what the layout moving answers instead.</summary>
+    private void HidePoints()
+    {
+        if (!_zones.IsVisible)
+        {
+            return;
+        }
 
         _approaching = null;
         _points.Clear();
@@ -2188,6 +2538,250 @@ internal sealed class DockArea : UserControl
 
         _zones.Children.Clear();
         _zones.IsVisible = false;
+    }
+
+    /// <summary>Draws the carried dock at the pointer, shrunk as though it had been lifted off its region.</summary>
+    /// <remarks>
+    /// The pickup is played once per drag and not once per frame the picture is put back on: a drag whose answers
+    /// are re-asked is the same dock being carried, and a pickup played again would size the picture up for a frame
+    /// before it shrank, which reads as the dock being picked up a second time.
+    /// </remarks>
+    /// <param name="at">Where the pointer is, in the area's coordinates.</param>
+    private void ShowLifted(Point at)
+    {
+        if (DockDrag.Picture is not { } picture || DockDrag.Lifted is not { Width: > 0, Height: > 0 } size)
+        {
+            return;
+        }
+
+        var growing = !_picked;
+        var first = !_lifted.IsVisible;
+
+        _picked = true;
+
+        if (first)
+        {
+            _carried.Source = picture;
+            _lifted.Width = size.Width;
+            _lifted.Height = size.Height;
+            _lifted.RenderTransformOrigin = new RelativePoint(
+                DockDrag.Grip.X,
+                DockDrag.Grip.Y,
+                RelativeUnit.Absolute
+            );
+
+            _liftScale.Transitions = null;
+            _liftScale.ScaleX = 1;
+            _liftScale.ScaleY = 1;
+            _liftScale.Transitions = _liftGrow;
+
+            _lifted.IsVisible = true;
+            _liftLayer.IsVisible = true;
+        }
+
+        Canvas.SetLeft(_lifted, at.X - DockDrag.Grip.X);
+        Canvas.SetTop(_lifted, at.Y - DockDrag.Grip.Y);
+
+        if (!first)
+        {
+            return;
+        }
+
+        if (growing && Motion.TravelTime(Motion.Feedback) > TimeSpan.Zero)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                _liftScale.ScaleX = LiftScale;
+                _liftScale.ScaleY = LiftScale;
+            });
+        }
+        else
+        {
+            _liftScale.ScaleX = LiftScale;
+            _liftScale.ScaleY = LiftScale;
+        }
+    }
+
+    /// <summary>Takes the carried dock off, which is what ends a drag whatever became of it.</summary>
+    private void HideLifted()
+    {
+        if (!_lifted.IsVisible)
+        {
+            return;
+        }
+
+        _lifted.IsVisible = false;
+        _liftLayer.IsVisible = false;
+        _carried.Source = null;
+
+        _liftScale.Transitions = null;
+        _liftScale.ScaleX = 1;
+        _liftScale.ScaleY = 1;
+        _liftScale.Transitions = _liftGrow;
+    }
+
+    /// <summary>Flies the carried picture into the place the dropped dock now stands.</summary>
+    /// <remarks>
+    /// What moves is the picture taken when the dock was picked up, not the dock itself. A live dock is a tree of
+    /// controls, and scaling that tree from frame to frame makes its listing and its drawing do their work at
+    /// every scale; the picture is drawn once, so the flight costs one image. The content waits underneath, at the
+    /// place it now belongs, and is shown when the picture arrives.
+    /// <para>
+    /// Where that place is is read on a frame after the layout that put it there, because a region just moved into
+    /// a tree still has the bounds it had in the one it left: a flight aimed at those is a flight to where the dock
+    /// used to be, which is another group's place, or to a canvas that is no longer drawn. The picture waits where
+    /// the pointer left it for those frames, and a place that never arrives ends the flight rather than flying the
+    /// dock nowhere.
+    /// </para>
+    /// </remarks>
+    /// <param name="region">The region whose content arrived.</param>
+    private void Fly(Region region)
+    {
+        StopFlight();
+
+        var left = Canvas.GetLeft(_lifted);
+        var top = Canvas.GetTop(_lifted);
+
+        if (
+            Motion.TravelTime(Motion.Panel) <= TimeSpan.Zero
+            || !_lifted.IsVisible
+            || _lifted.Width < 1
+            || _lifted.Height < 1
+            || double.IsNaN(left)
+            || double.IsNaN(top)
+        )
+        {
+            HideLifted();
+            Reveal(region);
+
+            return;
+        }
+
+        var grip = DockDrag.Grip;
+        var scaleX = _liftScale.ScaleX;
+        var scaleY = _liftScale.ScaleY;
+        var endScaleX = scaleX;
+        var endScaleY = scaleY;
+        var endLeft = left;
+        var endTop = top;
+        var resting = false;
+        var waited = 0;
+
+        // The pickup transition is stopped where it stands, so the flight begins from the size the picture has
+        // reached rather than from the size it was aiming for.
+        _liftScale.Transitions = null;
+        _liftScale.ScaleX = scaleX;
+        _liftScale.ScaleY = scaleY;
+
+        region.Content.Transitions = null;
+        region.Content.Opacity = 0;
+        region.Content.IsHitTestVisible = false;
+
+        var started = new Stopwatch();
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(15) };
+
+        timer.Tick += (_, _) =>
+        {
+            if (!resting)
+            {
+                if (RestingPlace(region) is not { } to)
+                {
+                    if (++waited > ArrivalWaits)
+                    {
+                        timer.Stop();
+                        _flight = null;
+                        _flying = null;
+                        Arrived(region);
+                    }
+
+                    return;
+                }
+
+                endScaleX = to.Width / _lifted.Width;
+                endScaleY = to.Height / _lifted.Height;
+                endLeft = to.X - (grip.X * (1 - endScaleX));
+                endTop = to.Y - (grip.Y * (1 - endScaleY));
+
+                resting = true;
+                started.Start();
+            }
+
+            var t = Math.Min(1, started.Elapsed.TotalMilliseconds / Motion.Panel.TotalMilliseconds);
+            var eased = Motion.Expo.Ease(t);
+
+            _liftScale.ScaleX = scaleX + ((endScaleX - scaleX) * eased);
+            _liftScale.ScaleY = scaleY + ((endScaleY - scaleY) * eased);
+            Canvas.SetLeft(_lifted, left + ((endLeft - left) * eased));
+            Canvas.SetTop(_lifted, top + ((endTop - top) * eased));
+
+            if (t < 1)
+            {
+                return;
+            }
+
+            timer.Stop();
+            _flight = null;
+            _flying = null;
+            Arrived(region);
+        };
+
+        _flight = timer;
+        _flying = region;
+        timer.Start();
+    }
+
+    /// <summary>
+    /// Where a dropped dock's content now stands, or nothing while the layout has not given it its room yet.
+    /// </summary>
+    /// <remarks>
+    /// The rectangle is read off the control and checked against the room the tree gives its group, which is worked
+    /// out from the tree rather than from the controls: a region that has just been moved into a tree keeps the
+    /// bounds it had, and those are either another group's place or a place in the arrangement that is no more.
+    /// </remarks>
+    /// <param name="region">The region the dock landed in.</param>
+    /// <returns>Where the content stands, or nothing.</returns>
+    private Rect? RestingPlace(Region region)
+    {
+        var found = BoundsOf(region.Content);
+
+        if (found.Width < 1 || found.Height < 1)
+        {
+            return null;
+        }
+
+        // The middle of the content rather than the whole of it, because a room is worked out in fractions and the
+        // controls are placed on whole pixels: a pixel of rounding must not read as a place the dock has left.
+        return Rooms(Layout.Root, null, null, 0).TryGetValue(region.Id, out var box)
+            && box.Contains(found.Center)
+                ? found
+                : null;
+    }
+
+    /// <summary>Puts a region's own content back, and takes the carried picture down with it.</summary>
+    /// <param name="region">The region the dock landed in.</param>
+    private void Arrived(Region region)
+    {
+        region.Content.Opacity = 1;
+        region.Content.IsHitTestVisible = true;
+        region.Content.Transitions = region.Fade;
+
+        HideLifted();
+    }
+
+    /// <summary>Ends a flight in flight, putting its region back as it stands.</summary>
+    private void StopFlight()
+    {
+        _flight?.Stop();
+        _flight = null;
+
+        if (_flying is { } region)
+        {
+            region.Content.Opacity = 1;
+            region.Content.IsHitTestVisible = true;
+            region.Content.Transitions = region.Fade;
+        }
+
+        _flying = null;
     }
 
     /// <summary>
@@ -2207,7 +2801,9 @@ internal sealed class DockArea : UserControl
     /// <returns>What the point has come to, or nothing when it is outside the area.</returns>
     private Approach? Approached(Point at)
     {
-        if (Bounds.Width <= 0 || Bounds.Height <= 0 || !Bounds.Contains(at))
+        var room = new Rect(Bounds.Size);
+
+        if (room.Width <= 0 || room.Height <= 0 || !room.Contains(at))
         {
             return null;
         }
@@ -2217,25 +2813,25 @@ internal sealed class DockArea : UserControl
         // edge of the window however the tree happens to be arranged.
         if (EdgeAt(at) is { } edge)
         {
-            return new Approach(new Rect(0, 0, Bounds.Width, Bounds.Height), null, edge);
+            return new Approach(room, null, edge);
         }
 
         if (Layout.Root is not null)
         {
+            // The answers as they stood when the drag reached the area: a room opened under the pointer moves the
+            // groups on screen, and what the pointer is aimed at has to stay where it was seen.
+            var rooms = _aim ??= Rooms(Layout.Root, null, null, 0);
+
             foreach (var group in DockTree.Groups(Layout))
             {
-                if (
-                    _regions.TryGetValue(group.Id, out var region)
-                    && Box(region.Panel) is { } leaf
-                    && leaf.Contains(at)
-                )
+                if (rooms.TryGetValue(group.Id, out var leaf) && leaf.Contains(at))
                 {
                     return new Approach(leaf, group);
                 }
             }
         }
 
-        return new Approach(new Rect(0, 0, Bounds.Width, Bounds.Height), null);
+        return new Approach(room, null);
     }
 
     /// <summary>The pane edge a point is near, or nothing when it is not near one.</summary>
@@ -2282,7 +2878,7 @@ internal sealed class DockArea : UserControl
             return DockSide.Center;
         }
 
-        foreach (var shape in Shapes(approach.Leaf))
+        foreach (var shape in Aim(approach.Leaf))
         {
             if (Contains(shape.Outline, at))
             {
@@ -2292,6 +2888,18 @@ internal sealed class DockArea : UserControl
 
         return null;
     }
+
+    /// <summary>The points a drop can land on in a group, as the level in force aims them.</summary>
+    /// <remarks>
+    /// The cluster is inset from the group's own edges, because what is said is where a drop would land and not
+    /// which group it is nearest: the very edge of a group is as likely to be aimed at the group beside it, and
+    /// the room the layout makes while the pointer is on an answer is made by the answer rather than by the group.
+    /// A group too small to spare the share keeps its answers whole, since the room is measured in pixels and a
+    /// share of nothing is nothing.
+    /// </remarks>
+    /// <param name="leaf">The rectangle of the group.</param>
+    /// <returns>The aim, the centre first.</returns>
+    internal static IReadOnlyList<DockPointShape> Aim(Rect leaf) => Shapes(leaf, ShowsRoom);
 
     /// <summary>The place a drop on one of a group's points would put the dock.</summary>
     /// <param name="approach">What the drag has come to.</param>
@@ -2321,30 +2929,81 @@ internal sealed class DockArea : UserControl
             : new DockTarget(active.Id, DockSide.Center, active.Docks.Count);
     }
 
-    /// <summary>A control's rectangle in the area's own coordinates, or nothing when it is not drawn.</summary>
-    /// <param name="control">The control.</param>
-    /// <returns>The rectangle, or nothing.</returns>
-    private Rect? Box(Control control)
+    /// <summary>
+    /// Says what the drag has come to: the room it would take, or the points it could be put on.
+    /// </summary>
+    /// <remarks>
+    /// The two answers are for the two kinds of look. Where travel is drawn, the answer is the layout itself: the
+    /// groups make room for the dock while the pointer is on an answer, and no shape is drawn, because a shape
+    /// over the room that was just made would be the same answer twice. Where travel is not drawn, the layout
+    /// changes only when the drop is let go of, so the answer is the five points, lit by the one under the pointer.
+    /// <para>
+    /// A group takes the drag wherever in it the pointer is, but a drop lands only on an answer, so what the area
+    /// says is "may be dropped" only when the pointer is on one, and merely "still here" while it is only near
+    /// one. Joining a group's tabs is an answer that moves nothing, and the release lands it all the same.
+    /// </para>
+    /// </remarks>
+    /// <param name="approach">What the drag has come to, or nothing.</param>
+    /// <param name="side">The point it is over, or nothing.</param>
+    /// <param name="carried">The dock the drag is carrying.</param>
+    private void Preview(Approach? approach, DockSide? side, DockInstance carried)
     {
-        var origin = control.TranslatePoint(new Point(0, 0), this);
+        if (!_zonesUp)
+        {
+            return;
+        }
 
-        return origin is null ? null : new Rect(origin.Value, control.Bounds.Size);
+        // The answers are drawn where the layout does not move to say them, and, for a debugging run, over the
+        // room it makes as well: what is shown then is what a drop would land on, in the shape it is hit in.
+        if (!ShowsRoom || DockDebug.Aim)
+        {
+            ShowPoints(approach, side);
+        }
+        else
+        {
+            HidePoints();
+        }
+
+        if (!ShowsRoom)
+        {
+            return;
+        }
+
+        if (approach is { } here && side is { } chosen && chosen != DockSide.Center)
+        {
+            Arrange(here, chosen, carried);
+
+            return;
+        }
+
+        Release();
     }
+
+    /// <summary>
+    /// Whether the area says where a drop would land by moving the layout rather than by drawing the points.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the level in force rather than kept as a setting of the area's: a level that draws travel can show
+    /// a room being made, and a level that does not has to draw the answer instead, because a layout that changes
+    /// at once is a layout nothing was read from.
+    /// </remarks>
+    private static bool ShowsRoom => Motion.TravelTime(Motion.Panel) > TimeSpan.Zero;
 
     /// <summary>
     /// Draws what the drag has come to: the five points of the group under the pointer, lit by the one it is over.
     /// </summary>
     /// <remarks>
-    /// The points are only drawn for the group under the pointer, since a drag is over one group at a time: a second
-    /// group's points would be a second answer to a question that has one. What is being aimed at is said by the
-    /// point itself, the five fill the group, so a lit point is the whole of where the dock would go and no second
-    /// box is drawn over it, which would be one more surface over a shape that already said it.
+    /// The points are only drawn for the group under the pointer, since a drag is over one group at a time: a
+    /// second group's points would be a second answer to a question that has one. What is being aimed at is said
+    /// by the point itself, the five of them fill what a drop may land on, so a lit point is the whole of where the
+    /// dock would go and no second box is drawn over it, which would be one more surface over a shape that already
+    /// said it.
     /// </remarks>
     /// <param name="approach">What the drag has come to, or nothing.</param>
     /// <param name="side">The point it is over, or nothing.</param>
-    private void Preview(Approach? approach, DockSide? side)
+    private void ShowPoints(Approach? approach, DockSide? side)
     {
-        if (!_zonesUp || approach is not { } here)
+        if (approach is not { } here)
         {
             return;
         }
@@ -2360,7 +3019,27 @@ internal sealed class DockArea : UserControl
         }
 
         _approaching = here;
-        _zones.IsVisible = true;
+
+        if (!_zones.IsVisible)
+        {
+            _zones.IsVisible = true;
+
+            // The cluster is put in before it is shown, so what fades is the whole answer rather than each
+            // shape on its own. A move between groups keeps it up and only the lit point changes, which is
+            // why the fade is on the one becoming visible rather than on every Preview.
+            if (Motion.FadeTime(Motion.Feedback) > TimeSpan.Zero)
+            {
+                _zones.Transitions = null;
+                _zones.Opacity = 0;
+                _zones.Transitions = _zoneFade;
+
+                Dispatcher.UIThread.Post(() => _zones.Opacity = 1);
+            }
+            else
+            {
+                _zones.Opacity = 1;
+            }
+        }
 
         foreach (var (pointed, zone) in _points)
         {
@@ -2368,12 +3047,528 @@ internal sealed class DockArea : UserControl
         }
     }
 
-    /// <summary>Builds the overlay for one group: the five points a drop could land on, and nothing else.</summary>
+    /// <summary>Makes room for a dragged dock in the layout, or gives up the room it was making.</summary>
+    /// <remarks>
+    /// The room is opened once and then moved: a pointer going from one answer to another is a second tree with the
+    /// same regions in it, so what changes is where each region stands and not what the area draws at all. A drop
+    /// that would change nothing closes the room and leaves the layout as it stands.
+    /// </remarks>
+    /// <param name="approach">The group the drop is on.</param>
+    /// <param name="side">The side of it.</param>
+    /// <param name="carried">The dock being dragged.</param>
+    private void Arrange(Approach approach, DockSide side, DockInstance carried)
+    {
+        // A room that was closing is opened again from where it had got to rather than started over: the hand has
+        // come back to an answer it left, and a second arrival from nowhere would be a jump.
+        var returning = _recede is not null;
+
+        _recede?.Stop();
+        _recede = null;
+
+        var standing = _arranged;
+
+        if (
+            !returning
+            && standing is not null
+            && standing.Side == side
+            && string.Equals(standing.Target, approach.Group?.Id, StringComparison.Ordinal)
+        )
+        {
+            return;
+        }
+
+        if (Room(approach, side, carried) is not { } made)
+        {
+            Release();
+
+            return;
+        }
+
+        if (standing is not null && Same(standing, made))
+        {
+            Move();
+
+            return;
+        }
+
+        _arranged = made;
+
+        if (standing is not null)
+        {
+            Move();
+
+            return;
+        }
+
+        if (!Adopt())
+        {
+            Reset();
+
+            return;
+        }
+
+        // The room opens from the layout as it stands, which is only true once the layout pass has placed the
+        // regions where they were put: moving them in the same pass would be a jump to the answer.
+        Dispatcher.UIThread.Post(() =>
+        {
+            Wear();
+            Move();
+        });
+    }
+
+    /// <summary>Puts an open room back after the tree was drawn again, without playing it again.</summary>
+    /// <remarks>
+    /// What a layout that changed under a drag changes is the tree, not the answer: the room is where it was, and
+    /// placing it again rather than opening it again is what keeps a dock arriving or leaving in the background
+    /// from flickering the room the pointer is on.
+    /// </remarks>
+    private void Restage()
+    {
+        if (!Adopt())
+        {
+            Reset();
+
+            return;
+        }
+
+        Move();
+        Wear();
+    }
+
+    /// <summary>What a drop on a side of a group would make of the layout.</summary>
+    /// <param name="approach">The group the drop is on.</param>
+    /// <param name="side">The side of it.</param>
+    /// <param name="carried">The dock being dragged.</param>
+    /// <returns>The room it would take, or nothing when the drop would change nothing.</returns>
+    private Arrangement? Room(Approach approach, DockSide side, DockInstance carried)
+    {
+        if (_manager.Ahead(carried, TargetOf(approach, side)) is not { Root: { } root } ahead)
+        {
+            return null;
+        }
+
+        if (DockTree.GroupOf(ahead, DockManager.AheadNameId, 0) is not { } incoming)
+        {
+            return null;
+        }
+
+        if (Opening(root, incoming.Id) is not { } opening)
+        {
+            // The tree holds nothing else: the room is the whole layout, and there is nothing to make it out of.
+            return null;
+        }
+
+        return new Arrangement(
+            root,
+            incoming.Id,
+            opening,
+            IsGroup(opening.First, incoming.Id) ? 0 : 1,
+            approach.Group?.Id,
+            side
+        );
+    }
+
+    /// <summary>Whether two arrangements show the same answer, which is the same tree with the regions in it.</summary>
+    /// <param name="one">An arrangement.</param>
+    /// <param name="other">The other.</param>
+    /// <returns>Whether they say the same thing.</returns>
+    private static bool Same(Arrangement one, Arrangement other) =>
+        one.Side == other.Side && string.Equals(one.Target, other.Target, StringComparison.Ordinal);
+
+    /// <summary>The split that opens to make room for a group, or nothing when the tree is that group alone.</summary>
+    /// <param name="node">The tree to walk.</param>
+    /// <param name="id">The group standing for the dock.</param>
+    /// <returns>The split, or nothing.</returns>
+    private static LayoutSplit? Opening(LayoutNode? node, string id) =>
+        node is not LayoutSplit split
+            ? null
+            : IsGroup(split.First, id) || IsGroup(split.Second, id)
+                ? split
+                : Opening(split.First, id) ?? Opening(split.Second, id);
+
+    /// <summary>Whether a node is one group.</summary>
+    /// <param name="node">The node.</param>
+    /// <param name="id">The group id.</param>
+    /// <returns>Whether it is the group with that id.</returns>
+    private static bool IsGroup(LayoutNode? node, string id) =>
+        node is LayoutGroup group && string.Equals(group.Id, id, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Takes the regions out of the tree and puts them where they stand, which is what lets them move.
+    /// </summary>
+    /// <remarks>
+    /// The tree places a region by its share of the room, and a share is the grid's own number rather than a
+    /// distance: it cannot be eased from one value to another. The regions are therefore placed as rectangles for
+    /// as long as a drag is showing where it would land, at the rectangles the tree gives them, which is where
+    /// they already are, and the move to the room the drop makes is made from there.
+    /// </remarks>
+    /// <returns>Whether the area has a room to arrange them in.</returns>
+    private bool Adopt()
+    {
+        var room = new Rect(_surface.Bounds.Size);
+
+        if (room.Width < 1 || room.Height < 1)
+        {
+            return false;
+        }
+
+        var standing = Rooms(Layout.Root, null, null, 0);
+
+        if (standing.Count == 0)
+        {
+            return false;
+        }
+
+        _arrange.Background = Brushes.Transparent;
+
+        // The seams of the layout as it stands are not the seams of the one a drop would make, and they hang over
+        // the docks: left up, they would be drawn through the room that is opening and behind the groups moving.
+        foreach (var part in _splits)
+        {
+            part.Handle.IsVisible = false;
+        }
+
+        foreach (var region in _regions.Values)
+        {
+            if (region.Panel.Parent is Panel parent)
+            {
+                parent.Children.Remove(region.Panel);
+            }
+        }
+
+        foreach (var (id, box) in standing)
+        {
+            if (!_regions.TryGetValue(id, out var region))
+            {
+                continue;
+            }
+
+            var panel = region.Panel;
+
+            panel.Transitions = null;
+            panel.Opacity = 1;
+
+            // A group that is moving is a surface rather than a hole in the ground: two groups pass over one
+            // another while the room opens, and a face that is the ground's own colour is what makes the one in
+            // front the one that is read. At rest the face is the area's, which is why the region has none then.
+            panel[!Panel.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Bright);
+
+            Place(panel, box);
+
+            if (!_arrange.Children.Contains(panel))
+            {
+                _arrange.Children.Add(panel);
+            }
+        }
+
+        _incoming.Transitions = null;
+        _incoming.Opacity = 1;
+        _incoming.IsVisible = true;
+        Place(_incoming, Closed());
+
+        return true;
+    }
+
+    /// <summary>Turns the transitions on for the groups that are arranged, which is after they have been placed.</summary>
+    private void Wear()
+    {
+        foreach (var region in _regions.Values)
+        {
+            if (ReferenceEquals(region.Panel.Parent, _arrange))
+            {
+                region.Panel.Transitions = _arrangeTravel;
+            }
+        }
+
+        _incoming.Transitions = _arrangeTravel;
+    }
+
+    /// <summary>Places every region where the arrangement puts it, which is what moves them there.</summary>
+    private void Move()
+    {
+        if (_arranged is not { } standing)
+        {
+            return;
+        }
+
+        var rooms = Rooms(standing.Root, standing.Incoming, null, 0);
+
+        foreach (var (id, region) in _regions)
+        {
+            var panel = region.Panel;
+
+            if (!ReferenceEquals(panel.Parent, _arrange))
+            {
+                continue;
+            }
+
+            if (rooms.TryGetValue(id, out var box))
+            {
+                Place(panel, box);
+                panel.Opacity = 1;
+
+                continue;
+            }
+
+            // A group whose only dock was taken out is in no tree at all: the strip it is holding is left where
+            // it stands and faded, since a region that is nowhere is not one to be moved anywhere.
+            panel.Opacity = 0;
+        }
+
+        if (rooms.TryGetValue(standing.Incoming, out var room))
+        {
+            Place(_incoming, room);
+        }
+    }
+
+    /// <summary>Gives up the room a drag was making, showing the layout as it stands again.</summary>
+    /// <remarks>
+    /// The room is closed the way it was opened: the regions return to where they stand and the room shuts, and the
+    /// tree is drawn again once they have arrived. A level that draws no travel has nothing to show, so the area is
+    /// put back at once. A room closed because the layout itself changed is given up by the drawing of the new
+    /// layout, which <see cref="Reset"/> is a part of.
+    /// </remarks>
+    private void Release()
+    {
+        if (_arranged is not { } standing || _recede is not null)
+        {
+            return;
+        }
+
+        if (!ShowsRoom)
+        {
+            Reset();
+            Render();
+
+            return;
+        }
+
+        var rooms = Rooms(Layout.Root, null, null, 0);
+
+        foreach (var (id, region) in _regions)
+        {
+            var panel = region.Panel;
+
+            if (!ReferenceEquals(panel.Parent, _arrange))
+            {
+                continue;
+            }
+
+            if (rooms.TryGetValue(id, out var box))
+            {
+                Place(panel, box);
+            }
+
+            panel.Opacity = 1;
+        }
+
+        if (Rooms(standing.Root, standing.Incoming, null, 0).TryGetValue(standing.Incoming, out var room))
+        {
+            Place(_incoming, Shrink(room, standing.Opening.Axis, standing.From));
+        }
+
+        // The dock a drag was carrying is shown in its region again while the room closes, which is what a drag that
+        // has ended means and what a drag still in flight does not: the views are said again from where the drag
+        // stands rather than moved, and a region whose dock is still in the air keeps it hidden.
+        if (_sourceRegion is not null && _carriedDock is null)
+        {
+            Show();
+        }
+
+        var timer = new DispatcherTimer { Interval = Motion.TravelTime(Motion.Panel) };
+
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            _recede = null;
+
+            // The room is given up before the tree is drawn: a drawing puts an open room back where it was, and
+            // this one is closed.
+            _arranged = null;
+
+            // The tree is drawn again rather than put back by hand, because what the drag left behind may have
+            // changed what the area holds: a carried dock is shown in its region again once it has been let go of.
+            Rebuild();
+        };
+
+        _recede = timer;
+        timer.Start();
+    }
+
+    /// <summary>Puts the regions and the room back as the layout stands, without drawing the tree again.</summary>
+    private void Reset()
+    {
+        _recede?.Stop();
+        _recede = null;
+        _arranged = null;
+
+        _incoming.IsVisible = false;
+        _arrange.Background = null;
+
+        foreach (var part in _splits)
+        {
+            part.Handle.IsVisible = true;
+        }
+
+        foreach (var region in _regions.Values)
+        {
+            region.Panel.Transitions = null;
+            region.Panel.Background = Brushes.Transparent;
+            region.Panel.Opacity = 1;
+            region.Panel.Width = double.NaN;
+            region.Panel.Height = double.NaN;
+        }
+    }
+
+    /// <summary>Where the room stands before it is opened: the seam it opens from, of no size.</summary>
+    /// <returns>The rectangle, in the arrangement's coordinates.</returns>
+    private Rect Closed()
+    {
+        var standing = _arranged;
+
+        return standing is not null
+            && Rooms(standing.Root, standing.Incoming, null, 0).TryGetValue(standing.Incoming, out var room)
+            ? Shrink(room, standing.Opening.Axis, standing.From)
+            : default;
+    }
+
+    /// <summary>Puts a control at a rectangle, which a canvas and a size are enough for.</summary>
+    /// <param name="control">The control to place.</param>
+    /// <param name="box">Where.</param>
+    private static void Place(Control control, Rect box)
+    {
+        Canvas.SetLeft(control, box.X);
+        Canvas.SetTop(control, box.Y);
+        control.Width = Math.Max(0, box.Width);
+        control.Height = Math.Max(0, box.Height);
+    }
+
+    /// <summary>The rectangle a room closes into: the seam it opens from, of no size.</summary>
+    /// <param name="box">Where the room is when it is open.</param>
+    /// <param name="axis">The axis the split it opens in divides.</param>
+    /// <param name="from">The share the room's side has while it is closed.</param>
+    /// <returns>The rectangle it stands at closed.</returns>
+    private static Rect Shrink(Rect box, DockAxis axis, double from) =>
+        axis == DockAxis.Columns
+            ? new Rect(from < 0.5 ? box.X : box.Right, box.Y, 0, box.Height)
+            : new Rect(box.X, from < 0.5 ? box.Y : box.Bottom, box.Width, 0);
+
+    /// <summary>
+    /// The rectangle of every group a tree draws, in the area's own coordinates.
+    /// </summary>
+    /// <remarks>
+    /// The same arithmetic the tree is drawn with: a split divides its room by its share, and a group that draws
+    /// nothing gives its room to the group beside it. It is worked out rather than read off the controls because a
+    /// drag is answered while the regions may be somewhere else, the arrangement having taken them out of the
+    /// tree, and because what a hit test needs is the layout rather than what happens to be drawn.
+    /// </remarks>
+    /// <param name="root">The tree to lay out.</param>
+    /// <param name="incoming">The group standing for the dock being carried, which draws with no docks in it.</param>
+    /// <param name="opening">The split whose share is to be overridden, or nothing.</param>
+    /// <param name="share">The share <paramref name="opening"/> is read as.</param>
+    /// <returns>The rectangle of each group drawn, by the group's id.</returns>
+    private Dictionary<string, Rect> Rooms(
+        LayoutNode? root,
+        string? incoming,
+        LayoutSplit? opening,
+        double share
+    )
+    {
+        var rooms = new Dictionary<string, Rect>(StringComparer.Ordinal);
+
+        Walk(root, new Rect(_surface.Bounds.Size));
+
+        return rooms;
+
+        void Walk(LayoutNode? node, Rect room)
+        {
+            switch (node)
+            {
+                case null:
+                    return;
+
+                case LayoutGroup group:
+                    if (Draws(group))
+                    {
+                        rooms[group.Id] = room;
+                    }
+
+                    return;
+
+                default:
+                    var split = (LayoutSplit)node;
+
+                    // A split with one side drawing nothing is no split at all: the control that is there takes the
+                    // room of both, which is what the tree builds when it draws itself.
+                    if (!Draws(split.First))
+                    {
+                        Walk(split.Second, room);
+
+                        return;
+                    }
+
+                    if (!Draws(split.Second))
+                    {
+                        Walk(split.First, room);
+
+                        return;
+                    }
+
+                    var ratio = ReferenceEquals(split, opening) ? share : split.Ratio;
+
+                    if (split.Axis == DockAxis.Columns)
+                    {
+                        Walk(split.First, new Rect(room.X, room.Y, room.Width * ratio, room.Height));
+                        Walk(
+                            split.Second,
+                            new Rect(
+                                room.X + (room.Width * ratio),
+                                room.Y,
+                                room.Width * (1 - ratio),
+                                room.Height
+                            )
+                        );
+                    }
+                    else
+                    {
+                        Walk(split.First, new Rect(room.X, room.Y, room.Width, room.Height * ratio));
+                        Walk(
+                            split.Second,
+                            new Rect(
+                                room.X,
+                                room.Y + (room.Height * ratio),
+                                room.Width,
+                                room.Height * (1 - ratio)
+                            )
+                        );
+                    }
+
+                    return;
+            }
+        }
+
+        bool Draws(LayoutNode? node) =>
+            node switch
+            {
+                null => false,
+                LayoutGroup group =>
+                    (incoming is { } carried && string.Equals(group.Id, carried, StringComparison.Ordinal))
+                    || Drawn(group),
+                LayoutSplit split => Draws(split.First) || Draws(split.Second),
+                _ => false,
+            };
+    }
+
+    /// <summary>Builds the overlay for one group: the answers a drop could land on, and nothing else.</summary>
     /// <remarks>
     /// The children are rebuilt when the group under the pointer changes and kept while it does not, because the
     /// pointer spends a drag moving between points of one group and rebuilding five shapes on every move would be
     /// drawing work for a change of class. What moves with the pointer is only which point wears
     /// <see cref="DockPointOverClass"/>.
+    /// <para>
+    /// What is drawn is what is hit (see <see cref="Aim"/>), so a debugging run watches the same shapes a drop is
+    /// read against rather than a larger set drawn for the eye.
+    /// </para>
     /// </remarks>
     /// <param name="approach">What the drag has come to.</param>
     private void Show(Approach approach)
@@ -2383,10 +3578,10 @@ internal sealed class DockArea : UserControl
         _shapes.Clear();
 
         IReadOnlyList<DockPointShape> shapes = approach.Edge is { } edge
-            ? [.. Shapes(approach.Leaf).Where(shape => shape.Side == edge)]
+            ? [.. Aim(approach.Leaf).Where(shape => shape.Side == edge)]
             : approach.Group is null
                 ? Whole(approach.Leaf)
-                : Shapes(approach.Leaf);
+                : Aim(approach.Leaf);
 
         foreach (var shape in shapes)
         {
@@ -2404,30 +3599,47 @@ internal sealed class DockArea : UserControl
 
     /// <summary>
     /// The five points a dock can be put on in a group: four isosceles trapezoids along its edges around a centre
-    /// rectangle, filling the group.
+    /// rectangle, filling the group or the room a drag is aimed in.
     /// </summary>
     /// <remarks>
-    /// The group is the target, so the five points are the whole of it: each trapezoid's long side is one of the
-    /// group's edges and its short side is the centre rectangle, so the shape itself says which way the dock goes,
-    /// and every point of the group is on exactly one of them. A binary split has two children, a column split and
-    /// a row split, so left and right are the two ways to split a group into columns and top and bottom are the two
-    /// ways to split it into rows.
+    /// The points are the target, so the five of them fill it: each trapezoid's long side is one of its edges and
+    /// its short side is the centre rectangle, so the shape itself says which way the dock goes, and every point
+    /// of the target is on exactly one of them. A binary split has two children, a column split and a row split,
+    /// so left and right are the two ways to split a group into columns and top and bottom are the two ways to
+    /// split it into rows.
     /// <para>
     /// The trapezoids are a band of <see cref="DockPointEdge"/> along the edges and the centre is what they leave,
-    /// which is why the centre keeps the group's shape rather than being a square: a wide group has a wide centre,
-    /// and the middle of a group is the whole of what is not along its edges.
+    /// which is why the centre keeps the target's shape rather than being a square: a wide target has a wide
+    /// centre, and the middle of one is the whole of what is not along its edges.
+    /// </para>
+    /// <para>
+    /// An inset cluster is the same five points on the group brought in by <see cref="DockPointPadding"/> on each
+    /// side, which is what a drag is aimed in where the layout moves: the group's own edge is where a drop would
+    /// be aimed at the group beside it, and a room the layout makes is made by an answer and not by a group.
     /// </para>
     /// </remarks>
     /// <param name="leaf">The rectangle of the group, in the area's coordinates.</param>
+    /// <param name="inset">Whether to draw the cluster inside the group rather than over the whole of it.</param>
     /// <returns>The five points, the centre first.</returns>
-    internal static IReadOnlyList<DockPointShape> Shapes(Rect leaf)
+    internal static IReadOnlyList<DockPointShape> Shapes(Rect leaf, bool inset = false)
     {
-        var band = Math.Min(DockPointEdge, Math.Min(leaf.Width, leaf.Height) / 3);
+        var padding = Math.Min(DockPointPadding, Math.Min(leaf.Width, leaf.Height) / 4);
+
+        var box = inset
+            ? new Rect(
+                leaf.X + padding,
+                leaf.Y + padding,
+                leaf.Width - (padding * 2),
+                leaf.Height - (padding * 2)
+            )
+            : leaf;
+
+        var band = Math.Min(DockPointEdge, Math.Min(box.Width, box.Height) / 3);
         var inner = new Rect(
-            leaf.X + band,
-            leaf.Y + band,
-            leaf.Width - (band * 2),
-            leaf.Height - (band * 2)
+            box.X + band,
+            box.Y + band,
+            box.Width - (band * 2),
+            box.Height - (band * 2)
         );
 
         return
@@ -2436,26 +3648,26 @@ internal sealed class DockArea : UserControl
             new(
                 DockSide.Left,
                 [
-                    new Point(leaf.X, leaf.Y),
+                    new Point(box.X, box.Y),
                     new Point(inner.X, inner.Y),
                     new Point(inner.X, inner.Bottom),
-                    new Point(leaf.X, leaf.Bottom),
+                    new Point(box.X, box.Bottom),
                 ]
             ),
             new(
                 DockSide.Right,
                 [
                     new Point(inner.Right, inner.Y),
-                    new Point(leaf.Right, leaf.Y),
-                    new Point(leaf.Right, leaf.Bottom),
+                    new Point(box.Right, box.Y),
+                    new Point(box.Right, box.Bottom),
                     new Point(inner.Right, inner.Bottom),
                 ]
             ),
             new(
                 DockSide.Top,
                 [
-                    new Point(leaf.X, leaf.Y),
-                    new Point(leaf.Right, leaf.Y),
+                    new Point(box.X, box.Y),
+                    new Point(box.Right, box.Y),
                     new Point(inner.Right, inner.Y),
                     new Point(inner.X, inner.Y),
                 ]
@@ -2465,8 +3677,8 @@ internal sealed class DockArea : UserControl
                 [
                     new Point(inner.X, inner.Bottom),
                     new Point(inner.Right, inner.Bottom),
-                    new Point(leaf.Right, leaf.Bottom),
-                    new Point(leaf.X, leaf.Bottom),
+                    new Point(box.Right, box.Bottom),
+                    new Point(box.X, box.Bottom),
                 ]
             ),
         ];

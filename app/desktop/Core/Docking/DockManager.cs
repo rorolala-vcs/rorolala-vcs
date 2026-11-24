@@ -23,6 +23,17 @@ namespace RorolalaDesktop.Docking;
 /// </remarks>
 internal sealed class DockManager
 {
+    /// <summary>
+    /// The name id of the dock a preview of a drop stands in with, which no live instance answers to.
+    /// </summary>
+    /// <remarks>
+    /// A preview is a layout the tree is asked for and not a layout that is kept: the dock being dragged has a
+    /// region of its own, which is the place it left, so what stands for it where it would land is a dock that
+    /// is nothing but a name for the room. The name is a character a dock name id cannot hold, since a name id
+    /// is an identifier written as <c>&lt;plugin-id&gt;.&lt;dock&gt;</c>.
+    /// </remarks>
+    public const string AheadNameId = "\u001f";
+
     /// <summary>The registrations.</summary>
     private readonly DockRegistry _registry;
 
@@ -742,7 +753,132 @@ internal sealed class DockManager
     {
         ArgumentNullException.ThrowIfNull(instance);
 
-        var group = DockTree.GroupOf(Layout, instance.DockNameId, instance.Ordinal);
+        // A drop that would leave the arrangement as it is is a drop that does nothing: a dock let go of beside the
+        // group it is already beside is a dock already there, and the split written again would only reset the
+        // share the two already have.
+        if (!Moves(instance, target))
+        {
+            return;
+        }
+
+        if (Put(Layout, instance, target, () => Record(instance)) is not { } group)
+        {
+            return;
+        }
+
+        instance.GroupId = group;
+        instance.Window = null;
+        instance.OpenedHere = false;
+        Raise();
+    }
+
+    /// <summary>
+    /// The layout a drop would make, without making it.
+    /// </summary>
+    /// <remarks>
+    /// What a drag draws while it is over an answer: the tree it would leave behind, with the group the dock would
+    /// land in standing for the dock alone, since the dock has a region of its own at the place it is leaving.
+    /// Nothing here changes the live layout, so a drag that is called off has nothing to undo, and a drag that
+    /// lands asks <see cref="Move"/> for the same answer again rather than carrying this one over.
+    /// </remarks>
+    /// <param name="instance">The dock being dragged.</param>
+    /// <param name="target">Where the drop said it goes.</param>
+    /// <returns>The layout the drop would make, or nothing when it would change nothing.</returns>
+    internal DockLayout? Ahead(DockInstance instance, DockTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+
+        if (Settled(instance, target) is not { } ahead)
+        {
+            return null;
+        }
+
+        if (DockTree.GroupOf(ahead, instance.DockNameId, instance.Ordinal) is { } landed)
+        {
+            landed.Docks = [new LayoutDock { DockNameId = AheadNameId, Ordinal = 0 }];
+            landed.Active = 0;
+        }
+
+        return ahead;
+    }
+
+    /// <summary>Whether a drop would move the docks anywhere.</summary>
+    /// <param name="instance">The dock being dragged.</param>
+    /// <param name="target">Where the drop said it goes.</param>
+    /// <returns>Whether the arrangement would be another one.</returns>
+    private bool Moves(DockInstance instance, DockTarget target) => Settled(instance, target) is not null;
+
+    /// <summary>
+    /// The layout a drop would leave behind, or nothing when it would leave the arrangement as it is.
+    /// </summary>
+    /// <remarks>
+    /// The answer a landing and a preview are both read from, so that what a drag shows and what it does are one
+    /// answer. A drop that would put a dock back among the docks it is already beside is that answer returning
+    /// nothing: it is the same place, whatever the tree would have been rewritten as.
+    /// </remarks>
+    /// <param name="instance">The dock that would move.</param>
+    /// <param name="target">Where the drop said it goes.</param>
+    /// <returns>The layout, or nothing when nothing would move.</returns>
+    private DockLayout? Settled(DockInstance instance, DockTarget target)
+    {
+        var ahead = new DockLayout
+        {
+            Root = Layout.Root is { } root ? DockTree.Copy(root, dock => dock) : null,
+            ActiveGroup = Layout.ActiveGroup,
+            GroupIdHighWater = Layout.GroupIdHighWater,
+        };
+
+        return Put(ahead, instance, target, () => Record(instance)) is null || Same(Layout.Root, ahead.Root)
+            ? null
+            : ahead;
+    }
+
+    /// <summary>
+    /// Whether two trees put the same docks in the same places.
+    /// </summary>
+    /// <remarks>
+    /// The shares and the ids are left out on purpose: what a drop is asked is whether it would move a dock, and a
+    /// group named again at the same place holding the same tabs is the same place. Two docks of one group in
+    /// another order are not, which is what makes a dock dropped among its own tabs a move.
+    /// </remarks>
+    /// <param name="one">A tree.</param>
+    /// <param name="other">The other.</param>
+    /// <returns>Whether they arrange the same docks the same way.</returns>
+    private static bool Same(LayoutNode? one, LayoutNode? other) =>
+        (one, other) switch
+        {
+            (null, null) => true,
+            (LayoutGroup ours, LayoutGroup theirs) =>
+                ours.Docks.Count == theirs.Docks.Count
+                && ours.Docks.Zip(theirs.Docks)
+                    .All(pair => pair.Second.Ordinal == pair.First.Ordinal
+                        && string.Equals(pair.Second.DockNameId, pair.First.DockNameId, StringComparison.Ordinal)),
+            (LayoutSplit ours, LayoutSplit theirs) =>
+                ours.Axis == theirs.Axis
+                && Same(ours.First, theirs.First)
+                && Same(ours.Second, theirs.Second),
+            _ => false,
+        };
+
+    /// <summary>Puts a dock where a drop said, answering the group it went into, or nothing when nothing moved.</summary>
+    /// <remarks>
+    /// The judgement both a landing and a preview are made by, so that what a drag shows and what it does are
+    /// one answer: a drop on the side of the group the dock is already alone in moves nothing, and a drop among
+    /// the tabs of the group it is already a tab of moves nothing unless it changes the tab order.
+    /// </remarks>
+    /// <param name="layout">The layout to change.</param>
+    /// <param name="instance">The dock that moves.</param>
+    /// <param name="target">Where the drop said it goes.</param>
+    /// <param name="record">What to put in the tree for the dock.</param>
+    /// <returns>The group the dock went into, or nothing when the move would change nothing.</returns>
+    private static string? Put(
+        DockLayout layout,
+        DockInstance instance,
+        DockTarget target,
+        Func<LayoutDock> record
+    )
+    {
+        var group = DockTree.GroupOf(layout, instance.DockNameId, instance.Ordinal);
         var wanted = target;
 
         if (group is not null)
@@ -762,7 +898,7 @@ internal sealed class DockManager
 
                 if (adjusted == at)
                 {
-                    return;
+                    return null;
                 }
 
                 wanted = target with { Index = adjusted };
@@ -775,16 +911,13 @@ internal sealed class DockManager
             {
                 // The only dock of a group has no second place in it to be put: splitting it would mean
                 // splitting a group that the removal leaves empty, which is a group that does not exist.
-                return;
+                return null;
             }
 
-            DockTree.Remove(Layout, instance.DockNameId, instance.Ordinal);
+            DockTree.Remove(layout, instance.DockNameId, instance.Ordinal);
         }
 
-        instance.GroupId = DockTree.Insert(Layout, wanted, Record(instance));
-        instance.Window = null;
-        instance.OpenedHere = false;
-        Raise();
+        return DockTree.Insert(layout, wanted, record());
     }
 
     /// <summary>

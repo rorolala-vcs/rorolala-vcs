@@ -18,24 +18,6 @@ internal enum ColorMode
     Dark,
 }
 
-/// <summary>How much of the program's motion is drawn.</summary>
-/// <remarks>
-/// It is a choice about the look rather than a preference of the panel's, which is why it is kept in
-/// <c>theme.json</c> beside the colours: a person who needs less motion needs it in every surface at once, and
-/// the look is what every surface is drawn from.
-/// </remarks>
-internal enum MotionLevel
-{
-    /// <summary>Every movement the program has.</summary>
-    Full,
-
-    /// <summary>The fades, without the travel and the scaling.</summary>
-    Reduced,
-
-    /// <summary>Nothing is animated: every change arrives at once.</summary>
-    Off,
-}
-
 /// <summary>
 /// <c>theme.json</c>: what the user chooses about how the program looks and moves.
 /// </summary>

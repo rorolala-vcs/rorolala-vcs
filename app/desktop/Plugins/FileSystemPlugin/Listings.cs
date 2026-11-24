@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Selection;
@@ -692,6 +693,12 @@ internal abstract class EntryView<TItem> : EntryView
     /// <summary>The band a frame is drawn with.</summary>
     private readonly Border _band = Band();
 
+    /// <summary>What the listing arrives with after it is pointed at another one.</summary>
+    private readonly Transitions _arise;
+
+    /// <summary>What the band a frame is drawn with arrives with.</summary>
+    private readonly Transitions _bandFade;
+
     /// <summary>
     /// The band a frame is drawn with: a border of the primary and a wash of it inside.
     /// </summary>
@@ -796,7 +803,14 @@ internal abstract class EntryView<TItem> : EntryView
             _listed.Add(item);
         }
 
-        _ghost = new Ghost(_over);
+        _ghost = new Ghost(_over, host.Motion);
+
+        // A step to another directory is the listing being replaced, and the fade is what says the view is the
+        // same one rather than a control taken out and another put in its place. The band a frame is drawn with
+        // arrives with the pointer, and is gone the moment the frame ends.
+        _arise = new Transitions { host.Motion.Fade(Visual.OpacityProperty, host.Motion.State) };
+        _bandFade = new Transitions { host.Motion.Fade(Visual.OpacityProperty, host.Motion.Feedback) };
+        _band.Transitions = _bandFade;
 
         List = new ListBox
         {
@@ -980,6 +994,25 @@ internal abstract class EntryView<TItem> : EntryView
         // enters a window: a step that reused this view does not enter it again, and a folder just made is
         // exactly the name that arrives with the new listing.
         Naming();
+
+        Reveal();
+    }
+
+    /// <summary>Brings the listing in after it has been pointed at another one.</summary>
+    private void Reveal()
+    {
+        if (Host.Motion.FadeTime(Host.Motion.State) <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        // Put to nothing without a transition and then brought up with one: the rows are replaced in the same
+        // turn, so the frame that hides the old listing is not itself a movement to watch.
+        Transitions = null;
+        Opacity = 0;
+        Transitions = _arise;
+
+        Dispatcher.UIThread.Post(() => Opacity = 1);
     }
 
     /// <summary>
@@ -2186,7 +2219,26 @@ internal abstract class EntryView<TItem> : EntryView
     {
         var frame = new Rect(_framedAt, e.GetPosition(this)).Normalize();
 
-        _band.IsVisible = true;
+        if (!_band.IsVisible)
+        {
+            _band.IsVisible = true;
+
+            // The band is the pointer's answer, so it lands short and leaves at once. With motion off it is
+            // simply there.
+            if (Host.Motion.FadeTime(Host.Motion.Feedback) > TimeSpan.Zero)
+            {
+                _band.Transitions = null;
+                _band.Opacity = 0;
+                _band.Transitions = _bandFade;
+
+                Dispatcher.UIThread.Post(() => _band.Opacity = 1);
+            }
+            else
+            {
+                _band.Opacity = 1;
+            }
+        }
+
         Canvas.SetLeft(_band, frame.X);
         Canvas.SetTop(_band, frame.Y);
         _band.Width = frame.Width;

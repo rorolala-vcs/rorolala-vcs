@@ -1,8 +1,10 @@
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Threading;
 using RorolalaDesktop.Contract;
 
 namespace FileSystemPlugin;
@@ -23,8 +25,11 @@ namespace FileSystemPlugin;
 /// </remarks>
 internal sealed class Ghost
 {
-    /// <summary>How faded the card is, so that it reads as a carrying, not as a thing.</summary>
+    /// <summary>How faded the card is at rest, so that it reads as a carrying, not as a thing.</summary>
     private const double Opacity = 0.7;
+
+    /// <summary>The scale the card is picked up from, so that it arrives at the hand rather than appearing.</summary>
+    private const double Waking = 0.92;
 
     /// <summary>How large the card is, which is also what keeps it inside the view.</summary>
     private const double Size = 48.0;
@@ -41,6 +46,18 @@ internal sealed class Ghost
     /// <summary>What the card is drawn over, which is also what says how large the view is.</summary>
     private readonly Canvas _over;
 
+    /// <summary>How the program moves, which the card is picked up with.</summary>
+    private readonly IMotion _motion;
+
+    /// <summary>The card's scale, which is what says it has been picked up.</summary>
+    private readonly ScaleTransform _scale = new(Waking, Waking);
+
+    /// <summary>What the card's opacity arrives with.</summary>
+    private readonly Transitions _fade;
+
+    /// <summary>What the card's scale arrives with.</summary>
+    private readonly Transitions _grow;
+
     /// <summary>The card itself.</summary>
     private readonly Border _card;
 
@@ -56,21 +73,35 @@ internal sealed class Ghost
 
     /// <summary>Makes a card, drawn over the view that will answer for the pointer.</summary>
     /// <param name="over">What it is drawn over: a layer filling the view and taking no pointer of its own.</param>
-    public Ghost(Canvas over)
+    /// <param name="motion">How the program moves, which the pickup is drawn with.</param>
+    public Ghost(Canvas over, IMotion motion)
     {
         _over = over;
+        _motion = motion;
+
+        _fade = new Transitions { motion.Fade(Visual.OpacityProperty, motion.Instant) };
+        _grow = new Transitions
+        {
+            motion.Travel(ScaleTransform.ScaleXProperty, motion.Instant),
+            motion.Travel(ScaleTransform.ScaleYProperty, motion.Instant),
+        };
 
         _card = new Border
         {
             IsVisible = false,
             IsHitTestVisible = false,
-            Opacity = Opacity,
+            Opacity = 0,
             Width = Size,
             Height = Size,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Child = _face,
+            RenderTransform = _scale,
+            RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
+            Transitions = _fade,
         };
+
+        _scale.Transitions = _grow;
 
         // Read from the look's own keys rather than written in colours, like the band a frame is drawn with:
         // colours of its own here would be a second answer to what this program looks like.
@@ -126,9 +157,56 @@ internal sealed class Ghost
 
         Canvas.SetLeft(_card, Math.Clamp(at.X + Step, 0, room.Width));
         Canvas.SetTop(_card, Math.Clamp(at.Y + Step, 0, room.Height));
+
+        if (_card.IsVisible)
+        {
+            return;
+        }
+
         _card.IsVisible = true;
+
+        // The card is shown where it belongs and at nothing, then brought up: the position is set before the
+        // first frame, so a pickup is seen at the hand rather than on the way to it. With motion off the two
+        // values are set at once and the card simply appears.
+        if (
+            _motion.FadeTime(_motion.Instant) > TimeSpan.Zero
+            || _motion.TravelTime(_motion.Instant) > TimeSpan.Zero
+        )
+        {
+            Dispatcher.UIThread.Post(Arrived);
+        }
+        else
+        {
+            Arrived();
+        }
     }
 
     /// <summary>Takes the card off, which is what every end of a drag does.</summary>
-    public void Unghost() => _card.IsVisible = false;
+    public void Unghost()
+    {
+        if (!_card.IsVisible)
+        {
+            return;
+        }
+
+        _card.IsVisible = false;
+
+        // Put back to where a pickup starts, without a transition: a card taken off while it was still arriving
+        // would otherwise begin the next drag from wherever that fade had reached.
+        _card.Transitions = null;
+        _scale.Transitions = null;
+        _card.Opacity = 0;
+        _scale.ScaleX = Waking;
+        _scale.ScaleY = Waking;
+        _card.Transitions = _fade;
+        _scale.Transitions = _grow;
+    }
+
+    /// <summary>Puts the card at the size and opacity it rests at while it is carried.</summary>
+    private void Arrived()
+    {
+        _card.Opacity = Opacity;
+        _scale.ScaleX = 1;
+        _scale.ScaleY = 1;
+    }
 }

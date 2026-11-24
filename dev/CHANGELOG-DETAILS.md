@@ -341,7 +341,17 @@ settings write the same file. What was missing was the live half.
 
 `theme.json` now states a `motion` level, and the Appearance section of the Preference dock offers it beside the variant: `full` draws every movement, `reduced` keeps the short fades and removes travel, and `off` makes every change arrive at once. The choice applies as it is made, including the transitions the look put in its styles.
 
-The durations, the distances and the easing every transition is built from now stand in one place, so the surfaces that animate, from the look's hover washes to notifications, progress capsules and the plugin manager's cards, answer the one setting rather than a constant apiece.
+The durations, the distances and the easing every transition is built from now stand in one place, so the surfaces that animate, from the look's hover washes to notifications, progress capsules, the plugin manager's cards, a dock's tab contents, the points a dragged dock is aimed with, the card a drag carries, the Version Graph's hover mark and a panel that lands from a drag, answer the one setting rather than a constant apiece.
+
+An arrangement drawing a listing brings its rows in with a fade after a step, and the band a frame is drawn over the empty space arrives with the pointer.
+
+A dock taken by its header is now drawn as itself under the pointer, at seven tenths of its size, and the place it came from is left empty until it lands. The content slides into the region it landed in with an exponential settle.
+
+A drag aimed at a group is answered by the arrangement where the look draws travel: the groups make room for the dock while the pointer is on an answer, the room opening from the seam the dock would take; the groups go back to where they stood, and the room shuts, when the drag leaves or is let go of somewhere with no answer; and the release lands the dock in the room that was made. Nothing is drawn over the groups then, because the movement is the answer, and a drop is aimed at a cluster a band inside the group's own edge rather than at all of it, so the edge of a group is not where the group beside it is offered. That band is a distance rather than a share, because the edge of a large group is as near the group beside it as the edge of a small one. A level that draws no travel keeps the five points, over the whole of the group, since a layout that changes at once is a layout nothing was read from. A `Debug` group under the kernel's own settings offers a switch that draws the answers over the room a drag makes, in the shape a drop is hit in, so that where a drop would land can be watched against the room the layout opens there.
+
+What the pointer is aimed at is taken once for the drag and kept, since a room opening under it moves the groups on screen and must not move what it is aiming at, and a layout drawn again while the pointer still holds the dock puts the room back where it was rather than playing it again. A drop that would put a dock back among the docks it is already beside is no answer at all: it is the same place, and the split written again would only reset the share the two already have.
+
+A plugin draws its own surfaces from the same statement through `IPluginHost.Motion`, so a plugin's animation follows the one setting rather than keeping a duration of its own.
 
 ### 25. [`app`] [`RorolalaDesktop`] [`theme`] State the light look's semantic colours in the bright set
 

@@ -777,6 +777,278 @@ public sealed class WindowTests
         Assert.Contains("it.dock.dropped", Saved(services));
     }
 
+    /// <summary>
+    /// What a drag draws is the layout the drop would make, and drawing it changes nothing.
+    /// </summary>
+    /// <remarks>
+    /// The preview is asked of the layout rather than written into it, so a drag that is called off leaves the
+    /// arrangement it left alone, and what it shows is what a release will do: the dock taken out of where it is,
+    /// and a group standing for it where it would land.
+    /// </remarks>
+    [Fact]
+    public void APreviewOfADropIsTheLayoutItWouldMakeAndChangesNothing()
+    {
+        var (services, _) = Windows();
+        var moved = New("it.dock.ahead.moved");
+        var kept = New("it.dock.ahead.kept");
+        services.Docks.Register(moved);
+        services.Docks.Register(kept);
+        services.Docks.Activate(kept);
+
+        var instance = services.Docks.Activate(moved);
+
+        Assert.NotNull(instance);
+
+        var group = Assert.IsType<LayoutGroup>(services.Docks.Layout.Root);
+        var ahead = services.Docks.Ahead(instance, new DockTarget(group.Id, DockSide.Left, 0));
+
+        Assert.NotNull(ahead);
+
+        var split = Assert.IsType<LayoutSplit>(ahead.Root);
+        var incoming = Assert.IsType<LayoutGroup>(split.First);
+        var beside = Assert.IsType<LayoutGroup>(split.Second);
+
+        Assert.Equal(DockAxis.Columns, split.Axis);
+        Assert.Equal([DockManager.AheadNameId], incoming.Docks.Select(dock => dock.DockNameId));
+        Assert.Equal("it.dock.ahead.kept", Assert.Single(beside.Docks).DockNameId);
+
+        // Nothing of the live tree moved: what a drag shows is asked for and not written.
+        Assert.Same(group, services.Docks.Layout.Root);
+        Assert.Equal(2, group.Docks.Count);
+    }
+
+    /// <summary>A dock dropped beside the group it is already beside stays where it is.</summary>
+    /// <remarks>
+    /// The neighbour's own side is the place the dock already stands, so there is nothing to show and nothing to
+    /// do: the split written again would only reset the share the two already have, which is a resize nobody asked
+    /// for. What is asked is the arrangement rather than the tree, since a group named again in the same place
+    /// holding the same tabs is the same place.
+    /// </remarks>
+    [Fact]
+    public void ADockDroppedBesideTheGroupItIsAlreadyBesideStaysPut()
+    {
+        var (services, _) = Windows();
+        var first = New("it.dock.beside.left");
+        var second = New("it.dock.beside.right");
+        services.Docks.Register(first);
+        services.Docks.Register(second);
+
+        var one = services.Docks.Activate(first);
+        var two = services.Docks.Activate(second);
+
+        Assert.NotNull(one);
+        Assert.NotNull(two);
+
+        services.Docks.Move(two, Beside(services.Docks, one, DockSide.Right));
+
+        var split = Assert.IsType<LayoutSplit>(services.Docks.Layout.Root);
+        var left = Assert.IsType<LayoutGroup>(split.First);
+
+        // A share that is not half, so that a split written again is a split that moved.
+        services.Docks.SetRatio(split, 0.25);
+
+        var target = new DockTarget(left.Id, DockSide.Right, 0);
+
+        Assert.Null(services.Docks.Ahead(two, target));
+
+        services.Docks.Move(two, target);
+
+        Assert.Same(split, services.Docks.Layout.Root);
+        Assert.Equal(0.25, split.Ratio, 6);
+        Assert.Equal(one.GroupId, left.Id);
+    }
+
+    /// <summary>
+    /// A leave raised for the control the drag moved off is not the area losing the drag.
+    /// </summary>
+    /// <remarks>
+    /// The platform raises a leave for the control it left and lets it bubble, so a drag moving from one part of the
+    /// area to another arrives as a leave of the whole area. Read that way, the finger that is still over a dock
+    /// would put the answers down and the carried dock back on its region on every change of what is under it.
+    /// </remarks>
+    [Fact]
+    public void ALeaveWithThePointerStillInsideIsNotTheAreaLosingTheDrag()
+    {
+        var (services, _) = Windows();
+        var kept = New("it.dock.still.kept");
+        services.Docks.Register(kept);
+        services.Docks.Activate(kept);
+        services.Windows.OpenMain();
+
+        var main = (MainWindow)services.Shell.Window!;
+        var area = main.GetVisualDescendants().OfType<DockArea>().First();
+        var inside = area.TranslatePoint(
+            new Point(area.Bounds.Width / 2, area.Bounds.Height / 2),
+            main
+        );
+
+        Assert.NotNull(inside);
+
+        using var carrying = DockDrag.Carrying(services.Docks.Instances.First());
+
+        main.DragDrop(
+            inside.Value,
+            RawDragEventType.DragEnter,
+            carrying,
+            DragDropEffects.Move,
+            RawInputModifiers.LeftMouseButton
+        );
+
+        Assert.True(services.Windows.OverArea);
+
+        main.DragDrop(
+            inside.Value,
+            RawDragEventType.DragLeave,
+            carrying,
+            DragDropEffects.None,
+            RawInputModifiers.None
+        );
+
+        Assert.True(services.Windows.OverArea, "the pointer is still inside the area");
+
+        // A leave with the pointer outside it is the area losing the drag, which is what it is for. The platform
+        // forgets the target a leave was raised for, so the drag is taken again before it is let go of.
+        main.DragDrop(
+            inside.Value,
+            RawDragEventType.DragEnter,
+            carrying,
+            DragDropEffects.Move,
+            RawInputModifiers.LeftMouseButton
+        );
+
+        var outside = area.TranslatePoint(new Point(-4, -4), main);
+
+        Assert.NotNull(outside);
+
+        main.DragDrop(
+            outside.Value,
+            RawDragEventType.DragLeave,
+            carrying,
+            DragDropEffects.None,
+            RawInputModifiers.None
+        );
+
+        Assert.False(services.Windows.OverArea);
+    }
+
+    /// <summary>A dock dropped among its own tabs is reordered, and the drop is answered.</summary>
+    /// <remarks>
+    /// The reorder is the one landing that changes no group, and it is the one the answers were read against: what a
+    /// drop does is the order of the tabs, and the picture taken at the pickup is what shows it.
+    /// </remarks>
+    [Fact]
+    public void ADockDroppedAmongItsOwnTabsIsReordered()
+    {
+        var (services, _) = Windows();
+        var first = New("it.dock.flying.first");
+        var second = New("it.dock.flying.second");
+        services.Docks.Register(first);
+        services.Docks.Register(second);
+
+        var instance = services.Docks.Activate(first);
+
+        services.Docks.Activate(second);
+
+        Assert.NotNull(instance);
+
+        services.Windows.OpenMain();
+
+        var main = (MainWindow)services.Shell.Window!;
+
+        // The middle of the group puts the dock among its tabs, which is the end of the row for the first of them.
+        Drop(main, OverDockPoint(main, DockSide.Center), instance);
+
+        var order = Assert.IsType<LayoutGroup>(services.Docks.Layout.Root);
+
+        Assert.Equal(
+            ["it.dock.flying.second", "it.dock.flying.first"],
+            order.Docks.Select(dock => dock.DockNameId)
+        );
+
+        // The drop is answered to the platform, which is what a landing is told apart by.
+        Assert.True(services.Windows.Dropped);
+    }
+
+    /// <summary>A drop that would change nothing has no preview, which is what leaves the layout standing.</summary>
+    /// <remarks>
+    /// The only dock of a group has no second place in it to be put, and a dock that is let go of on the group it
+    /// is already the active tab of keeps its place. Both are answers a drag shows nothing for.
+    /// </remarks>
+    [Fact]
+    public void ADropThatWouldChangeNothingHasNoPreview()
+    {
+        var (services, _) = Windows();
+        var alone = New("it.dock.ahead.alone");
+        services.Docks.Register(alone);
+
+        var instance = services.Docks.Activate(alone);
+
+        Assert.NotNull(instance);
+
+        var group = Assert.IsType<LayoutGroup>(services.Docks.Layout.Root);
+
+        Assert.Null(services.Docks.Ahead(instance, new DockTarget(group.Id, DockSide.Right, 0)));
+        Assert.Null(services.Docks.Ahead(instance, new DockTarget(group.Id, DockSide.Center, 0)));
+    }
+
+    /// <summary>The switch that draws the answers follows the setting, so a debugging run needs no restart.</summary>
+    /// <remarks>
+    /// What the area reads is the value this keeps rather than the setting itself: the panel writes the setting, and
+    /// no panel can reach every window's area, so the answer is kept where every area reads it.
+    /// </remarks>
+    [Fact]
+    public void TheDebugSwitchFollowsTheSetting()
+    {
+        var (services, _) = Windows();
+
+        DockDebug.Declare(services.Settings);
+
+        Assert.False(DockDebug.Aim);
+
+        var setting = services
+            .Settings.Of(Core.Id)
+            .First(one => string.Equals(one.Id, DockDebug.AimSetting, StringComparison.Ordinal));
+
+        services.Settings.Keep(Core.Id, setting, "true");
+
+        Assert.True(DockDebug.Aim);
+
+        services.Settings.Keep(Core.Id, setting, "false");
+
+        Assert.False(DockDebug.Aim);
+    }
+
+    /// <summary>A drag is aimed a little inside a group, so a group's own edge is no answer of its own.</summary>
+    /// <remarks>
+    /// The edge of a group is as near the group beside it as this one, and what a drop there would be read as is
+    /// the neighbour. The answers therefore stop short of the edges, and the room a layout makes is made by an
+    /// answer rather than by a group.
+    /// </remarks>
+    [Fact]
+    public void TheAimStopsShortOfAGroupsEdges()
+    {
+        var leaf = new Rect(0, 0, 1000, 600);
+        var aim = DockArea.Aim(leaf);
+
+        Assert.Equal(5, aim.Count);
+
+        // Just inside each edge is where the group beside would be aimed at, and is no answer here.
+        Assert.DoesNotContain(aim, shape => DockArea.Contains(shape.Outline, new Point(4, 300)));
+        Assert.DoesNotContain(aim, shape => DockArea.Contains(shape.Outline, new Point(996, 300)));
+        Assert.DoesNotContain(aim, shape => DockArea.Contains(shape.Outline, new Point(500, 4)));
+        Assert.DoesNotContain(aim, shape => DockArea.Contains(shape.Outline, new Point(500, 596)));
+
+        // The middle is the answer that joins the group's tabs, and a point near the aim's own edge is its side.
+        Assert.Contains(
+            aim,
+            shape => shape.Side == DockSide.Center && DockArea.Contains(shape.Outline, new Point(500, 300))
+        );
+        Assert.Contains(
+            aim,
+            shape => shape.Side == DockSide.Left && DockArea.Contains(shape.Outline, new Point(60, 300))
+        );
+    }
+
     /// <summary>A dock dropped on the centre point joins the group's tabs rather than splitting it.</summary>
     /// <remarks>
     /// The one point of a group that does not make a new group: the dock is put among the tabs of the group it was
@@ -977,9 +1249,11 @@ public sealed class WindowTests
     /// <summary>The point of a window's one group that a drop would land on to do one thing.</summary>
     /// <remarks>
     /// The group fills the area, so its leaf is the area's own rectangle, and the five points are worked out from
-    /// it by the same function the area hit tests with. What is aimed at is the middle of the outline, a point
-    /// inside a convex shape's corners is inside the shape, and the area has to have been laid out for any of that
-    /// to mean anything, which is why it is asked of the window that was shown.
+    /// it by the same function the area hit tests with, in the shape the motion level in force aims them: what is
+    /// offered is the cluster a little inside the group, so aiming at the middle of a whole-group point would miss.
+    /// What is aimed at is the middle of the outline, a point inside a convex shape's corners is inside the shape,
+    /// and the area has to have been laid out for any of that to mean anything, which is why it is asked of the
+    /// window that was shown.
     /// </remarks>
     /// <param name="main">The window to find the point in.</param>
     /// <param name="side">Which point of the cluster to aim at.</param>
@@ -991,7 +1265,7 @@ public sealed class WindowTests
         Assert.True(area.Bounds.Height > 0, "the window was shown, so its area was laid out");
 
         var leaf = new Rect(0, 0, area.Bounds.Width, area.Bounds.Height);
-        var shape = DockArea.Shapes(leaf).First(one => one.Side == side);
+        var shape = DockArea.Aim(leaf).First(one => one.Side == side);
         var middle = new Point(
             shape.Outline.Average(corner => corner.X),
             shape.Outline.Average(corner => corner.Y)

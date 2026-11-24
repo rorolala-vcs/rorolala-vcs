@@ -735,7 +735,7 @@ internal sealed class TreeBrowser : UserControl
         };
 
         var over = new Canvas { IsHitTestVisible = false };
-        _ghost = new Ghost(over);
+        _ghost = new Ghost(over, host.Motion);
 
         var grid = new Grid();
         grid.Children.Add(_washes);

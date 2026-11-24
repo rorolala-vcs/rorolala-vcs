@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Automation;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Chrome;
 using Avalonia.Controls.Presenters;
@@ -1874,7 +1875,20 @@ internal sealed class RorolalaTheme
                 NewBrush(Shape.FillProperty, _accentWash),
                 Brushed(Shape.StrokeProperty, Accent),
                 new Setter(Shape.StrokeThicknessProperty, 1.0),
-                new Setter(Visual.OpacityProperty, 0.85)
+                new Setter(Visual.OpacityProperty, 0.85),
+                // Which point the pointer is on changes as the hand moves, so the answer is short enough to
+                // land with it. The thickness is a size and goes with motion reduced; the two brushes and the
+                // opacity are kept.
+                new Setter(
+                    Visual.TransitionsProperty,
+                    new Transitions
+                    {
+                        Motion.Brush(Shape.FillProperty, Motion.Instant),
+                        Motion.Brush(Shape.StrokeProperty, Motion.Instant),
+                        Motion.Fade(Visual.OpacityProperty, Motion.Instant),
+                        Motion.Travel(Shape.StrokeThicknessProperty, Motion.Instant),
+                    }
+                )
             ),
             On(
                 selector =>
@@ -1898,6 +1912,20 @@ internal sealed class RorolalaTheme
                         .Class(DockArea.DockPointCenterClass),
                 NewBrush(Shape.FillProperty, _dropZone),
                 new Setter(Shape.StrokeThicknessProperty, 1.0)
+            ),
+
+            // The room a dragged dock would take, where the look draws travel: the layout makes the room by moving,
+            // and this is the one surface over it, so the gap reads as a place being kept rather than as a hole. It
+            // is washed with the accent and drawn with an edge of its own, since what is under it is the ground and
+            // not a dock.
+            On(
+                selector => selector.OfType<Rectangle>().Class(DockArea.IncomingClass),
+                NewBrush(Shape.FillProperty, _accentWash),
+                Brushed(Shape.StrokeProperty, Accent),
+                new Setter(Shape.StrokeThicknessProperty, 1.0),
+                new Setter(Shape.StrokeDashArrayProperty, new AvaloniaList<double> { 4, 3 }),
+                new Setter(Rectangle.RadiusXProperty, 8.0),
+                new Setter(Rectangle.RadiusYProperty, 8.0)
             ),
         ];
 

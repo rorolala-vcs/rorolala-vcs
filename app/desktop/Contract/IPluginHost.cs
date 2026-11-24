@@ -112,6 +112,16 @@ public interface IPluginHost
     IPalette Palette { get; }
 
     /// <summary>
+    /// How the program moves: the durations, the distances and the transitions a plugin draws its own surfaces with.
+    /// </summary>
+    /// <remarks>
+    /// It is the program's own answer rather than a copy: the level is the one the user set, a transition made here
+    /// is retuned when that level changes, and <see cref="IMotion.Changed"/> is for a plugin that eases a drawing
+    /// itself rather than holding a transition.
+    /// </remarks>
+    IMotion Motion { get; }
+
+    /// <summary>
     /// Raised when the look has been written and its colours replaced, after an edit in the panel is settled.
     /// </summary>
     /// <remarks>

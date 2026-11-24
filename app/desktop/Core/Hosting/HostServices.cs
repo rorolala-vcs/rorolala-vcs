@@ -68,6 +68,10 @@ internal sealed class HostServices
     /// </remarks>
     public required IPalette Palette { get; init; }
 
+    /// <summary>How the program moves, which a plugin draws its own surfaces with.</summary>
+    /// <remarks>One instance, because the service is a view over the program's one statement of its motion.</remarks>
+    public IMotion Motion { get; } = new MotionService();
+
     /// <summary>What Rorolala can do.</summary>
     public required IRola Rola { get; init; }
 
@@ -262,6 +266,9 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     public IPalette Palette => _services.Palette;
+
+    /// <inheritdoc />
+    public IMotion Motion => _services.Motion;
 
     /// <inheritdoc />
     public event EventHandler? ThemeChanged

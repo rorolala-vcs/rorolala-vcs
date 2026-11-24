@@ -60,6 +60,7 @@ internal sealed class VersionGraphDock : IDockView
             host.Files,
             host.Icons,
             host.Palette,
+            host.Motion,
             statuses,
             sync,
             fetch,
@@ -290,6 +291,9 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>The host's windows, which a press on an entry asks to go to its file.</summary>
     private readonly IWindows _windows;
 
+    /// <summary>How the program moves, which the hover's mark arrives with.</summary>
+    private readonly IMotion _motion;
+
     /// <summary>Measures the graph's text in content units, so its pills are laid out once.</summary>
     private readonly GraphMeasure _measure = new();
 
@@ -305,8 +309,17 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>The frame timer that eases a change of scale or place into view.</summary>
     private readonly DispatcherTimer _glide = new() { Interval = TimeSpan.FromMilliseconds(15) };
 
+    /// <summary>The frame timer that eases a hover's mark into place.</summary>
+    private readonly DispatcherTimer _hoverGlide = new() { Interval = TimeSpan.FromMilliseconds(15) };
+
     /// <summary>How much of the way to the target a frame takes.</summary>
     private const double GlidePart = 0.22;
+
+    /// <summary>How much of the way a hover's mark takes a frame, which is quicker because it answers the hand.</summary>
+    private const double HoverGlidePart = 0.28;
+
+    /// <summary>How near the hover's mark has to be before it is taken as arrived.</summary>
+    private const double HoverSettled = 0.98;
 
     /// <summary>The graph on screen, or nothing while a read is going or when there is none.</summary>
     private VariantGraphDrawing? _drawing;
@@ -416,6 +429,9 @@ internal sealed partial class VersionGraphView : Control
     /// <summary>The thing the pointer is on, when it is on one.</summary>
     private Hover? _hover;
 
+    /// <summary>How far the hover's mark has arrived, from nothing to all of it.</summary>
+    private double _hoverWeight = 1;
+
     /// <summary>Where the pointer is, which is where a bubble stands.</summary>
     private Point _pointer;
 
@@ -445,6 +461,7 @@ internal sealed partial class VersionGraphView : Control
     /// <param name="files">What says that the files may have changed.</param>
     /// <param name="icons">The pictures a node's menu is drawn with.</param>
     /// <param name="palette">The colours the program is drawn in.</param>
+    /// <param name="motion">How the program moves, which the hover's mark arrives with.</param>
     /// <param name="statuses">What the work says about the files.</param>
     /// <param name="sync">What a sync would carry.</param>
     /// <param name="fetch">The one fetch of the Vault's Layout.</param>
@@ -456,6 +473,7 @@ internal sealed partial class VersionGraphView : Control
         IFileChanges files,
         IIconLibrary icons,
         IPalette palette,
+        IMotion motion,
         StatusReadings statuses,
         SyncWatcher sync,
         VaultFetch fetch,
@@ -468,6 +486,7 @@ internal sealed partial class VersionGraphView : Control
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(icons);
         ArgumentNullException.ThrowIfNull(palette);
+        ArgumentNullException.ThrowIfNull(motion);
         ArgumentNullException.ThrowIfNull(statuses);
         ArgumentNullException.ThrowIfNull(sync);
         ArgumentNullException.ThrowIfNull(fetch);
@@ -479,6 +498,7 @@ internal sealed partial class VersionGraphView : Control
         _files = files;
         _icons = icons;
         _palette = palette;
+        _motion = motion;
         _statuses = statuses;
         _sync = sync;
         _fetch = fetch;
@@ -487,6 +507,7 @@ internal sealed partial class VersionGraphView : Control
         _windows = windows;
         _settle.Tick += Settled;
         _glide.Tick += Glided;
+        _hoverGlide.Tick += HoverGlided;
 
         // The first drawing may be read before the dock has a size to frame it in, and a dock that is
         // resized before the next reading would keep a frame that no longer holds the work.
@@ -576,6 +597,7 @@ internal sealed partial class VersionGraphView : Control
         _again = false;
         _settle.Stop();
         _glide.Stop();
+        _hoverGlide.Stop();
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -1377,6 +1399,60 @@ internal sealed partial class VersionGraphView : Control
         InvalidateVisual();
     }
 
+    /// <summary>Takes one frame of the hover's mark arriving.</summary>
+    /// <param name="sender">What raised the frame.</param>
+    /// <param name="e">The frame's arguments.</param>
+    private void HoverGlided(object? sender, EventArgs e)
+    {
+        if (_hover is null)
+        {
+            _hoverGlide.Stop();
+            _hoverWeight = 0;
+
+            return;
+        }
+
+        _hoverWeight += (1 - _hoverWeight) * HoverGlidePart;
+
+        if (_hoverWeight >= HoverSettled)
+        {
+            _hoverWeight = 1;
+            _hoverGlide.Stop();
+        }
+
+        InvalidateVisual();
+    }
+
+    /// <summary>Starts the hover's mark on its way in, or puts it there at once when motion is reduced.</summary>
+    private void BeginHover()
+    {
+        // The mark is a colour and a thickness, and a thickness is a size: reduced motion removes it rather
+        // than fading half of it, so the whole mark arrives at once.
+        if (_motion.TravelTime(_motion.Instant) <= TimeSpan.Zero)
+        {
+            _hoverWeight = 1;
+            _hoverGlide.Stop();
+
+            return;
+        }
+
+        _hoverWeight = 0;
+
+        if (!_hoverGlide.IsEnabled)
+        {
+            _hoverGlide.Start();
+        }
+    }
+
+    /// <summary>Whether two hover answers name the same card, ghost or edge, whatever part is under the pointer.</summary>
+    /// <param name="left">One answer.</param>
+    /// <param name="right">The other.</param>
+    /// <returns>Whether the mark is already where it belongs.</returns>
+    private static bool SameTarget(Hover? left, Hover? right) =>
+        left?.Card?.Index == right?.Card?.Index
+        && left?.GhostIndex == right?.GhostIndex
+        && left?.EdgeIndex == right?.EdgeIndex;
+
     /// <summary>Says the scale the drawing stands at now, as the corner reads it.</summary>
     private void UpdateZoomText() =>
         _zoomText = $"{Math.Round(_zoom * 100, MidpointRounding.AwayFromZero)}%";
@@ -1704,7 +1780,20 @@ internal sealed partial class VersionGraphView : Control
             return;
         }
 
+        var moved = !SameTarget(next, _hover);
+
         _hover = next;
+
+        if (next is null)
+        {
+            _hoverGlide.Stop();
+            _hoverWeight = 0;
+        }
+        else if (moved)
+        {
+            BeginHover();
+        }
+
         UpdateCursor();
         RedrawInfo();
         InvalidateVisual();
@@ -1744,6 +1833,8 @@ internal sealed partial class VersionGraphView : Control
         }
 
         _hover = null;
+        _hoverGlide.Stop();
+        _hoverWeight = 0;
         UpdateCursor();
         RedrawInfo();
         InvalidateVisual();

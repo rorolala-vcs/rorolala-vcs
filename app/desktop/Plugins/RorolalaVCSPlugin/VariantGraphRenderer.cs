@@ -172,6 +172,7 @@ internal sealed record GraphInk(
 /// its focus chains in the drawing, so the same cards stay on screen, but stops emphasising them.
 /// </param>
 /// <param name="Edge">The edge the pointer is on, when it is on one, which is drawn thicker and on top.</param>
+/// <param name="HoverWeight">How far the mark on the hovered card or edge has arrived, from nothing to all of it.</param>
 internal sealed record VariantGraphFrame(
     double Zoom,
     Point Pan,
@@ -180,7 +181,8 @@ internal sealed record VariantGraphFrame(
     string Stats,
     bool Truncated,
     bool Emphasized,
-    int? Edge
+    int? Edge,
+    double HoverWeight = 1
 );
 
 /// <summary>
@@ -501,8 +503,11 @@ internal sealed class VariantGraphRenderer
 
             if (onPointer)
             {
-                colour = ink.Primary;
-                width = Math.Max(2.4, width * 1.9);
+                // The mark arrives over the short moment the pointer settles on the edge, rather than being a
+                // jump from the edge's own colour to the accent. At nothing the edge is drawn as it stands.
+                colour = GraphTint.Mix(colour, ink.Primary, frame.HoverWeight);
+                var lit = Math.Max(2.4, width * 1.9);
+                width += (lit - width) * frame.HoverWeight;
             }
 
             IDisposable? undo = faint ? context.PushOpacity(0.14) : null;
@@ -821,9 +826,10 @@ internal sealed class VariantGraphRenderer
         }
         else if (hovered)
         {
-            stroke = ink.Text;
+            stroke = GraphTint.Mix(stroke, ink.Text, frame.HoverWeight);
             dash = null;
-            thickness = Math.Max(1.2, 1.8 * zoom);
+            var lit = Math.Max(1.2, 1.8 * zoom);
+            thickness += (lit - thickness) * frame.HoverWeight;
         }
         else if (beside && !onChain)
         {

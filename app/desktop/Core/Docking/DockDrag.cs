@@ -1,5 +1,7 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media.Imaging;
 using RorolalaDesktop.Hosting;
 
 namespace RorolalaDesktop.Docking;
@@ -33,6 +35,21 @@ internal sealed class DockDrag
     /// the hand rather than the surface.
     /// </remarks>
     private const double Slip = 4;
+
+    /// <summary>The dock as it looked when it was picked up, or nothing while no drag of this host's is on.</summary>
+    private static RenderTargetBitmap? _picture;
+
+    /// <summary>How large that dock is in its own coordinates.</summary>
+    private static Size _lifted;
+
+    /// <summary>Where within the dock the pointer took hold of it.</summary>
+    private static Point _grip;
+
+    /// <summary>The dock a drag of this host's is carrying, or nothing while none is on.</summary>
+    private static DockInstance? _source;
+
+    /// <summary>Raised when a dock is picked up or let go of, which is when a region empties or fills its place.</summary>
+    public static event EventHandler? LiftedChanged;
 
     /// <summary>The format a dock travels in, which nothing outside this host reads.</summary>
     private static readonly DataFormat<string> Dock = DataFormat.CreateStringApplicationFormat(
@@ -166,14 +183,84 @@ internal sealed class DockDrag
             : null;
     }
 
-    /// <summary>Hands a dock to the platform, and waits to be told what became of it.</summary>
+    /// <summary>
+    /// Hands a dock to the platform, and waits to be told what became of it.
+    /// </summary>
     /// <param name="from">The press the drag begins at, which is what the platform is handed.</param>
     /// <param name="instance">The dock to carry.</param>
     /// <returns>What the drag came to, which is nothing where no target took it.</returns>
     public static async Task<DragDropEffects> Away(PointerPressedEventArgs from, DockInstance instance)
     {
-        using var transfer = Carrying(instance);
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(instance);
 
-        return await DragDrop.DoDragDropAsync(from, transfer, DragDropEffects.Move);
+        Lift(instance, from);
+
+        try
+        {
+            _source = instance;
+            LiftedChanged?.Invoke(null, EventArgs.Empty);
+
+            using var transfer = Carrying(instance);
+
+            return await DragDrop.DoDragDropAsync(from, transfer, DragDropEffects.Move);
+        }
+        finally
+        {
+            _source = null;
+
+            LiftedChanged?.Invoke(null, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>The dock a drag of this host's is carrying, or nothing while none is on.</summary>
+    public static DockInstance? Source => _source;
+
+    /// <summary>The dock as it looked when it was picked up, or nothing while no drag of this host's is on.</summary>
+    public static RenderTargetBitmap? Picture => _picture;
+
+    /// <summary>How large the dock is in its own coordinates, which is what the picture shows.</summary>
+    public static Size Lifted => _lifted;
+
+    /// <summary>Where within the dock the pointer took hold of it.</summary>
+    public static Point Grip => _grip;
+
+    /// <summary>Pictures the dock as it is picked up, so a drag can be drawn as the dock itself being carried.</summary>
+    /// <remarks>
+    /// The drag is the toolkit's, and the toolkit floats no picture of its own: what follows the pointer is
+    /// therefore drawn by whichever region the pointer is over, from this one picture, taken before the drag is
+    /// handed over. A dock whose bounds are not yet laid out has no picture, and the drop points alone answer.
+    /// </remarks>
+    /// <param name="instance">The dock being carried.</param>
+    /// <param name="from">The press that began the drag, which says where it was taken hold of.</param>
+    private static void Lift(DockInstance instance, PointerPressedEventArgs from)
+    {
+        var view = instance.View.View;
+        var bounds = view.Bounds;
+
+        if (bounds.Width < 1 || bounds.Height < 1)
+        {
+            _picture?.Dispose();
+            _picture = null;
+            _lifted = default;
+            _grip = default;
+
+            return;
+        }
+
+        var scaling = TopLevel.GetTopLevel(view)?.RenderScaling ?? 1;
+        var pixels = new PixelSize(
+            Math.Max(1, (int)Math.Ceiling(bounds.Width * scaling)),
+            Math.Max(1, (int)Math.Ceiling(bounds.Height * scaling))
+        );
+
+        var picture = new RenderTargetBitmap(pixels, new Vector(96 * scaling, 96 * scaling));
+
+        picture.Render(view);
+
+        _picture?.Dispose();
+        _picture = picture;
+        _lifted = bounds.Size;
+        _grip = from.GetPosition(view);
     }
 }

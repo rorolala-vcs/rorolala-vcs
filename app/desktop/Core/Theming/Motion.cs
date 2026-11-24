@@ -1,7 +1,7 @@
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
-using RorolalaDesktop.Configuration;
+using RorolalaDesktop.Contract;
 
 namespace RorolalaDesktop.Theming;
 
@@ -50,11 +50,21 @@ internal static class Motion
     /// <summary>The standard easing: fast at the start, settling at the end.</summary>
     public static readonly Easing Ease = new CubicEaseOut();
 
+    /// <summary>The easing a released panel settles with: quicker off the release than the standard one.</summary>
+    public static readonly Easing Expo = new ExponentialEaseOut();
+
     /// <summary>How many registrations may stand before the dead ones are swept.</summary>
     private const int SweepAt = 256;
 
     /// <summary>The transitions this class made, so that a change of level reaches each of them.</summary>
     private static readonly List<Registration> Registered = [];
+
+    /// <summary>Raised after a change of level has retuned every transition this class made.</summary>
+    /// <remarks>
+    /// It is for a plugin whose animation is not a transition on a property, a drawing that eases itself frame by
+    /// frame: what it holds has already been retuned by the time this arrives.
+    /// </remarks>
+    public static event EventHandler? Changed;
 
     /// <summary>How much of the motion is drawn, set from the look the user chose.</summary>
     /// <remarks>
@@ -73,6 +83,7 @@ internal static class Motion
 
             _level = value;
             Retune();
+            Changed?.Invoke(null, EventArgs.Empty);
         }
     }
 

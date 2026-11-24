@@ -380,6 +380,10 @@ internal sealed class Desktop
         // from the library when the window is made, which is after this.
         Icons.Declare(services.Icons);
 
+        // What the host itself is settable about, which the preference panel lists under the kernel: the
+        // debugging answer about drawing a drag, declared here so that it is in force before the first window.
+        DockDebug.Declare(services.Settings);
+
         services.Docks.Register(
             new DockRegistration(
                 Kernel,
