@@ -812,11 +812,16 @@ internal sealed class BringFlow
                 };
 
                 using var native = Progress.New();
+
+                // What the poll reads is said on the window's thread rather than the run's: the rows waiting for it are
+                // bound to the catalogue's entries, and what a row is bound to moves on the drawing thread.
                 using var watching = new Watching(native, run.Records, () =>
-                {
-                    Tick(placed, run.Records);
-                    _hub.Touch();
-                });
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        Tick(placed, run.Records);
+                        _hub.Touch();
+                    })
+                );
 
                 failed = [.. new WorkspaceWriter(workspace).Bring(request, native).Failed];
             }
@@ -862,11 +867,15 @@ internal sealed class BringFlow
         });
     }
 
-    /// <summary>Says how far along the run has got to everything it put in the catalogue.</summary>
+    /// <summary>
+    /// Says how far along the run has got to everything it put in the catalogue.
+    /// </summary>
     /// <remarks>
     /// The proportion is the one the progress capsule draws, which is the phase the run is working on: the
     /// writer reports phases, not one file at a time, so every row waiting for the run fills with the same
-    /// answer rather than each pretending to have a proportion of its own.
+    /// answer rather than each pretending to have a proportion of its own. It is said on the window's thread
+    /// rather than the one the run is read on: the entries are bound to the rows drawn for them, so what moves
+    /// them is the drawing thread's to move.
     /// </remarks>
     /// <param name="placed">What the run put in the catalogue.</param>
     /// <param name="records">What the run has said about itself.</param>

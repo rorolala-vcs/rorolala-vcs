@@ -242,6 +242,11 @@ with the proportion the run's progress capsule shows while it carries content, a
 every path `layout tree-diff` reports as lost and on every unstaged deletion inside a rola-tree. A
 reading keeps them in step: a file that comes back, or a bring that finishes, puts its row away.
 
+What a ring is filled with is said on the window's thread rather than the one the run's progress is
+read on, because a ring is bound to the entry behind it: a proportion written from the reading's own
+worker made that binding throw, which ended a bring that had already carried everything and told the
+user the run had not finished while the work was there.
+
 ### 14. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Draw file icons on a plate with solid corner badges
 
 A file's icon now stands on a rounded plate: the `Mid` ground with a `Splitter` line, the icon inset so the plate reads as its frame, and a preview embedded inside it when there is one. The entry's type icon takes the plate's bottom right at four tenths of the tile once a preview is there.
