@@ -22,17 +22,16 @@
     clippy::trivially_copy_pass_by_ref
 )]
 
-use std::path::{Component, Path, PathBuf};
-use std::str::FromStr as _;
+use std::path::Path;
 
 use librorolala::auth::Account;
 use librorolala::ignore::IgnoreRuleSet;
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::protocol::VaultAddress;
 use librorolala::status::tracked_vault;
-use librorolala::storage::Key;
 use librorolala::workspace::Workspace;
 use librorolala::write::WriteError;
+use librorolala::write::path::{PathRefusal, local_path};
 use librorolala::write::retrack::{
     EntryRefusal, Recorded, Recording, Request, RetrackMessages, RetrackOptions, RetrackOutcome,
     RetrackRefusal, TargetRefusal, recording_of, retrack_path, tree_above,
@@ -54,11 +53,9 @@ use rorolala_cli_setups::{
 };
 use rorolala_errors::Failure;
 use rorolala_utils_cli_theme::{err_line, help_line, trd, warn_line};
-use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_utils_location::Locate as _;
 use rust_i18n::t;
 use serde::Serialize;
-use uuid::Uuid;
 
 use crate::Next;
 use crate::account::ResCurrentAccount;
@@ -70,9 +67,7 @@ use crate::exit_codes::{EC_ERR_RETRACK, EC_ERR_RETRACK_ARGUMENT, EC_ERR_RETRACK_
 use crate::failure::failure;
 use crate::fetch;
 use crate::keys::account_named;
-use crate::layout::{
-    ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutShouldInWorkspace, chosen, remote_spec,
-};
+use crate::layout::{ErrorLayoutFailed, ErrorLayoutMissing, ErrorLayoutShouldInWorkspace, chosen};
 use crate::progress::Reporting;
 
 /// Leave the record where it is put and leave the file on disk alone.
@@ -628,63 +623,17 @@ fn entry_kind(kind: EntryRefusal) -> RetrackEntryError {
 /// left to be a path: what is refused is the Vault-side marker and the one name a Vault's Layout
 /// is kept under.
 fn locate(root: &Path, cwd: &Path, given: &str) -> Result<LayoutPath, Next> {
-    if Uuid::from_str(given).is_ok() || Key::from_str(given).is_ok() || is_remote(given) {
-        return Err(ErrorRetrackFile::new(given, RetrackFileError::NotLocal).into());
-    }
-
-    let root = normalize(root);
-    let disk = normalize(&resolve(cwd, given));
-
-    let Ok(relative) = disk.strip_prefix(&root) else {
-        return Err(ErrorRetrackFile::new(given, RetrackFileError::OutsideWorkspace).into());
-    };
-
-    let Ok(path) = LayoutPath::from_relative(relative) else {
-        return Err(ErrorRetrackFile::new(given, RetrackFileError::OutsideWorkspace).into());
-    };
-
-    if path.as_str().split('/').any(|part| part == ".rola") {
-        return Err(ErrorRetrackFile::new(given, RetrackFileError::InsideData).into());
-    }
-
-    Ok(path)
-}
-
-/// Whether `given` is a name of the Vault's side rather than a path in this tree.
-fn is_remote(given: &str) -> bool {
-    // `@` is the marker a Vault's own path starts with; `truth@VAULT` is how a Vault's one Layout
-    // is named. A file of one's own may hold an `@` and is left to be read as the path it is.
-    given.starts_with('@')
-        || matches!(remote_spec(given), Some((layout, _)) if layout == VAULT_LAYOUT_NAME)
-}
-
-/// The path `given` names, made absolute against the directory the run was made in.
-fn resolve(cwd: &Path, given: &str) -> PathBuf {
-    if Path::new(given).is_absolute() {
-        PathBuf::from(given)
-    } else {
-        cwd.join(given)
-    }
-}
-
-/// `path` with its `.` dropped and its `..` climbed, worked out lexically rather than on disk.
-///
-/// A name is written against where the run was made, so `..` climbs out of the Workspace as
-/// readily as it climbs into it, and what is then left is refused for being outside it.
-fn normalize(path: &Path) -> PathBuf {
-    let mut components: Vec<Component<'_>> = Vec::new();
-
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir if matches!(components.last(), Some(Component::Normal(_))) => {
-                components.pop();
-            }
-            other => components.push(other),
-        }
-    }
-
-    components.into_iter().collect()
+    local_path(root, cwd, given).map_err(|refusal| {
+        ErrorRetrackFile::new(
+            given,
+            match refusal {
+                PathRefusal::NotLocal => RetrackFileError::NotLocal,
+                PathRefusal::OutsideWorkspace => RetrackFileError::OutsideWorkspace,
+                PathRefusal::InsideData => RetrackFileError::InsideData,
+            },
+        )
+        .into()
+    })
 }
 
 /// The answer a store, an index or a Layout refusing is given.

@@ -1,0 +1,277 @@
+_version: 2
+
+tweak:
+  help:
+    en: |
+        # Tweak a chain's history and rebuild the versions after the tweaked point
+        **Usage**: rola [[GREEN]]__tweak__[[/]] <file> [target]
+        **Tweak**:
+         __-d__, __--description__ <TEXT>    Set the **description** of this version
+         __-C__, __--creator__     <TEXT>    Set the **author** of this version
+         __-c__, __--content__     <HASH>    Point this version's content to **another stored content**
+         __-J__, __--join__        <HASH>    Associate this version with a variant as a merge, or leave empty to clear
+             __--insert__                Insert a copy of it above this version
+             __--drop__       <TARGET>   Remove this version
+        **Execution**:
+             __--now__                   **Immediately** execute all pending adjustments
+             __--cancel__      <INDEX>   Delete a pending adjustment by index
+         __-i__, __--interact__    `-i`      Interactive adjustment
+             __--offline__               Do not connect to the vault; use only existing local content and versions
+             __--concurrency__ <N>       Transfer N pieces of content at a time (default 4)
+    zh-CN: |
+        # 调整一条链的历史，并重建被调整点之后的版本
+        **用法**：rola [[GREEN]]__tweak__[[/]] <文件> [目标]
+        **调整**：
+         __-d__, __--description__ <文本>    设置该版本的 **描述**
+         __-C__, __--creator__     <文本>    设置该版本的 **作者**
+         __-c__, __--content__     <哈希>    把该版本的内容指向 **另一份已存内容**
+         __-J__, __--join__        <哈希>    将该版本与一个变体关联为合并，或留空表示清除
+             __--insert__                在该版本上方插入一个它的副本
+             __--drop__        <目标>    移除该版本
+        **执行**：
+             __--now__                   **立刻** 执行全部待定的调整
+             __--cancel__      <序号>    按序号删除一条待定的调整
+         __-i__, __--interact__    `-i`      交互式调整
+             __--offline__               不连接保险库，只使用本地已有的内容与版本
+             __--concurrency__ <N>       每次同时搬运 N 份内容（默认 4）
+
+  complete:
+    description:
+      en: Set the description of the version
+      zh-CN: 设置该版本的描述
+    creator:
+      en: Set the creator of the version
+      zh-CN: 设置该版本的作者
+    content:
+      en: Point the version at other stored content
+      zh-CN: 把该版本的内容指向另一份已存内容
+    join:
+      en: Join the version with a variant, empty to unjoin
+      zh-CN: 将该版本与一个变体关联为合并，空串表示解除
+    insert:
+      en: Insert a copy of the version above it
+      zh-CN: 在该版本上方插入一个它的副本
+    drop:
+      en: Remove the version
+      zh-CN: 移除该版本
+    interact:
+      en: Edit the whole range in an editor and apply the result
+      zh-CN: 在编辑器中编辑整个范围并直接执行结果
+    now:
+      en: Apply every pending adjustment at once
+      zh-CN: 立刻执行全部待定的调整
+    cancel:
+      en: Drop one pending adjustment by its number
+      zh-CN: 按序号删除一条待定的调整
+
+  description:
+    en: Adjust a file's chain, rebuilding every version after the point changed
+    zh-CN: 调整文件的版本链，并重建被调整点之后的每个版本
+
+  query_ready:
+    en: About to adjust the version `%{version}` of `%{file}`
+    zh-CN: 准备在 `%{file}` 上调整版本 `%{version}`
+
+  query_row:
+    en: "`%{variant}` %{creator}: \"%{message}\" (V%{number})"
+    zh-CN: "`%{variant}` %{creator}：“%{message}”（第 %{number} 版）"
+
+  query_ambiguous:
+    en: Scope the target for `%{file}`, more than one version matches
+    zh-CN: 准备在 `%{file}` 上调整，有多个版本命中，需要更精确的目标
+
+  query_help:
+    en: "Help: run `rola tweak --help` to see what can be adjusted"
+    zh-CN: "帮助：使用 `rola tweak --help` 查看可以调整的内容"
+
+  pending_header:
+    en: Adjustments not yet applied
+    zh-CN: 未执行调整
+
+  pending_item:
+    en: "%{number}. %{operation}"
+    zh-CN: "%{number}、%{operation}"
+
+  pending_help:
+    en: "Help: run `rola tweak <FILE> --now` to apply them"
+    zh-CN: "帮助：使用 `rola tweak <文件> --now` 执行调整"
+
+  cancelled:
+    en: "Removed: %{operation}"
+    zh-CN: "已移除：%{operation}"
+
+  applied:
+    en: "Adjusted `%{file}`: `%{from}` became `%{to}`, %{count} versions rebuilt"
+    zh-CN: "已调整 `%{file}`：`%{from}` 变为 `%{to}`，重建了 %{count} 个版本"
+
+  warn_content:
+    en: The content was not fetched, so the file now stands modified
+    zh-CN: 文件内容拉取失败，本地现在是修改状态
+
+  warn_content_help:
+    en: Fetch the content and write it over the file when it is here
+    zh-CN: 内容就绪后再把文件还原到基线
+
+  plan_header:
+    en: "Adjusting `%{uuid}` at `%{local}`"
+    zh-CN: "正在调整 `%{uuid}` 的 `%{local}`"
+
+  edit_header:
+    en: "Adjusting `%{file}`, recorded at `%{version}`"
+    zh-CN: "正在调整 `%{file}`，它记录的版本是 `%{version}`"
+
+  edit_columns:
+    en: "# creator  message  content  join"
+    zh-CN: "# 名字  描述  内容  合入"
+
+  edit_markers:
+    en: "# a line starting with -- removes a version, one starting with ++ inserts one"
+    zh-CN: "# 以 -- 开头的一行表示移除该版本，以 ++ 开头的一行表示插入一个版本"
+
+  op_creator:
+    en: "set the creator of %{version} to \"%{text}\""
+    zh-CN: "修改版本 %{version} 的作者为 “%{text}”"
+
+  op_message:
+    en: "set the description of %{version} to \"%{text}\""
+    zh-CN: "修改版本 %{version} 的描述为 “%{text}”"
+
+  op_content:
+    en: "point the content of %{version} at \"%{hash}\""
+    zh-CN: "重新将版本 %{version} 的内容指向到 “%{hash}”"
+
+  op_join:
+    en: join %{version} with the variant %{variant}
+    zh-CN: 将版本 %{version} 和变体 %{variant} 关联为合并
+
+  op_unjoin:
+    en: unjoin %{version} from the variant %{variant}
+    zh-CN: 解除版本 %{version} 与变体 %{variant} 的关联
+
+  op_insert:
+    en: insert a version between %{below} and %{above}
+    zh-CN: 在 %{below} 和 %{above} 之间插入版本
+
+  op_remove:
+    en: remove %{version}
+    zh-CN: 移除版本 %{version}
+
+  err_no_file:
+    en: Please name the file whose chain is to be adjusted
+    zh-CN: 请指定要调整的文件
+
+  err_no_file_help:
+    en: Please name one file, see `rola tweak --help` for usage
+    zh-CN: 请指定一个文件，用法见 `rola tweak --help`
+
+  err_not_local:
+    en: "`%{file}` is not a local path of this Workspace"
+    zh-CN: "`%{file}` 不是本工作区的本地路径"
+
+  err_not_local_help:
+    en: Please name a path inside this Workspace, the way `rola retrack` takes one
+    zh-CN: 请指定本工作区内的路径，与 `rola retrack` 接受的一样
+
+  err_not_recorded:
+    en: "`%{file}` is not recorded in the Layout"
+    zh-CN: "`%{file}` 没有被布局记录"
+
+  err_not_recorded_help:
+    en: Please record it with `rola track` first
+    zh-CN: 请先用 `rola track` 记录它
+
+  err_no_chain:
+    en: The version `%{file}` records is not the top of a chain
+    zh-CN: "`%{file}` 记录的版本不是一条链的顶端"
+
+  err_no_chain_help:
+    en: Please run `rola fsck` to check the index
+    zh-CN: 请运行 `rola fsck` 检查索引
+
+  err_merging:
+    en: "`%{file}` has the variant `%{variant}` waiting to be joined into it"
+    zh-CN: "`%{file}` 有变体 `%{variant}` 等待合并进来"
+
+  err_merging_help:
+    en: Please finish or end the merge with `rola track` before adjusting the chain
+    zh-CN: 请先用 `rola track` 完成或结束这次合并，再调整版本链
+
+  err_target_none:
+    en: Nothing on the chain of `%{file}` matches "%{target}"
+    zh-CN: 在 `%{file}` 的链上没有找到 “%{target}”
+
+  err_target_none_help:
+    en: Please name a version hash, a variant hash, `~N`, or text of one creator or message
+    zh-CN: 请给出至少 4 位的版本哈希、变体哈希、`~N`，或某个作者或描述的文本
+
+  err_target_many:
+    en: "\"%{target}\" matches %{count} versions of `%{file}`"
+    zh-CN: "“%{target}” 命中了 `%{file}` 的 %{count} 个版本"
+
+  err_target_many_help:
+    en: Please narrow the target with a hash or a number of steps
+    zh-CN: 请用哈希或回溯步数把目标写得更精确
+
+  err_target_other:
+    en: "`%{target}` belongs to another file's chain"
+    zh-CN: "`%{target}` 属于别的文件的链"
+
+  err_target_other_help:
+    en: Please name a version or a variant of the chain `%{file}` records
+    zh-CN: 请给出 `%{file}` 所记录的那条链上的版本或变体
+
+  err_flags:
+    en: The flags given describe more than one adjustment of `%{file}`
+    zh-CN: 给出的旗标描述了对 `%{file}` 的多条调整
+
+  err_flags_help:
+    en: Please give one adjustment at a time, one of the four fields, `--insert`, or `--drop`
+    zh-CN: 请一次只给一条调整，四个字段之一、`--insert`、或 `--drop`
+
+  err_insert_target:
+    en: "`--insert` needs a target to name the version it is inserted above"
+    zh-CN: "`--insert` 需要一个目标，用来指明插在哪一版上方"
+
+  err_insert_target_help:
+    en: Please name the target, for example `rola tweak a.psd ~2 --insert`
+    zh-CN: 请给出目标，例如 `rola tweak a.psd ~2 --insert`
+
+  err_interact:
+    en: "`--interact` edits the whole range, so it cannot be given with another adjustment"
+    zh-CN: "`--interact` 编辑整个范围，不能与其他调整同时给出"
+
+  err_interact_help:
+    en: Please run `rola tweak <FILE> --interact` on its own
+    zh-CN: 请单独运行 `rola tweak <文件> --interact`
+
+  err_no_plan:
+    en: "`%{file}` has no pending adjustment at its current version"
+    zh-CN: "`%{file}` 在当前版本上没有待执行的调整"
+
+  err_no_plan_help:
+    en: Please add one with a field flag, `--insert`, or `--drop`
+    zh-CN: 请先用字段旗标、`--insert`、或 `--drop` 添加一条
+
+  err_cancel_range:
+    en: "%{number} is not a number from 1 to %{count}"
+    zh-CN: "%{number} 不在 1 到 %{count} 之间"
+
+  err_cancel_range_help:
+    en: Please read the numbers from the list of pending adjustments
+    zh-CN: 请从待执行调整的列表里读取序号
+
+  err_sheet:
+    en: "The sheet of `%{file}` cannot be read: %{reason}"
+    zh-CN: "`%{file}` 的表格无法读懂：%{reason}"
+
+  err_sheet_help:
+    en: Please keep the columns and the two markers as the file shows them
+    zh-CN: 请保持列与两种行首标记与文件中原有的写法
+
+  err_no_index:
+    en: This run is not inside a Workspace that holds a version control index
+    zh-CN: 本次运行不在持有版本控制索引的工作区里
+
+  err_failed:
+    en: "Adjusting `%{file}` failed: %{cause}"
+    zh-CN: "调整 `%{file}` 失败：%{cause}"

@@ -18,6 +18,7 @@ pub mod layout;
 pub mod layout_remote;
 pub mod ownership;
 pub mod pack;
+pub mod path;
 pub mod progress;
 pub mod request;
 pub mod retrack;
@@ -29,6 +30,7 @@ pub mod tree;
 pub mod tree_init;
 pub mod tree_remove;
 pub mod tree_reset;
+pub mod tweak;
 pub mod workspace;
 
 pub use cancel::*;

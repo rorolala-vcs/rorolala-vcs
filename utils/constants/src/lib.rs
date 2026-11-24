@@ -41,6 +41,16 @@ pub const WORKSPACE_LAYOUT_DIR: &str = "./.rola/layout/";
 #[lazyffi(export = ROLA_WORKSPACE_EDITING_PATH)]
 pub const WORKSPACE_EDITING_PATH: &str = "./.rola/EDITING.md";
 
+/// Path to the file a run opens in an editor to adjust a chain's history
+///
+/// What a run adjusts is read as a table, one version a line, from the version the entry records
+/// back to the oldest one being adjusted, so the editor writes one file the run then reads back. It
+/// lives beside `EDITING.md`, in the Workspace's data directory, since it is not part of the work.
+///
+/// Nothing here is exported to the C ABI: no C caller reads or writes this file, and a name in the
+/// header is one every binding has to carry.
+pub const WORKSPACE_TWEAKING_PATH: &str = "./.rola/TWEAKING.md";
+
 /// Path, inside the Workspace's data directory, where what a Layout's analysis is kept
 ///
 /// The tree a Layout describes is read back against the files a Workspace holds, and what was
@@ -74,6 +84,15 @@ pub const WORKSPACE_READONLY_LAYOUTS_DIR: &str = "./.rola/cache/readonly-layouts
 /// fetched.
 #[lazyffi(export = ROLA_WORKSPACE_IGNORE_RULES_DIR)]
 pub const WORKSPACE_IGNORE_RULES_DIR: &str = "./.rola/info/ignore/";
+
+/// Path, inside the Workspace's data directory, where adjustments a run has not applied wait
+///
+/// One directory per `Uuid`, and inside it one per version the entry records, each holding a
+/// `plan.md`: the version in the path is what makes a plan belong to the chain it was written
+/// against, so a plan the entry has moved past is ignored rather than applied to another chain.
+///
+/// Like the rules beside it, nothing here is exported to the C ABI.
+pub const WORKSPACE_TWEAKING_DIR: &str = "./.rola/info/tweaking/";
 
 /// The directory, inside a Workspace's ignore rules, that a fetched Vault's rules are kept under
 ///

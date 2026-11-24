@@ -426,6 +426,13 @@ pub const EC_ERR_RETRACK_ARGUMENT: i32 = 251;
 /// `exit_codes.retrack_dirty`
 pub const EC_ERR_RETRACK_DIRTY: i32 = 253;
 
+// Adjusting a chain's history, rebuilding what follows the point adjusted. The block a subject of
+// its own would have had is past the byte an exit status is, so the one number this block has left
+// is what a refused adjustment ends on.
+
+/// `exit_codes.tweak`
+pub const EC_ERR_TWEAK: i32 = 249;
+
 // Offline, a run that may not reach the Vault
 
 // The decade this block would have had is past the byte an exit status is: 260 is read as 4 by

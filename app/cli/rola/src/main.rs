@@ -45,6 +45,7 @@ mod cmd_retrack;
 mod cmd_status;
 mod cmd_sync;
 mod cmd_track;
+mod cmd_tweak;
 mod cmd_version;
 mod complete;
 mod editor;

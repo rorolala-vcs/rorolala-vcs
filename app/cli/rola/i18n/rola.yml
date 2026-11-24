@@ -55,6 +55,7 @@ rola:
       **Housekeeping and maintenance:**
           vault                     Query and operate on vaults known to the current workspace
           align <path>              Fix inconsistencies between the filesystem and records
+          tweak <file> [target]     Adjust a version's record and rebuild what follows it
           pack                      Pack and tidy stored objects
           fsck                      Check the integrity of the storage
       **Low-level operations:**
@@ -109,6 +110,7 @@ rola:
       **整理与维护：**
           vault                     查询和操作当前工作区已知的保险库
           align <路径>              修复文件系统和记录不一致的情况
+          tweak <文件> [目标]       调整某个版本的记录，并重建它之后的版本
           pack                      打包、整理所存储的对象
           fsck                      检查所在存储的完整性
       **底层操作：**

@@ -44,6 +44,7 @@ fn main() {
     let cached = sandbox.join("cached");
     let ignoreme = sandbox.join("ignoreme");
     let switching = sandbox.join("switching");
+    let tweaked = sandbox.join("tweaked");
     let joining = sandbox.join("joining");
     let git_rola = sandbox.join("git-rola");
     let tree_project = sandbox.join("git-rola-tree");
@@ -65,6 +66,7 @@ fn main() {
         &cached,
         &ignoreme,
         &switching,
+        &tweaked,
         &joining,
         &git_rola,
         &tree_project,
@@ -115,6 +117,7 @@ fn main() {
     ownership(&rola, &claimed, &mut checked);
     empty_cache(&rola, &cached, &mut checked);
     uuid_switch(&rola, &switching, &mut checked);
+    tweaking(&rola, &tweaked, &mut checked);
     foreign_storage(&rola, &foreign, &mut checked);
 
     // Collecting is last, since the tracked work it makes acts as an account and installs a key,
@@ -2786,6 +2789,168 @@ fn entry_named(rola: &Rola, dir: &Path, uuid: &str) -> bool {
                 })
         })
         .unwrap_or(false)
+}
+
+/// Adjusting a chain's history: what the query names, what waits, and what applying rebuilds.
+///
+/// The fixture is the shape the command needs: a Workspace with an account, and a file recorded
+/// twice so its entry has a chain to adjust.
+fn tweaking(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to adjust a chain in", &ran, 0);
+
+    let ran = rola.run(dir, &["account", "bob"]);
+    checked.exits("the work acts as an account that is installed", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "one").expect("a file to record");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "first", "--no-editor"],
+    );
+    checked.exits("a file is recorded", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "two").expect("the second reading of the file");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "second", "--no-editor"],
+    );
+    checked.exits("the file is recorded again", &ran, 0);
+
+    // A run that says nothing adjusts nothing: it says which version the target names, and what
+    // the entry records, and stops there.
+    let ran = rola.run(dir, &["tweak", "a.psd"]);
+    checked.exits("a query ends successfully", &ran, 0);
+    checked.stdout_has("the query names the file", &ran, "a.psd");
+    checked.stdout_has("the query draws the recorded version", &ran, "(V1)");
+    checked.stdout_has(
+        "the query names how to learn more",
+        &ran,
+        "rola tweak --help",
+    );
+
+    // Text names a version only when it names one, so a word both versions carry is listed.
+    let ran = rola.run(dir, &["tweak", "a.psd", "s"]);
+    checked.exits(
+        "an ambiguous target is answered rather than refused",
+        &ran,
+        0,
+    );
+    checked.stdout_has(
+        "an ambiguous target says the range needs narrowing",
+        &ran,
+        "more than one",
+    );
+    checked.stdout_has("an ambiguous target lists the first version", &ran, "(V0)");
+    checked.stdout_has("an ambiguous target lists the second version", &ran, "(V1)");
+
+    // A step count is a target, and one past the first version names nothing.
+    let ran = rola.run(dir, &["tweak", "a.psd", "~9"]);
+    checked.exits("a step past the first version is refused", &ran, 249);
+
+    // An adjustment waits in the plan until it is applied.
+    let ran = rola.run(dir, &["tweak", "a.psd", "-d", "edited"]);
+    checked.exits("an adjustment is written into the plan", &ran, 0);
+    checked.stdout_has("the plan is listed", &ran, "Adjustments not yet applied");
+    checked.stdout_has("the listing names the version", &ran, "V1");
+    checked.stdout_has("the listing names the new description", &ran, "edited");
+
+    let ran = rola.run(dir, &["tweak", "a.psd"]);
+    checked.exits("a query with a plan still ends successfully", &ran, 0);
+    checked.stdout_has(
+        "the query is drawn beside the plan",
+        &ran,
+        "About to adjust",
+    );
+    checked.stdout_has(
+        "the plan is drawn beside the query",
+        &ran,
+        "Adjustments not yet applied",
+    );
+
+    // The plan waits under the file's `Uuid` and the version it records.
+    let plan = dir.join(".rola/info/tweaking");
+    checked.wants(
+        "the plan is kept under the Workspace's own directory",
+        plan.is_dir(),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["tweak", "a.psd", "--now"]);
+    checked.exits("a plan is applied", &ran, 0);
+    checked.stdout_has("the run says what the chain came to", &ran, "Adjusted");
+    checked.stdout_has(
+        "the run says one version was rebuilt",
+        &ran,
+        "1 versions rebuilt",
+    );
+    checked.wants(
+        "the plan is taken away once it is applied",
+        no_plan(&plan),
+        &said(&ran),
+    );
+    checked.wants(
+        "the file on disk is left as the work had it",
+        fs::read_to_string(dir.join("a.psd")).is_ok_and(|it| it == "two"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["tweak", "a.psd", "edited"]);
+    checked.exits(
+        "the version the plan adjusted is named by its new words",
+        &ran,
+        0,
+    );
+    checked.stdout_has("the new description is what the version says", &ran, "(V1)");
+
+    // Cancelling needs something to cancel.
+    let ran = rola.run(dir, &["tweak", "a.psd", "--cancel", "1"]);
+    checked.exits("cancelling with nothing pending is refused", &ran, 249);
+
+    // A removal names its own version, and a plan that leaves nothing to do is taken away.
+    let ran = rola.run(dir, &["tweak", "a.psd", "--drop", "~1"]);
+    checked.exits("a version is planned for removal", &ran, 0);
+    checked.stdout_has("the listing names the removal", &ran, "remove");
+
+    let ran = rola.run(dir, &["tweak", "a.psd", "--cancel", "1"]);
+    checked.exits("the planned removal is cancelled", &ran, 0);
+    checked.stdout_has("the cancelled adjustment is named", &ran, "Removed");
+    checked.wants(
+        "a plan with nothing left is taken away",
+        no_plan(&plan),
+        &said(&ran),
+    );
+
+    // What the flags say together is refused before anything is read.
+    let ran = rola.run(dir, &["tweak", "a.psd", "--insert"]);
+    checked.exits("an insert with no target is refused", &ran, 14);
+
+    let ran = rola.run(dir, &["tweak", "a.psd", "--insert", "--drop", "~1"]);
+    checked.exits("two adjustments at once are refused", &ran, 14);
+
+    let ran = rola.run(dir, &["tweak", "a.psd", "-i", "--now"]);
+    checked.exits("editing and applying at once are refused", &ran, 14);
+
+    // A path the Layout does not record, and one outside the Workspace, name nothing to adjust.
+    fs::write(dir.join("b.psd"), "bee").expect("a file that is never recorded");
+    let ran = rola.run(dir, &["tweak", "b.psd"]);
+    checked.exits("a file the Layout does not record is refused", &ran, 249);
+    checked.stderr_has(
+        "the refusal says the file is not recorded",
+        &ran,
+        "not recorded",
+    );
+
+    let ran = rola.run(dir, &["tweak", "../elsewhere.psd"]);
+    checked.exits("a path outside the Workspace is refused", &ran, 14);
+
+    // A directory is one entry and not a file, so it is not something this command takes.
+    let ran = rola.run(dir, &["tweak", "."]);
+    checked.exits("a directory of the work is refused", &ran, 14);
+}
+
+/// Whether nothing waits under the directory plans are kept in.
+fn no_plan(dir: &Path) -> bool {
+    !dir.exists() || fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_none())
 }
 
 /// Changing the `Uuid` a path records, and giving it a new one.

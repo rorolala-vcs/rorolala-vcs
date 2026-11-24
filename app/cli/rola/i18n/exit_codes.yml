@@ -437,6 +437,10 @@ exit_codes:
     en: The file has changes that were never recorded, or a variant that was never merged
     zh-CN: 该文件有从未记录的改动，或有从未合并的变体
 
+  tweak:
+    en: A chain's history could not be adjusted, or what follows it could not be rebuilt
+    zh-CN: 无法调整一条链的历史，或无法重建它之后的版本
+
   offline:
     en: The run was asked to reach no Vault, and what it asked for needs one
     zh-CN: 本次运行被要求不连接保险库，而它请求的操作需要保险库
