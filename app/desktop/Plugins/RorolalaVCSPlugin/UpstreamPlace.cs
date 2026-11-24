@@ -1658,7 +1658,7 @@ internal sealed class UpstreamPlace
         return
         [
             new LogicalBadge(
-                IconKey: mine ? Icons.Pencil : Icons.Lock,
+                IconKey: mine ? Icons.PencilBold : Icons.LockBold,
                 Colour: mine ? RorolalaColours.Allow : RorolalaColours.Disallow,
                 Text: mine ? null : owner,
                 TextKey: mine ? "rorolala_vcs.ownership.mine" : null,

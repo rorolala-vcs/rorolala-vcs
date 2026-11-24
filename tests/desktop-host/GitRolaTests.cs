@@ -170,7 +170,7 @@ public sealed class GitRolaTests
                 marked is not null && marked.Value == host.Palette.Semantic.Error,
                 $"wrong={check.Wrong(entry.Path)} root={root} answer={string.Join('|', check.AnswerFor(root ?? string.Empty) ?? ["<none>"])} lock={File.Exists(Path.Combine(directory, "rola.lock"))} exe={GitRolaPrograms.Git} project={GitRolaToml.IsProject(directory)}"
             );
-            Assert.Equal(GitVCSPlugin.Icons.NotePencil, badge.Mark(entry).IconKey);
+            Assert.Equal(GitVCSPlugin.Icons.NotePencilBold, badge.Mark(entry).IconKey);
         }
         finally
         {

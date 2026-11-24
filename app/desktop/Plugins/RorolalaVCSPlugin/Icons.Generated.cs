@@ -101,6 +101,45 @@ internal static partial class Icons
     /// <summary>The key the `user-circle-gear` picture is held under.</summary>
     public const string UserCircleGear = "rorolala_vcs.user-circle-gear";
 
+    /// <summary>The key the `plus-bold` picture is held under.</summary>
+    public const string PlusBold = "rorolala_vcs.plus-bold";
+
+    /// <summary>The key the `note-pencil-bold` picture is held under.</summary>
+    public const string NotePencilBold = "rorolala_vcs.note-pencil-bold";
+
+    /// <summary>The key the `exclamation-mark-bold` picture is held under.</summary>
+    public const string ExclamationMarkBold = "rorolala_vcs.exclamation-mark-bold";
+
+    /// <summary>The key the `arrow-right-bold` picture is held under.</summary>
+    public const string ArrowRightBold = "rorolala_vcs.arrow-right-bold";
+
+    /// <summary>The key the `check-circle-bold` picture is held under.</summary>
+    public const string CheckCircleBold = "rorolala_vcs.check-circle-bold";
+
+    /// <summary>The key the `radio-button-bold` picture is held under.</summary>
+    public const string RadioButtonBold = "rorolala_vcs.radio-button-bold";
+
+    /// <summary>The key the `circle-bold` picture is held under.</summary>
+    public const string CircleBold = "rorolala_vcs.circle-bold";
+
+    /// <summary>The key the `arrow-up-bold` picture is held under.</summary>
+    public const string ArrowUpBold = "rorolala_vcs.arrow-up-bold";
+
+    /// <summary>The key the `arrow-down-bold` picture is held under.</summary>
+    public const string ArrowDownBold = "rorolala_vcs.arrow-down-bold";
+
+    /// <summary>The key the `git-fork-bold` picture is held under.</summary>
+    public const string GitForkBold = "rorolala_vcs.git-fork-bold";
+
+    /// <summary>The key the `git-merge-bold` picture is held under.</summary>
+    public const string GitMergeBold = "rorolala_vcs.git-merge-bold";
+
+    /// <summary>The key the `pencil-bold` picture is held under.</summary>
+    public const string PencilBold = "rorolala_vcs.pencil-bold";
+
+    /// <summary>The key the `lock-bold` picture is held under.</summary>
+    public const string LockBold = "rorolala_vcs.lock-bold";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
@@ -135,5 +174,18 @@ internal static partial class Icons
         (Briefcase, "briefcase"),
         (ArrowsSplit, "arrows-split"),
         (UserCircleGear, "user-circle-gear"),
+        (PlusBold, "plus-bold"),
+        (NotePencilBold, "note-pencil-bold"),
+        (ExclamationMarkBold, "exclamation-mark-bold"),
+        (ArrowRightBold, "arrow-right-bold"),
+        (CheckCircleBold, "check-circle-bold"),
+        (RadioButtonBold, "radio-button-bold"),
+        (CircleBold, "circle-bold"),
+        (ArrowUpBold, "arrow-up-bold"),
+        (ArrowDownBold, "arrow-down-bold"),
+        (GitForkBold, "git-fork-bold"),
+        (GitMergeBold, "git-merge-bold"),
+        (PencilBold, "pencil-bold"),
+        (LockBold, "lock-bold"),
     ];
 }

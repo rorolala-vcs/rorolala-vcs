@@ -59,7 +59,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
             // file may be edited. The phrase names nobody, because "you" is not somebody else's name.
             { Kind: EntryLockKind.Mine } => new EntryMark(
                 TextKey: Mine,
-                IconKey: Icons.Pencil,
+                IconKey: Icons.PencilBold,
                 Colour: RorolalaColours.Allow,
                 TextInk: MarkInk.Plain,
                 Tagged: true,
@@ -72,7 +72,7 @@ internal sealed class RorolalaLocks : IEntryLockProvider
             // the phrase that name goes in.
             { Kind: EntryLockKind.Held, Holder: { Length: > 0 } holder } => new EntryMark(
                 Text: holder,
-                IconKey: Icons.Lock,
+                IconKey: Icons.LockBold,
                 Colour: RorolalaColours.Disallow,
                 TextInk: MarkInk.Plain,
                 Tagged: true,

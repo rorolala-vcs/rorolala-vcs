@@ -17,11 +17,15 @@ internal static partial class Icons
     /// <summary>The key the `arrow-clockwise` picture is held under.</summary>
     public const string ArrowClockwise = "rorolala_git.arrow-clockwise";
 
+    /// <summary>The key the `note-pencil-bold` picture is held under.</summary>
+    public const string NotePencilBold = "rorolala_git.note-pencil-bold";
+
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
         (NotePencil, "note-pencil"),
         (ArrowDown, "arrow-down"),
         (ArrowClockwise, "arrow-clockwise"),
+        (NotePencilBold, "note-pencil-bold"),
     ];
 }

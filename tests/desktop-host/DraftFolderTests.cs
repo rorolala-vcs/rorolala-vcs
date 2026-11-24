@@ -246,7 +246,7 @@ public sealed class DraftFolderTests
             place.Badges(new UpstreamSpot(entry.Path, "hero.psd", Folder: false, Entry: entry))
         );
 
-        Assert.Equal(RorolalaVCSPlugin.Icons.Lock, badge.IconKey);
+        Assert.Equal(RorolalaVCSPlugin.Icons.LockBold, badge.IconKey);
         Assert.Equal("rorolala_vcs.ownership.held_by", badge.HoverKey);
     }
 

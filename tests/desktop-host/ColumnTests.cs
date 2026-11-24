@@ -185,32 +185,32 @@ public sealed class ColumnTests
         var partial = RorolalaTreeStagedColumn.Badge(TreeWorkStage.Partial);
         var none = RorolalaTreeStagedColumn.Badge(TreeWorkStage.Unstaged);
 
-        Assert.Equal(VcsIcons.Plus, added.IconKey);
+        Assert.Equal(VcsIcons.PlusBold, added.IconKey);
         Assert.Equal(RorolalaColours.Untagged, added.Colour);
         Assert.True(added.Tagged);
         Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_work.added_hover"), added.Hover());
 
-        Assert.Equal(VcsIcons.NotePencil, modified.IconKey);
+        Assert.Equal(VcsIcons.NotePencilBold, modified.IconKey);
         Assert.Equal(RorolalaColours.UnderWay, modified.Colour);
         Assert.True(modified.Tagged);
         Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_work.modified_hover"), modified.Hover());
 
-        Assert.Equal(VcsIcons.ExclamationMark, wrong.IconKey);
+        Assert.Equal(VcsIcons.ExclamationMarkBold, wrong.IconKey);
         Assert.Equal(RorolalaColours.Wrong, wrong.Colour);
         Assert.True(wrong.Tagged);
         Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_work.wrong_hover"), wrong.Hover());
 
-        Assert.Equal(VcsIcons.CheckCircle, all.IconKey);
+        Assert.Equal(VcsIcons.CheckCircleBold, all.IconKey);
         Assert.Equal(RorolalaColours.Untagged, all.Colour);
         Assert.True(all.Tagged);
         Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_staged.all_hover"), all.Hover());
 
-        Assert.Equal(VcsIcons.RadioButton, partial.IconKey);
+        Assert.Equal(VcsIcons.RadioButtonBold, partial.IconKey);
         Assert.Equal(RorolalaColours.UnderWay, partial.Colour);
         Assert.True(partial.Tagged);
         Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_staged.partial_hover"), partial.Hover());
 
-        Assert.Equal(VcsIcons.Circle, none.IconKey);
+        Assert.Equal(VcsIcons.CircleBold, none.IconKey);
         Assert.Null(none.Colour);
         Assert.True(none.Tagged);
         Assert.Equal(RolaI18N.Get("rorolala_vcs.tree_staged.none_hover"), none.Hover());
@@ -454,20 +454,20 @@ public sealed class ColumnTests
         _ = Host.Services();
 
         var ahead = RorolalaStandingBadge.Say(new Standing(StandingRelation.Ahead, 2));
-        Assert.Equal(VcsIcons.ArrowUp, ahead.IconKey);
+        Assert.Equal(VcsIcons.ArrowUpBold, ahead.IconKey);
         Assert.Equal(RorolalaColours.Success, ahead.Colour);
 
         // Behind is one answer with the count and without it: what a reader does about either is fetch.
         var behind = RorolalaStandingBadge.Say(new Standing(StandingRelation.Behind, 1));
-        Assert.Equal(VcsIcons.ArrowDown, behind.IconKey);
+        Assert.Equal(VcsIcons.ArrowDownBold, behind.IconKey);
         Assert.Equal(RorolalaColours.Fail, behind.Colour);
 
         var untold = RorolalaStandingBadge.Say(new Standing(StandingRelation.Behind, null));
-        Assert.Equal(VcsIcons.ArrowDown, untold.IconKey);
+        Assert.Equal(VcsIcons.ArrowDownBold, untold.IconKey);
         Assert.Equal(RorolalaColours.Fail, untold.Colour);
 
         var apart = RorolalaStandingBadge.Say(new Standing(StandingRelation.Apart, null));
-        Assert.Equal(VcsIcons.GitFork, apart.IconKey);
+        Assert.Equal(VcsIcons.GitForkBold, apart.IconKey);
         Assert.Equal(RorolalaColours.Fail, apart.Colour);
 
         // Every one of them is worn on the badge's own ground, and says on itself the very sentence the column's
@@ -534,12 +534,12 @@ public sealed class ColumnTests
     {
         _ = Host.Services();
 
-        Assert.Equal(VcsIcons.Plus, RorolalaStates.Badge(PathState.Untagged, "it").IconKey);
-        Assert.Equal(VcsIcons.NotePencil, RorolalaStates.Badge(PathState.Modified, "it").IconKey);
-        Assert.Equal(VcsIcons.ExclamationMark, RorolalaStates.Badge(PathState.Wrong, "it").IconKey);
-        Assert.Equal(VcsIcons.ArrowRight, RorolalaStates.Badge(PathState.Renamed, "it").IconKey);
-        Assert.Equal(VcsIcons.ArrowRight, RorolalaStates.Badge(PathState.RenamedLikely, "it").IconKey);
-        Assert.Equal(VcsIcons.NotePencil, RorolalaStates.Badge(PathState.Merging, "it").IconKey);
+        Assert.Equal(VcsIcons.PlusBold, RorolalaStates.Badge(PathState.Untagged, "it").IconKey);
+        Assert.Equal(VcsIcons.NotePencilBold, RorolalaStates.Badge(PathState.Modified, "it").IconKey);
+        Assert.Equal(VcsIcons.ExclamationMarkBold, RorolalaStates.Badge(PathState.Wrong, "it").IconKey);
+        Assert.Equal(VcsIcons.ArrowRightBold, RorolalaStates.Badge(PathState.Renamed, "it").IconKey);
+        Assert.Equal(VcsIcons.ArrowRightBold, RorolalaStates.Badge(PathState.RenamedLikely, "it").IconKey);
+        Assert.Equal(VcsIcons.NotePencilBold, RorolalaStates.Badge(PathState.Merging, "it").IconKey);
 
         // The colours are the ones the dots are, since what a state is coloured is the state and not the shape
         // it is drawn in.

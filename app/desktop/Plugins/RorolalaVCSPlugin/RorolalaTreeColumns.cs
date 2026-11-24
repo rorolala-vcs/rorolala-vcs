@@ -139,9 +139,9 @@ internal sealed class RorolalaTreeStatusColumn : RorolalaTreeColumn
         new(
             IconKey: status switch
             {
-                TreeWorkStatus.Added => Icons.Plus,
-                TreeWorkStatus.Wrong => Icons.ExclamationMark,
-                _ => Icons.NotePencil,
+                TreeWorkStatus.Added => Icons.PlusBold,
+                TreeWorkStatus.Wrong => Icons.ExclamationMarkBold,
+                _ => Icons.NotePencilBold,
             },
             Colour: Colour(status),
             Tagged: true,
@@ -255,9 +255,9 @@ internal sealed class RorolalaTreeStagedColumn : RorolalaTreeColumn
     private static string Icon(TreeWorkStage stage) =>
         stage switch
         {
-            TreeWorkStage.Staged => Icons.CheckCircle,
-            TreeWorkStage.Partial => Icons.RadioButton,
-            _ => Icons.Circle,
+            TreeWorkStage.Staged => Icons.CheckCircleBold,
+            TreeWorkStage.Partial => Icons.RadioButtonBold,
+            _ => Icons.CircleBold,
         };
 
     /// <summary>What a stage is coloured, when it has a colour of its own.</summary>

@@ -20,7 +20,7 @@ namespace GitVCSPlugin;
 internal sealed class GitRolaBadge : IEntryMarkProvider
 {
     /// <summary>The picture a change is drawn with, drawn into this plugin's own set.</summary>
-    private const string Modified = Icons.NotePencil;
+    private const string Modified = Icons.NotePencilBold;
 
     /// <summary>What the check answered about the work.</summary>
     private readonly GitRolaCheck _check;

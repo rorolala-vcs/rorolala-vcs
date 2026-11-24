@@ -167,6 +167,22 @@ icons = [
     "briefcase",
     "arrows-split",
     "user-circle-gear",
+    # A badge is drawn on a tile at a dozen pixels, where the regular weight's thin strokes close up, so
+    # each picture a badge wears is drawn again at bold under a key of its own. The regular keys above stay
+    # what a menu, a progress capsule and a dock header wear, and only the badge producers name these.
+    { key = "plus-bold", name = "plus", weight = "bold" },
+    { key = "note-pencil-bold", name = "note-pencil", weight = "bold" },
+    { key = "exclamation-mark-bold", name = "exclamation-mark", weight = "bold" },
+    { key = "arrow-right-bold", name = "arrow-right", weight = "bold" },
+    { key = "check-circle-bold", name = "check-circle", weight = "bold" },
+    { key = "radio-button-bold", name = "radio-button", weight = "bold" },
+    { key = "circle-bold", name = "circle", weight = "bold" },
+    { key = "arrow-up-bold", name = "arrow-up", weight = "bold" },
+    { key = "arrow-down-bold", name = "arrow-down", weight = "bold" },
+    { key = "git-fork-bold", name = "git-fork", weight = "bold" },
+    { key = "git-merge-bold", name = "git-merge", weight = "bold" },
+    { key = "pencil-bold", name = "pencil", weight = "bold" },
+    { key = "lock-bold", name = "lock", weight = "bold" },
 ]
 
 [[set]]
@@ -177,7 +193,14 @@ key = "rorolala_git"
 # project's lock records, the down arrow the Open item wears, the same one the VCS plugin's Upstream item
 # draws, and the arrow the restore's menu item wears. All are the artwork the VCS plugin draws for the same
 # words, drawn here again so that this plugin's keys are its own, the way every set is one project's.
-icons = ["note-pencil", "arrow-down", "arrow-clockwise"]
+icons = [
+    "note-pencil",
+    "arrow-down",
+    "arrow-clockwise",
+    # The picture a material wears when it is out of step with the lock is a tile badge, so it is drawn
+    # again at bold under its own key. See the VCS set for why.
+    { key = "note-pencil-bold", name = "note-pencil", weight = "bold" },
+]
 
 [[set]]
 plugin = "RorolalaDesktop"

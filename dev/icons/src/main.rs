@@ -76,8 +76,8 @@ struct Set {
     source: Option<String>,
     /// What the pictures are handed over under.
     key: String,
-    /// The pictures, by the name the set knows each by.
-    icons: Vec<String>,
+    /// The pictures, by the name the set knows each by, or by a table that says which weight and key.
+    icons: Vec<Picture>,
 }
 
 impl Set {
@@ -89,6 +89,48 @@ impl Set {
         self.source
             .as_ref()
             .map_or_else(|| Path::new(SOURCES).join(&self.plugin), PathBuf::from)
+    }
+}
+
+/// One picture a set draws: a name at the set's weight, or a table that says which weight and key.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Picture {
+    /// A picture at the set's own weight, under its own name.
+    Named(String),
+    /// A picture at a weight of its own, under a key of its own when it needs one.
+    Described {
+        /// The name the set knows the artwork by.
+        name: String,
+        /// The weight it is drawn at.
+        weight: String,
+        /// What it is handed over under, which is `name` when it is left out.
+        key: Option<String>,
+    },
+}
+
+impl Picture {
+    /// The name the set knows the artwork by.
+    fn name(&self) -> &str {
+        match self {
+            Self::Named(name) | Self::Described { name, .. } => name,
+        }
+    }
+
+    /// What the picture is handed over under, which is where its file and constant are named from.
+    fn key(&self) -> &str {
+        match self {
+            Self::Described { key: Some(key), .. } => key,
+            Self::Named(name) | Self::Described { name, .. } => name,
+        }
+    }
+
+    /// The weight it is drawn at, which is the set's when it names none of its own.
+    fn weight<'a>(&'a self, set: &'a str) -> &'a str {
+        match self {
+            Self::Named(_) => set,
+            Self::Described { weight, .. } => weight,
+        }
     }
 }
 
@@ -223,8 +265,11 @@ fn draw(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Draws one picture, by the name the set knows it by.
-fn draw_picture(root: &Path, pictures: &Path, icon: &str, weight: &str) -> Result<(), String> {
+/// Draws one picture, by the name the set knows it by and the weight it is drawn at.
+fn draw_picture(root: &Path, pictures: &Path, icon: &Picture, set: &str) -> Result<(), String> {
+    let name = icon.name();
+    let weight = icon.weight(set);
+
     // The set files the regular weight under the bare name and every other weight with a suffix, so the
     // path is built rather than looked for in two places.
     let suffix = if weight == "regular" {
@@ -236,10 +281,10 @@ fn draw_picture(root: &Path, pictures: &Path, icon: &str, weight: &str) -> Resul
         .join(CLONE)
         .join("assets")
         .join(weight)
-        .join(format!("{icon}{suffix}.svg"));
+        .join(format!("{name}{suffix}.svg"));
     let text = fs::read_to_string(&source).map_err(|error| {
         format!(
-            "the icon set holds no `{icon}`: `{}` could not be read: {error}",
+            "the icon set holds no `{name}`: `{}` could not be read: {error}",
             source.display()
         )
     })?;
@@ -250,10 +295,10 @@ fn draw_picture(root: &Path, pictures: &Path, icon: &str, weight: &str) -> Resul
 
     let options = resvg::usvg::Options::default();
     let tree = resvg::usvg::Tree::from_str(&inked, &options)
-        .map_err(|error| format!("`{icon}` could not be read as a picture: {error}"))?;
+        .map_err(|error| format!("`{name}` could not be read as a picture: {error}"))?;
 
     let mut pixmap = resvg::tiny_skia::Pixmap::new(SIZE, SIZE)
-        .ok_or_else(|| format!("a {SIZE}-pixel square could not be made for `{icon}`"))?;
+        .ok_or_else(|| format!("a {SIZE}-pixel square could not be made for `{name}`"))?;
 
     // The set's own grid scaled to the size asked for, so that what is drawn is the whole of the artwork.
     let scale = wide() / tree.size().width();
@@ -263,7 +308,7 @@ fn draw_picture(root: &Path, pictures: &Path, icon: &str, weight: &str) -> Resul
         &mut pixmap.as_mut(),
     );
 
-    let picture = pictures.join(format!("{icon}.png"));
+    let picture = pictures.join(format!("{}.png", icon.key()));
     pixmap
         .save_png(&picture)
         .map_err(|error| format!("`{}` could not be written: {error}", picture.display()))?;
@@ -341,7 +386,7 @@ fn said(phosphor: &Phosphor, set: &Set) -> String {
     let list = set
         .icons
         .iter()
-        .map(|icon| format!("`{icon}`"))
+        .map(|icon| format!("`{}`", icon.key()))
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -383,17 +428,18 @@ fn keys_of(set: &Set) -> String {
     let mut table = String::new();
 
     for icon in &set.icons {
-        let named = constant(icon);
+        let key = icon.key();
+        let named = constant(key);
 
         // Written into the string rather than formatted into a second one and appended: this is a file being
         // written, and one `String` is what it is written into.
         let _ = write!(
             keys,
-            "    /// <summary>The key the `{icon}` picture is held under.</summary>\n    \
-             public const string {named} = \"{}.{icon}\";\n\n",
+            "    /// <summary>The key the `{key}` picture is held under.</summary>\n    \
+             public const string {named} = \"{}.{key}\";\n\n",
             set.key
         );
-        let _ = writeln!(table, "        ({named}, \"{icon}\"),");
+        let _ = writeln!(table, "        ({named}, \"{key}\"),");
     }
 
     format!(

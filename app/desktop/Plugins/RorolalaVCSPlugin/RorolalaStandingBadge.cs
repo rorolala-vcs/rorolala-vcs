@@ -23,17 +23,17 @@ namespace RorolalaVCSPlugin;
 internal sealed class RorolalaStandingBadge : IEntryMarkProvider
 {
     /// <summary>The arrow the set draws for work this side has that the Vault has not been told of.</summary>
-    private const string Upload = Icons.ArrowUp;
+    private const string Upload = Icons.ArrowUpBold;
 
     /// <summary>The arrow the set draws for work the Vault has that this side has not fetched.</summary>
-    private const string Download = Icons.ArrowDown;
+    private const string Download = Icons.ArrowDownBold;
 
     /// <summary>The mark the set draws for two chains that have each moved on.</summary>
     /// <remarks>
     /// A fork rather than an arrow, because there is no direction the work could move in to settle it: the
     /// two arrows say which side is further on, and this says that neither is.
     /// </remarks>
-    private const string Split = Icons.GitFork;
+    private const string Split = Icons.GitForkBold;
 
     /// <summary>What the work says about the directories being listed, shared with the list's own columns.</summary>
     private readonly StatusReadings _readings;
