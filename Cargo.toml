@@ -282,6 +282,7 @@ rola-desktop-pty.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+unicode-width.workspace = true
 uuid.workspace = true
 
 [build-dependencies]

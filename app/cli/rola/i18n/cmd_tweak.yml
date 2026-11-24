@@ -112,21 +112,25 @@ tweak:
     en: Fetch the content and write it over the file when it is here
     zh-CN: 内容就绪后再把文件还原到基线
 
-  plan_header:
-    en: "Adjusting `%{uuid}` at `%{local}`"
-    zh-CN: "正在调整 `%{uuid}` 的 `%{local}`"
+  header:
+    en: "Adjusting %{anchor} ... LOCAL:"
+    zh-CN: "正在调整 %{anchor} ... LOCAL 的内容："
 
-  edit_header:
-    en: "Adjusting `%{file}`, recorded at `%{version}`"
-    zh-CN: "正在调整 `%{file}`，它记录的版本是 `%{version}`"
+  column_creator:
+    en: creator
+    zh-CN: 名字
 
-  edit_columns:
-    en: "# creator  message  content  join"
-    zh-CN: "# 名字  描述  内容  合入"
+  column_message:
+    en: message
+    zh-CN: 描述
 
-  edit_markers:
-    en: "# a line starting with -- removes a version, one starting with ++ inserts one"
-    zh-CN: "# 以 -- 开头的一行表示移除该版本，以 ++ 开头的一行表示插入一个版本"
+  column_content:
+    en: content
+    zh-CN: 内容
+
+  column_join:
+    en: join
+    zh-CN: 合入
 
   op_creator:
     en: "set the creator of %{version} to \"%{text}\""

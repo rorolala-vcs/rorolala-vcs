@@ -28,7 +28,7 @@ use std::fs;
 
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::status::tracked_vault;
-use librorolala::storage::{Blake3Hash, Key, StorageSet};
+use librorolala::storage::{Blake3Hash, StorageSet};
 use librorolala::vcs::VCSIndex;
 use librorolala::workspace::Workspace;
 use librorolala::write::path::local_path;
@@ -421,10 +421,21 @@ pub fn handle_tweak(
             if let Err(refusal) = tweak::remove_plan(&root, id, &local) {
                 return refused(&state.file, refusal);
             }
-        } else if let Err(refusal) =
-            tweak::write_plan(&root, id, &local, &sheet, &chain, &[&plan_head(id, &local)])
-        {
-            return refused(&state.file, refusal);
+        } else {
+            let (head_lines, columns) = sheet_head(sheet.anchor().unwrap_or_default());
+            let header: Vec<&str> = head_lines.iter().map(String::as_str).collect();
+
+            if let Err(refusal) = tweak::write_plan(
+                &root,
+                id,
+                &local,
+                &sheet,
+                &chain,
+                &header,
+                columns_of(&columns),
+            ) {
+                return refused(&state.file, refusal);
+            }
         }
 
         let listed = match tweak::operations(&chain, &sheet) {
@@ -613,9 +624,13 @@ where
         Ok(sheet) => sheet,
         Err(refusal) => return refused(&state.file, refusal),
     };
-    let head = plan_head_text(state, chain);
-    let comments: Vec<&str> = head.iter().map(String::as_str).collect();
-    let text = match sheet.render(chain, &comments) {
+    let anchor = match chain.short(anchor) {
+        Ok(anchor) => anchor,
+        Err(refusal) => return refused(&state.file, refusal),
+    };
+    let (head_lines, columns) = sheet_head(&anchor);
+    let header: Vec<&str> = head_lines.iter().map(String::as_str).collect();
+    let text = match sheet.render(chain, &header, columns_of(&columns)) {
         Ok(text) => text,
         Err(refusal) => return refused(&state.file, refusal),
     };
@@ -662,31 +677,30 @@ where
     apply(&sheet)
 }
 
-/// The head the editor opens on.
-fn plan_head_text(state: &StateTweak, chain: &Chain) -> Vec<String> {
-    let Some(top) = chain.top().ok().and_then(|top| chain.found(top).ok()) else {
-        return Vec::new();
-    };
+/// The head a sheet is drawn with: the range it stands for, a blank line, and the column names.
+fn sheet_head(anchor: &str) -> (Vec<String>, [String; 4]) {
+    let header = vec![
+        t!("tweak.header", anchor = anchor).trim().to_owned(),
+        String::new(),
+    ];
+    let columns = [
+        t!("tweak.column_creator").trim().to_owned(),
+        t!("tweak.column_message").trim().to_owned(),
+        t!("tweak.column_content").trim().to_owned(),
+        t!("tweak.column_join").trim().to_owned(),
+    ];
 
-    vec![
-        t!(
-            "tweak.edit_header",
-            file = state.file,
-            version = top.version,
-            local = &top.version[..top.version.len().min(12)]
-        )
-        .trim()
-        .to_owned(),
-        t!("tweak.edit_columns").trim().to_owned(),
-        t!("tweak.edit_markers").trim().to_owned(),
-    ]
+    (header, columns)
 }
 
-/// The one comment a plan file opens with.
-fn plan_head(id: Uuid, local: &Blake3Hash) -> String {
-    t!("tweak.plan_header", uuid = id, local = hex(local))
-        .trim()
-        .to_owned()
+/// The four column names, as the grid takes them.
+fn columns_of(columns: &[String; 4]) -> [&str; 4] {
+    [
+        columns[0].as_str(),
+        columns[1].as_str(),
+        columns[2].as_str(),
+        columns[3].as_str(),
+    ]
 }
 
 /// Drops the pending adjustment `written` names, and says what is left.
@@ -718,10 +732,21 @@ fn drop_pending(
         if let Err(refusal) = tweak::remove_plan(root, id, local) {
             return refused(file, refusal);
         }
-    } else if let Err(refusal) =
-        tweak::write_plan(root, id, local, &sheet, chain, &[&plan_head(id, local)])
-    {
-        return refused(file, refusal);
+    } else {
+        let (head_lines, columns) = sheet_head(sheet.anchor().unwrap_or_default());
+        let header: Vec<&str> = head_lines.iter().map(String::as_str).collect();
+
+        if let Err(refusal) = tweak::write_plan(
+            root,
+            id,
+            local,
+            &sheet,
+            chain,
+            &header,
+            columns_of(&columns),
+        ) {
+            return refused(file, refusal);
+        }
     }
 
     println!(
@@ -944,11 +969,6 @@ fn failed(file: &str, cause: String) -> Next {
         cause,
     }
     .into()
-}
-
-/// A digest written out in hex.
-fn hex(digest: &Blake3Hash) -> String {
-    Key::new(*digest).hex()
 }
 
 /// Error: no file was named.

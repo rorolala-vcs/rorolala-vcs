@@ -50,11 +50,11 @@ const HEAD: usize = 7;
 /// The file a plan is written as, inside its directory.
 const PLAN_FILE: &str = "plan.md";
 
-/// The widest a column is padded to keep the table readable.
-///
-/// A creator or a message longer than this simply runs on: a table is a convenience, and cutting
-/// what a person wrote for its sake costs them the words.
-const WIDEST: usize = 40;
+/// How far the grid is set in from the left edge, which is also the width of `# `.
+const INDENT: usize = 2;
+
+/// How much room a column leaves before the one after it.
+const GAP: usize = 4;
 
 // ---------------------------------------------------------------------------------------------
 // The sheet
@@ -249,12 +249,22 @@ impl Sheet {
         Ok(Self { anchor, rows })
     }
 
-    /// The sheet as text, with `comments` written above it as `#` lines.
+    /// The sheet as the grid an editor and a plan file share.
+    ///
+    /// `header` is written above the grid as `#` lines, and an empty one as a blank line. `columns`
+    /// names the four columns in the run's language. A column is as wide as its widest cell, its
+    /// own name included, and each starts four spaces after the one before it, so the table reads
+    /// the same however long a creator or a message is.
     ///
     /// # Errors
     ///
     /// Returns [`TweakRefusal::Sheet`] when the sheet does not fit the chain it names.
-    pub fn render(&self, chain: &Chain, comments: &[&str]) -> Result<String, TweakRefusal> {
+    pub fn render(
+        &self,
+        chain: &Chain,
+        header: &[&str],
+        columns: [&str; 4],
+    ) -> Result<String, TweakRefusal> {
         let bound = bind(self, chain)?;
         let mut cells: Vec<[String; 4]> = Vec::with_capacity(bound.entries.len());
 
@@ -262,28 +272,39 @@ impl Sheet {
             cells.push(cell_of(entry, chain)?);
         }
 
-        let mut widths = [0_usize; 4];
-        for cell in &cells {
-            for (at, part) in cell.iter().enumerate() {
-                widths[at] = widths[at].max(visible(part).min(WIDEST));
-            }
-        }
+        let starts = offsets(&cells, columns);
 
         let mut text = String::new();
-        for comment in comments {
-            text.push_str("# ");
-            text.push_str(comment);
+        for line in header {
+            if !line.is_empty() {
+                text.push_str("# ");
+                text.push_str(line);
+            }
             text.push('\n');
         }
+        text.push_str(&laid(
+            &[
+                format!("# {}", columns[0]),
+                columns[1].to_owned(),
+                columns[2].to_owned(),
+                columns[3].to_owned(),
+            ],
+            starts,
+        ));
+        text.push('\n');
+
         text.push_str(">>> LOCAL\n");
         for cell in &cells {
-            for (at, part) in cell.iter().enumerate() {
-                text.push_str(part);
-                if at + 1 < cell.len() {
-                    let pad = widths[at].saturating_sub(visible(part)) + 2;
-                    text.extend(std::iter::repeat_n(' ', pad));
-                }
-            }
+            let [creator, message, content, join] = cell;
+            text.push_str(&laid(
+                &[
+                    format!("  {creator}"),
+                    message.clone(),
+                    content.clone(),
+                    join.clone(),
+                ],
+                starts,
+            ));
             text.push('\n');
         }
         text.push_str(">>> ");
@@ -415,9 +436,46 @@ fn row_of(mark: Mark, mut words: Vec<String>) -> Result<Row, &'static str> {
     })
 }
 
-/// The characters of `text` a reader sees, which is what a column is padded to.
-fn visible(text: &str) -> usize {
-    text.chars().count()
+/// How many columns `text` takes on a terminal, which is what a column is padded to.
+///
+/// A CJK word is two columns a character, so counting characters would line a name of one script
+/// up under a name of the other only by accident.
+fn width(text: &str) -> usize {
+    unicode_width::UnicodeWidthStr::width(text)
+}
+
+/// Where each of the four columns starts, its widest cell and its own name deciding.
+fn offsets(cells: &[[String; 4]], columns: [&str; 4]) -> [usize; 4] {
+    let mut widths = [0_usize; 4];
+    for (at, column) in columns.iter().enumerate() {
+        widths[at] = width(column);
+    }
+    for cell in cells {
+        for (at, part) in cell.iter().enumerate() {
+            widths[at] = widths[at].max(width(part));
+        }
+    }
+
+    let mut starts = [0_usize; 4];
+    for at in 1..4 {
+        starts[at] = if at == 1 { INDENT } else { starts[at - 1] } + widths[at - 1] + GAP;
+    }
+
+    starts
+}
+
+/// One line of the grid, its cells set at the column starts.
+fn laid(cells: &[String; 4], starts: [usize; 4]) -> String {
+    let mut line = cells[0].clone();
+    for (at, cell) in cells.iter().enumerate().skip(1) {
+        line.extend(std::iter::repeat_n(
+            ' ',
+            starts[at].saturating_sub(width(&line)),
+        ));
+        line.push_str(cell);
+    }
+
+    line.trim_end().to_owned()
 }
 
 /// A word written so that [`words`] reads it back whole.
@@ -1398,7 +1456,8 @@ pub fn write_plan(
     local: &Blake3Hash,
     sheet: &Sheet,
     chain: &Chain,
-    comments: &[&str],
+    header: &[&str],
+    columns: [&str; 4],
 ) -> Result<(), TweakRefusal> {
     let directory = plan_dir(root, id, local);
     if let Err(error) = fs::create_dir_all(&directory) {
@@ -1409,7 +1468,7 @@ pub fn write_plan(
     }
 
     let path = directory.join(PLAN_FILE);
-    if let Err(error) = fs::write(&path, sheet.render(chain, comments)?) {
+    if let Err(error) = fs::write(&path, sheet.render(chain, header, columns)?) {
         return Err(TweakRefusal::Failed(WriteError::Io {
             path: path.display().to_string(),
             reason: error.to_string(),
@@ -2075,7 +2134,7 @@ mod tests {
 
     use super::{
         Adjustment, Chain, Change, Mark, Request, Sheet, TweakOutcome, adjust, apply, cancel,
-        operations,
+        operations, width,
     };
     use crate::write::Cancellation;
     use crate::write::track::{TrackOptions, track_file};
@@ -2195,14 +2254,57 @@ mod tests {
     }
 
     #[test]
+    fn a_column_starts_after_the_widest_cell_it_holds() {
+        let (dir, workspace) =
+            recorded("grid", &[("one", "增加第一个版本"), ("two", "第二个版本")]);
+        let chain = chain_of(&workspace);
+        let sheet = Sheet::plain(&chain, 0).unwrap();
+        let columns = ["名字", "描述", "内容", "合入"];
+        let text = sheet.render(&chain, &["a note", ""], columns).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+
+        assert_eq!(lines[0], "# a note");
+        assert_eq!(lines[1], "");
+        assert!(lines[2].starts_with("# 名字"));
+        assert!(lines[4].starts_with("  alice"));
+
+        // The widest creator is `alice`, five columns, and `名字` is four: the message column
+        // starts two spaces in, five columns later, and four spaces after that.
+        let message = 2 + 5 + 4;
+        let content = message + width("增加第一个版本") + 4;
+        let join = content + 12 + 4;
+        assert_eq!(join, content + 16);
+
+        for line in [lines[2], lines[4]] {
+            let at = line
+                .find("描述")
+                .or_else(|| line.find("第二个版本"))
+                .unwrap();
+            assert_eq!(width(&line[..at]), message, "{line}");
+        }
+        let content_at = lines[4]
+            .find(&*super::short(
+                chain.level(1).unwrap().variant.storage_hash(),
+            ))
+            .unwrap();
+        assert_eq!(width(&lines[4][..content_at]), content, "{}", lines[4]);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn a_sheet_that_fits_its_chain_is_drawn_and_read_back() {
         let (dir, workspace) = recorded("round", &[("one", "first"), ("two", "second")]);
         let chain = chain_of(&workspace);
         let sheet = Sheet::plain(&chain, 0).unwrap();
-        let text = sheet.render(&chain, &["a comment"]).unwrap();
+        let columns = ["creator", "message", "content", "join"];
+        let text = sheet.render(&chain, &["a comment", ""], columns).unwrap();
         let read = Sheet::parse(&text).unwrap();
 
-        assert_eq!(read.render(&chain, &["a comment"]).unwrap(), text);
+        assert_eq!(
+            read.render(&chain, &["a comment", ""], columns).unwrap(),
+            text
+        );
         assert_eq!(read.rows().len(), chain.len());
 
         let _ = fs::remove_dir_all(dir);
