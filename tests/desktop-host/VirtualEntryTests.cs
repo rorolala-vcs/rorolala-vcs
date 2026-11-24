@@ -171,14 +171,14 @@ public sealed class VirtualEntryTests
         var path = Path.Combine(directory, "waiting.psd");
 
         var (host, browser) = Client(directory);
-        host.Icons.Add(Icons.Circle, Icons.Picture(Icons.Circle));
+        host.Icons.Add(Icons.Dot, Icons.Picture(Icons.Dot));
 
         VirtualEntries.Place(
             path,
             EntryKind.File,
             VirtualEntryState.Pending,
             0f,
-            [new EntryMark(IconKey: Icons.Circle)]
+            [new EntryMark(IconKey: Icons.Dot)]
         );
 
         var files = FilesOf(host, browser);

@@ -11,7 +11,7 @@ namespace RorolalaLauncher;
 /// The pictures this program is drawn with, by the key the manifest names each under.
 /// </summary>
 /// <remarks>
-/// The four the toolbar wears are this project's own set, drawn from the pinned Material Design set by
+/// The four the toolbar wears are this project's own set, drawn from the pinned Phosphor Icons set by
 /// <c>cargo dev icons</c> and named by the generated <see cref="Icons"/>; the two a window's frame carries are
 /// the Desktop program's own files, because the two programs draw one frame. The Git logomark is the one
 /// picture copied from outside the set, and it travels here so the launcher does not read a plugin's files.
@@ -29,13 +29,13 @@ internal static class LauncherIcons
     private static readonly Dictionary<string, Bitmap> Read = new(StringComparer.Ordinal);
 
     /// <summary>The picture the minimize button of a frame carries.</summary>
-    public static Bitmap Minimize => Named("minimize");
+    public static Bitmap Minimize => Named("minus");
 
     /// <summary>The picture the close button of a frame carries.</summary>
-    public static Bitmap Close => Named("close");
+    public static Bitmap Close => Named("x");
 
     /// <summary>The picture the settings button of a frame carries.</summary>
-    public static Bitmap Settings => Named("settings");
+    public static Bitmap Settings => Named("gear");
 
     /// <summary>
     /// The Git logomark a git-rola Workspace wears beside its name.

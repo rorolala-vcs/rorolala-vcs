@@ -1,22 +1,28 @@
 # The pictures the product draws (the Desktop program's, its plugins', and the launcher's) which is the
 # one file adding one means editing.
 #
-# What is drawn is Google's Material Design icons, from the maintained mirror of the set. The set is not
-# vendored: it is a shallow clone under `THIRD_PARTY/`, which git ignores, and every picture is drawn from
-# that clone by `cargo dev icons`, so what is drawn is what the pinned commit holds, and another picture is
-# another name below rather than another file copied into a plugin.
+# What is drawn is Phosphor Icons, from `phosphor-icons/core`. The set is not vendored: it is a shallow
+# clone under `THIRD_PARTY/`, which git ignores, and every picture is drawn from that clone by
+# `cargo dev icons`, so what is drawn is what the pinned commit holds, and another picture is another name
+# below rather than another file copied into a plugin.
 #
 # The pictures are committed, so a build needs neither the clone nor a renderer: only drawing them does, and
 # `export` draws them first, so what ships is always drawn from the pin. The license the set is under is
 # copied into each directory the pictures are drawn into, so that what travels with a plugin says where its
 # artwork came from.
 
-[material]
-url = "https://github.com/material-icons/material-icons"
+[phosphor]
+url = "https://github.com/phosphor-icons/core"
 
 # The whole of what "the icon set" means here: there is no history to travel, so another set is another
-# clone, and the upstream is archived, this is expected to stay where it is.
-commit = "af0ed9c0e1276bad43c4d6ca8e8aaa283e425195"
+# clone. A commit rather than a branch, because a branch is a moving answer and a picture drawn from a
+# different set every day is a picture that changes without a commit.
+commit = "2b75f3ad12b420c9504ef05df8d2564a28f8500e"
+
+# The weight every picture is drawn at: `thin`, `light`, `regular`, `bold`, `fill` or `duotone`. `regular`
+# is the family's default, and its hollow shapes stay readable at the size a row and a window button wear
+# them, which is what the maximize and the restore pictures are.
+weight = "regular"
 
 # One set per project, which is also where the pictures are drawn, the project's own `icons/`, and the
 # namespace the keys are generated into.
@@ -31,47 +37,47 @@ commit = "af0ed9c0e1276bad43c4d6ca8e8aaa283e425195"
 plugin = "FileSystemPlugin"
 key = "rorolala_file_system"
 
-# The toolbar's own pictures. `visibility` and `visibility_off` are the switch that shows what the rules
-# hide (an eye, and an eye struck through) and `link` and `link_off` are whether a dock follows the whole
-# or looks at a directory of its own; `arrow_back`, `arrow_forward`, `arrow_upward` and `refresh` are the
-# four ways a browser moves, and `home` is the way back to the top of the platform, which is a place and
-# not a direction: it is offered by the menu rather than by the toolbar, and a house is what the set draws
-# a place a user starts from with.
+# The toolbar's own pictures. `eye` and `eye-slash` are the switch that shows what the rules hide and
+# `link` and `link-break` are whether a dock follows the whole or looks at a directory of its own;
+# `arrow-left`, `arrow-right`, `arrow-up` and `arrow-clockwise` are the four ways a browser moves, and
+# `house` is the way back to the top of the platform, which is a place and not a direction: it is offered
+# by the menu rather than by the toolbar, and a house is what the set draws a place a user starts from
+# with.
 #
-# `radio_button_unchecked`, `radio_button_checked` and `circle` are the three states a hide rule's popup
-# draws: shown, gray and hidden. `more_vert` opens that popup, beside the eye in the toolbar's own group.
-# The rest are what an entry's menu is read by: `launch` opens it or shows it where the system keeps it,
-# `file_copy` copies it or its path, `content_cut` cuts it, `content_paste` pastes onto it, `delete` removes
-# it, `local_offer` renames it, and `create_new_folder` makes a directory beside it. `add` is the plus a
-# category of new things wears, which is the same picture the VCS plugin draws for the same word rather than
-# a second one copied here.
+# `circle`, `radio-button` and `dot` are the three states a hide rule's popup draws: shown, gray and
+# hidden. `dots-three-vertical` opens that popup, beside the eye in the toolbar's own group.
+# The rest are what an entry's menu is read by: `arrow-square-out` opens it or shows it where the system
+# keeps it, `copy` copies it or its path, `scissors` cuts it, `clipboard` pastes onto it, `trash` removes
+# it, `tag` renames it, and `folder-plus` makes a directory beside it. `plus` is the mark a category of new
+# things wears, which is the same picture the VCS plugin draws for the same word rather than a second one
+# copied here.
 icons = [
-    "visibility",
-    "visibility_off",
-    "radio_button_unchecked",
-    "radio_button_checked",
+    "eye",
+    "eye-slash",
     "circle",
-    "more_vert",
+    "radio-button",
+    "dot",
+    "dots-three-vertical",
     "link",
-    "link_off",
-    "arrow_back",
-    "arrow_forward",
-    "arrow_upward",
-    "refresh",
-    "home",
-    "launch",
-    "file_copy",
-    "content_cut",
-    "content_paste",
-    "delete",
-    "local_offer",
-    "create_new_folder",
-    "add",
+    "link-break",
+    "arrow-left",
+    "arrow-right",
+    "arrow-up",
+    "arrow-clockwise",
+    "house",
+    "arrow-square-out",
+    "copy",
+    "scissors",
+    "clipboard",
+    "trash",
+    "tag",
+    "folder-plus",
+    "plus",
     # The pictures the two docks this plugin registers are drawn as: the directory browser's folder and the
     # tree's nodes. What a registration names is worn by the item that opens the dock in the Window menu and at
     # the left of the dock's tab.
     "folder",
-    "account_tree",
+    "tree-structure",
 ]
 
 [[set]]
@@ -79,88 +85,88 @@ plugin = "RorolalaVCSPlugin"
 key = "rorolala_vcs"
 
 # What an entry's lock is drawn with, and what taking and letting go of one is: `lock` is somebody else
-# holding it and is also what claiming it wears, `lock_open` is letting go of it, and `create`, the set's
+# holding it and is also what claiming it wears, `lock-open` is letting go of it, and `pencil`, the set's
 # pencil, is the reader holding it, since holding it is what makes it theirs to change.
-# `lock` and `lock_open` are what taking ownership and letting it go wear in an entry's menu, `create` is
-# the pencil that marks the reader's own, and the last three are how a command's own report is read: what it
-# said went wrong, what it said to be careful of, and what it said could be done about it. `refresh` is what
-# reading the work again wears in the Overview's own strip, which is what the file browser's toolbar wears
-# for the same thing: the two are one mark, and each plugin draws its own rather than reaching for the
+# `lock` and `lock-open` are what taking ownership and letting it go wear in an entry's menu, `pencil` is
+# the mark that says the reader's own, and the last three are how a command's own report is read: what it
+# said went wrong, what it said to be careful of, and what it said could be done about it. `arrow-clockwise`
+# is what reading the work again wears in the Overview's own strip, which is what the file browser's toolbar
+# wears for the same thing: the two are one mark, and each plugin draws its own rather than reaching for the
 # other's.
 #
-# `upload` and `download` are how a file stands beside upstream: the version recorded for it is ahead of
+# `arrow-up` and `arrow-down` are how a file stands beside upstream: the version recorded for it is ahead of
 # what the Vault was told of, or behind it, and the arrows say which way the work would have to move to be
 # in step, nothing is uploaded or downloaded by them, so the mark is of a direction rather than of an
-# action. `call_split` is the third answer: the two sides have each moved on, so neither is based on the
+# action. `git-fork` is the third answer: the two sides have each moved on, so neither is based on the
 # other and there is no direction the work could move in to settle it.
 #
-# `merge` is what a variant file waiting to be joined wears: the set draws two lines coming together into
-# one, which is what the file is for, its content is to become part of the file beside it.
+# `git-merge` is what a variant file waiting to be joined wears: the set draws two lines coming together
+# into one, which is what the file is for, its content is to become part of the file beside it.
 #
 # The last four are what a file's own state is worn as on a tile, where there is no column to draw a dot in:
-# `add` for a file the Layout does not name, `edit_note` for one whose content has changed or is waiting to
-# be joined, a pencil over lines, which is the nearest this set has to an edited line, since its `edit` is
-# the very picture `create` is and that one is already the lock's, `arrow_right_alt` for one that moved,
-# and `priority_high` for a change that must not be recorded.
+# `plus` for a file the Layout does not name, `note-pencil` for one whose content has changed or is waiting
+# to be joined, a pencil over a page, `arrow-right` for one that moved, and `exclamation-mark` for a change
+# that must not be recorded.
 #
-# `cloud_upload`, `cloud_download` and `sync` are the three sync buttons in the Overview's strip, and they
-# are the cloud's own arrows rather than the `upload`/`download` above so that the two are told apart at a
-# glance: what stands beside a file is a direction, and what is pressed is an exchange with the Vault that
-# carries data both ways. The order they are read in is the command line's (up, then down, then both) and
-# `sync` is the two arrows that turn into each other, which is what both is.
+# `cloud-arrow-up`, `cloud-arrow-down` and `arrows-clockwise` are the three sync buttons in the Overview's
+# strip, and they are the cloud's own arrows rather than the `arrow-up`/`arrow-down` above so that the two
+# are told apart at a glance: what stands beside a file is a direction, and what is pressed is an exchange
+# with the Vault that carries data both ways. The order they are read in is the command line's (up, then
+# down, then both) and `arrows-clockwise` is the two arrows that turn into each other, which is what both
+# is.
 #
-# `more_vert` is the button that opens what the three of them are told to leave out: three vertical beads,
-# which is what this set draws for a menu of a few more choices.
+# `dots-three-vertical` is the button that opens what the three of them are told to leave out: three
+# vertical beads, which is what this set draws for a menu of a few more choices.
 #
-# `content_copy` is what the Version Graph's node menu wears: two sheets, one in front of the other,
-# which is the set's mark for copying something and the same picture the browser's own copy uses.
+# `copy` is what the Version Graph's node menu wears: two sheets, one in front of the other, which is the
+# set's mark for copying something and the same picture the browser's own copy uses.
 #
-# `visibility` and `visibility_off` are the switch in the Overview's strip that shows what the ignore
-# rules govern (an eye, and an eye struck through) which is the browser's own pair for showing what
-# its rules hide, drawn again here so that each plugin's keys stay its own.
+# `eye` and `eye-slash` are the switch in the Overview's strip that shows what the ignore rules govern,
+# which is the browser's own pair for showing what its rules hide, drawn again here so that each plugin's
+# keys stay its own.
 icons = [
     "lock",
-    "create",
-    "lock_open",
-    "error",
+    "pencil",
+    "lock-open",
+    "warning-circle",
     "warning",
-    "live_help",
-    "refresh",
-    "visibility",
-    "visibility_off",
-    "upload",
-    "download",
-    "call_split",
-    "merge",
-    "add",
-    "edit_note",
-    "arrow_right_alt",
-    "priority_high",
-    "cloud_upload",
-    "cloud_download",
-    "sync",
-    "more_vert",
-    "content_copy",
-    # `format_list_bulleted` is the switch in the Version Graph's corner that reads one file's chain as a
-    # list of versions: lines with a bead before each, which is what the drawing becomes.
-    "format_list_bulleted",
-    # `park` is what a rola-tree's folder icon wears, in the colour the tree's own id names: the set draws one
+    "question",
+    "arrow-clockwise",
+    "eye",
+    "eye-slash",
+    "arrow-up",
+    "arrow-down",
+    "git-fork",
+    "git-merge",
+    "plus",
+    "note-pencil",
+    "arrow-right",
+    "exclamation-mark",
+    "cloud-arrow-up",
+    "cloud-arrow-down",
+    "arrows-clockwise",
+    "dots-three-vertical",
+    "copy",
+    # `list-bullets` is the switch in the Version Graph's corner that reads one file's chain as a list of
+    # versions: lines with a bead before each, which is what the drawing becomes.
+    "list-bullets",
+    # `tree` is what a rola-tree's folder icon wears, in the colour the tree's own id names: the set draws one
     # tree, which is what the directory is rather than what is in it.
-    "park",
-    # What a path in a tree wears for how much of its work is staged: a full circle for all of it, half a
-    # circle for some, and an empty circle for none.
-    "check_circle",
-    "radio_button_checked",
-    "radio_button_unchecked",
+    "tree",
+    # What a path in a tree wears for how much of its work is staged: a full circle for all of it, a circle
+    # with a bead for some, and an empty circle for none.
+    "check-circle",
+    "radio-button",
+    "circle",
     # The pictures the docks this plugin registers are drawn as, which is what the Window menu lists each of
-    # them by and what the left of its tab wears: the Overview is a checklist with its last line ticked, a
-    # reading of the work that is done rather than a task, the Workspace is the work as a case, the Version
-    # Graph is the way a change comes round again through one file rather than a chart, and the Accounts are the
-    # person the work acts as.
-    "task_alt",
-    "work",
-    "alt_route",
-    "manage_accounts",
+    # them by and what the left of its tab wears: the Overview is a list with its lines ticked, a reading of
+    # the work that is done rather than a task, the Workspace is the work as a case, the Version Graph is two
+    # arrows parting from one point, a change that goes one way through one file rather than a chart, and the
+    # Accounts are the person the work acts as.
+    "list-checks",
+    "briefcase",
+    "arrows-split",
+    "user-circle-gear",
 ]
 
 [[set]]
@@ -168,11 +174,10 @@ plugin = "GitVCSPlugin"
 key = "rorolala_git"
 
 # The pictures this plugin draws: the mark a material wears when what it holds is not what the
-# project's lock records, the download arrow the Open item wears, the same one the VCS plugin's
-# Upstream item draws, and the refresh arrow the restore's menu item wears. All are the artwork the
-# VCS plugin draws for the same words, drawn here again so that this plugin's keys are its own, the
-# way every set is one project's.
-icons = ["edit_note", "download", "refresh"]
+# project's lock records, the down arrow the Open item wears, the same one the VCS plugin's Upstream item
+# draws, and the arrow the restore's menu item wears. All are the artwork the VCS plugin draws for the same
+# words, drawn here again so that this plugin's keys are its own, the way every set is one project's.
+icons = ["note-pencil", "arrow-down", "arrow-clockwise"]
 
 [[set]]
 plugin = "RorolalaDesktop"
@@ -182,30 +187,30 @@ key = "rorolala"
 # The window's own buttons: the row at the top of the window wears them, and they are the program's
 # pictures rather than the desktop's, because the title bar they sit in is the program's too.
 #
-# `minimize` is the set's bar, `close` its cross, `crop_square` the hollow square a window is drawn as
-# while it is not maximized, and `filter_none` the two squares, one behind the other, that say pressing
-# it puts the window back the size it was. Nothing here is `fullscreen` or `open_in_full`: this window
-# has no full-screen button, and a picture for one would be a picture nothing wears.
+# `minus` is the set's bar, `x` its cross, `square` the hollow square a window is drawn as while it is not
+# maximized, and `copy-simple` the two squares, one behind the other, that say pressing it puts the window
+# back the size it was. Nothing here is `corners-out` or `arrows-out-simple`: this window has no
+# full-screen button, and a picture for one would be a picture nothing wears.
 #
 # The last three are the kernel's own docks, the ones the program itself registers rather than a plugin: the
-# Plugin Manager is a puzzle piece, the Log is a list of lines, and the Preferences are a machine's own cog. They
-# are the program's pictures for the same reason the buttons above are, the docks are the kernel's, and each is
+# Plugin Manager is a puzzle piece, the Log is a list, and the Preferences are a machine's own gear. They are
+# the program's pictures for the same reason the buttons above are, the docks are the kernel's, and each is
 # worn by the item that opens its dock in the Window menu and at the left of the dock's tab.
 #
-# `menu` is the hamburger the title row's button wears: the row no longer draws a menu bar, and the one button
-# that opens it needs a picture that says so without a word. `back_hand` is the hand beside it that a window of
-# one dock is dragged back to the main window by: the set draws an open hand, which is what taking hold of a
-# thing rather than pressing it looks like.
+# `rows` is the three bars the title row's button wears: the row no longer draws a menu bar, and the one
+# button that opens it needs a picture that says so without a word. `hand` is the open hand beside it that a
+# window of one dock is dragged back to the main window by, which is what taking hold of a thing rather than
+# pressing it looks like.
 icons = [
-    "minimize",
-    "crop_square",
-    "filter_none",
-    "close",
-    "extension",
-    "list_alt",
-    "settings",
-    "menu",
-    "back_hand",
+    "minus",
+    "square",
+    "copy-simple",
+    "x",
+    "puzzle-piece",
+    "list",
+    "gear",
+    "rows",
+    "hand",
 ]
 
 [[set]]
@@ -214,7 +219,7 @@ key = "rorolala_terminal"
 
 # The picture of this plugin's one dock, which is what the Window menu lists it by and what its tab wears: the
 # set draws a window with a prompt in it, which is the shell's own mark rather than a picture of this program's.
-icons = ["terminal"]
+icons = ["terminal-window"]
 
 [[set]]
 plugin = "RorolalaLauncher"
@@ -227,4 +232,4 @@ key = "rola_launcher"
 #
 # The window's frame is the Desktop program's own, so the marks on it are that set's and are not stated
 # again here: what is drawn for this project is only what its own window offers.
-icons = ["account_circle", "add_circle", "folder_open", "language"]
+icons = ["user-circle", "plus-circle", "folder-open", "translate"]

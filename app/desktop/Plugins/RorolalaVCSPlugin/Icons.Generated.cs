@@ -11,129 +11,129 @@ internal static partial class Icons
     /// <summary>The key the `lock` picture is held under.</summary>
     public const string Lock = "rorolala_vcs.lock";
 
-    /// <summary>The key the `create` picture is held under.</summary>
-    public const string Create = "rorolala_vcs.create";
+    /// <summary>The key the `pencil` picture is held under.</summary>
+    public const string Pencil = "rorolala_vcs.pencil";
 
-    /// <summary>The key the `lock_open` picture is held under.</summary>
-    public const string LockOpen = "rorolala_vcs.lock_open";
+    /// <summary>The key the `lock-open` picture is held under.</summary>
+    public const string LockOpen = "rorolala_vcs.lock-open";
 
-    /// <summary>The key the `error` picture is held under.</summary>
-    public const string Error = "rorolala_vcs.error";
+    /// <summary>The key the `warning-circle` picture is held under.</summary>
+    public const string WarningCircle = "rorolala_vcs.warning-circle";
 
     /// <summary>The key the `warning` picture is held under.</summary>
     public const string Warning = "rorolala_vcs.warning";
 
-    /// <summary>The key the `live_help` picture is held under.</summary>
-    public const string LiveHelp = "rorolala_vcs.live_help";
+    /// <summary>The key the `question` picture is held under.</summary>
+    public const string Question = "rorolala_vcs.question";
 
-    /// <summary>The key the `refresh` picture is held under.</summary>
-    public const string Refresh = "rorolala_vcs.refresh";
+    /// <summary>The key the `arrow-clockwise` picture is held under.</summary>
+    public const string ArrowClockwise = "rorolala_vcs.arrow-clockwise";
 
-    /// <summary>The key the `visibility` picture is held under.</summary>
-    public const string Visibility = "rorolala_vcs.visibility";
+    /// <summary>The key the `eye` picture is held under.</summary>
+    public const string Eye = "rorolala_vcs.eye";
 
-    /// <summary>The key the `visibility_off` picture is held under.</summary>
-    public const string VisibilityOff = "rorolala_vcs.visibility_off";
+    /// <summary>The key the `eye-slash` picture is held under.</summary>
+    public const string EyeSlash = "rorolala_vcs.eye-slash";
 
-    /// <summary>The key the `upload` picture is held under.</summary>
-    public const string Upload = "rorolala_vcs.upload";
+    /// <summary>The key the `arrow-up` picture is held under.</summary>
+    public const string ArrowUp = "rorolala_vcs.arrow-up";
 
-    /// <summary>The key the `download` picture is held under.</summary>
-    public const string Download = "rorolala_vcs.download";
+    /// <summary>The key the `arrow-down` picture is held under.</summary>
+    public const string ArrowDown = "rorolala_vcs.arrow-down";
 
-    /// <summary>The key the `call_split` picture is held under.</summary>
-    public const string CallSplit = "rorolala_vcs.call_split";
+    /// <summary>The key the `git-fork` picture is held under.</summary>
+    public const string GitFork = "rorolala_vcs.git-fork";
 
-    /// <summary>The key the `merge` picture is held under.</summary>
-    public const string Merge = "rorolala_vcs.merge";
+    /// <summary>The key the `git-merge` picture is held under.</summary>
+    public const string GitMerge = "rorolala_vcs.git-merge";
 
-    /// <summary>The key the `add` picture is held under.</summary>
-    public const string Add = "rorolala_vcs.add";
+    /// <summary>The key the `plus` picture is held under.</summary>
+    public const string Plus = "rorolala_vcs.plus";
 
-    /// <summary>The key the `edit_note` picture is held under.</summary>
-    public const string EditNote = "rorolala_vcs.edit_note";
+    /// <summary>The key the `note-pencil` picture is held under.</summary>
+    public const string NotePencil = "rorolala_vcs.note-pencil";
 
-    /// <summary>The key the `arrow_right_alt` picture is held under.</summary>
-    public const string ArrowRightAlt = "rorolala_vcs.arrow_right_alt";
+    /// <summary>The key the `arrow-right` picture is held under.</summary>
+    public const string ArrowRight = "rorolala_vcs.arrow-right";
 
-    /// <summary>The key the `priority_high` picture is held under.</summary>
-    public const string PriorityHigh = "rorolala_vcs.priority_high";
+    /// <summary>The key the `exclamation-mark` picture is held under.</summary>
+    public const string ExclamationMark = "rorolala_vcs.exclamation-mark";
 
-    /// <summary>The key the `cloud_upload` picture is held under.</summary>
-    public const string CloudUpload = "rorolala_vcs.cloud_upload";
+    /// <summary>The key the `cloud-arrow-up` picture is held under.</summary>
+    public const string CloudArrowUp = "rorolala_vcs.cloud-arrow-up";
 
-    /// <summary>The key the `cloud_download` picture is held under.</summary>
-    public const string CloudDownload = "rorolala_vcs.cloud_download";
+    /// <summary>The key the `cloud-arrow-down` picture is held under.</summary>
+    public const string CloudArrowDown = "rorolala_vcs.cloud-arrow-down";
 
-    /// <summary>The key the `sync` picture is held under.</summary>
-    public const string Sync = "rorolala_vcs.sync";
+    /// <summary>The key the `arrows-clockwise` picture is held under.</summary>
+    public const string ArrowsClockwise = "rorolala_vcs.arrows-clockwise";
 
-    /// <summary>The key the `more_vert` picture is held under.</summary>
-    public const string MoreVert = "rorolala_vcs.more_vert";
+    /// <summary>The key the `dots-three-vertical` picture is held under.</summary>
+    public const string DotsThreeVertical = "rorolala_vcs.dots-three-vertical";
 
-    /// <summary>The key the `content_copy` picture is held under.</summary>
-    public const string ContentCopy = "rorolala_vcs.content_copy";
+    /// <summary>The key the `copy` picture is held under.</summary>
+    public const string Copy = "rorolala_vcs.copy";
 
-    /// <summary>The key the `format_list_bulleted` picture is held under.</summary>
-    public const string FormatListBulleted = "rorolala_vcs.format_list_bulleted";
+    /// <summary>The key the `list-bullets` picture is held under.</summary>
+    public const string ListBullets = "rorolala_vcs.list-bullets";
 
-    /// <summary>The key the `park` picture is held under.</summary>
-    public const string Park = "rorolala_vcs.park";
+    /// <summary>The key the `tree` picture is held under.</summary>
+    public const string Tree = "rorolala_vcs.tree";
 
-    /// <summary>The key the `check_circle` picture is held under.</summary>
-    public const string CheckCircle = "rorolala_vcs.check_circle";
+    /// <summary>The key the `check-circle` picture is held under.</summary>
+    public const string CheckCircle = "rorolala_vcs.check-circle";
 
-    /// <summary>The key the `radio_button_checked` picture is held under.</summary>
-    public const string RadioButtonChecked = "rorolala_vcs.radio_button_checked";
+    /// <summary>The key the `radio-button` picture is held under.</summary>
+    public const string RadioButton = "rorolala_vcs.radio-button";
 
-    /// <summary>The key the `radio_button_unchecked` picture is held under.</summary>
-    public const string RadioButtonUnchecked = "rorolala_vcs.radio_button_unchecked";
+    /// <summary>The key the `circle` picture is held under.</summary>
+    public const string Circle = "rorolala_vcs.circle";
 
-    /// <summary>The key the `task_alt` picture is held under.</summary>
-    public const string TaskAlt = "rorolala_vcs.task_alt";
+    /// <summary>The key the `list-checks` picture is held under.</summary>
+    public const string ListChecks = "rorolala_vcs.list-checks";
 
-    /// <summary>The key the `work` picture is held under.</summary>
-    public const string Work = "rorolala_vcs.work";
+    /// <summary>The key the `briefcase` picture is held under.</summary>
+    public const string Briefcase = "rorolala_vcs.briefcase";
 
-    /// <summary>The key the `alt_route` picture is held under.</summary>
-    public const string AltRoute = "rorolala_vcs.alt_route";
+    /// <summary>The key the `arrows-split` picture is held under.</summary>
+    public const string ArrowsSplit = "rorolala_vcs.arrows-split";
 
-    /// <summary>The key the `manage_accounts` picture is held under.</summary>
-    public const string ManageAccounts = "rorolala_vcs.manage_accounts";
+    /// <summary>The key the `user-circle-gear` picture is held under.</summary>
+    public const string UserCircleGear = "rorolala_vcs.user-circle-gear";
 
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
         (Lock, "lock"),
-        (Create, "create"),
-        (LockOpen, "lock_open"),
-        (Error, "error"),
+        (Pencil, "pencil"),
+        (LockOpen, "lock-open"),
+        (WarningCircle, "warning-circle"),
         (Warning, "warning"),
-        (LiveHelp, "live_help"),
-        (Refresh, "refresh"),
-        (Visibility, "visibility"),
-        (VisibilityOff, "visibility_off"),
-        (Upload, "upload"),
-        (Download, "download"),
-        (CallSplit, "call_split"),
-        (Merge, "merge"),
-        (Add, "add"),
-        (EditNote, "edit_note"),
-        (ArrowRightAlt, "arrow_right_alt"),
-        (PriorityHigh, "priority_high"),
-        (CloudUpload, "cloud_upload"),
-        (CloudDownload, "cloud_download"),
-        (Sync, "sync"),
-        (MoreVert, "more_vert"),
-        (ContentCopy, "content_copy"),
-        (FormatListBulleted, "format_list_bulleted"),
-        (Park, "park"),
-        (CheckCircle, "check_circle"),
-        (RadioButtonChecked, "radio_button_checked"),
-        (RadioButtonUnchecked, "radio_button_unchecked"),
-        (TaskAlt, "task_alt"),
-        (Work, "work"),
-        (AltRoute, "alt_route"),
-        (ManageAccounts, "manage_accounts"),
+        (Question, "question"),
+        (ArrowClockwise, "arrow-clockwise"),
+        (Eye, "eye"),
+        (EyeSlash, "eye-slash"),
+        (ArrowUp, "arrow-up"),
+        (ArrowDown, "arrow-down"),
+        (GitFork, "git-fork"),
+        (GitMerge, "git-merge"),
+        (Plus, "plus"),
+        (NotePencil, "note-pencil"),
+        (ArrowRight, "arrow-right"),
+        (ExclamationMark, "exclamation-mark"),
+        (CloudArrowUp, "cloud-arrow-up"),
+        (CloudArrowDown, "cloud-arrow-down"),
+        (ArrowsClockwise, "arrows-clockwise"),
+        (DotsThreeVertical, "dots-three-vertical"),
+        (Copy, "copy"),
+        (ListBullets, "list-bullets"),
+        (Tree, "tree"),
+        (CheckCircle, "check-circle"),
+        (RadioButton, "radio-button"),
+        (Circle, "circle"),
+        (ListChecks, "list-checks"),
+        (Briefcase, "briefcase"),
+        (ArrowsSplit, "arrows-split"),
+        (UserCircleGear, "user-circle-gear"),
     ];
 }

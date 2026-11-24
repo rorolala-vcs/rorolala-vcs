@@ -77,7 +77,7 @@ internal sealed class OverviewDock : IDockView
         [
             new DockHeaderView(
                 _view.Strip,
-                new DockHeaderCommand("rorolala_vcs.status.refresh", _view.Refresh, IconKey: Icons.Refresh)
+                new DockHeaderCommand("rorolala_vcs.status.refresh", _view.Refresh, IconKey: Icons.ArrowClockwise)
             ),
         ];
 }

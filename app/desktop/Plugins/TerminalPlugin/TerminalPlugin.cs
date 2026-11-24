@@ -64,7 +64,7 @@ public sealed class TerminalPlugin : IRolaPlugin
                 DockOpenMode.New,
                 DockSide.Bottom,
                 () => new TerminalDock(host.Log),
-                Icons.Terminal
+                Icons.TerminalWindow
             )
         );
     }

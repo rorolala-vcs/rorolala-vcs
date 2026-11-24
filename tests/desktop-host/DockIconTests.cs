@@ -53,7 +53,7 @@ public sealed class DockIconTests
     [Fact]
     public void AWindowMenuItemAndItsTabWearTheDocksMark()
     {
-        var (_, main, _) = Open(DesktopIcons.Extension);
+        var (_, main, _) = Open(DesktopIcons.PuzzlePiece);
 
         // The menu the docks are listed under: the entry for this one wears what the dock is drawn by, beside its word.
         var header = Assert.IsType<StackPanel>(Entry(main).Header);
@@ -80,7 +80,7 @@ public sealed class DockIconTests
     [Fact]
     public void ATabKeepsRoomForItsPictureAndItsWord()
     {
-        var (_, main, _) = Open(DesktopIcons.Extension);
+        var (_, main, _) = Open(DesktopIcons.PuzzlePiece);
 
         var tab = Tab(main);
         var columns = ((Grid)tab.Content!).ColumnDefinitions;
@@ -115,7 +115,7 @@ public sealed class DockIconTests
     [Fact]
     public void AWindowMenuItemKeepsItsCheckAndItsPictureApart()
     {
-        var (_, main, _) = Open(DesktopIcons.Extension);
+        var (_, main, _) = Open(DesktopIcons.PuzzlePiece);
         var entry = Entry(main);
 
         // The item is a toggle: its check is the base theme's to draw, in the slot the base theme keeps for one.
@@ -217,7 +217,7 @@ public sealed class DockIconTests
 
         try
         {
-            var (_, main, _) = Open(DesktopIcons.Extension);
+            var (_, main, _) = Open(DesktopIcons.PuzzlePiece);
             var button = main.GetVisualDescendants()
                 .OfType<Button>()
                 .Single(control => control.Name == "MenuButton");
@@ -246,7 +246,7 @@ public sealed class DockIconTests
     [Fact]
     public void TheMenuButtonOpensEveryTopLevelMenu()
     {
-        var (_, main, _) = Open(DesktopIcons.Extension);
+        var (_, main, _) = Open(DesktopIcons.PuzzlePiece);
         var button = main.GetVisualDescendants()
             .OfType<Button>()
             .Single(control => control.Name == "MenuButton");
@@ -296,7 +296,7 @@ public sealed class DockIconTests
 
         try
         {
-            var (_, main, _) = Open(DesktopIcons.Extension);
+            var (_, main, _) = Open(DesktopIcons.PuzzlePiece);
             var window = Window(main);
 
             // The menu bar is a flyout now, so the items are drawn only once the button opens it. The flyout is

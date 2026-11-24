@@ -895,33 +895,33 @@ internal sealed class BrowserActions
     /// </remarks>
     internal static readonly Dictionary<string, string> Pictures = new(StringComparer.Ordinal)
     {
-        ["rorolala_file_system.open"] = Icons.Launch,
-        ["rorolala_file_system.copy"] = Icons.FileCopy,
-        ["rorolala_file_system.cut"] = Icons.ContentCut,
-        ["rorolala_file_system.paste"] = Icons.ContentPaste,
-        ["rorolala_file_system.delete"] = Icons.Delete,
-        ["rorolala_file_system.rename"] = Icons.LocalOffer,
-        ["rorolala_file_system.new_folder"] = Icons.CreateNewFolder,
-        ["rorolala_file_system.reveal"] = Icons.Launch,
-        ["rorolala_file_system.copy_path"] = Icons.FileCopy,
-        ["rorolala_file_system.root"] = Icons.Home,
-        ["rorolala_file_system.refresh"] = Icons.Refresh,
-        ["rorolala_file_system.set_base"] = Icons.AccountTree,
-        ["rorolala_file_system.collapse_all"] = Icons.AccountTree,
+        ["rorolala_file_system.open"] = Icons.ArrowSquareOut,
+        ["rorolala_file_system.copy"] = Icons.Copy,
+        ["rorolala_file_system.cut"] = Icons.Scissors,
+        ["rorolala_file_system.paste"] = Icons.Clipboard,
+        ["rorolala_file_system.delete"] = Icons.Trash,
+        ["rorolala_file_system.rename"] = Icons.Tag,
+        ["rorolala_file_system.new_folder"] = Icons.FolderPlus,
+        ["rorolala_file_system.reveal"] = Icons.ArrowSquareOut,
+        ["rorolala_file_system.copy_path"] = Icons.Copy,
+        ["rorolala_file_system.root"] = Icons.House,
+        ["rorolala_file_system.refresh"] = Icons.ArrowClockwise,
+        ["rorolala_file_system.set_base"] = Icons.TreeStructure,
+        ["rorolala_file_system.collapse_all"] = Icons.TreeStructure,
 
         // The categories a menu is grouped by wear a picture too, and the one of the action they hold: a
         // category is the word for what its entries do, so a second picture would be a second answer to one
         // question. The two that are not an action of their own are the plus a category of new things wears
         // and the three beads a menu of views wears.
-        ["menu.entry.open"] = Icons.Launch,
-        ["menu.entry.copy"] = Icons.FileCopy,
-        ["menu.entry.cut"] = Icons.ContentCut,
-        ["menu.entry.paste"] = Icons.ContentPaste,
-        ["menu.entry.delete"] = Icons.Delete,
-        ["menu.entry.new"] = Icons.Add,
-        ["menu.entry.rename"] = Icons.LocalOffer,
-        ["menu.entry.reveal"] = Icons.Launch,
-        ["menu.entry.restore"] = Icons.Refresh,
-        ["menu.entry.view"] = Icons.MoreVert,
+        ["menu.entry.open"] = Icons.ArrowSquareOut,
+        ["menu.entry.copy"] = Icons.Copy,
+        ["menu.entry.cut"] = Icons.Scissors,
+        ["menu.entry.paste"] = Icons.Clipboard,
+        ["menu.entry.delete"] = Icons.Trash,
+        ["menu.entry.new"] = Icons.Plus,
+        ["menu.entry.rename"] = Icons.Tag,
+        ["menu.entry.reveal"] = Icons.ArrowSquareOut,
+        ["menu.entry.restore"] = Icons.ArrowClockwise,
+        ["menu.entry.view"] = Icons.DotsThreeVertical,
     };
 }

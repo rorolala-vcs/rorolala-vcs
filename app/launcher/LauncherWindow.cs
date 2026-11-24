@@ -861,7 +861,7 @@ internal sealed class LauncherWindow : Window
         _language = LanguageMenu();
 
         var account = ToolbarButton(
-            LauncherIcons.Of(Icons.AccountCircle),
+            LauncherIcons.Of(Icons.UserCircle),
             17,
             RolaI18N.Get("launcher.toolbar.account"),
             () => _ = OpenAccount()
@@ -929,7 +929,7 @@ internal sealed class LauncherWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        face.Children.Add(LauncherIcons.Glyph(LauncherIcons.Of(Icons.AddCircle), 14, _skin.OnPrimary));
+        face.Children.Add(LauncherIcons.Glyph(LauncherIcons.Of(Icons.PlusCircle), 14, _skin.OnPrimary));
         face.Children.Add(
             new TextBlock
             {
@@ -1009,7 +1009,7 @@ internal sealed class LauncherWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        face.Children.Add(LauncherIcons.Glyph(LauncherIcons.Of(Icons.Language), 16, _skin.Front));
+        face.Children.Add(LauncherIcons.Glyph(LauncherIcons.Of(Icons.Translate), 16, _skin.Front));
         face.Children.Add(Marks.Caret(_skin.Muted, 7));
 
         var button = new FlatButton(face, _skin, ButtonKind.Surface)

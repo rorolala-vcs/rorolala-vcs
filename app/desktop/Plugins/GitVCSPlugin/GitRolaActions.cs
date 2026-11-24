@@ -24,7 +24,7 @@ internal static class GitRolaActions
     public const string RestoreToLock = "menu.entry.to_lock";
 
     /// <summary>The picture the restore wears, drawn into this plugin's own set.</summary>
-    public const string RestoreIcon = Icons.Refresh;
+    public const string RestoreIcon = Icons.ArrowClockwise;
 
     /// <summary>The refresh's word, under the whole-project category.</summary>
     public const string Refresh = "rorolala_git.menu.refresh";

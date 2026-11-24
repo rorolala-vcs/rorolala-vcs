@@ -363,15 +363,15 @@ internal sealed class UpstreamPlace
         // step away, so a work with nothing tracked still has somewhere to go.
         host.Menu.AddItem(
             WorkspaceMenu,
-            new MenuItem("rorolala_vcs.menu.root", 10, place.OpenRoot, Icons.Download)
+            new MenuItem("rorolala_vcs.menu.root", 10, place.OpenRoot, Icons.ArrowDown)
         );
         host.Menu.AddItem(
             WorkspaceMenu,
-            new MenuItem("rorolala_vcs.menu.layouts", 20, () => Open(host, [Layouts]), Icons.Merge)
+            new MenuItem("rorolala_vcs.menu.layouts", 20, () => Open(host, [Layouts]), Icons.GitMerge)
         );
         host.Menu.AddItem(
             WorkspaceMenu,
-            new MenuItem("rorolala_vcs.menu.vaults", 30, () => Open(host, [Vaults]), Icons.CloudDownload)
+            new MenuItem("rorolala_vcs.menu.vaults", 30, () => Open(host, [Vaults]), Icons.CloudArrowDown)
         );
 
         // And the same place from a directory of the work, which is where a reader stands when they wonder what upstream
@@ -382,7 +382,7 @@ internal sealed class UpstreamPlace
                 ["menu.entry.open", "menu.entry.upstream"],
                 60,
                 _ => place.OpenRoot(),
-                Icons.Download,
+                Icons.ArrowDown,
                 Applies: target => place.Holds(target.Directory)
             )
         );
@@ -1658,7 +1658,7 @@ internal sealed class UpstreamPlace
         return
         [
             new LogicalBadge(
-                IconKey: mine ? Icons.Create : Icons.Lock,
+                IconKey: mine ? Icons.Pencil : Icons.Lock,
                 Colour: mine ? RorolalaColours.Allow : RorolalaColours.Disallow,
                 Text: mine ? null : owner,
                 TextKey: mine ? "rorolala_vcs.ownership.mine" : null,
@@ -1814,7 +1814,7 @@ internal sealed class UpstreamPlace
                             ["menu.entry.new", "menu.entry.folder"],
                             5,
                             _ => NewFolder(Of(source.Domain, source.Name, spot.Path)),
-                            Icons.Add
+                            Icons.Plus
                         ),
                     }
                     : []),
@@ -1829,7 +1829,7 @@ internal sealed class UpstreamPlace
                                 [new UpstreamCarry(source, spot.Path)],
                                 destination: null
                             ),
-                            Icons.Download
+                            Icons.ArrowDown
                         ),
                     }
                     : []),
@@ -1848,7 +1848,7 @@ internal sealed class UpstreamPlace
                         "rorolala_vcs.place.new_folder",
                         5,
                         _ => NewFolder(Of(source.Domain, source.Name, spot.Path)),
-                        Icons.Add
+                        Icons.Plus
                     ),
                 }
                 : []),
@@ -1865,7 +1865,7 @@ internal sealed class UpstreamPlace
                         ["menu.entry.version", "menu.entry.bring"],
                         10,
                         _ => _bring.Start(source, entry, spot.Path),
-                        Icons.Download
+                        Icons.ArrowDown
                     ),
                 }
                 : []),
@@ -1891,7 +1891,7 @@ internal sealed class UpstreamPlace
                         source.Vault.Length > 0 ? "rorolala_vcs.place.path_title" : "rorolala_vcs.place.path_title_layout",
                         entry.Path
                     ),
-                    Icons.ContentCopy
+                    Icons.Copy
                 ),
         ];
     }
@@ -1916,7 +1916,7 @@ internal sealed class UpstreamPlace
                         ["menu.entry.fetch", "menu.entry.content"],
                         10,
                         _ => Fetch(),
-                        Icons.Download
+                        Icons.ArrowDown
                     ),
                 ]
             ),
@@ -1957,7 +1957,7 @@ internal sealed class UpstreamPlace
                     ["menu.entry.fetch", "menu.entry.read_again"],
                     10,
                     _ => ReadAgain(source, list, why),
-                    Icons.Refresh
+                    Icons.ArrowClockwise
                 ),
             ]
         );

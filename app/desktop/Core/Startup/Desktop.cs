@@ -397,7 +397,7 @@ internal sealed class Desktop
                         services.I18n,
                         plugins.Configuration
                     ),
-                Icons.Extension
+                Icons.PuzzlePiece
             )
         );
 
@@ -409,7 +409,7 @@ internal sealed class Desktop
                 DockOpenMode.Toggle,
                 DockSide.Bottom,
                 () => new LogDock(services.Log),
-                Icons.ListAlt
+                Icons.List
             )
         );
 
@@ -427,7 +427,7 @@ internal sealed class Desktop
                         services.I18n,
                         services.Theme
                     ),
-                Icons.Settings
+                Icons.Gear
             )
         );
 
@@ -456,7 +456,7 @@ internal sealed class Desktop
                     "menu.dock.own_window",
                     10,
                     was => OpenInWindow(services, was),
-                    Icons.CropSquare
+                    Icons.Square
                 )
             )
         );
@@ -471,7 +471,7 @@ internal sealed class Desktop
                     "menu.dock.close",
                     20,
                     was => services.Windows.CloseDock(was.Directory),
-                    Icons.Close
+                    Icons.X
                 )
             )
         );

@@ -105,16 +105,16 @@ internal static class RorolalaDocks
             owner,
             OverviewNameId,
             OverviewKey,
-            Icons.TaskAlt,
+            Icons.ListChecks,
             () => new OverviewDock(host, host.Log, host.Files, hub, sync, fetch)
         );
-        Add(host, owner, WorkspaceNameId, WorkspaceKey, Icons.Work, () => new RorolalaDock(host.Log));
+        Add(host, owner, WorkspaceNameId, WorkspaceKey, Icons.Briefcase, () => new RorolalaDock(host.Log));
         Add(
             host,
             owner,
             VersionGraphNameId,
             VersionGraphKey,
-            Icons.AltRoute,
+            Icons.ArrowsSplit,
             () => new VersionGraphDock(host, statuses, sync, fetch, hub)
         );
         Add(
@@ -122,10 +122,10 @@ internal static class RorolalaDocks
             owner,
             TreeNameId,
             TreeKey,
-            Icons.Park,
+            Icons.Tree,
             () => new TreePanelDock(host, hub, trees)
         );
-        Add(host, owner, AccountsNameId, AccountsKey, Icons.ManageAccounts, () => new AccountsDock(host));
+        Add(host, owner, AccountsNameId, AccountsKey, Icons.UserCircleGear, () => new AccountsDock(host));
     }
 
     /// <summary>
@@ -197,7 +197,7 @@ internal sealed class AccountsDock : IDockView
     /// <inheritdoc />
     public IReadOnlyList<DockHeaderItem> Header =>
         [
-            new DockHeaderCommand("rorolala_vcs.accounts.refresh", _view.Refresh, IconKey: Icons.Refresh),
+            new DockHeaderCommand("rorolala_vcs.accounts.refresh", _view.Refresh, IconKey: Icons.ArrowClockwise),
         ];
 }
 

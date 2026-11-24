@@ -46,7 +46,7 @@ internal static class TreeRestoreActions
                 ["menu.entry.restore", $"menu.entry.{which}"],
                 order,
                 was => Ask(host, hub, was, which == Staged),
-                Icons.Refresh,
+                Icons.ArrowClockwise,
                 false,
                 IsTreeFile
             )

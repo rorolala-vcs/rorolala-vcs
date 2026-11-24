@@ -237,7 +237,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
                         );
                     }
                 },
-                Icons.Launch,
+                Icons.ArrowSquareOut,
                 false,
                 was => was.Entry is { Kind: EntryKind.Directory }
             )
@@ -263,7 +263,7 @@ public sealed class FileSystemPlugin : IRolaPlugin
                 DockOpenMode.Toggle,
                 DockSide.Left,
                 () => new TreeDock(host, browser, clip, logical),
-                Icons.AccountTree
+                Icons.TreeStructure
             )
         );
     }

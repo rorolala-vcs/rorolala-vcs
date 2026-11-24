@@ -8,12 +8,12 @@ namespace TerminalPlugin;
 /// <summary>The keys the pictures of this project are held under.</summary>
 internal static partial class Icons
 {
-    /// <summary>The key the `terminal` picture is held under.</summary>
-    public const string Terminal = "rorolala_terminal.terminal";
+    /// <summary>The key the `terminal-window` picture is held under.</summary>
+    public const string TerminalWindow = "rorolala_terminal.terminal-window";
 
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
-        (Terminal, "terminal"),
+        (TerminalWindow, "terminal-window"),
     ];
 }

@@ -54,7 +54,7 @@ internal sealed class TreePanelDock : IDockView, IDockTitle
             new DockHeaderCommand(
                 "rorolala_vcs.tree_panel.refresh",
                 _view.Reload,
-                IconKey: Icons.Refresh
+                IconKey: Icons.ArrowClockwise
             ),
         ];
 
@@ -741,7 +741,7 @@ internal sealed class TreePanelView : UserControl
                         ["menu.entry.reveal", "menu.entry.in_list"],
                         10,
                         () => Reveal(change.Path),
-                        Icons.Visibility
+                        Icons.Eye
                     ),
                 ],
                 Detail: change.OldPath is { Length: > 0 } previous
@@ -1171,13 +1171,13 @@ internal sealed class TreePanelView : UserControl
                             ["menu.entry.restore", "menu.entry.theirs"],
                             10,
                             () => Reveal(Path.Combine(tree, conflict.Theirs)),
-                            Icons.Refresh
+                            Icons.ArrowClockwise
                         ),
                         new MenuLeaf(
                             ["menu.entry.reveal", "menu.entry.in_list"],
                             10,
                             () => Reveal(conflict.Path),
-                            Icons.Visibility
+                            Icons.Eye
                         ),
                     ],
                     Detail: conflict.Path
@@ -1246,7 +1246,7 @@ internal sealed class TreePanelView : UserControl
                         "rorolala_vcs.progress.tree_restore",
                         () => TreePanelCommands.Restore(tree, restore.Item2)
                     ),
-                    Icons.Refresh
+                    Icons.ArrowClockwise
                 )
             );
         }
@@ -1256,7 +1256,7 @@ internal sealed class TreePanelView : UserControl
                 ["menu.entry.reveal", "menu.entry.in_list"],
                 10,
                 () => Reveal(change.Path),
-                Icons.Visibility
+                Icons.Eye
             )
         );
 
@@ -1294,7 +1294,7 @@ internal sealed class TreePanelView : UserControl
                     ["menu.entry.reveal", "menu.entry.in_list"],
                     10,
                     () => Reveal(entry.Path),
-                    Icons.Visibility
+                    Icons.Eye
                 ),
             ],
             Detail: entry.Path

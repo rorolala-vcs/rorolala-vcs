@@ -23,7 +23,7 @@ namespace RorolalaVCSPlugin;
 internal sealed class RorolalaMergeBadge : IEntryMarkProvider
 {
     /// <summary>What the set draws for two things coming together into one.</summary>
-    private const string Join = Icons.Merge;
+    private const string Join = Icons.GitMerge;
 
     /// <summary>What the work says about the directories being listed, shared with the list's own columns.</summary>
     private readonly StatusReadings _readings;

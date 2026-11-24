@@ -21,7 +21,7 @@ namespace RorolalaDesktop;
 /// that is neither markup nor toolkit: the words a reader hears it by, which are translated, and the
 /// picture it carries, which is the program's own rather than the desktop's.
 /// <para>
-/// The pictures are Material Design's, drawn from the pinned set and read out of the program's own
+/// The pictures are Phosphor Icons', drawn from the pinned set and read out of the program's own
 /// assembly, see <see cref="Icons"/>. Each is drawn as an opacity mask over the ink of the button it sits
 /// in rather than as a picture, so that a button under the pointer, and the one that closes the window,
 /// take the colour the look gives them instead of one baked into the file.
@@ -56,16 +56,16 @@ internal static class WindowControls
     public const double LightGlyphSize = 8.0;
 
     /// <summary>The key the minimize button's picture is held under.</summary>
-    public const string MinimizeKey = Icons.Minimize;
+    public const string MinimizeKey = Icons.Minus;
 
     /// <summary>The key the maximize button's picture is held under.</summary>
-    public const string MaximizeKey = Icons.CropSquare;
+    public const string MaximizeKey = Icons.Square;
 
     /// <summary>The key the picture the maximize button wears once the window is maximized is held under.</summary>
-    public const string RestoreKey = Icons.FilterNone;
+    public const string RestoreKey = Icons.CopySimple;
 
     /// <summary>The key the close button's picture is held under.</summary>
-    public const string CloseKey = Icons.Close;
+    public const string CloseKey = Icons.X;
 
     /// <summary>
     /// A picture read from the library, or nothing when the library holds no such key.

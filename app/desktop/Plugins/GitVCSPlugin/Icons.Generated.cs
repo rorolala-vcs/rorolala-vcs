@@ -8,20 +8,20 @@ namespace GitVCSPlugin;
 /// <summary>The keys the pictures of this project are held under.</summary>
 internal static partial class Icons
 {
-    /// <summary>The key the `edit_note` picture is held under.</summary>
-    public const string EditNote = "rorolala_git.edit_note";
+    /// <summary>The key the `note-pencil` picture is held under.</summary>
+    public const string NotePencil = "rorolala_git.note-pencil";
 
-    /// <summary>The key the `download` picture is held under.</summary>
-    public const string Download = "rorolala_git.download";
+    /// <summary>The key the `arrow-down` picture is held under.</summary>
+    public const string ArrowDown = "rorolala_git.arrow-down";
 
-    /// <summary>The key the `refresh` picture is held under.</summary>
-    public const string Refresh = "rorolala_git.refresh";
+    /// <summary>The key the `arrow-clockwise` picture is held under.</summary>
+    public const string ArrowClockwise = "rorolala_git.arrow-clockwise";
 
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
-        (EditNote, "edit_note"),
-        (Download, "download"),
-        (Refresh, "refresh"),
+        (NotePencil, "note-pencil"),
+        (ArrowDown, "arrow-down"),
+        (ArrowClockwise, "arrow-clockwise"),
     ];
 }

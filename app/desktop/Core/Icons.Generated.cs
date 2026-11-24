@@ -8,44 +8,44 @@ namespace RorolalaDesktop;
 /// <summary>The keys the pictures of this project are held under.</summary>
 internal static partial class Icons
 {
-    /// <summary>The key the `minimize` picture is held under.</summary>
-    public const string Minimize = "rorolala.minimize";
+    /// <summary>The key the `minus` picture is held under.</summary>
+    public const string Minus = "rorolala.minus";
 
-    /// <summary>The key the `crop_square` picture is held under.</summary>
-    public const string CropSquare = "rorolala.crop_square";
+    /// <summary>The key the `square` picture is held under.</summary>
+    public const string Square = "rorolala.square";
 
-    /// <summary>The key the `filter_none` picture is held under.</summary>
-    public const string FilterNone = "rorolala.filter_none";
+    /// <summary>The key the `copy-simple` picture is held under.</summary>
+    public const string CopySimple = "rorolala.copy-simple";
 
-    /// <summary>The key the `close` picture is held under.</summary>
-    public const string Close = "rorolala.close";
+    /// <summary>The key the `x` picture is held under.</summary>
+    public const string X = "rorolala.x";
 
-    /// <summary>The key the `extension` picture is held under.</summary>
-    public const string Extension = "rorolala.extension";
+    /// <summary>The key the `puzzle-piece` picture is held under.</summary>
+    public const string PuzzlePiece = "rorolala.puzzle-piece";
 
-    /// <summary>The key the `list_alt` picture is held under.</summary>
-    public const string ListAlt = "rorolala.list_alt";
+    /// <summary>The key the `list` picture is held under.</summary>
+    public const string List = "rorolala.list";
 
-    /// <summary>The key the `settings` picture is held under.</summary>
-    public const string Settings = "rorolala.settings";
+    /// <summary>The key the `gear` picture is held under.</summary>
+    public const string Gear = "rorolala.gear";
 
-    /// <summary>The key the `menu` picture is held under.</summary>
-    public const string Menu = "rorolala.menu";
+    /// <summary>The key the `rows` picture is held under.</summary>
+    public const string Rows = "rorolala.rows";
 
-    /// <summary>The key the `back_hand` picture is held under.</summary>
-    public const string BackHand = "rorolala.back_hand";
+    /// <summary>The key the `hand` picture is held under.</summary>
+    public const string Hand = "rorolala.hand";
 
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
-        (Minimize, "minimize"),
-        (CropSquare, "crop_square"),
-        (FilterNone, "filter_none"),
-        (Close, "close"),
-        (Extension, "extension"),
-        (ListAlt, "list_alt"),
-        (Settings, "settings"),
-        (Menu, "menu"),
-        (BackHand, "back_hand"),
+        (Minus, "minus"),
+        (Square, "square"),
+        (CopySimple, "copy-simple"),
+        (X, "x"),
+        (PuzzlePiece, "puzzle-piece"),
+        (List, "list"),
+        (Gear, "gear"),
+        (Rows, "rows"),
+        (Hand, "hand"),
     ];
 }

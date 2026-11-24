@@ -50,9 +50,9 @@ internal static partial class Icons
         foreach (var (category, key) in new[]
         {
             ("menu.entry.ownership", Lock),
-            ("menu.entry.version", AltRoute),
-            ("menu.entry.fetch", Download),
-            ("menu.entry.restore", Refresh),
+            ("menu.entry.version", ArrowsSplit),
+            ("menu.entry.fetch", ArrowDown),
+            ("menu.entry.restore", ArrowClockwise),
         })
         {
             if (library.Find(key) is { } picture && library.Find(category) is null)

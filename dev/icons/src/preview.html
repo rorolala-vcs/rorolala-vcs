@@ -1,13 +1,14 @@
 <!doctype html>
 <!--
-  Written by `cargo dev icons` (`dev/icons`) beside the clone of the set, from the pin's own data.json.
+  Written by `cargo dev icons` (`dev/icons`) beside the clone of the set, from the files in the weight's
+  own directory.
   Do not edit: the next run writes it again from the pin.
 -->
 <html lang="en">
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Material icons</title>
+        <title>Phosphor icons</title>
         <style>
             :root {
                 color-scheme: dark;
@@ -17,7 +18,8 @@
                 --fg: #e7e9ec;
                 --dim: #939ba6;
                 --accent: #7aa7ff;
-                /* The set is drawn in black, so the dark page turns it over rather than recolouring 2191 files. */
+                /* The artwork says `currentColor`, which a browser draws black, so the dark page turns it over
+                   rather than recolouring every file. */
                 --invert: 1;
                 --size: 32px;
             }
@@ -274,17 +276,18 @@
             <input
                 id="search"
                 type="search"
-                placeholder="Search name, tag or category"
+                placeholder="Search names"
                 autofocus
                 spellcheck="false"
                 aria-label="Search icons"
             />
-            <select id="family" aria-label="Icon family">
-                <option value="baseline">baseline</option>
-                <option value="outline">outline</option>
-                <option value="round">round</option>
-                <option value="sharp">sharp</option>
-                <option value="twotone">twotone</option>
+            <select id="weight" aria-label="Icon weight">
+                <option value="thin">thin</option>
+                <option value="light">light</option>
+                <option value="regular">regular</option>
+                <option value="bold">bold</option>
+                <option value="fill">fill</option>
+                <option value="duotone">duotone</option>
             </select>
             <label class="range"
                 >size
@@ -321,25 +324,27 @@
         </dialog>
         <div id="toast" class="toast" hidden></div>
         <script>
-            // One entry per icon, as `[name, tags, categories]`, the set's own index, inlined because a page
-            // opened from disk may not fetch it. Written by `cargo dev icons`.
+            // One entry per icon, as `[name, tags, categories]`, the shape this page reads, written by
+            // `cargo dev icons` from the weight's own directory. Phosphor's files carry no tags or
+            // categories, so the last two are empty.
             const ICONS = __ICONS__;
 
-            const FAMILIES = [
-                "baseline",
-                "outline",
-                "round",
-                "sharp",
-                "twotone",
+            const WEIGHTS = [
+                "thin",
+                "light",
+                "regular",
+                "bold",
+                "fill",
+                "duotone",
             ];
-            const PREFS_KEY = "material-icon-preview";
-            const SVGS = "../material-icons/svg/";
-            const REPO_PATH = "THIRD_PARTY/material-icons/svg/";
+            const PREFS_KEY = "phosphor-icon-preview";
+            const SVGS = "../phosphor-icons/assets/";
+            const REPO_PATH = "THIRD_PARTY/phosphor-icons/assets/";
 
             const html = document.documentElement;
             const grid = document.getElementById("grid");
             const search = document.getElementById("search");
-            const family = document.getElementById("family");
+            const weight = document.getElementById("weight");
             const size = document.getElementById("size");
             const sizeValue = document.getElementById("size-value");
             const themeButton = document.getElementById("theme");
@@ -349,14 +354,14 @@
             const toastNode = document.getElementById("toast");
 
             const state = {
-                family: "baseline",
+                weight: "regular",
                 size: 32,
                 theme: prefersLight() ? "light" : "dark",
                 query: "",
             };
 
             // Every icon's searchable text, and where each sits in ICONS: built once, so that a keystroke costs
-            // one pass over 2191 strings rather than a rebuild of the grid and 2191 image requests.
+            // one pass over the names rather than a rebuild of the grid and an image request per tile.
             const PLACE = new Map();
             const HAYSTACK = ICONS.map(([name, tags, categories], index) => {
                 PLACE.set(name, index);
@@ -366,10 +371,22 @@
             // The tiles live for the life of the page; filtering only flips `hidden` on them.
             const tiles = [];
 
-            const iconUrl = (name, variant) =>
-                SVGS + name + "/" + variant + ".svg";
-            const repoPath = (name, variant) =>
-                REPO_PATH + name + "/" + variant + ".svg";
+            // The regular weight is filed under the bare name and every other weight carries its own as a
+            // suffix, which is how the set's `assets/` directory is laid out.
+            const iconUrl = (name, weight) =>
+                SVGS +
+                weight +
+                "/" +
+                name +
+                (weight === "regular" ? "" : "-" + weight) +
+                ".svg";
+            const repoPath = (name, weight) =>
+                REPO_PATH +
+                weight +
+                "/" +
+                name +
+                (weight === "regular" ? "" : "-" + weight) +
+                ".svg";
 
             function prefersLight() {
                 return window.matchMedia("(prefers-color-scheme: light)")
@@ -381,8 +398,8 @@
                     const saved = JSON.parse(
                         localStorage.getItem(PREFS_KEY) || "{}",
                     );
-                    if (FAMILIES.includes(saved.family))
-                        state.family = saved.family;
+                    if (WEIGHTS.includes(saved.weight))
+                        state.weight = saved.weight;
                     if (Number.isFinite(saved.size))
                         state.size = Math.min(64, Math.max(16, saved.size));
                     if (saved.theme === "light" || saved.theme === "dark")
@@ -397,7 +414,7 @@
                     localStorage.setItem(
                         PREFS_KEY,
                         JSON.stringify({
-                            family: state.family,
+                            weight: state.weight,
                             size: state.size,
                             theme: state.theme,
                         }),
@@ -410,7 +427,7 @@
             function apply() {
                 html.dataset.theme = state.theme;
                 html.style.setProperty("--size", state.size + "px");
-                family.value = state.family;
+                weight.value = state.weight;
                 size.value = state.size;
                 sizeValue.textContent = state.size + "px";
             }
@@ -428,7 +445,7 @@
                     image.alt = "";
                     image.loading = "lazy";
                     image.decoding = "async";
-                    image.src = iconUrl(name, state.family);
+                    image.src = iconUrl(name, state.weight);
 
                     const label = document.createElement("span");
                     label.className = "label";
@@ -469,8 +486,8 @@
                 }
             }
 
-            function setFamily(next) {
-                state.family = next;
+            function setWeight(next) {
+                state.weight = next;
                 for (const tile of tiles) {
                     tile.firstElementChild.src = iconUrl(
                         tile.dataset.name,
@@ -489,7 +506,7 @@
 
                 const variants = document.getElementById("detail-variants");
                 variants.textContent = "";
-                for (const variant of FAMILIES) {
+                for (const variant of WEIGHTS) {
                     const figure = document.createElement("figure");
                     const image = document.createElement("img");
                     image.src = iconUrl(name, variant);
@@ -507,7 +524,7 @@
                     tags.join(", "),
                 ]
                     .filter(Boolean)
-                    .join("  \u00b7  ");
+                    .join("  ");
 
                 if (!detail.open) {
                     detail.showModal();
@@ -549,8 +566,8 @@
                 filter();
             });
 
-            family.addEventListener("change", () => {
-                setFamily(family.value);
+            weight.addEventListener("change", () => {
+                setWeight(weight.value);
             });
 
             size.addEventListener("input", () => {
@@ -577,7 +594,7 @@
                     const name = detail.dataset.name;
                     copyText(
                         button.dataset.copy === "path"
-                            ? repoPath(name, state.family)
+                            ? repoPath(name, state.weight)
                             : name,
                     );
                 } else if (event.target === detail) {

@@ -27,7 +27,7 @@ internal static class RorolalaTreeCreate
         ArgumentNullException.ThrowIfNull(host);
 
         host.FolderVariants.Add(
-            new FolderVariant(LabelKey, Icons.Park, NameKey, made => Make(host, made))
+            new FolderVariant(LabelKey, Icons.Tree, NameKey, made => Make(host, made))
         );
     }
 

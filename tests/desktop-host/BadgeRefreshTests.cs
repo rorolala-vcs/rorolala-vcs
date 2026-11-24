@@ -84,7 +84,7 @@ public sealed class BadgeRefreshTests
             row = Until(() => window.GetVisualDescendants().OfType<TreeViewItem>().FirstOrDefault(step => Same(step.Tag as string, file)));
 
             Assert.True(marking.Asked > asked, "the tree kept rows it should have asked again");
-            Assert.NotNull(host.Icons.Find(Icons.Circle));
+            Assert.NotNull(host.Icons.Find(Icons.Dot));
 
             var again = Until(() =>
             {
@@ -183,7 +183,7 @@ public sealed class BadgeRefreshTests
         {
             Asked++;
 
-            return new EntryMark(IconKey: Icons.Circle, Ink: MarkInk.Accent);
+            return new EntryMark(IconKey: Icons.Dot, Ink: MarkInk.Accent);
         }
     }
 

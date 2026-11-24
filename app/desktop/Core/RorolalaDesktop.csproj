@@ -7,7 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AvaloniaUseCompiledBindingsByDefault
+        >true</AvaloniaUseCompiledBindingsByDefault>
     <!-- The program as a file: the icon a file list draws and a pinned program keeps. The same
          picture is embedded again below as the one the windows are drawn with, and the two are not
          the same thing, one is a program to a file manager, the other a program to a window. -->
@@ -16,7 +17,8 @@
          default Avalonia would take from `ApplicationIcon`: that default embeds the file a second
          time under a name of its own and dresses every window, including the ones plugins make,
          which is a choice this host makes explicitly instead. -->
-    <AvaloniaIncludeApplicationIconAsWindowIcon>false</AvaloniaIncludeApplicationIconAsWindowIcon>
+    <AvaloniaIncludeApplicationIconAsWindowIcon
+        >false</AvaloniaIncludeApplicationIconAsWindowIcon>
     <!-- The window is always made by the host and handed its services, so it is deliberately not
          reachable through Avalonia's runtime XAML loader, which wants a public parameterless
          constructor; that loader is never used for it. -->
@@ -26,7 +28,7 @@
   <ItemGroup>
     <!-- The pictures the window's own buttons are drawn as, embedded so that they travel in the program
          itself and not beside it: the program is what they belong to, and a picture in a directory is one
-         more thing that can be left behind by a copy of it. They are drawn from the pinned Material Design
+         more thing that can be left behind by a copy of it. They are drawn from the pinned Phosphor Icons
          set by `cargo dev icons`, and the keys they are read by are generated from the same manifest. -->
     <EmbeddedResource Include="icons/*.png" />
   </ItemGroup>
@@ -60,7 +62,10 @@
          from beside it is one that a copy moved by hand can lose. `Link` is the path it answers to
          inside the assembly, which `AppIcon` names; the file itself is linked rather than copied
          into this tree, so `res/icons` stays the one place an icon lives. -->
-    <AvaloniaResource Include="../../../res/icons/yizi.ico" Link="res/icons/yizi.ico" />
+    <AvaloniaResource
+            Include="../../../res/icons/yizi.ico"
+            Link="res/icons/yizi.ico"
+        />
   </ItemGroup>
 
   <ItemGroup>
@@ -69,18 +74,26 @@
          rather than inside it: it is the boundary between the host and its plugins, not a part of
          either. -->
     <ProjectReference Include="../Contract/RorolalaDesktop.Contract.csproj" />
-    <ProjectReference Include="../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj" />
+    <ProjectReference
+            Include="../../../utils/desktop-i18n/RorolalaDesktopI18n.csproj"
+        />
     <!-- The face every word is set in, embedded in one assembly both this program and the launcher
          carry, so that the two are drawn with one font and a plugin that draws text of its own reads
          the same family. -->
-    <ProjectReference Include="../../../utils/desktop-fonts/RorolalaDesktopFonts.csproj" />
+    <ProjectReference
+            Include="../../../utils/desktop-fonts/RorolalaDesktopFonts.csproj"
+        />
     <!-- The renderer the host's own dock-tab menu is drawn by, and the one every plugin draws its
          menus with: one assembly in the program, delegated to the plugins, rather than a copy each. -->
-    <ProjectReference Include="../../../utils/desktop-menu/RorolalaDesktopMenu.csproj" />
+    <ProjectReference
+            Include="../../../utils/desktop-menu/RorolalaDesktopMenu.csproj"
+        />
     <!-- Carried rather than used. A plugin's dependencies are what the host itself carries, since
          nothing but a plugin's own assembly is laid beside it; the icons are one of them, so the
          host has to have them for a plugin to be allowed to ask for them. -->
-    <ProjectReference Include="../../../utils/desktop-sys-icons/RorolalaDesktopSysIcons.csproj" />
+    <ProjectReference
+            Include="../../../utils/desktop-sys-icons/RorolalaDesktopSysIcons.csproj"
+        />
   </ItemGroup>
 
   <!--
@@ -109,7 +122,10 @@
          carried as a second implementation: the launcher compiles it beside this file, and the
          binding library compiles the same file, so a change to the rule is one change. The
          Desktop program does not reference the binding library for a path. -->
-    <Compile Include="../../../modules/rola-sharp/UserDataPaths.cs" Link="Configuration/UserDataPaths.cs" />
+    <Compile
+            Include="../../../modules/rola-sharp/UserDataPaths.cs"
+            Link="Configuration/UserDataPaths.cs"
+        />
   </ItemGroup>
 
 </Project>

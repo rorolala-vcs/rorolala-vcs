@@ -1,4 +1,4 @@
-//! Draws the Desktop's own pictures from the pinned Material Design icon set.
+//! Draws the Desktop's own pictures from the pinned Phosphor Icons set.
 //!
 //! What is drawn is what `app/desktop/icons.toml` names: the commit to draw from, and the pictures each
 //! project wears, a plugin of the program's, and the host itself. What is written beside them is what a
@@ -29,7 +29,7 @@ use serde::Deserialize;
 const MANIFEST: &str = "app/desktop/icons.toml";
 
 /// Where the icon set is kept, from the root of the tree.
-const CLONE: &str = "THIRD_PARTY/material-icons";
+const CLONE: &str = "THIRD_PARTY/phosphor-icons";
 
 /// Where the plugins are, from the root of the tree.
 const PLUGINS: &str = "app/desktop/Plugins";
@@ -44,8 +44,8 @@ const SOURCES: &str = PLUGINS;
 ///
 /// The ink is white and the ground transparent, because a plugin draws a picture as a mask over a colour it
 /// takes from the theme: white is opaque under either reading of a mask (its alpha, and its luminance) so
-/// the mark takes the colour the user is looking at rather than one baked into the file. The size is four
-/// times the set's own 24-unit grid, which is as large as a tile's icon ever gets.
+/// the mark takes the colour the user is looking at rather than one baked into the file. The size sits on
+/// the set's own 256-unit grid, and is as large as a tile's icon ever gets.
 const INK: &str = "#FFFFFF";
 const SIZE: u32 = 96;
 
@@ -94,17 +94,19 @@ impl Set {
 
 /// The set to draw from.
 #[derive(Deserialize)]
-struct Material {
+struct Phosphor {
     /// Where the set is cloned from.
     url: String,
     /// The commit every picture is drawn from.
     commit: String,
+    /// The weight every picture is drawn at.
+    weight: String,
 }
 
 /// The manifest: the set, and the pictures each plugin wears.
 #[derive(Deserialize)]
 struct Manifest {
-    material: Material,
+    phosphor: Phosphor,
     set: Vec<Set>,
 }
 
@@ -186,10 +188,10 @@ fn draw(root: &Path) -> Result<(), String> {
     let manifest: Manifest = toml::from_str(&manifest)
         .map_err(|error| format!("the manifest could not be read: {error}"))?;
 
-    println!("==> icons at {}", manifest.material.commit);
-    ensure_set(root, &manifest.material)?;
+    println!("==> icons at {}", manifest.phosphor.commit);
+    ensure_set(root, &manifest.phosphor)?;
 
-    let page = preview::write(root, &root.join(CLONE))?;
+    let page = preview::write(root, &root.join(CLONE), &manifest.phosphor.weight)?;
     println!("==> {}", page.display());
 
     let license = fs::read_to_string(root.join(CLONE).join("LICENSE"))
@@ -201,14 +203,14 @@ fn draw(root: &Path) -> Result<(), String> {
             .map_err(|error| format!("`{}` could not be made: {error}", pictures.display()))?;
 
         for icon in &set.icons {
-            draw_picture(root, &pictures, icon)?;
+            draw_picture(root, &pictures, icon, &manifest.phosphor.weight)?;
         }
 
         fs::write(pictures.join("LICENSE"), &license)
             .map_err(|error| format!("the license could not be written: {error}"))?;
 
         let notice = pictures.join("README.md");
-        fs::write(&notice, said(&manifest.material, set))
+        fs::write(&notice, said(&manifest.phosphor, set))
             .map_err(|error| format!("`{}` could not be written: {error}", notice.display()))?;
         println!("==> {}", notice.display());
 
@@ -222,8 +224,19 @@ fn draw(root: &Path) -> Result<(), String> {
 }
 
 /// Draws one picture, by the name the set knows it by.
-fn draw_picture(root: &Path, pictures: &Path, icon: &str) -> Result<(), String> {
-    let source = root.join(CLONE).join("svg").join(icon).join("baseline.svg");
+fn draw_picture(root: &Path, pictures: &Path, icon: &str, weight: &str) -> Result<(), String> {
+    // The set files the regular weight under the bare name and every other weight with a suffix, so the
+    // path is built rather than looked for in two places.
+    let suffix = if weight == "regular" {
+        String::new()
+    } else {
+        format!("-{weight}")
+    };
+    let source = root
+        .join(CLONE)
+        .join("assets")
+        .join(weight)
+        .join(format!("{icon}{suffix}.svg"));
     let text = fs::read_to_string(&source).map_err(|error| {
         format!(
             "the icon set holds no `{icon}`: `{}` could not be read: {error}",
@@ -260,25 +273,25 @@ fn draw_picture(root: &Path, pictures: &Path, icon: &str) -> Result<(), String> 
 }
 
 /// Puts the clone where this expects it: the named commit, and nothing changed in it.
-fn ensure_set(root: &Path, material: &Material) -> Result<(), String> {
+fn ensure_set(root: &Path, phosphor: &Phosphor) -> Result<(), String> {
     let clone = root.join(CLONE);
 
     if !clone.join(".git").is_dir() {
-        println!("==> cloning {}", material.url);
+        println!("==> cloning {}", phosphor.url);
         let _ = fs::remove_dir_all(&clone);
         fs::create_dir_all(&clone)
             .map_err(|error| format!("`{}` could not be made: {error}", clone.display()))?;
         git(&clone, &["init", "-q"])?;
-        git(&clone, &["remote", "add", "origin", &material.url])?;
+        git(&clone, &["remote", "add", "origin", &phosphor.url])?;
     }
 
-    if git_says(&clone, &["rev-parse", "HEAD"]).trim() != material.commit {
-        println!("==> checking out {}", material.commit);
+    if git_says(&clone, &["rev-parse", "HEAD"]).trim() != phosphor.commit {
+        println!("==> checking out {}", phosphor.commit);
         git(
             &clone,
-            &["fetch", "-q", "--depth", "1", "origin", &material.commit],
+            &["fetch", "-q", "--depth", "1", "origin", &phosphor.commit],
         )?;
-        git(&clone, &["checkout", "-q", "--detach", &material.commit])?;
+        git(&clone, &["checkout", "-q", "--detach", &phosphor.commit])?;
     }
 
     if !git_says(&clone, &["status", "--porcelain"])
@@ -286,7 +299,7 @@ fn ensure_set(root: &Path, material: &Material) -> Result<(), String> {
         .is_empty()
     {
         println!("==> restoring {}", clone.display());
-        git(&clone, &["checkout", "-q", "--force", &material.commit])?;
+        git(&clone, &["checkout", "-q", "--force", &phosphor.commit])?;
         git(&clone, &["clean", "-qffd"])?;
     }
 
@@ -324,7 +337,7 @@ fn git_says(repository: &Path, arguments: &[&str]) -> String {
 }
 
 /// What a directory of pictures says for itself: where they came from, and what to do to draw them again.
-fn said(material: &Material, set: &Set) -> String {
+fn said(phosphor: &Phosphor, set: &Set) -> String {
     let list = set
         .icons
         .iter()
@@ -337,18 +350,16 @@ fn said(material: &Material, set: &Set) -> String {
          \n\
          The pictures the `{}` project draws: {}.\n\
          \n\
-         They are Google's Material Design icons, taken from the maintained mirror of the set,\n\
-         [material-icons/material-icons]({}), the same artwork as\n\
-         [google/material-design-icons](https://github.com/google/material-design-icons), under the\n\
-         [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). The license itself is\n\
-         `LICENSE`, copied from the commit below.\n\
+         They are Phosphor Icons, taken from the set's own repository,\n\
+         [phosphor-icons/core]({}), under the [MIT License](https://github.com/phosphor-icons/core/blob/main/LICENSE).\n\
+         The license itself is `LICENSE`, copied from the commit below.\n\
          \n\
-         **The set is not vendored here.** It is a shallow clone under `THIRD_PARTY/material-icons/`, which\n\
+         **The set is not vendored here.** It is a shallow clone under `THIRD_PARTY/phosphor-icons/`, which\n\
          git ignores, and the pictures are drawn from it by `cargo dev icons` rather than copied by hand, so\n\
          that what is drawn is what the pinned commit holds. The manifest is `app/desktop/icons.toml`:\n\
          another picture is another name there rather than another file in this directory.\n\
          \n\
-         - drawn from: `{}`\n\
+         - drawn from: `{}`, at `{}`\n\
          - handed over under: `{}.*`\n\
          \n\
          **Nothing here is edited by hand.** The pictures, this file and the license are what that run\n\
@@ -361,9 +372,8 @@ fn said(material: &Material, set: &Set) -> String {
          \n\
          **Why raster rather than linked.** Nothing at runtime draws an SVG: the toolkit would need another\n\
          package for it, and a plugin is discovered as a single assembly. The pictures are drawn at {SIZE}\n\
-         pixels, which is four times the 24-unit viewBox the artwork is drawn at, so the mask is scaled down\n\
-         rather than up.\n",
-        set.plugin, set.plugin, list, material.url, material.commit, set.key
+         pixels from the set's 256-unit viewBox, so the mask is scaled down rather than up.\n",
+        set.plugin, set.plugin, list, phosphor.url, phosphor.commit, phosphor.weight, set.key
     )
 }
 
@@ -410,7 +420,7 @@ fn keys_of(set: &Set) -> String {
 
 /// The name a picture's key constant is written as, from the name the set knows it by.
 fn constant(icon: &str) -> String {
-    icon.split('_')
+    icon.split(['_', '-'])
         .map(|part| {
             let mut letters = part.chars();
             letters.next().map_or_else(String::new, |first| {

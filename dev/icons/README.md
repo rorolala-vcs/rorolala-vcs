@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Draws the Desktop's pictures from the Material Design set at the commit `app/desktop/icons.toml` pins, and writes the license, the C# keys and a preview page beside them.
+Draws the Desktop's pictures from the Phosphor Icons set at the commit `app/desktop/icons.toml` pins, and writes the license, the C# keys and a preview page beside them.
 
 ## Boundary
 

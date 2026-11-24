@@ -78,7 +78,7 @@ public sealed class VariantTests
 
         var mark = RorolalaMergeBadge.Say(Held("art/hero.1a2b3c.txt"));
 
-        Assert.Equal(VcsIcons.Merge, mark.IconKey);
+        Assert.Equal(VcsIcons.GitMerge, mark.IconKey);
         Assert.Equal(RorolalaColours.Warning, mark.Colour);
 
         // Worn on the badge's own ground, as every mark of a tile is: a bar picture beside a badge would be

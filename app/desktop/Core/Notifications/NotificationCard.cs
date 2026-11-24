@@ -214,7 +214,7 @@ internal sealed class NotificationCard : Border
     /// <returns>What the close button is drawn as.</returns>
     private static Control Picture(IIconLibrary pictures)
     {
-        if (pictures.Find(Icons.Close) is { } picture)
+        if (pictures.Find(Icons.X) is { } picture)
         {
             return WindowControls.Glyph(picture, WindowControls.GlyphSize);
         }

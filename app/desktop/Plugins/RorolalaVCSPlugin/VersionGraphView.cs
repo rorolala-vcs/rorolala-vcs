@@ -114,7 +114,7 @@ internal sealed class VersionGraphDock : IDockView
             IsChecked = true,
         };
 
-        var mark = Mark(host, Icons.Visibility);
+        var mark = Mark(host, Icons.Eye);
 
         if (mark is not null)
         {
@@ -156,7 +156,7 @@ internal sealed class VersionGraphDock : IDockView
             IsChecked = true,
         };
 
-        if (Mark(host, Icons.AltRoute) is { } route)
+        if (Mark(host, Icons.ArrowsSplit) is { } route)
         {
             all.Content = route;
         }
@@ -178,7 +178,7 @@ internal sealed class VersionGraphDock : IDockView
             Classes = { "tool" },
             Padding = new Thickness(6),
         };
-        var list = Mark(host, Icons.FormatListBulleted);
+        var list = Mark(host, Icons.ListBullets);
 
         if (list is not null)
         {
@@ -255,7 +255,7 @@ internal sealed class VersionGraphDock : IDockView
             new DockHeaderCommand(
                 "rorolala_vcs.status.refresh",
                 _graph.RefreshWithFetch,
-                IconKey: Icons.Refresh
+                IconKey: Icons.ArrowClockwise
             ),
         ];
 }

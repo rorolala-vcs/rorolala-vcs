@@ -722,13 +722,13 @@ internal sealed class DirectoryControl : UserControl
     private void FillHidden()
     {
         _eyes = (
-            Icons.Picture(Icons.Visibility),
-            Icons.Picture(Icons.VisibilityOff)
+            Icons.Picture(Icons.Eye),
+            Icons.Picture(Icons.EyeSlash)
         );
         _marks = (
-            Icons.Picture(Icons.RadioButtonUnchecked),
-            Icons.Picture(Icons.RadioButtonChecked),
-            Icons.Picture(Icons.Circle)
+            Icons.Picture(Icons.Circle),
+            Icons.Picture(Icons.RadioButton),
+            Icons.Picture(Icons.Dot)
         );
 
         _show.Classes.Add("tool");
@@ -749,7 +749,7 @@ internal sealed class DirectoryControl : UserControl
 
         _rules.VerticalAlignment = VerticalAlignment.Center;
         _rules.Classes.Add("tool");
-        _rules.Content = Icons.Inked(Icons.Picture(Icons.MoreVert), Icons.Tool);
+        _rules.Content = Icons.Inked(Icons.Picture(Icons.DotsThreeVertical), Icons.Tool);
         _rules.Flyout = new Flyout { Content = HiddenBoxes() };
         AutomationProperties.SetName(_rules, RolaI18N.Get("rorolala_file_system.hides.providers"));
 
@@ -788,7 +788,7 @@ internal sealed class DirectoryControl : UserControl
 
         foreach (var provider in HideRegistry.All)
         {
-            var glyph = Icons.Inked(Icons.Picture(Icons.RadioButtonUnchecked), Icons.Tool);
+            var glyph = Icons.Inked(Icons.Picture(Icons.Circle), Icons.Tool);
             var label = new TextBlock
             {
                 Text = RolaI18N.Get(provider.LabelKey),
@@ -921,7 +921,7 @@ internal sealed class DirectoryControl : UserControl
     {
         _links = (
             Icons.Picture(Icons.Link),
-            Icons.Picture(Icons.LinkOff)
+            Icons.Picture(Icons.LinkBreak)
         );
 
         _sync.Classes.Add("tool");

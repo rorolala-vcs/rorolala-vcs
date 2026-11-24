@@ -231,7 +231,7 @@ public sealed class RorolalaDockTests
         Assert.IsType<SyncStrip>(strip.View);
 
         Assert.Contains(
-            "rorolala_vcs.refresh",
+            "rorolala_vcs.arrow-clockwise",
             global::RorolalaVCSPlugin.Icons.Pictures.Select(picture => picture.Key)
         );
     }

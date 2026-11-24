@@ -36,7 +36,7 @@ internal sealed class RolaTreeIcon : IEntryMarkProvider
     public EntryMark Mark(Entry entry) =>
         _colours.Colour(entry) is not null
             ? new EntryMark(
-                IconKey: Icons.Park,
+                IconKey: Icons.Tree,
                 Colour: RorolalaColours.Mid,
                 Glyph: RorolalaColours.Front,
                 Tagged: true,

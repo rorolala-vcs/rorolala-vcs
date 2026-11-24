@@ -68,7 +68,7 @@ public sealed class GitVCSPlugin : IRolaPlugin
                 ["menu.entry.open", "menu.entry.git_rola"],
                 70,
                 _ => place.OpenRoot(),
-                Icons.Download,
+                Icons.ArrowDown,
                 Applies: target => GitRolaToml.ProjectOf(GitRolaActions.Chosen(target)) is not null
             )
         );

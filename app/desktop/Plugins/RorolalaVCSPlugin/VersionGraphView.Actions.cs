@@ -30,8 +30,8 @@ internal sealed partial class VersionGraphView
     private Control? MenuIcon(string key) =>
         key switch
         {
-            "menu.entry.copy" => Inked(Icons.ContentCopy),
-            "menu.entry.version" => Inked(Icons.AltRoute),
+            "menu.entry.copy" => Inked(Icons.Copy),
+            "menu.entry.version" => Inked(Icons.ArrowsSplit),
             _ => Inked(key),
         };
 
@@ -59,20 +59,20 @@ internal sealed partial class VersionGraphView
         switch (hover.Part)
         {
             case HoverPart.EntryPill when hover.Chip is { Entry: { } entry }:
-                leaves.Add(Leaf(["menu.entry.copy", "menu.entry.uuid"], Icons.ContentCopy, () => Copy(entry.Uuid)));
-                leaves.Add(Leaf(["menu.entry.copy", "menu.entry.path"], Icons.ContentCopy, () => Copy(entry.Path)));
+                leaves.Add(Leaf(["menu.entry.copy", "menu.entry.uuid"], Icons.Copy, () => Copy(entry.Uuid)));
+                leaves.Add(Leaf(["menu.entry.copy", "menu.entry.path"], Icons.Copy, () => Copy(entry.Path)));
 
                 if (entry.Version is { Length: > 0 } version)
                 {
                     leaves.Add(
-                        Leaf(["menu.entry.copy", "menu.entry.version_hash"], Icons.ContentCopy, () => Copy(version))
+                        Leaf(["menu.entry.copy", "menu.entry.version_hash"], Icons.Copy, () => Copy(version))
                     );
                 }
 
                 leaves.Add(
                     Leaf(
                         ["menu.entry.copy", "menu.entry.variant_hash"],
-                        Icons.ContentCopy,
+                        Icons.Copy,
                         () => Copy(hover.Card!.Hash)
                     )
                 );
@@ -89,7 +89,7 @@ internal sealed partial class VersionGraphView
                     leaves.Add(
                         Leaf(
                             ["menu.entry.version", "menu.entry.fork"],
-                            Icons.CallSplit,
+                            Icons.GitFork,
                             () => BeginForkUuid(root, entry.Path)
                         )
                     );
@@ -115,14 +115,14 @@ internal sealed partial class VersionGraphView
                         leaves.Add(
                             Leaf(
                                 ["menu.entry.version", "menu.entry.switch"],
-                                Icons.ArrowRightAlt,
+                                Icons.ArrowRight,
                                 () => AskSwitch(file, entry.Uuid)
                             )
                         );
                         leaves.Add(
                             Leaf(
                                 ["menu.entry.version", "menu.entry.switch_keep"],
-                                Icons.ArrowRightAlt,
+                                Icons.ArrowRight,
                                 () => BeginSwitch(file, entry.Uuid, onlyIndex: true, force: false)
                             )
                         );
@@ -132,7 +132,7 @@ internal sealed partial class VersionGraphView
                 break;
 
             case HoverPart.FilePill when hover.Card?.Draft is { } draft:
-                leaves.Add(Leaf(["menu.entry.copy", "menu.entry.path"], Icons.ContentCopy, () => Copy(draft.Path)));
+                leaves.Add(Leaf(["menu.entry.copy", "menu.entry.path"], Icons.Copy, () => Copy(draft.Path)));
 
                 break;
 
@@ -140,7 +140,7 @@ internal sealed partial class VersionGraphView
                 leaves.Add(
                     Leaf(
                         ["menu.entry.copy", "menu.entry.message"],
-                        Icons.ContentCopy,
+                        Icons.Copy,
                         () => Copy(said.Message),
                         enabled: said.Message.Length > 0
                     )
@@ -150,12 +150,12 @@ internal sealed partial class VersionGraphView
 
             case HoverPart.Creator when hover.Card is { } maker:
                 leaves.Add(
-                    Leaf(["menu.entry.copy", "menu.entry.creator"], Icons.ContentCopy, () => Copy(maker.Creator))
+                    Leaf(["menu.entry.copy", "menu.entry.creator"], Icons.Copy, () => Copy(maker.Creator))
                 );
                 leaves.Add(
                     Leaf(
                         ["menu.entry.copy", "menu.entry.creator_hash"],
-                        Icons.ContentCopy,
+                        Icons.Copy,
                         () => Copy(maker.CreatorHash),
                         enabled: maker.CreatorHash.Length > 0
                     )
@@ -172,12 +172,12 @@ internal sealed partial class VersionGraphView
                 leaves.Add(
                     Leaf(
                         ["menu.entry.copy", "menu.entry.version_hash"],
-                        Icons.ContentCopy,
+                        Icons.Copy,
                         () => Copy(numbered.VersionHash!)
                     )
                 );
                 leaves.Add(
-                    Leaf(["menu.entry.copy", "menu.entry.variant_hash"], Icons.ContentCopy, () => Copy(numbered.Hash))
+                    Leaf(["menu.entry.copy", "menu.entry.variant_hash"], Icons.Copy, () => Copy(numbered.Hash))
                 );
 
                 break;
@@ -210,7 +210,7 @@ internal sealed partial class VersionGraphView
                 leaves.Add(DeleteChangesItem(file));
             }
 
-            leaves.Add(Leaf(["menu.entry.copy", "menu.entry.path"], Icons.ContentCopy, () => Copy(draft.Path)));
+            leaves.Add(Leaf(["menu.entry.copy", "menu.entry.path"], Icons.Copy, () => Copy(draft.Path)));
 
             return;
         }
@@ -231,7 +231,7 @@ internal sealed partial class VersionGraphView
         leaves.Add(
             Leaf(
                 ["menu.entry.copy", "menu.entry.variant_hash"],
-                Icons.ContentCopy,
+                Icons.Copy,
                 () => Copy(card.Hash),
                 enabled: card.Hash.Length > 0
             )
@@ -240,15 +240,15 @@ internal sealed partial class VersionGraphView
         if (card.HasVersion)
         {
             leaves.Add(
-                Leaf(["menu.entry.copy", "menu.entry.version_hash"], Icons.ContentCopy, () => Copy(card.VersionHash!))
+                Leaf(["menu.entry.copy", "menu.entry.version_hash"], Icons.Copy, () => Copy(card.VersionHash!))
             );
         }
 
-        leaves.Add(Leaf(["menu.entry.copy", "menu.entry.content_hash"], Icons.ContentCopy, () => Copy(card.Storage)));
+        leaves.Add(Leaf(["menu.entry.copy", "menu.entry.content_hash"], Icons.Copy, () => Copy(card.Storage)));
 
         if (card.Message.Length > 0)
         {
-            leaves.Add(Leaf(["menu.entry.copy", "menu.entry.message"], Icons.ContentCopy, () => Copy(card.Message)));
+            leaves.Add(Leaf(["menu.entry.copy", "menu.entry.message"], Icons.Copy, () => Copy(card.Message)));
         }
 
         // A variant may be joined into the file the user is on. The press is on the variant being
@@ -259,14 +259,14 @@ internal sealed partial class VersionGraphView
             if (PendingMerge(selected.Path) is null)
             {
                 leaves.Add(
-                    Leaf(["menu.entry.version", "menu.entry.join"], Icons.Merge, () => BeginJoin(selected.Path, card.Hash))
+                    Leaf(["menu.entry.version", "menu.entry.join"], Icons.GitMerge, () => BeginJoin(selected.Path, card.Hash))
                 );
             }
         }
         else if (Joinable(card))
         {
             leaves.Add(
-                Leaf(["menu.entry.version", "menu.entry.join"], Icons.Merge, () => BeginJoin(TargetFor(card)!, card.Hash))
+                Leaf(["menu.entry.version", "menu.entry.join"], Icons.GitMerge, () => BeginJoin(TargetFor(card)!, card.Hash))
             );
         }
 
@@ -301,7 +301,7 @@ internal sealed partial class VersionGraphView
             leaves.Add(
                 Leaf(
                     ["menu.entry.fetch", "menu.entry.version_blobs"],
-                    Icons.Download,
+                    Icons.ArrowDown,
                     () => BeginFetchBlobs(card.Hash, recursive: false),
                     enabled: !card.Offline
                 )
@@ -310,7 +310,7 @@ internal sealed partial class VersionGraphView
             leaves.Add(
                 Leaf(
                     ["menu.entry.fetch", "menu.entry.all_blobs"],
-                    Icons.Download,
+                    Icons.ArrowDown,
                     () => BeginFetchBlobs(card.Hash, recursive: true),
                     enabled: MissingInChain(card)
                 )
@@ -345,7 +345,7 @@ internal sealed partial class VersionGraphView
     /// <param name="file">The file, as the program names it.</param>
     /// <returns>The leaf, ready to be added to a menu.</returns>
     private MenuLeaf DeleteChangesItem(string file) =>
-        Leaf(["menu.entry.delete", "menu.entry.draft"], Icons.Refresh, () => AskDeleteChanges(file));
+        Leaf(["menu.entry.delete", "menu.entry.draft"], Icons.ArrowClockwise, () => AskDeleteChanges(file));
 
     /// <summary>One of the two entries that end a merge, which differ in what the file is left holding.</summary>
     /// <param name="file">The file the merge is waiting on, as the program names it.</param>
@@ -363,7 +363,7 @@ internal sealed partial class VersionGraphView
     ) =>
         Leaf(
             ["menu.entry.version", keep ? "menu.entry.cancel_merge_keep" : "menu.entry.cancel_merge"],
-            keep ? Icons.EditNote : Icons.CallSplit,
+            keep ? Icons.NotePencil : Icons.GitFork,
             () => AskCancelMerge(file, directory, variant, recorded, keep)
         );
 
@@ -376,7 +376,7 @@ internal sealed partial class VersionGraphView
     private MenuLeaf RetrackItem(string file, string version, string label, bool onlyIndex) =>
         Leaf(
             ["menu.entry.version", onlyIndex ? "menu.entry.retrack_only_index" : "menu.entry.retrack"],
-            onlyIndex ? Icons.ArrowRightAlt : Icons.EditNote,
+            onlyIndex ? Icons.ArrowRight : Icons.NotePencil,
             () => AskRetrack(file, version, label, onlyIndex)
         );
 

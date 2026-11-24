@@ -1,19 +1,17 @@
 # The RorolalaDesktop pictures
 
-The pictures the `RorolalaDesktop` project draws: `minimize`, `crop_square`, `filter_none`, `close`, `extension`, `list_alt`, `settings`, `menu`, `back_hand`.
+The pictures the `RorolalaDesktop` project draws: `minus`, `square`, `copy-simple`, `x`, `puzzle-piece`, `list`, `gear`, `rows`, `hand`.
 
-They are Google's Material Design icons, taken from the maintained mirror of the set,
-[material-icons/material-icons](https://github.com/material-icons/material-icons), the same artwork as
-[google/material-design-icons](https://github.com/google/material-design-icons), under the
-[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). The license itself is
-`LICENSE`, copied from the commit below.
+They are Phosphor Icons, taken from the set's own repository,
+[phosphor-icons/core](https://github.com/phosphor-icons/core), under the [MIT License](https://github.com/phosphor-icons/core/blob/main/LICENSE).
+The license itself is `LICENSE`, copied from the commit below.
 
-**The set is not vendored here.** It is a shallow clone under `THIRD_PARTY/material-icons/`, which
+**The set is not vendored here.** It is a shallow clone under `THIRD_PARTY/phosphor-icons/`, which
 git ignores, and the pictures are drawn from it by `cargo dev icons` rather than copied by hand, so
 that what is drawn is what the pinned commit holds. The manifest is `app/desktop/icons.toml`:
 another picture is another name there rather than another file in this directory.
 
-- drawn from: `af0ed9c0e1276bad43c4d6ca8e8aaa283e425195`
+- drawn from: `2b75f3ad12b420c9504ef05df8d2564a28f8500e`, at `regular`
 - handed over under: `rorolala.*`
 
 **Nothing here is edited by hand.** The pictures, this file and the license are what that run
@@ -26,5 +24,4 @@ luminance, so the picture works whichever one the toolkit does.
 
 **Why raster rather than linked.** Nothing at runtime draws an SVG: the toolkit would need another
 package for it, and a plugin is discovered as a single assembly. The pictures are drawn at 96
-pixels, which is four times the 24-unit viewBox the artwork is drawn at, so the mask is scaled down
-rather than up.
+pixels from the set's 256-unit viewBox, so the mask is scaled down rather than up.

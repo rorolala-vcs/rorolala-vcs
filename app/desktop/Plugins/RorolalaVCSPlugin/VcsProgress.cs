@@ -25,19 +25,19 @@ internal static class VcsProgress
     /// <returns>The key of its picture.</returns>
     private static string IconOf(string titleKey) => titleKey switch
     {
-        "rorolala_vcs.progress.sync" => Icons.Sync,
-        "rorolala_vcs.progress.fetch" => Icons.CloudDownload,
-        "rorolala_vcs.progress.bring" => Icons.CloudDownload,
+        "rorolala_vcs.progress.sync" => Icons.ArrowsClockwise,
+        "rorolala_vcs.progress.fetch" => Icons.CloudArrowDown,
+        "rorolala_vcs.progress.bring" => Icons.CloudArrowDown,
         "rorolala_vcs.progress.hold" => Icons.Lock,
         "rorolala_vcs.progress.giveup" => Icons.LockOpen,
-        "rorolala_vcs.progress.track" => Icons.Add,
-        "rorolala_vcs.progress.retrack" => Icons.AltRoute,
-        "rorolala_vcs.progress.join" => Icons.Merge,
-        "rorolala_vcs.progress.fetch_content" => Icons.Download,
-        "rorolala_vcs.progress.restore" => Icons.Download,
-        "rorolala_vcs.progress.unmerge" => Icons.CallSplit,
-        "rorolala_vcs.progress.path_move" => Icons.ArrowRightAlt,
-        "rorolala_vcs.progress.path_remove" => Icons.Error,
-        _ => Icons.Work,
+        "rorolala_vcs.progress.track" => Icons.Plus,
+        "rorolala_vcs.progress.retrack" => Icons.ArrowsSplit,
+        "rorolala_vcs.progress.join" => Icons.GitMerge,
+        "rorolala_vcs.progress.fetch_content" => Icons.ArrowDown,
+        "rorolala_vcs.progress.restore" => Icons.ArrowDown,
+        "rorolala_vcs.progress.unmerge" => Icons.GitFork,
+        "rorolala_vcs.progress.path_move" => Icons.ArrowRight,
+        "rorolala_vcs.progress.path_remove" => Icons.WarningCircle,
+        _ => Icons.Briefcase,
     };
 }

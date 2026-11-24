@@ -8,100 +8,100 @@ namespace FileSystemPlugin;
 /// <summary>The keys the pictures of this project are held under.</summary>
 internal static partial class Icons
 {
-    /// <summary>The key the `visibility` picture is held under.</summary>
-    public const string Visibility = "rorolala_file_system.visibility";
+    /// <summary>The key the `eye` picture is held under.</summary>
+    public const string Eye = "rorolala_file_system.eye";
 
-    /// <summary>The key the `visibility_off` picture is held under.</summary>
-    public const string VisibilityOff = "rorolala_file_system.visibility_off";
-
-    /// <summary>The key the `radio_button_unchecked` picture is held under.</summary>
-    public const string RadioButtonUnchecked = "rorolala_file_system.radio_button_unchecked";
-
-    /// <summary>The key the `radio_button_checked` picture is held under.</summary>
-    public const string RadioButtonChecked = "rorolala_file_system.radio_button_checked";
+    /// <summary>The key the `eye-slash` picture is held under.</summary>
+    public const string EyeSlash = "rorolala_file_system.eye-slash";
 
     /// <summary>The key the `circle` picture is held under.</summary>
     public const string Circle = "rorolala_file_system.circle";
 
-    /// <summary>The key the `more_vert` picture is held under.</summary>
-    public const string MoreVert = "rorolala_file_system.more_vert";
+    /// <summary>The key the `radio-button` picture is held under.</summary>
+    public const string RadioButton = "rorolala_file_system.radio-button";
+
+    /// <summary>The key the `dot` picture is held under.</summary>
+    public const string Dot = "rorolala_file_system.dot";
+
+    /// <summary>The key the `dots-three-vertical` picture is held under.</summary>
+    public const string DotsThreeVertical = "rorolala_file_system.dots-three-vertical";
 
     /// <summary>The key the `link` picture is held under.</summary>
     public const string Link = "rorolala_file_system.link";
 
-    /// <summary>The key the `link_off` picture is held under.</summary>
-    public const string LinkOff = "rorolala_file_system.link_off";
+    /// <summary>The key the `link-break` picture is held under.</summary>
+    public const string LinkBreak = "rorolala_file_system.link-break";
 
-    /// <summary>The key the `arrow_back` picture is held under.</summary>
-    public const string ArrowBack = "rorolala_file_system.arrow_back";
+    /// <summary>The key the `arrow-left` picture is held under.</summary>
+    public const string ArrowLeft = "rorolala_file_system.arrow-left";
 
-    /// <summary>The key the `arrow_forward` picture is held under.</summary>
-    public const string ArrowForward = "rorolala_file_system.arrow_forward";
+    /// <summary>The key the `arrow-right` picture is held under.</summary>
+    public const string ArrowRight = "rorolala_file_system.arrow-right";
 
-    /// <summary>The key the `arrow_upward` picture is held under.</summary>
-    public const string ArrowUpward = "rorolala_file_system.arrow_upward";
+    /// <summary>The key the `arrow-up` picture is held under.</summary>
+    public const string ArrowUp = "rorolala_file_system.arrow-up";
 
-    /// <summary>The key the `refresh` picture is held under.</summary>
-    public const string Refresh = "rorolala_file_system.refresh";
+    /// <summary>The key the `arrow-clockwise` picture is held under.</summary>
+    public const string ArrowClockwise = "rorolala_file_system.arrow-clockwise";
 
-    /// <summary>The key the `home` picture is held under.</summary>
-    public const string Home = "rorolala_file_system.home";
+    /// <summary>The key the `house` picture is held under.</summary>
+    public const string House = "rorolala_file_system.house";
 
-    /// <summary>The key the `launch` picture is held under.</summary>
-    public const string Launch = "rorolala_file_system.launch";
+    /// <summary>The key the `arrow-square-out` picture is held under.</summary>
+    public const string ArrowSquareOut = "rorolala_file_system.arrow-square-out";
 
-    /// <summary>The key the `file_copy` picture is held under.</summary>
-    public const string FileCopy = "rorolala_file_system.file_copy";
+    /// <summary>The key the `copy` picture is held under.</summary>
+    public const string Copy = "rorolala_file_system.copy";
 
-    /// <summary>The key the `content_cut` picture is held under.</summary>
-    public const string ContentCut = "rorolala_file_system.content_cut";
+    /// <summary>The key the `scissors` picture is held under.</summary>
+    public const string Scissors = "rorolala_file_system.scissors";
 
-    /// <summary>The key the `content_paste` picture is held under.</summary>
-    public const string ContentPaste = "rorolala_file_system.content_paste";
+    /// <summary>The key the `clipboard` picture is held under.</summary>
+    public const string Clipboard = "rorolala_file_system.clipboard";
 
-    /// <summary>The key the `delete` picture is held under.</summary>
-    public const string Delete = "rorolala_file_system.delete";
+    /// <summary>The key the `trash` picture is held under.</summary>
+    public const string Trash = "rorolala_file_system.trash";
 
-    /// <summary>The key the `local_offer` picture is held under.</summary>
-    public const string LocalOffer = "rorolala_file_system.local_offer";
+    /// <summary>The key the `tag` picture is held under.</summary>
+    public const string Tag = "rorolala_file_system.tag";
 
-    /// <summary>The key the `create_new_folder` picture is held under.</summary>
-    public const string CreateNewFolder = "rorolala_file_system.create_new_folder";
+    /// <summary>The key the `folder-plus` picture is held under.</summary>
+    public const string FolderPlus = "rorolala_file_system.folder-plus";
 
-    /// <summary>The key the `add` picture is held under.</summary>
-    public const string Add = "rorolala_file_system.add";
+    /// <summary>The key the `plus` picture is held under.</summary>
+    public const string Plus = "rorolala_file_system.plus";
 
     /// <summary>The key the `folder` picture is held under.</summary>
     public const string Folder = "rorolala_file_system.folder";
 
-    /// <summary>The key the `account_tree` picture is held under.</summary>
-    public const string AccountTree = "rorolala_file_system.account_tree";
+    /// <summary>The key the `tree-structure` picture is held under.</summary>
+    public const string TreeStructure = "rorolala_file_system.tree-structure";
 
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
-        (Visibility, "visibility"),
-        (VisibilityOff, "visibility_off"),
-        (RadioButtonUnchecked, "radio_button_unchecked"),
-        (RadioButtonChecked, "radio_button_checked"),
+        (Eye, "eye"),
+        (EyeSlash, "eye-slash"),
         (Circle, "circle"),
-        (MoreVert, "more_vert"),
+        (RadioButton, "radio-button"),
+        (Dot, "dot"),
+        (DotsThreeVertical, "dots-three-vertical"),
         (Link, "link"),
-        (LinkOff, "link_off"),
-        (ArrowBack, "arrow_back"),
-        (ArrowForward, "arrow_forward"),
-        (ArrowUpward, "arrow_upward"),
-        (Refresh, "refresh"),
-        (Home, "home"),
-        (Launch, "launch"),
-        (FileCopy, "file_copy"),
-        (ContentCut, "content_cut"),
-        (ContentPaste, "content_paste"),
-        (Delete, "delete"),
-        (LocalOffer, "local_offer"),
-        (CreateNewFolder, "create_new_folder"),
-        (Add, "add"),
+        (LinkBreak, "link-break"),
+        (ArrowLeft, "arrow-left"),
+        (ArrowRight, "arrow-right"),
+        (ArrowUp, "arrow-up"),
+        (ArrowClockwise, "arrow-clockwise"),
+        (House, "house"),
+        (ArrowSquareOut, "arrow-square-out"),
+        (Copy, "copy"),
+        (Scissors, "scissors"),
+        (Clipboard, "clipboard"),
+        (Trash, "trash"),
+        (Tag, "tag"),
+        (FolderPlus, "folder-plus"),
+        (Plus, "plus"),
         (Folder, "folder"),
-        (AccountTree, "account_tree"),
+        (TreeStructure, "tree-structure"),
     ];
 }

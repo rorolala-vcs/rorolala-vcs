@@ -9,11 +9,11 @@ namespace RorolalaLauncher;
 /// docks and their menus are made of.
 /// </summary>
 /// <remarks>
-/// Everything else the program is drawn with is a picture from the pinned Material Design set, the
+/// Everything else the program is drawn with is a picture from the pinned Phosphor Icons set, the
 /// pictures the toolbar wears and the frame's own marks, because those are the product's artwork and are
 /// drawn from one manifest by <c>cargo dev icons</c>. These are the exceptions: the set this project pins
-/// has no rack, no refresh and no menu marks, and a mark from another set would be a second artwork in a
-/// program drawn with one.
+/// has no rack, and a mark from another set would be a second artwork in a program drawn with one. The
+/// rest are drawn here in the rack's own stroke, so the small marks and the rack stay one hand.
 /// </remarks>
 internal static class Marks
 {

@@ -235,10 +235,10 @@ internal sealed class NavigationBar : UserControl
     /// <summary>Puts the four pictures on, which are the ways a browser moves.</summary>
     private void FillTools()
     {
-        _back.Content = Glyph(Icons.ArrowBack);
-        _forward.Content = Glyph(Icons.ArrowForward);
-        _up.Content = Glyph(Icons.ArrowUpward);
-        _refresh.Content = Glyph(Icons.Refresh);
+        _back.Content = Glyph(Icons.ArrowLeft);
+        _forward.Content = Glyph(Icons.ArrowRight);
+        _up.Content = Glyph(Icons.ArrowUp);
+        _refresh.Content = Glyph(Icons.ArrowClockwise);
     }
 
     /// <summary>A picture this plugin draws, drawn as a mask over the ordinary ink.</summary>

@@ -130,7 +130,7 @@ internal sealed class SyncStrip : StackPanel
         // about what the reading shows rather than about the work, and a reader reaches for it less often
         // than for the refresh beside it.
         Children.Add(Ignored());
-        Children.Add(Button(Glyph(Icons.Refresh), "rorolala_vcs.status.refresh", refresh));
+        Children.Add(Button(Glyph(Icons.ArrowClockwise), "rorolala_vcs.status.refresh", refresh));
 
         _group = new Border
         {
@@ -143,9 +143,9 @@ internal sealed class SyncStrip : StackPanel
 
         var inside = new StackPanel { Orientation = Orientation.Horizontal };
 
-        Add(inside, SyncWay.Up, Icons.CloudUpload, "rorolala_vcs.sync.up");
-        Add(inside, SyncWay.Down, Icons.CloudDownload, "rorolala_vcs.sync.down");
-        Add(inside, SyncWay.Both, Icons.Sync, "rorolala_vcs.sync.both");
+        Add(inside, SyncWay.Up, Icons.CloudArrowUp, "rorolala_vcs.sync.up");
+        Add(inside, SyncWay.Down, Icons.CloudArrowDown, "rorolala_vcs.sync.down");
+        Add(inside, SyncWay.Both, Icons.ArrowsClockwise, "rorolala_vcs.sync.both");
 
         _group.Child = inside;
         Children.Add(_group);
@@ -208,7 +208,7 @@ internal sealed class SyncStrip : StackPanel
         Box(boxes, SyncSettings.Layout, "rorolala_vcs.sync.layout");
         Box(boxes, SyncSettings.Storage, "rorolala_vcs.sync.storage");
 
-        var more = Button(Glyph(Icons.MoreVert), "rorolala_vcs.sync.more", command: null);
+        var more = Button(Glyph(Icons.DotsThreeVertical), "rorolala_vcs.sync.more", command: null);
         more.Flyout = new Flyout { Content = boxes };
 
         return more;
@@ -252,8 +252,8 @@ internal sealed class SyncStrip : StackPanel
     /// <returns>The button.</returns>
     private Button Ignored()
     {
-        _ignoredEyes = (_host.Icons.Find(Icons.Visibility), _host.Icons.Find(Icons.VisibilityOff));
-        _ignoredMark = Glyph(Icons.VisibilityOff);
+        _ignoredEyes = (_host.Icons.Find(Icons.Eye), _host.Icons.Find(Icons.EyeSlash));
+        _ignoredMark = Glyph(Icons.EyeSlash);
 
         var button = Button(_ignoredMark, "rorolala_vcs.status.show_ignored", () =>
         {

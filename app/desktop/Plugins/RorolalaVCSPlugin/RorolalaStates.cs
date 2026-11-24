@@ -349,12 +349,12 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
     internal static EntryMark Badge(PathState state, string words) =>
         state switch
         {
-            PathState.Untagged => Worn(Icons.Add, RorolalaColours.Untagged, words),
-            PathState.Modified => Worn(Icons.EditNote, RorolalaColours.UnderWay, words),
-            PathState.Wrong => Worn(Icons.PriorityHigh, RorolalaColours.Wrong, words),
-            PathState.Renamed => Worn(Icons.ArrowRightAlt, RorolalaColours.Moved, words),
-            PathState.RenamedLikely => Worn(Icons.ArrowRightAlt, RorolalaColours.StatusBeta, words),
-            PathState.Merging => Worn(Icons.EditNote, RorolalaColours.StatusDelta, words),
+            PathState.Untagged => Worn(Icons.Plus, RorolalaColours.Untagged, words),
+            PathState.Modified => Worn(Icons.NotePencil, RorolalaColours.UnderWay, words),
+            PathState.Wrong => Worn(Icons.ExclamationMark, RorolalaColours.Wrong, words),
+            PathState.Renamed => Worn(Icons.ArrowRight, RorolalaColours.Moved, words),
+            PathState.RenamedLikely => Worn(Icons.ArrowRight, RorolalaColours.StatusBeta, words),
+            PathState.Merging => Worn(Icons.NotePencil, RorolalaColours.StatusDelta, words),
             _ => new EntryMark(),
         };
 

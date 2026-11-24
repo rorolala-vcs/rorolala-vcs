@@ -8,24 +8,24 @@ namespace RorolalaLauncher;
 /// <summary>The keys the pictures of this project are held under.</summary>
 internal static partial class Icons
 {
-    /// <summary>The key the `account_circle` picture is held under.</summary>
-    public const string AccountCircle = "rola_launcher.account_circle";
+    /// <summary>The key the `user-circle` picture is held under.</summary>
+    public const string UserCircle = "rola_launcher.user-circle";
 
-    /// <summary>The key the `add_circle` picture is held under.</summary>
-    public const string AddCircle = "rola_launcher.add_circle";
+    /// <summary>The key the `plus-circle` picture is held under.</summary>
+    public const string PlusCircle = "rola_launcher.plus-circle";
 
-    /// <summary>The key the `folder_open` picture is held under.</summary>
-    public const string FolderOpen = "rola_launcher.folder_open";
+    /// <summary>The key the `folder-open` picture is held under.</summary>
+    public const string FolderOpen = "rola_launcher.folder-open";
 
-    /// <summary>The key the `language` picture is held under.</summary>
-    public const string Language = "rola_launcher.language";
+    /// <summary>The key the `translate` picture is held under.</summary>
+    public const string Translate = "rola_launcher.translate";
 
     /// <summary>Every picture, by the key it is held under and its name in the set.</summary>
     public static readonly (string Key, string Name)[] Pictures =
     [
-        (AccountCircle, "account_circle"),
-        (AddCircle, "add_circle"),
-        (FolderOpen, "folder_open"),
-        (Language, "language"),
+        (UserCircle, "user-circle"),
+        (PlusCircle, "plus-circle"),
+        (FolderOpen, "folder-open"),
+        (Translate, "translate"),
     ];
 }

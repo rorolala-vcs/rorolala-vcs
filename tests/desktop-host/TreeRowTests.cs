@@ -668,7 +668,7 @@ public sealed class TreeRowTests
         public bool Applies(string directory) => true;
 
         /// <inheritdoc />
-        public EntryMark Mark(Entry entry) => new(Text: "it", IconKey: Icons.CreateNewFolder, Ink: MarkInk.Accent);
+        public EntryMark Mark(Entry entry) => new(Text: "it", IconKey: Icons.FolderPlus, Ink: MarkInk.Accent);
     }
 
     /// <summary>A colour provider that marks one directory with one colour.</summary>
@@ -726,7 +726,7 @@ public sealed class TreeRowTests
             entry.Kind is EntryKind.Directory
             && string.Equals(entry.Path, _marked, StringComparison.Ordinal)
                 ? new EntryMark(
-                    IconKey: Icons.CreateNewFolder,
+                    IconKey: Icons.FolderPlus,
                     Colour: Colors.Red,
                     Tagged: true
                 )
