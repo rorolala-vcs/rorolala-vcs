@@ -491,17 +491,17 @@ pub fn handle_tweak(
     };
     println!(
         "{}",
-        t!(
+        trd!(t!(
             "tweak.query_ready",
             file = state.file,
             version = &found.version
-        )
+        ))
         .trim()
     );
     println!();
     println!("{}", row_text(&found));
     println!();
-    println!("{}", t!("tweak.query_help").trim());
+    println!("{}", help_line!(t!("tweak.query_help").trim()));
 
     if let Some(plan) = plan {
         let listed = match tweak::operations(&chain, &plan) {
@@ -573,13 +573,13 @@ fn applied(
         Ok(outcome) => {
             println!(
                 "{}",
-                t!(
+                trd!(t!(
                     "tweak.applied",
                     file = state.file,
                     from = outcome.from,
                     to = outcome.to,
                     count = outcome.rebuilt
-                )
+                ))
                 .trim()
             );
             for warning in outcome.warnings {
@@ -726,7 +726,11 @@ fn drop_pending(
 
     println!(
         "{}",
-        t!("tweak.cancelled", operation = operation_text(&operation)).trim()
+        trd!(t!(
+            "tweak.cancelled",
+            operation = operation_text(&operation)
+        ))
+        .trim()
     );
 
     let listed = match tweak::operations(chain, &sheet) {
@@ -743,20 +747,20 @@ fn drop_pending(
 
 /// Draws the list of what a plan would do.
 fn say_pending(operations: &[Operation]) {
-    println!("{}", t!("tweak.pending_header").trim());
+    println!("{}", trd!(t!("tweak.pending_header")).trim());
     for (at, operation) in operations.iter().enumerate() {
         println!(
             "{}",
-            t!(
+            trd!(t!(
                 "tweak.pending_item",
                 number = at + 1,
                 operation = operation_text(operation)
-            )
+            ))
             .trim()
         );
     }
     println!();
-    println!("{}", t!("tweak.pending_help").trim());
+    println!("{}", help_line!(t!("tweak.pending_help").trim()));
 }
 
 /// The words one adjustment is said in.
@@ -796,7 +800,7 @@ fn operation_text(operation: &Operation) -> String {
 
 /// Draws the versions an ambiguous target names, for a run that asked what it names.
 fn say_ambiguous(file: &str, chain: &Chain, candidates: &[usize]) -> Next {
-    println!("{}", t!("tweak.query_ambiguous", file = file).trim());
+    println!("{}", trd!(t!("tweak.query_ambiguous", file = file)).trim());
     println!();
     for number in candidates {
         if let Ok(found) = chain.found(*number) {
@@ -804,20 +808,20 @@ fn say_ambiguous(file: &str, chain: &Chain, candidates: &[usize]) -> Next {
         }
     }
     println!();
-    println!("{}", t!("tweak.query_help").trim());
+    println!("{}", help_line!(t!("tweak.query_help").trim()));
 
     ().into()
 }
 
 /// One version drawn as a listing draws it.
 fn row_text(found: &Found) -> String {
-    t!(
+    trd!(t!(
         "tweak.query_row",
         variant = head(&found.variant),
         creator = found.creator,
         message = found.message,
         number = found.number
-    )
+    ))
     .trim()
     .to_owned()
 }
@@ -1162,13 +1166,13 @@ pub fn render_error_tweak_target(error: ErrorTweakTarget, ec: &mut ResExitCode) 
             for candidate in candidates {
                 r_eprintln!(
                     "{}",
-                    t!(
+                    trd!(t!(
                         "tweak.query_row",
                         variant = candidate.variant,
                         creator = candidate.creator,
                         message = candidate.message,
                         number = candidate.number
-                    )
+                    ))
                     .trim()
                 );
             }
