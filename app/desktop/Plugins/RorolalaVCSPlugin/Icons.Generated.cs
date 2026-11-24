@@ -74,6 +74,9 @@ internal static partial class Icons
     /// <summary>The key the `content_copy` picture is held under.</summary>
     public const string ContentCopy = "rorolala_vcs.content_copy";
 
+    /// <summary>The key the `format_list_bulleted` picture is held under.</summary>
+    public const string FormatListBulleted = "rorolala_vcs.format_list_bulleted";
+
     /// <summary>The key the `park` picture is held under.</summary>
     public const string Park = "rorolala_vcs.park";
 
@@ -123,6 +126,7 @@ internal static partial class Icons
         (Sync, "sync"),
         (MoreVert, "more_vert"),
         (ContentCopy, "content_copy"),
+        (FormatListBulleted, "format_list_bulleted"),
         (Park, "park"),
         (CheckCircle, "check_circle"),
         (RadioButtonChecked, "radio_button_checked"),

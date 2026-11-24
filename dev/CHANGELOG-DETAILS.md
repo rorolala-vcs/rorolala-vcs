@@ -321,14 +321,22 @@ A right-click on a node of the Version Graph now offers the content the node is 
 
 The run is `rola fetch --with` with the node's variant as its word, so a node below the top is fetched exactly as it is rather than as the version its entry is at now, and a tree comes with the files its structure names. Nothing is written into the work: what follows a run is the graph read again with those versions' content marked as held here, including when the graph stands on the whole work.
 
-### 22. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner
+### 22. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Read one file's versions as a list in the Version Graph
+
+The Version Graph's corner holds a third switch, Compat view, that reads the graph of the one chosen file as a list rather than as a field of cards: one row per version, newest first, with its entry pills, the lane it stands on, its message, creator, whether its content is held here, its version and variant hashes, and its number. A draft the file holds stands above the version it would be recorded on, a variant the chain merges in stands on a lane of its own, and a variant nothing merges in stands on a broken lane above the version it is based on.
+
+The switch is always pressable, and the list keeps the file it was last about when the choice is taken away or becomes several files: the entry pills lose their ink rather than the screen emptying itself. What a row says about itself stands under that row and follows the pointer, fading and sliding into place as the pointer moves. A right-click on a row or a pill opens the same menu the drawing's cards do, a press on a pill naming a local entry goes to that file and makes it the choice, the keyboard walks the rows, and the wheel scrolls the list.
+
+When upstream records another version of the same file, the two chains are read as one list: upstream's first and on the leftmost line, the file's own chain as the branch beside it, and the history the two share under the version they parted at drawn straight and faded. Every version the file's chain gives rise to is listed, including a future version no entry names: a chain of them keeps the line straight, a fork gives the line to its first chain and puts the rest on a lane that comes back into the version they left, and a branch's own forks do the same from the branch.
+
+### 23. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] [`version-graph`] Show the whole Version Graph again from its corner
 
 The Version Graph's corner holds a second button under the hover switch: the show-all button clears
 the chosen file and draws the whole work again. It gives the same answer as a press on empty drawing,
 for a reader who wants every lane back without finding a patch of ground to click, and a tooltip
 names it.
 
-### 23. [`app`] [`RorolalaDesktop`] [`ROLALauncher`] [`theme`] Follow the look's file while the other program is open
+### 24. [`app`] [`RorolalaDesktop`] [`ROLALauncher`] [`theme`] Follow the look's file while the other program is open
 
 The Desktop program and the launcher are drawn from one `theme.json`, and each read it when it started: a
 colour or a day/night choice made beside a window that was already open was seen only by the next run of it.
@@ -342,7 +350,7 @@ watch whose directory is not there yet follows nothing.
 The launcher's colours were already the Desktop's: it compiles the same configuration and theme sources, and its
 settings write the same file. What was missing was the live half.
 
-### 24. [`app`] [`RorolalaDesktop`] [`theme`] Draw the program's motion at the level the look states
+### 25. [`app`] [`RorolalaDesktop`] [`theme`] Draw the program's motion at the level the look states
 
 `theme.json` now states a `motion` level, and the Appearance section of the Preference dock offers it beside the variant: `full` draws every movement, `reduced` keeps the short fades and removes travel, and `off` makes every change arrive at once. The choice applies as it is made, including the transitions the look put in its styles.
 
@@ -358,7 +366,7 @@ What the pointer is aimed at is taken once for the drag and kept, since a room o
 
 A plugin draws its own surfaces from the same statement through `IPluginHost.Motion`, so a plugin's animation follows the one setting rather than keeping a duration of its own.
 
-### 25. [`app`] [`RorolalaDesktop`] [`theme`] State the light look's semantic colours in the bright set
+### 26. [`app`] [`RorolalaDesktop`] [`theme`] State the light look's semantic colours in the bright set
 
 The light look now states its twelve semantic colours in the bright set the dark look states, rather
 than in darker shades chosen to be read as words on a light ground. A state is no longer coloured by
@@ -368,27 +376,27 @@ window is in. The two variants' fields remain in `theme.json` for anyone who wan
 stated apart; a file that names none draws both in the one set, and the light set is stated as the
 dark one so the two cannot drift.
 
-### 26. [`librorolala`] [`write`] Export the content fetch as rola_write_fetch_with
+### 27. [`librorolala`] [`write`] Export the content fetch as rola_write_fetch_with
 
 `librorolala` carries the fetch of named entries' content as one workflow, `FetchWithRequest::fetch_with`, and the C ABI exports it as `rola_write_fetch_with`. It reads the Layout a fetch left, syncs the index only when a named version is not in the local one, and brings each version's content, and the whole chain when asked. The command line and a C# caller enter the same function, so the order they read and fetch in cannot drift.
 
-### 27. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala
+### 28. [`librorolala`] [`write`] Move the Layout, storage and index writes into librorolala
 
 The write workflows behind `rola layout path` and `rola layout entry` now live in `librorolala::write`: storage puts and extracts, Layout batches, path bind, unbind, move and switch, entry write, remove, owner changes, description changes, preference changes and version changes, the tree cache rebuild, VCS index object writes, file version writes, single file tracking, single path retracking and alignment in a Workspace or a Vault, content fetching, and the sync plan and its carry, the collecting planning and sweep, the checkout cache writes, restores and forgets, and store and index repacking. The tree's own writes live there too: `tree init`, `tree add`, `tree rm`, `tree reset` and `tree write-desc`. The command line and the C ABI call the same functions, so their order, their checks and their failures cannot drift.
 
 The five whole workflows are there as well: `write::ownership` plans and applies a hold or a giveup, `write::bring` resolves references, brings entries in and merges a variant, `write::track` plans a recording and applies the messages in one batch, `write::align` runs every alignment mode, and `write::retrack` moves a recording. A shared request layer resolves the Workspace, the account, the Vault name and address, and the candidate Vaults from values rather than from a command's resources. The C ABI exports the one-shot flows as JSON requests and answers: `rola_write_bring` for both the bring of entries and the variant merge, `rola_write_retrack`, `rola_write_align` for the whole workflow with the single-entry form renamed `rola_write_align_entry`, `rola_write_ownership_plan`, `rola_write_ownership_apply`, `rola_write_track_plan` and `rola_write_track_apply`, each taking a `RolaProgress` and a `RolaCancellation`. The sync workflow is a request-shaped plan and apply as well: the plan fetches the Vault's Layout before reading it, a plan holding a blocked entry is refused before anything is written, and both check the caller's cancellation between entries.
 
-### 28. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry
+### 29. [`librorolala`] [`write`] [`layout`] Write a fetched Vault copy and fork an entry
 
 `rola_write_layout_move_fetched` and `rola_write_layout_remove_fetched_entry` move a path or remove an entry in the fetched copy of a Vault's own Layout, making the Vault's action first and writing the copy only to what it answered. `LayoutWriter` gained `MoveFetched`, `RemoveFetchedEntry` and `SwitchEntry`, the last carrying the entry's preference along with its version, owner and description. The desktop's low-level Layout commands no longer start `rola`.
 
-### 29. [`modules`] [`rola-sharp`] Add the C# bindings
+### 30. [`modules`] [`rola-sharp`] Add the C# bindings
 
 `RolaSharp` is the C# bindings: a generated `RorolalaBinding`, the `Scope` family over users, daemons, Workspaces, Vaults, Layouts, stores, VCS indexes, statuses, trees, ownership, inverse indexes, version graphs, books and ignore rules, and the writers over storage, Layouts, the tree cache, VCS indexes, file versions, one file's tracking and one path's retracking, and store and index packing. The read side no longer writes the tree cache; the write side calls the same `librorolala` workflows as the command line. Workspace and Vault scopes can be opened from any nested directory. The tree scope answers a tree's mark as well as its status: the Layout entry id, whether a description is staged and what it says. The user scope reads the userdata name the assembly was built for, which is `release` unless the build names another, and takes a name explicitly when a caller wants one; `Home` is gone, because the name rather than the user's home is what it reads.
 
 The writers over the whole workflows are there too: `Bring`, `BringVariant`, `Retrack`, `Align`, `PlanOwnership`, `ApplyOwnership`, `PlanTrack` and `Track`. Each takes a request record and answers a result record, the plan a track asks for is the exact text the native side answered with, and the single-entry alignment is now `AlignEntry`. The sync writer takes a `SyncRequest`, the plan it was handed and a `Progress`, so what a panel previewed is what it applies. An ownership plan can be handed back to `ApplyOwnership`, and every write failure has its own kind, tree and missing Vault included.
 
-### 30. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores
+### 31. [`modules`] [`storage`] Bind a Workspace, a Vault or a git-rola project to separate stores
 
 The store a Workspace, a Vault or a `git-rola` project writes content to is a set of stores rather
 than one directory. `workspace.toml` takes `[default] storages`, `vault.toml` takes
@@ -411,7 +419,7 @@ many chunks is read from whichever store holds each of them in the order they ar
 bring` and `git rola update` build a runtime that can open a socket again, so fetching content from a
 Vault no longer panics.
 
-### 31. [`modules`] [`storage`] [`fsck`] Answer whether a store holds together
+### 32. [`modules`] [`storage`] [`fsck`] Answer whether a store holds together
 
 `RorolalaStorage::fsck` answers with an `FsckReport`: the findings of a check
 that reads the layout first and content only when `FsckOptions::full` asks it
@@ -420,7 +428,7 @@ manifests that do not read, and contents whose chunks are missing. The full
 check reads every key the store names and checks it against its key. Nothing is
 repaired.
 
-### 32. [`utils`] [`constants`] [`abi`] State the ABI version and pin every transparent layout
+### 33. [`utils`] [`constants`] [`abi`] State the ABI version and pin every transparent layout
 
 The C header now states the version of the ABI it describes, as `ROROLALA_ABI_VERSION`, `ROROLALA_ABI_VERSION_MAJOR`, `ROROLALA_ABI_VERSION_MINOR` and `ROROLALA_ABI_VERSION_PATCH`, and the library exports the same number as `ROLA_ABI_VERSION`.
 

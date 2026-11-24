@@ -119,6 +119,57 @@ rorolala_vcs:
       en: Show all
       zh-CN: 显示全部
 
+    # The third switch in the corner, which turns the drawing into a list of one file's versions. It is
+    # about how the chain is read rather than about the work, so it is not remembered between sessions.
+    # It always stands, and with no file chosen the list keeps the file it was last about, drawn in the
+    # ink of what is not being worked on.
+    compat:
+      en: Compat view
+      zh-CN: Compat 视图
+    compat_unavailable:
+      en: Select one file to see its version chain
+      zh-CN: 选择单个文件以查看它的版本链
+    compat_loading:
+      en: Reading the version chain
+      zh-CN: 正在读取版本链
+    compat_failed:
+      en: The version chain could not be read
+      zh-CN: 未能读取版本链
+
+    # What the pill standing in place of the entries a row leaves out says when the pointer rests on
+    # it: the entries themselves, one row each, as the path each of them names.
+    compat_more:
+      en: Other references
+      zh-CN: 其他引用
+
+    # What the band over the list names each column: the entries naming the version, the lane graph, the
+    # message it was recorded with, who recorded it, whether its content is held here, the two hashes
+    # and its number in the chain.
+    compat_column_references:
+      en: References
+      zh-CN: 引用
+    compat_column_graph:
+      en: Graph
+      zh-CN: 图
+    compat_column_message:
+      en: Message
+      zh-CN: 消息
+    compat_column_creator:
+      en: Creator
+      zh-CN: 创建者
+    compat_column_local:
+      en: Local
+      zh-CN: 本地
+    compat_column_version_hash:
+      en: Version hash
+      zh-CN: 版本哈希
+    compat_column_variant_hash:
+      en: Variant hash
+      zh-CN: 变体哈希
+    compat_column_version:
+      en: Version
+      zh-CN: 版本
+
     # What a right-click on a variant's hash or on the node naming it offers when a file is chosen:
     # joining that variant into the file the user is on. Both name one variant, so both offer this.
     join_selected:

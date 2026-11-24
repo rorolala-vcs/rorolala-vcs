@@ -76,6 +76,13 @@ internal sealed partial class VersionGraphView
             return;
         }
 
+        if (_compat)
+        {
+            DrawCompat(context, ink);
+
+            return;
+        }
+
         if (_drawing is null)
         {
             DrawEmpty(context, ink);
@@ -164,7 +171,13 @@ internal sealed partial class VersionGraphView
 
             if (graph.InfoOnScreen() is { } table)
             {
-                DrawInfoPanel(context, table.Ink, table.Info, Bounds.Size);
+                DrawInfoPanel(
+                    context,
+                    table.Ink,
+                    table.Info,
+                    Bounds.Size,
+                    new Point(Bounds.Width - Corner - InfoWidth, Corner)
+                );
             }
         }
     }
@@ -173,7 +186,9 @@ internal sealed partial class VersionGraphView
     /// <returns>The colours and the table.</returns>
     private (GraphInk Ink, Info Info)? InfoOnScreen()
     {
-        if (!_showInfo || _hover is not { } hover)
+        // The list draws its table beside the row the pointer is on, so the corner's table would be a
+        // second reading of the same thing in a place the reader is not looking.
+        if (_compat || !_showInfo || _hover is not { } hover)
         {
             return null;
         }
@@ -953,6 +968,9 @@ internal sealed partial class VersionGraphView
             ? message
             : RolaI18N.Get("rorolala_vcs.version_graph.info_no_message");
 
+    /// <summary>How wide the table the hover's thing is read through stands.</summary>
+    private const double InfoWidth = 300;
+
     /// <summary>Draws the table the pointer's thing is read through, in the graph's corner.</summary>
     /// <remarks>
     /// It stands still while the graph moves under it: a table that followed the pointer would cover
@@ -963,9 +981,16 @@ internal sealed partial class VersionGraphView
     /// <param name="ink">The colours in force.</param>
     /// <param name="info">What the table says.</param>
     /// <param name="size">The room the table stands in, which is the graph's whole stage.</param>
-    private static void DrawInfoPanel(DrawingContext context, GraphInk ink, Info info, Size size)
+    /// <param name="at">Where the table's top left is asked to stand.</param>
+    private static void DrawInfoPanel(
+        DrawingContext context,
+        GraphInk ink,
+        Info info,
+        Size size,
+        Point at
+    )
     {
-        const double width = 300;
+        const double width = InfoWidth;
         const double padding = 12;
         const double labelWidth = 64;
         const double rowHeight = 19;
@@ -984,13 +1009,13 @@ internal sealed partial class VersionGraphView
             new SolidColorBrush(info.Accent)
         );
 
-        // The right and top are the switch's own: the table covers it exactly, and its first row starts
-        // where the switch did rather than one padding step below it.
-        var titleTop = Corner;
-        var rowsTop = titleTop + title.Height + 9;
-        var height = (rowsTop - titleTop) + (info.Rows.Count * rowHeight) + 10;
-        var x = size.Width - Corner - width;
-        var y = titleTop;
+        // The table is pinned to the place it was asked for, and moved back inside the stage only when
+        // that place would put part of it out of sight.
+        var titleHeight = title.Height + 9;
+        var height = titleHeight + (info.Rows.Count * rowHeight) + 10;
+        var x = Math.Clamp(at.X, 8, Math.Max(8, size.Width - width - 8));
+        var y = Math.Clamp(at.Y, 8, Math.Max(8, size.Height - height - 8));
+        var rowsTop = y + titleHeight;
 
         context.DrawRectangle(
             new SolidColorBrush(ink.Shadow),

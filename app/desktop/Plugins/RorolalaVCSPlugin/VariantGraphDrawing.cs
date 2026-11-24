@@ -404,6 +404,11 @@ internal sealed class VariantGraphDrawing
     /// unless the reading is compared by what it says. The parts that decide the drawing are the versions,
     /// the entries, the nodes, the merges in progress and the drafts; the words and the numbers are read
     /// from those, and a message whose words changed has another hash.
+    /// <para>
+    /// The focus is part of it because it decides which entries are drawn as the ones being worked on: a
+    /// reading of the same window centred on another file has the same nodes and entries, and laying it out
+    /// again is what moves the local pill and the emphasis to the file now chosen.
+    /// </para>
     /// </remarks>
     /// <param name="graph">The reading.</param>
     /// <param name="drafts">The drafts read from the work.</param>
@@ -421,6 +426,18 @@ internal sealed class VariantGraphDrawing
         var text = new StringBuilder();
 
         text.Append(emphasized ? '1' : '0').Append(graph.Truncated ? '1' : '0').Append('\n');
+
+        foreach (var focus in graph.Focus)
+        {
+            text.Append(focus.Side)
+                .Append('|')
+                .Append(focus.Path)
+                .Append('|')
+                .Append(focus.Version)
+                .Append('|')
+                .Append(focus.Variant)
+                .Append('\n');
+        }
 
         foreach (var version in graph.Versions)
         {

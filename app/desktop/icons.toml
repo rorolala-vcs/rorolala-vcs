@@ -141,6 +141,9 @@ icons = [
     "sync",
     "more_vert",
     "content_copy",
+    # `format_list_bulleted` is the switch in the Version Graph's corner that reads one file's chain as a
+    # list of versions: lines with a bead before each, which is what the drawing becomes.
+    "format_list_bulleted",
     # `park` is what a rola-tree's folder icon wears, in the colour the tree's own id names: the set draws one
     # tree, which is what the directory is rather than what is in it.
     "park",

@@ -169,6 +169,46 @@ internal sealed class VersionGraphDock : IDockView
             graph.ShowAll();
         };
 
+        // The third switch reads the one file's chain as a list rather than as a field of cards. It is
+        // always pressable, because a reader who wants the list should not have to choose again to see
+        // it: with no file chosen the list keeps the file it was last about, drawn in the ink of what
+        // is not being worked on.
+        var compat = new ToggleButton
+        {
+            Classes = { "tool" },
+            Padding = new Thickness(6),
+        };
+        var list = Mark(host, Icons.FormatListBulleted);
+
+        if (list is not null)
+        {
+            compat.Content = list;
+        }
+
+        ToolTip.SetTip(compat, RolaI18N.Get("rorolala_vcs.version_graph.compat"));
+        compat.IsCheckedChanged += (_, _) =>
+        {
+            var on = compat.IsChecked == true;
+
+            if (on)
+            {
+                compat.Classes.Add("on");
+            }
+            else
+            {
+                compat.Classes.Remove("on");
+            }
+
+            if (list is not null)
+            {
+                list[!Border.BackgroundProperty] = new DynamicResourceExtension(
+                    on ? PaletteKeys.PrimaryText : PaletteKeys.Front
+                );
+            }
+
+            graph.ShowCompat(on);
+        };
+
         return new StackPanel
         {
             Orientation = Orientation.Vertical,
@@ -176,7 +216,7 @@ internal sealed class VersionGraphDock : IDockView
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, VersionGraphView.Corner, VersionGraphView.Corner, 0),
-            Children = { toggle, all },
+            Children = { toggle, all, compat },
         };
     }
 
@@ -508,6 +548,7 @@ internal sealed partial class VersionGraphView : Control
         _settle.Tick += Settled;
         _glide.Tick += Glided;
         _hoverGlide.Tick += HoverGlided;
+        _compatInfoGlide.Tick += CompatInfoGlided;
 
         // The first drawing may be read before the dock has a size to frame it in, and a dock that is
         // resized before the next reading would keep a frame that no longer holds the work.
@@ -598,6 +639,7 @@ internal sealed partial class VersionGraphView : Control
         _settle.Stop();
         _glide.Stop();
         _hoverGlide.Stop();
+        _compatInfoGlide.Stop();
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -727,6 +769,11 @@ internal sealed partial class VersionGraphView : Control
         _showFocus = false;
         _hover = null;
         _again = false;
+
+        if (_compat)
+        {
+            HideCompatInfo();
+        }
 
         if (_reading)
         {
@@ -894,7 +941,9 @@ internal sealed partial class VersionGraphView : Control
             VariantGraphReading? graph = null;
             IReadOnlyList<DraftFact> drafts = [];
             var emphasized = false;
+            var failed = false;
             string? root = null;
+            string? target = null;
 
             try
             {
@@ -903,6 +952,7 @@ internal sealed partial class VersionGraphView : Control
                 var focus = FocusOf(files, root);
 
                 emphasized = focus.Count > 0;
+                target = focus.Count == 1 ? focus[0].Path : null;
                 graph = GraphReading(directory, focus.Count > 0 ? focus : null);
 
                 if (graph is not null && status is not null && root is not null)
@@ -912,6 +962,7 @@ internal sealed partial class VersionGraphView : Control
             }
             catch (Exception error) when (error is not OutOfMemoryException)
             {
+                failed = true;
                 _log.Warn($"the variant graph of `{directory}` could not be read: {error.Message}");
             }
 
@@ -935,6 +986,9 @@ internal sealed partial class VersionGraphView : Control
                 {
                     _target = files.Length == 1 ? files[0] : null;
                     _root = root;
+                    _focusPath = null;
+                    _compatChain = null;
+                    _compatFailed = failed;
                     _showFocus = false;
                     ShowMessage(RolaI18N.Get("rorolala_vcs.version_graph.empty"));
                 }
@@ -969,6 +1023,9 @@ internal sealed partial class VersionGraphView : Control
                         Fit();
                     }
 
+                    _focusPath = target ?? _focusPath;
+                    _compatFailed = false;
+                    BuildCompat();
                     UpdateCursor();
                     InvalidateVisual();
                     TrackableChanged?.Invoke(this, EventArgs.Empty);
@@ -1276,6 +1333,12 @@ internal sealed partial class VersionGraphView : Control
         }
 
         _showInfo = show;
+
+        if (_compat)
+        {
+            HideCompatInfo();
+        }
+
         RedrawInfo();
         InvalidateVisual();
     }
@@ -1498,15 +1561,33 @@ internal sealed partial class VersionGraphView : Control
 
     /// <summary>Draws the pointer as the surface it is over.</summary>
     private void UpdateCursor() =>
-        Cursor = _drawing is null
-            ? Cursor.Default
-            : _hover is null
-                ? new Cursor(StandardCursorType.SizeAll)
-                : new Cursor(StandardCursorType.Hand);
+        Cursor = _compat
+            ? _compatHoverRow is null
+                ? Cursor.Default
+                : new Cursor(StandardCursorType.Hand)
+            : _drawing is null
+                ? Cursor.Default
+                : _hover is null
+                    ? new Cursor(StandardCursorType.SizeAll)
+                    : new Cursor(StandardCursorType.Hand);
 
     /// <inheritdoc />
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (_compat)
+        {
+            if (CompatKey(e))
+            {
+                e.Handled = true;
+            }
+            else
+            {
+                base.OnKeyDown(e);
+            }
+
+            return;
+        }
+
         if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.None)
         {
             // A graph standing on one file is a graph of that file's local chain: F is the node, as a press
@@ -1549,6 +1630,13 @@ internal sealed partial class VersionGraphView : Control
 
         var point = e.GetCurrentPoint(this);
         var at = e.GetPosition(this);
+
+        if (_compat)
+        {
+            CompatPressed(e, point, at);
+
+            return;
+        }
 
         if (point.Properties.IsRightButtonPressed)
         {
@@ -1752,6 +1840,16 @@ internal sealed partial class VersionGraphView : Control
     {
         _pointer = e.GetPosition(this);
 
+        if (_compat)
+        {
+            CompatPoint(_pointer);
+            UpdateCursor();
+            RedrawInfo();
+            InvalidateVisual();
+
+            return;
+        }
+
         if (_dragging)
         {
             var movedBy = Math.Abs(_pointer.X - _pressed.X) + Math.Abs(_pointer.Y - _pressed.Y);
@@ -1827,6 +1925,19 @@ internal sealed partial class VersionGraphView : Control
     /// <inheritdoc />
     protected override void OnPointerExited(PointerEventArgs e)
     {
+        if (_compat)
+        {
+            _compatHoverRow = null;
+            _compatHoverMore = false;
+            _hover = null;
+            HideCompatInfo();
+            UpdateCursor();
+            RedrawInfo();
+            InvalidateVisual();
+
+            return;
+        }
+
         if (_hover is null)
         {
             return;
@@ -1843,6 +1954,25 @@ internal sealed partial class VersionGraphView : Control
     /// <inheritdoc />
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
+        if (_compat)
+        {
+            if (_compatChain is not { } chain)
+            {
+                return;
+            }
+
+            _compatScroll = Math.Clamp(
+                _compatScroll - (e.Delta.Y * CompatChain.RowHeight * 2),
+                0,
+                CompatMaxScroll(chain)
+            );
+            CompatPoint(e.GetPosition(this));
+            InvalidateVisual();
+            e.Handled = true;
+
+            return;
+        }
+
         if (_drawing is null)
         {
             return;

@@ -798,6 +798,303 @@ public sealed class VariantGraphTests
         Assert.Null(HitAt(drawing, drawing.Left - 5000, drawing.Bottom + 5000, reach));
     }
 
+    /// <summary>The chain of one file is its versions, newest first, numbered as the index numbers them.</summary>
+    [Fact]
+    public void TheChainOfAFileIsListedNewestFirst()
+    {
+        var workspace = Recorded("compat-chain");
+        var graph = Focused(workspace);
+        var drawing = Drawing(graph, [], emphasized: true);
+        var chain = CompatChain.Build(drawing, "art.txt");
+
+        Assert.Equal(2, chain.Rows.Count);
+        Assert.All(chain.Rows, row => Assert.Equal(CompatRowKind.Spine, row.Kind));
+        Assert.All(chain.Rows, row => Assert.False(row.Behind));
+        Assert.DoesNotContain(chain.Rows, row => row.Kind == CompatRowKind.Branch);
+        Assert.Equal(1UL, chain.Rows[0].Number);
+        Assert.Equal(0UL, chain.Rows[1].Number);
+        Assert.Equal(graph.Focus[0].Variant, chain.Rows[0].Card.Hash);
+
+        // Only the row carrying the chosen file's own local entry is the current one.
+        Assert.True(chain.Rows[0].Current);
+        Assert.False(chain.Rows[1].Current);
+
+        // The rail is one lane from the newest row to the oldest, broken only where a node stands.
+        Assert.Equal(0, chain.Rows[0].Lane);
+        Assert.False(chain.Rows[0].Dashed);
+
+        var top = chain.Rows[0].Lanes.Single(line => line.Lane == 0);
+
+        Assert.True(top.Node);
+        Assert.False(top.Above);
+        Assert.True(top.Below);
+
+        var bottom = chain.Rows[1].Lanes.Single(line => line.Lane == 0);
+
+        Assert.True(bottom.Above);
+        Assert.False(bottom.Below);
+
+        // A path no entry of the drawing names has no chain at all, and says so rather than looking
+        // like a file whose chain happens to be empty.
+        var missing = CompatChain.Build(drawing, "missing.txt");
+
+        Assert.Empty(missing.Rows);
+        Assert.False(missing.Found);
+        Assert.True(chain.Found);
+    }
+
+    /// <summary>A draft stands above the version it would be recorded on, and owns that file's pill.</summary>
+    [Fact]
+    public void ADraftStandsAboveTheVersionItWouldBeRecordedOn()
+    {
+        var workspace = Recorded("compat-draft");
+        var graph = Focused(workspace);
+        var art = graph.Entries.Single(entry => entry.Path == "art.txt");
+
+        var chain = CompatChain.Build(
+            Drawing(
+                graph,
+                [new DraftFact("art.txt", art.Version!, Wrong: false, Unowned: false, null)],
+                emphasized: true
+            ),
+            "art.txt"
+        );
+
+        var draft = chain.Rows[0];
+
+        Assert.Equal(CompatRowKind.Draft, draft.Kind);
+        Assert.Equal(2UL, draft.Number);
+        Assert.True(draft.Current);
+        Assert.True(draft.Dashed);
+        Assert.Equal(CompatRailKind.Modify, draft.Rail);
+        Assert.Equal(GraphChipKind.File, Assert.Single(draft.Pills).Kind);
+        Assert.Empty(draft.More);
+
+        // A draft holds neither hash, and the version below it has lost its local pill to the draft.
+        Assert.Equal(CompatChain.UnknownHash, CompatChain.ShortHash(draft.Card.Hash));
+        Assert.Equal(CompatChain.UnknownHash, CompatChain.ShortHash(draft.Card.VersionHash));
+        Assert.Equal(CompatRowKind.Spine, chain.Rows[1].Kind);
+        Assert.Equal(1UL, chain.Rows[1].Number);
+        Assert.False(chain.Rows[1].Current);
+
+        var wrong = CompatChain.Build(
+            Drawing(
+                graph,
+                [new DraftFact("art.txt", art.Version!, Wrong: true, Unowned: false, null)],
+                emphasized: true
+            ),
+            "art.txt"
+        );
+
+        Assert.Equal(CompatRailKind.Error, wrong.Rows[0].Rail);
+    }
+
+    /// <summary>A variant nothing merges in stands on a lane of its own above the version it is based on.</summary>
+    [Fact]
+    public void AVariantLeftUnmergedStandsAboveTheVersionItIsBasedOn()
+    {
+        var workspace = Recorded("compat-unjoined");
+        var graph = Focused(workspace);
+        var head = graph.Nodes.Single(node => node.Hash == graph.Focus[0].Variant);
+        var file = Path.Combine(workspace, "branch.txt");
+
+        File.WriteAllText(file, "a branch\n");
+
+        var storage = Said(workspace, "storage", "write-file", file);
+        var creator = Said(workspace, "vcs-index", "write-creator", "bob");
+        var message = Said(workspace, "vcs-index", "write-msg", "a branch");
+
+        _ = Said(workspace, "vcs-index", "write-variant", head.BaseVersion, storage, creator, message);
+
+        var chain = CompatChain.Build(
+            Drawing(Focused(workspace), [], emphasized: true),
+            "art.txt"
+        );
+
+        Assert.Equal(3, chain.Rows.Count);
+        Assert.Equal(CompatRowKind.Spine, chain.Rows[0].Kind);
+        Assert.Equal(CompatRowKind.Branch, chain.Rows[1].Kind);
+        Assert.Equal(CompatRowKind.Spine, chain.Rows[2].Kind);
+        Assert.Equal(0UL, chain.Rows[2].Number);
+
+        // The unmerged variant stands on a lane of its own, above the version it was based on, and its
+        // line closes into that version's node.
+        Assert.Equal(1, chain.Rows[1].Lane);
+        Assert.False(chain.Rows[1].Dashed);
+        Assert.Contains(
+            chain.Rows[1].Lanes,
+            line => line.Lane == 1 && line.Node && !line.Above && line.Below
+        );
+        Assert.Contains(
+            chain.Rows[2].Lanes,
+            line => line.Lane == 1 && line.Close
+        );
+    }
+
+    /// <summary>The list's columns are the widths the design names, and a row shows two pills at most.</summary>
+    [Fact]
+    public void TheListsColumnsAndPillsAreTheOnesTheDesignNames()
+    {
+        Assert.Equal(155, CompatChain.ReferencesWidth);
+        Assert.Equal(100, CompatChain.GraphWidth);
+        Assert.Equal(280, CompatChain.MessageWidth);
+        Assert.Equal(40, CompatChain.LocalWidth);
+        Assert.Equal(72, CompatChain.VersionHashWidth);
+        Assert.Equal(72, CompatChain.VariantHashWidth);
+        Assert.Equal(64, CompatChain.VersionWidth);
+        Assert.Equal(52, CompatChain.PillWidth);
+        Assert.Equal(2, CompatChain.ShownPills);
+
+        var workspace = Recorded("compat-pills");
+        var graph = Focused(workspace);
+        var drawing = Drawing(graph, [], emphasized: true);
+        var head = drawing.Cards.Single(card => card.Hash == graph.Focus[0].Variant);
+        var (shown, hidden) = CompatChain.PillsOf(head);
+
+        Assert.Single(shown);
+        Assert.Empty(hidden);
+        Assert.Equal("LOCAL", shown[0].Tag);
+        Assert.True(shown[0].Chosen);
+
+        // A hash held for seven characters or more is written as its first seven, and one not held at
+        // all is written as the marks the list uses for it.
+        Assert.Equal(7, CompatChain.ShortHash(head.Hash).Length);
+        Assert.Equal(head.Hash[..7], CompatChain.ShortHash(head.Hash));
+        Assert.Equal(CompatChain.UnknownHash, CompatChain.ShortHash(string.Empty));
+    }
+
+    /// <summary>The chain is the one of the path asked for, so choosing another file reads another chain.</summary>
+    [Fact]
+    public void TheChainFollowsThePathItIsAskedFor()
+    {
+        var drawing = RecordedDrawing("compat-switch");
+
+        var art = CompatChain.Build(drawing, "art.txt");
+        var other = CompatChain.Build(drawing, "other.txt");
+
+        Assert.True(art.Found);
+        Assert.True(other.Found);
+
+        var artHead = art.Rows.First(row => row.Kind == CompatRowKind.Spine);
+        var otherHead = other.Rows.First(row => row.Kind == CompatRowKind.Spine);
+
+        Assert.Equal(
+            "art.txt",
+            artHead.Card.Entries.First(entry => entry.Side == "local").Path
+        );
+        Assert.Equal(
+            "other.txt",
+            otherHead.Card.Entries.First(entry => entry.Side == "local").Path
+        );
+        Assert.NotEqual(artHead.Card.Hash, otherHead.Card.Hash);
+    }
+
+    /// <summary>Every future version is listed, and a chain of them keeps the line straight.</summary>
+    [Fact]
+    public void EveryFutureVersionIsListedAndASingleChainKeepsTheLine()
+    {
+        var workspace = Recorded("compat-future");
+        var graph = Focused(workspace);
+        var storage = Said(workspace, "storage", "write-file", Ahead(workspace, "future.txt", "future\n"));
+        var creator = Said(workspace, "vcs-index", "write-creator", "bob");
+        var message = Said(workspace, "vcs-index", "write-msg", "a future");
+
+        var first = Said(
+            workspace,
+            "vcs-index",
+            "write-variant",
+            graph.Focus[0].Version!,
+            storage,
+            creator,
+            message
+        );
+        var firstVersion = Said(workspace, "vcs-index", "write-version", first);
+        var second = Said(
+            workspace,
+            "vcs-index",
+            "write-variant",
+            firstVersion,
+            storage,
+            creator,
+            message
+        );
+
+        _ = Said(workspace, "vcs-index", "write-version", second);
+
+        var chain = CompatChain.Build(
+            Drawing(Focused(workspace), [], emphasized: true),
+            "art.txt"
+        );
+
+        // The record, its past, and both future versions: one chain, so one straight line.
+        Assert.Equal(4, chain.Rows.Count);
+        Assert.All(chain.Rows, row => Assert.Equal(CompatRowKind.Spine, row.Kind));
+        Assert.All(chain.Rows, row => Assert.Equal(0, row.Lane));
+        Assert.All(chain.Rows, row => Assert.False(row.Behind));
+        Assert.Equal(second, chain.Rows[0].Card.Hash);
+        Assert.Equal(first, chain.Rows[1].Card.Hash);
+        Assert.Equal(graph.Focus[0].Variant, chain.Rows[2].Card.Hash);
+    }
+
+    /// <summary>A fork ahead puts the first chain on the line and the other on a lane above the version they part at.</summary>
+    [Fact]
+    public void AForkAheadKeepsTheLineAndBranchesTheRest()
+    {
+        var workspace = Recorded("compat-fork");
+        var graph = Focused(workspace);
+        var storage = Said(workspace, "storage", "write-file", Ahead(workspace, "future.txt", "future\n"));
+        var creator = Said(workspace, "vcs-index", "write-creator", "bob");
+        var message = Said(workspace, "vcs-index", "write-msg", "a future");
+
+        var first = Said(
+            workspace,
+            "vcs-index",
+            "write-variant",
+            graph.Focus[0].Version!,
+            storage,
+            creator,
+            message
+        );
+        var firstVersion = Said(workspace, "vcs-index", "write-version", first);
+        var left = Said(
+            workspace,
+            "vcs-index",
+            "write-variant",
+            firstVersion,
+            storage,
+            creator,
+            message
+        );
+        var right = Said(
+            workspace,
+            "vcs-index",
+            "write-variant",
+            firstVersion,
+            storage,
+            creator,
+            Said(workspace, "vcs-index", "write-msg", "another future")
+        );
+
+        _ = Said(workspace, "vcs-index", "write-version", left);
+        _ = Said(workspace, "vcs-index", "write-version", right);
+
+        var chain = CompatChain.Build(
+            Drawing(Focused(workspace), [], emphasized: true),
+            "art.txt"
+        );
+
+        // One of the two futures keeps the line and the other stands on a lane of its own.
+        Assert.Equal(5, chain.Rows.Count);
+        var branch = Assert.Single(chain.Rows, row => row.Kind == CompatRowKind.Branch);
+
+        Assert.Equal(1, branch.Lane);
+        Assert.False(branch.Behind);
+
+        var join = Assert.Single(chain.Rows, row => row.Card.Hash == first);
+
+        Assert.Contains(join.Lanes, line => line.Lane == 1 && line.Close);
+    }
+
     /// <summary>Lays out the graph of a workspace holding two files, one of them being edited.</summary>
     /// <param name="label">What the workspace is for, for a person reading the path.</param>
     /// <returns>The drawing.</returns>
@@ -954,6 +1251,92 @@ public sealed class VariantGraphTests
             // Locate answered with nothing rather than a failure.
             return null;
         }
+    }
+
+    /// <summary>Reads the graph centred on one file of a recorded workspace.</summary>
+    /// <param name="workspace">The workspace.</param>
+    /// <returns>The reading.</returns>
+    private static VariantGraphReading Focused(string workspace)
+    {
+        var graph = Graph(
+            workspace,
+            new VariantGraphRequest { Focus = [new VariantGraphFocus("local", "art.txt")] }
+        );
+
+        Assert.NotNull(graph);
+
+        return graph;
+    }
+
+    /// <summary>Lays out a drawing of a reading, with the words a test names.</summary>
+    /// <param name="graph">The reading.</param>
+    /// <param name="drafts">The changes the work holds.</param>
+    /// <param name="emphasized">Whether the drawing stands on chosen entries.</param>
+    /// <returns>The drawing.</returns>
+    private static VariantGraphDrawing Drawing(
+        VariantGraphReading graph,
+        IReadOnlyList<DraftFact> drafts,
+        bool emphasized
+    ) =>
+        VariantGraphDrawing.From(
+            graph,
+            drafts,
+            new GraphVocabulary(
+                "DRAFT",
+                "unrecorded",
+                "unrecorded tree",
+                "wrong",
+                "unowned",
+                "draft",
+                "wrong-draft",
+                "unowned-draft",
+                "merging into %{file}",
+                "no entries",
+                "unknown base"
+            ),
+            new GraphMeasure(),
+            emphasized
+        );
+
+    /// <summary>Writes a file beside the work and answers where it is.</summary>
+    /// <param name="workspace">The workspace.</param>
+    /// <param name="name">The file's name.</param>
+    /// <param name="content">What it holds.</param>
+    /// <returns>Its path.</returns>
+    private static string Ahead(string workspace, string name, string content)
+    {
+        var path = Path.Combine(workspace, name);
+
+        File.WriteAllText(path, content);
+
+        return path;
+    }
+
+    /// <summary>Runs one command and answers what it wrote to its standard output.</summary>
+    /// <param name="directory">Where to run it.</param>
+    /// <param name="arguments">What the command is told.</param>
+    /// <returns>Its standard output, without the newline that ends it.</returns>
+    private static string Said(string directory, params string[] arguments)
+    {
+        var start = new ProcessStartInfo(Program())
+        {
+            WorkingDirectory = directory,
+            RedirectStandardOutput = true,
+        };
+
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var command = Process.Start(start)!;
+        var said = command.StandardOutput.ReadToEnd();
+
+        command.WaitForExit();
+
+        Assert.Equal(0, command.ExitCode);
+
+        return said.Trim();
     }
 
     /// <summary>Reads how the work under a directory stands, for the checks that need a reading.</summary>
