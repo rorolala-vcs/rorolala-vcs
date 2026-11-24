@@ -15,6 +15,7 @@ use crate::dotnet;
 use crate::ops::adwaita::fetch_adwaita;
 use crate::ops::book::build_book;
 use crate::ops::fonts::{fetch_fonts, lay_out_fonts};
+use crate::ops::icons::lay_out_icon_license;
 use crate::paths::Workspace;
 use crate::run_step;
 use crate::{Next, ops::library::build_library};
@@ -61,6 +62,7 @@ pub fn lay_out_desktop(userdata_name: &str) -> Result<(), crate::Error> {
     dotnet::publish_plugins(&workspace, &directory)?;
     lay_out_presets(&workspace)?;
     lay_out_fonts(&workspace, &directory)?;
+    lay_out_icon_license(&workspace, &directory)?;
 
     // The Desktop program searches the book laid beside the programs, so a layout a person runs
     // by hand carries it too; without it the program opens with nothing to search.

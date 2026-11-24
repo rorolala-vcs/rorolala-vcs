@@ -96,6 +96,9 @@ pub use ops::fonts::fetch_fonts;
 /// The fetched Noto Sans set, laid beside the programs with the license it is distributed under.
 pub use ops::fonts::lay_out_fonts;
 
+/// The icon set's license, laid beside the programs with the pictures it covers.
+pub use ops::icons::lay_out_icon_license;
+
 /// The Adwaita pictures the file listing draws with, fetched at the release the set pins.
 ///
 /// Reached by name because `export` and `desktop` fetch them before the Desktop is published.

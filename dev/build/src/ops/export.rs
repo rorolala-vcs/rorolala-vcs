@@ -256,6 +256,7 @@ pub fn export_artifacts(userdata_name: &str, self_contained: bool) -> Result<(),
     dotnet::publish_plugins(&workspace, &desktop)?;
     crate::ops::desktop::lay_out_presets(&workspace)?;
     crate::lay_out_fonts(&workspace, &desktop)?;
+    crate::lay_out_icon_license(&workspace, &desktop)?;
 
     // The C# bindings beside the native library they bind, under `lib/` where a consumer of the C
     // ABI looks for both.
