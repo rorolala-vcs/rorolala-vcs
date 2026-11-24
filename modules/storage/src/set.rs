@@ -17,7 +17,7 @@ use std::sync::OnceLock;
 use rorolala_utils_location::{Locate as _, normalize};
 
 use crate::{
-    Chunking, Codec, Error, Key, Manifest, ObjectBatch, Presence, RorolalaStorage,
+    Bytes, Chunking, Codec, Error, Key, Manifest, ObjectBatch, Presence, RorolalaStorage,
     StorageBackend as _, TransferableBackend, store_file,
 };
 
@@ -449,6 +449,32 @@ impl StorageSet {
         Err(first_error.unwrap_or(Error::NotFound(*key)))
     }
 
+    /// Reads the object stored under `key` from the first store that answers, as the ranges it is
+    /// read as, checking it against its key.
+    ///
+    /// It is [`read_object`](Self::read_object) for a caller that can use the run as it comes: a
+    /// tree structure is decoded out of the range of the file it was read from rather than out of a
+    /// copy made to give a decoder one slice.
+    ///
+    /// # Errors
+    ///
+    /// As [`read_object`](Self::read_object).
+    pub async fn read_object_bytes(&self, key: &Key) -> Result<Bytes, Error> {
+        let mut first_error = None;
+
+        for store in self.stores() {
+            match store.read_object_bytes(key).await {
+                Ok(bytes) => return Ok(bytes),
+                Err(Error::NotFound(_)) => {}
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+
+        Err(first_error.unwrap_or(Error::NotFound(*key)))
+    }
+
     /// Reads the object stored under `key` from the first store that answers, without checking it
     /// against its key.
     ///
@@ -457,10 +483,13 @@ impl StorageSet {
     /// arrived under. What that saves is a second pass over every byte that crosses; a local read is
     /// `read_object`, which checks.
     ///
+    /// What comes back is the run the object was read as, so a sender hands its pieces to the wire
+    /// rather than a copy of them.
+    ///
     /// # Errors
     ///
     /// As [`read_object`](Self::read_object), except [`Corrupt`](Error::Corrupt).
-    pub async fn read_object_unchecked(&self, key: &Key) -> Result<Vec<u8>, Error> {
+    pub async fn read_object_unchecked(&self, key: &Key) -> Result<Bytes, Error> {
         self.open_objects(std::slice::from_ref(key))
             .await?
             .read_unchecked(key)
@@ -531,7 +560,7 @@ impl StorageSet {
     ///
     /// Returns the first hard failure when no store produces the content, or `Ok(None)` when no
     /// store holds it.
-    pub async fn content(&self, key: &Key) -> Result<Option<Vec<u8>>, Error> {
+    pub async fn content(&self, key: &Key) -> Result<Option<Bytes>, Error> {
         let mut first_error = None;
 
         for store in self.stores() {
@@ -884,7 +913,7 @@ impl SetBatch {
     ///
     /// Returns the first hard failure when no store answers with the object, and
     /// [`Error::NotFound`] when every store says it does not hold it.
-    pub async fn read(&self, key: &Key) -> Result<Vec<u8>, Error> {
+    pub async fn read(&self, key: &Key) -> Result<Bytes, Error> {
         self.read_where(key, true).await
     }
 
@@ -893,7 +922,7 @@ impl SetBatch {
     /// # Errors
     ///
     /// As [`read`](Self::read), except [`Corrupt`](Error::Corrupt).
-    pub async fn read_unchecked(&self, key: &Key) -> Result<Vec<u8>, Error> {
+    pub async fn read_unchecked(&self, key: &Key) -> Result<Bytes, Error> {
         self.read_where(key, false).await
     }
 
@@ -901,7 +930,7 @@ impl SetBatch {
     ///
     /// A store that answers with nothing is one more that was asked, while a store that failed is
     /// the account kept in case none answers: the same rule [`StorageSet::read_object`] reads.
-    async fn read_where(&self, key: &Key, check: bool) -> Result<Vec<u8>, Error> {
+    async fn read_where(&self, key: &Key, check: bool) -> Result<Bytes, Error> {
         let mut first_error = None;
 
         for plan in &self.plans {
@@ -1137,7 +1166,7 @@ mod tests {
         );
 
         assert!(set.manifest_of(&key).await.unwrap().is_some());
-        assert_eq!(set.content(&key).await.unwrap().unwrap(), content);
+        assert_eq!(set.content(&key).await.unwrap().unwrap().to_vec(), content);
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -1349,9 +1378,12 @@ mod tests {
         // The first store holds nothing under the key, so the second is the one that answers. The
         // plan is made once for both, which is what makes a content of many chunks one open per
         // store rather than one per chunk.
-        assert_eq!(batch.read(&key).await.unwrap(), b"found in the second");
         assert_eq!(
-            batch.read_unchecked(&key).await.unwrap(),
+            batch.read(&key).await.unwrap().to_vec(),
+            b"found in the second"
+        );
+        assert_eq!(
+            batch.read_unchecked(&key).await.unwrap().to_vec(),
             b"found in the second"
         );
 
@@ -1375,7 +1407,7 @@ mod tests {
         let batch = set.open_objects(&[one]).await.unwrap();
 
         assert!(matches!(batch.read(&one).await, Err(Error::Corrupt(_))));
-        assert_eq!(batch.read_unchecked(&one).await.unwrap(), b"other");
+        assert_eq!(batch.read_unchecked(&one).await.unwrap().to_vec(), b"other");
 
         let _ = fs::remove_dir_all(&dir);
     }

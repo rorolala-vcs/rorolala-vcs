@@ -42,7 +42,13 @@ pub enum DifferenceKind {
 pub fn structure(source: &dyn ContentSource, content: ContentHash) -> Result<TreeStructure, Error> {
     let bytes = source.read(content)?;
 
-    TreeStructure::decode(&bytes).map_err(|_| Error::Structure {
+    // A structure is one object, so what a source hands back is one range or one buffer. A run of
+    // more than one piece is content that is not a structure this build reads.
+    let encoded = bytes.as_slice().ok_or_else(|| Error::Structure {
+        content: content.to_token(),
+    })?;
+
+    TreeStructure::decode(encoded).map_err(|_| Error::Structure {
         content: content.to_token(),
     })
 }

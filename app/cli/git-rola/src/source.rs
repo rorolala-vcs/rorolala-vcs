@@ -13,7 +13,7 @@
 use std::io;
 use std::path::Path;
 
-use librorolala::storage::{Key, StorageSet};
+use librorolala::storage::{Bytes, Key, StorageSet};
 use rola_define_format::ContentHash;
 use rola_git_support::{ContentSource, Error, Project};
 
@@ -54,7 +54,7 @@ impl ContentSource for Source {
         }
     }
 
-    fn read(&self, content: ContentHash) -> Result<Vec<u8>, Error> {
+    fn read(&self, content: ContentHash) -> Result<Bytes, Error> {
         match self {
             Self::Stores(stores) => read_from_stores(stores, content),
             Self::Nothing => Err(Error::Unavailable {
@@ -68,14 +68,14 @@ impl ContentSource for Source {
 ///
 /// A tree material's content is its structure, which has to be read whole to say what the material
 /// holds. It meets the stores' runtime the same way a placement does, see [`write_from_stores`].
-fn read_from_stores(stores: &StorageSet, content: ContentHash) -> Result<Vec<u8>, Error> {
+fn read_from_stores(stores: &StorageSet, content: ContentHash) -> Result<Bytes, Error> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()
         .map_err(|error| Error::Io(io::Error::other(error.to_string())))?;
 
     let key = Key::new(*content.digest());
 
-    match runtime.block_on(stores.read_object(&key)) {
+    match runtime.block_on(stores.read_object_bytes(&key)) {
         Ok(bytes) => Ok(bytes),
         // A content no store holds is "no source here has it", which is what a caller reports as an
         // unplaced material rather than as a failed read.

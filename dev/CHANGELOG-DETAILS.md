@@ -133,6 +133,12 @@ A sync's sending side read a chunked content one chunk at a time, opening every 
 
 A store publishing another store's content wrote one file for each chunk, and read each chunk through a batch of its own. The content is now read through one batch of the source and written through one batch of the target, so a content of ten thousand chunks is two packs rather than ten thousand files.
 
+### 8. [`modules`] [`storage`] [`read`] Read content through memory mappings instead of copying it
+
+A content is read as the ranges of the packs it sits in rather than as a copy of them: a chunk stored as it is is handed on as the range it occupies, and only a chunk a codec has to undo becomes a buffer of its own. `fsck --full` checks each content against its key without putting it in one buffer first, a transfer writes those ranges straight into its frames, and a file being written is mapped instead of read whole, so a large material costs the pages that are hashed and not a second copy of itself.
+
+Naming content also runs on more than one thread above 128 KiB, and the three streaming hash loops the tree carried are one. The workspace analysis and the git bridge read a file the same way, and the mapping and the run of pieces both are built on are `utils/mapped`.
+
 ## Feature
 
 ### 1. [`app`] [`rola`] Draw the unjoined variants in the chain behind --show-unjoined-variants

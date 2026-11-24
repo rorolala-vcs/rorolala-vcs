@@ -7,6 +7,7 @@ use rorolala_storage::{
     Batch, LockError, Lockable, LockingGuard, RorolalaStorage, StorageBackend as _, store_file,
 };
 use rorolala_utils_location::mark_hidden;
+use rorolala_utils_mapped::Mapped;
 
 use crate::TreeError;
 use crate::consts::{CONFLICTS, DESCRIPTION, LOCK, MARK, STAGED_TREE, STAGING};
@@ -222,7 +223,9 @@ impl Staging {
         path: &str,
     ) -> Result<TreeEntry, TreeError> {
         let choice = store.choose_algorithm(disk);
-        let content = fs::read(disk)?;
+        // Mapped rather than read: the batch cuts and hashes the content, and neither wants a copy of
+        // it in the program's own memory.
+        let content = Mapped::open(disk)?;
         let key = batch
             .add_content(&content, choice)
             .await

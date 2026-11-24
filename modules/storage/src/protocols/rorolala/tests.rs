@@ -901,7 +901,10 @@ async fn a_manifest_that_makes_another_content_falls_back_to_the_object() {
     manifest.push(Chunk::new(other_key, other.len() as u64));
     lay_manifest(&store, &key, &manifest);
 
-    assert_eq!(store.content(&key).await.unwrap().unwrap(), content);
+    assert_eq!(
+        store.content(&key).await.unwrap().unwrap().to_vec(),
+        content
+    );
 
     let out = parent.join("out");
     store.extract_file(&key, &out).await.unwrap();

@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use super::RorolalaStorage;
 use super::consts::{MANIFEST_DIR, OBJECTS_DIR, PACKED_DIR, TEMPORARY_SUFFIX};
 use crate::{Error, Frame, Key};
+use rorolala_utils_mapped::Bytes;
 
 impl RorolalaStorage {
     /// Writes an entry, its frame and its payload, where `path` says.
@@ -100,6 +101,19 @@ pub(super) fn plain_len_of(frame: &Frame) -> Result<usize, Error> {
 /// Fails unless `content` hashes to `key`.
 pub(super) fn verify(key: &Key, content: &[u8]) -> Result<(), Error> {
     if key_of(content) == *key {
+        Ok(())
+    } else {
+        Err(Error::Corrupt(*key))
+    }
+}
+
+/// Fails unless the bytes `content` is made of hash to `key`.
+///
+/// The same check as [`verify`], taken over the pieces a content was read as rather than over a copy
+/// of it: a content whose chunks are ranges of mapped packs is checked without being put in one
+/// buffer first.
+pub(super) fn verify_content(key: &Key, content: &Bytes) -> Result<(), Error> {
+    if Key::new(content.digest()) == *key {
         Ok(())
     } else {
         Err(Error::Corrupt(*key))

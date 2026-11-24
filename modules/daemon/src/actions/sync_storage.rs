@@ -46,8 +46,8 @@ use rorolala_auth::MAX_PLAINTEXT;
 use rorolala_errors::BincodeError;
 use rorolala_protocol::{ActionContext, ActionError, Both, MAX_FRAME, OnlyVault, OnlyWorkspace};
 use rorolala_storage::{
-    BLAKE3_HASH_LEN, Blake3Hash, Chunk, Error as StoreError, Key, Manifest, Presence, SetBatch,
-    StorageSet,
+    BLAKE3_HASH_LEN, Blake3Hash, Bytes, Chunk, Error as StoreError, Key, Manifest, Presence,
+    SetBatch, StorageSet,
 };
 use rorolala_utils_progress::{Direction, Task};
 
@@ -817,7 +817,7 @@ pub(crate) fn packet_unread() -> ActionError {
 }
 
 /// One chunk being read: the key it is for, and the read itself.
-type Reading = (Key, tokio::task::JoinHandle<Result<Vec<u8>, StoreError>>);
+type Reading = (Key, tokio::task::JoinHandle<Result<Bytes, StoreError>>);
 
 /// A content's chunks, read with its window always full, out of one batch per store.
 ///
@@ -876,7 +876,7 @@ impl Prefetch {
     }
 
     /// The next chunk that has been read, in the order the manifest names them.
-    async fn next(&mut self) -> Result<Option<(Key, Vec<u8>)>, ActionError> {
+    async fn next(&mut self) -> Result<Option<(Key, Bytes)>, ActionError> {
         self.fill();
 
         let Some((key, read)) = self.reads.pop_front() else {
@@ -920,7 +920,16 @@ async fn add_unit(
                 return Err(ActionError::MissingObject);
             };
 
-            push(ctx, outgoing, task, to, &unit.key, true, manifest.encode()).await
+            push(
+                ctx,
+                outgoing,
+                task,
+                to,
+                &unit.key,
+                true,
+                Bytes::from(manifest.encode()),
+            )
+            .await
         }
         // A whole unit is the manifest and then every chunk it names, and an object unit is the
         // object whatever the store keeps beside it: the caller asked for one thing, so one thing
@@ -935,7 +944,16 @@ async fn add_unit(
                 push(ctx, outgoing, task, to, &unit.key, false, bytes).await
             }
             Some(manifest) => {
-                push(ctx, outgoing, task, to, &unit.key, true, manifest.encode()).await?;
+                push(
+                    ctx,
+                    outgoing,
+                    task,
+                    to,
+                    &unit.key,
+                    true,
+                    Bytes::from(manifest.encode()),
+                )
+                .await?;
 
                 // The chunks are read with the window kept full, and each read outlives the one in
                 // hand: a store read is a hand-over to a thread that blocks, and beginning the next
@@ -965,7 +983,16 @@ async fn add_unit(
         // no round of asking.
         UnitKind::Discover => {
             if let Some(manifest) = manifest {
-                push(ctx, outgoing, task, to, &unit.key, true, manifest.encode()).await
+                push(
+                    ctx,
+                    outgoing,
+                    task,
+                    to,
+                    &unit.key,
+                    true,
+                    Bytes::from(manifest.encode()),
+                )
+                .await
             } else {
                 let bytes = local
                     .read_object_unchecked(&unit.key)
@@ -992,13 +1019,15 @@ pub(crate) async fn push(
     to: Side,
     key: &Key,
     manifest: bool,
-    bytes: Vec<u8>,
+    bytes: Bytes,
 ) -> Result<(), ActionError> {
-    if bytes.len() > PIECE {
+    let length = usize::try_from(bytes.len()).unwrap_or(usize::MAX);
+
+    if length > PIECE {
         return push_large(ctx, outgoing, task, to, key, manifest, bytes).await;
     }
 
-    let over = !outgoing.carried.is_empty() && !outgoing.room_for(bytes.len());
+    let over = !outgoing.carried.is_empty() && !outgoing.room_for(length);
     if over {
         flush(ctx, outgoing, task).await?;
     }
@@ -1020,13 +1049,17 @@ async fn push_large(
     to: Side,
     key: &Key,
     manifest: bool,
-    bytes: Vec<u8>,
+    bytes: Bytes,
 ) -> Result<(), ActionError> {
     if !outgoing.carried.is_empty() {
         flush(ctx, outgoing, task).await?;
     }
 
-    outgoing.add(Carried::new(*key, Lead::of(manifest, true), Vec::new()));
+    outgoing.add(Carried::new(
+        *key,
+        Lead::of(manifest, true),
+        Bytes::default(),
+    ));
     flush(ctx, outgoing, task).await?;
 
     carry_blob_moving(ctx, to, Some(bytes), Some(task)).await?;
@@ -1092,7 +1125,8 @@ impl Outgoing {
 
     /// Adds one entry, whether or not there was room for it.
     fn add(&mut self, entry: Carried) {
-        self.bytes = self.bytes.saturating_add(entry.bytes.len());
+        let length = usize::try_from(entry.bytes.len()).unwrap_or(usize::MAX);
+        self.bytes = self.bytes.saturating_add(length);
         self.carried.push(entry);
     }
 
@@ -1103,7 +1137,7 @@ impl Outgoing {
     pub(crate) fn parts(&self) -> ([u8; PACKET_HEADER], Vec<&[u8]>) {
         let mut entries = Vec::with_capacity(self.carried.len() * 2);
         for entry in &self.carried {
-            entries.extend_from_slice(&entry.parts());
+            entries.extend(entry.parts());
         }
 
         (
@@ -1197,12 +1231,15 @@ pub(crate) struct Carried {
     header: [u8; ENTRY_HEADER],
     /// The bytes themselves: a manifest's encoding, or an object's content, and nothing at all for
     /// an entry whose bytes are too many for one value and follow it as a blob.
-    pub(crate) bytes: Vec<u8>,
+    ///
+    /// A content read is the ranges of the packs it sits in, so what this holds is those ranges
+    /// rather than a copy of them, and the frame under a packet writes them where they lie.
+    pub(crate) bytes: Bytes,
 }
 
 impl Carried {
     /// One entry of a packet being built.
-    pub(crate) fn new(key: Key, lead: Lead, bytes: Vec<u8>) -> Self {
+    pub(crate) fn new(key: Key, lead: Lead, bytes: Bytes) -> Self {
         let mut header = [0_u8; ENTRY_HEADER];
         header[0] = lead.0;
         header[1..=BLAKE3_HASH_LEN].copy_from_slice(key.digest());
@@ -1214,9 +1251,9 @@ impl Carried {
         Self { header, bytes }
     }
 
-    /// The two runs of bytes this entry is on the wire: its header, and its bytes.
-    fn parts(&self) -> [&[u8]; 2] {
-        [&self.header, &self.bytes]
+    /// The runs of bytes this entry is on the wire: its header, and then its bytes.
+    fn parts(&self) -> impl Iterator<Item = &[u8]> {
+        std::iter::once(&self.header[..]).chain(self.bytes.parts())
     }
 }
 
@@ -1390,7 +1427,9 @@ pub(crate) async fn carry_blob(
     to: Side,
     blob: Option<Vec<u8>>,
 ) -> Result<Option<Vec<u8>>, ActionError> {
-    carry_blob_moving(ctx, to, blob, None).await
+    // A blob held as a buffer is one piece of a run, and the run is the shape
+    // `carry_blob_moving` cuts into pieces, so what this side holds is handed over as it is.
+    carry_blob_moving(ctx, to, blob.map(Bytes::from), None).await
 }
 
 /// Carries one blob as [`carry_blob`] does, and moves `task` along as each piece of it crosses.
@@ -1403,17 +1442,24 @@ pub(crate) async fn carry_blob(
 pub(crate) async fn carry_blob_moving(
     ctx: &mut ActionContext<'_>,
     to: Side,
-    blob: Option<Vec<u8>>,
+    blob: Option<Bytes>,
     mut task: Option<&mut Task>,
 ) -> Result<Option<Vec<u8>>, ActionError> {
     let sending = blob.is_some();
+
+    // What is cut into pieces is one entry, and an entry read as a run of ranges is one range of one
+    // object, so the blob is one slice of the file it came from rather than a buffer of its own.
+    let blob = match &blob {
+        Some(bytes) => Some(bytes.as_slice().ok_or(ActionError::MissingValue)?),
+        None => None,
+    };
 
     // How many bytes to expect comes first, and the pieces that follow are counted from it, so the
     // two ends agree on how many values cross without either being told a second time. The number is
     // eight bytes big-endian rather than a serde `usize`: what crosses here is a number and a run of
     // bytes, and the width a build's `usize` happens to have is not part of either.
-    let announced = blob.as_ref().map_or(0, Vec::len);
-    let said = blob.as_ref().map(|_| {
+    let announced = blob.map_or(0, <[u8]>::len);
+    let said = blob.map(|_| {
         u64::try_from(announced)
             .unwrap_or(u64::MAX)
             .to_be_bytes()
@@ -1440,9 +1486,7 @@ pub(crate) async fn carry_blob_moving(
         let start = at * PIECE;
         // Handed out as what it is rather than copied into a buffer of its own: the piece is a run of
         // the blob this side already holds, and the frame under this writes it where it lies.
-        let outgoing = blob
-            .as_ref()
-            .map(|bytes| &bytes[start..bytes.len().min(start + PIECE)]);
+        let outgoing = blob.map(|bytes| &bytes[start..bytes.len().min(start + PIECE)]);
 
         // What this piece is long: the side sending cut it, so it knows; the side taking is handed
         // what the other side cut, so it learns it here. The two are the same number of bytes. A

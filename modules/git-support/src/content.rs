@@ -2,11 +2,10 @@
 
 use std::fs;
 use std::io;
-use std::io::Read as _;
 use std::path::{Path, PathBuf};
 
-use blake3::Hasher;
 use rola_define_format::ContentHash;
+use rorolala_utils_mapped::{Bytes, Mapped};
 
 use crate::error::Error;
 
@@ -26,11 +25,14 @@ pub trait ContentSource {
     /// asks for it whole here. A file's content is placed through [`write`](Self::write) instead,
     /// since reading a gigabyte to learn what it is is not a thing a placement does.
     ///
+    /// What comes back is a run, so a source that keeps its content in a file hands back a range of
+    /// that file rather than a copy of it.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::Unavailable`] when the source does not hold the content, and
     /// [`Error::Io`] when it cannot be read.
-    fn read(&self, content: ContentHash) -> Result<Vec<u8>, Error>;
+    fn read(&self, content: ContentHash) -> Result<Bytes, Error>;
 }
 
 /// Loose content on this machine, laid down the way a rola store lays its objects down.
@@ -85,9 +87,9 @@ impl ContentSource for LocalStore {
         Ok(())
     }
 
-    fn read(&self, content: ContentHash) -> Result<Vec<u8>, Error> {
-        match fs::read(self.object_path(content)) {
-            Ok(bytes) => Ok(bytes),
+    fn read(&self, content: ContentHash) -> Result<Bytes, Error> {
+        match Mapped::open(&self.object_path(content)) {
+            Ok(map) => Ok(Bytes::from(map)),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Err(Error::Unavailable {
                 content: content.to_token(),
             }),
@@ -98,24 +100,16 @@ impl ContentSource for LocalStore {
 
 /// The content the file at `path` holds.
 ///
+/// The file is mapped rather than read into a buffer: what a material is named by is the hash of
+/// the whole of it, and mapping keeps that from costing a buffer the size of the material.
+///
 /// # Errors
 ///
 /// Returns [`Error::Io`] when the file cannot be read.
 pub fn digest_of(path: &Path) -> Result<ContentHash, Error> {
-    let mut file = fs::File::open(path).map_err(Error::Io)?;
-    let mut hasher = Hasher::new();
-    let mut buffer = vec![0_u8; 64 * 1024];
+    let mapped = Mapped::open(path).map_err(Error::Io)?;
 
-    loop {
-        let read = file.read(&mut buffer).map_err(Error::Io)?;
-        if read == 0 {
-            break;
-        }
-
-        hasher.update(&buffer[..read]);
-    }
-
-    Ok(ContentHash::from_digest(*hasher.finalize().as_bytes()))
+    Ok(ContentHash::from_digest(mapped.digest()))
 }
 
 #[cfg(test)]

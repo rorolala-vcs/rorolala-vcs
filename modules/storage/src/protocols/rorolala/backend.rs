@@ -7,11 +7,14 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use rorolala_utils_mapped::Mapped;
+
 use super::RorolalaStorage;
 use super::consts::{HOLDS_AT_ONCE, MANIFEST_DIR, OBJECTS_DIR, PackKind, SNIFF_LEN};
 use super::entry::{collect, exists, verify};
 use crate::{
-    AlgorithmChoice, Error, Key, Presence, ProtocolMagic, StorageBackend, TransferableBackend,
+    AlgorithmChoice, Bytes, Error, Key, Presence, ProtocolMagic, StorageBackend,
+    TransferableBackend,
 };
 
 impl StorageBackend for RorolalaStorage {
@@ -33,7 +36,11 @@ impl StorageBackend for RorolalaStorage {
         file: &Path,
         choice: Self::AlgorithmChoice,
     ) -> Result<Key, Self::Error> {
-        let content = tokio::fs::read(file).await?;
+        // The file is mapped rather than read into a buffer: what a write cuts is the content
+        // itself, and the cutting, hashing and compressing read it where the kernel already holds
+        // it. The mapping lives for this call alone, so a file that is packed away after it cannot
+        // meet a mapping Windows would refuse to remove.
+        let content = Mapped::open(file)?;
 
         self.write_content(&content, choice).await
     }
@@ -179,7 +186,7 @@ impl TransferableBackend for RorolalaStorage {
     ///
     /// Content kept as chunks comes back as the whole of it: what a transfer moves is content, and
     /// how this store keeps it is not something the other end is told.
-    async fn content(&self, key: &Key) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn content(&self, key: &Key) -> Result<Option<Bytes>, Self::Error> {
         match self.read_content(key).await {
             Ok(content) => Ok(Some(content)),
             Err(Error::NotFound(_)) => Ok(None),

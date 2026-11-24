@@ -243,7 +243,11 @@ pub fn tree_structure(
         });
     };
 
-    crate::TreeEntries::decode(&bytes).ok_or(StorageReadError::NotAStructure)
+    // A structure is one object, so what was read is one range or one buffer: the decoder takes it
+    // as it lies rather than through a copy made to give it one run of bytes.
+    let encoded = bytes.as_slice().ok_or(StorageReadError::NotAStructure)?;
+
+    crate::TreeEntries::decode(encoded).ok_or(StorageReadError::NotAStructure)
 }
 
 /// The chunks of a chunked object.

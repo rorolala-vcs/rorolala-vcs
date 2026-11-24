@@ -9,5 +9,6 @@ rorolala-ignore.workspace = true
 rorolala-layout.workspace = true
 rorolala-utils-constants.workspace = true
 rorolala-utils-location.workspace = true
+rorolala-utils-mapped.workspace = true
 rorolala-workspace.workspace = true
 uuid.workspace = true

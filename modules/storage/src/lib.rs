@@ -84,6 +84,13 @@ pub use protocols::RorolalaStorage;
 /// or hands it to a function, and a type it cannot write down it cannot do either with.
 pub use protocols::{Batch, ObjectBatch, PublishReport};
 
+/// The bytes a content is read as, named here for the same reason [`Batch`] is.
+///
+/// A content read is a run of ranges of mapped files and of buffers, so a caller that takes one of
+/// the two boundaries, [`StorageBackend`] or [`TransferableBackend`], can name its answer without
+/// depending on the crate the run is defined in.
+pub use rorolala_utils_mapped::Bytes;
+
 /// A collecting run's plan and its report, named here for the same reason [`Batch`] is.
 ///
 /// The packing and the laying-out say their work through a `Progress`, the one

@@ -9,11 +9,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use rorolala_utils_mapped::{Bytes, Mapped};
 use tokio::io::{AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _};
 
 use super::RorolalaStorage;
 use super::consts::{HOLDS_AT_ONCE, MANIFEST_DIR, PackKind};
-use super::entry::{collect, exists, key_of, plain_len_of, read_range, temporary_beside, verify};
+use super::entry::{
+    collect, exists, key_of, plain_len_of, read_range, temporary_beside, verify_content,
+};
 use crate::{
     AlgorithmChoice, Chunk, Chunker as _, Codec, Error, FRAME_HEADER_LEN, FRAME_VERSION, Frame,
     Key, Layout, Manifest, PackIndex,
@@ -94,7 +97,7 @@ impl RorolalaStorage {
     /// Returns [`Error::Io`] if an index or a pack cannot be read.
     pub async fn open_objects(&self, keys: &[Key]) -> Result<ObjectBatch, Error> {
         let state = self.root_state();
-        let mut open: BTreeMap<PathBuf, Arc<std::fs::File>> = BTreeMap::new();
+        let mut open: BTreeMap<PathBuf, Arc<Mapped>> = BTreeMap::new();
         let mut indexes: Vec<(PathBuf, Arc<PackIndex>)> = Vec::new();
 
         for index in self.packs_of(&state, PackKind::Object).await? {
@@ -103,16 +106,16 @@ impl RorolalaStorage {
             };
             let path = self.pack_path(index);
 
-            // The index was read and the pack taken away before it could be opened, what dropping a
+            // The index was read and the pack taken away before it could be mapped, what dropping a
             // pack's last entry does. A pack that is not there holds nothing, which is the same answer
             // as an index that is not there.
-            let file = match tokio::fs::File::open(&path).await {
-                Ok(file) => file.into_std().await,
+            let map = match Mapped::open(&path) {
+                Ok(map) => map,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(error) => return Err(error.into()),
             };
 
-            open.insert(path.clone(), Arc::new(file));
+            open.insert(path.clone(), Arc::new(map));
             indexes.push((path, directory));
         }
 
@@ -143,6 +146,19 @@ impl RorolalaStorage {
     /// what is stored is not framed as this build can read, and [`Error::Corrupt`] if what comes
     /// back does not hash to `key`.
     pub async fn read_object(&self, key: &Key) -> Result<Vec<u8>, Error> {
+        Ok(self.read_object_bytes(key).await?.to_vec())
+    }
+
+    /// The object stored under `key`, checked against its key, as the ranges it is read as.
+    ///
+    /// This is what the content paths use, and by the time they are done with it, the last copy is
+    /// not one: only a caller that has to have the bytes in one buffer asks for
+    /// [`read_object`](Self::read_object).
+    ///
+    /// # Errors
+    ///
+    /// As [`read_object`](Self::read_object).
+    pub async fn read_object_bytes(&self, key: &Key) -> Result<Bytes, Error> {
         self.open_objects(std::slice::from_ref(key))
             .await?
             .read(key)
@@ -159,10 +175,12 @@ impl RorolalaStorage {
     ///
     /// Returns what [`read_object`](Self::read_object) does, except [`Error::Corrupt`].
     pub async fn read_object_unchecked(&self, key: &Key) -> Result<Vec<u8>, Error> {
-        self.open_objects(std::slice::from_ref(key))
+        Ok(self
+            .open_objects(std::slice::from_ref(key))
             .await?
             .read_unchecked(key)
-            .await
+            .await?
+            .to_vec())
     }
 
     /// Writes the manifest of the content stored under `key`, framed as a chunked entry.
@@ -243,11 +261,11 @@ impl RorolalaStorage {
     /// [`Error::Corrupt`] if what is stored does not make the content the key names,
     /// [`Error::Malformed`] if a manifest will not read and there is no object to answer with, and
     /// [`Error::Io`] if the store cannot be read at all.
-    pub(super) async fn read_content(&self, key: &Key) -> Result<Vec<u8>, Error> {
+    pub(super) async fn read_content(&self, key: &Key) -> Result<Bytes, Error> {
         let manifest = match self.read_manifest(key).await {
             Ok(Some(manifest)) => manifest,
             // No manifest at all: the content is whatever is under the key as an object.
-            Ok(None) => return self.read_object(key).await,
+            Ok(None) => return self.read_object_bytes(key).await,
             // A manifest that will not read is one nothing can be put back together from; the object
             // under the key is the same content, so it is answered with. What the fallback fails
             // with decides what is reported: only a key with nothing under it leaves the manifest's
@@ -261,7 +279,7 @@ impl RorolalaStorage {
             // Every chunk is whole in itself, `read_object` checked that, but the manifest that
             // put them in order is not covered by the key, so the whole is checked on its own. A
             // per-chunk check that passed is not the check a key promises.
-            Ok(content) if verify(key, &content).is_ok() => Ok(content),
+            Ok(content) if verify_content(key, &content).is_ok() => Ok(content),
             Ok(_) => self.whole_or_corrupt(key).await,
             // The chunks cannot be put back together, one is gone, or longer than the manifest says.
             // The whole content may still be under the key, beside the manifest (see `write_content`),
@@ -270,7 +288,7 @@ impl RorolalaStorage {
             // is reported, unless the fallback itself failed in a way that says more: a store that
             // cannot be read is not content that does not add up, and an object that does not hash is
             // not a manifest that reads wrong.
-            Err(error) => match self.read_object(key).await {
+            Err(error) => match self.read_object_bytes(key).await {
                 Ok(content) => Ok(content),
                 Err(Error::Io(failure)) => Err(Error::Io(failure)),
                 Err(Error::Corrupt(corrupt)) => Err(Error::Corrupt(corrupt)),
@@ -285,8 +303,8 @@ impl RorolalaStorage {
     /// content, so a read that works answers the key; a read that fails for its own reason is the
     /// better account of the store (an unreadable disk, or an object that does not hash) and only
     /// a key with no object under it leaves the manifest's failure as what is reported.
-    async fn whole_or_malformed(&self, key: &Key) -> Result<Vec<u8>, Error> {
-        match self.read_object(key).await {
+    async fn whole_or_malformed(&self, key: &Key) -> Result<Bytes, Error> {
+        match self.read_object_bytes(key).await {
             Ok(content) => Ok(content),
             Err(Error::NotFound(_)) => Err(Error::Malformed),
             Err(error) => Err(error),
@@ -299,8 +317,8 @@ impl RorolalaStorage {
     /// content may still be under the key as one object, and a whole write leaves it there beside a
     /// manifest, see `write_content`. If it is not, what the key promises is not in the store, and
     /// the key is corrupt rather than missing: a manifest for it is there, and says it was stored.
-    async fn whole_or_corrupt(&self, key: &Key) -> Result<Vec<u8>, Error> {
-        match self.read_object(key).await {
+    async fn whole_or_corrupt(&self, key: &Key) -> Result<Bytes, Error> {
+        match self.read_object_bytes(key).await {
             Ok(content) => Ok(content),
             // The fallback's own failure is the more telling one for an I/O problem: the store is
             // failing rather than holding content that does not add up.
@@ -314,35 +332,30 @@ impl RorolalaStorage {
     /// What the manifest says each chunk should be long is checked against what comes back: a
     /// manifest is the only place that is written down, and one that disagrees with the objects it
     /// names is a store that does not hold together rather than content to be handed on.
-    async fn assemble(&self, manifest: &Manifest) -> Result<Vec<u8>, Error> {
+    ///
+    /// The pieces are laid end to end as they are, and none of them is copied: a chunk stored as it
+    /// is comes back as a range of the pack it sits in, so putting a content together costs the
+    /// lengths and nothing of the bytes.
+    async fn assemble(&self, manifest: &Manifest) -> Result<Bytes, Error> {
         // The chunks are planned as one read rather than one read each: a batch finds every chunk
-        // and opens every pack once, where a read per chunk would walk the packs again for each of
+        // and maps every pack once, where a read per chunk would walk the packs again for each of
         // them. A content of fifty thousand chunks is fifty thousand walks otherwise.
         //
         // Each chunk is checked against its own key, and the whole is checked against the content's
         // key after this returns. Neither check can stand in for the other: a chunk that reads but
         // holds another content is corrupt under its own key, and chunks that are each whole can
         // still be in the wrong order, which only the whole check sees.
-        //
-        // Nothing is reserved from the total the manifest claims: a length is the manifest's to say
-        // and this is not a number an allocator should be handed on trust. A manifest that reads is
-        // bounded by `MAX_CONTENT_LEN`, see `Manifest::decode`, and what grows the buffer here is
-        // the bytes that really came back, one chunk at a time. A reserve that cannot be met is an
-        // I/O failure rather than an abort.
         let keys: Vec<Key> = manifest.chunks().iter().map(Chunk::key).collect();
         let batch = self.open_objects(&keys).await?;
-        let mut content = Vec::new();
+        let mut content = Bytes::default();
 
         for chunk in manifest.chunks() {
             let piece = batch.read(&chunk.key()).await?;
-            if piece.len() as u64 != chunk.len() {
+            if piece.len() != chunk.len() {
                 return Err(Error::Malformed);
             }
 
-            content
-                .try_reserve(piece.len())
-                .map_err(|error| Error::Io(std::io::Error::other(error)))?;
-            content.extend_from_slice(&piece);
+            content.push(piece);
         }
 
         Ok(content)
@@ -441,12 +454,14 @@ impl RorolalaStorage {
     ) -> Result<(), Error> {
         for chunk in manifest.chunks() {
             let piece = batch.read(&chunk.key()).await?;
-            if piece.len() as u64 != chunk.len() {
+            if piece.len() != chunk.len() {
                 return Err(Error::Malformed);
             }
 
-            hasher.update(&piece);
-            file.write_all(&piece).await?;
+            for part in piece.parts() {
+                hasher.update(part);
+                file.write_all(part).await?;
+            }
         }
 
         Ok(())
@@ -477,7 +492,9 @@ impl RorolalaStorage {
                 let _ = tokio::fs::remove_file(&temporary).await;
 
                 let content = batch.read(key).await?;
-                super::entry::write_whole(path, &content).await
+                let bytes = content.as_slice().ok_or(Error::Malformed)?;
+
+                super::entry::write_whole(path, bytes).await
             }
             Err(error) => {
                 drop(file);
@@ -611,7 +628,11 @@ impl RorolalaStorage {
                 for entry in &plan.entries {
                     match reads.read(entry).await {
                         Ok(bytes) => {
-                            write.add(entry, &bytes).await?;
+                            // A written entry is one object, so what was read is one range or one
+                            // buffer, and the batch takes it as it is rather than as a copy.
+                            let plain = bytes.as_slice().ok_or(Error::Malformed)?;
+
+                            write.add(entry, plain).await?;
                             report.written += 1;
                         }
                         // A chunk that is not there is the manifest not making a content, which the
@@ -941,16 +962,96 @@ enum Source {
     },
 }
 
-/// A run of object reads planned as one batch, with every pack they need opened once.
+/// One entry read, carried to a thread that may block.
 ///
-/// This is what a content of many chunks is read through: the packs are opened here rather than per
-/// chunk, and each read is a `pread` of the handle the batch holds. See
+/// A mapping faults a page at a time on the thread that touches it, so the read is made where a
+/// blocking read was made before it: the batch's chunks then overlap rather than queue.
+enum Read {
+    /// An entry of its own, mapped when it is read.
+    Loose(PathBuf),
+    /// A range of a pack the batch has already mapped.
+    Packed {
+        /// The mapped pack.
+        map: Arc<Mapped>,
+        /// Where the entry begins.
+        offset: u64,
+        /// How long it is, frame and payload together.
+        len: u64,
+    },
+}
+
+impl Read {
+    /// The content this read names, handed back as the ranges of the file it lies in.
+    fn of(self, key: &Key) -> Result<Bytes, Error> {
+        let (map, at, total) = match self {
+            Self::Loose(path) => {
+                let map = match Mapped::open(&path) {
+                    Ok(map) => Arc::new(map),
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        return Err(Error::NotFound(*key));
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+                let total = map.len();
+
+                (map, 0, total)
+            }
+            Self::Packed { map, offset, len } => {
+                let at = usize::try_from(offset).map_err(|_| Error::Malformed)?;
+                let total = usize::try_from(len).map_err(|_| Error::Malformed)?;
+
+                (map, at, total)
+            }
+        };
+
+        let end = at.checked_add(total).ok_or(Error::Malformed)?;
+        let head_end = at
+            .checked_add(total.min(FRAME_HEADER_LEN))
+            .ok_or(Error::Malformed)?;
+        let head = map.get(at..head_end).ok_or(Error::Malformed)?;
+        let (frame, header) = Frame::decode(head)?;
+        if header > total {
+            return Err(Error::Malformed);
+        }
+
+        // An object is the content itself; a manifest is how content was put together, and it is
+        // not stored where an object is.
+        if frame.layout != Layout::Single {
+            return Err(Error::Malformed);
+        }
+
+        let plain_len = plain_len_of(&frame)?;
+        let payload = at.saturating_add(header)..end;
+
+        match frame.codec {
+            Codec::Raw => {
+                // What is stored as it is is the content as it lies, so the range is the content: a
+                // length the frame disagrees with is a store that does not hold together.
+                if payload.end.saturating_sub(payload.start) != plain_len {
+                    return Err(Error::Malformed);
+                }
+
+                Bytes::mapped(map, payload).ok_or(Error::Malformed)
+            }
+            codec => {
+                let encoded = map.get(payload).ok_or(Error::Malformed)?;
+
+                Ok(Bytes::from(codec.decode(encoded, plain_len)?))
+            }
+        }
+    }
+}
+
+/// A run of object reads planned as one batch, with every pack they need mapped once.
+///
+/// This is what a content of many chunks is read through: the packs are mapped here rather than per
+/// chunk, and each read is a range of the mapping the batch holds. See
 /// [`RorolalaStorage::open_objects`].
 pub struct ObjectBatch {
     /// Where each key's bytes are.
     plan: BTreeMap<Key, Source>,
-    /// The packs the plan names, opened.
-    open: BTreeMap<PathBuf, Arc<std::fs::File>>,
+    /// The packs the plan names, mapped.
+    open: BTreeMap<PathBuf, Arc<Mapped>>,
 }
 
 impl ObjectBatch {
@@ -964,93 +1065,40 @@ impl ObjectBatch {
     /// Returns [`Error::NotFound`] if nothing is stored under `key`, [`Error::Malformed`] if what is
     /// stored is not framed as this build can read, [`Error::Corrupt`] if it does not hash to `key`,
     /// and [`Error::Io`] if a read failed.
-    pub async fn read(&self, key: &Key) -> Result<Vec<u8>, Error> {
+    pub async fn read(&self, key: &Key) -> Result<Bytes, Error> {
         self.read_where(key, true).await
     }
 
     /// Reads `key`, checking it against its key when `verify` says to.
-    async fn read_where(&self, key: &Key, check: bool) -> Result<Vec<u8>, Error> {
+    ///
+    /// The bytes come back as the ranges of the files they were read from rather than as a copy of
+    /// them: an entry stored as it is *is* its payload, so the range of the pack, or of the loose
+    /// file, is the content. Only an entry a codec has to undo becomes a buffer of its own.
+    ///
+    /// The read itself is handed to a thread that may block, as the `pread` it replaces was: a
+    /// mapping faults a page at a time on the thread that touches it, and a batch of chunks is read
+    /// for the reads to overlap rather than to wait one behind another.
+    async fn read_where(&self, key: &Key, check: bool) -> Result<Bytes, Error> {
         let Some(source) = self.plan.get(key) else {
             return Err(Error::NotFound(*key));
         };
+        let key = *key;
 
-        let (frame, payload) = match source {
-            Source::Loose(path) => {
-                use tokio::io::AsyncReadExt as _;
-
-                let mut file = match tokio::fs::File::open(path).await {
-                    Ok(file) => file,
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                        return Err(Error::NotFound(*key));
-                    }
-                    Err(error) => return Err(error.into()),
-                };
-                let total =
-                    usize::try_from(file.metadata().await?.len()).map_err(|_| Error::Malformed)?;
-
-                // The frame is read first, so the payload is read into the front of its own buffer
-                // rather than being moved down inside a buffer that holds both.
-                let mut header = vec![0_u8; total.min(FRAME_HEADER_LEN)];
-                file.read_exact(&mut header).await?;
-                let (frame, header) = Frame::decode(&header)?;
-                if header > total {
-                    return Err(Error::Malformed);
-                }
-
-                let mut payload = vec![0_u8; total - header];
-                file.read_exact(&mut payload).await?;
-
-                (frame, payload)
-            }
-            Source::Packed { pack, offset, len } => {
-                let file = Arc::clone(self.open.get(pack).ok_or(Error::NotFound(*key))?);
-                let (offset, len) = (*offset, *len);
-
-                // A `pread` blocks the thread it runs on, so it is handed to one that may block: the
-                // point of the batch is that the reads overlap, and awaiting a blocking read would put
-                // them one behind another.
-                let read = tokio::task::spawn_blocking(move || {
-                    let total = usize::try_from(len).map_err(|_| Error::Malformed)?;
-                    let mut header = vec![0_u8; total.min(FRAME_HEADER_LEN)];
-
-                    read_exact_at(&file, &mut header, offset)?;
-                    let (frame, header) = Frame::decode(&header)?;
-                    if header > total {
-                        return Err(Error::Malformed);
-                    }
-
-                    let at = offset.checked_add(header as u64).ok_or(Error::Malformed)?;
-                    let mut payload = vec![0_u8; total - header];
-                    read_exact_at(&file, &mut payload, at)?;
-
-                    Ok::<_, Error>((frame, payload))
-                })
-                .await
-                .map_err(|error| Error::Io(std::io::Error::other(error)))?;
-
-                match read {
-                    Ok(parts) => parts,
-                    // The pack was taken away after the plan was made, what dropping a pack's last
-                    // entry does. A key whose pack is gone has nothing under it, which is the same
-                    // answer as a key the store never had.
-                    Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
-                        return Err(Error::NotFound(*key));
-                    }
-                    Err(error) => return Err(error),
-                }
-            }
+        let read = match source {
+            Source::Loose(path) => Read::Loose(path.clone()),
+            Source::Packed { pack, offset, len } => Read::Packed {
+                map: Arc::clone(self.open.get(pack).ok_or(Error::NotFound(key))?),
+                offset: *offset,
+                len: *len,
+            },
         };
 
-        // An object is the content itself; a manifest is how content was put together, and it is
-        // not stored where an object is.
-        if frame.layout != Layout::Single {
-            return Err(Error::Malformed);
-        }
-
-        let content = frame.codec.decode_moving(payload, plain_len_of(&frame)?)?;
+        let content = tokio::task::spawn_blocking(move || read.of(&key))
+            .await
+            .map_err(|error| Error::Io(std::io::Error::other(error)))??;
 
         if check {
-            verify(key, &content)?;
+            verify_content(&key, &content)?;
         }
 
         Ok(content)
@@ -1066,7 +1114,7 @@ impl ObjectBatch {
     /// # Errors
     ///
     /// As [`read`](Self::read), except [`Corrupt`](Error::Corrupt).
-    pub async fn read_unchecked(&self, key: &Key) -> Result<Vec<u8>, Error> {
+    pub async fn read_unchecked(&self, key: &Key) -> Result<Bytes, Error> {
         self.read_where(key, false).await
     }
 
@@ -1179,44 +1227,5 @@ async fn finish(
 
             Err(error)
         }
-    }
-}
-
-/// Reads exactly `buffer.len()` bytes of `file` starting at `offset`, leaving its cursor where it was.
-fn read_exact_at(file: &std::fs::File, buffer: &mut [u8], offset: u64) -> Result<(), Error> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::FileExt as _;
-
-        file.read_exact_at(buffer, offset)?;
-
-        Ok(())
-    }
-
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::FileExt as _;
-
-        let mut read = 0;
-        while read < buffer.len() {
-            let got = file.seek_read(&mut buffer[read..], offset + read as u64)?;
-            if got == 0 {
-                return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
-            }
-            read += got;
-        }
-
-        Ok(())
-    }
-
-    #[cfg(not(any(unix, windows)))]
-    {
-        use std::io::{Read as _, Seek as _};
-
-        let mut handle = file.try_clone()?;
-        handle.seek(std::io::SeekFrom::Start(offset))?;
-        handle.read_exact(buffer)?;
-
-        Ok(())
     }
 }

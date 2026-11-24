@@ -339,7 +339,11 @@ async fn resolved_entry(layout: &Layout, index: &VCSIndex, path: &LayoutPath) ->
 async fn read_structure(store: &StorageSet, key: Key) -> Option<TreeStructure> {
     let bytes = store.content(&key).await.ok().flatten()?;
 
-    TreeStructure::decode(&bytes).ok()
+    // A structure is one object, so what is read is one range or one buffer, and never a run of
+    // pieces a decoder would have to be handed as a whole.
+    let encoded = bytes.as_slice()?;
+
+    TreeStructure::decode(encoded).ok()
 }
 
 /// The structure stored under `key`, when what is stored there begins one.

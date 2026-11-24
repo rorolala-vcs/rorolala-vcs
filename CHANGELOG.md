@@ -25,6 +25,7 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`rorolala-vcs`] Leave the views alone when a background fetch changes nothing. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-rorolala-vcs-leave-the-views-alone-when-a-background-fetch-changes-nothing)
 6. [`modules`] [`daemon`] [`sync_storage`] Read a content's chunks with the window in flight again. [See details](dev/CHANGELOG-DETAILS.md#6-modules-daemon-sync_storage-read-a-contents-chunks-with-the-window-in-flight-again)
 7. [`modules`] [`storage`] [`content`] Publish a content into packs instead of a file apiece. [See details](dev/CHANGELOG-DETAILS.md#7-modules-storage-content-publish-a-content-into-packs-instead-of-a-file-apiece)
+8. [`modules`] [`storage`] [`read`] Read content through memory mappings instead of copying it. [See details](dev/CHANGELOG-DETAILS.md#8-modules-storage-read-read-content-through-memory-mappings-instead-of-copying-it)
 
 ## Feature
 

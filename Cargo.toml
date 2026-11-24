@@ -45,6 +45,7 @@ members = [
     "utils/lazyffi-core",
     "utils/lazyffi-macros",
     "utils/location",
+    "utils/mapped",
     "utils/progress",
     "utils/sandbox",
 ]
@@ -106,6 +107,7 @@ rorolala-utils-lazyffi = { path = "utils/lazyffi" }
 rorolala-utils-lazyffi-core = { path = "utils/lazyffi-core" }
 rorolala-utils-lazyffi-macros = { path = "utils/lazyffi-macros" }
 rorolala-utils-location = { path = "utils/location" }
+rorolala-utils-mapped = { path = "utils/mapped" }
 rorolala-utils-progress = { path = "utils/progress" }
 rorolala-vault = { path = "modules/vault" }
 rorolala-vcs = { path = "modules/vcs" }
@@ -179,6 +181,11 @@ unicode-normalization = "0.1.25"
 # Identifiers
 uuid = { version = "1.26.1", features = ["v4", "serde"] }
 
+# Mapping a file rather than reading it into a buffer. What a large material is read through, so
+# that the pages the kernel already holds are not copied into the program a second time, and what a
+# content read hands out as the ranges of the files it came from.
+memmap2 = "0.9.11"
+
 # Compression
 lz4 = "1.28.1"
 zstd = "0.13.3"
@@ -205,7 +212,11 @@ minus = { version = "5.8.0", default-features = false, features = ["static_outpu
 rust-i18n = "4.2.2"
 
 # Cryptography
-blake3 = "1.8.3"
+#
+# `rayon` is what lets BLAKE3 hash one buffer on more than one thread: a material is named by the
+# hash of the whole of it, so a few gigabytes go faster across cores. The `mmap` feature is left off
+# on purpose: it maps a `Path` of its own, while a caller here already holds a mapping.
+blake3 = { version = "1.8.3", features = ["rayon"] }
 chacha20poly1305 = "0.10.1"
 ed25519-dalek = "2.2.0"
 hkdf = "0.12.4"

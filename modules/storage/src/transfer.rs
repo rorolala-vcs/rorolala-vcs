@@ -28,7 +28,8 @@ use std::io;
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as _};
 
 use crate::{
-    BLAKE3_HASH_LEN, Blake3Hash, Key, PROTOCOL_MAGIC_LEN, Presence, TransferableBackend, split_u64,
+    BLAKE3_HASH_LEN, Blake3Hash, Bytes, Key, PROTOCOL_MAGIC_LEN, Presence, TransferableBackend,
+    split_u64,
 };
 
 /// How many bytes of content one frame may carry.
@@ -174,7 +175,7 @@ where
     match backend.content(key).await.map_err(Error::Store)? {
         Some(content) => {
             write_frame(stream, &[1]).await?;
-            write_frame(stream, &content).await?;
+            write_bytes(stream, &content).await?;
         }
         None => write_frame(stream, &[0]).await?,
     }
@@ -244,6 +245,31 @@ where
     stream.read_exact(&mut theirs).await.map_err(Wire::Stream)?;
 
     Ok(theirs)
+}
+
+/// Writes a length-prefixed run of bytes, held as pieces.
+///
+/// The length goes out before the pieces and the pieces follow it one after another, so what a
+/// content read as ranges of mapped packs costs is the writes and not a buffer holding all of it.
+async fn write_bytes<W>(stream: &mut W, bytes: &Bytes) -> Result<(), Wire>
+where
+    W: AsyncWrite + Unpin,
+{
+    let length = usize::try_from(bytes.len()).map_err(|_| Wire::TooLarge)?;
+    if length > MAX_FRAME {
+        return Err(Wire::TooLarge);
+    }
+
+    stream
+        .write_all(&(length as u64).to_be_bytes())
+        .await
+        .map_err(Wire::Stream)?;
+
+    for part in bytes.parts() {
+        stream.write_all(part).await.map_err(Wire::Stream)?;
+    }
+
+    Ok(())
 }
 
 /// Writes a length-prefixed run of bytes.
@@ -450,7 +476,11 @@ mod tests {
 
         assert!(holds(&left, &key).await, "the content is now held");
         assert_eq!(
-            left.content(&key).await.ok().flatten(),
+            left.content(&key)
+                .await
+                .ok()
+                .flatten()
+                .map(|bytes| bytes.to_vec()),
             Some(content),
             "what crossed is the content"
         );
@@ -652,7 +682,11 @@ mod tests {
             "the right end wrote it its own way"
         );
         assert_eq!(
-            right.content(&key).await.ok(),
+            right
+                .content(&key)
+                .await
+                .ok()
+                .map(|bytes| bytes.map(|bytes| bytes.to_vec())),
             Some(Some(content)),
             "what arrived is the content that was sent"
         );

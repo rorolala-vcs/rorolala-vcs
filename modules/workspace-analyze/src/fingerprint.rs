@@ -7,17 +7,14 @@
 //! whose `hash_chars` and `diffcore_count_changes` this is a port of.
 
 use std::collections::HashMap;
-use std::fs;
-use std::io::Read as _;
 use std::path::Path;
+
+use rorolala_utils_mapped::Mapped;
 
 /// How much of a file is looked at to tell text from binary.
 ///
 /// git's `FIRST_FEW_BYTES`: past this, a NUL is not looked for.
 const FIRST_FEW_BYTES: usize = 8000;
-
-/// How much of a file a streaming read hands the hasher at a time.
-const STREAM_CHUNK: usize = 64 * 1024;
 
 /// How long a span may be, when a line does not cut it first.
 const SPAN_LIMIT: u32 = 64;
@@ -70,50 +67,30 @@ impl Fingerprint {
 
 /// Reads the file at `path` and works out what it holds.
 ///
-/// Only the opening is kept to tell text from binary: a binary file is hashed as it streams past,
-/// so a large `PSD` is never held whole. A text file is held whole, because the spans a move is
-/// guessed from are cut out of the whole of it.
+/// The file is mapped rather than read into a buffer, so a large `PSD` is never copied into the
+/// program to be hashed: the pages the kernel already holds are hashed where they are, on more
+/// than one thread when the file is big enough to pay for it. A file that has to be cut into spans
+/// is walked over the same mapping.
 ///
 /// # Errors
 ///
 /// Returns what opening or reading the file fails with.
 pub fn read(path: &Path) -> std::io::Result<Fingerprint> {
-    let mut file = fs::File::open(path)?;
-    let mut opening = Vec::with_capacity(FIRST_FEW_BYTES);
-    file.by_ref()
-        .take(u64::try_from(FIRST_FEW_BYTES).unwrap_or(u64::MAX))
-        .read_to_end(&mut opening)?;
+    let mapped = Mapped::open(path)?;
+    let bytes: &[u8] = &mapped;
+    let digest = mapped.digest();
+    let len = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
 
-    if !is_binary(&opening) {
-        let mut bytes = opening;
-        file.read_to_end(&mut bytes)?;
-        let digest = digest(&bytes);
-        let spans = Some(spans(&bytes, false));
-
+    if !is_binary(bytes) {
         return Ok(Fingerprint {
             digest,
-            spans,
-            len: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+            spans: Some(spans(bytes, false)),
+            len,
         });
     }
 
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(&opening);
-    let mut len = u64::try_from(opening.len()).unwrap_or(u64::MAX);
-    let mut buffer = vec![0_u8; STREAM_CHUNK];
-
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-
-        hasher.update(&buffer[..read]);
-        len = len.saturating_add(u64::try_from(read).unwrap_or(u64::MAX));
-    }
-
     Ok(Fingerprint {
-        digest: *hasher.finalize().as_bytes(),
+        digest,
         spans: None,
         len,
     })

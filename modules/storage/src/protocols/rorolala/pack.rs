@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::time::{Duration, SystemTime};
 
 use rorolala_chunking::Chunker as _;
+use rorolala_utils_mapped::{Bytes, Mapped};
 use rorolala_utils_progress::{Progress, Task};
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -717,6 +718,12 @@ impl RorolalaStorage {
         let max = self.max_pack_size().await;
         let mut written = Vec::new();
 
+        // Each pack is mapped once and read through its slices rather than opened and copied once
+        // per entry: a repack walks every entry the store holds, and most of them sit in a pack
+        // already. The mappings live until this returns, and the packs they name are dropped after
+        // it, so no removal meets a mapping Windows would refuse.
+        let mut mapped: BTreeMap<u64, Arc<Mapped>> = BTreeMap::new();
+
         for run in kind_runs(entries) {
             let part = &entries[run];
             let kind = part[0].0;
@@ -729,17 +736,20 @@ impl RorolalaStorage {
                 for (_, key, _, source) in &part[range] {
                     // An entry the store stopped holding between being listed and being read is left
                     // out: it is gone, so there is nothing to move and no entry to name.
-                    let Some(bytes) = self.read_source(source).await? else {
+                    let Some(bytes) = self.read_source(source, &mut mapped)? else {
                         task.advance_by(1);
 
                         continue;
                     };
 
-                    packing.file.write_all(&bytes).await?;
+                    for piece in bytes.parts() {
+                        packing.file.write_all(piece).await?;
+                    }
+
                     packing
                         .directory
-                        .push(PackEntry::new(*key, packing.size, bytes.len() as u64));
-                    packing.size += bytes.len() as u64;
+                        .push(PackEntry::new(*key, packing.size, bytes.len()));
+                    packing.size += bytes.len();
                     keys.push(*key);
                     task.advance_by(1);
                 }
@@ -837,21 +847,46 @@ impl RorolalaStorage {
     ///
     /// `None` is an entry that is not there any more, which is not a failure: what is gone cannot be
     /// written again, and a pack is not made to name it.
-    async fn read_source(&self, source: &Source) -> Result<Option<Vec<u8>>, Error> {
+    ///
+    /// `mapped` holds the packs opened so far in this run, so that an entry already in a pack is a
+    /// range of one mapping rather than a fresh copy of it.
+    fn read_source(
+        &self,
+        source: &Source,
+        mapped: &mut BTreeMap<u64, Arc<Mapped>>,
+    ) -> Result<Option<Bytes>, Error> {
         match source {
-            Source::Loose(path) => match tokio::fs::read(path).await {
-                Ok(bytes) => Ok(Some(bytes)),
-                Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Source::Loose(path) => match Mapped::open(path) {
+                Ok(map) => Ok(Some(Bytes::from(map))),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
                 Err(error) => Err(error.into()),
             },
             Source::Packed { index, offset, len } => {
-                let pack_path = self.pack_path(*index);
+                if !mapped.contains_key(index) {
+                    let opened = match Mapped::open(&self.pack_path(*index)) {
+                        Ok(map) => map,
+                        // A pack taken away between being listed and being read holds nothing.
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                            return Ok(None);
+                        }
+                        Err(error) => return Err(error.into()),
+                    };
 
-                match read_range(&pack_path, *offset, *len).await {
-                    Ok(bytes) => Ok(Some(bytes)),
-                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-                    Err(error) => Err(error),
+                    mapped.insert(*index, Arc::new(opened));
                 }
+
+                // The key was just put there, so the mapping is one of the run's own.
+                let map = Arc::clone(mapped.get(index).ok_or(Error::Malformed)?);
+                let start = usize::try_from(*offset).map_err(|_| Error::Malformed)?;
+                let end = start
+                    .checked_add(usize::try_from(*len).map_err(|_| Error::Malformed)?)
+                    .ok_or(Error::Malformed)?;
+
+                // A range the pack does not hold says the store does not hold together, which is
+                // the answer `read_range` gave for the same bytes.
+                Bytes::mapped(map, start..end)
+                    .map(Some)
+                    .ok_or(Error::Malformed)
             }
         }
     }

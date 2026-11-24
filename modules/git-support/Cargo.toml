@@ -10,6 +10,7 @@ rola-define-format.workspace = true
 # A tree material is placed from the structure its content is, and the structure's shape is the
 # tree module's: this crate only moves files to and from the paths it names.
 rorolala-tree.workspace = true
+rorolala-utils-mapped.workspace = true
 blake3.workspace = true
 serde.workspace = true
 toml.workspace = true

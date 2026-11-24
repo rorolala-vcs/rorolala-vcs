@@ -370,6 +370,7 @@ dependencies = [
  "cfg-if",
  "constant_time_eq",
  "cpufeatures 0.3.1",
+ "rayon-core",
 ]
 
 [[package]]
@@ -3664,6 +3665,7 @@ dependencies = [
  "rola-define-format",
  "rorolala-storage",
  "rorolala-tree",
+ "rorolala-utils-mapped",
  "serde",
  "toml 0.8.23",
  "uuid",
@@ -3935,6 +3937,7 @@ dependencies = [
  "rorolala-chunking",
  "rorolala-utils-constants",
  "rorolala-utils-location",
+ "rorolala-utils-mapped",
  "rorolala-utils-progress",
  "serde",
  "size",
@@ -3955,6 +3958,7 @@ dependencies = [
  "rorolala-storage",
  "rorolala-utils-constants",
  "rorolala-utils-location",
+ "rorolala-utils-mapped",
  "rorolala-vcs",
  "rorolala-workspace-analyze",
  "serde",
@@ -4053,6 +4057,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rorolala-utils-mapped"
+version = "0.4.0"
+dependencies = [
+ "blake3",
+ "memmap2",
+]
+
+[[package]]
 name = "rorolala-utils-progress"
 version = "0.4.0"
 dependencies = [
@@ -4125,6 +4137,7 @@ dependencies = [
  "rorolala-layout",
  "rorolala-utils-constants",
  "rorolala-utils-location",
+ "rorolala-utils-mapped",
  "rorolala-workspace",
  "uuid",
 ]

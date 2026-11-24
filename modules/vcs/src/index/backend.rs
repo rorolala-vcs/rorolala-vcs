@@ -17,7 +17,7 @@ use std::io;
 use std::path::Path;
 
 use rorolala_storage::{
-    AlgorithmChoice, Chunking, Codec, Key, Presence, ProtocolMagic, StorageBackend,
+    AlgorithmChoice, Bytes, Chunking, Codec, Key, Presence, ProtocolMagic, StorageBackend,
     TransferableBackend,
 };
 
@@ -144,9 +144,9 @@ impl TransferableBackend for VCSIndex {
     /// each other turn one another away rather than moving what neither of them holds.
     const PROTOCOL_MAGIC: ProtocolMagic = *b"ROLAIXYZ";
 
-    async fn content(&self, key: &Key) -> Result<Option<Vec<u8>>, Self::Error> {
+    async fn content(&self, key: &Key) -> Result<Option<Bytes>, Self::Error> {
         match self.read_object(key).await {
-            Ok(plain) => Ok(Some(plain)),
+            Ok(plain) => Ok(Some(Bytes::from(plain))),
             Err(VCSIndexError::NotFound(_)) => Ok(None),
             Err(error) => Err(error),
         }

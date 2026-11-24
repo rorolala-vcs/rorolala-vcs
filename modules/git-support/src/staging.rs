@@ -570,6 +570,7 @@ mod tests {
     use rola_define_format::{ContentHash, Lock, LockPath, Material, MaterialKind};
     use rorolala_storage::Key;
     use rorolala_tree::{FileMode, TreeEntry, TreeStructure};
+    use rorolala_utils_mapped::Bytes;
 
     use super::{Placed, Private, State, attach, detach, placement, restore};
     use crate::content::{ContentSource, LocalStore, digest_of};
@@ -663,7 +664,7 @@ mod tests {
             })
         }
 
-        fn read(&self, content: ContentHash) -> Result<Vec<u8>, Error> {
+        fn read(&self, content: ContentHash) -> Result<Bytes, Error> {
             Err(Error::Unavailable {
                 content: content.to_token(),
             })
@@ -697,10 +698,11 @@ mod tests {
             fs::write(path, bytes).map_err(Error::Io)
         }
 
-        fn read(&self, content: ContentHash) -> Result<Vec<u8>, Error> {
+        fn read(&self, content: ContentHash) -> Result<Bytes, Error> {
             self.0
                 .get(&content)
                 .cloned()
+                .map(Bytes::from)
                 .ok_or_else(|| Error::Unavailable {
                     content: content.to_token(),
                 })
@@ -941,7 +943,7 @@ mod tests {
                 })
             }
 
-            fn read(&self, _content: ContentHash) -> Result<Vec<u8>, Error> {
+            fn read(&self, _content: ContentHash) -> Result<Bytes, Error> {
                 self.0.set(self.0.get() + 1);
 
                 Err(Error::Unavailable {

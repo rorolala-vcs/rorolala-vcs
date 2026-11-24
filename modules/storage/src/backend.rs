@@ -1,8 +1,9 @@
 use std::future::Future;
-use std::io::Read as _;
 use std::path::Path;
 
-use crate::{Key, Presence};
+use rorolala_utils_mapped::Mapped;
+
+use crate::{Bytes, Key, Presence};
 
 /// Local, content-addressed storage.
 ///
@@ -194,6 +195,10 @@ pub trait TransferableBackend: StorageBackend {
     /// This is the content, not the entry: a content kept as chunks is answered with the whole of
     /// it. Nothing about how it is kept goes over the wire.
     ///
+    /// What comes back is a run of ranges of the store's own files and of buffers, not one copy of
+    /// the content: a chunk stored as it is is a range of the pack it sits in, and only a chunk a
+    /// codec has to undo is a buffer. A caller that needs one buffer asks the run for it.
+    ///
     /// `None` is content that is not there, which is what lets a sender leave out a key it can no
     /// longer produce. Content that is there but does not hold together is an error instead, and an
     /// error ends the exchange rather than being quietly read as "not there": a store that hands
@@ -202,10 +207,8 @@ pub trait TransferableBackend: StorageBackend {
     /// # Errors
     ///
     /// Whatever the backend itself fails with, including content that is there but does not read.
-    fn content(
-        &self,
-        key: &Key,
-    ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> + Send;
+    fn content(&self, key: &Key)
+    -> impl Future<Output = Result<Option<Bytes>, Self::Error>> + Send;
 
     /// Stores `content` under `key`, which is the hash it has to come to.
     ///
@@ -250,25 +253,13 @@ where
 ///
 /// This is the same key [`store_file`] would answer with, the hash of the file's content, so a
 /// caller that has to know whether content is already recorded, before deciding whether to write
-/// it, can ask here and write only what is new. The file is streamed through the hasher and never
-/// held whole, so asking about a gigabyte costs a buffer and not a gigabyte.
+/// it, can ask here and write only what is new. The file is mapped rather than read into a buffer,
+/// so naming a gigabyte costs the pages that are hashed and not a gigabyte of its own, and the hash
+/// is taken on more than one thread where the file is big enough to pay for it.
 ///
 /// # Errors
 ///
 /// Whatever reading `file` fails with.
 pub fn key_of_file(file: impl AsRef<Path>) -> std::io::Result<Key> {
-    let mut file = std::fs::File::open(file.as_ref())?;
-    let mut hasher = blake3::Hasher::new();
-    let mut buffer = vec![0_u8; 64 * 1024];
-
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-
-        hasher.update(&buffer[..read]);
-    }
-
-    Ok(Key::new(*hasher.finalize().as_bytes()))
+    Ok(Key::new(Mapped::open(file.as_ref())?.digest()))
 }
