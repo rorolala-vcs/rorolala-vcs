@@ -171,4 +171,20 @@ internal sealed class VirtualPlace : ILogicalViewProvider, ILogicalFolderEditor
 
         return true;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// This place's removal is the browser's own, so it states no words of its own and offers no second way to
+    /// take a row away.
+    /// </remarks>
+    public RemovalWords? Removal(object data) => null;
+
+    /// <inheritdoc />
+    public bool StatesRemoval(LogicalAddress address) => false;
+
+    /// <inheritdoc />
+    public bool Erasable(object data) => false;
+
+    /// <inheritdoc />
+    public bool Erase(LogicalAddress address, object data) => false;
 }

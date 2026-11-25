@@ -618,6 +618,12 @@ inline RolaWriteLayoutOp native_layout_op(const LayoutOp &op) noexcept {
             .path = const_cast<char *>(op.path.c_str()),
         };
         break;
+    case LayoutOpKind::soft_delete_path:
+        out.tag = RolaWriteLayoutOp_SoftDeletePath;
+        out.payload.SoftDeletePath = RolaWriteLayoutOpSoftDeletePath{
+            .path = const_cast<char *>(op.path.c_str()),
+        };
+        break;
     case LayoutOpKind::change_ownership:
         out.tag = RolaWriteLayoutOp_ChangeOwnership;
         out.payload.ChangeOwnership = RolaWriteLayoutOpChangeOwnership{

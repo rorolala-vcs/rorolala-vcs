@@ -591,6 +591,8 @@ pub enum LayoutDid {
     Unbound,
     /// A path was moved.
     Moved,
+    /// A path was moved under `@/removed/`, keeping its entry.
+    Archived,
     /// The `Uuid` a path names was changed.
     UuidChanged,
     /// The `Uuid` a path names was renewed.
@@ -615,6 +617,7 @@ pub fn render_result_layout_content(result: ResultLayoutContent) {
         LayoutDid::Bound => t!("cmd_layout_path.result_bound", what = result.what),
         LayoutDid::Unbound => t!("cmd_layout_path.result_unbound", what = result.what),
         LayoutDid::Moved => t!("cmd_layout_path.result_moved", what = result.what),
+        LayoutDid::Archived => t!("cmd_layout_path.result_archived", what = result.what),
         LayoutDid::UuidChanged => t!("cmd_layout_path.result_uuid_changed", what = result.what),
         LayoutDid::UuidNew => t!("cmd_layout_path.result_uuid_new", what = result.what),
     };

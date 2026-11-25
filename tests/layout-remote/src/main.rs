@@ -652,6 +652,80 @@ async fn main() {
         &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
     );
 
+    // A soft delete is the move above with the target worked out by the writer: the path lands under
+    // `@/removed/<date>/`, dated in UTC, and an account that holds nothing may still make it.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "path",
+            "remove",
+            "a.psd",
+            "--soft",
+            "--layout",
+            "truth@origin",
+        ],
+    ));
+    let archived = vault_path(&root).unwrap_or_default();
+    checked.wants(
+        "a member who does not hold the entry may archive it",
+        said.success() && archived.starts_with("@/removed/") && archived.ends_with("/a.psd"),
+        &format!(
+            "it ended with {:?} and the Vault names {:?}: {}",
+            said.code,
+            archived,
+            said.stderr.trim()
+        ),
+    );
+    checked.wants(
+        "the copy follows the path the Vault archived",
+        Layout::open(fetched_copy(&workspace, VAULT_NAME))
+            .expect("the fetched copy")
+            .id_of(&LayoutPath::new(&archived).unwrap())
+            == Some(ENTRY),
+        "the copy did not follow the archive",
+    );
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "path",
+            "remove",
+            &archived,
+            "--soft",
+            "--layout",
+            "truth@origin",
+        ],
+    ));
+    checked.wants(
+        "a path already under the archive is not archived again",
+        said.code == Some(191),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // Back where it was, so what the checks after this one read is the entry they were written for.
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "layout",
+            "path",
+            "move",
+            &archived,
+            "a.psd",
+            "--layout",
+            "truth@origin",
+        ],
+    ));
+    checked.wants(
+        "the archived path is moved back out of the archive",
+        said.success(),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
     // Put it back under the marker, since what the checks after this one read is the deprecated
     // entry they were written for; the account doing it still holds nothing.
     let said = run(&mut client(

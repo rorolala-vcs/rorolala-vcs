@@ -1192,7 +1192,10 @@ internal sealed class DirectoryControl : UserControl
         // place's to say, a folder of its own is the case it exists for, and a row it does not answer for is left alone.
         if (_logical is { } place)
         {
-            if (Keys.Forget(e, place.Delete, _host.Log) || Keys.Rename(e, place.Rename, _host.Log))
+            if (
+                Keys.Forget(e, place.Delete, place.Erase, _host.Log)
+                || Keys.Rename(e, place.Rename, _host.Log)
+            )
             {
                 return;
             }

@@ -165,7 +165,7 @@ struct CollectRequest {
     std::uint64_t grace = 0;
 };
 
-// One change a Layout batch applies. The eight kinds share one shape because
+// One change a Layout batch applies. The nine kinds share one shape because
 // they travel as one tagged record each; the fields a kind does not read stay
 // empty.
 enum class LayoutOpKind {
@@ -175,6 +175,7 @@ enum class LayoutOpKind {
     create_path,
     move_path,
     remove_path,
+    soft_delete_path,
     change_ownership,
     change_uuid,
 };

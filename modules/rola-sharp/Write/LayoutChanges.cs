@@ -21,6 +21,9 @@ public enum LayoutChangeKind
     /// <summary>Removes a path.</summary>
     RemovePath,
 
+    /// <summary>Moves a path under <c>@/removed/&lt;date&gt;/</c>, leaving its entry.</summary>
+    SoftDeletePath,
+
     /// <summary>Changes who holds an entry.</summary>
     ChangeOwnership,
 
@@ -29,8 +32,9 @@ public enum LayoutChangeKind
 }
 
 /// <summary>One change a Layout batch applies.</summary>
+/// One change a Layout batch applies.
 /// <remarks>
-/// The eight changes share one shape because they travel as one tagged record each; which fields a
+/// The nine changes share one shape because they travel as one tagged record each; which fields a
 /// change reads is what <see cref="Kind"/> says, and the others stay empty.
 /// </remarks>
 public sealed record LayoutChange

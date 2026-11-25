@@ -70,5 +70,21 @@ int main() {
              "the failure is no_workspace");
     }
 
+    /* A batch carries the soft delete as a change of its own, and the archive's path is worked out by
+       the native side: a path already under `@/removed/` is refused rather than archived twice, so the
+       fixture is left as it was read. */
+    rola::LayoutApplyRequest archive;
+    rola::LayoutOp change;
+    change.kind = rola::LayoutOpKind::soft_delete_path;
+    change.path = "@/removed/old.psd";
+    archive.ops.push_back(change);
+
+    auto archived = rola::LayoutWriter{directory, std::string{"main"}}.apply(archive);
+    want(!archived.has_value(), "a path already under the archive is not archived again");
+    if (!archived) {
+        want(archived.error().kind() == rola::ErrorKind::invalid_path,
+             "the failure is invalid_path");
+    }
+
     return harness::finish();
 }

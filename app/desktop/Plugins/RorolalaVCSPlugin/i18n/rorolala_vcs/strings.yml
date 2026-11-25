@@ -1066,6 +1066,34 @@ rorolala_vcs:
       en: "The Vault still names the entry: only the account that holds it, or one that administrates the Vault, may remove it."
       zh-CN: "保险库仍记录着该条目：只有持有它的账户、或保险库管理员才能删除它。"
 
+    # What the two removals a Vault's copy offers are called, what each is asked about with, and what
+    # an archive that did not happen says.
+    soft_delete:
+      en: Soft delete
+      zh-CN: 软删除
+    erase:
+      en: Delete permanently
+      zh-CN: 彻底删除
+    soft_delete_one:
+      en: "Archive `%{name}` under `@/removed/`? Its entry stays in the Vault."
+      zh-CN: "把 `%{name}` 归档到 `@/removed/` 下吗？条目仍留在保险库中。"
+    soft_delete_many:
+      en: "Archive the %{count} selected entries under `@/removed/`? Their entries stay in the Vault."
+      zh-CN: "把选中的 %{count} 个条目归档到 `@/removed/` 下吗？条目仍留在保险库中。"
+    erase_one:
+      en: "Delete `%{name}` for good? The Vault will no longer hold it."
+      zh-CN: "彻底删除 `%{name}` 吗？保险库将不再持有该条目。"
+    erase_many:
+      en: "Delete the %{count} selected entries for good? The Vault will no longer hold them."
+      zh-CN: "彻底删除选中的 %{count} 个条目吗？保险库将不再持有它们。"
+    soft_delete_refused:
+      en: "`%{path}` could not be archived"
+      zh-CN: "`%{path}` 无法归档"
+    soft_delete_refused_why:
+      en: "The Vault still names the entry where it was: `@/removed/` has no room for that path today."
+      zh-CN: "保险库仍把条目记在原处：`@/removed/` 下今天没有该路径的位置。"
+
+
     # What the root of the place opens at, and what it says when there is no Vault to open: the work's own upstream is
     # the Vault the Layout being worked in tracks, and the Workspace's default Vault where it tracks none.
     no_root_title:
@@ -1127,6 +1155,11 @@ rorolala_vcs:
     path_remove:
       en: Removing the entry upstream
       zh-CN: 正在删除上游条目
+
+    soft_delete:
+      en: Archiving the entry upstream
+      zh-CN: 正在归档上游条目
+
     switch_uuid:
       en: Switching the tracked entry
       zh-CN: 正在切换跟踪条目

@@ -989,13 +989,17 @@ internal enum RolaWriteLayoutOpTag : int
     /// </summary>
     RolaWriteLayoutOp_RemovePath = 5,
     /// <summary>
+    /// Moves the path under `@/removed/&lt;date&gt;/`, leaving the entry.
+    /// </summary>
+    RolaWriteLayoutOp_SoftDeletePath = 6,
+    /// <summary>
     /// Changes who holds an entry.
     /// </summary>
-    RolaWriteLayoutOp_ChangeOwnership = 6,
+    RolaWriteLayoutOp_ChangeOwnership = 7,
     /// <summary>
     /// Changes an entry's `Uuid`.
     /// </summary>
-    RolaWriteLayoutOp_ChangeUuid = 7,
+    RolaWriteLayoutOp_ChangeUuid = 8,
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -1093,6 +1097,15 @@ internal struct RolaWriteLayoutOpRemovePath
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct RolaWriteLayoutOpSoftDeletePath
+{
+    /// <summary>
+    /// The path.
+    /// </summary>
+    public nint path;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct RolaWriteLayoutOpChangeOwnership
 {
     /// <summary>
@@ -1151,6 +1164,11 @@ internal struct RolaWriteLayoutOpPayload
     /// </summary>
     [FieldOffset(0)]
     public RolaWriteLayoutOpRemovePath RemovePath;
+    /// <summary>
+    /// Moves the path under `@/removed/&lt;date&gt;/`, leaving the entry.
+    /// </summary>
+    [FieldOffset(0)]
+    public RolaWriteLayoutOpSoftDeletePath SoftDeletePath;
     /// <summary>
     /// Changes who holds an entry.
     /// </summary>
@@ -4885,6 +4903,19 @@ internal static partial class RorolalaBinding
     internal static extern RorolalaResult rola_write_layout_remove_path(nint directory, nint layout, nint path);
 
     /// <summary>
+    /// Moves a path of a Layout a directory holds under `@/removed/&lt;date&gt;/`.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_soft_delete_path(nint directory, nint layout, nint path);
+
+    /// <summary>
     /// Makes or changes an entry of a Layout a directory holds.
     ///
     /// An empty string on success, or a `RolaWriteError *` the caller releases with
@@ -5022,6 +5053,20 @@ internal static partial class RorolalaBinding
     /// </summary>
     [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern RorolalaResult rola_write_layout_move_fetched(nint directory, nint layout, nint from, nint to);
+
+    /// <summary>
+    /// Moves a path of the fetched copy of a Vault's own Layout under `@/removed/&lt;date&gt;/`.
+    ///
+    /// An empty string on success, or a `RolaWriteError *` the caller releases with
+    /// `free_rola_write_error`. `layout` is `truth@VAULT`, the name a fetch left the copy under, and
+    /// `path` is the path the entry is at now.
+    ///
+    /// Returns a result:
+    /// - `Ok`: nothing; the payload is null
+    /// - `Err`: `RolaWriteError *`, owned; release it with `free_rola_write_error`
+    /// </summary>
+    [DllImport("rorolala", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern RorolalaResult rola_write_layout_soft_delete_fetched(nint directory, nint layout, nint path);
 
     /// <summary>
     /// Removes the entry a fetched copy names, path and all.

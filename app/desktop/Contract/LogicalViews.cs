@@ -320,6 +320,16 @@ public interface ILogicalRefusal
     string? Refusal(LogicalAddress address, LogicalDrag drag);
 }
 
+/// <summary>The three keys a removal is asked about with.</summary>
+/// <remarks>
+/// The browser shows the window and the place owns the words: a removal that keeps what it takes away is not
+/// the one-way action a file's removal is, and only the place knows which of the two it is doing.
+/// </remarks>
+/// <param name="Title">The key naming the removal, which the question is titled with.</param>
+/// <param name="One">The key asking about one row, taking the row's name.</param>
+/// <param name="Many">The key asking about several, taking how many.</param>
+public sealed record RemovalWords(string Title, string One, string Many);
+
 /// <summary>
 /// What a place can do to the folders it holds that are not in what it reads.
 /// </summary>
@@ -388,6 +398,31 @@ public interface ILogicalFolderEditor
     /// <param name="data">What the row carries.</param>
     /// <returns>Whether something was removed.</returns>
     bool Remove(LogicalAddress address, object data);
+
+    /// <summary>The words a removal of a row is asked about with, or nothing for the browser's own.</summary>
+    /// <param name="data">What the row carries.</param>
+    /// <returns>The words, or nothing when the row's removal is the ordinary one.</returns>
+    RemovalWords? Removal(object data);
+
+    /// <summary>Whether the place states its own removals in a menu.</summary>
+    /// <remarks>
+    /// A place whose removal is more than one thing, an archive and a removal for good, draws both itself: the
+    /// browser then adds no item of its own, since one would be a third way to do what two already do.
+    /// </remarks>
+    /// <param name="address">The place being asked about.</param>
+    /// <returns>Whether the place offers its own removal items.</returns>
+    bool StatesRemoval(LogicalAddress address);
+
+    /// <summary>Whether a row may be removed for good.</summary>
+    /// <param name="data">What the row carries.</param>
+    /// <returns>Whether the place would remove it permanently.</returns>
+    bool Erasable(object data);
+
+    /// <summary>Removes a row for good, one the place answered is erasable.</summary>
+    /// <param name="address">The place the row is in.</param>
+    /// <param name="data">What the row carries.</param>
+    /// <returns>Whether something was removed.</returns>
+    bool Erase(LogicalAddress address, object data);
 }
 
 /// <summary>

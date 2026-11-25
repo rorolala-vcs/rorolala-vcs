@@ -474,6 +474,24 @@ internal abstract class Listing<TItem>
     /// <param name="ask">Whether to put the question to the user first.</param>
     public virtual void Delete(IReadOnlyList<TItem> chosen, bool ask) { }
 
+    /// <summary>The words a removal of a row is asked about with, or nothing for the browser's own.</summary>
+    /// <param name="item">The row.</param>
+    /// <returns>The words, or nothing.</returns>
+    public virtual RemovalWords? Removal(TItem item) => null;
+
+    /// <summary>Whether the listing states its own removal items in a menu.</summary>
+    /// <returns>Whether it does.</returns>
+    public virtual bool StatesRemoval() => false;
+
+    /// <summary>Whether a row may be removed for good.</summary>
+    /// <param name="item">The row.</param>
+    /// <returns>Whether the listing would remove it permanently.</returns>
+    public virtual bool Erasable(TItem item) => false;
+
+    /// <summary>Removes for good what the listing answered is erasable.</summary>
+    /// <param name="chosen">What is chosen.</param>
+    public virtual void Erase(IReadOnlyList<TItem> chosen) { }
+
     /// <summary>Makes a directory in the listing, which is then named where it is drawn.</summary>
     /// <param name="variant">What the folder is to become, or nothing for a plain folder.</param>
     public virtual void NewFolder(FolderVariant? variant = null) { }
@@ -1460,6 +1478,9 @@ internal abstract class EntryView<TItem> : EntryView
     /// <summary>Removes what is chosen, asking first unless told not to.</summary>
     /// <param name="ask">Whether to put the question to the user first.</param>
     public void Delete(bool ask) => Source.Delete([.. Offered().Where(Source.Removable)], ask);
+
+    /// <summary>Removes for good what is chosen, among the rows the listing answered are erasable.</summary>
+    public void Erase() => Source.Erase([.. Offered().Where(Source.Erasable)]);
 
     /// <summary>Makes a directory in the listing, which is then named where it is drawn.</summary>
     /// <param name="variant">What the folder is to become, or nothing for a plain folder.</param>

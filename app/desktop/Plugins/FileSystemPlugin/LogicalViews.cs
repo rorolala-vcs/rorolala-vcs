@@ -153,6 +153,17 @@ internal sealed class Places : Listing<LogicalEntry>
         item.Data is { } data && Editor() is { } editor && editor.Removable(data);
 
     /// <inheritdoc />
+    public override RemovalWords? Removal(LogicalEntry item) =>
+        item.Data is { } data ? Editor()?.Removal(data) : null;
+
+    /// <inheritdoc />
+    public override bool StatesRemoval() => Editor()?.StatesRemoval(_place.Address) == true;
+
+    /// <inheritdoc />
+    public override bool Erasable(LogicalEntry item) =>
+        item.Data is { } data && Editor() is { } editor && editor.Erasable(data);
+
+    /// <inheritdoc />
     /// <remarks>
     /// What may be removed is the place's to say, so the rows it would not remove are left out before the question is
     /// put: the question names what is about to go, and a question that listed a row the place keeps would be one whose
@@ -186,15 +197,87 @@ internal sealed class Places : Listing<LogicalEntry>
             return;
         }
 
+        var words = Words(editor, going[0]);
+
         Host.Dialogs.Show(
             new Dialog(
-                RolaI18N.Get("rorolala_file_system.delete"),
+                RolaI18N.Get(words.Title),
                 going.Length == 1
-                    ? RolaI18N.Get("rorolala_file_system.delete_one", going[0].Name)
-                    : RolaI18N.Get("rorolala_file_system.delete_many", going.Length),
+                    ? RolaI18N.Get(words.One, going[0].Name)
+                    : RolaI18N.Get(words.Many, going.Length),
                 () => Removed(editor, going)
             )
         );
+    }
+
+    /// <summary>
+    /// Removes rows for good, asking first, which a place answers is erasable for a row it takes away for good.
+    /// </summary>
+    /// <remarks>
+    /// The question is the browser's own, since a removal for good is one-way wherever it happens: what a place may
+    /// say about its removals is about the ordinary one, which some of them take back.
+    /// </remarks>
+    /// <param name="chosen">What is chosen.</param>
+    public override void Erase(IReadOnlyList<LogicalEntry> chosen)
+    {
+        ArgumentNullException.ThrowIfNull(chosen);
+
+        if (Editor() is not { } editor)
+        {
+            return;
+        }
+
+        var going = chosen.Where(item => item.Data is { } data && editor.Erasable(data)).ToArray();
+
+        if (going.Length == 0)
+        {
+            return;
+        }
+
+        Host.Dialogs.Show(
+            new Dialog(
+                RolaI18N.Get(EraseWords.Title),
+                going.Length == 1
+                    ? RolaI18N.Get(EraseWords.One, going[0].Name)
+                    : RolaI18N.Get(EraseWords.Many, going.Length),
+                () => Erased(editor, going)
+            )
+        );
+    }
+
+    /// <summary>The words the browser asks a removal with when the place states none.</summary>
+    private static readonly RemovalWords BrowserWords = new(
+        "rorolala_file_system.delete",
+        "rorolala_file_system.delete_one",
+        "rorolala_file_system.delete_many"
+    );
+
+    /// <summary>The words a removal for good is asked with.</summary>
+    private static readonly RemovalWords EraseWords = new(
+        "rorolala_file_system.erase",
+        "rorolala_file_system.erase_one",
+        "rorolala_file_system.erase_many"
+    );
+
+    /// <summary>The words a removal of a row is asked with: the place's own, or the browser's.</summary>
+    /// <param name="editor">What answers for the place.</param>
+    /// <param name="item">The row being removed.</param>
+    /// <returns>The words.</returns>
+    private static RemovalWords Words(ILogicalFolderEditor editor, LogicalEntry item) =>
+        item.Data is { } data && editor.Removal(data) is { } own ? own : BrowserWords;
+
+    /// <summary>Removes rows for good, ones the place agreed were its own to remove.</summary>
+    /// <param name="editor">What answers for the folders of the place.</param>
+    /// <param name="chosen">What the user confirmed.</param>
+    private void Erased(ILogicalFolderEditor editor, IReadOnlyList<LogicalEntry> chosen)
+    {
+        foreach (var item in chosen)
+        {
+            if (item.Data is { } data)
+            {
+                _ = editor.Erase(_place.Address, data);
+            }
+        }
     }
 
     /// <summary>Removes rows the place agreed were its own to remove.</summary>
@@ -347,7 +430,7 @@ internal sealed class Places : Listing<LogicalEntry>
             );
         }
 
-        if (chosen.Any(Removable))
+        if (!StatesRemoval() && chosen.Any(Removable))
         {
             leaves.Add(
                 new MenuLeaf(

@@ -155,6 +155,55 @@ internal static class Keys
         return true;
     }
 
+    /// <summary>
+    /// Whether this key is a user asking for what is chosen to be removed for good, and takes it if it is.
+    /// </summary>
+    /// <remarks>
+    /// A place that removes two ways is the case this exists for: the unshifted key is its ordinary removal, which
+    /// asks first, and the shifted one is the removal that cannot be taken back, which asks too. Every press is said
+    /// out loud, for the reason the clipboard's keys are.
+    /// </remarks>
+    /// <param name="e">The key.</param>
+    /// <param name="remove">What to remove, given whether the user is to be asked first.</param>
+    /// <param name="erase">What to remove for good, which asks on its own.</param>
+    /// <param name="log">Where the press is said.</param>
+    /// <returns>Whether the key was taken.</returns>
+    public static bool Forget(KeyEventArgs e, Action<bool> remove, Action erase, ILog log)
+    {
+        if (e.Key != Key.Delete)
+        {
+            return false;
+        }
+
+        if (e.Source is TextBox)
+        {
+            log.Info("Delete: left to the field it was pressed in");
+
+            return false;
+        }
+
+        var forGood = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+        log.Info(
+            forGood
+                ? "Shift+Delete: removing what is chosen for good, after asking"
+                : "Delete: removing what is chosen, after asking"
+        );
+
+        e.Handled = true;
+
+        if (forGood)
+        {
+            erase();
+        }
+        else
+        {
+            remove(true);
+        }
+
+        return true;
+    }
+
     /// <summary>The element the keyboard is on in a control's window, or nothing where it is nowhere.</summary>
     /// <param name="anywhere">A control, which is how its window is reached.</param>
     /// <returns>What the keyboard is on.</returns>

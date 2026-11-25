@@ -387,6 +387,9 @@ cmd_layout_path:
     layout:
       en: The Layout to work on; the one being worked in when none is named
       zh-CN: 要操作的布局，未指定时用当前使用的布局
+    soft:
+      en: Move the path under @/removed/ rather than removing it
+      zh-CN: 把路径移到 @/removed/ 下，而非删除
   create_help:
     en: |
         # Make a path name an entry
@@ -411,26 +414,34 @@ cmd_layout_path:
 
   remove_help:
     en: |
-        # Make a path name nothing, or take an entry out of the Vault's Layout
+        # Make a path name nothing, take an entry out of the Vault's Layout, or archive a path
         **Usage**: rola layout path [[GREEN]]__remove__[[/]] <PATH>
         **Flags**:
+             __--soft__                     Move the path under `@/removed/<date>/` rather than removing it
              __--layout__ <NAME[@VAULT]>    Remove the path in that Layout
                                     Write `truth@VAULT` to point at the Vault's Layout
              __--vault__ __-v__                 Switch to editing the Vault's Layout
              __--offline__                  Do not reach the Vault, using only what was fetched locally
+        > [!Note]
+        > `--soft` keeps the entry: its path is moved under `@/removed/`, dated in UTC
+        > The path it moves to may not already name anything
 
     zh-CN: |
-        # 让路径不再指向任何条目，或从保险库的布局中删除条目
+        # 让路径不再指向任何条目，从保险库的布局中删除条目，或归档一条路径
         **用法**：rola layout path [[GREEN]]__remove__[[/]] <路径>
         **标识**：
+             __--soft__                     把路径移到 `@/removed/<日期>/` 下，而非删除
              __--layout__ <名称[@保险库]>    在指定布局中删除路径
                                      以 `truth@VAULT` 指向保险库布局
              __--vault__ __-v__                  切换为编辑保险库的布局
              __--offline__                   不访问保险库，仅使用本地已取回的内容
+        > [!Note]
+        > `--soft` 会保留条目：路径被移到 `@/removed/` 下，日期取 UTC
+        > 目标路径不得已指向任何条目
 
   remove_description:
-    en: Make a path name nothing, or take an entry out of the Vault's Layout
-    zh-CN: 让路径不再指向任何条目，或从保险库的布局中删除条目
+    en: Make a path name nothing, take an entry out of the Vault's Layout, or archive the path
+    zh-CN: 让路径不再指向任何条目，从保险库的布局中删除条目，或归档该路径
 
   move_help:
     en: |
@@ -548,6 +559,10 @@ cmd_layout_path:
   result_moved:
     en: "The entry was moved: %{what}"
     zh-CN: "条目已移动：%{what}"
+
+  result_archived:
+    en: "The path was archived: %{what}"
+    zh-CN: "该路径已归档：%{what}"
 
   result_uuid_changed:
     en: "The path now names another entry: %{what}"

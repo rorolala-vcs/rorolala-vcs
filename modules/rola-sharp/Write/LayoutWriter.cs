@@ -300,6 +300,17 @@ public sealed class LayoutWriter : Writer
                     },
                 },
             },
+            LayoutChangeKind.SoftDeletePath => new RolaWriteLayoutOp
+            {
+                tag = RolaWriteLayoutOpTag.RolaWriteLayoutOp_SoftDeletePath,
+                payload = new RolaWriteLayoutOpPayload
+                {
+                    SoftDeletePath = new RolaWriteLayoutOpSoftDeletePath
+                    {
+                        path = memory.Text(change.Path),
+                    },
+                },
+            },
             LayoutChangeKind.ChangeOwnership => new RolaWriteLayoutOp
             {
                 tag = RolaWriteLayoutOpTag.RolaWriteLayoutOp_ChangeOwnership,
@@ -373,6 +384,33 @@ public sealed class LayoutWriter : Writer
         }
     }
 
+    /// <summary>Moves a path under the archive, leaving its entry.</summary>
+    /// <remarks>
+    /// It is the unbinding <see cref="RemovePath"/> is not: the path is moved to
+    /// <c>@/removed/&lt;date&gt;/</c> and the entry stays where a reader can find it. The date is the
+    /// day the call is made, in UTC, and the target is worked out by the native side, so a caller
+    /// names the path it has.
+    /// </remarks>
+    /// <param name="path">The path to archive.</param>
+    public void SoftDelete(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var target = Utf8(path);
+        try
+        {
+            Check(RorolalaBinding.rola_write_layout_soft_delete_path(directory, layout, target));
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(target);
+        }
+    }
+
     /// <summary>Moves a path in the fetched copy of a Vault's own Layout.</summary>
     /// <remarks>
     /// A copy is read, never worked in: the Vault is asked to make the move, and the copy follows
@@ -407,6 +445,34 @@ public sealed class LayoutWriter : Writer
             Marshal.FreeCoTaskMem(layout);
             Marshal.FreeCoTaskMem(fromPath);
             Marshal.FreeCoTaskMem(toPath);
+        }
+    }
+
+    /// <summary>Moves a path of the fetched copy under the archive, by asking the Vault to.</summary>
+    /// <remarks>
+    /// The Vault is asked to move the path, not to let the entry go, and the copy follows only what
+    /// it answered. The target, <c>@/removed/&lt;date&gt;/</c> dated in UTC, is worked out by the
+    /// native side. The Layout must be named <c>truth@VAULT</c>.
+    /// </remarks>
+    /// <param name="path">The path the entry is at now.</param>
+    public void SoftDeleteFetched(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var directory = Utf8(_layout.Root.FullName);
+        var layout = Utf8(_layout.Name ?? string.Empty);
+        var target = Utf8(path);
+        try
+        {
+            Check(
+                RorolalaBinding.rola_write_layout_soft_delete_fetched(directory, layout, target)
+            );
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directory);
+            Marshal.FreeCoTaskMem(layout);
+            Marshal.FreeCoTaskMem(target);
         }
     }
 

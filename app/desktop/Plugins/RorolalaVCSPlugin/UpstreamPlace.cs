@@ -641,19 +641,19 @@ internal sealed class UpstreamPlace
 
     /// <inheritdoc />
     /// <remarks>
-    /// A folder this side made is the place's to take away, and so is an entry of a Vault's copy this account holds: an
-    /// entry is a file the Vault holds, and the account whose it is may let it go. What the work names in its own Layout
-    /// is not: that is the work itself, and a row of it is dealt with by the file places, not by a suggestion about the
-    /// upstream.
+    /// A folder this side made is the place's to take away, and so is anything of a Vault's copy that the copy names:
+    /// an archive keeps what it takes away, so it asks for no holder, and an entry another account holds is still this
+    /// one's to deprecate. What the work names in its own Layout is not: that is the work itself, and a row of it is
+    /// dealt with by the file places, not by a suggestion about the upstream.
     /// </remarks>
-    public bool Removable(object data) => data is UpstreamCarry carry && (Draft(carry) || Deleting(carry));
+    public bool Removable(object data) =>
+        data is UpstreamCarry carry && (Draft(carry) || Archivable(carry));
 
     /// <inheritdoc />
     /// <remarks>
-    /// A folder this side made goes at once; an entry of the Vault's goes by asking the Vault to let it go, which is a
-    /// run of the command line rather than a change here. What the run agreed to is read back from the copy the run
-    /// wrote, since a status of zero is not the whole of the answer and a removal that did not happen must not be left
-    /// saying nothing.
+    /// A folder this side made goes at once; anything of a Vault's copy is archived, which is a move of its paths under
+    /// <c>@/removed/</c> rather than the entry going. It is a run of the command line rather than a change here, and
+    /// what it agreed to is read back from the copy it wrote, since a status of zero is not the whole of the answer.
     /// </remarks>
     public bool Remove(LogicalAddress address, object data)
     {
@@ -683,15 +683,108 @@ internal sealed class UpstreamPlace
             return true;
         }
 
-        if (!Deleting(carry))
+        if (!Archivable(carry))
         {
             return false;
         }
 
-        Take(carry);
+        var paths = Archiving(carry);
+
+        if (paths.Count == 0)
+        {
+            return false;
+        }
+
+        Archive(carry.Source, paths);
 
         return true;
     }
+
+    /// <inheritdoc />
+    public bool Erasable(object data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        return data is UpstreamCarry carry && Deleting(carry);
+    }
+
+    /// <inheritdoc />
+    public bool Erase(LogicalAddress address, object data)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        if (data is not UpstreamCarry carry || !Deleting(carry))
+        {
+            return false;
+        }
+
+        return Take(carry.Source, [(carry.Entry!.Uuid, carry.Path)]);
+    }
+
+    /// <summary>The words a removal of a row of the Vaults domain is asked about with.</summary>
+    /// <param name="data">What the row carries.</param>
+    /// <returns>The words, or nothing when the row is the browser's to remove.</returns>
+    public RemovalWords? Removal(object data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        return data is UpstreamCarry carry && Archivable(carry) ? SoftDeleteWords : null;
+    }
+
+    /// <summary>Whether the place states its own removals, which the Vaults domain does.</summary>
+    /// <param name="address">The place being asked about.</param>
+    /// <returns>Whether it is a Vault's copy.</returns>
+    public bool StatesRemoval(LogicalAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        return Segments(address) is [Vaults, ..];
+    }
+
+    /// <summary>Whether a row of a Vault's copy is one an archive takes away.</summary>
+    /// <remarks>
+    /// A row is the paths it and its children are at, so a folder that names no entry of its own is still a row of
+    /// entries below it, which the copy's tree is what answers. Nothing of the work's own Layouts is answered for here.
+    /// </remarks>
+    /// <param name="carry">The row.</param>
+    /// <returns>Whether it has anything to archive.</returns>
+    private bool Archivable(UpstreamCarry carry)
+    {
+        ArgumentNullException.ThrowIfNull(carry);
+
+        if (!string.Equals(carry.Source.Domain, Vaults, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return carry.Entry is not null
+            || (
+                Tree(carry.Source)?.Find(carry.Path) is { } node
+                && Tree(carry.Source)!.At(node.Path).Count > 0
+            );
+    }
+
+    /// <summary>Every path a row of the Vaults domain is archived by, its children's included.</summary>
+    /// <param name="carry">The row.</param>
+    /// <returns>The paths, in the order a listing reads them.</returns>
+    private IReadOnlyList<string> Archiving(UpstreamCarry carry)
+    {
+        ArgumentNullException.ThrowIfNull(carry);
+
+        if (Tree(carry.Source) is not { } tree)
+        {
+            return [];
+        }
+
+        return [.. UpstreamBringing.Entries(tree, [carry]).Select(entry => entry.Path)];
+    }
+
+    /// <summary>The words an archive is asked about with.</summary>
+    private static readonly RemovalWords SoftDeleteWords = new(
+        "rorolala_vcs.place.soft_delete",
+        "rorolala_vcs.place.soft_delete_one",
+        "rorolala_vcs.place.soft_delete_many"
+    );
 
     /// <summary>Whether a row is an entry of a Vault's copy that this account may take away.</summary>
     /// <remarks>
@@ -1711,6 +1804,34 @@ internal sealed class UpstreamPlace
             return items;
         }
 
+        // The two removals a Vault's copy has are stated here rather than by the browser: an archive keeps what it
+        // takes away and a removal for good does not, and the browser has no word for either of them.
+        var archivable = carries.Where(Archivable).ToArray();
+
+        if (archivable.Length > 0)
+        {
+            items.Add(
+                new ContextMenuItem(
+                    ["menu.entry.delete", "rorolala_vcs.place.soft_delete"],
+                    10,
+                    _ => AskArchive(source, archivable)
+                )
+            );
+        }
+
+        var erasable = carries.Where(Deleting).ToArray();
+
+        if (erasable.Length > 0)
+        {
+            items.Add(
+                new ContextMenuItem(
+                    ["menu.entry.delete", "rorolala_vcs.place.erase"],
+                    20,
+                    _ => AskTake(source, erasable)
+                )
+            );
+        }
+
         var ids = carries
             .Where(carry => carry.Entry is not null)
             .Select(carry => carry.Entry!.Uuid)
@@ -1741,6 +1862,66 @@ internal sealed class UpstreamPlace
 
         return items;
     }
+
+    /// <summary>Puts the archive question to the user, which is a removal that keeps what it takes away.</summary>
+    /// <param name="source">The Vault's copy the rows are of.</param>
+    /// <param name="carries">The rows to archive, their children included.</param>
+    private void AskArchive(UpstreamSource source, IReadOnlyList<UpstreamCarry> carries)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(carries);
+
+        var paths = carries.SelectMany(Archiving).ToArray();
+
+        if (paths.Length == 0)
+        {
+            return;
+        }
+
+        _host.Dialogs.Show(
+            new Dialog(
+                RolaI18N.Get(SoftDeleteWords.Title),
+                carries.Count == 1
+                    ? RolaI18N.Get(SoftDeleteWords.One, Leaf(carries[0].Path))
+                    : RolaI18N.Get(SoftDeleteWords.Many, carries.Count),
+                () => Archive(source, paths)
+            )
+        );
+    }
+
+    /// <summary>Puts the question a removal for good is asked about to the user.</summary>
+    /// <param name="source">The Vault's copy the rows are of.</param>
+    /// <param name="carries">The rows to remove for good.</param>
+    private void AskTake(UpstreamSource source, IReadOnlyList<UpstreamCarry> carries)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(carries);
+
+        var entries = carries
+            .Where(carry => carry.Entry is not null)
+            .Select(carry => (carry.Entry!.Uuid, carry.Path))
+            .ToArray();
+
+        if (entries.Length == 0)
+        {
+            return;
+        }
+
+        _host.Dialogs.Show(
+            new Dialog(
+                RolaI18N.Get("rorolala_vcs.place.erase"),
+                entries.Length == 1
+                    ? RolaI18N.Get("rorolala_vcs.place.erase_one", Leaf(entries[0].Path))
+                    : RolaI18N.Get("rorolala_vcs.place.erase_many", entries.Length),
+                () => Take(source, entries)
+            )
+        );
+    }
+
+    /// <summary>What a path is called, which is what a message about one names.</summary>
+    /// <param name="path">The path.</param>
+    /// <returns>Its last component.</returns>
+    private static string Leaf(string path) => path[(path.LastIndexOf('/') + 1)..];
 
     /// <summary>Runs the Vault's own ownership door over the entries chosen.</summary>
     /// <param name="source">The Vault's copy the entries are of.</param>
@@ -2478,19 +2659,23 @@ internal sealed class UpstreamPlace
         });
     }
 
-    /// <summary>Takes an entry of a Vault's copy away, by asking the Vault to let it go.</summary>
+    /// <summary>Takes entries of a Vault's copy away, by asking the Vault to let them go.</summary>
     /// <remarks>
     /// The place cannot write the Vault's Layout itself, so what it does is ask the writer that can, and then read the
-    /// copy the write left: the copy is what says whether the entry is gone, and a write that ended well without the
-    /// copy following it is a removal that did not happen. The rows are drawn again from the copy as the write left it,
-    /// and what was read of the ownership is forgotten, since the tree it was read from no longer holds what it did.
+    /// copy the write left: the copy is what says whether an entry is gone, and a write that ended well without the copy
+    /// following it is a removal that did not happen. One write each, so a row the Vault refuses does not take the rest
+    /// of the choice with it. The rows are drawn again from the copy as the writes left it, and what was read of the
+    /// ownership is forgotten, since the tree it was read from no longer holds what it did.
     /// </remarks>
-    /// <param name="carry">The row, which names the Layout, the path, and the entry.</param>
-    private void Take(UpstreamCarry carry)
+    /// <param name="source">The Vault's copy they are of.</param>
+    /// <param name="entries">The entries, by `Uuid` and by the path the copy names each at.</param>
+    /// <returns>Whether the runs were started.</returns>
+    private bool Take(UpstreamSource source, IReadOnlyList<(string Uuid, string Path)> entries)
     {
-        ArgumentNullException.ThrowIfNull(carry);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(entries);
 
-        if (BaseDirectory.Current is not { Length: > 0 } directory || carry.Entry is not { } entry)
+        if (BaseDirectory.Current is not { Length: > 0 } directory)
         {
             // Nothing was run, and a removal that did nothing and said nothing is the one thing a reader cannot tell
             // from a removal that has not landed yet.
@@ -2501,39 +2686,49 @@ internal sealed class UpstreamPlace
                 RolaI18N.Get("rorolala_vcs.place.no_program_why")
             );
 
-            return;
+            return false;
+        }
+
+        if (entries.Count == 0)
+        {
+            return false;
         }
 
         var run = _hub.Begin("rorolala_vcs.progress.path_remove");
-        var source = carry.Source;
-        var path = carry.Path;
 
         _ = Task.Run(() =>
         {
-            var (done, said) = LayoutEntryRemoveCommand.Run(
-                directory,
-                source.Layout,
-                entry.Uuid
-            );
+            List<(string Path, string Said, bool Done)> outcomes = [];
 
-            // What the writer agreed to is written into the copy as well, so the copy is what says whether the entry
-            // is gone: asking it costs one read, and not asking it would leave a copy that still names the entry looking
-            // like a removal that happened.
-            var after = done ? Reads(source, directory) : null;
-            var refused =
-                !done
-                || !(
-                    after is { Done: true } copy
-                    && copy.Entries.All(entry =>
-                        !string.Equals(entry.Path, path, StringComparison.Ordinal)
+            foreach (var (uuid, path) in entries)
+            {
+                var (done, said) = LayoutEntryRemoveCommand.Run(directory, source.Layout, uuid);
+
+                outcomes.Add((path, said, done));
+            }
+
+            // What the writer agreed to is written into the copy as well, so the copy is what says whether an entry
+            // is gone: asking it costs one read, and not asking it would leave a copy that still names the entry
+            // looking like a removal that happened. Only when every write said it ended well is there anything to ask.
+            var after = outcomes.TrueForAll(outcome => outcome.Done) ? Reads(source, directory) : null;
+
+            var refused = outcomes
+                .Where(outcome =>
+                    !outcome.Done
+                    || (
+                        after is { Done: true } copy
+                        && copy.Entries.Any(entry =>
+                            string.Equals(entry.Path, outcome.Path, StringComparison.Ordinal)
+                        )
                     )
-                );
+                )
+                .ToList();
 
             Dispatcher.UIThread.Post(() =>
             {
                 _hub.End(run);
 
-                if (refused)
+                foreach (var (path, said, _) in refused)
                 {
                     var leaf = path[(path.LastIndexOf('/') + 1)..];
 
@@ -2544,6 +2739,88 @@ internal sealed class UpstreamPlace
                         said.Trim() is { Length: > 0 } words
                             ? words
                             : RolaI18N.Get("rorolala_vcs.place.remove_refused_why")
+                    );
+                }
+
+                Forget();
+                _host.Files.Touch();
+            });
+        });
+
+        return true;
+    }
+
+    /// <summary>Archives paths of a Vault's copy, one write each.</summary>
+    /// <remarks>
+    /// An archive is a move of the path under <c>@/removed/</c>, so the Vault is asked to make it and the copy follows
+    /// what it answered. The words a refusal is shown with are the writer's own, and the path it is about is named
+    /// beside them: a reader told only that something failed has nothing to act on. What the writer agreed to is
+    /// written into the copy, so a path the copy still names at its old place is read as a refusal whatever the write
+    /// said about itself.
+    /// </remarks>
+    /// <param name="source">The Vault's copy they are of.</param>
+    /// <param name="paths">Every path to archive, in the order the choice has them.</param>
+    private void Archive(UpstreamSource source, IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(paths);
+
+        if (BaseDirectory.Current is not { Length: > 0 } directory)
+        {
+            // Nothing was run, and an archive that did nothing and said nothing is the one thing a reader cannot tell
+            // from an archive that has not landed yet.
+            FailureNotice.Show(
+                _host.Dialogs,
+                _host.Icons,
+                RolaI18N.Get("rorolala_vcs.place.no_program"),
+                RolaI18N.Get("rorolala_vcs.place.no_program_why")
+            );
+
+            return;
+        }
+
+        var run = _hub.Begin("rorolala_vcs.progress.soft_delete");
+
+        _ = Task.Run(() =>
+        {
+            List<(string Path, string Said, bool Done)> outcomes = [];
+
+            foreach (var path in paths)
+            {
+                var (done, said) = LayoutPathSoftDeleteCommand.Run(directory, source.Layout, path);
+
+                outcomes.Add((path, said, done));
+            }
+
+            var after = outcomes.TrueForAll(outcome => outcome.Done) ? Reads(source, directory) : null;
+
+            var refused = outcomes
+                .Where(outcome =>
+                    !outcome.Done
+                    || (
+                        after is { Done: true } copy
+                        && copy.Entries.Any(entry =>
+                            string.Equals(entry.Path, outcome.Path, StringComparison.Ordinal)
+                        )
+                    )
+                )
+                .ToList();
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                _hub.End(run);
+
+                foreach (var (path, said, _) in refused)
+                {
+                    var leaf = path[(path.LastIndexOf('/') + 1)..];
+
+                    FailureNotice.Show(
+                        _host.Dialogs,
+                        _host.Icons,
+                        RolaI18N.Get("rorolala_vcs.place.soft_delete_refused", leaf),
+                        said.Trim() is { Length: > 0 } words
+                            ? words
+                            : RolaI18N.Get("rorolala_vcs.place.soft_delete_refused_why")
                     );
                 }
 

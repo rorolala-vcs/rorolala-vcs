@@ -2,6 +2,7 @@
 
 use std::path::Path;
 use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use rorolala_layout::{Batch, EntryKind, Layout, LayoutError, LayoutPath, MutableData};
 use rorolala_storage::Key;
@@ -55,6 +56,11 @@ pub enum LayoutOp {
     /// Removes the path, leaving the entry.
     RemovePath {
         /// The path to remove.
+        path: LayoutPath,
+    },
+    /// Moves the path under `@/removed/<date>/`, leaving the entry where a reader can find it.
+    SoftDeletePath {
+        /// The path to archive.
         path: LayoutPath,
     },
     /// Changes who holds an entry, keeping what it holds.
@@ -131,6 +137,7 @@ pub fn apply(layout: &Layout, ops: &[LayoutOp]) -> Result<(), WriteError> {
                         reason: error.to_string(),
                     })?;
             }
+            LayoutOp::SoftDeletePath { path } => soft_delete(&mut batch, &path)?,
             LayoutOp::ChangeOwnership { id, owner } => {
                 let data = batch.entry(id).ok_or_else(|| WriteError::NotFound {
                     what: format!("Layout entry {id}"),
@@ -176,6 +183,99 @@ pub fn apply(layout: &Layout, ops: &[LayoutOp]) -> Result<(), WriteError> {
     batch.commit().map_err(|error| WriteError::Layout {
         reason: error.to_string(),
     })
+}
+
+/// Where a soft delete puts what it takes away: under the Vault's own archived marker.
+///
+/// The value is the one every reader in this tree tests a path against to read an entry as
+/// deprecated, so a soft delete is one every reader already understands.
+const SOFT_DELETED_PREFIX: &str = "@/removed/";
+
+/// The path a soft delete of `path` moves it to: `@/removed/<date>/<path>`.
+///
+/// The date is the day the caller runs, in UTC, so that two machines in two zones archive the same
+/// work under the same day. What is kept under it is the path as the Layout writes it, so a reader
+/// sees where the entry came from.
+///
+/// # Panics
+///
+/// Panics when `@/removed/` and a date do not make a path a Layout accepts, which cannot happen:
+/// both are this function's own and `path` was accepted already.
+#[must_use]
+pub fn soft_delete_target(path: &LayoutPath) -> LayoutPath {
+    // UNWRAP: `@/removed/`, a date of digits and dashes, and a path a Layout already accepted make
+    // a path a Layout accepts, which is what the tests beside this state.
+    LayoutPath::new(&format!(
+        "{SOFT_DELETED_PREFIX}{}/{}",
+        utc_date(),
+        path.as_str()
+    ))
+    .expect("a path under `@/removed/` with a date in it")
+}
+
+/// Whether a soft delete of `path` is one this accepts.
+///
+/// A path already under the archived marker is refused: the target would be
+/// `@/removed/<date>/@/removed/...`, nesting the marker, and no reader reads a nested one as where
+/// an entry is.
+#[must_use]
+pub fn soft_deletable(path: &LayoutPath) -> bool {
+    !path.as_str().starts_with(SOFT_DELETED_PREFIX)
+}
+
+/// Today, in UTC, as `YYYY-MM-DD`.
+///
+/// The clock is read here rather than taken from a dependency: the workspace carries no date crate,
+/// and a civil date is the one arithmetic below. A clock that reads before 1970 dates the day the
+/// epoch did, since nothing this archives is older than the machine's own fault.
+fn utc_date() -> String {
+    let days = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
+        / 86_400;
+
+    civil_from_days(days)
+}
+
+/// The civil date `days` days after 1970-01-01, as `YYYY-MM-DD`.
+///
+/// Howard Hinnant's days-to-civil algorithm, whose epochs are shifted here so that zero is the Unix
+/// one. It is the shape of the arithmetic rather than a table, so it holds before and after a leap
+/// year and a century without a second rule.
+fn civil_from_days(days: u64) -> String {
+    let days = days + 719_468;
+    let era = days / 146_097;
+    let day_of_era = days % 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_of_year = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_of_year + 2) / 5 + 1;
+    let month = if month_of_year < 10 {
+        month_of_year + 3
+    } else {
+        month_of_year - 9
+    };
+    let year = if month <= 2 { year + 1 } else { year };
+
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+/// Moves `path` under `@/removed/`, refusing a path that is already there.
+fn soft_delete(batch: &mut Batch<'_>, path: &LayoutPath) -> Result<(), WriteError> {
+    if !soft_deletable(path) {
+        return Err(WriteError::InvalidPath {
+            path: path.as_str().to_owned(),
+            reason: "a path under `@/removed/` is not archived again".to_owned(),
+        });
+    }
+
+    batch
+        .move_path(path, &soft_delete_target(path))
+        .map_err(|error| WriteError::Layout {
+            reason: error.to_string(),
+        })
 }
 
 /// Moves the entry at one path to another, and takes a waiting merge with it.
@@ -334,6 +434,41 @@ pub fn remove_path_at(directory: &Path, layout: &str, path: &str) -> Result<(), 
     let path = path_of(path)?;
 
     remove_path(&target, &path)
+}
+
+/// Moves a path of a Layout a directory holds under `@/removed/<date>/`.
+///
+/// The date is the day the call is made, in UTC, and the path is kept under it as the Layout writes
+/// it. The entry stays, so what reads the Layout afterwards finds it under the marker as deprecated
+/// rather than gone.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `main`, `truth`, or empty for the one being worked in.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`,
+/// [`WriteError::NoLayout`] when it has no Layout, [`WriteError::InvalidPath`] when a path is not
+/// one a Layout accepts or is already under `@/removed/`, [`WriteError::NotFound`] when the path
+/// names nothing, and [`WriteError::Layout`] when the move does not apply.
+#[lazyffi(export = rola_write_layout_soft_delete_path)]
+pub fn soft_delete_path_at(directory: &Path, layout: &str, path: &str) -> Result<(), WriteError> {
+    let target = open(directory, layout)?;
+    let path = path_of(path)?;
+
+    if !soft_deletable(&path) {
+        return Err(WriteError::InvalidPath {
+            path: path.as_str().to_owned(),
+            reason: "a path under `@/removed/` is not archived again".to_owned(),
+        });
+    }
+
+    let to = soft_delete_target(&path);
+    let workspace = Workspace::locate(directory);
+
+    move_path(&target, workspace.as_ref(), &path, &to)
 }
 
 /// Makes or changes what an entry holds.
@@ -888,6 +1023,11 @@ pub enum WriteLayoutOp {
         /// The path.
         path: String,
     },
+    /// Moves the path under `@/removed/<date>/`, leaving the entry.
+    SoftDeletePath {
+        /// The path.
+        path: String,
+    },
     /// Changes who holds an entry.
     ChangeOwnership {
         /// The entry's `Uuid`, as text.
@@ -1008,6 +1148,9 @@ fn op_of(raw: WriteLayoutOp) -> Result<LayoutOp, WriteError> {
             to: path_of(&to)?,
         }),
         WriteLayoutOp::RemovePath { path } => Ok(LayoutOp::RemovePath {
+            path: path_of(&path)?,
+        }),
+        WriteLayoutOp::SoftDeletePath { path } => Ok(LayoutOp::SoftDeletePath {
             path: path_of(&path)?,
         }),
         WriteLayoutOp::ChangeOwnership { uuid, owner } => Ok(LayoutOp::ChangeOwnership {
@@ -1139,7 +1282,10 @@ pub fn set_cached_owners(
 mod tests {
     use std::fs;
 
-    use super::{LayoutOp, apply, set_version};
+    use super::{
+        LayoutOp, apply, civil_from_days, set_version, soft_deletable, soft_delete_target,
+    };
+    use crate::write::WriteError;
     use rorolala_layout::{EntryKind, LayoutPath, MutableData};
     use rorolala_utils_location::Locate as _;
     use uuid::Uuid;
@@ -1208,5 +1354,90 @@ mod tests {
         assert_eq!(read.id_of(&from), None);
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_soft_delete_op_moves_the_path_and_keeps_the_entry() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-soft-delete-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        rorolala_workspace::Workspace::create(&dir).unwrap();
+        let workspace = rorolala_workspace::Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        let path = LayoutPath::new("art/a.psd").unwrap();
+        let id = Uuid::from_u128(3);
+
+        apply(
+            &layout,
+            &[
+                LayoutOp::CreateEntry {
+                    id,
+                    path: Some(path.clone()),
+                    data: MutableData::new(None, [1; 32], "first".to_owned()),
+                },
+                LayoutOp::SoftDeletePath { path: path.clone() },
+            ],
+        )
+        .unwrap();
+
+        let read = workspace.layout().unwrap();
+        let target = soft_delete_target(&path);
+
+        assert_eq!(read.id_of(&target), Some(id));
+        assert_eq!(read.id_of(&path), None);
+        assert!(read.entry(id).is_some());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_soft_delete_op_refuses_a_path_already_archived() {
+        let dir = std::env::temp_dir().join(format!("rola-write-archived-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        rorolala_workspace::Workspace::create(&dir).unwrap();
+        let workspace = rorolala_workspace::Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        let path = LayoutPath::new("@/removed/2026-01-01/a.psd").unwrap();
+
+        assert!(matches!(
+            apply(&layout, &[LayoutOp::SoftDeletePath { path }]),
+            Err(WriteError::InvalidPath { .. })
+        ));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_soft_delete_target_keeps_the_path_under_the_day() {
+        let target = soft_delete_target(&LayoutPath::new("art/a.psd").unwrap());
+        let text = target.as_str();
+        let (marker, rest) = text.split_once("@/removed/").unwrap();
+
+        assert_eq!(marker, "");
+
+        // The day is the run's own, so what is checked is its shape rather than the day itself.
+        let (day, path) = rest.split_once('/').unwrap();
+
+        assert_eq!(day.len(), 10);
+        assert_eq!(path, "art/a.psd");
+    }
+
+    #[test]
+    fn a_day_counts_from_the_unix_epoch() {
+        assert_eq!(civil_from_days(0), "1970-01-01");
+        assert_eq!(civil_from_days(11_016), "2000-02-29");
+        assert_eq!(civil_from_days(11_017), "2000-03-01");
+        assert_eq!(civil_from_days(20_454), "2026-01-01");
+    }
+
+    #[test]
+    fn a_path_already_archived_is_not_soft_deleted_again() {
+        assert!(!soft_deletable(
+            &LayoutPath::new("@/removed/2026-01-01/a.psd").unwrap()
+        ));
+        assert!(soft_deletable(&LayoutPath::new("@/new/a.psd").unwrap()));
+        assert!(soft_deletable(&LayoutPath::new("art/a.psd").unwrap()));
     }
 }

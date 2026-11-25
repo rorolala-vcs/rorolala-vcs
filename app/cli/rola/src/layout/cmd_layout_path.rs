@@ -17,7 +17,7 @@ use mingling::{
         routeify, suggest,
     },
     metadata::Description,
-    picker::EntryPicker,
+    picker::{EntryPicker, PickerArg, value::Flag},
     res::ResExitCode,
 };
 use rorolala_cli_setups::{ResCurrentRemoteVault, ResOffline, ResVault, ResWorkspace};
@@ -41,6 +41,11 @@ use crate::layout::{
 };
 
 dispatcher!("layout.path", EntryLayoutPath);
+
+/// Whether the path is archived under `@/removed/` rather than removed.
+///
+/// It is stated by the one command that reads it, the way `cmd_fsck.rs` states `ARG_FULL`.
+const ARG_SOFT: PickerArg<'static, Flag> = arg![soft: Flag];
 
 #[help(buffer)]
 pub fn help_layout_path(_: EntryLayoutPath, ec: &mut ResExitCode) {
@@ -220,6 +225,7 @@ pub fn complete_layout_path_remove(
             &ctx,
             suggest! {
                 crate::layout::ARG_LAYOUT: t!("cmd_layout_path.complete.layout"),
+                ARG_SOFT: t!("cmd_layout_path.complete.soft"),
             },
         );
     }
@@ -235,32 +241,39 @@ pub fn complete_layout_path_remove(
     }
 }
 
-/// Makes a path name nothing
+/// Makes a path name nothing, or archives it under `@/removed/<date>/`
 ///
 /// What is left is the entry the path named, at no path: a half-made entry, which the Layout
 /// allows and `rola layout entries` reports.
 ///
+/// `--soft` moves the path under `@/removed/<date>/` instead, dated in UTC, so the entry stays and
+/// reads as deprecated rather than gone. The path it moves to may not already name anything. A path
+/// already under `@/removed/` is refused, since archiving it again would nest the marker.
+///
 /// `--layout truth@VAULT` removes the entry the path names from the Vault's own Layout instead: a
 /// Vault's entry is a file the Vault holds, and letting one go is the entry going, path and all,
 /// rather than the path being unbound. Only the account that holds the entry, or one that
-/// administrates the Vault, may remove it. What the Vault agreed to is written into the copy kept
-/// here as well, so the places that read it see the file gone.
+/// administrates the Vault, may remove it, while a soft delete asks only that the Vault's Layout be
+/// one the account may write. What the Vault agreed to is written into the copy kept here as well,
+/// so the places that read it see the file gone.
 ///
 /// # Errors
 ///
-/// Renders [`ErrorLayoutArgument`] when an argument is missing or does not read,
-/// [`ErrorLayoutMissing`] when the path names nothing, [`ErrorLayoutHeld`] when another account
-/// holds the entry and this one does not administrate the Vault, [`ErrorOffline`] when the Vault's
-/// Layout is to be written and the run may not reach it, and the run-not-in-a-place or failed
-/// failures otherwise.
+/// Renders [`ErrorLayoutArgument`] when an argument is missing or does not read, or the path is
+/// already archived, [`ErrorLayoutMissing`] when the path names nothing, [`ErrorLayoutPathTaken`]
+/// when the archive of the day already names something at the target, [`ErrorLayoutHeld`] when
+/// another account holds the entry and this one does not administrate the Vault, [`ErrorOffline`]
+/// when the Vault's Layout is to be written and the run may not reach it, and the run-not-in-a-place
+/// or failed failures otherwise.
 #[command(node = "layout.path.remove", entry = EntryLayoutPathRemove)]
 pub fn layout_path_remove(args: EntryLayoutPathRemove) -> Next {
     let picked = args
         .pick(crate::layout::ARG_LAYOUT)
+        .pick(ARG_SOFT)
         .pick_or_route(arg![String], || ErrorLayoutArgument.to_chain())
         .pick(&UNMATCHED)
         .to_result();
-    let (layout, path, unmatched) = match picked {
+    let (layout, soft, path, unmatched) = match picked {
         Ok(picked) => picked,
         Err(next) => return next,
     };
@@ -269,7 +282,12 @@ pub fn layout_path_remove(args: EntryLayoutPathRemove) -> Next {
         return next;
     }
 
-    StateLayoutPathRemove { path, layout }.into()
+    StateLayoutPathRemove {
+        path,
+        layout,
+        soft: matches!(soft, Flag::Active),
+    }
+    .into()
 }
 
 /// The state of unbinding a path.
@@ -279,6 +297,8 @@ pub struct StateLayoutPathRemove {
     path: String,
     /// The Layout to work on, when one was named.
     layout: Option<String>,
+    /// Whether the path is archived rather than unbound.
+    soft: bool,
 }
 
 #[chain(routeify)]
@@ -290,12 +310,17 @@ pub fn handle_layout_path_remove(
     current: &mut LazyRes<ResCurrentAccount>,
     offline: &ResOffline,
 ) -> Next {
-    let StateLayoutPathRemove { path, layout } = state;
+    let StateLayoutPathRemove { path, layout, soft } = state;
 
     let path = match path_of(&path) {
         Ok(path) => path,
         Err(next) => return next,
     };
+
+    // An archive of an archive would nest the marker, which nothing reads as where an entry is.
+    if soft && !librorolala::write::layout::soft_deletable(&path) {
+        return ErrorLayoutArgument.into();
+    }
 
     // A Vault keeps one Layout, so a name written `NAME@VAULT` names that one only when `NAME` is
     // the name it is known by; it is written by asking the Vault rather than by opening anything
@@ -322,6 +347,39 @@ pub fn handle_layout_path_remove(
         // that removal, and the local unbindings are none of its business.
         if **offline {
             return ErrorOffline.into();
+        }
+
+        // A soft delete is a move, so it is the move action that carries it: the Vault is asked to
+        // change where the entry is rather than to let it go, which is what lets it need no holder.
+        if soft {
+            let to = librorolala::write::layout::soft_delete_target(&path);
+            let answer = action_move_remote_path(
+                held,
+                &account,
+                target.to_string(),
+                path.as_str().to_owned(),
+                to.as_str().to_owned(),
+            )?;
+            let outcome: PathMove = answer.outcome();
+
+            return match outcome {
+                PathMove::Moved => {
+                    // What the Vault agreed to is written into the copy as well, so a reader here
+                    // sees the entry under the marker rather than where it was.
+                    if let Err(error) = set_cached_path(held, &name, named, &path, &to) {
+                        return ErrorLayoutFailed::new(error.to_string()).into();
+                    }
+
+                    ResultLayoutContent {
+                        did: LayoutDid::Archived,
+                        what: format!("{} -> {}", path.as_str(), to.as_str()),
+                    }
+                    .into()
+                }
+                PathMove::Missing => ErrorLayoutMissing.into(),
+                PathMove::Taken => ErrorLayoutPathTaken.into(),
+                PathMove::Malformed => ErrorLayoutArgument.into(),
+            };
         }
 
         let answer = action_remove_remote_path(
@@ -358,6 +416,28 @@ pub fn handle_layout_path_remove(
         Ok(layout) => layout,
         Err(next) => return next,
     };
+
+    if soft {
+        let to = librorolala::write::layout::soft_delete_target(&path);
+
+        // The day's archive may already hold the path, which is a refusal rather than a second
+        // archive under a name nobody would find.
+        if layout.id_of(&to).is_some() {
+            return ErrorLayoutPathTaken.into();
+        }
+
+        if let Err(error) =
+            librorolala::write::layout::move_path(&layout, workspace.get_ref().as_ref(), &path, &to)
+        {
+            return failed_write(error);
+        }
+
+        return ResultLayoutContent {
+            did: LayoutDid::Archived,
+            what: format!("{} -> {}", path.as_str(), to.as_str()),
+        }
+        .into();
+    }
 
     if let Err(error) = librorolala::write::layout::remove_path(&layout, &path) {
         return failed_write(error);

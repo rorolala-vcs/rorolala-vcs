@@ -7,17 +7,18 @@ using RorolalaVCSPlugin;
 namespace RorolalaDesktopHost.IntegrationTests;
 
 /// <summary>
-/// Taking an entry out of a Vault's Layout: what the place offers to remove.
+/// Taking an entry out of a Vault's Layout: what the place offers to archive, and what it offers to remove for good.
 /// </summary>
 /// <remarks>
-/// An entry of a Vault's copy is a file the Vault holds, and the account that holds it may let it go, which is the one
-/// row of a place that is a deletion rather than a suggestion about the work. What is checked here is the judgement the
-/// place draws from what it read. Neither the command line nor a Vault is here to be run against, and the write the
-/// judgement leads to goes through the writer, which <see cref="LayoutWriterCommandTests"/> checks.
+/// An entry of a Vault's copy is a file the Vault holds. Archiving it keeps the entry and needs no holder, and what
+/// it is asked for below is the other removal: letting it go is the holder's, which is the one row of a place that
+/// is a loss rather than a suggestion about the work. What is checked here is the judgement the place draws from what
+/// it read. Neither the command line nor a Vault is here to be run against, and the write the judgement leads to goes
+/// through the writer, which <see cref="LayoutWriterCommandTests"/> checks.
 /// </remarks>
 public sealed class UpstreamRemoveTests
 {
-    /// <summary>A row of a Vault's copy is removable by the account that holds it, and by no other.</summary>
+    /// <summary>A row of a Vault's copy is archived by anyone, and removed for good by the account that holds it.</summary>
     [Fact]
     public void AFileTheVaultHoldsForThisAccountMayBeRemoved()
     {
@@ -26,39 +27,36 @@ public sealed class UpstreamRemoveTests
 
         try
         {
-            Assert.True(
-                place.Removable(
-                    new UpstreamCarry(
-                        Origin,
-                        "Assets/hero.psd",
-                        new LayoutEntry("Assets/hero.psd", "a", "v", "alice", string.Empty, false)
-                    )
-                )
+            var mine = new UpstreamCarry(
+                Origin,
+                "Assets/hero.psd",
+                new LayoutEntry("Assets/hero.psd", "a", "v", "alice", string.Empty, false)
             );
 
-            // An entry another account holds is that account's: the command refuses the removal, and the place offers
-            // nothing it knows will be refused.
-            Assert.False(
-                place.Removable(
-                    new UpstreamCarry(
-                        Origin,
-                        "Assets/other.psd",
-                        new LayoutEntry("Assets/other.psd", "b", "v", "bob", string.Empty, false)
-                    )
-                )
+            Assert.True(place.Removable(mine));
+            Assert.True(place.Erasable(mine));
+
+            // The holder's alone is the removal that cannot be taken back. The archive keeps the entry, so it asks
+            // for no holder, and the command allows it for any account that may write the Vault's Layout.
+            var theirs = new UpstreamCarry(
+                Origin,
+                "Assets/other.psd",
+                new LayoutEntry("Assets/other.psd", "b", "v", "bob", string.Empty, false)
             );
+
+            Assert.True(place.Removable(theirs));
+            Assert.False(place.Erasable(theirs));
 
             // A row of the work's own Layout is not the Vault's, whatever an owner says: the work itself is not removed
             // by a suggestion about the upstream.
-            Assert.False(
-                place.Removable(
-                    new UpstreamCarry(
-                        new UpstreamSource(UpstreamPlace.Layouts, "work"),
-                        "Assets/hero.psd",
-                        new LayoutEntry("Assets/hero.psd", "a", "v", "alice", string.Empty, false)
-                    )
-                )
+            var work = new UpstreamCarry(
+                new UpstreamSource(UpstreamPlace.Layouts, "work"),
+                "Assets/hero.psd",
+                new LayoutEntry("Assets/hero.psd", "a", "v", "alice", string.Empty, false)
             );
+
+            Assert.False(place.Removable(work));
+            Assert.False(place.Erasable(work));
 
             // A row that names no entry is a folder of the listing, and nothing of the Vault's is there to take away.
             Assert.False(place.Removable(new UpstreamCarry(Origin, "Assets")));

@@ -1392,7 +1392,7 @@ RorolalaResult rola_thing_write(const char *path);
 
         assert!(counts.functions > 500, "{counts:?}");
         assert!(counts.handles > 100, "{counts:?}");
-        assert_eq!(counts.outcomes, 109, "{counts:?}");
+        assert_eq!(counts.outcomes, 111, "{counts:?}");
         assert!(counts.error_families > 10, "{counts:?}");
         assert_eq!(counts.constants, 38, "{counts:?}");
 

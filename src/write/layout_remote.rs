@@ -22,7 +22,7 @@ use crate::daemon::{
 };
 use crate::remote::Reached;
 use crate::write::WriteError;
-use crate::write::layout::{cached_copy, path_of};
+use crate::write::layout::{cached_copy, path_of, soft_deletable, soft_delete_target};
 use crate::write::request::{Common, Target};
 
 /// Moves a path in the fetched copy of a Vault's own Layout.
@@ -70,6 +70,42 @@ pub fn move_path_fetched(
     let outcome: PathMove = said.outcome();
 
     follow_move(&workspace, &reached.name, &from, &to, &outcome)
+}
+
+/// Moves a path of the fetched copy of a Vault's own Layout under `@/removed/<date>/`.
+///
+/// It is the soft delete the command line makes with `--soft`: the Vault is asked to move the path,
+/// not to let the entry go, and the copy follows what it answered. The target is worked out here, so
+/// a caller names the path it has and never the archive's convention.
+///
+/// # FFI
+///
+/// An empty string on success, or a `RolaWriteError *` the caller releases with
+/// `free_rola_write_error`. `layout` is `truth@VAULT`, the name a fetch left the copy under, and
+/// `path` is the path the entry is at now.
+///
+/// # Errors
+///
+/// Returns [`WriteError::NoWorkspace`] when no Workspace holds `directory`, [`WriteError::NoAccount`]
+/// when the work acts as no account, [`WriteError::InvalidPath`] when the path or the Layout name is
+/// not one this accepts, or the path is already under `@/removed/`, [`WriteError::Precondition`]
+/// when the Vault is not one the Workspace bound or the day's archive already names something at
+/// that path, [`WriteError::NotFound`] when the path names nothing, [`WriteError::Action`] when the
+/// Vault cannot be asked, and [`WriteError::Layout`] when the copy cannot be read or written.
+#[lazyffi(export = rola_write_layout_soft_delete_fetched)]
+pub fn soft_delete_fetched(directory: &Path, layout: &str, path: &str) -> Result<(), WriteError> {
+    let path = path_of(path)?;
+
+    if !soft_deletable(&path) {
+        return Err(WriteError::InvalidPath {
+            path: path.as_str().to_owned(),
+            reason: "a path under `@/removed/` is not archived again".to_owned(),
+        });
+    }
+
+    let to = soft_delete_target(&path);
+
+    move_path_fetched(directory, layout, path.as_str(), to.as_str())
 }
 
 /// Removes the entry a fetched copy names, path and all.

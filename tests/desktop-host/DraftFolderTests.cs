@@ -32,9 +32,17 @@ public sealed class DraftFolderTests
         Assert.True(place.Removable(new UpstreamCarry(source, made)));
 
         // A row the work names is not something the place may name: it is the Vault's, and a place that edited it would
-        // be saying the work had a name it does not have.
-        Assert.False(place.Renamable(new UpstreamCarry(source, "Assets/hero.psd", new LayoutEntry("Assets/hero.psd", "a", string.Empty, string.Empty, string.Empty, false))));
-        Assert.False(place.Removable(new UpstreamCarry(source, "Assets/hero.psd", new LayoutEntry("Assets/hero.psd", "a", string.Empty, string.Empty, string.Empty, false))));
+        // be saying the work had a name it does not have. What it is offered is the archive, which keeps the entry;
+        // letting it go for good is the holder's, and nothing here holds it.
+        var hero = new UpstreamCarry(
+            source,
+            "Assets/hero.psd",
+            new LayoutEntry("Assets/hero.psd", "a", string.Empty, string.Empty, string.Empty, false)
+        );
+
+        Assert.False(place.Renamable(hero));
+        Assert.True(place.Removable(hero));
+        Assert.False(place.Erasable(hero));
     }
 
     /// <summary>A folder keeps what is under it when it is renamed, and lets go of it when it is removed.</summary>

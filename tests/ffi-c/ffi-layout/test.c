@@ -256,5 +256,25 @@ int main(void) {
         free_rola_write_error(removed.payload);
     }
 
+    /* A soft delete works out the archive's path itself, so what it is told is the path the entry is at
+       now: a Layout that is not a fetched copy is refused as an argument, as a move is, and a path
+       already under `@/removed/` is refused rather than archived under a second marker. */
+    RorolalaResult archived = rola_write_layout_soft_delete_fetched(workspace, "main", "a.psd");
+    want(archived.tag == RorolalaResult_Err,
+         "an archive in a Layout that is not a fetched copy is a failure");
+    if (archived.tag == RorolalaResult_Err) {
+        const RolaWriteError *error = archived.payload;
+        want(error->tag == RolaWriteError_InvalidPath, "it is reported as InvalidPath");
+        free_rola_write_error(archived.payload);
+    }
+
+    RorolalaResult again = rola_write_layout_soft_delete_path(workspace, "main", "@/removed/2020-01-01/a.psd");
+    want(again.tag == RorolalaResult_Err, "a path already under the archive is not archived again");
+    if (again.tag == RorolalaResult_Err) {
+        const RolaWriteError *error = again.payload;
+        want(error->tag == RolaWriteError_InvalidPath, "it is reported as InvalidPath");
+        free_rola_write_error(again.payload);
+    }
+
     return finish();
 }

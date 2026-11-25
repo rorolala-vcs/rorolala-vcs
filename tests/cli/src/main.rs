@@ -44,6 +44,7 @@ fn main() {
     let cached = sandbox.join("cached");
     let ignoreme = sandbox.join("ignoreme");
     let switching = sandbox.join("switching");
+    let soft = sandbox.join("soft");
     let tweaked = sandbox.join("tweaked");
     let joining = sandbox.join("joining");
     let git_rola = sandbox.join("git-rola");
@@ -66,6 +67,7 @@ fn main() {
         &cached,
         &ignoreme,
         &switching,
+        &soft,
         &tweaked,
         &joining,
         &git_rola,
@@ -117,6 +119,7 @@ fn main() {
     ownership(&rola, &claimed, &mut checked);
     empty_cache(&rola, &cached, &mut checked);
     uuid_switch(&rola, &switching, &mut checked);
+    soft_delete(&rola, &soft, &mut checked);
     tweaking(&rola, &tweaked, &mut checked);
     foreign_storage(&rola, &foreign, &mut checked);
 
@@ -2753,6 +2756,80 @@ fn ownership(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let ran = rola.run(dir, &["hold"]);
     checked.exits(
         "while `hold` with nothing named is still refused",
+        &ran,
+        191,
+    );
+}
+
+/// Removing a path by archiving it: `layout path remove --soft`.
+///
+/// What an archive changes is where an entry is, not whether it is: the path moves under
+/// `@/removed/<date>/`, dated in UTC, and the entry stays. It asks for no holder, which is what makes
+/// it the one removal a browser offers for an entry somebody else holds, and it writes over nothing:
+/// a path the day's archive already names is refused.
+fn soft_delete(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to archive in", &ran, 0);
+
+    let uuid = "00000000-0000-0000-0000-00000000000a";
+    let version = "22".repeat(32);
+
+    let ran = rola.run(dir, &["layout", "entry", "create", uuid, &version]);
+    checked.exits("an entry is made to archive", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "path", "create", "art/a.psd", uuid]);
+    checked.exits("the entry is named at a path", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "path", "remove", "art/a.psd", "--soft"]);
+    checked.exits("the path is archived rather than removed", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "entries"]);
+    checked.exits("the Layout is read back", &ran, 0);
+    checked.wants(
+        "the entry is named under the day's archive",
+        ran.stdout
+            .lines()
+            .any(|line| line.starts_with("@/removed/") && line.contains("/art/a.psd ")),
+        &said(&ran),
+    );
+    checked.wants(
+        "the path it was at names nothing any more",
+        !ran.stdout.lines().any(|line| line.starts_with("art/a.psd ")),
+        &said(&ran),
+    );
+
+    // A second entry at the path collides with the day's archive, which already holds `art/a.psd`: the
+    // archive is written over nothing, so the run is refused.
+    let other = "00000000-0000-0000-0000-00000000000b";
+    let ran = rola.run(dir, &["layout", "entry", "create", other, &version]);
+    checked.exits("a second entry is made", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "path", "create", "art/a.psd", other]);
+    checked.exits(
+        "the second entry is named at the path the first was archived from",
+        &ran,
+        0,
+    );
+
+    let ran = rola.run(dir, &["layout", "path", "remove", "art/a.psd", "--soft"]);
+    checked.exits(
+        "the day's archive already names the path, so nothing is overwritten",
+        &ran,
+        10,
+    );
+
+    let ran = rola.run(
+        dir,
+        &[
+            "layout",
+            "path",
+            "remove",
+            "@/removed/2020-01-01/art.psd",
+            "--soft",
+        ],
+    );
+    checked.exits(
+        "a path already under the archive is not archived again",
         &ran,
         191,
     );
