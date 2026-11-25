@@ -23,5 +23,5 @@ Nothing beyond the Rust toolchain. The search file is built from the Markdown by
 
 ## Checks
 
-`cargo dev refresh-book` writes the search file to `build/docs/builtin.book`, and a build of the
+`cargo dev export-book` writes the search file to `build/docs/builtin.book`, and a build of the
 workspace writes it with everything else. `cargo ci test` covers the indexer.

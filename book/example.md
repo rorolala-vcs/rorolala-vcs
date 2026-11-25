@@ -24,5 +24,5 @@ Please note that book content **does not support images or HTML**; such content 
 After writing or modifying, run the following command to recompile the book into `build/docs/builtin.book`:
 
 ```bash
-cargo dev refresh-book
+cargo dev export-book
 ```

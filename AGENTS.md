@@ -140,7 +140,14 @@ Template:
 - Go as far as you can: read the code, run it, compile it. Do not say "maybe", do not say "probably". State in detail what you did not do, why, and what is needed next.
 - Keep asking back on unclear requests, offering options and their costs, until the plan is clear.
 - Before starting, **restate** the plan in your own words, listing every decision: types, names, locations, what breaks, who calls whom. **Restate! Restate! Restate!**
-- **At the end of every round, rebuild the artifacts with `cargo dev export`** so the user can test directly, unless the user explicitly says not to.
+
+- **Lay the build out for hand-off every round, so the user can test directly**, unless the user explicitly says not to. `cargo dev export` lays out everything under `build/`. When only part of the tree changed, export just that part to save debugging time:
+  - `export-lib`: the C ABI into `build/lib`
+  - `export-cli`: the programs into `build/bin`
+  - `export-desktop`: the Desktop program into `build/bin/desktop`
+  - `export-book`: the book's search file into `build/docs`
+
+  For anything further, read `dev/build/help.txt` rather than guessing.
 
 ## Mechanics
 
