@@ -376,6 +376,19 @@ internal sealed class DockArea : UserControl
     /// <summary>The way back to the layout as it stands, while the regions are returning to it.</summary>
     private DispatcherTimer? _recede;
 
+    /// <summary>
+    /// The rooms the area last drew, by the id of the group standing in each.
+    /// </summary>
+    /// <remarks>
+    /// Taken from the layout rather than read off the controls, for the reason <see cref="Rooms"/> gives, and kept
+    /// because a group is already gone from the layout by the time the area is asked to draw what is left: the room
+    /// it held is only known from before the change.
+    /// </remarks>
+    private Dictionary<string, Rect> _rooms = new(StringComparer.Ordinal);
+
+    /// <summary>The fill-in of a group that went, while it runs.</summary>
+    private DispatcherTimer? _fill;
+
     /// <summary>What the drop points arrive with, and nothing they leave with: the answer to a drag is transient.</summary>
     private readonly Transitions _zoneFade = new()
     {
@@ -558,7 +571,11 @@ internal sealed class DockArea : UserControl
 
         // The crossings are where the seams are, which is only known once the layout has given them their
         // room: a grip put where a seam was before a resize would not be on the seam it resizes.
-        LayoutUpdated += (_, _) => Crosses();
+        LayoutUpdated += (_, _) =>
+        {
+            Crosses();
+            Remember();
+        };
     }
 
     /// <summary>
@@ -979,13 +996,220 @@ internal sealed class DockArea : UserControl
             return;
         }
 
+        // A change arriving while the last one is still being filled in is answered at once: two answers cannot be
+        // shown over one another, and the one just made is the one the user is waiting for.
+        if (_fill is not null)
+        {
+            Reset();
+        }
+
+        var before = _rooms;
+
         Forget();
         Sync();
         Place();
+
+        var after = Rooms(Layout.Root, null, null, 0);
+
+        // A group that went while others are left is the one change that reads as a surface rather than as a
+        // layout: what is drawn is the room it held being taken by the groups beside it.
+        if (Fills(before, after))
+        {
+            Order();
+            Settle();
+            Show();
+            Fill(after);
+
+            return;
+        }
+
         Render();
         Order();
         Settle();
         Show();
+    }
+
+    /// <summary>
+    /// Takes the rooms the layout gives the groups it draws, which is where the next change starts from.
+    /// </summary>
+    /// <remarks>
+    /// Taken after a layout pass rather than when the tree changes, because a region is placed by shares until the
+    /// layout turns them into pixels, and because the answer belongs to the size the window has now. Nothing is
+    /// taken while the regions are being moved by something other than the layout, since what they stand in then is
+    /// not the layout.
+    /// </remarks>
+    private void Remember()
+    {
+        if (Moving)
+        {
+            return;
+        }
+
+        var size = _surface.Bounds;
+
+        _rooms =
+            size.Width < 1 || size.Height < 1
+                ? new Dictionary<string, Rect>(StringComparer.Ordinal)
+                : Rooms(Layout.Root, null, null, 0);
+    }
+
+    /// <summary>
+    /// Whether the regions are being moved by something other than the layout, so where they stand is not where the
+    /// tree puts them.
+    /// </summary>
+    /// <remarks>
+    /// A drag, the room it is making, the return to the layout once it is over, a fill-in of its own, and a dropped
+    /// dock on its way back to its region all place the regions as rectangles. What the layout says is where they
+    /// will end rather than where they are, so nothing is measured or filled in from the rooms while any of it runs.
+    /// </remarks>
+    private bool Moving =>
+        _fill is not null
+        || _arranged is not null
+        || _recede is not null
+        || _carriedDock is not null
+        || _flight is not null;
+
+    /// <summary>
+    /// Whether a drawn group has gone and the ones left have the room it held.
+    /// </summary>
+    /// <remarks>
+    /// Only when the look draws travel, since a fill-in is movement and nothing else; only while no drag is arranging
+    /// the layout, that arrangement is an answer of its own; and only when the area has been drawn at its real size,
+    /// since before the first pass every room is of no size and every region would appear to come from nowhere.
+    /// </remarks>
+    /// <param name="before">The rooms drawn a moment ago.</param>
+    /// <param name="after">The rooms the new tree gives.</param>
+    /// <returns>Whether the change is one to fill in.</returns>
+    private bool Fills(Dictionary<string, Rect> before, Dictionary<string, Rect> after)
+    {
+        if (!ShowsRoom || Moving || _surface.Bounds.Width < 1 || _surface.Bounds.Height < 1)
+        {
+            return false;
+        }
+
+        if (before.Count == 0 || after.Count == 0)
+        {
+            return false;
+        }
+
+        var gone = false;
+        var kept = false;
+
+        foreach (var id in before.Keys)
+        {
+            if (after.ContainsKey(id))
+            {
+                kept = true;
+            }
+            else
+            {
+                gone = true;
+            }
+        }
+
+        // Nothing left to fill the room from is a layout that emptied, and every group replaced is a layout that was
+        // not changed but swapped, which a person reads as a new arrangement and not as one making way.
+        if (!gone || !kept)
+        {
+            return false;
+        }
+
+        foreach (var (id, room) in after)
+        {
+            if (!before.TryGetValue(id, out var was) || !Same(was, room))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether two rectangles stand in the same place, to within a pixel.</summary>
+    /// <param name="one">One rectangle.</param>
+    /// <param name="other">The other.</param>
+    /// <returns>Whether they are the same room.</returns>
+    private static bool Same(Rect one, Rect other) =>
+        Math.Abs(one.X - other.X) <= 0.5
+        && Math.Abs(one.Y - other.Y) <= 0.5
+        && Math.Abs(one.Width - other.Width) <= 0.5
+        && Math.Abs(one.Height - other.Height) <= 0.5;
+
+    /// <summary>Shows the groups left after one went growing into the room it held.</summary>
+    /// <remarks>
+    /// The tree places a region by its share and a share cannot be eased, so the tree is not drawn yet: the regions
+    /// are put where they stood before the change and moved to where the new tree puts them, which is the way a drag
+    /// shows the room it would make. The tree is drawn when they arrive, at the rectangles they arrived at, so that
+    /// nothing jumps at the end.
+    /// </remarks>
+    /// <param name="after">The rooms the new tree gives the groups that are left.</param>
+    private void Fill(Dictionary<string, Rect> after)
+    {
+        // A seam belongs to the tree that is gone and a grip to the seams it was read from: both would be drawn
+        // through the regions moving over them.
+        foreach (var part in _splits)
+        {
+            part.Handle.IsVisible = false;
+        }
+
+        _crossLayer.IsVisible = false;
+
+        foreach (var region in _regions.Values)
+        {
+            var panel = region.Panel;
+
+            if (panel.Parent is Panel parent)
+            {
+                parent.Children.Remove(panel);
+            }
+
+            panel.Transitions = null;
+            panel[!Panel.BackgroundProperty] = new DynamicResourceExtension(PaletteKeys.Bright);
+
+            if (_rooms.TryGetValue(region.Id, out var was))
+            {
+                // Where it stood, which is where the move starts.
+                panel.Opacity = 1;
+                Place(panel, was);
+            }
+            else if (after.TryGetValue(region.Id, out var now))
+            {
+                // A region new to the area has nowhere to come from, so it stands where it belongs and fades in.
+                panel.Opacity = 0;
+                Place(panel, now);
+            }
+
+            if (!_arrange.Children.Contains(panel))
+            {
+                _arrange.Children.Add(panel);
+            }
+        }
+
+        var timer = new DispatcherTimer { Interval = Motion.TravelTime(Motion.Panel) };
+
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            _fill = null;
+            Reset();
+            Render();
+        };
+
+        _fill = timer;
+
+        // The regions are placed before they are moved: a transition from a value the layout has not yet seen is no
+        // transition at all.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(_fill, timer))
+            {
+                return;
+            }
+
+            Wear();
+            MoveTo(after);
+            timer.Start();
+        });
     }
 
     /// <summary>
@@ -3293,6 +3517,18 @@ internal sealed class DockArea : UserControl
 
         var rooms = Rooms(standing.Root, standing.Incoming, null, 0);
 
+        MoveTo(rooms);
+
+        if (rooms.TryGetValue(standing.Incoming, out var room))
+        {
+            Place(_incoming, room);
+        }
+    }
+
+    /// <summary>Places every arranged region at a room, fading the ones with no room of their own out.</summary>
+    /// <param name="rooms">The rectangle of each group that is drawn, by its id.</param>
+    private void MoveTo(Dictionary<string, Rect> rooms)
+    {
         foreach (var (id, region) in _regions)
         {
             var panel = region.Panel;
@@ -3313,11 +3549,6 @@ internal sealed class DockArea : UserControl
             // A group whose only dock was taken out is in no tree at all: the strip it is holding is left where
             // it stands and faded, since a region that is nowhere is not one to be moved anywhere.
             panel.Opacity = 0;
-        }
-
-        if (rooms.TryGetValue(standing.Incoming, out var room))
-        {
-            Place(_incoming, room);
         }
     }
 
@@ -3398,12 +3629,15 @@ internal sealed class DockArea : UserControl
     /// <summary>Puts the regions and the room back as the layout stands, without drawing the tree again.</summary>
     private void Reset()
     {
+        _fill?.Stop();
+        _fill = null;
         _recede?.Stop();
         _recede = null;
         _arranged = null;
 
         _incoming.IsVisible = false;
         _arrange.Background = null;
+        _crossLayer.IsVisible = true;
 
         foreach (var part in _splits)
         {
