@@ -143,17 +143,24 @@ impl<'a> Sources<'a> {
 
     /// Brings `keys` here from whichever Vaults hold them, so a read that wants one finds it.
     ///
-    /// A key that is already here is not asked about, and nothing at all is asked when the run is
-    /// offline: what is missing stays missing, and the read that wanted it fails in its own words.
-    /// A Vault that cannot be reached is passed over, so a fetch that cannot be made is not a
-    /// failure of the run, it is one more thing that was not brought.
+    /// A key that is already here is not asked about, and nothing is asked at all when the run is
+    /// offline or has no Vault to ask: the store is read either way, so what is reported missing is
+    /// what is genuinely not here rather than what the run could not ask for. That is what lets a
+    /// bring of content the store already holds finish without a Vault, which is the offline path a
+    /// cached entry takes. A Vault that cannot be reached is passed over, so a fetch that cannot be
+    /// made is not a failure of the run, it is one more thing that was not brought.
     ///
     /// What is answered is the keys that were wanted and are still not here, so that a caller which
     /// needs them, a bring handing over a version, says so rather than leaving a version behind
     /// that nothing can produce.
     pub fn bring(&self, store: &StorageSet, keys: &[Key]) -> Vec<Key> {
-        if self.offline || self.candidates.is_empty() || keys.is_empty() {
-            return keys.to_vec();
+        if keys.is_empty() {
+            return Vec::new();
+        }
+
+        let mut left = self.missing(store, keys);
+        if left.is_empty() || self.offline || self.candidates.is_empty() {
+            return left;
         }
 
         // `used` says a candidate was asked for the keys of this call, not that it may never be asked
@@ -161,11 +168,6 @@ impl<'a> Sources<'a> {
         // second ask has to reach the same Vault the first one did.
         for asked in self.asked.borrow_mut().iter_mut() {
             asked.used = false;
-        }
-
-        let mut left = self.missing(store, keys);
-        if left.is_empty() {
-            return Vec::new();
         }
 
         // Ask the candidates in order, and stop asking as soon as what has been seen covers what is
@@ -526,6 +528,34 @@ mod tests {
         let store = workspace.get_current_rola_storage().unwrap();
         let key = key(9);
         assert_eq!(sources.bring(&StorageSet::sole(store), &[key]), vec![key]);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An offline run still reads the store: content that is here is not reported missing, which is
+    /// what lets a bring of a cached entry finish without reaching a Vault.
+    #[test]
+    fn an_offline_source_reports_only_what_the_store_does_not_hold() {
+        let dir = std::env::temp_dir().join(format!("rola-fetch-held-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Workspace::create(&dir).unwrap();
+        let workspace = Workspace::locate(&dir).unwrap();
+
+        let account = Account::default();
+        let sources = Sources::new(&workspace, &account, Vec::new(), true).unwrap();
+
+        let store = StorageSet::sole(workspace.get_current_rola_storage().unwrap());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let held = runtime
+            .block_on(store.write_object(b"already here", crate::storage::Codec::Raw))
+            .unwrap();
+        let absent = key(9);
+
+        let mut missing = sources.bring(&store, &[held, absent]);
+        missing.sort_unstable_by_key(Key::hex);
+
+        assert_eq!(missing, vec![absent]);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

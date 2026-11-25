@@ -1479,6 +1479,76 @@ public sealed class WriteTests
         }
     }
 
+    /// <summary>
+    /// A variant merge the window asks for finishes from the Workspace's own store when the run is
+    /// offline.
+    /// </summary>
+    /// <remarks>
+    /// This is the writer the Desktop plugin calls, so the check is made at the door the window
+    /// uses rather than through the command line. The variant, its content and the file it is joined
+    /// into are all here, so nothing has to be reached for: a run that looked for a Vault anyway
+    /// would fail with the window's own words instead of writing the variant file.
+    /// </remarks>
+    [Fact]
+    public void A_bring_variant_finishes_offline_from_the_store()
+    {
+        var directory = Scratch();
+        try
+        {
+            RunRola(directory, "init");
+
+            // The window's Workspaces are bound to a Vault, and that binding is what a run reaches
+            // for when the content is not here. The address is never dialled: the run is offline, so
+            // what this checks is that a bound Vault is not mistaken for a needed one.
+            RunRola(directory, "vault bind origin 127.0.0.1:1/vault");
+
+            // An account is located by the name of its key file alone, so the run acts as alice
+            // without anything being signed.
+            var keys = Path.Combine(directory, ".rola", "auth");
+            Directory.CreateDirectory(keys);
+            File.WriteAllText(
+                Path.Combine(keys, "alice.pem"),
+                "a key this test never signs with"
+            );
+
+            var file = Path.Combine(directory, "a.psd");
+            File.WriteAllText(file, "one");
+
+            var workspace = new WorkspaceScope(directory);
+            workspace.Read();
+            var writer = new WorkspaceWriter(workspace);
+            var first = writer.TrackFile("a.psd", "alice", "first");
+
+            File.WriteAllText(file, "two");
+            var second = writer.TrackFile("a.psd", "alice", "second");
+
+            // The variant of the second version is based on the first, so the file's own chain
+            // shares a version with it and the merge has a place to hang.
+            Assert.NotEqual(first.Version, second.Version);
+
+            var written = writer.BringVariant(
+                new BringVariantRequest
+                {
+                    Workspace = directory,
+                    Account = "alice",
+                    Target = WriteTarget.Tracked,
+                    Variant = second.Variant,
+                    File = "a.psd",
+                    Offline = true,
+                }
+            );
+
+            Assert.True(
+                File.Exists(Path.Combine(directory, written.Path)),
+                $"the variant file was not written at {written.Path}"
+            );
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
     [Fact]
     public void A_track_plan_needs_an_account()
     {

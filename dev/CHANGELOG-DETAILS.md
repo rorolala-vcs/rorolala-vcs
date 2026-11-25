@@ -61,7 +61,11 @@ picture is now at least what an arc reaches into, so every badge stands on the t
 the size a grid opens at the room already there is enough and nothing moves; a larger picture gains the
 room its badges need, and the tiles of a line therefore stand a little further apart.
 
-### 7. [`librorolala`] [`write`] [`sync`] Write a tree's work when a sync pulls its version
+### 7. [`librorolala`] [`fetch`] Let a bring finish offline from content the store already holds
+
+`rola bring --join --offline` refused a variant whose content was already stored, saying the content could not be brought here: an offline run reported every key it was asked for as missing without reading the store. `Sources::bring` now reads the store first, so a run that may not ask a Vault reports only what is genuinely absent. An entry bring, a variant merge and a tweak now finish offline from the Vault's cached Layout copy and the content the Workspace already holds.
+
+### 8. [`librorolala`] [`write`] [`sync`] Write a tree's work when a sync pulls its version
 
 A sync that pulled a tree version tried to write the structure as a file at the tree's path, so it
 failed wherever the directory was already there: Windows answered `Access is denied`, and the other
@@ -69,7 +73,7 @@ systems answered that the target is a directory. The pulled version is now writt
 writes one: the structure is read, the work is laid down under the tree, the paths the new version no
 longer names are taken away, and the baseline and the local id record the version that is now here.
 
-### 8. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused
+### 9. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused
 
 `rola track` refused a changed file that the fetched copy says another account holds, but a tree was
 recorded without `--force`: the check only looked at files, and a tree's commit wrote the committer in
@@ -77,7 +81,7 @@ as its owner. A tree another account holds is now refused the same way, whether 
 through a file inside it, or through a directory that contains it, and `--force` still records it. The
 refusal now counts entries rather than files.
 
-### 9. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault
+### 10. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault
 
 `RolaAccounts.Locate(null, rule)` and `RolaMembers.Locate(null, rule)` passed a zero Vault pointer to a native export that requires one, which panicked inside the library. The two now call `rola_account_locate_local` and `rola_member_locate_local`, the same search with the Vault's root left out, so a run with no Vault in scope lists the Workspace's and the user's keys instead of crashing.
 

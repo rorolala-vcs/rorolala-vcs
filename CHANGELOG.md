@@ -12,9 +12,10 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Ask a row again when the answers behind it were let go of. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-file-system-ask-a-row-again-when-the-answers-behind-it-were-let-go-of)
 5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Stand a place's tile on the plate a file's stands on. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-file-system-stand-a-places-tile-on-the-plate-a-files-stands-on)
 6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Give a tile the room its badges stand in. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-file-system-icons-give-a-tile-the-room-its-badges-stand-in)
-7. [`librorolala`] [`write`] [`sync`] Write a tree's work when a sync pulls its version. [See details](dev/CHANGELOG-DETAILS.md#7-librorolala-write-sync-write-a-trees-work-when-a-sync-pulls-its-version)
-8. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused. [See details](dev/CHANGELOG-DETAILS.md#8-librorolala-write-track-refuse-a-tree-another-account-holds-as-a-file-is-refused)
-9. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault. [See details](dev/CHANGELOG-DETAILS.md#9-modules-rola-sharp-locate-accounts-and-members-without-a-vault)
+7. [`librorolala`] [`fetch`] Let a bring finish offline from content the store already holds. [See details](dev/CHANGELOG-DETAILS.md#7-librorolala-fetch-let-a-bring-finish-offline-from-content-the-store-already-holds)
+8. [`librorolala`] [`write`] [`sync`] Write a tree's work when a sync pulls its version. [See details](dev/CHANGELOG-DETAILS.md#8-librorolala-write-sync-write-a-trees-work-when-a-sync-pulls-its-version)
+9. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused. [See details](dev/CHANGELOG-DETAILS.md#9-librorolala-write-track-refuse-a-tree-another-account-holds-as-a-file-is-refused)
+10. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault. [See details](dev/CHANGELOG-DETAILS.md#10-modules-rola-sharp-locate-accounts-and-members-without-a-vault)
 
 ## Optimized
 

@@ -453,9 +453,36 @@ async fn main() {
     .expect_success();
 
     let brought = BROUGHT.to_string();
-    let said = run(&mut client(&workspace, &data, &["bring", BROUGHT_PATH]));
+
+    // An offline bring needs two things and no more: the Vault's Layout copy, which the fetch above
+    // left here, and the entry's content in this Workspace's store. A fetch of the entry with the
+    // `truth@origin` copy is what puts the content and the index objects here, since the words of
+    // `--with` are read in the copy rather than in the work. The Vault is stopped before the bring,
+    // so a run that reached for it would fail rather than quietly pass.
+    let vault_layout = format!("truth@{VAULT_NAME}");
+    run(&mut client(
+        &workspace,
+        &data,
+        &[
+            "fetch",
+            VAULT_NAME,
+            "--layout",
+            &vault_layout,
+            "--with",
+            BROUGHT_PATH,
+        ],
+    ))
+    .expect_success();
+
+    serving.stop();
+
+    let said = run(&mut client(
+        &workspace,
+        &data,
+        &["bring", "--offline", BROUGHT_PATH],
+    ));
     checked.wants(
-        "a bring carries the content the Vault holds into the work",
+        "an offline bring writes the content the store already holds",
         said.success()
             && fs::read(workspace.join(BROUGHT_PATH))
                 .is_ok_and(|content| content == BROUGHT_CONTENT)
@@ -469,6 +496,9 @@ async fn main() {
             fs::read(workspace.join(BROUGHT_PATH))
         ),
     );
+
+    // What the rest of the suite asks of the Vault is asked of it serving again.
+    let serving = serve_vault(&data, &root, PORT);
 
     checked.wants(
         "the Layout names what the bring put here",
@@ -1922,12 +1952,30 @@ async fn main() {
         })
         .expect("a variant based on the version the entry is at");
 
-    run(&mut client(
+    // The variant, its content and its index record are all here, so the merge is local work. The
+    // Vault is stopped before it, so a run that reached for one would fail instead of quietly
+    // passing: this is the offline join a cached variant takes.
+    serving.stop();
+
+    let said = run(&mut client(
         &workspace,
         &data,
-        &["bring", &variant, "--join", "models/hero.psd"],
-    ))
-    .expect_success();
+        &[
+            "bring",
+            &variant,
+            "--join",
+            "models/hero.psd",
+            "--offline",
+        ],
+    ));
+    checked.wants(
+        "an offline join writes a variant the store already holds",
+        said.success(),
+        &format!("it ended with {:?}: {}", said.code, said.stderr.trim()),
+    );
+
+    // What the rest of the suite asks of the Vault is asked of it serving again.
+    let serving = serve_vault(&data, &root, PORT);
 
     let variant_file = workspace.join(format!("models/hero.{}.psd", &variant[..7]));
     checked.wants(
