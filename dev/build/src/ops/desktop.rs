@@ -1,12 +1,15 @@
-//! `desktop`: the Desktop program, built.
+//! `desktop`: the Desktop program and its launcher.
 //!
-//! The C ABI is built first, and deliberately: a plugin that answers who holds an entry binds the
-//! library, and both the library and the header the bindings are generated from are the build's
-//! output. Building the Desktop without them would be building against the last ones there happened
-//! to be, or failing at the header.
+//! The part is three programs: the window, the host that starts it, and the launcher. `desktop`
+//! builds those three and nothing else, against whatever Rust output is already there: the plugins
+//! are [`crate::ops::desktop_plugin`]'s, the window over the daemon is [`crate::ops::daemon_gui`]'s,
+//! and a build that fails because the Rust side is stale or absent is the signal to take the full
+//! `export` path instead.
 //!
-//! `export-desktop` is the same build laid out where an export lays it out, with the C# bindings and
-//! the two `NuGet` packages a .NET consumer restores.
+//! `export-desktop` publishes the same three into `build/bin/desktop`. It lays out only what it names
+//! and does not make the rest of the layout consistent: a missing plugin or daemon window is not its
+//! concern, each of those being exported by its own command. What it is for is a short loop for a
+//! change to the Desktop itself.
 
 use mingling::{
     Grouped,
@@ -14,17 +17,15 @@ use mingling::{
     res::ResExitCode,
 };
 
+use crate::Next;
 use crate::dotnet;
 use crate::ops::adwaita::fetch_adwaita;
-use crate::ops::book::build_book;
 use crate::ops::fonts::{fetch_fonts, lay_out_fonts};
 use crate::ops::icons::lay_out_icon_license;
 use crate::paths::Workspace;
 use crate::run_step;
-use crate::toolchain::Tool;
-use crate::{Next, ops::library::build_library};
 
-/// Builds the Desktop program and its C ABI.
+/// Builds the Desktop program and its launcher.
 #[command(node = "desktop")]
 pub fn desktop(args: Vec<String>) -> StateDesktop {
     StateDesktop {
@@ -39,79 +40,52 @@ pub struct StateDesktop {
     userdata_name: String,
 }
 
-/// Builds the library and the whole .NET solution, so the Desktop program is compiled.
+/// Builds the Desktop program, its host and its launcher.
 ///
-/// The font files are fetched first, and deliberately: the shared project embeds them, so a build that
-/// started without them would be a program drawn in the machine's face rather than this one.
+/// It builds against whatever is already there: the C ABI and its header, the fonts, the drawn
+/// pictures. None of them is fetched or rebuilt here, and nothing else is built either.
 ///
 /// # Errors
 ///
-/// Reports [`crate::Error::UserDataName`] when the name is not one directory segment, and whatever the
-/// font fetch, the library build or the solution build reports.
+/// Reports [`crate::Error::UserDataName`] when the name is not one directory segment, and the build's
+/// own failure, including the missing C header a build without the Rust side meets.
 pub fn build_desktop(userdata_name: &str) -> Result<(), crate::Error> {
     let userdata_name = crate::checked_userdata_name(userdata_name)?;
     let workspace = Workspace::discover()?;
 
-    fetch_fonts(&workspace)?;
-    build_library(userdata_name)?;
-    dotnet::build_solution(&workspace, userdata_name)
+    dotnet::build_desktop_programs(&workspace, userdata_name)
 }
 
-/// Builds the Desktop program and lays it, its launcher, its plugins and the presets down.
+/// Publishes the Desktop program, its host and its launcher under `build/bin/desktop`.
 ///
-/// `self_contained` is what the program and the launcher are published as: a developer's layout
-/// leaves the .NET runtime to the machine, a package carries it.
+/// `self_contained` is what the programs are published as: a developer's layout leaves the .NET
+/// runtime to the machine, a package carries it.
 ///
-/// # Errors
-///
-/// Reports [`crate::Error::UserDataName`] when the name is not one directory segment, and the first
-/// failing step after that.
-pub fn lay_out_desktop(userdata_name: &str, self_contained: bool) -> Result<(), crate::Error> {
-    let userdata_name = crate::checked_userdata_name(userdata_name)?;
-    let workspace = Workspace::discover()?;
-
-    // The Adwaita set is packaged beside the Desktop from the tree, so it is fetched before the
-    // program is published: a layout without it offers only the system's own icons.
-    fetch_adwaita(&workspace)?;
-
-    build_desktop(userdata_name)?;
-
-    let directory = workspace.desktop_dir()?;
-    dotnet::publish_desktop(&workspace, &directory, self_contained, userdata_name)?;
-    dotnet::publish_host(&workspace, &directory, self_contained, userdata_name)?;
-    dotnet::publish_launcher(&workspace, &directory, self_contained, userdata_name)?;
-    dotnet::publish_plugins(&workspace, &directory)?;
-    lay_out_presets(&workspace)?;
-    lay_out_fonts(&workspace, &directory)?;
-    lay_out_icon_license(&workspace, &directory)?;
-
-    // The Desktop program searches the book laid beside the programs, so a layout a person runs
-    // by hand carries it too; without it the program opens with nothing to search.
-    build_book(&workspace)?;
-
-    Ok(())
-}
-
-/// Builds the Desktop program and lays out everything the export carries for it, under `build/`.
-///
-/// The C# bindings are laid beside the native library they bind, under `build/lib`, and the two
-/// `NuGet` packages are written there as well, since that is what a .NET consumer restores.
+/// The fonts and the Adwaita set are fetched first, since the shared project embeds the fonts and the
+/// Adwaita set is packaged beside the program; a set already there is only read.
 ///
 /// # Errors
 ///
 /// Reports [`crate::Error::UserDataName`] when the name is not one directory segment, and the first
 /// failing step after that.
 pub fn export_desktop(userdata_name: &str, self_contained: bool) -> Result<(), crate::Error> {
+    let userdata_name = crate::checked_userdata_name(userdata_name)?;
     let workspace = Workspace::discover()?;
 
-    // The pictures are drawn from the pinned icon set before the solution is built, so what the
-    // program carries is what the pin holds rather than whatever was last in the tree.
-    Tool::cargo().run(["run", "--quiet", "-p", "rorolala-dev-icons"])?;
+    // Before the solution is evaluated: the shared font project embeds the files, and a layout
+    // without the Adwaita set offers only the system's own icons.
+    fetch_fonts(&workspace)?;
+    fetch_adwaita(&workspace)?;
 
-    lay_out_desktop(userdata_name, self_contained)?;
+    let directory = workspace.desktop_dir()?;
+    dotnet::publish_desktop(&workspace, &directory, self_contained, userdata_name)?;
+    dotnet::publish_host(&workspace, &directory, self_contained, userdata_name)?;
+    dotnet::publish_launcher(&workspace, &directory, self_contained, userdata_name)?;
+    lay_out_presets(&workspace)?;
+    lay_out_fonts(&workspace, &directory)?;
+    lay_out_icon_license(&workspace, &directory)?;
 
-    dotnet::publish_rsharp(&workspace)?;
-    crate::nuget::pack_rsharp(&workspace)
+    Ok(())
 }
 
 /// Lays the preset layouts beside the program, where the title row's tabs read them.
@@ -157,7 +131,7 @@ pub fn handle_desktop(state: StateDesktop, ec: &mut ResExitCode) -> Next {
     empty_result!()
 }
 
-/// Builds the Desktop program and lays it out under `build/`.
+/// Publishes the Desktop program and its launcher under `build/bin/desktop`.
 #[command(node = "export-desktop")]
 pub fn export_desktop_command(args: Vec<String>) -> StateExportDesktop {
     StateExportDesktop {
@@ -172,7 +146,7 @@ pub struct StateExportDesktop {
     userdata_name: String,
 }
 
-/// Builds the Desktop program and lays it out under `build/`.
+/// Publishes the Desktop program and its launcher under `build/`.
 #[chain]
 pub fn handle_export_desktop(state: StateExportDesktop, ec: &mut ResExitCode) -> Next {
     run_step(ec, || {

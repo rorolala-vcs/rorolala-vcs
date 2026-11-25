@@ -142,12 +142,18 @@ Template:
 - Before starting, **restate** the plan in your own words, listing every decision: types, names, locations, what breaks, who calls whom. **Restate! Restate! Restate!**
 
 - **Lay the build out for hand-off every round, so the user can test directly**, unless the user explicitly says not to. `cargo dev export` lays out everything under `build/`. When only part of the tree changed, export just that part to save debugging time:
-  - `export-lib`: the C ABI into `build/lib`
+  - `export-lib`: the C ABI into `build/lib`, with the C++ include tree, the CMake package, the C# bindings and the two `NuGet` packages
   - `export-cli`: the programs into `build/bin`
-  - `export-desktop`: the Desktop program into `build/bin/desktop`
+  - `export-desktop`: the Desktop program, its host and its launcher into `build/bin/desktop`. It builds against the C ABI already there and neither builds the plugins or the daemon window nor redraws the icons
   - `export-book`: the book's search file into `build/docs`
+  - `export-daemon-gui`: the window over the daemon into `build/bin`
+  - `export-desktop-plugin`: the plugins into `build/bin/desktop/plugins`
 
   For anything further, read `dev/build/help.txt` rather than guessing.
+
+- **Each `export-*` builds only the part it names and drops it into `build/`.** It makes no promise that the rest of the layout is present or consistent; that is the full `export`'s job. The point of the per-part commands is a short loop for a change to that one part.
+- Each part has a build command and an export command: `lib`, `cli`, `book`, `desktop`, `daemon-gui`, `desktop-plugin` build; `export-*` builds and lays out. A part placed only in the export, the book and the daemon window, is written there by both.
+- **A build command is a partial build and ignores the heavy dependencies.** `desktop` builds only the three Desktop programs (the window, the host and the launcher) against the Rust output already there, and `desktop-plugin` builds only the plugin projects; neither rebuilds the C ABI or the programs. That is fast and may fail when that output is stale or absent, and a failure is the signal to take the full `export` path, which rebuilds what it needs.
 
 ## Mechanics
 

@@ -489,10 +489,83 @@ pub fn publish_plugins(workspace: &Workspace, into: &Path) -> Result<(), Error> 
     Ok(())
 }
 
+/// Builds one project, restored on its own so that no other project is built with it.
+///
+/// # Errors
+///
+/// Reports the restore or the build's own failure.
+fn build_project(workspace: &Workspace, project: &Path, userdata_name: &str) -> Result<(), Error> {
+    let project = project.to_string_lossy().into_owned();
+
+    restore(workspace, &[&project])?;
+    Tool::dotnet().run_with_env(
+        &userdata_env(userdata_name),
+        [
+            "build",
+            project.as_str(),
+            "-c",
+            CONFIGURATION,
+            "--no-restore",
+        ],
+    )
+}
+
+/// Builds the three programs that make the Desktop: the window, the host that starts it, and the
+/// launcher.
+///
+/// Nothing else is built: the plugins are their own command, and the solution is not built as a
+/// whole, since that would build the plugins and the tests with it. Each project is restored and
+/// built alone, so what is compiled is what this names.
+///
+/// # Errors
+///
+/// Reports the restore or the build's own failure of whichever project failed.
+pub fn build_desktop_programs(workspace: &Workspace, userdata_name: &str) -> Result<(), Error> {
+    for project in [
+        workspace.desktop_project(),
+        workspace.host_project(),
+        workspace.launcher_project(),
+    ] {
+        build_project(workspace, &project, userdata_name)?;
+    }
+
+    Ok(())
+}
+
+/// Builds the C# bindings to the C ABI.
+///
+/// The bindings are a library with nothing beside them; they are built rather than published.
+///
+/// # Errors
+///
+/// Reports the restore or the build's own failure, including the missing C header a build without
+/// the Rust side meets.
+pub fn build_rsharp(workspace: &Workspace, userdata_name: &str) -> Result<(), Error> {
+    build_project(workspace, &workspace.rsharp_project(), userdata_name)
+}
+
+/// Builds each plugin that ships with the Desktop program, and nothing else.
+///
+/// A plugin is a project of its own, so building it alone is what a change to a plugin needs: the
+/// solution, the Rust side and the rest of the Desktop are left as they are. Its output lands where
+/// [`publish_plugins`] reads it, since `Directory.Build.props` puts every project's output under the
+/// one .NET output root.
+///
+/// # Errors
+///
+/// Reports a project the workspace cannot name, the restore, or the build's own failure.
+pub fn build_plugins(workspace: &Workspace, userdata_name: &str) -> Result<(), Error> {
+    for plugin in workspace.desktop_plugins()? {
+        build_project(workspace, plugin.project(), userdata_name)?;
+    }
+
+    Ok(())
+}
+
 /// Lays the C# bindings down beside the native library they bind.
 ///
-/// Nothing is built here: the bindings are a project of the solution, and built rather than
-/// published even there, it is a library with nothing beside it, since the library it binds is the
+/// Nothing is built here: [`build_rsharp`] builds the bindings first, and they are built rather than
+/// published, since they are a library with nothing beside them: the library they bind is the
 /// export's own `lib/`.
 ///
 /// # Errors

@@ -2,7 +2,8 @@
 //! root build script, the C header that describes it.
 //!
 //! `export-lib` is the same build, laid out for hand-off under `build/lib` beside the C++ include
-//! tree and the `CMake` package, so a C or C++ consumer builds against it.
+//! tree and the `CMake` package, so a C or C++ consumer builds against it. The C# bindings and the two
+//! `NuGet` packages are laid there as well, since they are the same hand-off for a .NET consumer.
 
 use std::ffi::OsStr;
 
@@ -187,16 +188,25 @@ pub struct StateExportLibrary {
 
 /// Builds the library and lays the C ABI hand-off out under `build/lib`.
 ///
+/// The hand-off is more than the native library: the C# bindings and the two `NuGet` packages are
+/// part of it, since a .NET consumer restores one instead of being told which file sits beside which
+/// program. They are built and packed here, after the header the bindings are generated from.
+///
 /// # Errors
 ///
 /// Reports [`crate::Error::UserDataName`] when the name is not one directory segment, and whatever
-/// [`build_library`] or [`lay_out_library`] reports after that.
+/// [`build_library`], [`lay_out_library`], the bindings' build or a package's failure reports after
+/// that.
 pub fn export_library(userdata_name: &str) -> Result<(), crate::Error> {
     let userdata_name = crate::checked_userdata_name(userdata_name)?;
     let workspace = Workspace::discover()?;
 
     build_library(userdata_name)?;
-    lay_out_library(&workspace, Platform::current())
+    lay_out_library(&workspace, Platform::current())?;
+
+    crate::dotnet::build_rsharp(&workspace, userdata_name)?;
+    crate::dotnet::publish_rsharp(&workspace)?;
+    crate::nuget::pack_rsharp(&workspace)
 }
 
 /// Lays the C ABI hand-off into the export: the libraries, the header that describes them, the C++

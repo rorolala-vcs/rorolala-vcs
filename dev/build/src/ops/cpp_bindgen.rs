@@ -8,7 +8,6 @@
 use crate::Error;
 use crate::paths::Workspace;
 use crate::run_step;
-use crate::toolchain::Tool;
 use mingling::{
     Grouped,
     macros::{chain, command, empty_result},
@@ -29,19 +28,31 @@ pub struct StateCppBindgen;
 
 /// Lays the include tree out from the header a development build writes.
 ///
-/// The header is a side effect of the root build script, so the development build is run first: a
-/// warm target directory can hold the library while the header it generated is gone.
+/// It reads the header that is already there and builds nothing: this is a partial step, so a header
+/// that is missing is the whole of what it needs and the whole of what it says, rather than a reason
+/// to compile the C ABI. The full `cargo dev export` is the path that builds it.
 ///
 /// # Errors
 ///
-/// Reports the development build's failure, [`Error::Directory`] when the workspace cannot name
-/// where it builds, and the generator's own failure.
+/// Reports [`Error::Missing`] when the development header is not there, [`Error::Directory`] when the
+/// workspace cannot name where it builds, and the generator's own failure.
 pub fn generate_cpp_headers() -> Result<(), Error> {
     let workspace = Workspace::discover()?;
     let header = workspace.debug_header()?;
 
     if !header.is_file() {
-        Tool::cargo().run(["build", "--quiet", "-p", "rororala-ffi"])?;
+        return Err(Error::Missing {
+            summary: format!(
+                "the development C header is not there: {}",
+                header.display()
+            ),
+            advice: vec![
+                "build the C ABI in the development profile first, with `cargo build -p rororala-ffi`"
+                    .to_owned(),
+                "or run `cargo dev export`, which builds the C ABI and lays the C++ layer out"
+                    .to_owned(),
+            ],
+        });
     }
 
     crate::cpp::lay_out_includes(&workspace, &workspace.build_dir()?.join("include"), &header)

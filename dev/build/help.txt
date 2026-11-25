@@ -2,23 +2,27 @@ What this workspace's artifacts are made of, and how they are laid out.
 USAGE: cargo dev <COMMAND> [ARGS...]
 
 BUILD:
-   lib           Build the C ABI artifact and the header that describes it
-   cli           Build the release command line programs
-   build         Build both: the library first, the programs after it
-   book          Write the built-in book's search file into the export
-   icons         Draw the Desktop's pictures from the icon sets the tree carries
-   fonts         Fetch the Noto Sans face the Desktop is drawn in, at its pinned commit
-   adwaita       Fetch the Adwaita pictures the file listing draws with, at the release the set pins
-   cpp-bindgen   Write the C++ generated headers from the development build's C header
-   chunker       Run the chunking harness: its own options are passed through unchanged
-   desktop       Build the Desktop program
+   lib             Build the C ABI artifact and the header that describes it
+   cli             Build the release command line programs
+   build           Build both: the library first, the programs after it
+   book            Write the built-in book's search file into the export
+   icons           Draw the Desktop's pictures from the icon sets the tree carries
+   fonts           Fetch the Noto Sans face the Desktop is drawn in, at its pinned commit
+   adwaita         Fetch the Adwaita pictures the file listing draws with, at the release the set pins
+   cpp-bindgen     Write the C++ generated headers from the development build's C header
+   chunker         Run the chunking harness: its own options are passed through unchanged
+   desktop         Build the Desktop program, its host and its launcher
+   daemon-gui      Build the window over the daemon
+   desktop-plugin  Build the plugins the Desktop program ships
 
 EXPORT:
-   export          Lay the whole build out for hand-off under `build/` (--userdata-name=<name>, default develop)
-   export-lib      Build the C ABI and lay it out under `build/lib`
-   export-cli      Build the programs and lay them out under `build/bin`
-   export-book     Write the built-in book's search file into `build/docs` (same as `book`)
-   export-desktop  Build the Desktop program and lay it out under `build/bin/desktop`
+   export                 Lay the whole build out for hand-off under `build/` (--userdata-name=<name>, default develop)
+   export-lib             Build the C ABI, the C# bindings and the NuGet packages, and lay them out under `build/lib`
+   export-cli             Build the programs and lay them out under `build/bin`
+   export-book            Write the built-in book's search file into `build/docs` (same as `book`)
+   export-desktop         Build the Desktop program and its launcher, and lay them out under `build/bin/desktop`
+   export-daemon-gui      Build the window over the daemon and lay it out under `build/bin`
+   export-desktop-plugin  Build the plugins and lay them out under `build/bin/desktop/plugins`
 
 PACKAGE:
    publish       Lay an export out and package it: an installer on Windows, an archive elsewhere (userdata name: release)

@@ -1,10 +1,12 @@
 //! `export`: the whole build laid out for hand-off under `build/`, under the names a consumer
 //! links, includes and sources.
 //!
-//! It is the four `export-*` steps in order, the C ABI first, the programs after it, and the Desktop
-//! program last, plus the two files that say what the hand-off is. A step run on its own,
-//! `export-lib`, `export-cli`, `export-book` or `export-desktop`, lays out only its own part, so a
-//! change on one side is exported without rebuilding the other.
+//! It is the `export-*` steps in order, the C ABI first, the programs after it, then the Desktop
+//! program, its plugins and the window over the daemon, plus the two files that say what the hand-off
+//! is. A step run on its own, `export-lib`, `export-cli`, `export-book`, `export-desktop`,
+//! `export-daemon-gui` or `export-desktop-plugin`, builds and lays out only its own part and makes no
+//! promise that the rest of the layout is there: what it is for is a short loop for a change to that
+//! one part.
 //!
 //! What is laid down is what the platform spells its artifacts:
 //!
@@ -35,7 +37,6 @@ use crate::Next;
 use crate::fs;
 use crate::paths::Workspace;
 use crate::run_step;
-#[cfg(windows)]
 use crate::toolchain::Tool;
 
 /// Lays the build out for hand-off.
@@ -138,15 +139,23 @@ pub fn export_artifacts(userdata_name: &str, self_contained: bool) -> Result<(),
     // sits in.
     crate::ops::programs::stop_running_programs()?;
 
+    // The Desktop's own pictures are drawn here, at the full export, rather than on every per-part
+    // export: they are idempotent, and a change to the icon manifest is what asks for this step. A
+    // per-part `export-desktop` uses the pictures the tree already carries.
+    Tool::cargo().run(["run", "--quiet", "-p", "rorolala-dev-icons"])?;
+
     let build = workspace.build_dir()?;
     fs::remove(&build)?;
     fs::create_directory(&build)?;
 
-    // One part at a time, each building and laying out what it owns. The book is written by the
-    // Desktop step, which needs it beside the program it publishes.
+    // One part at a time, each building and laying out what it owns. This is the one place the whole
+    // set is assembled; a per-part `export-*` lays out only its own part.
     crate::ops::library::export_library(userdata_name)?;
     crate::ops::programs::export_programs(userdata_name)?;
+    crate::ops::book::build_book(&workspace)?;
     crate::ops::desktop::export_desktop(userdata_name, self_contained)?;
+    crate::ops::desktop_plugin::export_desktop_plugins(userdata_name)?;
+    crate::ops::daemon_gui::build_daemon_gui(userdata_name)?;
 
     // And the words that go with it: what the hand-off is, and what it is handed over under. They
     // are the tree's own at its top rather than files written for a layout, because a second copy is

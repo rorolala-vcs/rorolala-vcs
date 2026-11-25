@@ -11,7 +11,9 @@ pub mod chunker;
 pub mod clean;
 pub mod cli_help_editor;
 pub mod cpp_bindgen;
+pub mod daemon_gui;
 pub mod desktop;
+pub mod desktop_plugin;
 pub mod export;
 pub mod fonts;
 pub mod icons;
@@ -25,5 +27,6 @@ pub mod publish;
 #[allow(clippy::wildcard_imports, clippy::redundant_pub_crate)]
 pub(crate) use {
     adwaita::*, book::*, build::*, cargo_clean::*, clean::*, cli_help_editor::*, cpp_bindgen::*,
-    desktop::*, export::*, fonts::*, icons::*, library::*, programs::*, publish::*,
+    daemon_gui::*, desktop::*, desktop_plugin::*, export::*, fonts::*, icons::*, library::*,
+    programs::*, publish::*,
 };
