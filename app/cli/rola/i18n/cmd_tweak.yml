@@ -4,7 +4,8 @@ tweak:
   help:
     en: |
         # Tweak a chain's history and rebuild the versions after the tweaked point
-        **Usage**: rola [[GREEN]]__tweak__[[/]] <file> [target]
+        **Usage**: rola [[GREEN]]__tweak__[[/]] <path> [target]
+        A path inside a tree names the tree.
         **Tweak**:
          __-d__, __--description__ <TEXT>    Set the **description** of this version
          __-C__, __--creator__     <TEXT>    Set the **author** of this version
@@ -20,7 +21,8 @@ tweak:
              __--concurrency__ <N>       Transfer N pieces of content at a time (default 4)
     zh-CN: |
         # 调整一条链的历史，并重建被调整点之后的版本
-        **用法**：rola [[GREEN]]__tweak__[[/]] <文件> [目标]
+        **用法**：rola [[GREEN]]__tweak__[[/]] <路径> [目标]
+        树内的路径指向该树。
         **调整**：
          __-d__、__--description__ <文本>    设置该版本的 **描述**
          __-C__、__--creator__     <文本>    设置该版本的 **作者**
@@ -65,15 +67,15 @@ tweak:
       zh-CN: 按序号删除一条待定的调整
 
   description:
-    en: Adjust a file's chain, rebuilding every version after the point changed
-    zh-CN: 调整文件的版本链，并重建被调整点之后的每个版本
+    en: Adjust a file's or a tree's chain, rebuilding every version after the point changed
+    zh-CN: 调整文件或树的版本链，并重建被调整点之后的每个版本
 
   query_ready:
     en: About to adjust the version `%{version}` of `%{file}`
     zh-CN: 准备在 `%{file}` 上调整版本 `%{version}`
 
   query_row:
-    en: "`%{variant}` %{creator}: \"%{message}\" (V%{number})"
+    en: '`%{variant}` %{creator}: "%{message}" (V%{number})'
     zh-CN: "`%{variant}` %{creator}：“%{message}”（第 %{number} 版）"
 
   query_ambiguous:
@@ -93,8 +95,8 @@ tweak:
     zh-CN: "%{number}、%{operation}"
 
   pending_help:
-    en: run `rola tweak <FILE> --now` to apply them
-    zh-CN: 使用 `rola tweak <文件> --now` 执行调整
+    en: run `rola tweak <PATH> --now` to apply them
+    zh-CN: 使用 `rola tweak <路径> --now` 执行调整
 
   cancelled:
     en: "Removed: %{operation}"
@@ -105,12 +107,12 @@ tweak:
     zh-CN: "已调整 `%{file}`：`%{from}` 变为 `%{to}`，重建了 %{count} 个版本"
 
   warn_content:
-    en: The content was not fetched, so the file now stands modified
-    zh-CN: 文件内容拉取失败，本地现在是修改状态
+    en: The content was not fetched, so the work now stands modified
+    zh-CN: 内容拉取失败，本地工作区现在处于修改状态
 
   warn_content_help:
-    en: Fetch the content and write it over the file when it is here
-    zh-CN: 内容就绪后再把文件还原到基线
+    en: Fetch the content and write it over the work when it is here
+    zh-CN: 内容就绪后再把工作区还原到基线
 
   header:
     en: "Adjusting %{anchor} ... LOCAL:"
@@ -133,15 +135,15 @@ tweak:
     zh-CN: 合入
 
   op_creator:
-    en: "set the creator of %{version} to \"%{text}\""
+    en: 'set the creator of %{version} to "%{text}"'
     zh-CN: "修改版本 %{version} 的作者为 “%{text}”"
 
   op_message:
-    en: "set the description of %{version} to \"%{text}\""
+    en: 'set the description of %{version} to "%{text}"'
     zh-CN: "修改版本 %{version} 的描述为 “%{text}”"
 
   op_content:
-    en: "point the content of %{version} at \"%{hash}\""
+    en: 'point the content of %{version} at "%{hash}"'
     zh-CN: "重新将版本 %{version} 的内容指向到 “%{hash}”"
 
   op_join:
@@ -161,12 +163,12 @@ tweak:
     zh-CN: 移除版本 %{version}
 
   err_no_file:
-    en: Please name the file whose chain is to be adjusted
-    zh-CN: 请指定要调整的文件
+    en: Please name the entry whose chain is to be adjusted
+    zh-CN: 请指定要调整的条目
 
   err_no_file_help:
-    en: Please name one file, see `rola tweak --help` for usage
-    zh-CN: 请指定一个文件，用法见 `rola tweak --help`
+    en: Please name one path, see `rola tweak --help` for usage
+    zh-CN: 请指定一个路径，用法见 `rola tweak --help`
 
   err_not_local:
     en: "`%{file}` is not a local path of this Workspace"
@@ -209,7 +211,7 @@ tweak:
     zh-CN: 请给出至少 4 位的版本哈希、变体哈希、`~N`，或某个作者或描述的文本
 
   err_target_many:
-    en: "\"%{target}\" matches %{count} versions of `%{file}`"
+    en: '"%{target}" matches %{count} versions of `%{file}`'
     zh-CN: "“%{target}” 命中了 `%{file}` 的 %{count} 个版本"
 
   err_target_many_help:
@@ -217,8 +219,8 @@ tweak:
     zh-CN: 请用哈希或回溯步数把目标写得更精确
 
   err_target_other:
-    en: "`%{target}` belongs to another file's chain"
-    zh-CN: "`%{target}` 属于别的文件的链"
+    en: "`%{target}` belongs to another entry's chain"
+    zh-CN: "`%{target}` 属于别的条目的链"
 
   err_target_other_help:
     en: Please name a version or a variant of the chain `%{file}` records
@@ -245,8 +247,8 @@ tweak:
     zh-CN: "`--interact` 编辑整个范围，不能与其他调整同时给出"
 
   err_interact_help:
-    en: Please run `rola tweak <FILE> --interact` on its own
-    zh-CN: 请单独运行 `rola tweak <文件> --interact`
+    en: Please run `rola tweak <PATH> --interact` on its own
+    zh-CN: 请单独运行 `rola tweak <路径> --interact`
 
   err_no_plan:
     en: "`%{file}` has no pending adjustment at its current version"

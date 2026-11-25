@@ -56,17 +56,14 @@ use crate::daemon::{
 };
 use crate::fetch::Sources;
 use crate::status::variant_moves;
-use crate::tree::{
-    EntryKind as TreeEntryKind, Staging, Tree, TreeStructure, compare, conflict_copy,
-    read_structure,
-};
+use crate::tree::{Staging, Tree, TreeStructure, compare, conflict_copy, read_structure};
 use crate::write::checkout::{
     WriteRestore, forget, remember, restore as restore_path, restore_vault,
 };
 use crate::write::layout::{set_version, switch_entry};
 use crate::write::progress::{WriteProgress, watching};
 use crate::write::request::{Common, WriteCommon};
-use crate::write::tree::relative_to;
+use crate::write::tree::{put_back, relative_to};
 use crate::write::{Cancellation, WriteError};
 
 /// How alike two text files have to be to count as the same file moved.
@@ -2466,13 +2463,7 @@ fn retrack_tree(
 
     if !options.only_index {
         bring_tree_content(run, store, &target, &recorded, !options.force)?;
-        put_back(run, store, &tree_root, &target, &recorded, !options.force)?;
-
-        let conflicts = staging.conflicts().map_err(|error| tree_error(&error))?;
-        for conflict in &conflicts {
-            let _ = fs::remove_file(tree_root.join(conflict_copy(conflict)));
-        }
-        staging.clear().map_err(|error| tree_error(&error))?;
+        settle_tree(run, store, &tree_root, &target, &recorded, options.force)?;
     }
 
     let written = MutableData::new(
@@ -2516,100 +2507,6 @@ fn retrack_tree(
         }),
         took: run.took(),
     })
-}
-
-/// Writes `target` over the work at `root`, and takes out what `old` recorded and `target` does not.
-fn put_back(
-    run: &Run<'_>,
-    store: &StorageSet,
-    root: &Path,
-    target: &TreeStructure,
-    old: &TreeStructure,
-    skip_unchanged: bool,
-) -> Result<(), RetrackRefusal> {
-    if let Err(error) = fs::create_dir_all(root) {
-        return Err(internal(error.to_string()));
-    }
-
-    for entry in target.entries() {
-        run.stopped()?;
-
-        // What the old structure already held is what the work already holds: a move of the record
-        // that leaves a path as it was does not read it, write it, or make its directory again.
-        if skip_unchanged && old.entry(entry.path()) == Some(entry) {
-            continue;
-        }
-
-        let disk = root.join(entry.path());
-
-        match entry.kind() {
-            TreeEntryKind::Directory => {
-                if let Err(error) = fs::create_dir_all(&disk) {
-                    return Err(internal(error.to_string()));
-                }
-            }
-            TreeEntryKind::File => {
-                let Some(storage) = entry.storage() else {
-                    continue;
-                };
-                if let Some(parent) = disk.parent()
-                    && let Err(error) = fs::create_dir_all(parent)
-                {
-                    return Err(internal(error.to_string()));
-                }
-                if let Err(error) = run.runtime.block_on(store.extract_file(storage, &disk)) {
-                    return Err(RetrackRefusal::Failed(WriteError::Storage {
-                        reason: error.to_string(),
-                    }));
-                }
-            }
-            TreeEntryKind::Symlink => {
-                let Some(target_path) = entry.target() else {
-                    continue;
-                };
-                if disk.exists() {
-                    let _ = fs::remove_file(&disk);
-                }
-                if let Some(parent) = disk.parent()
-                    && let Err(error) = fs::create_dir_all(parent)
-                {
-                    return Err(internal(error.to_string()));
-                }
-                #[cfg(unix)]
-                {
-                    if let Err(error) = std::os::unix::fs::symlink(target_path, &disk) {
-                        return Err(internal(error.to_string()));
-                    }
-                }
-                #[cfg(windows)]
-                {
-                    if let Err(error) = std::os::windows::fs::symlink_file(target_path, &disk) {
-                        return Err(internal(error.to_string()));
-                    }
-                }
-            }
-        }
-    }
-
-    for entry in old.entries() {
-        run.stopped()?;
-
-        if target.entry(entry.path()).is_some() {
-            continue;
-        }
-
-        let disk = root.join(entry.path());
-        match entry.kind() {
-            TreeEntryKind::Directory => {
-                let _ = fs::remove_dir(&disk);
-            }
-            TreeEntryKind::File | TreeEntryKind::Symlink => {
-                let _ = fs::remove_file(&disk);
-            }
-        }
-    }
-
-    Ok(())
 }
 
 /// Gives a tree's Layout entry a fresh `Uuid`, with what it records now.
@@ -2749,14 +2646,7 @@ fn retrack_tree_entry(
             return Err(internal(told(&run.messages.structure_missing, &["target"])));
         };
 
-        put_back(run, store, &tree_root, wanted, recorded, !options.force)?;
-
-        let staging = Staging::new(&tree_root);
-        let conflicts = staging.conflicts().map_err(|error| tree_error(&error))?;
-        for conflict in &conflicts {
-            let _ = fs::remove_file(tree_root.join(conflict_copy(conflict)));
-        }
-        staging.clear().map_err(|error| tree_error(&error))?;
+        settle_tree(run, store, &tree_root, wanted, recorded, options.force)?;
     }
 
     if action == SwitchAction::Pointer {
@@ -2822,6 +2712,37 @@ fn bring_tree_content(
 
     sources.bring(store, &keys);
     run.absorb(&sources);
+
+    Ok(())
+}
+
+/// Writes `target` over the tree's work, and takes away what the move leaves behind: the conflict
+/// copies a merge left, and the staging area that stood for the old record.
+fn settle_tree(
+    run: &Run<'_>,
+    store: &StorageSet,
+    tree_root: &Path,
+    target: &TreeStructure,
+    old: &TreeStructure,
+    force: bool,
+) -> Result<(), RetrackRefusal> {
+    put_back(
+        run.runtime,
+        store,
+        tree_root,
+        target,
+        old,
+        !force,
+        run.cancellation,
+    )
+    .map_err(RetrackRefusal::Failed)?;
+
+    let staging = Staging::new(tree_root);
+    let conflicts = staging.conflicts().map_err(|error| tree_error(&error))?;
+    for conflict in &conflicts {
+        let _ = fs::remove_file(tree_root.join(conflict_copy(conflict)));
+    }
+    staging.clear().map_err(|error| tree_error(&error))?;
 
     Ok(())
 }

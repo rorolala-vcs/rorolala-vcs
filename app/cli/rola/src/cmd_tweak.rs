@@ -7,11 +7,11 @@
 //! plan, and what a run reads back to list what is still to do.
 //!
 //! The order of the work is the library's, see [`librorolala::write::tweak`]: what is read before
-//! what is written, which refusal stops the run, and what happens to the file on disk. What is left
+//! what is written, which refusal stops the run, and what happens to the work on disk. What is left
 //! here is the shape of the command: the words it takes, the resources it resolves, the words it
 //! prints and the exit codes it ends on.
 
-// A tweak resolves a file, a Layout, a chain, a target, a plan and the account it may reach before
+// A tweak resolves a path, a Layout, a chain, a target, a plan and the account it may reach before
 // it hands the work over, and every step of that is a refusal of its own to say. The handler's
 // parameters are the resources the framework injects, so how many of them there are is what the
 // command needs of the run rather than a signature this program shaped.
@@ -32,6 +32,7 @@ use librorolala::storage::{Blake3Hash, StorageSet};
 use librorolala::vcs::VCSIndex;
 use librorolala::workspace::Workspace;
 use librorolala::write::path::local_path;
+use librorolala::write::retrack::tree_above;
 use librorolala::write::tweak::{
     self, Adjustment, Chain, Change, Found, Operation, Request as TweakRequest, Sheet, TargetMiss,
     TweakRefusal, TweakWarning,
@@ -174,8 +175,11 @@ pub fn complete_tweak(
 /// `./.rola/TWEAKING.md`, opens the editor, and applies what comes back.
 ///
 /// Applying a plan writes the adjusted version and replays every version above it, points the
-/// Layout at the replayed tail, and leaves the old chain in the index. The file is brought up to
-/// the version the entry records when it stood as recorded, and left alone when it held changes.
+/// Layout at the replayed tail, and leaves the old chain in the index. The work is brought up to
+/// the version the entry records when it stood as recorded, and left alone when it held changes, so
+/// a file is rewritten and a tree has its work rewritten only when nothing in it changed.
+///
+/// A path inside a tree names the tree, as the Layout holds the tree as one entry.
 ///
 /// # Errors
 ///
@@ -272,7 +276,7 @@ pub fn tweak(args: EntryTweak) -> Next {
 /// The state a tweak starts in.
 #[derive(Grouped)]
 pub struct StateTweak {
-    /// The file named, as it was written.
+    /// The path named, as it was written.
     file: String,
     /// The version to adjust, when one was named.
     target: Option<String>,
@@ -319,6 +323,9 @@ pub fn handle_tweak(
     let Ok(path) = local_path(&root, &cwd, &state.file) else {
         return ErrorTweakFile { file: state.file }.into();
     };
+    // A path inside a tree names the tree's record, the same way `rola retrack` takes one: the
+    // Layout holds the tree as one entry, and the files under it are the tree's own.
+    let path = tree_above(&layout, &path).unwrap_or(path);
 
     let Some(index) = index.get_ref().as_ref() else {
         return failed(&state.file, t!("tweak.err_no_index").trim().to_owned());
@@ -909,12 +916,6 @@ fn earliest(miss: &TargetMiss) -> usize {
 fn refused(file: &str, refusal: TweakRefusal) -> Next {
     match refusal {
         TweakRefusal::NotRecorded | TweakRefusal::Nothing => ErrorTweakNotRecorded {
-            file: file.to_owned(),
-        }
-        .into(),
-        // A tree is not a file of the work in the sense this command takes one, and a path of the
-        // work is what it says it wants.
-        TweakRefusal::Tree => ErrorTweakFile {
             file: file.to_owned(),
         }
         .into(),

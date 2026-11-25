@@ -1,6 +1,7 @@
 //! Writing a tree's description, which is the note the next version carries.
 
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use rorolala_ignore::IgnoreRuleSet;
@@ -12,7 +13,7 @@ use rorolala_utils_location::Locate as _;
 use rorolala_vcs::VCSIndex;
 use rorolala_workspace::Workspace;
 
-use crate::write::WriteError;
+use crate::write::{Cancellation, WriteError};
 
 /// Writes the description of the next version of the tree at `target`.
 ///
@@ -602,6 +603,113 @@ const fn change_word(kind: AddChangeKind) -> &'static str {
         AddChangeKind::Added => "added",
         AddChangeKind::Updated => "updated",
         AddChangeKind::Deleted => "deleted",
+    }
+}
+
+/// Writes `target` over the work at `root`, and takes out what `old` recorded and `target` does not.
+///
+/// What the old structure already held is what the work already holds, so an entry that did not
+/// change is neither read nor written again. A run asked to stop leaves the entries it has written
+/// and nothing more.
+///
+/// # Errors
+///
+/// Returns [`WriteError::Cancelled`] when `cancellation` is set, [`WriteError::Io`] when a
+/// directory or a link cannot be made or taken out, and [`WriteError::Storage`] when a stored file
+/// cannot be written.
+pub(crate) fn put_back(
+    runtime: &tokio::runtime::Runtime,
+    store: &StorageSet,
+    root: &Path,
+    target: &TreeStructure,
+    old: &TreeStructure,
+    skip_unchanged: bool,
+    cancellation: &Cancellation,
+) -> Result<(), WriteError> {
+    fs::create_dir_all(root).map_err(|error| io(root, &error))?;
+
+    for entry in target.entries() {
+        if cancellation.is_cancelled() {
+            return Err(WriteError::Cancelled);
+        }
+
+        // What the old structure already held is what the work already holds: a move of the record
+        // that leaves a path as it was does not read it, write it, or make its directory again.
+        if skip_unchanged && old.entry(entry.path()) == Some(entry) {
+            continue;
+        }
+
+        let disk = root.join(entry.path());
+
+        match entry.kind() {
+            EntryKind::Directory => {
+                fs::create_dir_all(&disk).map_err(|error| io(&disk, &error))?;
+            }
+            EntryKind::File => {
+                let Some(storage) = entry.storage() else {
+                    continue;
+                };
+                if let Some(parent) = disk.parent() {
+                    fs::create_dir_all(parent).map_err(|error| io(parent, &error))?;
+                }
+                runtime
+                    .block_on(store.extract_file(storage, &disk))
+                    .map_err(|error| WriteError::Storage {
+                        reason: error.to_string(),
+                    })?;
+            }
+            EntryKind::Symlink => {
+                let Some(target_path) = entry.target() else {
+                    continue;
+                };
+                if disk.exists() {
+                    let _ = fs::remove_file(&disk);
+                }
+                if let Some(parent) = disk.parent() {
+                    fs::create_dir_all(parent).map_err(|error| io(parent, &error))?;
+                }
+                #[cfg(unix)]
+                {
+                    std::os::unix::fs::symlink(target_path, &disk)
+                        .map_err(|error| io(&disk, &error))?;
+                }
+                #[cfg(windows)]
+                {
+                    std::os::windows::fs::symlink_file(target_path, &disk)
+                        .map_err(|error| io(&disk, &error))?;
+                }
+            }
+        }
+    }
+
+    for entry in old.entries() {
+        if cancellation.is_cancelled() {
+            return Err(WriteError::Cancelled);
+        }
+
+        if target.entry(entry.path()).is_some() {
+            continue;
+        }
+
+        let disk = root.join(entry.path());
+        match entry.kind() {
+            EntryKind::Directory => {
+                let _ = fs::remove_dir(&disk);
+            }
+            EntryKind::File | EntryKind::Symlink => {
+                let _ = fs::remove_file(&disk);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// The failure a path the work could not be written to is told as.
+fn io(path: &Path, error: &std::io::Error) -> WriteError {
+    WriteError::Io {
+        path: path.display().to_string(),
+        reason: error.to_string(),
     }
 }
 

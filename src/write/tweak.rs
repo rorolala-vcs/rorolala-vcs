@@ -26,10 +26,11 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
 
 use rorolala_auth::Account;
+use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{EntryKind, Layout, LayoutPath};
 use rorolala_protocol::VaultAddress;
 use rorolala_storage::{Blake3Hash, Key, Resolved, ShortHash, StorageSet, key_of_file};
-use rorolala_utils_constants::WORKSPACE_TWEAKING_DIR;
+use rorolala_utils_constants::{WORKSPACE_IGNORE_RULES_DIR, WORKSPACE_TWEAKING_DIR};
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_progress::Progress;
 use rorolala_vcs::{Creator, Message, VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version};
@@ -37,8 +38,10 @@ use rorolala_workspace::{Merging, Workspace};
 use uuid::Uuid;
 
 use crate::fetch::Sources;
+use crate::tree::{Tree, TreeStructure, compare, conflict_copy, read_structure};
 use crate::write::checkout::remember;
 use crate::write::layout::set_version;
+use crate::write::tree::put_back;
 use crate::write::{Cancellation, WriteError};
 
 /// How many hex digits a hash is written with when a sheet names it.
@@ -1552,7 +1555,7 @@ pub struct TweakOutcome {
 /// What an applied sheet could not do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TweakWarning {
-    /// The content the entry now records is not here, and could not be brought, so the file still
+    /// The content the entry now records is not here, and could not be brought, so the work still
     /// holds the old version's content and stands modified.
     ContentUnavailable,
 }
@@ -1566,8 +1569,6 @@ pub enum TweakRefusal {
     Nothing,
     /// The entry records a version that is not the top of a chain.
     NotAChain,
-    /// The entry names a tree rather than a file.
-    Tree,
     /// A variant is waiting to be joined into the file.
     Merging {
         /// The variant that is waiting, as hex.
@@ -1590,7 +1591,6 @@ impl fmt::Display for TweakRefusal {
             Self::NotRecorded => formatter.write_str("the Layout records no entry at the path"),
             Self::Nothing => formatter.write_str("the entry records no version"),
             Self::NotAChain => formatter.write_str("the version is not the top of a chain"),
-            Self::Tree => formatter.write_str("the entry names a tree rather than a file"),
             Self::Merging { variant } => {
                 write!(formatter, "the variant {variant} is waiting to be joined")
             }
@@ -1614,6 +1614,14 @@ impl From<SheetError> for TweakRefusal {
         Self::Sheet {
             reason: error.to_string(),
         }
+    }
+}
+
+impl From<crate::tree::TreeError> for TweakRefusal {
+    fn from(error: crate::tree::TreeError) -> Self {
+        Self::Failed(WriteError::Tree {
+            reason: error.to_string(),
+        })
     }
 }
 
@@ -1652,11 +1660,13 @@ fn index_failed(error: impl fmt::Debug) -> TweakRefusal {
 
 /// Reads the chain a path's entry records.
 ///
+/// A tree records a version the same way a file does, and the chain above it is read here without
+/// asking what the entry holds: a tree's history is one chain like any other.
+///
 /// # Errors
 ///
 /// Returns [`TweakRefusal::NotRecorded`] when the path names no entry, [`TweakRefusal::Nothing`]
-/// when it records no version, [`TweakRefusal::Tree`] when it names a tree, and
-/// [`TweakRefusal::Failed`] when the index cannot be read.
+/// when it records no version, and [`TweakRefusal::Failed`] when the index cannot be read.
 pub fn chain_of(
     index: &VCSIndex,
     layout: &Layout,
@@ -1664,9 +1674,6 @@ pub fn chain_of(
 ) -> Result<Chain, TweakRefusal> {
     let id = layout.id_of(path).ok_or(TweakRefusal::NotRecorded)?;
     let data = layout.entry(id).ok_or(TweakRefusal::NotRecorded)?;
-    if data.kind() == EntryKind::Tree {
-        return Err(TweakRefusal::Tree);
-    }
     if data.version() == [0; 32] {
         return Err(TweakRefusal::Nothing);
     }
@@ -1686,13 +1693,17 @@ pub fn chain_of(
 /// The versions above the sheet's oldest one are written again, the merge of each carried over and
 /// pointed at the replayed variant when that variant was replayed too, and the variants based on a
 /// version in the range are replayed beside them so a merge names something that is still there.
-/// The Layout is then made to record the replayed tail, and the file is brought up to it when it
-/// stood as recorded: a file holding changes is left alone, and one whose content is not here is
+/// The Layout is then made to record the replayed tail, and the work is brought up to it when it
+/// stood as recorded: work holding changes is left alone, and work whose content is not here is
 /// left alone with a [`TweakWarning`].
+///
+/// A tree is brought up the way a file is, except that what stands recorded is a structure and the
+/// work it names is many files: a tree holding no change has its work rewritten, and one holding a
+/// change has only its baseline moved.
 ///
 /// # Errors
 ///
-/// Returns [`TweakRefusal`] when the run may not adjust the file, and [`WriteError::Cancelled`]
+/// Returns [`TweakRefusal`] when the run may not adjust the entry, and [`WriteError::Cancelled`]
 /// inside [`TweakRefusal::Failed`] when `cancellation` was set.
 pub fn apply(
     request: &Request<'_>,
@@ -1708,9 +1719,6 @@ pub fn apply(
     let Some(data) = request.layout.entry(id) else {
         return Err(TweakRefusal::NotRecorded);
     };
-    if data.kind() == EntryKind::Tree {
-        return Err(TweakRefusal::Tree);
-    }
     if data.version() == [0; 32] {
         return Err(TweakRefusal::Nothing);
     }
@@ -1720,6 +1728,12 @@ pub fn apply(
         return Err(TweakRefusal::Merging {
             variant: Key::new(*pending.variant()).hex(),
         });
+    }
+
+    // A tree's work is read and written through its directory, so a tree that is not here stops the
+    // run before the chain has moved rather than after.
+    if data.kind() == EntryKind::Tree {
+        Tree::open(root, &root.join(path.to_path_buf()))?;
     }
 
     let top = index
@@ -1809,9 +1823,27 @@ pub fn apply(
         index.write_version(version).map_err(index_failed)?;
     }
 
-    set_version(request.layout, id, base)?;
+    // A tree is one entry whose work is many files, so what a file's bring-up reads in one content
+    // key is a structure and the files it names. It is brought up before the Layout names the new
+    // version, since a tree whose content does not decode as a structure must not be recorded.
+    let warnings = if data.kind() == EntryKind::Tree {
+        let warnings = bring_tree_up_to_date(
+            request,
+            path,
+            id,
+            data.version(),
+            base,
+            progress,
+            cancellation,
+        )?;
+        set_version(request.layout, id, base)?;
 
-    let warnings = bring_up_to_date(request, path, &chain, base, progress)?;
+        warnings
+    } else {
+        set_version(request.layout, id, base)?;
+
+        bring_up_to_date(request, path, &chain, base, progress)?
+    };
 
     remove_plan(root, id, &data.version())?;
 
@@ -2110,6 +2142,174 @@ fn stored_content(request: &Request<'_>, version: Blake3Hash) -> Result<Blake3Ha
         .map_err(index_failed)?;
 
     Ok(*variant.storage_hash())
+}
+
+/// Writes the version a tree now records over its work when the work stood as recorded, and moves
+/// the baseline alone when it did not.
+///
+/// A tree is one entry whose work is many files, so what a file's bring-up reads in one content key
+/// is a structure and the files it names. A tree holding a change is the owner's: only the copy of
+/// what is recorded moves, and the work on disk is left exactly as it stands.
+fn bring_tree_up_to_date(
+    request: &Request<'_>,
+    path: &LayoutPath,
+    id: Uuid,
+    before: Blake3Hash,
+    to: Blake3Hash,
+    progress: &Progress,
+    cancellation: &Cancellation,
+) -> Result<Vec<TweakWarning>, TweakRefusal> {
+    let Some(index) = request.index else {
+        return Err(WriteError::NoIndex.into());
+    };
+    let root = request.workspace.get_root();
+    let tree = Tree::open(root, &root.join(path.to_path_buf()))?;
+    let runtime = runtime()?;
+
+    let old = recorded_structure(request, &runtime, index, &tree, before)?;
+
+    // A version whose content is the one recorded before is the same structure, so it is answered
+    // from the top of the old chain rather than read again. A metadata-only adjustment therefore
+    // needs nothing new from the store and nothing from a Vault.
+    let was = stored_content(request, before)?;
+    let now = stored_content(request, to)?;
+    let new = if now == was {
+        old.clone()
+    } else {
+        let Some(store) = request.store else {
+            return Ok(vec![TweakWarning::ContentUnavailable]);
+        };
+        if !bring_keys(request, &runtime, store, &[Key::new(now)], progress)? {
+            return Ok(vec![TweakWarning::ContentUnavailable]);
+        }
+        runtime
+            .block_on(read_structure(index, store, &to))
+            .map_err(TweakRefusal::from)?
+    };
+
+    let staging = tree.staging();
+    let staged = staging.structure()?.unwrap_or_else(|| old.clone());
+    let conflicts = staging.conflicts()?;
+    let rules = tree.rules(workspace_rules(request.workspace))?;
+    let scanned = tree.scan(&rules, false)?;
+    let status = compare(&old, &staged, &scanned.structure, &conflicts);
+    let clean =
+        status.staged.is_empty() && status.unstaged.is_empty() && status.conflicts.is_empty();
+
+    let baseline = tree.baseline();
+    if !clean {
+        baseline.write(&new, &to)?;
+
+        return Ok(Vec::new());
+    }
+
+    if old != new {
+        let Some(store) = request.store else {
+            return Ok(vec![TweakWarning::ContentUnavailable]);
+        };
+        let keys: Vec<Key> = new
+            .entries()
+            .iter()
+            .filter(|entry| old.entry(entry.path()) != Some(entry))
+            .filter_map(|entry| entry.storage().copied())
+            .collect();
+        if !bring_keys(request, &runtime, store, &keys, progress)? {
+            return Ok(vec![TweakWarning::ContentUnavailable]);
+        }
+        put_back(&runtime, store, tree.root(), &new, &old, true, cancellation)
+            .map_err(TweakRefusal::Failed)?;
+    }
+
+    for conflict in &conflicts {
+        let _ = fs::remove_file(tree.root().join(conflict_copy(conflict)));
+    }
+    staging.clear()?;
+
+    // What was just written is read again, so the cache names the files now on disk rather than the
+    // ones the reading started from.
+    let after = tree.scan(&rules, false)?;
+    baseline.write(&new, &to)?;
+    baseline.write_entries(&after.cache)?;
+    tree.write_local_id(id)?;
+
+    Ok(Vec::new())
+}
+
+/// The structure the tree recorded at `version`, read from the baseline when it is the one held
+/// there and from the store otherwise.
+fn recorded_structure(
+    request: &Request<'_>,
+    runtime: &tokio::runtime::Runtime,
+    index: &VCSIndex,
+    tree: &Tree,
+    version: Blake3Hash,
+) -> Result<TreeStructure, TweakRefusal> {
+    let baseline = tree.baseline();
+    if baseline.fresh_for(&version)
+        && let Some(structure) = baseline.tree()?
+    {
+        return Ok(structure);
+    }
+
+    let Some(store) = request.store else {
+        return Err(WriteError::NoStore.into());
+    };
+
+    runtime
+        .block_on(read_structure(index, store, &version))
+        .map_err(TweakRefusal::from)
+}
+
+/// Brings `keys` here, answering whether every one of them is held afterwards.
+fn bring_keys(
+    request: &Request<'_>,
+    runtime: &tokio::runtime::Runtime,
+    store: &StorageSet,
+    keys: &[Key],
+    progress: &Progress,
+) -> Result<bool, TweakRefusal> {
+    if keys.is_empty() {
+        return Ok(true);
+    }
+
+    let presence = runtime
+        .block_on(store.contains_keys(keys))
+        .map_err(|error| WriteError::Storage {
+            reason: error.to_string(),
+        })?;
+    let missing: Vec<Key> = keys
+        .iter()
+        .enumerate()
+        .filter(|(at, _)| !presence.held(*at))
+        .map(|(_, key)| *key)
+        .collect();
+    if missing.is_empty() {
+        return Ok(true);
+    }
+
+    let Some(account) = request.account else {
+        return Ok(false);
+    };
+    let sources = Sources::new(
+        request.workspace,
+        account,
+        request.candidates.to_vec(),
+        request.offline,
+    )
+    .map_err(|reason| WriteError::Internal { reason })?
+    .reporting(progress.clone())
+    .with_concurrency(request.concurrency);
+
+    Ok(sources.bring(store, &missing).is_empty())
+}
+
+/// The rules a tree's work is read by: the Workspace's own, which is what a commit reads it with.
+fn workspace_rules(workspace: &Workspace) -> IgnoreRuleSet {
+    IgnoreRuleSet::load(
+        &workspace.get_root().join(WORKSPACE_IGNORE_RULES_DIR),
+        workspace.get_root(),
+    )
+    .unwrap_or_else(|_| IgnoreRuleSet::empty())
 }
 
 /// The runtime the asynchronous reads and the content transfer are waited on.

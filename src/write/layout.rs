@@ -443,7 +443,8 @@ pub fn set_preference(
         })
 }
 
-/// Changes the version an entry names, leaving its owner, description and preference as they are.
+/// Changes the version an entry names, leaving its kind, owner, description and preference as they
+/// are.
 ///
 /// # Errors
 ///
@@ -453,12 +454,9 @@ pub fn set_version(layout: &Layout, id: Uuid, version: [u8; 32]) -> Result<(), W
     let entry = layout.entry(id).ok_or_else(|| WriteError::NotFound {
         what: format!("Layout entry {id}"),
     })?;
-    let data = MutableData::new(
-        entry.owner().map(str::to_owned),
-        version,
-        entry.description().to_owned(),
-    )
-    .with_preference(entry.preference().map(str::to_owned));
+    // `renewed` is what keeps an entry the kind it was made: a tree whose version moved with
+    // `new` would be recorded as a file from the change on.
+    let data = entry.renewed(entry.owner().map(str::to_owned), version);
 
     layout
         .update_entry(id, data)
@@ -1141,10 +1139,41 @@ pub fn set_cached_owners(
 mod tests {
     use std::fs;
 
-    use super::{LayoutOp, apply};
-    use rorolala_layout::{LayoutPath, MutableData};
+    use super::{LayoutOp, apply, set_version};
+    use rorolala_layout::{EntryKind, LayoutPath, MutableData};
     use rorolala_utils_location::Locate as _;
     use uuid::Uuid;
+
+    #[test]
+    fn a_version_change_keeps_a_tree_a_tree() {
+        let dir =
+            std::env::temp_dir().join(format!("rola-write-layout-tree-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        rorolala_workspace::Workspace::create(&dir).unwrap();
+        let workspace = rorolala_workspace::Workspace::locate(&dir).unwrap();
+        let layout = workspace.layout().unwrap();
+        let id = Uuid::from_u128(2);
+        let path = LayoutPath::new("art").unwrap();
+
+        let mut batch = layout.batch();
+        batch
+            .create_file(
+                id,
+                MutableData::new(None, [1; 32], "first".to_owned()).with_kind(EntryKind::Tree),
+                &path,
+            )
+            .unwrap();
+        batch.commit().unwrap();
+        set_version(&layout, id, [2; 32]).unwrap();
+
+        let data = layout.entry(id).unwrap();
+        assert_eq!(data.kind(), EntryKind::Tree);
+        assert_eq!(data.version(), [2; 32]);
+        assert_eq!(data.description(), "first");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_batch_binds_and_moves_a_path() {

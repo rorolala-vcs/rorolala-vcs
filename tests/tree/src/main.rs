@@ -55,6 +55,7 @@ fn main() {
     tree_move(&rola, &ws, &mut checked);
     tree_removal(&rola, &ws, &mut checked);
     missing_tree_delete(&rola, &ws, &mut checked);
+    tweaking(&rola, &ws, &mut checked);
 
     checked.report();
 }
@@ -1149,6 +1150,64 @@ fn tree_move(rola: &Rola, ws: &Path, checked: &mut Checked) {
 
     let ran = rola.run(ws, &["align", "legacy", "--rename"]);
     checked.exits("the connected move is confirmed", &ran, 0);
+}
+
+/// A tree's chain is adjusted like a file's, and what a tweak does to the work on disk depends on
+/// whether the tree holds changes of its own.
+fn tweaking(rola: &Rola, ws: &Path, checked: &mut Checked) {
+    let dir = ws.join("adjust");
+    fs::create_dir_all(&dir).expect("a directory to make a tree of");
+    fs::write(dir.join("a.psd"), b"one").expect("a file in the tree");
+
+    let ran = rola.run(ws, &["tree", "init", "adjust"]);
+    checked.exits("a tree is made to adjust", &ran, 0);
+    let ran = rola.run(ws, &["tree", "add", "adjust"]);
+    checked.exits("its work is staged", &ran, 0);
+    let ran = rola.run(
+        ws,
+        &["track", "adjust", "--message", "first", "--no-editor"],
+    );
+    checked.exits("the tree is recorded", &ran, 0);
+
+    // Every way of writing the tree names the same entry.
+    for written in ["adjust", "adjust/", "adjust/.rola-tree", "adjust/a.psd"] {
+        let ran = rola.run(ws, &["tweak", written]);
+        checked.exits("a tree or a path inside it names the tree", &ran, 0);
+        checked.stdout_has("the query answers about the tree", &ran, "adjust");
+    }
+
+    // Nothing changed in the tree, so the work is brought up to the version recorded. What the
+    // version holds is the same structure, so the file is not written again.
+    let ran = rola.run(ws, &["tweak", "adjust", "-d", "edited", "--now"]);
+    checked.exits("a clean tree's chain is adjusted", &ran, 0);
+    checked.wants(
+        "the tree's file is what it was",
+        fs::read(dir.join("a.psd")).is_ok_and(|it| it == b"one"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["layout", "entries"]);
+    checked.exits("the Layout is read after the tweak", &ran, 0);
+    checked.stdout_has("the tree is still one entry", &ran, "adjust");
+
+    let ran = rola.run(ws, &["tree", "status", "adjust"]);
+    checked.exits("the adjusted tree is read", &ran, 0);
+    checked.stdout_has("the tree stands as recorded", &ran, "clean");
+
+    // A tree holding a change keeps its work: the tweak moves the record, and the file stays as its
+    // owner wrote it.
+    fs::write(dir.join("a.psd"), b"mine").expect("the owner's change");
+    let ran = rola.run(ws, &["tweak", "adjust", "-d", "edited again", "--now"]);
+    checked.exits("a changed tree's chain is adjusted", &ran, 0);
+    checked.wants(
+        "the owner's change is kept",
+        fs::read(dir.join("a.psd")).is_ok_and(|it| it == b"mine"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(ws, &["tree", "status", "adjust"]);
+    checked.exits("the changed tree is read after the tweak", &ran, 0);
+    checked.stdout_has("the change is still the owner's", &ran, "modified");
 }
 
 /// A command that runs `rola`, working in `dir` and keeping the user's files in the sandbox.

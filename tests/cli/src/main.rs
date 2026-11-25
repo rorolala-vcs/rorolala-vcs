@@ -2943,9 +2943,9 @@ fn tweaking(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let ran = rola.run(dir, &["tweak", "../elsewhere.psd"]);
     checked.exits("a path outside the Workspace is refused", &ran, 14);
 
-    // A directory is one entry and not a file, so it is not something this command takes.
+    // The Workspace root is not a tree here, so it names no entry this command takes.
     let ran = rola.run(dir, &["tweak", "."]);
-    checked.exits("a directory of the work is refused", &ran, 14);
+    checked.exits("a Workspace root that is not a tree is refused", &ran, 14);
 }
 
 /// Whether nothing waits under the directory plans are kept in.
