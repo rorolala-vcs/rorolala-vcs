@@ -136,7 +136,7 @@ public sealed class PlacesTests
         var listing = new Places(host, browser, Place(provider, address));
         var item = Assert.Single(listing.Items);
 
-        // Nothing was contributed for this place, so the tile is the plate itself rather than a plate and an arc.
+        // Nothing was contributed for this place, so the tile is the plate itself rather than a plate and a row.
         var plate = Assert.IsType<Border>(listing.Marked(item, 64));
 
         Assert.Equal(64.0, plate.Width);

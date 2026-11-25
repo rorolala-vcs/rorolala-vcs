@@ -131,7 +131,7 @@ internal sealed class Files : Listing<Entry>
     /// <inheritdoc />
     public override Color? Band(Entry item) => FolderColours.Band(item);
 
-    /// <summary>An entry's icon, with what every contributor marked worn around its top right corner.</summary>
+    /// <summary>An entry's icon, with what every contributor marked worn along its top right corner.</summary>
     /// <remarks>
     /// Every provider that speaks for the directory is asked, rather than one of them: two badges say two
     /// different things, who holds the entry and how far its version has come, and neither is the other's to
@@ -140,7 +140,7 @@ internal sealed class Files : Listing<Entry>
     /// fails to be drawn.
     /// <para>
     /// The order the providers were asked in is the order the badges are numbered, which is what makes a badge
-    /// stand in the same place of the arc from one listing to the next.
+    /// stand in the same place of the row from one listing to the next.
     /// </para>
     /// </remarks>
     /// <param name="item">The entry to draw.</param>

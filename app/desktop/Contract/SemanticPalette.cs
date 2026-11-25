@@ -8,8 +8,9 @@ namespace RorolalaDesktop.Contract;
 /// <remarks>
 /// They are the look's rather than a plugin's: a state means the same thing wherever it is drawn, and a
 /// second set in a plugin is a second vocabulary for one answer. What a state is coloured is not the ground
-/// it is drawn on, so both looks ship the same bright set: a badge is a filled bead whose picture is always
-/// the light ink, and the bright colours are the ones that picture reads on. A user who wants the two looks
+/// it is drawn on, so both looks ship the same bright set: a badge stands on the look's face tinted with the
+/// state's colour, and that colour is what its picture is drawn in, lifted on the dark look and deepened on
+/// the light one. A user who wants the two looks
 /// apart states them apart in <c>theme.json</c>, which is what the two variants' fields are for.
 /// </remarks>
 public readonly record struct SemanticPalette

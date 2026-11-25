@@ -10,7 +10,7 @@ namespace RorolalaDesktopHost.IntegrationTests;
 /// <remarks>
 /// Nothing here draws (that needs a renderer, and a badge is a control) so what is exercised is the
 /// catalogue: a badge exists only where a provider speaks for the directory, and the order the providers
-/// were offered in is what says which badge of the arc is whose.
+/// were offered in is what says which badge of the row is whose.
 /// </remarks>
 public sealed class MarkTests
 {
@@ -21,7 +21,7 @@ public sealed class MarkTests
     /// <remarks>
     /// Every one rather than the first, which is where this differs from the Ownership column: a tile wears as
     /// many badges as there are answers about it, and the order is what makes a badge stand in the same place
-    /// of the arc from one listing to the next.
+    /// of the row from one listing to the next.
     /// </remarks>
     [Fact]
     public void EveryProviderThatSpeaksIsAskedInTheOrderItWasOffered()
@@ -42,7 +42,7 @@ public sealed class MarkTests
 
     /// <summary>A provider of an identity already offered is ignored rather than replacing it.</summary>
     /// <remarks>
-    /// Two plugins claiming one name would otherwise be two badges of the arc whose order, and so whose
+    /// Two plugins claiming one name would otherwise be two badges of the row whose order, and so whose
     /// positions, depended on which of them happened to be loaded second.
     /// </remarks>
     [Fact]

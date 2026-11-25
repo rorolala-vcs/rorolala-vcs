@@ -15,7 +15,7 @@ namespace FileSystemPlugin;
 /// plates that disagree the first time either was changed.
 /// <para>
 /// The plate is the tile: its size is the tile's, and the room a badge stands in is taken around it by the grid
-/// (see <see cref="BadgeArc.Reach"/>), not by the plate itself.
+/// (see <see cref="BadgeRow.Reach"/>), not by the plate itself.
 /// </para>
 /// </remarks>
 internal static class Plate

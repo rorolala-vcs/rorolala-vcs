@@ -49,10 +49,10 @@ internal sealed class RorolalaLocks : IEntryLockProvider
         _readings.Lock(entry) switch
         {
             // Held by the reader, which is the pencil: holding it is what makes it theirs to change, and the
-            // badge says so in the semantic allow, worn on the dark ground the way another account's lock is.
-            // The two are the two answers to the same question, so they are drawn the same way round. The words
-            // stay in the ordinary ink, since "you" is a name like any other and a column that shouted it would
-            // shout every row it holds.
+            // badge says so in the semantic allow, its bead the look's face tinted with that colour, the way
+            // another account's lock is. The two are the two answers to the same question, so they are drawn the
+            // same way round. The words stay in the ordinary ink, since "you" is a name like any other and a column
+            // that shouted it would shout every row it holds.
             //
             // What the badge says on hover is what holding the file means to the person reading it, which the
             // column's own word for it does not: the column says a name, and a name does not say whether the
@@ -67,9 +67,9 @@ internal sealed class RorolalaLocks : IEntryLockProvider
             ),
 
             // Held by somebody else, which is the lock: the one answer on the card that is not the reader's, so
-            // it is drawn in the semantic disallow and worn on the dark ground, the way the shell draws a state.
-            // The words name whoever holds it, and the badge, which is only a picture of a lock, is hovered for
-            // the phrase that name goes in.
+            // it is drawn in the semantic disallow, its bead the look's face tinted with that colour, the way the
+            // shell draws a state. The words name whoever holds it, and the badge, which is only a picture of a
+            // lock, is hovered for the phrase that name goes in.
             { Kind: EntryLockKind.Held, Holder: { Length: > 0 } holder } => new EntryMark(
                 Text: holder,
                 IconKey: Icons.LockBold,

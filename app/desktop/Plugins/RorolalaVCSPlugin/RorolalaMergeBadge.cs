@@ -70,7 +70,7 @@ internal sealed class RorolalaMergeBadge : IEntryMarkProvider
     /// What a variant file is worn as: the two lines coming together, in the amber of work under way.
     /// </summary>
     /// <remarks>
-    /// Worn on the dark ground the other badges wear, since a tile carries marks of several kinds at once and
+    /// Worn the way the other badges are worn, since a tile carries marks of several kinds at once and
     /// a bare picture beside a badge would be two of them. The words are the mark's own rather than a phrase
     /// read around them: there is nothing to say beside which variant it is, because the variant <em>is</em>
     /// what the file is.

@@ -16,7 +16,7 @@ namespace FileSystemPlugin;
 /// The plate is the same one a place's picture stands on (see <see cref="Plate"/>), so a grid of files and a grid
 /// of places read as one grid: what this adds is the thumbnail, and the entry's own type icon at four tenths of
 /// the tile once the thumbnail has taken the whole of it. The contribution badges stay above both pictures, in
-/// the same arc they are drawn on anywhere else.
+/// the same row they are drawn in anywhere else.
 /// <para>
 /// The preview is asked for when the tile is attached to a window and cancelled when it leaves: a grid recycles
 /// its tiles, and a request made once for one entry would otherwise be a request a different entry inherits.
@@ -129,14 +129,14 @@ internal sealed class PreviewTile : Grid
 
         if (badges.Count > 0)
         {
-            var arc = new BadgeArc();
+            var row = new BadgeRow();
 
-            for (var at = 0; at < BadgeArc.Worn(badges.Count); at++)
+            for (var at = 0; at < BadgeRow.Worn(badges.Count, size); at++)
             {
-                arc.Children.Add(Icons.Worn(badges[at], size));
+                row.Children.Add(Icons.Worn(badges[at], size));
             }
 
-            Children.Add(arc);
+            Children.Add(row);
         }
 
         AttachedToVisualTree += (_, _) => Load();

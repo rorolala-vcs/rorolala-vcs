@@ -11,7 +11,8 @@ namespace RorolalaVCSPlugin;
 /// mark says so wherever a mark is read: in the badge column at a tree row's right, and on the folder's
 /// corner in a directory listing. The colour a tree's id names belongs to the rows the tree marks, so the
 /// park stands on the look's Mid and draws its picture in Front: it says what the folder is, and the colour
-/// says where the tree reaches.
+/// says where the tree reaches. Naming the picture's ink is what says the bead is that ground rather than the
+/// look's face tinted with it, which is how every other tagged mark is drawn.
 /// </remarks>
 internal sealed class RolaTreeIcon : IEntryMarkProvider
 {

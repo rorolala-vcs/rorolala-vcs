@@ -34,8 +34,9 @@ namespace FileSystemPlugin;
 /// <param name="Ink">What the picture is drawn in.</param>
 /// <param name="TextInk">What the words are drawn in.</param>
 /// <param name="Tagged">
-/// Whether the picture is drawn as a filled bead in its own colour rather than bare on the tile. A badge that
-/// says something is wrong wants saying, and one that says an entry is the reader's own does not.
+/// Whether the mark wears a bead rather than standing bare on the tile: the look's face tinted with the mark's
+/// colour, with the picture drawn in that colour. A badge that says something is wrong wants saying, and one that
+/// says an entry is the reader's own does not.
 /// </param>
 /// <param name="HoverKey">
 /// A key for what the badge says when the pointer rests on it, with the mark's own words as the one value it
@@ -47,9 +48,11 @@ namespace FileSystemPlugin;
 /// over <paramref name="Ink"/>, and nothing means the role is what is drawn.
 /// </param>
 /// <param name="Glyph">
-/// The colour a filled badge's picture is drawn in, where the light ink is not wanted. The fill itself is
-/// <paramref name="Colour"/>; this is the picture standing on it, which a contribution that wants its mark read
-/// as ink on a bead gives a colour of its own. Nothing means the light ink a filled badge already draws with.
+/// The colour a tagged badge's picture is drawn in, where the mark's own colour will not do, and the sign that the
+/// bead is the mark's own colour rather than the look's face tinted with it. The ground is <paramref name="Colour"/>;
+/// this is the picture standing on it, which a contribution that says what a thing is rather than what state it is
+/// in gives a colour of its own. Nothing means the bead is tinted with the mark's colour and the picture is drawn
+/// in that colour.
 /// </param>
 public sealed record EntryMark(
     string? TextKey = null,

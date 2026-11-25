@@ -373,9 +373,9 @@ internal sealed class RorolalaStates : IEntryColumnProvider, IEntryMarkProvider
 
     /// <summary>One state, as the badge it wears on a tile.</summary>
     /// <remarks>
-    /// No ink role is named, because the badge is painted in the state's own colour rather than in one of the
-    /// look's: the colour is the whole of what the picture and the ring around it are drawn in, and a role
-    /// beside it would be a second answer about the same mark.
+    /// No ink role is named, because the colour is the state's own rather than one of the look's: the bead is the
+    /// look's face tinted with that colour and the picture is drawn in it, so a role beside it would be a second
+    /// answer about the same mark.
     /// </remarks>
     /// <param name="icon">The key of the picture the set draws for it.</param>
     /// <param name="colour">What the state is coloured.</param>

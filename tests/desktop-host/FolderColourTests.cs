@@ -213,10 +213,10 @@ public sealed class FolderColourTests
             var list = view.GetVisualDescendants().OfType<ListBox>().First();
             var entry = Assert.Single(list.Items.OfType<Entry>(), item => item.Path == tree);
             var container = Assert.IsType<ListBoxItem>(list.ContainerFromItem(entry));
-            var arc = Assert.Single(container.GetVisualDescendants().OfType<BadgeArc>());
-            var badge = Assert.Single(arc.Children);
+            var row = Assert.Single(container.GetVisualDescendants().OfType<BadgeRow>());
+            var badge = Assert.Single(row.Children);
             var expected = RorolalaColours.Mid;
-            var fill = badge.GetVisualDescendants()
+            var fill = badge.GetSelfAndVisualDescendants()
                 .OfType<Border>()
                 .FirstOrDefault(border =>
                     border.Background is ISolidColorBrush brush && brush.Color == expected
@@ -224,19 +224,16 @@ public sealed class FolderColourTests
 
             Assert.NotNull(fill);
 
-            // The bead is the look's ground, and the park itself is the look's ink: the colour marks where the
-            // tree reaches, and the badge says what the folder is.
+            // The bead is the look's ground, ringed rather than shadowed, and the park itself is the look's ink:
+            // the colour marks where the tree reaches, and the badge says what the folder is.
             Assert.Contains(
-                badge.GetVisualDescendants().OfType<Border>(),
+                badge.GetSelfAndVisualDescendants().OfType<Border>(),
                 border =>
                     border.Background is ISolidColorBrush brush
                     && brush.Color == RorolalaColours.Front
             );
 
-            Assert.DoesNotContain(
-                badge.GetVisualDescendants().OfType<Border>(),
-                border => border.BorderThickness.Left > 0
-            );
+            Assert.Equal(1, fill.BorderThickness.Left);
         }
         finally
         {

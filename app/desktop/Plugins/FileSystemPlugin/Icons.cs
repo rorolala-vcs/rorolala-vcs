@@ -388,13 +388,32 @@ internal static partial class Icons
     /// <inheritdoc cref="BallInset" />
     private const double BallLeast = 2;
 
-    /// <summary>The ink a filled badge's picture is always drawn in, whatever the mark's colour is.</summary>
+    /// <summary>How much of the mark's colour a tagged bead's ground takes.</summary>
     /// <remarks>
-    /// A filled bead is told from the picture it stands on by its fill and its shadow, so what is drawn on it
-    /// is the light ink rather than the mark's colour: a picture in the fill's own colour would be a picture
-    /// that vanished into it.
+    /// The bead is the look's face rather than the colour itself: a badge is a mark on a picture, and a ground
+    /// of the mark's full colour would be a statement as loud as the picture it stands on. A third of the way
+    /// tints the face enough to be read at a glance and leaves the ink on the picture in the mark's own colour.
     /// </remarks>
-    internal static readonly Color LightInk = Color.FromRgb(0xF7, 0xF8, 0xFA);
+    private const double TintShare = 0.35;
+
+    /// <summary>How far a bead's ring is taken from the bead's ground.</summary>
+    /// <remarks>
+    /// Towards white on the dark look and towards black on the light one, which is what tells a bead from the
+    /// picture under it on either surface while staying a shade of the bead rather than a colour of its own.
+    /// </remarks>
+    private const double RingShare = 0.10;
+
+    /// <summary>How far a bead's picture is lifted off the bead's ground on the dark look.</summary>
+    /// <remarks>
+    /// A mark drawn in its own colour on a bead tinted with that colour is a mark on a ground too near itself:
+    /// the brightest of the look's marks are the ones a pale ground swallows on the light look and a dark, tinted
+    /// one swallows on the dark look. Lifting the picture keeps the mark's hue and gives it the contrast it needs.
+    /// </remarks>
+    private const double LightenShare = 0.25;
+
+    /// <summary>How far a bead's picture is deepened into the bead's ground on the light look.</summary>
+    /// <inheritdoc cref="LightenShare" />
+    private const double DeepenShare = 0.30;
 
     /// <summary>The theme resource a contributed mark is drawn in.</summary>
     /// <remarks>
@@ -417,21 +436,21 @@ internal static partial class Icons
         };
 
     /// <summary>
-    /// An entry's icon with the badges its contributions asked for around the top right corner.
+    /// An entry's icon with the badges its contributions asked for along its top right corner.
     /// </summary>
     /// <remarks>
     /// Every contribution that speaks for the entry is worn at once, numbered the way it was registered: two
     /// badges say two different things (who holds the entry, and how far its version has come) and neither
     /// is the other's to replace.
     /// <para>
-    /// The picture is drawn as a mask over the light ink rather than as a picture, so that a filled bead's mark
-    /// is told from what is drawn on it: a picture carries whatever colours it was drawn with, and one drawn
-    /// once per fill would be one per colour.
+    /// The picture is drawn as a mask over the ink rather than as a picture, so that a badge's mark is told
+    /// from what is drawn on it: a picture carries whatever colours it was drawn with, and one drawn once per
+    /// colour would be one per colour.
     /// </para>
     /// <para>
-    /// A mark the contribution asked to have tagged is a filled bead in its own colour, which is how the shell
-    /// draws a state, so that a badge saying an entry is somebody else's reads as an answer rather than as
-    /// another icon beside the file's own.
+    /// A mark the contribution asked to have tagged wears a bead: the look's face tinted with the mark's own
+    /// colour, and the picture in that colour. A mark that names the ink of its picture instead wears a bead of
+    /// its own colour, which is how the tree's park says what a folder is rather than what state it is in.
     /// </para>
     /// </remarks>
     /// <param name="icon">What the entry is drawn as.</param>
@@ -450,27 +469,27 @@ internal static partial class Icons
             return icon;
         }
 
-        var arc = new BadgeArc();
+        var row = new BadgeRow();
 
-        // Only the first of them are worn. Past that the arc cannot tell one badge from its neighbour, and
-        // what it cannot tell is not worn rather than worn on top of another (see BadgeArc.Most).
-        for (var at = 0; at < BadgeArc.Worn(badges.Count); at++)
+        // Only the first of them are worn. Past that the row cannot tell one badge from its neighbour, and
+        // what it cannot tell is not worn rather than worn on top of another (see BadgeRow.Most).
+        for (var at = 0; at < BadgeRow.Worn(badges.Count, size); at++)
         {
-            arc.Children.Add(Worn(badges[at], size));
+            row.Children.Add(Worn(badges[at], size));
         }
 
         var grid = new Grid { Width = size, Height = size };
         grid.Children.Add(icon);
-        grid.Children.Add(arc);
+        grid.Children.Add(row);
 
         return grid;
     }
 
     /// <summary>
-    /// One badge drawn: a filled bead in the mark's colour, or bare in the ink.
+    /// One badge drawn: a tinted bead with the mark's colour on it, or bare in the ink.
     /// </summary>
     /// <remarks>
-    /// What a filled badge is drawn in is the role the contribution named, or its own colour where it named one: a
+    /// What a badge is drawn in is the role the contribution named, or its own colour where it named one: a
     /// contribution that has a palette of its own, the states a work's files are in, which are the plugin's
     /// answer and the user's to choose, says what its marks are coloured rather than which of the look's roles
     /// they wear.
@@ -481,15 +500,21 @@ internal static partial class Icons
     /// own colour is a badge that turns the look's grey the moment it is drawn.
     /// </para>
     /// <para>
-    /// A filled badge's picture is always the light ink, and the bead carries a shadow of its own hue: darker
-    /// on the light look and lighter on the dark one. The shadow is what tells the bead from the picture under
-    /// it without a line around it, and the light picture is what tells the picture from the fill.
+    /// A tagged badge stands on the look's face tinted with its colour, and its picture is that colour lifted on
+    /// the dark look and deepened on the light one, since a bright mark drawn on a pale bead is a mark that
+    /// vanishes into it. A mark that names the ink of its picture keeps a bead of its own colour and that ink
+    /// instead, which is the tree's park: it says what a folder is, not what state it is in.
+    /// </para>
+    /// <para>
+    /// The bead is ringed rather than shadowed: one pixel of the bead's own ground taken towards white on the
+    /// dark look and towards black on the light one, which tells the bead from the picture under it without a
+    /// colour that does not belong to the mark.
     /// </para>
     /// </remarks>
     /// <param name="badge">The picture and what the contribution said about the entry.</param>
     /// <param name="size">How many pixels wide and tall the icon is.</param>
-    /// <returns>What to stand on the arc.</returns>
-    public static Control Worn(EntryBadge badge, int size) => Worn(badge, BadgeArc.Extent(size));
+    /// <returns>What to stand on the row.</returns>
+    public static Control Worn(EntryBadge badge, int size) => Worn(badge, BadgeRow.Extent(size));
 
     /// <summary>
     /// One badge drawn at the size it is given, rather than at its share of an icon.
@@ -500,13 +525,13 @@ internal static partial class Icons
     /// </remarks>
     /// <param name="badge">The picture and what the contribution said about the entry.</param>
     /// <param name="size">How many pixels wide and tall the badge is.</param>
-    /// <returns>What to stand on the arc.</returns>
+    /// <returns>What to stand on the row.</returns>
     public static Control WornAt(EntryBadge badge, int size) => Worn(badge, (double)size);
 
     /// <summary>One badge drawn at an extent.</summary>
     /// <param name="badge">The picture and what the contribution said about the entry.</param>
     /// <param name="extent">How many pixels wide and tall the badge is.</param>
-    /// <returns>What to stand on the arc.</returns>
+    /// <returns>What to stand on the row.</returns>
     private static Control Worn(EntryBadge badge, double extent)
     {
         var role = Ink(badge.Mark.Ink);
@@ -516,46 +541,32 @@ internal static partial class Icons
 
         if (badge.Mark.Tagged)
         {
-            // The picture is taken off the bead's own edge, and what is left around it is the fill. The fill is
-            // the mark's own colour, or the look's role for it, and the picture is always light: the fill is what
-            // says which mark it is, and the picture is what is drawn on it.
+            // The picture is taken off the bead's own edge, and what is left around it is the ground. A mark
+            // that names the ink of its picture keeps a bead of its own colour, which is the tree's park; every
+            // other tagged mark stands on the look's face tinted with its colour.
             var room = Math.Max(BallLeast, extent * BallInset);
             var glyph = Picture(
                 badge.Picture,
                 Math.Max(1, Math.Round(extent - (2 * room), MidpointRounding.AwayFromZero))
             );
 
-            var fill = own ?? RoleColour(role) ?? Colors.Gray;
-            var shade = Shadow(fill, DarkLook);
+            var target = own ?? RoleColour(role) ?? Colors.Gray;
+            var dark = DarkLook;
+            var (fill, ink) = badge.Mark.Glyph is { } named
+                ? (target, named)
+                : (Mix(Bright(dark), target, TintShare), Readable(target, dark));
 
-            var worn = new Border
+            glyph.Background = new SolidColorBrush(ink);
+            drawn = new Border
             {
                 Width = extent,
                 Height = extent,
                 UseLayoutRounding = true,
                 CornerRadius = new CornerRadius(extent / 2),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Ring(fill, dark)),
+                Background = new SolidColorBrush(fill),
                 Child = glyph,
-                BoxShadow = new BoxShadows(
-                    new BoxShadow
-                    {
-                        OffsetX = 0,
-                        OffsetY = 1,
-                        Blur = 3,
-                        Spread = 0,
-                        Color = shade,
-                    }
-                ),
-            };
-            Painted(worn, Border.BackgroundProperty, own, role);
-            glyph.Background = new SolidColorBrush(badge.Mark.Glyph ?? LightInk);
-
-            // The ink the badge is drawn in is the dark look's, whatever the program is drawn on: the picture
-            // is the light ink, and the fill is the look's role read in the dark palette, so the bead reads the
-            // same on either surface while its shadow follows the surface it actually stands on.
-            drawn = new ThemeVariantScope
-            {
-                RequestedThemeVariant = ThemeVariant.Dark,
-                Child = worn,
             };
         }
         else
@@ -607,17 +618,27 @@ internal static partial class Icons
     }
 
     /// <summary>Whether the program is drawn on the dark look.</summary>
-    private static bool DarkLook =>
-        Application.Current?.ActualThemeVariant == ThemeVariant.Dark;
+    private static bool DarkLook => Application.Current?.ActualThemeVariant == ThemeVariant.Dark;
 
-    /// <summary>The colour a role is drawn in, read in the palette a filled badge is drawn in.</summary>
+    /// <summary>The look's face, which a tinted bead stands on.</summary>
+    /// <param name="dark">Whether the program is drawn on the dark look.</param>
+    /// <returns>The colour, as the look in force states it.</returns>
+    private static Color Bright(bool dark) =>
+        RoleColour(PaletteKeys.Bright) is { } face
+            ? Color.FromArgb(0xFF, face.R, face.G, face.B)
+            : dark
+                ? ThemePalette.DefaultDark.Bright
+                : ThemePalette.DefaultLight.Bright;
+
+    /// <summary>The colour a role is drawn in, read in the variant the program is drawn in.</summary>
     /// <param name="role">The resource key the look holds the role under.</param>
     /// <returns>The colour, or nothing when the look is not there to answer.</returns>
     private static Color? RoleColour(string role)
     {
         var look = Application.Current;
+        var variant = DarkLook ? ThemeVariant.Dark : ThemeVariant.Light;
 
-        if (look is null || !look.TryFindResource(role, ThemeVariant.Dark, out var found))
+        if (look is null || !look.TryFindResource(role, variant, out var found))
         {
             return null;
         }
@@ -630,19 +651,36 @@ internal static partial class Icons
         };
     }
 
-    /// <summary>The shadow a filled badge wears: the fill's own hue, darker or lighter with the look.</summary>
-    /// <param name="fill">The colour the bead is filled with.</param>
-    /// <param name="dark">Whether the program is drawn on the dark look.</param>
-    /// <returns>The shadow's colour.</returns>
-    private static Color Shadow(Color fill, bool dark)
+    /// <summary>A bead's ground: the look's face taken part of the way to the mark's colour.</summary>
+    /// <param name="face">The look's face.</param>
+    /// <param name="target">The mark's colour.</param>
+    /// <param name="share">How far towards the mark's colour.</param>
+    /// <returns>The colour the bead is filled with.</returns>
+    private static Color Mix(Color face, Color target, double share)
     {
-        var towards = dark ? Colors.White : Colors.Black;
-        const double share = 0.45;
-
         byte At(byte from, byte to) => (byte)Math.Round(from + ((to - from) * share));
 
-        return Color.FromArgb(0x99, At(fill.R, towards.R), At(fill.G, towards.G), At(fill.B, towards.B));
+        return Color.FromArgb(
+            face.A,
+            At(face.R, target.R),
+            At(face.G, target.G),
+            At(face.B, target.B)
+        );
     }
+
+    /// <summary>The ring a bead wears: its own ground taken towards white or black with the look.</summary>
+    /// <param name="fill">The bead's ground.</param>
+    /// <param name="dark">Whether the program is drawn on the dark look.</param>
+    /// <returns>The ring's colour.</returns>
+    private static Color Ring(Color fill, bool dark) =>
+        Mix(fill, dark ? Colors.White : Colors.Black, RingShare);
+
+    /// <summary>The colour a tinted bead's picture is drawn in.</summary>
+    /// <param name="target">The mark's colour.</param>
+    /// <param name="dark">Whether the program is drawn on the dark look.</param>
+    /// <returns>The colour, which keeps the mark's hue.</returns>
+    private static Color Readable(Color target, bool dark) =>
+        dark ? Mix(target, Colors.White, LightenShare) : Mix(target, Colors.Black, DeepenShare);
 
     /// <summary>
     /// The picture itself: a mask over the ink, which is what makes it take the theme's colour.

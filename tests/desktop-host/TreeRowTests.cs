@@ -391,17 +391,18 @@ public sealed class TreeRowTests
             var row = Until(window, () => Row(window, marked));
             var strip = Named<StackPanel>(row, "entry-badges");
             var badge = Assert.Single(strip.Children);
-            var fill = badge.GetVisualDescendants()
-                .OfType<Border>()
-                .FirstOrDefault(border =>
-                    border.Background is SolidColorBrush brush && brush.Color == Colors.Red
-                );
+            var bead = Assert.IsType<Border>(badge);
+            var ground = Assert.IsType<SolidColorBrush>(bead.Background).Color;
 
-            Assert.NotNull(fill);
-            Assert.DoesNotContain(
-                badge.GetVisualDescendants().OfType<Border>(),
-                border => border.BorderThickness.Left > 0
-            );
+            // The mark's colour reaches the badge twice: the bead is the look's face tinted with it, and the
+            // picture standing on the bead is drawn in it. A bead without the ring would be a mark that bleeds
+            // into the row it stands on.
+            Assert.True(ground.R > ground.G && ground.R > ground.B, "the mark's colour is not in the bead");
+            Assert.Equal(1, bead.BorderThickness.Left);
+
+            var glyph = Assert.IsType<SolidColorBrush>(Assert.IsType<Border>(bead.Child).Background).Color;
+
+            Assert.True(glyph.R > glyph.G && glyph.R > glyph.B, "the mark's colour is not in its picture");
             Assert.DoesNotContain(row.GetVisualDescendants(), one => one.Name == "entry-icon");
         }
         finally

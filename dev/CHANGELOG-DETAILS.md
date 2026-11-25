@@ -267,11 +267,11 @@ read on, because a ring is bound to the entry behind it: a proportion written fr
 worker made that binding throw, which ended a bring that had already carried everything and told the
 user the run had not finished while the work was there.
 
-### 16. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Draw file icons on a plate with solid corner badges
+### 16. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Draw file icons on a plate with a row of badges on the corner
 
 A file's icon now stands on a rounded plate: the `Mid` ground with a `Splitter` line, the icon inset so the plate reads as its frame, and a preview embedded inside it when there is one. The entry's type icon takes the plate's bottom right at four tenths of the tile once a preview is there.
 
-A tagged contribution is a filled bead in its own colour: the picture is always the light ink, and the bead carries a shadow of its own hue, darker on the light look and lighter on the dark one. A state is the same bright bead whichever look the window is in, since both looks ship one semantic set. A single badge still sits on the top right diagonal, up to five share the same quarter arc, and the listing's larger selected frame is unchanged.
+A tagged contribution now stands on the look's face tinted with its own colour: the ground is `Bright` with 35% of the mark's colour laid over it, the picture is drawn in that colour lifted on the dark look and deepened on the light one, and a 1px ring of the ground taken towards white or black with the look replaces the shadow. A mark that names the ink of its picture, the tree's park, keeps a bead of its own colour and that ink instead. The badges of a tile stand in one row along the top right corner rather than on an arc about it, the first at the left and the last past the corner; four fit across the icon a grid opens at and five at the largest zoom, and what does not fit is dropped. A tree row keeps the row it already had, and the listing's larger selected frame is unchanged.
 
 ### 17. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Draw the file listing with the Adwaita icon set by default
 

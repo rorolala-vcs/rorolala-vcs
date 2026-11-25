@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using FileSystemPlugin;
 using RorolalaDesktop.Configuration;
 using RorolalaDesktop.Contract;
@@ -54,126 +56,122 @@ public sealed class IconTests
         Assert.All(BrowserActions.Pictures.Values, picture => Assert.Contains(picture, drawn));
     }
 
-    /// <summary>Badges stand on an arc about the icon's top right corner, and never past a quarter turn.</summary>
+    /// <summary>Badges stand in a row along the icon's top right corner, in the order they were contributed.</summary>
     /// <remarks>
     /// The arrangement is checked as geometry rather than as a drawing, because a drawing needs a renderer
-    /// and this suite has none: what is here is the whole of what places a badge, the ring it stands on, the
-    /// direction a lone one stands in, the order the numbers run, and the arc's own limit, and a badge drawn
-    /// anywhere else is a badge off the arc it was asked to stand on.
+    /// and this suite has none: what is here is the whole of what places a badge, one line of them at the same
+    /// height, the last reaching past the corner and the first nearest the middle of the picture, and a badge
+    /// drawn anywhere else is a badge off the row it was asked to stand on.
     /// </remarks>
     [Fact]
-    public void BadgesStandOnAnArcAboutTheTopRightCorner()
+    public void BadgesStandInARowAlongTheTopRightCorner()
     {
         const int size = 64;
+        const int count = 3;
 
-        // The ring is centred on the icon's top right quarter, and it stands between that quarter's inscribed
-        // and circumscribed circles, inside the mean of the two, which is what keeps a badge from reaching
-        // past the corner by more than the mark it is.
-        var quarter = new Point(size * 3 / 4, size / 4);
-        var radius = BadgeArc.Radius(size);
-        var inscribed = size / 4.0;
-        var circumscribed = size * Math.Sqrt(2) / 4;
+        var row = new BadgeRow();
 
-        Assert.True(radius > inscribed, "the ring has crowded the middle of the quarter");
-        Assert.True(radius < (inscribed + circumscribed) / 2, "the ring is not pulled in from the mean");
-        Assert.True(radius < circumscribed, "the ring leaves the quarter it belongs to");
-
-        // One badge stands up and to the right of the icon's middle: the direction of the corner itself.
-        var alone = BadgeArc.Centre(0, 1, size);
-
-        Assert.True(alone.X > size / 2.0, "a lone badge is not towards the right");
-        Assert.True(alone.Y < size / 2.0, "a lone badge is not towards the top");
-        Assert.Equal(radius, Distance(alone, quarter), 1e-9);
-
-        // Every badge of an arc stands on the ring, and the whole arc is a quarter turn at the most.
-        for (var count = 1; count <= BadgeArc.Most; count++)
+        for (var at = 0; at < count; at++)
         {
-            var placed = Enumerable
-                .Range(0, count)
-                .Select(at => BadgeArc.Centre(at, count, size))
-                .ToArray();
-
-            Assert.All(placed, at => Assert.Equal(radius, Distance(at, quarter), 1e-9));
-
-            var angles = placed.Select(at => Math.Atan2(at.Y - quarter.Y, at.X - quarter.X)).ToArray();
-
-            Assert.True(
-                angles.Max() - angles.Min() <= (Math.PI / 2) + 1e-9,
-                $"{count} badges spread past a quarter turn"
-            );
+            row.Children.Add(new Border { Width = BadgeRow.Extent(size), Height = BadgeRow.Extent(size) });
         }
 
-        // The numbers run clockwise on the screen: the second badge of a pair is the further right and the
-        // further down, which is what makes the first the one read at the top of the arc.
-        var first = BadgeArc.Centre(0, 2, size);
-        var second = BadgeArc.Centre(1, 2, size);
+        row.Measure(new Size(size, size));
+        row.Arrange(new Rect(0, 0, size, size));
 
-        Assert.True(second.X > first.X, "the second badge is not clockwise of the first");
-        Assert.True(second.Y > first.Y, "the second badge is not clockwise of the first");
+        var extent = BadgeRow.Extent(size);
+        var reach = BadgeRow.Reach(size);
+        var placed = row.Children.Select(child => child.Bounds).ToArray();
+
+        // The row hangs the same share past the picture's top and right edges, and the badge nearest the corner
+        // is the last one contributed.
+        Assert.Equal(size + reach, placed[^1].Right, 1e-9);
+        Assert.Equal(-reach, placed[0].Top, 1e-9);
+        Assert.True(placed[0].Left >= -reach, "the row has left the room the tile reserves");
+
+        for (var at = 0; at < placed.Length; at++)
+        {
+            Assert.Equal(placed[0].Top, placed[at].Top, 1e-9);
+            Assert.Equal(extent, placed[at].Width, 1e-9);
+            Assert.Equal(extent, placed[at].Height, 1e-9);
+
+            if (at > 0)
+            {
+                Assert.True(
+                    placed[at].Left >= placed[at - 1].Right,
+                    "two badges of the row stand over one another"
+                );
+            }
+        }
     }
 
-    /// <summary>A full arc stands no further past the picture than a tile's least room reserves.</summary>
+    /// <summary>A full row stands no further past the picture than a tile's least room reserves.</summary>
     /// <remarks>
-    /// The ends of a crowded arc are drawn past the picture's edge, and the tile is the box a badge is worn in:
-    /// what the tile leaves around the picture is at least what an arc reaches into, so the badges of a tile
-    /// stand on the tile rather than over the gap beside it, where the drawing is cut and the pointer does not
-    /// reach. What is checked is the two halves of that one number, at every size a picture is drawn at.
+    /// The row hangs past the picture's edge, and the tile is the box a badge is worn in: what the tile leaves
+    /// around the picture is at least what the row reaches into, so the badges of a tile stand on the tile
+    /// rather than over the gap beside it, where the drawing is cut and the pointer does not reach. What is
+    /// checked is the two halves of that one number, at every size a picture is drawn at.
     /// </remarks>
     [Fact]
-    public void TheArcStandsNoFurtherThanATileReserves()
+    public void TheRowStandsNoFurtherThanATileReserves()
     {
         foreach (var size in new[] { Icons.Row, 64, 110, Icons.SizeAt(200), Icons.SizeAt(400) })
         {
-            var reach = BadgeArc.Reach(size);
+            var reach = BadgeRow.Reach(size);
+            var worn = BadgeRow.Worn(12, size);
+            var row = new BadgeRow();
 
-            for (var count = 1; count <= BadgeArc.Most; count++)
+            for (var at = 0; at < worn; at++)
             {
-                var half = BadgeArc.Extent(size) / 2;
-
-                for (var at = 0; at < count; at++)
-                {
-                    var middle = BadgeArc.Centre(at, count, size);
-
-                    Assert.True(
-                        middle.X + half <= size + reach + 1e-9,
-                        $"{count} badges at {size} reach further right than the tile reserves"
-                    );
-                    Assert.True(
-                        middle.Y - half >= -reach - 1e-9,
-                        $"{count} badges at {size} reach higher than the tile reserves"
-                    );
-                }
+                row.Children.Add(
+                    new Border { Width = BadgeRow.Extent(size), Height = BadgeRow.Extent(size) }
+                );
             }
+
+            row.Measure(new Size(size, size));
+            row.Arrange(new Rect(0, 0, size, size));
+
+            var placed = row.Children.Select(child => child.Bounds).ToArray();
+
+            Assert.Equal(size + reach, placed[^1].Right, 1e-9);
+            Assert.Equal(-reach, placed[0].Top, 1e-9);
+
+            Assert.True(
+                placed[0].Left >= -reach - 1e-9,
+                $"{worn} badges at {size} reach further left than the tile reserves"
+            );
         }
 
-        // At the size a grid opens at, the room a tile already leaves is the whole of what the arc needs: a
+        // At the size a grid opens at, the room a tile already leaves is the whole of what the row needs: a
         // listing at rest is not spread out for a mark it does not wear.
-        Assert.True(BadgeArc.Reach(64) <= 12);
+        Assert.True(BadgeRow.Reach(64) <= 12);
     }
 
-    /// <summary>No icon wears more than five badges, however many are contributed.</summary>
+    /// <summary>No icon wears more badges than its row holds, and never more than five.</summary>
     /// <remarks>
-    /// An arc of a quarter turn stops being read as a set past a handful, so what is contributed beyond the
-    /// last badge of it is dropped rather than crowded in: this is the count the drawing wears, and the one
-    /// place it is decided.
+    /// A full row stops being read as a set past a handful, and a row narrower than the picture holds fewer
+    /// than that: what is contributed beyond what the row can hold is dropped rather than crowded in, since a
+    /// badge nothing can tell from the one beside it says nothing.
     /// </remarks>
     [Fact]
-    public void NoIconWearsMoreThanFiveBadges()
+    public void NoIconWearsMoreBadgesThanItsRowHolds()
     {
-        Assert.Equal(5, BadgeArc.Most);
-        Assert.Equal(0, BadgeArc.Worn(0));
-        Assert.Equal(3, BadgeArc.Worn(3));
-        Assert.Equal(BadgeArc.Most, BadgeArc.Worn(BadgeArc.Most));
-        Assert.Equal(BadgeArc.Most, BadgeArc.Worn(12));
+        Assert.Equal(5, BadgeRow.Most);
+        Assert.Equal(0, BadgeRow.Worn(0, 64));
+        Assert.Equal(3, BadgeRow.Worn(3, 64));
+
+        // Four badges fit across the icon a grid opens at, and five at the largest an icon is drawn at.
+        Assert.Equal(4, BadgeRow.Worn(12, 64));
+        Assert.Equal(BadgeRow.Most, BadgeRow.Worn(12, Icons.SizeAt(400)));
     }
 
-    /// <summary>A badge a contribution coloured itself is painted in that colour, ring and picture alike.</summary>
+    /// <summary>A bead is the look's face tinted with the contribution's colour, its picture that colour.</summary>
     /// <remarks>
     /// A contribution that has a palette of its own, the states a work's files are in, which the plugin owns
     /// and the user chooses, names a colour rather than one of the look's roles, and what it names is the whole
-    /// of the badge: the picture is a mask over the colour and the ring is the ground's edge, so a picture drawn
-    /// in the role and a ring drawn in the contribution's colour is one mark in two colours, which reads as two
-    /// marks laid over each other rather than as a state.
+    /// of the badge: the ground is the look's face taken part of the way to that colour and the picture is drawn
+    /// in it. A picture drawn in the role instead would be one mark in two colours, which reads as two marks
+    /// laid over each other rather than as a state.
     /// <para>
     /// It is drawn inside a window, with the look's own resources over it, and that is the point rather than
     /// ceremony: a resource a control carries is asked for when the control is attached to a tree and is
@@ -182,17 +180,16 @@ public sealed class IconTests
     /// </para>
     /// </remarks>
     [Fact]
-    public void ABadgeColouredByItsContributionIsPaintedInThatColour()
+    public void ABadgeColouredByItsContributionIsTintedWithThatColour()
     {
-        var look = new RorolalaTheme(
-            ThemePalette.DefaultDark,
-            Color.Parse("#223300"),
-            WindowStyle.Windows
-        );
-        var resources = Assert.IsAssignableFrom<ResourceDictionary>(
-            look.Palette.ThemeDictionaries[ThemeVariant.Dark]
-        );
-        var faint = Assert.IsType<SolidColorBrush>(resources[PaletteKeys.Faint]).Color;
+        var application = Application.Current!;
+        var variant = application.RequestedThemeVariant;
+        var styles = application.Styles.Count;
+        var (theme, _) = ThemeService.Make(application, new ThemeConfiguration());
+
+        theme.Apply();
+        application.RequestedThemeVariant = ThemeVariant.Dark;
+        Pump();
 
         using var picture = Icons.Picture(Icons.Pictures[0].Key);
         var ours = new EntryMark(Colour: Colors.Lime, Tagged: true, Text: "it");
@@ -200,7 +197,6 @@ public sealed class IconTests
 
         var window = new Window
         {
-            Resources = resources,
             Content = new StackPanel
             {
                 Children =
@@ -212,83 +208,91 @@ public sealed class IconTests
         };
 
         window.Show();
+        Pump();
 
-        var both = Assert.IsType<StackPanel>(window.Content);
+        try
+        {
+            var bright = Colour(PaletteKeys.Bright);
+            var faint = Colour(PaletteKeys.Faint);
+            var both = Assert.IsType<StackPanel>(window.Content);
 
-        // A filled bead's ground is the mark's own colour, its picture is always light, and the shadow is of
-        // the same hue. The look is not worn as a border around it any more.
-        var (ball, glyph) = Worn(Assert.IsType<Grid>(both.Children[0]));
+            // The bead is the look's face tinted with the mark's colour, its picture that colour taken towards
+            // white on the dark look, and a ring of the bead's own ground rather than a shadow.
+            var (ball, glyph) = Worn(Assert.IsType<Grid>(both.Children[0]));
+            var ground = Mix(bright, Colors.Lime, 0.35);
 
-        Assert.Equal(Colors.Lime, Assert.IsType<SolidColorBrush>(ball.Background).Color);
-        Assert.Equal(0, ball.BorderThickness.Left);
-        Assert.Equal(Icons.LightInk, Assert.IsType<SolidColorBrush>(glyph.Background).Color);
-        Assert.NotEqual(default, ball.BoxShadow);
+            Assert.Equal(ground, Solid(ball.Background));
+            Assert.Equal(Mix(ground, Colors.White, 0.10), Solid(ball.BorderBrush));
+            Assert.Equal(1, ball.BorderThickness.Left);
+            Assert.Equal(default, ball.BoxShadow);
+            Assert.Equal(Mix(Colors.Lime, Colors.White, 0.25), Solid(glyph.Background));
 
-        // A mark that named no colour is the look's own answer, which is the other half of the same rule.
-        var (quiet, quietGlyph) = Worn(Assert.IsType<Grid>(both.Children[1]));
+            // A mark that named no colour is the look's own answer, which is the other half of the same rule.
+            var (quiet, quietGlyph) = Worn(Assert.IsType<Grid>(both.Children[1]));
 
-        Assert.Equal(faint, Assert.IsType<SolidColorBrush>(quiet.Background).Color);
-        Assert.Equal(Icons.LightInk, Assert.IsType<SolidColorBrush>(quietGlyph.Background).Color);
-        Assert.NotEqual(default, quiet.BoxShadow);
+            Assert.Equal(Mix(bright, faint, 0.35), Solid(quiet.Background));
+            Assert.Equal(Mix(faint, Colors.White, 0.25), Solid(quietGlyph.Background));
+        }
+        finally
+        {
+            window.Close();
+
+            while (application.Styles.Count > styles)
+            {
+                application.Styles.RemoveAt(application.Styles.Count - 1);
+            }
+
+            application.RequestedThemeVariant = variant;
+            Pump();
+        }
     }
 
-    /// <summary>The ball and the picture one drawn badge is made of, wherever the arc put them.</summary>
+    /// <summary>The ball and the picture one drawn badge is made of.</summary>
     /// <param name="marked">What the icon was drawn as.</param>
     /// <returns>The ball, and the picture inside it.</returns>
     private static (Border Ball, Border Glyph) Worn(Grid marked)
     {
-        var arc = Assert.IsType<BadgeArc>(marked.Children[1]);
-        var ball = Assert.IsType<Border>(
-            Assert.IsType<ThemeVariantScope>(Assert.Single(arc.Children)).Child
-        );
+        var row = Assert.IsType<BadgeRow>(marked.Children[1]);
+        var ball = Assert.IsType<Border>(Assert.Single(row.Children));
 
         return (ball, Assert.IsType<Border>(ball.Child));
     }
 
-    /// <summary>The arc puts a badge where the geometry says, rather than in the panel's own corner.</summary>
-    /// <remarks>
-    /// The arrangement is what a badge is actually drawn at, and it is the one part of the arc that the
-    /// geometry above does not reach: a panel that arranged its children the way a panel ordinarily does would
-    /// put every badge in the same place, which is one corner worn by as many badges as were contributed and
-    /// no sign of the others.
-    /// </remarks>
-    [Fact]
-    public void TheArcPutsItsBadgesWhereTheGeometrySays()
+    /// <summary>The colour a brush holds.</summary>
+    /// <param name="brush">The brush.</param>
+    /// <returns>Its colour.</returns>
+    private static Color Solid(IBrush? brush) => Assert.IsType<SolidColorBrush>(brush).Color;
+
+    /// <summary>A role the look publishes, as the dark look answers it.</summary>
+    /// <param name="key">The resource key.</param>
+    /// <returns>The colour.</returns>
+    private static Color Colour(string key) =>
+        Application.Current!.TryFindResource(key, ThemeVariant.Dark, out var found)
+        && found is ISolidColorBrush brush
+            ? brush.Color
+            : throw new InvalidOperationException($"the look states no {key}");
+
+    /// <summary>Lets the window run a few turns of its loop, which is what lays the badges out.</summary>
+    private static void Pump()
     {
-        const int size = 64;
-        var arc = new BadgeArc();
-
-        for (var at = 0; at < 3; at++)
+        for (var turn = 0; turn < 30; turn++)
         {
-            arc.Children.Add(
-                new Border { Width = BadgeArc.Extent(size), Height = BadgeArc.Extent(size) }
-            );
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         }
 
-        arc.Measure(new Size(size, size));
-        arc.Arrange(new Rect(0, 0, size, size));
-
-        // What is arranged is snapped to whole pixels, because that is what the toolkit does with everything
-        // it lays out: a badge lands within a pixel of the ring rather than on it to the last digit. What is
-        // checked is that it lands there at all, a panel that arranged its children the way a panel
-        // ordinarily does would put all three in one place, which is many pixels from two of them.
-        const double slack = 1.0;
-
-        for (var at = 0; at < arc.Children.Count; at++)
-        {
-            var middle = BadgeArc.Centre(at, arc.Children.Count, size);
-            var placed = arc.Children[at].Bounds;
-
-            Assert.Equal(middle.X, placed.Center.X, slack);
-            Assert.Equal(middle.Y, placed.Center.Y, slack);
-            Assert.Equal(BadgeArc.Extent(size), placed.Width, slack);
-        }
+        Dispatcher.UIThread.RunJobs();
     }
 
-    /// <summary>How far apart two points are.</summary>
-    /// <param name="one">One point.</param>
-    /// <param name="other">The other.</param>
-    /// <returns>The distance between them.</returns>
-    private static double Distance(Point one, Point other) =>
-        Math.Sqrt(((one.X - other.X) * (one.X - other.X)) + ((one.Y - other.Y) * (one.Y - other.Y)));
+    /// <summary>A colour taken part of the way to another, which is what the badge's two are made of.</summary>
+    /// <param name="from">Where it starts.</param>
+    /// <param name="to">Where it ends.</param>
+    /// <param name="share">How far along.</param>
+    /// <returns>The mixed colour.</returns>
+    private static Color Mix(Color from, Color to, double share)
+    {
+        byte At(byte a, byte b) => (byte)Math.Round(a + ((b - a) * share));
+
+        return Color.FromArgb(from.A, At(from.R, to.R), At(from.G, to.G), At(from.B, to.B));
+    }
 }

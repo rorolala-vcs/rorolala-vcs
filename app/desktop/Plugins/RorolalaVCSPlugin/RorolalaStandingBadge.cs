@@ -77,11 +77,10 @@ internal sealed class RorolalaStandingBadge : IEntryMarkProvider
     /// way, drawn the way the lock beside it is, and nothing at all where there is nothing to move.
     /// </summary>
     /// <remarks>
-    /// Worn on the dark ground the lock's badge wears: the two mark the same tile at once and are read one
+    /// Worn the way the lock's badge is worn: the two mark the same tile at once and are read one
     /// after the other, so a picture laid on the artwork and a badge the artwork carries would be two marks of
-    /// two different kinds about one file. The ground is the badge's own dark whatever the look is, so the role
-    /// the picture is drawn in is read against that and not against the tile, which is why the picture is the
-    /// ink and the ground the badge's.
+    /// two different kinds about one file. The bead is the look's face tinted with the mark's colour, so the
+    /// picture drawn in that colour is read against that and not against the tile.
     /// <para>
     /// Green up for work waiting to be sent and red down for work waiting to be fetched: the two are opposite
     /// things to do about the same file, and the direction is what tells them apart where a glance at the colour
