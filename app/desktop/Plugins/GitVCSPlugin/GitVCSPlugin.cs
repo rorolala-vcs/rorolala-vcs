@@ -53,10 +53,10 @@ public sealed class GitVCSPlugin : IRolaPlugin
         host.LogicalViews.Register(GitRolaPlace.Scheme, place);
         host.Drops.Add(new GitRolaDrops(host));
 
-        host.Menu.AddTopLevel("rorolala_git.menu.root", 70);
+        host.Menu.AddTopLevel("rorolala_git.menu.root", 70, Icons.GitBranch);
         host.Menu.AddItem(
             "rorolala_git.menu.root",
-            new MenuItem("rorolala_git.menu.open", 10, place.OpenRoot)
+            new MenuItem("rorolala_git.menu.open", 10, place.OpenRoot, Icons.AppWindow)
         );
 
         // From a directory of the work, where a person stands when they wonder what upstream holds,

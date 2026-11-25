@@ -16,7 +16,14 @@ internal sealed record Owned<T>(PluginId Owner, int Position, T Value);
 /// <param name="Position">The plugin's place in the load order.</param>
 /// <param name="LabelKey">An i18n key for the menu's label, which is also its path.</param>
 /// <param name="Order">Where the menu sits among the top-level menus.</param>
-internal sealed record TopLevelMenu(PluginId Owner, int Position, string LabelKey, int Order);
+/// <param name="IconKey">An optional key naming the menu's icon.</param>
+internal sealed record TopLevelMenu(
+    PluginId Owner,
+    int Position,
+    string LabelKey,
+    int Order,
+    string? IconKey = null
+);
 
 /// <summary>
 /// The top-level menus and their items.
@@ -39,8 +46,14 @@ internal sealed class MenuRegistry
     /// <param name="position">The plugin's place in the load order.</param>
     /// <param name="labelKey">An i18n key for the label, which is also the menu's path.</param>
     /// <param name="order">Where the menu sits among the top-level menus.</param>
-    public void AddTopLevel(PluginId owner, int position, string labelKey, int order) =>
-        _topLevels.Add(new TopLevelMenu(owner, position, labelKey, order));
+    /// <param name="iconKey">An optional key naming the menu's icon.</param>
+    public void AddTopLevel(
+        PluginId owner,
+        int position,
+        string labelKey,
+        int order,
+        string? iconKey = null
+    ) => _topLevels.Add(new TopLevelMenu(owner, position, labelKey, order, iconKey));
 
     /// <summary>Adds an item under a top-level menu.</summary>
     /// <param name="owner">The plugin registering it.</param>

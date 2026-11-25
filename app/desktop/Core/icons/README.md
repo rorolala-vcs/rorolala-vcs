@@ -1,6 +1,6 @@
 # The RorolalaDesktop pictures
 
-The pictures the `RorolalaDesktop` project draws: `minus`, `square`, `copy-simple`, `x`, `puzzle-piece`, `list`, `gear`, `rows`, `hand`.
+The pictures the `RorolalaDesktop` project draws: `minus`, `square`, `copy-simple`, `x`, `puzzle-piece`, `list`, `gear`, `app-window`, `rows`, `hand`.
 
 They are Phosphor Icons, taken from the set's own repository,
 [phosphor-icons/core](https://github.com/phosphor-icons/core), under the [MIT License](https://github.com/phosphor-icons/core/blob/main/LICENSE).

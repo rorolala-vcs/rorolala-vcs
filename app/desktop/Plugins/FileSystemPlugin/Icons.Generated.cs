@@ -26,6 +26,9 @@ internal static partial class Icons
     /// <summary>The key the `dots-three-vertical` picture is held under.</summary>
     public const string DotsThreeVertical = "rorolala_file_system.dots-three-vertical";
 
+    /// <summary>The key the `option` picture is held under.</summary>
+    public const string Option = "rorolala_file_system.option";
+
     /// <summary>The key the `link` picture is held under.</summary>
     public const string Link = "rorolala_file_system.link";
 
@@ -86,6 +89,7 @@ internal static partial class Icons
         (RadioButton, "radio-button"),
         (Dot, "dot"),
         (DotsThreeVertical, "dots-three-vertical"),
+        (Option, "option"),
         (Link, "link"),
         (LinkBreak, "link-break"),
         (ArrowLeft, "arrow-left"),

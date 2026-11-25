@@ -431,7 +431,7 @@ internal sealed class Desktop
             )
         );
 
-        services.Menu.AddTopLevel(Kernel, Core.Position, WindowMenu, 100);
+        services.Menu.AddTopLevel(Kernel, Core.Position, WindowMenu, 100, Icons.AppWindow);
 
         // Where a window that was closed is asked for again. It is an item of the Window menu rather than one
         // of its own, because what it is about is the window the docks are in: a dock's own window carries

@@ -45,7 +45,9 @@ key = "rorolala_file_system"
 # with.
 #
 # `circle`, `radio-button` and `dot` are the three states a hide rule's popup draws: shown, gray and
-# hidden. `dots-three-vertical` opens that popup, beside the eye in the toolbar's own group.
+# hidden. `dots-three-vertical` opens that popup, beside the eye in the toolbar's own group. `option` is
+# what the top-level Operations menu wears: the glyph the keyboard's Option key carries, which is what a
+# menu of optional behaviours is.
 # The rest are what an entry's menu is read by: `arrow-square-out` opens it or shows it where the system
 # keeps it, `copy` copies it or its path, `scissors` cuts it, `clipboard` pastes onto it, `trash` removes
 # it, `tag` renames it, and `folder-plus` makes a directory beside it. `plus` is the mark a category of new
@@ -58,6 +60,7 @@ icons = [
     "radio-button",
     "dot",
     "dots-three-vertical",
+    "option",
     "link",
     "link-break",
     "arrow-left",
@@ -197,6 +200,10 @@ icons = [
     "note-pencil",
     "arrow-down",
     "arrow-clockwise",
+    # `git-branch` is the top-level Git menu, and `app-window` is its Open item, which opens the git-rola
+    # view rather than a version of one file.
+    "git-branch",
+    "app-window",
     # The picture a material wears when it is out of step with the lock is a tile badge, so it is drawn
     # again at bold under its own key. See the VCS set for why.
     { key = "note-pencil-bold", name = "note-pencil", weight = "bold" },
@@ -232,6 +239,8 @@ icons = [
     "puzzle-piece",
     "list",
     "gear",
+    # `app-window` is the Window menu, which lists the docks and the way back to the main window.
+    "app-window",
     "rows",
     "hand",
 ]

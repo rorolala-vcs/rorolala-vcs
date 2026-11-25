@@ -332,6 +332,39 @@ public sealed class DockIconTests
         }
     }
 
+    /// <summary>A top-level menu and an item each wear the picture they name.</summary>
+    [Fact]
+    public void ATopLevelMenuAndAnItemWearTheirPictures()
+    {
+        var (services, main, _) = Open(DesktopIcons.PuzzlePiece);
+        var owner = new PluginId("it.marked");
+
+        services.Menu.AddTopLevel(owner, 1, "it.marked", 90, DesktopIcons.AppWindow);
+        services.Menu.AddItem(
+            owner,
+            1,
+            "it.marked",
+            new ContractMenuItem("it.marked.open", 0, () => { }, DesktopIcons.PuzzlePiece)
+        );
+        main.RebuildMenu();
+
+        var top = main.MenuItems.Single(item => HeaderText(item) == "it.marked");
+        Marked(top);
+
+        var entry = top.Items.OfType<MenuItem>().Single(item => HeaderText(item) == "it.marked.open");
+        Marked(entry);
+    }
+
+    /// <summary>Asserts that an item's header is a mark with its word beside it.</summary>
+    /// <param name="item">The item.</param>
+    private static void Marked(MenuItem item)
+    {
+        var header = Assert.IsType<StackPanel>(item.Header);
+        var fitted = Assert.IsType<Panel>(header.Children[0]);
+
+        Assert.NotNull(Assert.IsType<Border>(fitted.Children[0]).OpacityMask);
+    }
+
     /// <summary>The word a menu item draws, over and above the words of its parts.</summary>
     /// <param name="item">The item.</param>
     /// <returns>The word.</returns>

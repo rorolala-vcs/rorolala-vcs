@@ -1,6 +1,6 @@
 # The FileSystemPlugin pictures
 
-The pictures the `FileSystemPlugin` project draws: `eye`, `eye-slash`, `circle`, `radio-button`, `dot`, `dots-three-vertical`, `link`, `link-break`, `arrow-left`, `arrow-right`, `arrow-up`, `arrow-clockwise`, `house`, `arrow-square-out`, `copy`, `scissors`, `clipboard`, `trash`, `tag`, `folder-plus`, `plus`, `folder`, `tree-structure`.
+The pictures the `FileSystemPlugin` project draws: `eye`, `eye-slash`, `circle`, `radio-button`, `dot`, `dots-three-vertical`, `option`, `link`, `link-break`, `arrow-left`, `arrow-right`, `arrow-up`, `arrow-clockwise`, `house`, `arrow-square-out`, `copy`, `scissors`, `clipboard`, `trash`, `tag`, `folder-plus`, `plus`, `folder`, `tree-structure`.
 
 They are Phosphor Icons, taken from the set's own repository,
 [phosphor-icons/core](https://github.com/phosphor-icons/core), under the [MIT License](https://github.com/phosphor-icons/core/blob/main/LICENSE).

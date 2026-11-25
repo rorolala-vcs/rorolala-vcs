@@ -139,7 +139,8 @@ public interface IMenuRegistry
     /// </summary>
     /// <param name="labelKey">An i18n key for the menu's label, which is also its path.</param>
     /// <param name="order">Where the menu sits among the top-level menus.</param>
-    void AddTopLevel(string labelKey, int order);
+    /// <param name="iconKey">An optional key naming the menu's icon.</param>
+    void AddTopLevel(string labelKey, int order, string? iconKey = null);
 
     /// <summary>
     /// Adds an item under a top-level menu.

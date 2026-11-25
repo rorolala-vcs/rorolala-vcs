@@ -1,6 +1,6 @@
 # The GitVCSPlugin pictures
 
-The pictures the `GitVCSPlugin` project draws: `note-pencil`, `arrow-down`, `arrow-clockwise`, `note-pencil-bold`.
+The pictures the `GitVCSPlugin` project draws: `note-pencil`, `arrow-down`, `arrow-clockwise`, `git-branch`, `app-window`, `note-pencil-bold`.
 
 They are Phosphor Icons, taken from the set's own repository,
 [phosphor-icons/core](https://github.com/phosphor-icons/core), under the [MIT License](https://github.com/phosphor-icons/core/blob/main/LICENSE).

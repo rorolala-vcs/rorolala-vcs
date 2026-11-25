@@ -29,6 +29,9 @@ internal static partial class Icons
     /// <summary>The key the `gear` picture is held under.</summary>
     public const string Gear = "rorolala.gear";
 
+    /// <summary>The key the `app-window` picture is held under.</summary>
+    public const string AppWindow = "rorolala.app-window";
+
     /// <summary>The key the `rows` picture is held under.</summary>
     public const string Rows = "rorolala.rows";
 
@@ -45,6 +48,7 @@ internal static partial class Icons
         (PuzzlePiece, "puzzle-piece"),
         (List, "list"),
         (Gear, "gear"),
+        (AppWindow, "app-window"),
         (Rows, "rows"),
         (Hand, "hand"),
     ];

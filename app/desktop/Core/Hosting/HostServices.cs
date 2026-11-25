@@ -278,8 +278,8 @@ internal sealed class PluginHost
     }
 
     /// <inheritdoc />
-    void IMenuRegistry.AddTopLevel(string labelKey, int order) =>
-        _services.Menu.AddTopLevel(_id, _position, labelKey, order);
+    void IMenuRegistry.AddTopLevel(string labelKey, int order, string? iconKey) =>
+        _services.Menu.AddTopLevel(_id, _position, labelKey, order, iconKey);
 
     /// <inheritdoc />
     void IMenuRegistry.AddItem(string menuPath, MenuItem item) =>

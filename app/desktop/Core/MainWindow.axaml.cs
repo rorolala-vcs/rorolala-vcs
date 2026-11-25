@@ -985,6 +985,45 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// A menu entry's header: its word, and its picture before it when it names one the library holds.
+    /// </summary>
+    /// <remarks>
+    /// The picture is part of the header rather than the item's <c>Icon</c>, so that an item's mark and its word
+    /// are one header wherever it is drawn. An entry that names no picture, or names one the library does not
+    /// hold, is its word alone.
+    /// </remarks>
+    /// <param name="words">What the entry says.</param>
+    /// <param name="iconKey">The key naming its picture, or nothing.</param>
+    /// <returns>The header.</returns>
+    private object Marked(string words, string? iconKey)
+    {
+        if (iconKey is not { Length: > 0 } key || _services.Icons.Find(key) is not { } picture)
+        {
+            return words;
+        }
+
+        var fitted = new Panel
+        {
+            Width = Marks.MenuSize,
+            Height = MenuLine,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { Marks.Menu(picture) },
+        };
+
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = DockMarkGap,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                fitted,
+                new AccessText { Text = words, VerticalAlignment = VerticalAlignment.Center },
+            },
+        };
+    }
+
     /// <summary>Builds the menu bar from what was registered, for the window this is.</summary>
     /// <remarks>
     /// The dock's own header commands are added under the Window menu rather than as menus of their own:
@@ -1002,7 +1041,7 @@ public partial class MainWindow : Window
 
         foreach (var top in Visible(_services.Menu, _scope))
         {
-            var menu = new MenuItem { Header = _services.I18n.Get(top.LabelKey) };
+            var menu = new MenuItem { Header = Marked(_services.I18n.Get(top.LabelKey), top.IconKey) };
 
             foreach (var item in _services.Menu.Items(top.LabelKey))
             {
@@ -1024,7 +1063,7 @@ public partial class MainWindow : Window
     /// <summary>Makes one item, running its command when chosen.</summary>
     private MenuItem Item(ContractMenuItem item)
     {
-        var made = new MenuItem { Header = _services.I18n.Get(item.LabelKey) };
+        var made = new MenuItem { Header = Marked(_services.I18n.Get(item.LabelKey), item.IconKey) };
         made.Click += (_, _) => item.Command();
 
         return made;

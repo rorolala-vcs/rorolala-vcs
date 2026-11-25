@@ -17,6 +17,12 @@ internal static partial class Icons
     /// <summary>The key the `arrow-clockwise` picture is held under.</summary>
     public const string ArrowClockwise = "rorolala_git.arrow-clockwise";
 
+    /// <summary>The key the `git-branch` picture is held under.</summary>
+    public const string GitBranch = "rorolala_git.git-branch";
+
+    /// <summary>The key the `app-window` picture is held under.</summary>
+    public const string AppWindow = "rorolala_git.app-window";
+
     /// <summary>The key the `note-pencil-bold` picture is held under.</summary>
     public const string NotePencilBold = "rorolala_git.note-pencil-bold";
 
@@ -26,6 +32,8 @@ internal static partial class Icons
         (NotePencil, "note-pencil"),
         (ArrowDown, "arrow-down"),
         (ArrowClockwise, "arrow-clockwise"),
+        (GitBranch, "git-branch"),
+        (AppWindow, "app-window"),
         (NotePencilBold, "note-pencil-bold"),
     ];
 }

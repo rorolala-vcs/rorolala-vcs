@@ -356,7 +356,7 @@ internal sealed class UpstreamPlace
         host.Drops.Add(place);
 
         // One menu for the work: the root of the place, and the two lists that stand under it.
-        host.Menu.AddTopLevel(WorkspaceMenu, 60);
+        host.Menu.AddTopLevel(WorkspaceMenu, 60, Icons.Briefcase);
 
         // The root is the work's own upstream rather than the list of what there is: what a reader asking for upstream
         // wants is what this work is the upstream of, which is the Layout of the Vault it tracks. The two lists stay a
