@@ -28,6 +28,6 @@ pub use status::{
 };
 pub use structure::{EntryKind, FileMode, TreeEntry, TreeStructure};
 pub use tree::{
-    Recorded, Tree, is_control_file, marked, read_description, read_storage, read_structure,
+    Recorded, Tree, is_control_file, marked, read_description, read_storage, read_structure, rekey,
     version_of,
 };

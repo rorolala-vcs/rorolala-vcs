@@ -392,6 +392,8 @@ pub enum FsOpsBlock {
     Project,
     /// The destination is outside the git-rola project the source is in.
     Outside,
+    /// The destination is the source itself or lies inside it.
+    Inside,
 }
 
 impl Failure for ErrorFsOpsBlocked {
@@ -405,6 +407,7 @@ impl Failure for ErrorFsOpsBlocked {
             FsOpsBlock::Variant => t!("fs_ops.err_blocked_variant", path = self.path),
             FsOpsBlock::Project => t!("fs_ops.err_blocked_project", path = self.path),
             FsOpsBlock::Outside => t!("fs_ops.err_blocked_outside", path = self.path),
+            FsOpsBlock::Inside => t!("fs_ops.err_blocked_inside", path = self.path),
         };
 
         said.trim().to_string()

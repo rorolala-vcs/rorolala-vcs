@@ -480,6 +480,21 @@ pub fn marked(directory: &Path) -> bool {
     directory.join(MARK).is_dir()
 }
 
+/// Writes `id` into the mark of the tree rooted at `root`, creating the mark's id file when it is
+/// not there.
+///
+/// A copy of a tree is another tree rather than the same one named twice, so the copy is given an
+/// id of its own: a reading pairs a lost tree with a gained one by this id, and two directories
+/// carrying one id would be paired wrongly. It reads no Workspace, because a copied tree may sit
+/// outside one and still carry a mark whose id must not be shared with the original.
+///
+/// # Errors
+///
+/// Returns [`TreeError::Io`] when the file cannot be written.
+pub fn rekey(root: &Path, id: Uuid) -> Result<(), TreeError> {
+    files::write(&root.join(MARK).join(ENTRY_ID), id.to_string().as_bytes())
+}
+
 /// The files a tree keeps for itself that a caller may need to leave out of a loop.
 #[must_use]
 pub fn is_control_file(path: &Path) -> bool {
@@ -528,6 +543,28 @@ mod tests {
         )
         .expect("a file that is not an id");
         assert_eq!(tree.local_id().expect("a reading"), None);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A copied tree can be given an id of its own, whether or not the mark held one.
+    #[test]
+    fn a_copied_tree_can_be_given_an_id_of_its_own() {
+        let root = scratch("rekey");
+        fs::create_dir_all(root.join(crate::consts::MARK)).expect("a mark");
+        let file = root.join(crate::consts::MARK).join(crate::consts::ENTRY_ID);
+
+        rekey(&root, Uuid::from_u128(11)).expect("an id");
+        assert_eq!(
+            fs::read_to_string(&file).expect("the id file").trim(),
+            Uuid::from_u128(11).to_string()
+        );
+
+        rekey(&root, Uuid::from_u128(12)).expect("another id");
+        assert_eq!(
+            fs::read_to_string(&file).expect("the id file").trim(),
+            Uuid::from_u128(12).to_string()
+        );
 
         let _ = fs::remove_dir_all(&root);
     }

@@ -78,6 +78,10 @@ fs_ops:
     en: "`%{path}` is outside the git-rola project, and its `rola.toml` cannot name a path outside it"
     zh-CN: "`%{path}` 在 git-rola 项目之外，项目的 `rola.toml` 无法命名项目之外的路径"
 
+  err_blocked_inside:
+    en: "`%{path}` is inside the source, and a copy cannot be written into what it reads"
+    zh-CN: "`%{path}` 位于源路径内部，无法把副本写入正在读取的位置"
+
   err_blocked_help:
     en: Keep the change within what the Layout allows, and it is applied whole rather than half made
     zh-CN: 请让改动落在布局允许的范围内，改动会被整体执行，而不会只做一半

@@ -710,6 +710,50 @@ pub fn remember_moved(
     cache.write(&file)
 }
 
+/// Writes down that a copy at `to` holds what `from` held, so the copy shares the edit state of
+/// the original.
+///
+/// A copy is not a change either. The destination path is one the cache has never read, and a path
+/// never read before is assumed to agree with the Layout, so a copy of a file that had changed
+/// would be reported as clean. What is carried over is the digest the Layout was last known to
+/// agree with at `from`, while the destination's own stamp and digest are read from the copy, the
+/// two files being at different paths.
+///
+/// The source is left as it is: it is still there, and whether the Layout names it is the Layout's
+/// to say.
+///
+/// # Errors
+///
+/// Returns [`TreeDiffError::Io`] when the copied file, or the cache, could not be read or written.
+pub fn remember_copied(
+    root: &Path,
+    layout: &Layout,
+    from: &LayoutPath,
+    to: &LayoutPath,
+) -> Result<(), TreeDiffError> {
+    let disk = root.join(to.to_path_buf());
+
+    // A tree entry has no line of its own in the cache, so a copy that landed a directory is
+    // nothing to write down.
+    if !disk.is_file() {
+        return Ok(());
+    }
+
+    let file = cache_path(root, layout);
+    let mut cache = Cache::read(&file);
+    let read = entry_of(&disk)?;
+
+    // The copy is a new path, so nothing has read it and nothing has disagreed with it yet. The
+    // agreement it starts with is the one the source had, which is what makes a copy of a changed
+    // file changed as well.
+    let agree = cache
+        .get(from)
+        .map_or_else(|| Some(read.digest()), Entry::agreed);
+
+    cache.insert(to.clone(), read.with_agreed(agree));
+    cache.write(&file)
+}
+
 /// What the file at `disk` holds now, as a reading of it writes it down.
 ///
 /// It is one file read on its own, for a caller that needs what a file looks like to the analysis
@@ -748,7 +792,9 @@ mod tests {
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
 
-    use super::{PathRename, cache_path, tree_diff, tree_diff_remembering};
+    use crate::cache::{Cache, Entry};
+
+    use super::{PathRename, cache_path, remember_copied, tree_diff, tree_diff_remembering};
 
     /// A directory of its own, emptied first so a rerun starts clean.
     fn scratch(label: &str) -> PathBuf {
@@ -797,6 +843,43 @@ mod tests {
         layout
             .create_path(&path(text), Uuid::from_u128(id))
             .unwrap();
+    }
+
+    #[test]
+    fn a_copy_takes_the_agreement_the_source_had() {
+        let (dir, workspace) = workspace("copy-agreement");
+        track(&workspace, 1, "one.txt");
+        fs::write(dir.join("one.txt"), b"one").unwrap();
+        fs::write(dir.join("two.txt"), b"two").unwrap();
+
+        let layout = working(&workspace);
+        let file = cache_path(&dir, &layout);
+
+        // A source the reading knows to disagree with the Layout keeps that disagreement at the
+        // path it was copied to.
+        let mut cache = Cache::empty();
+        cache.insert(
+            path("one.txt"),
+            Entry::new(0, 0, 3, [4; 32], None).disagreed(),
+        );
+        cache.write(&file).unwrap();
+
+        remember_copied(&dir, &layout, &path("one.txt"), &path("two.txt")).unwrap();
+
+        let after = Cache::read(&file);
+        assert_eq!(after.get(&path("two.txt")).unwrap().agreed(), None);
+        assert_eq!(after.get(&path("one.txt")).unwrap().agreed(), None);
+
+        // A source the Layout agrees with carries the digest it agreed with, not the copy's own
+        // digest, which is the same bytes at a new path.
+        let mut cache = Cache::empty();
+        cache.insert(path("one.txt"), Entry::new(0, 0, 3, [4; 32], None));
+        cache.write(&file).unwrap();
+
+        remember_copied(&dir, &layout, &path("one.txt"), &path("two.txt")).unwrap();
+
+        let after = Cache::read(&file);
+        assert_eq!(after.get(&path("two.txt")).unwrap().agreed(), Some([4; 32]));
     }
 
     #[test]

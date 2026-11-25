@@ -53,6 +53,7 @@ fn main() {
     let gcvault = sandbox.join("gcvault");
     let gcchain = sandbox.join("gcchain");
     let foreign = sandbox.join("foreign");
+    let copying = sandbox.join("copying");
 
     for dir in [
         &home,
@@ -76,6 +77,7 @@ fn main() {
         &gcvault,
         &gcchain,
         &foreign,
+        &copying,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -116,6 +118,7 @@ fn main() {
     output(&rola, &ws, &mut checked);
     language(&rola, &ws, &mut checked);
     held_by_another(&rola, &held, &mut checked);
+    copying_a_path(&rola, &copying, &mut checked);
     ownership(&rola, &claimed, &mut checked);
     empty_cache(&rola, &cached, &mut checked);
     uuid_switch(&rola, &switching, &mut checked);
@@ -2711,6 +2714,319 @@ fn held_by_another(rola: &Rola, dir: &Path, checked: &mut Checked) {
     );
 }
 
+/// The `(uuid, version)` a `layout entries` line names for `path`, when a line names it.
+fn entry_of(ran: &Ran, path: &str) -> Option<(String, String)> {
+    ran.stdout.lines().find_map(|line| {
+        let mut fields = line.split_whitespace();
+
+        if fields.next()? != path {
+            return None;
+        }
+
+        Some((fields.next()?.to_owned(), fields.next()?.to_owned()))
+    })
+}
+
+/// Copying a path inside a Workspace, and the Layout it keeps in step.
+///
+/// What a copy is to the Layout: a tracked entry is forked at the destination path with a new
+/// `Uuid` and the source's version, a copied tree's mark is given an id of its own, and an untracked
+/// path is only the filesystem's. The edit state travels too, so a copy of a file that had changed
+/// is read as changed.
+fn copying_a_path(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to copy in", &ran, 0);
+
+    let ran = rola.run(dir, &["key", "generate", "--install", "alice"]);
+    checked.exits("a key pair is made for the copy", &ran, 0);
+
+    let ran = rola.run(dir, &["account", "alice"]);
+    checked.exits("the copy acts as that account", &ran, 0);
+
+    // A tracked file: the copy is a new entry with the source's version.
+    let version = "11".repeat(32);
+    let solo = "00000000-0000-0000-0000-000000000001";
+    let ran = rola.run(
+        dir,
+        &[
+            "layout", "entry", "create", solo, &version, "--owner", "alice",
+        ],
+    );
+    checked.exits("a tracked file is written", &ran, 0);
+    let ran = rola.run(dir, &["layout", "path", "create", "solo.psd", solo]);
+    checked.exits("the tracked file is named", &ran, 0);
+    fs::write(dir.join("solo.psd"), "art\n").expect("the tracked file");
+
+    let ran = rola.run(dir, &["fs-ops", "cp", "solo.psd", "solo-copy.psd"]);
+    checked.exits("a tracked file is copied", &ran, 0);
+    checked.wants(
+        "the tracked file's copy is there",
+        dir.join("solo-copy.psd").is_file(),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["layout", "entries"]);
+    checked.exits("the Layout is read after the copy", &ran, 0);
+    let source = entry_of(&ran, "solo.psd");
+    let copy = entry_of(&ran, "solo-copy.psd");
+
+    match (&source, &copy) {
+        (Some((source_id, source_version)), Some((copy_id, copy_version))) => {
+            checked.wants(
+                "the copy is an entry of its own",
+                source_id != copy_id,
+                &said(&ran),
+            );
+            checked.wants(
+                "the copy shares the source's version",
+                source_version == copy_version,
+                &said(&ran),
+            );
+            checked.wants(
+                "the source keeps the id it had",
+                source_id.as_str() == solo,
+                &said(&ran),
+            );
+        }
+        _ => checked.wants("both paths are named by the Layout", false, &said(&ran)),
+    }
+
+    // The edit state travels: a recorded file that changed before the copy is modified at both
+    // paths.
+    fs::write(dir.join("edited.psd"), b"first").expect("a file to record");
+    let ran = rola.run(
+        dir,
+        &["track", "edited.psd", "--message", "first", "--no-editor"],
+    );
+    checked.exits("a file is recorded before the copy", &ran, 0);
+    fs::write(dir.join("edited.psd"), b"second").expect("the recorded file changed");
+
+    let ran = rola.run(dir, &["fs-ops", "cp", "edited.psd", "edited-copy.psd"]);
+    checked.exits("a changed file is copied", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "tree-diff"]);
+    checked.exits("the tree is compared with the Layout", &ran, 0);
+    checked.stdout_has(
+        "the copy of a changed file is modified",
+        &ran,
+        "modified edited-copy.psd",
+    );
+
+    // A folder holding a tracked file forks the entry at the mirrored path.
+    let inner = "00000000-0000-0000-0000-000000000002";
+    let inner_version = "22".repeat(32);
+    fs::create_dir_all(dir.join("folder")).expect("a folder to copy");
+    fs::write(dir.join("folder").join("inner.psd"), "inner\n").expect("a file in it");
+    let ran = rola.run(
+        dir,
+        &[
+            "layout",
+            "entry",
+            "create",
+            inner,
+            &inner_version,
+            "--owner",
+            "alice",
+        ],
+    );
+    checked.exits("a tracked file in a folder is written", &ran, 0);
+    let ran = rola.run(
+        dir,
+        &["layout", "path", "create", "folder/inner.psd", inner],
+    );
+    checked.exits("the tracked file in the folder is named", &ran, 0);
+
+    let ran = rola.run(dir, &["fs-ops", "cp", "folder", "folder-copy"]);
+    checked.exits("a folder holding a tracked file is copied", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "entries"]);
+    checked.exits("the Layout is read after the folder copy", &ran, 0);
+    let source = entry_of(&ran, "folder/inner.psd");
+    let copy = entry_of(&ran, "folder-copy/inner.psd");
+
+    match (&source, &copy) {
+        (Some((source_id, source_version)), Some((copy_id, copy_version))) => {
+            checked.wants(
+                "the mirrored path is an entry of its own",
+                source_id != copy_id,
+                &said(&ran),
+            );
+            checked.wants(
+                "the mirrored path shares the version",
+                source_version == copy_version,
+                &said(&ran),
+            );
+        }
+        _ => checked.wants(
+            "the folder copy is named at its mirrored path",
+            false,
+            &said(&ran),
+        ),
+    }
+
+    // A tracked tree is forked, and its mark is written with the fork's id.
+    fs::create_dir_all(dir.join("tree")).expect("a tree to copy");
+    fs::write(dir.join("tree").join("a.psd"), b"tree\n").expect("a file in the tree");
+    let ran = rola.run(dir, &["tree", "init", "tree"]);
+    checked.exits("a tree is made to copy", &ran, 0);
+    let ran = rola.run(dir, &["tree", "add", "tree"]);
+    checked.exits("the tree's work is staged", &ran, 0);
+    let ran = rola.run(
+        dir,
+        &["track", "tree", "--message", "a tree", "--no-editor"],
+    );
+    checked.exits("the tree is recorded", &ran, 0);
+
+    let ran = rola.run(dir, &["fs-ops", "cp", "tree", "tree-copy"]);
+    checked.exits("a tracked tree is copied", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "entries"]);
+    checked.exits("the Layout is read after the tree copy", &ran, 0);
+    let source = entry_of(&ran, "tree");
+    let copy = entry_of(&ran, "tree-copy");
+
+    match (&source, &copy) {
+        (Some((source_id, source_version)), Some((copy_id, copy_version))) => {
+            checked.wants(
+                "the copied tree is an entry of its own",
+                source_id != copy_id,
+                &said(&ran),
+            );
+            checked.wants(
+                "the copied tree shares the version",
+                source_version == copy_version,
+                &said(&ran),
+            );
+
+            let mark = dir.join("tree-copy").join(".rola-tree").join("id");
+            checked.wants(
+                "the copied tree's mark names the fork",
+                fs::read_to_string(&mark).is_ok_and(|text| text.trim() == copy_id.as_str()),
+                "the mark does not name the fork's id",
+            );
+        }
+        _ => checked.wants("the copied tree is named by the Layout", false, &said(&ran)),
+    }
+
+    let ran = rola.run(dir, &["tree", "status", "tree-copy"]);
+    checked.exits("the copied tree is read", &ran, 0);
+    checked.stdout_has("the copied tree holds what it records", &ran, "clean");
+
+    // A marked tree the Layout does not name is still given an id of its own.
+    fs::create_dir_all(dir.join("loose")).expect("a tree without an entry");
+    fs::write(dir.join("loose").join("b.psd"), b"loose\n").expect("a file in it");
+    let ran = rola.run(dir, &["tree", "init", "loose"]);
+    checked.exits("an untracked tree is made", &ran, 0);
+    let ran = rola.run(dir, &["tree", "add", "loose"]);
+    checked.exits("the untracked tree's work is staged", &ran, 0);
+    let ran = rola.run(
+        dir,
+        &["track", "loose", "--message", "loose", "--no-editor"],
+    );
+    checked.exits("the untracked tree is recorded once", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "entries"]);
+    checked.exits("the Layout is read for the loose tree", &ran, 0);
+    let loose = entry_of(&ran, "loose").map(|(id, _)| id);
+
+    let Some(loose) = loose else {
+        checked.wants(
+            "the loose tree is recorded",
+            false,
+            "the loose tree has no entry",
+        );
+
+        return;
+    };
+
+    let ran = rola.run(dir, &["layout", "entry", "remove", &loose]);
+    checked.exits("the loose tree's entry is dropped", &ran, 0);
+
+    let before = fs::read_to_string(dir.join("loose").join(".rola-tree").join("id"))
+        .expect("the loose tree's id");
+
+    let ran = rola.run(dir, &["fs-ops", "cp", "loose", "loose-copy"]);
+    checked.exits("the untracked tree is copied", &ran, 0);
+
+    let after = fs::read_to_string(dir.join("loose-copy").join(".rola-tree").join("id"))
+        .expect("the copy's id");
+    checked.wants(
+        "the copied untracked tree gets an id of its own",
+        before.trim() != after.trim(),
+        "the copy kept the original's id",
+    );
+
+    // An untracked file adds no entry.
+    fs::write(dir.join("plain.txt"), "plain\n").expect("an untracked file");
+    let ran = rola.run(dir, &["fs-ops", "cp", "plain.txt", "plain-copy.txt"]);
+    checked.exits("an untracked file is copied", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "entries"]);
+    checked.exits("the Layout is read after the plain copy", &ran, 0);
+    checked.wants(
+        "an untracked file adds no entry",
+        entry_of(&ran, "plain-copy.txt").is_none(),
+        &said(&ran),
+    );
+
+    // A destination that already names an entry is replaced.
+    let old_taken = "00000000-0000-0000-0000-000000000003";
+    let taken_version = "33".repeat(32);
+    let origin = "00000000-0000-0000-0000-000000000004";
+    let origin_version = "44".repeat(32);
+    fs::write(dir.join("taken.psd"), "old\n").expect("the destination file");
+    fs::write(dir.join("origin.psd"), "new\n").expect("the source file");
+
+    for (uuid, version, path) in [
+        (old_taken, taken_version.as_str(), "taken.psd"),
+        (origin, origin_version.as_str(), "origin.psd"),
+    ] {
+        let ran = rola.run(
+            dir,
+            &[
+                "layout", "entry", "create", uuid, version, "--owner", "alice",
+            ],
+        );
+        checked.exits(&format!("an entry is written for `{path}`"), &ran, 0);
+        let ran = rola.run(dir, &["layout", "path", "create", path, uuid]);
+        checked.exits(&format!("the entry is named at `{path}`"), &ran, 0);
+    }
+
+    let ran = rola.run(dir, &["fs-ops", "cp", "origin.psd", "taken.psd"]);
+    checked.exits("a named destination is copied onto", &ran, 0);
+
+    let ran = rola.run(dir, &["layout", "entries"]);
+    checked.exits("the Layout is read after the replacement", &ran, 0);
+    let replaced = entry_of(&ran, "taken.psd");
+    let origin_entry = entry_of(&ran, "origin.psd");
+
+    checked.wants(
+        "the old destination entry is gone",
+        !ran.stdout.contains(old_taken),
+        &said(&ran),
+    );
+
+    match (&replaced, &origin_entry) {
+        (Some((taken_id, replacement_version)), Some((_, source_version))) => {
+            checked.wants(
+                "the replacement is a new entry",
+                taken_id.as_str() != old_taken,
+                &said(&ran),
+            );
+            checked.wants(
+                "the replacement shares the source's version",
+                replacement_version == source_version,
+                &said(&ran),
+            );
+        }
+        _ => checked.wants(
+            "the replacement and the source are named",
+            false,
+            &said(&ran),
+        ),
+    }
+}
+
 /// Taking ownership and letting it go, which the Desktop's ownership menu runs the same way.
 ///
 /// What the Layout says about a Vault is what `hold` and `giveup` need, and a Workspace that tracks none is
@@ -2794,7 +3110,9 @@ fn soft_delete(rola: &Rola, dir: &Path, checked: &mut Checked) {
     );
     checked.wants(
         "the path it was at names nothing any more",
-        !ran.stdout.lines().any(|line| line.starts_with("art/a.psd ")),
+        !ran.stdout
+            .lines()
+            .any(|line| line.starts_with("art/a.psd ")),
         &said(&ran),
     );
 
