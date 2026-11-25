@@ -1,0 +1,1861 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-motion="full">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Rorolala Desktop panel prototype</title>
+        <!--
+    The Rorolala Desktop panel template.
+
+    Copy this file to a prototype location. Do not edit it in place, because every later prototype
+    is copied from it. The panel chrome is 1:1 with the Desktop: a 32px strip, a 14px selected tab,
+    an 8px frame and a 1px border. The content surface is empty on purpose.
+
+    The palette values and the derived tokens are the Desktop's, taken from
+    app/desktop/Contract/ThemePalette.cs, app/desktop/Contract/SemanticPalette.cs,
+    app/desktop/Core/Theming/RorolalaTheme.cs, app/desktop/Core/Docking/DockArea.cs and
+    app/desktop/Core/Theming/Motion.cs. Read the README beside this file before changing them.
+  -->
+        <style>
+            :root {
+                color-scheme: dark;
+
+                /* The shape of the panel. At 100% these are CSS pixels, which is the Desktop's own size. */
+                --panel-w: 760px;
+                --panel-h: 480px;
+                --strip: 32px;
+                --radius: 0;
+                --small: 0;
+                --zoom: 1;
+
+                --font:
+                    "Segoe UI", system-ui, -apple-system, "Noto Sans",
+                    sans-serif;
+                --mono: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+
+                /* Motion. The names are the Desktop's: feedback, state, panel and bar. */
+                --ease: cubic-bezier(0.215, 0.61, 0.355, 1);
+                --t-instant: 100ms;
+                --t-hover: 120ms;
+                --t-state: 160ms;
+                --t-panel: 220ms;
+                --t-bar: 280ms;
+                --travel: 4px;
+                --scale: 0.985;
+                --sample-travel: 56px;
+                --drawer-shift: 100%;
+
+                /* The dark defaults, as a first paint. The script writes the real values from the saved
+         state, so the page has the panel's colours before the script runs. */
+                --bright: #1a1b20;
+                --mid: #17181b;
+                --dark: #121318;
+                --front: #e8e9ec;
+                --splitter: #2d2f37;
+                --primary: #446dd6;
+                --accent: #ff7ea2;
+                --primary-text: #ffffff;
+                --accent-text: #000000;
+                --muted: #999a9d;
+                --faint: #66676a;
+                --strong: #5c5e64;
+                --tab-fill: #16171c;
+                --tab-hover: #16171c;
+                --tab-clear: rgba(22, 23, 28, 0);
+                --hover: rgba(255, 255, 255, 0.08);
+                --shadow: rgba(0, 0, 0, 0.4);
+                --shadow-soft: rgba(0, 0, 0, 0.35);
+                --scrim: rgba(0, 0, 0, 0.45);
+                --selection: rgba(68, 109, 214, 0.188);
+                --ring: rgba(68, 109, 214, 0.55);
+                --grid: rgba(45, 47, 55, 0.35);
+                --grid-strong: rgba(45, 47, 55, 0.7);
+                --info-icon: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAHW0lEQVR4nO2d7XHbOBCGX2bu/+UqOKaCUyoIU0GcCiJXELuC0BUkV8HJFdiuwHQFtisIVcElFTi74XKssbkgQHxRFp8ZjGSSFoFdYrFYfPAVFrLyCgtZWRSQmUUBmVkUkJlFAZlZFJCZRQGZWRSQmT8wYx4eHl7Txz+UVpRK+YR8L59c3kpiGko/KN1Rui+K4gdmSoGZQUJ/Rx9HlCo8CtwXVsQlpYaUcYMZMQsFkNBZ0J8orSm9RlxadMo4J2XcITNZFUCC/0AfJ+ie9hw0lM5IEQ0ykUUBJHh+2ms8t+O5aCj9S4q4RGKSKoAEX9LHf8j3xI/RUDomRbRIRDIFkPC/oHvqXdmia0T7xB5N+1RIolxO3IasdtLfcKem3z9DAqIrQARzATeP5gqPXksLD+T+FTrP6oPDv7KyP8auDVEVQIXnQrPJsfFs+En/RukyVqFFGZwnbvhtagbXtuOYbUM0BVBhP6MT6BgseK7yGySE8rdGZxJtFHEcK39RFECF46d+PXLZT3SCt1FSNCivNboa8efIpd8or6cITHAFWAqfbfxJSm/DhJgmfhDG2ogN5fkYAQkajLMU/ikV4mguwmc4L5wn+jr2hK+pjEFrbLAaQBnjavzVcAmbnGoO3X8TEhZpYDZJwdqEIAoQb+fCcMk9OuHPNiq5i0RhG3SRWI2PIbwjbwWI/byF7mrulfB7LJTA5Xnra0pDtAH85L8o4TOS5wpdGYbgMl/AEy8FiAun9XB7m793wu/ZUcJP5ZKVyGD6PTARMT3fDZe8jdHgSkypktSgC1dEjdtIw3xruOTNVFPko4Br6FHN0xgdLLonC2Goxt3R/d4iIiNeHj8E7zGBSSZIuvGVcvoqkvBr6ObO2xSMIWW6Uk5X4gm6/y4mQDdj01MOnGJbuYrRyTI8/T03dN8KERGzy2Z1qI8wqRY41wDKRAV9JKuO2MMdC2e/Q2SkbFrtrkQ2br8JRwy2f0sZLBEJui8/eaaOUfQasJOXFsNRVOda4FQDxBuolNM14jLW62yQjlo5XomZssapBkgg6vPAqahP/879tVrAk69cRtxC5KXFcC3gwf0TWOLaBnxSjieJ6YuQ2efvJ1fx51lq4QtamV2GPe1rgDQw18rpyR2RfWWkI/redq6RSw3Q/NyrQxM+I2XWpjlWsMRFAZqbF23Aeg/YKMcrWGJlgiQ0+79y+uDMT8+IGfrLJhBpWwO0Rm57qMJnpOxb5bSVY+CrgAYLWsQ3qAJK5XiLRLAZpPSV41APHbcyyTc3mgJewwLfGpBygL1GN3+nlL85TxtRhFVhI6HJoIIFvkOSKUe7tKedFXGNfHjJwFYB2vS9FukweWwrGaPIQascH5tp9xuvNiCxBzQW7viMDBhkYNUI2/YDHjB889QLPFgJ3CMfrJGp89PjI5+9UkDPS8rPslA7M7YKGOztuQ4+vERkkGqILSywVUCrHC+xoPVBWljgu1VBzg7QXPCSgW0N8Ip3vHC84mS2NaCF280PCU0GVj1kWwVoNcA0TeRQ0GRgFSfzNUHlIXtC4gGVyulwCpCRHW2efIXDpVKOW+9R5NIRa5TjRzhctCko1uPkLgrQfvTDIZqhnS0QhmhgibUCZJ6LtlLkEGuBVuZt4bD/kGssaKMczxIKzoxWZmvzw4RSQJlxQCQ5UtZSOb2BA04KkDVf2mywL8iMDNinyId2j5vCcV3clHB0rRwvZR1VCjSXuKRUh95OYBdZClUqp2s4MnWJUovhUakgi5ct7m9aMMfw3g9vEP6+JfRF6ZOmyE8dkNGedM6YSTBBkAVz96ZLEAcumxb9rDGBSQqQPRK0tuAokSmqoCthg8BImTTX86aYuG/E3i3UHsjHGl2N5KAYj0Lxnj41AjLLhdqMNEiaR8DtwZtij7cqYB7GNyM581F4iN1STKsX+dz7fVWCTHnkWXda4+q9Ni3ErAi2i+pmFpSuM8/dnISF8LnM3iEYbwWI7VsbLtk7JYjZMQmfWYdwt4PMCxIPwLTfGhfku2EKx2zYaXBNeT0uAu0lGmxilvjm54ZLuAbcyn6is0TyZmpwmfMi4B6iMbat3ECfSt7zu8YU89q2kjtZYzadhb9GQIJPTZQMno9cxgWdRW2Q4N0tMgifibl18Vi8pqdFt8vKmNKC4vgOg+Nin7Yu7pFNjDawW6zQolsDEG3ht5ia/lUppcW/sKu5LvZx8+4eKTQXwGUO0aWkm8J/+3r2ZnZfDGQLx5mi7/Cb8gUONaYN2rR4/gKHbTH8AgcOkbMHs9pJJdzxCi+4kOMVJhsk2N1qIhzhXRcJvbOkCzRkk+yKvn6E5fz5RLC54a2Iq9SucZYVMtyoyQZPvL3XDfLB9+Zg4arI8AYlJsuaqqdIQ7mGYQFeQLjmsbA3xaG/yG0I2Riq91hCzb5mE8NCb4qML20bYnYK2EUiqL03w98rOVXieU3hJ7uV7w0eX+Z5N+fxiFkr4BBYlqlmZlFAZhYFZGZRQGYWBWRmUUBmFgVkZlFAZn4BUQu9UsM0f3UAAAAASUVORK5CYII=");
+            }
+
+            :root[data-theme="light"] {
+                color-scheme: light;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            html,
+            body {
+                height: 100%;
+            }
+
+            body {
+                margin: 0;
+                overflow: hidden;
+                background: var(--mid);
+                color: var(--front);
+                font: 13px/1.45 var(--font);
+            }
+
+            button,
+            input {
+                font: inherit;
+                color: inherit;
+            }
+
+            :focus-visible {
+                outline: 2px solid var(--ring);
+                outline-offset: 2px;
+                border-radius: 0;
+            }
+
+            .app {
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                background: var(--mid);
+            }
+
+            /* The tool around the panel. It is not part of the product, and it says so. */
+            .protobar {
+                flex: none;
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px 14px;
+                padding: 8px 14px;
+                background: var(--dark);
+                border-bottom: 1px solid var(--splitter);
+                color: var(--front);
+            }
+
+            .brand {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .brand .mark {
+                width: 14px;
+                height: 14px;
+                border-radius: 0;
+                background: var(--primary);
+            }
+
+            .brand .name {
+                font-size: 13px;
+                font-weight: 600;
+            }
+
+            .badge {
+                font-size: 10px;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--muted);
+                border: 1px solid var(--splitter);
+                border-radius: 0;
+                padding: 2px 7px;
+            }
+
+            .controls {
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin-left: auto;
+            }
+
+            .seg {
+                display: inline-flex;
+                gap: 1px;
+                padding: 1px;
+                background: var(--dark);
+                border: 1px solid var(--splitter);
+                border-radius: var(--small);
+            }
+
+            .seg button {
+                border: 0;
+                background: transparent;
+                color: var(--muted);
+                font-size: 11px;
+                font-weight: 500;
+                line-height: 1;
+                padding: 5px 8px;
+                border-radius: 0;
+                cursor: pointer;
+                transition:
+                    background-color var(--t-hover) var(--ease),
+                    color var(--t-hover) var(--ease);
+            }
+
+            .seg button:hover {
+                color: var(--front);
+            }
+
+            .seg button[aria-pressed="true"] {
+                background: var(--bright);
+                color: var(--front);
+            }
+
+            .seg button:focus-visible {
+                outline-offset: -2px;
+            }
+
+            .ghost {
+                background: transparent;
+                border: 1px solid var(--splitter);
+                border-radius: var(--small);
+                color: var(--front);
+                font-size: 11px;
+                font-weight: 500;
+                line-height: 1;
+                padding: 5px 9px;
+                cursor: pointer;
+                transition:
+                    background-color var(--t-hover) var(--ease),
+                    border-color var(--t-hover) var(--ease);
+            }
+
+            .ghost:hover {
+                background: var(--hover);
+                border-color: var(--muted);
+            }
+
+            .ghost[hidden] {
+                display: none;
+            }
+
+            .ghost.icon {
+                width: 24px;
+                padding: 5px 0;
+                text-align: center;
+            }
+
+            .zoom {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .zoom input[type="range"] {
+                width: 86px;
+                height: 16px;
+                accent-color: var(--primary);
+                -webkit-appearance: none;
+                appearance: none;
+                background: transparent;
+            }
+
+            .zoom input[type="range"]::-webkit-slider-runnable-track {
+                height: 4px;
+                border-radius: 0;
+                background: var(--splitter);
+            }
+
+            .zoom input[type="range"]::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                width: 12px;
+                height: 12px;
+                margin-top: -4px;
+                border-radius: 0;
+                background: var(--primary);
+                border: 1px solid var(--splitter);
+            }
+
+            .zoom input[type="range"]::-moz-range-track {
+                height: 4px;
+                border-radius: 0;
+                background: var(--splitter);
+            }
+
+            .zoom input[type="range"]::-moz-range-thumb {
+                width: 12px;
+                height: 12px;
+                border-radius: 0;
+                background: var(--primary);
+                border: 1px solid var(--splitter);
+            }
+
+            .zoom output {
+                min-width: 38px;
+                text-align: right;
+                font: 11px/1 var(--mono);
+                color: var(--muted);
+                font-variant-numeric: tabular-nums;
+            }
+
+            .sample {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .sample-track {
+                position: relative;
+                width: 72px;
+                height: 16px;
+                border-radius: 0;
+                background: var(--mid);
+                border: 1px solid var(--splitter);
+                overflow: hidden;
+            }
+
+            .sample-dot {
+                position: absolute;
+                top: 2px;
+                left: 2px;
+                width: 10px;
+                height: 10px;
+                border-radius: 0;
+                background: var(--primary);
+            }
+
+            @keyframes sample-run {
+                from {
+                    opacity: 0.2;
+                    transform: translateX(0);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(var(--sample-travel));
+                }
+            }
+
+            .sample-track.run .sample-dot {
+                animation: sample-run var(--t-panel) var(--ease) both;
+            }
+
+            /* The stage: the ground the panel stands on. */
+            .stage {
+                flex: 1;
+                min-height: 0;
+                overflow: auto;
+                background-color: var(--mid);
+                background-image:
+                    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+                    linear-gradient(
+                        to bottom,
+                        var(--grid) 1px,
+                        transparent 1px
+                    ),
+                    linear-gradient(
+                        to right,
+                        var(--grid-strong) 1px,
+                        transparent 1px
+                    ),
+                    linear-gradient(
+                        to bottom,
+                        var(--grid-strong) 1px,
+                        transparent 1px
+                    );
+                background-size:
+                    24px 24px,
+                    24px 24px,
+                    120px 120px,
+                    120px 120px;
+                scrollbar-width: thin;
+                scrollbar-color: var(--splitter) transparent;
+            }
+
+            .stage-inner {
+                min-width: max-content;
+                min-height: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                padding: 28px;
+            }
+
+            .zoom-sizer {
+                position: relative;
+                flex: none;
+                width: calc(var(--panel-w) * var(--zoom));
+                height: calc(var(--panel-h) * var(--zoom));
+            }
+
+            .zoom-scale {
+                position: relative;
+                width: var(--panel-w);
+                height: var(--panel-h);
+                transform: scale(var(--zoom));
+                transform-origin: top left;
+            }
+
+            .caption {
+                margin: 0;
+                font-size: 11px;
+                color: var(--muted);
+            }
+
+            .resize {
+                position: absolute;
+                z-index: 3;
+                background: transparent;
+                touch-action: none;
+            }
+
+            .resize:hover {
+                background: var(--ring);
+            }
+
+            .resize-n,
+            .resize-s {
+                left: 0;
+                right: 0;
+                height: 8px;
+                cursor: ns-resize;
+            }
+
+            .resize-n {
+                top: -4px;
+            }
+
+            .resize-s {
+                bottom: -4px;
+            }
+
+            .resize-e,
+            .resize-w {
+                top: 0;
+                bottom: 0;
+                width: 8px;
+                cursor: ew-resize;
+            }
+
+            .resize-e {
+                right: -4px;
+            }
+
+            .resize-w {
+                left: -4px;
+            }
+
+            .resize-ne,
+            .resize-nw,
+            .resize-se,
+            .resize-sw {
+                width: 12px;
+                height: 12px;
+                z-index: 4;
+            }
+
+            .resize-ne {
+                top: -4px;
+                right: -4px;
+                cursor: nesw-resize;
+            }
+
+            .resize-nw {
+                top: -4px;
+                left: -4px;
+                cursor: nwse-resize;
+            }
+
+            .resize-se {
+                bottom: -4px;
+                right: -4px;
+                cursor: nwse-resize;
+            }
+
+            .resize-sw {
+                bottom: -4px;
+                left: -4px;
+                cursor: nesw-resize;
+            }
+
+            body.resizing {
+                user-select: none;
+            }
+
+            /* The panel. Its chrome is the Desktop's dock frame and header strip. */
+            .dock {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                background: var(--bright);
+                border: 1px solid var(--splitter);
+                border-radius: var(--radius);
+                overflow: hidden;
+                box-shadow:
+                    0 1px 2px var(--shadow),
+                    0 8px 24px var(--shadow-soft);
+            }
+
+            .dock[hidden] {
+                display: none;
+            }
+
+            .dock.entering {
+                animation: panel-in var(--t-panel) var(--ease) both;
+            }
+
+            .dock.leaving {
+                animation: panel-out var(--t-panel) var(--ease) both;
+            }
+
+            @keyframes panel-in {
+                from {
+                    opacity: 0;
+                    transform: translateY(var(--travel)) scale(var(--scale));
+                }
+                to {
+                    opacity: 1;
+                    transform: none;
+                }
+            }
+
+            @keyframes panel-out {
+                from {
+                    opacity: 1;
+                    transform: none;
+                }
+                to {
+                    opacity: 0;
+                    transform: translateY(var(--travel)) scale(var(--scale));
+                }
+            }
+
+            .strip {
+                flex: none;
+                height: var(--strip);
+                display: grid;
+                grid-template-columns: auto 1fr auto;
+                align-items: stretch;
+                background: var(--dark);
+                border-bottom: 1px solid var(--splitter);
+            }
+
+            .tab-cluster {
+                position: relative;
+                display: flex;
+                align-items: stretch;
+                min-width: 0;
+            }
+
+            .tabs {
+                display: flex;
+                align-items: stretch;
+                min-width: 0;
+            }
+
+            /* A tab is a piece of the strip: no radius, as tall as the strip, one edge between two tabs.
+       The leading room and the close room are the Desktop's own numbers. */
+            .tab {
+                display: grid;
+                grid-template-columns: 40px auto 26px;
+                align-items: center;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+                background: var(--tab-clear);
+                color: var(--muted);
+                font-size: 14px;
+                font-weight: 400;
+                line-height: 1.2;
+                border: 0;
+                border-left: 1px solid var(--splitter);
+                border-radius: 0;
+                cursor: default;
+                user-select: none;
+                transition:
+                    background-color var(--t-hover) var(--ease),
+                    color var(--t-hover) var(--ease);
+            }
+
+            .tab.leading {
+                border-left: 0;
+            }
+
+            .tab.trailing {
+                border-right: 1px solid var(--splitter);
+            }
+
+            .tab.leading.trailing {
+                border-left: 0;
+                border-right: 1px solid var(--splitter);
+            }
+
+            .tab:hover {
+                background: var(--tab-hover);
+                color: var(--front);
+            }
+
+            .tab:active {
+                background: var(--strong);
+            }
+
+            /* The tab being read lifts out of the strip and joins the panel below by covering the line. */
+            .tab.selected {
+                height: calc(100% + 1px);
+                margin-bottom: -1px;
+                background: var(--bright);
+                color: var(--front);
+                font-weight: 600;
+            }
+
+            .tab.selected:hover,
+            .tab.selected:active {
+                background: var(--bright);
+            }
+
+            .tab:focus-visible {
+                outline-offset: -2px;
+            }
+
+            .tab-name {
+                grid-column: 2;
+                min-width: 0;
+                max-width: 240px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                text-align: center;
+            }
+
+            .tab-icon {
+                grid-column: 1;
+                justify-self: start;
+                width: 16px;
+                height: 16px;
+                margin-left: 18px;
+                background-color: currentColor;
+                -webkit-mask: var(--info-icon) center / contain no-repeat;
+                mask: var(--info-icon) center / contain no-repeat;
+            }
+
+            .tab-close {
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 26px;
+                height: calc(100% + 1px);
+                display: grid;
+                place-items: center;
+                padding: 0 10px 0 0;
+                border: 0;
+                background: transparent;
+                color: var(--front);
+                font-size: 14px;
+                line-height: 1;
+                cursor: pointer;
+                opacity: 0;
+                transition: opacity var(--t-hover) var(--ease);
+            }
+
+            .tab-cluster:hover .tab-close,
+            .tab-close:focus-visible {
+                opacity: 1;
+            }
+
+            .tab-close:focus-visible {
+                outline-offset: -2px;
+            }
+
+            /* The room a dock is dragged by, and the slot the shown dock's header commands go in. */
+            .drag {
+                background: transparent;
+                cursor: move;
+            }
+
+            .commands {
+                display: flex;
+                align-items: center;
+                gap: 2px;
+                margin-right: 8px;
+            }
+
+            /* The panel's own surface. It is empty on purpose in this template. */
+            .content {
+                flex: 1;
+                min-height: 0;
+                background: var(--bright);
+                overflow: auto;
+            }
+
+            /* The palette drawer. A tool, drawn on the panel's face. */
+            .scrim {
+                position: fixed;
+                inset: 0;
+                z-index: 15;
+                background: var(--scrim);
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity var(--t-panel) var(--ease);
+            }
+
+            body.drawer-open .scrim {
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+            .palette {
+                position: fixed;
+                top: 0;
+                right: 0;
+                z-index: 20;
+                width: 340px;
+                max-width: calc(100vw - 24px);
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                background: var(--bright);
+                border-left: 1px solid var(--splitter);
+                box-shadow: -12px 0 30px var(--shadow-soft);
+                transform: translateX(var(--drawer-shift));
+                opacity: 0;
+                pointer-events: none;
+                transition:
+                    transform var(--t-panel) var(--ease),
+                    opacity var(--t-panel) var(--ease);
+            }
+
+            body.drawer-open .palette {
+                transform: none;
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+            .palette-head {
+                flex: none;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 10px 14px;
+                background: var(--dark);
+                border-bottom: 1px solid var(--splitter);
+            }
+
+            .palette-head h2 {
+                margin: 0;
+                font-size: 13px;
+                font-weight: 600;
+            }
+
+            .palette-body {
+                flex: 1;
+                overflow-y: auto;
+                padding: 4px 14px 18px;
+                scrollbar-width: thin;
+                scrollbar-color: var(--splitter) transparent;
+            }
+
+            .palette-body h3 {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                margin: 14px 0 4px;
+                font-size: 10.5px;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--muted);
+                font-weight: 600;
+            }
+
+            .theme-tag {
+                font-size: 10px;
+                letter-spacing: 0;
+                text-transform: none;
+                color: var(--front);
+                background: var(--dark);
+                border: 1px solid var(--splitter);
+                border-radius: 0;
+                padding: 1px 7px;
+            }
+
+            .rows {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .row {
+                display: grid;
+                grid-template-columns: 22px 1fr auto 18px;
+                align-items: center;
+                gap: 8px;
+                padding: 3px 4px;
+                margin: 0 -4px;
+                border-radius: var(--small);
+            }
+
+            .row:hover {
+                background: var(--hover);
+            }
+
+            .row-name {
+                font-size: 12px;
+                color: var(--front);
+            }
+
+            .row-hex {
+                font: 10.5px/1 var(--mono);
+                color: var(--muted);
+                text-align: right;
+                font-variant-numeric: tabular-nums;
+            }
+
+            .row-reset {
+                width: 18px;
+                height: 18px;
+                display: grid;
+                place-items: center;
+                border: 1px solid transparent;
+                border-radius: 0;
+                background: transparent;
+                color: var(--muted);
+                font-size: 14px;
+                line-height: 1;
+                cursor: pointer;
+            }
+
+            .row-reset:hover:not(:disabled) {
+                border-color: var(--splitter);
+                color: var(--front);
+            }
+
+            .row-reset:disabled {
+                opacity: 0.3;
+                cursor: default;
+            }
+
+            input[type="color"] {
+                width: 22px;
+                height: 22px;
+                padding: 0;
+                border: 1px solid var(--splitter);
+                border-radius: var(--small);
+                background: transparent;
+                cursor: pointer;
+                -webkit-appearance: none;
+                appearance: none;
+            }
+
+            input[type="color"]::-webkit-color-swatch-wrapper {
+                padding: 0;
+            }
+
+            input[type="color"]::-webkit-color-swatch {
+                border: 0;
+                border-radius: 0;
+            }
+
+            input[type="color"]::-moz-color-swatch {
+                border: 0;
+                border-radius: 0;
+            }
+
+            .palette-actions {
+                display: flex;
+                gap: 8px;
+                margin-top: 16px;
+            }
+
+            .palette-actions .ghost {
+                flex: 1;
+            }
+
+            .note {
+                margin: 12px 0 0;
+                font-size: 11px;
+                line-height: 1.5;
+                color: var(--muted);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="app" id="app">
+            <header class="protobar">
+                <div class="brand">
+                    <span class="mark" aria-hidden="true"></span>
+                    <span class="name">Rorolala Desktop</span>
+                    <span class="badge">Prototype</span>
+                </div>
+
+                <div class="controls">
+                    <div
+                        class="seg"
+                        role="group"
+                        aria-label="Theme"
+                        data-control="theme"
+                    >
+                        <button
+                            type="button"
+                            data-value="system"
+                            aria-pressed="true"
+                        >
+                            System
+                        </button>
+                        <button
+                            type="button"
+                            data-value="light"
+                            aria-pressed="false"
+                        >
+                            Light
+                        </button>
+                        <button
+                            type="button"
+                            data-value="dark"
+                            aria-pressed="false"
+                        >
+                            Dark
+                        </button>
+                    </div>
+
+                    <div
+                        class="seg"
+                        role="group"
+                        aria-label="Motion"
+                        data-control="motion"
+                    >
+                        <button
+                            type="button"
+                            data-value="full"
+                            aria-pressed="true"
+                        >
+                            Full
+                        </button>
+                        <button
+                            type="button"
+                            data-value="reduce"
+                            aria-pressed="false"
+                        >
+                            Reduce
+                        </button>
+                        <button
+                            type="button"
+                            data-value="none"
+                            aria-pressed="false"
+                        >
+                            None
+                        </button>
+                    </div>
+
+                    <div class="sample">
+                        <button
+                            type="button"
+                            class="ghost small"
+                            id="motion-play"
+                            aria-label="Play the motion sample"
+                        >
+                            Test
+                        </button>
+                        <span
+                            class="sample-track"
+                            id="motion-track"
+                            aria-hidden="true"
+                            ><span class="sample-dot"></span
+                        ></span>
+                    </div>
+
+                    <div class="zoom">
+                        <button
+                            type="button"
+                            class="ghost icon"
+                            data-zoom="-10"
+                            aria-label="Zoom out"
+                        >
+                            &minus;
+                        </button>
+                        <input
+                            type="range"
+                            id="zoom"
+                            min="50"
+                            max="200"
+                            step="5"
+                            value="100"
+                            aria-label="Zoom"
+                        />
+                        <output id="zoom-value" for="zoom">100%</output>
+                        <button
+                            type="button"
+                            class="ghost icon"
+                            data-zoom="10"
+                            aria-label="Zoom in"
+                        >
+                            +
+                        </button>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="ghost"
+                        id="palette-toggle"
+                        aria-expanded="false"
+                        aria-controls="palette"
+                    >
+                        Palette
+                    </button>
+                    <button
+                        type="button"
+                        class="ghost"
+                        id="panel-toggle"
+                        hidden
+                    >
+                        Show panel
+                    </button>
+                </div>
+            </header>
+
+            <main class="stage" id="stage">
+                <div class="stage-inner">
+                    <div class="zoom-sizer">
+                        <div class="zoom-scale">
+                            <section class="dock" id="dock" aria-label="Panel">
+                                <div class="strip">
+                                    <div class="tab-cluster">
+                                        <div class="tabs" role="tablist">
+                                            <div
+                                                class="tab selected leading trailing"
+                                                id="tab"
+                                                role="tab"
+                                                tabindex="0"
+                                                aria-selected="true"
+                                                aria-controls="content"
+                                                aria-label="Panel"
+                                            >
+                                                <span
+                                                    class="tab-icon"
+                                                    aria-hidden="true"
+                                                ></span>
+                                                <span class="tab-name"
+                                                    >Panel</span
+                                                >
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="tab-close"
+                                            id="tab-close"
+                                            aria-label="Close panel"
+                                            title="Close panel"
+                                        >
+                                            &#10005;
+                                        </button>
+                                    </div>
+                                    <div class="drag" aria-hidden="true"></div>
+                                    <div
+                                        class="commands"
+                                        aria-hidden="true"
+                                    ></div>
+                                </div>
+                                <div
+                                    class="content"
+                                    id="content"
+                                    role="tabpanel"
+                                    aria-labelledby="tab"
+                                    aria-label="Panel content"
+                                ></div>
+                            </section>
+                        </div>
+                    </div>
+                    <p class="caption">
+                        Empty panel. 100% is 1:1 in CSS pixels. Drag the edges
+                        to resize.
+                    </p>
+                </div>
+            </main>
+        </div>
+
+        <div class="scrim" id="scrim"></div>
+
+        <aside class="palette" id="palette" aria-label="Palette" inert>
+            <header class="palette-head">
+                <h2>Palette</h2>
+                <button
+                    type="button"
+                    class="ghost icon"
+                    id="palette-close"
+                    aria-label="Close palette"
+                >
+                    &#10005;
+                </button>
+            </header>
+            <div class="palette-body">
+                <section>
+                    <h3>
+                        Grounds
+                        <span class="theme-tag" id="grounds-theme">Dark</span>
+                    </h3>
+                    <div class="rows" id="grounds-rows"></div>
+                </section>
+
+                <section>
+                    <h3>Configured</h3>
+                    <div class="rows" id="configured-rows"></div>
+                </section>
+
+                <section>
+                    <h3>Semantic</h3>
+                    <div class="rows" id="semantic-rows"></div>
+                </section>
+
+                <div class="palette-actions">
+                    <button type="button" class="ghost" id="restore-theme">
+                        Restore this theme
+                    </button>
+                    <button type="button" class="ghost" id="restore-all">
+                        Restore all colours
+                    </button>
+                </div>
+
+                <p class="note">
+                    The panel is empty on purpose. Colours start from the
+                    Desktop palette and are stored in this browser.
+                </p>
+            </div>
+        </aside>
+
+        <script>
+            (() => {
+                "use strict";
+
+                const STORE_KEY = "rorolala.desktop-prototype.v1";
+                const HEX = /^#[0-9a-f]{6}$/i;
+                const GROUNDS = [
+                    ["bright", "Bright"],
+                    ["mid", "Mid"],
+                    ["dark", "Dark"],
+                    ["front", "Front"],
+                    ["splitter", "Splitter"],
+                ];
+                const SEMANTIC = [
+                    ["disabled", "Disabled"],
+                    ["modify", "Modify"],
+                    ["warning", "Warning"],
+                    ["error", "Error"],
+                    ["fail", "Fail"],
+                    ["success", "Success"],
+                    ["allow", "Allow"],
+                    ["disallow", "Disallow"],
+                    ["force", "Force"],
+                    ["statusAlpha", "Status alpha"],
+                    ["statusBeta", "Status beta"],
+                    ["statusDelta", "Status delta"],
+                ];
+                const SEMANTIC_DEFAULTS = {
+                    disabled: "#6e7480",
+                    modify: "#ffc857",
+                    warning: "#ff9f43",
+                    error: "#ff6b6b",
+                    fail: "#d32f2f",
+                    success: "#6fdf85",
+                    allow: "#4dd0e1",
+                    disallow: "#9aa0a6",
+                    force: "#ff5c9e",
+                    statusAlpha: "#64b5f6",
+                    statusBeta: "#ba68c8",
+                    statusDelta: "#f48fb1",
+                };
+                const DEFAULTS = {
+                    mode: "system",
+                    motion: "full",
+                    zoom: 100,
+                    size: { w: 760, h: 480 },
+                    primary: "#446dd6",
+                    accent: "#ff7ea2",
+                    grounds: {
+                        light: {
+                            bright: "#ffffff",
+                            mid: "#e9eaee",
+                            dark: "#f3f4f7",
+                            front: "#1b1c1f",
+                            splitter: "#e3e5e7",
+                        },
+                        dark: {
+                            bright: "#1a1b20",
+                            mid: "#17181b",
+                            dark: "#121318",
+                            front: "#e8e9ec",
+                            splitter: "#2d2f37",
+                        },
+                    },
+                    semantic: {
+                        light: { ...SEMANTIC_DEFAULTS },
+                        dark: { ...SEMANTIC_DEFAULTS },
+                    },
+                };
+
+                const $ = (id) => document.getElementById(id);
+
+                const copy = (value) => JSON.parse(JSON.stringify(value));
+                const colour = (value, fallback) =>
+                    typeof value === "string" && HEX.test(value)
+                        ? value.toLowerCase()
+                        : fallback;
+                const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+                const clamp = (value, low, high) =>
+                    Math.min(high, Math.max(low, value));
+
+                function rgb(hex) {
+                    const number = parseInt(hex.slice(1), 16);
+                    return [
+                        (number >> 16) & 255,
+                        (number >> 8) & 255,
+                        number & 255,
+                    ];
+                }
+
+                function hex(channels) {
+                    return (
+                        "#" +
+                        channels
+                            .map((value) =>
+                                Math.round(value).toString(16).padStart(2, "0"),
+                            )
+                            .join("")
+                    );
+                }
+
+                function mix(a, b, amount) {
+                    const one = rgb(a);
+                    const other = rgb(b);
+                    return hex(
+                        one.map(
+                            (value, index) =>
+                                value * (1 - amount) + other[index] * amount,
+                        ),
+                    );
+                }
+
+                function alpha(a, value) {
+                    const [r, g, b] = rgb(a);
+                    return `rgba(${r}, ${g}, ${b}, ${value})`;
+                }
+
+                function channel(value) {
+                    const encoded = value / 255;
+                    return encoded <= 0.03928
+                        ? encoded / 12.92
+                        : ((encoded + 0.055) / 1.055) ** 2.4;
+                }
+
+                function luminance(a) {
+                    const [r, g, b] = rgb(a);
+                    return (
+                        0.2126 * channel(r) +
+                        0.7152 * channel(g) +
+                        0.0722 * channel(b)
+                    );
+                }
+
+                function contrasts(a, b) {
+                    const one = luminance(a);
+                    const other = luminance(b);
+                    return (
+                        (Math.max(one, other) + 0.05) /
+                        (Math.min(one, other) + 0.05)
+                    );
+                }
+
+                function inkOn(a) {
+                    return contrasts("#000000", a) >= contrasts("#ffffff", a)
+                        ? "#000000"
+                        : "#ffffff";
+                }
+
+                function normalize(raw) {
+                    const state = copy(DEFAULTS);
+                    if (!raw || typeof raw !== "object") {
+                        return state;
+                    }
+
+                    if (["system", "light", "dark"].includes(raw.mode)) {
+                        state.mode = raw.mode;
+                    }
+                    if (["full", "reduce", "none"].includes(raw.motion)) {
+                        state.motion = raw.motion;
+                    }
+                    if (Number.isFinite(raw.zoom)) {
+                        state.zoom = Math.min(
+                            200,
+                            Math.max(50, Math.round(raw.zoom)),
+                        );
+                    }
+                    if (
+                        raw.size &&
+                        Number.isFinite(raw.size.w) &&
+                        Number.isFinite(raw.size.h)
+                    ) {
+                        state.size.w = clamp(Math.round(raw.size.w), 320, 1600);
+                        state.size.h = clamp(Math.round(raw.size.h), 200, 1200);
+                    }
+
+                    state.primary = colour(raw.primary, state.primary);
+                    state.accent = colour(raw.accent, state.accent);
+
+                    for (const theme of ["light", "dark"]) {
+                        for (const [key] of GROUNDS) {
+                            state.grounds[theme][key] = colour(
+                                raw.grounds && raw.grounds[theme]
+                                    ? raw.grounds[theme][key]
+                                    : undefined,
+                                DEFAULTS.grounds[theme][key],
+                            );
+                        }
+                        for (const [key] of SEMANTIC) {
+                            state.semantic[theme][key] = colour(
+                                raw.semantic && raw.semantic[theme]
+                                    ? raw.semantic[theme][key]
+                                    : undefined,
+                                DEFAULTS.semantic[theme][key],
+                            );
+                        }
+                    }
+
+                    return state;
+                }
+
+                const systemTheme = matchMedia("(prefers-color-scheme: dark)");
+                const systemReduced = matchMedia(
+                    "(prefers-reduced-motion: reduce)",
+                );
+
+                function load() {
+                    try {
+                        const raw = localStorage.getItem(STORE_KEY);
+                        if (!raw) {
+                            const state = copy(DEFAULTS);
+                            if (systemReduced.matches) {
+                                state.motion = "reduce";
+                            }
+                            return state;
+                        }
+                        return normalize(JSON.parse(raw));
+                    } catch {
+                        return copy(DEFAULTS);
+                    }
+                }
+
+                function save() {
+                    try {
+                        localStorage.setItem(STORE_KEY, JSON.stringify(state));
+                    } catch {
+                        /* storage is a convenience, not a requirement */
+                    }
+                }
+
+                let state = load();
+
+                const root = document.documentElement;
+                const dock = $("dock");
+                const tab = $("tab");
+                const tabClose = $("tab-close");
+                const panelToggle = $("panel-toggle");
+                const palette = $("palette");
+                const paletteToggle = $("palette-toggle");
+                const paletteClose = $("palette-close");
+                const scrim = $("scrim");
+                const zoom = $("zoom");
+                const zoomValue = $("zoom-value");
+                const motionTrack = $("motion-track");
+                const motionPlay = $("motion-play");
+                const groundsRows = $("grounds-rows");
+                const configuredRows = $("configured-rows");
+                const semanticRows = $("semantic-rows");
+                const groundsTheme = $("grounds-theme");
+
+                const theme = () =>
+                    state.mode === "system"
+                        ? systemTheme.matches
+                            ? "dark"
+                            : "light"
+                        : state.mode;
+
+                function write(group, active, key, value) {
+                    if (group === "configured") {
+                        state[key] = value;
+                    } else if (group === "grounds") {
+                        state.grounds[active][key] = value;
+                    } else {
+                        state.semantic[active][key] = value;
+                    }
+                }
+
+                function row({ group, active, key, label, value, fallback }) {
+                    const element = document.createElement("div");
+                    element.className = "row";
+
+                    const input = document.createElement("input");
+                    input.type = "color";
+                    input.value = value;
+                    input.title = label;
+                    input.setAttribute("aria-label", label);
+
+                    const name = document.createElement("span");
+                    name.className = "row-name";
+                    name.textContent = label;
+
+                    const code = document.createElement("code");
+                    code.className = "row-hex";
+                    code.textContent = value.toUpperCase();
+
+                    const reset = document.createElement("button");
+                    reset.type = "button";
+                    reset.className = "row-reset";
+                    reset.textContent = "\u21ba";
+                    reset.title = `Restore ${label}`;
+                    reset.setAttribute("aria-label", `Restore ${label}`);
+                    reset.disabled = same(value, fallback);
+
+                    input.addEventListener("input", () => {
+                        const next = input.value.toLowerCase();
+                        write(group, active, key, next);
+                        code.textContent = next.toUpperCase();
+                        reset.disabled = same(next, fallback);
+                        apply();
+                        save();
+                    });
+
+                    reset.addEventListener("click", () => {
+                        input.value = fallback;
+                        write(group, active, key, fallback);
+                        code.textContent = fallback.toUpperCase();
+                        reset.disabled = true;
+                        apply();
+                        save();
+                    });
+
+                    element.append(input, name, code, reset);
+                    return element;
+                }
+
+                function renderPalette() {
+                    const active = theme();
+                    groundsTheme.textContent =
+                        active === "dark" ? "Dark" : "Light";
+
+                    groundsRows.replaceChildren(
+                        ...GROUNDS.map(([key, label]) =>
+                            row({
+                                group: "grounds",
+                                active,
+                                key,
+                                label,
+                                value: state.grounds[active][key],
+                                fallback: DEFAULTS.grounds[active][key],
+                            }),
+                        ),
+                    );
+
+                    configuredRows.replaceChildren(
+                        ...["primary", "accent"].map((key) =>
+                            row({
+                                group: "configured",
+                                key,
+                                label: key === "primary" ? "Primary" : "Accent",
+                                value: state[key],
+                                fallback: DEFAULTS[key],
+                            }),
+                        ),
+                    );
+
+                    semanticRows.replaceChildren(
+                        ...SEMANTIC.map(([key, label]) =>
+                            row({
+                                group: "semantic",
+                                active,
+                                key,
+                                label,
+                                value: state.semantic[active][key],
+                                fallback: DEFAULTS.semantic[active][key],
+                            }),
+                        ),
+                    );
+                }
+
+                function syncControls() {
+                    for (const button of document.querySelectorAll(
+                        '[data-control="theme"] button',
+                    )) {
+                        button.setAttribute(
+                            "aria-pressed",
+                            String(button.dataset.value === state.mode),
+                        );
+                    }
+                    for (const button of document.querySelectorAll(
+                        '[data-control="motion"] button',
+                    )) {
+                        button.setAttribute(
+                            "aria-pressed",
+                            String(button.dataset.value === state.motion),
+                        );
+                    }
+
+                    zoom.value = String(state.zoom);
+                    zoomValue.textContent = `${state.zoom}%`;
+                }
+
+                function apply() {
+                    const active = theme();
+                    const grounds = state.grounds[active];
+                    const semantic = state.semantic[active];
+                    const primary = state.primary;
+                    const accent = state.accent;
+
+                    const [mr, mg, mb] = rgb(grounds.mid);
+                    const lightGround = mr + mg + mb > 3 * 0x80;
+
+                    const set = (name, value) =>
+                        root.style.setProperty(name, value);
+
+                    set("--bright", grounds.bright);
+                    set("--mid", grounds.mid);
+                    set("--dark", grounds.dark);
+                    set("--front", grounds.front);
+                    set("--splitter", grounds.splitter);
+                    set("--grid", alpha(grounds.splitter, 0.35));
+                    set("--grid-strong", alpha(grounds.splitter, 0.7));
+                    set("--panel-w", `${state.size.w}px`);
+                    set("--panel-h", `${state.size.h}px`);
+                    set("--primary", primary);
+                    set("--accent", accent);
+                    set("--primary-text", inkOn(primary));
+                    set("--accent-text", inkOn(accent));
+
+                    const tabFill = mix(grounds.dark, grounds.bright, 0.5);
+                    set("--muted", mix(grounds.front, grounds.mid, 0.38));
+                    set("--faint", mix(grounds.front, grounds.mid, 0.62));
+                    set("--strong", mix(grounds.splitter, grounds.front, 0.25));
+                    set("--tab-fill", tabFill);
+                    set("--tab-hover", tabFill);
+                    set("--tab-clear", alpha(tabFill, 0));
+
+                    set(
+                        "--hover",
+                        lightGround
+                            ? "rgba(0, 0, 0, 0.08)"
+                            : "rgba(255, 255, 255, 0.08)",
+                    );
+                    set(
+                        "--shadow",
+                        lightGround
+                            ? "rgba(0, 0, 0, 0.06)"
+                            : "rgba(0, 0, 0, 0.40)",
+                    );
+                    set(
+                        "--shadow-soft",
+                        lightGround
+                            ? "rgba(0, 0, 0, 0.06)"
+                            : "rgba(0, 0, 0, 0.35)",
+                    );
+                    set(
+                        "--scrim",
+                        lightGround
+                            ? "rgba(0, 0, 0, 0.18)"
+                            : "rgba(0, 0, 0, 0.45)",
+                    );
+                    set(
+                        "--selection",
+                        alpha(primary, lightGround ? 0.141 : 0.188),
+                    );
+                    set("--ring", alpha(primary, 0.55));
+
+                    set("--add", semantic.success);
+                    set("--add-bg", alpha(semantic.success, 0.141));
+                    set("--del", semantic.error);
+                    set("--del-bg", alpha(semantic.error, 0.141));
+                    set("--del-wash", alpha(semantic.error, 0.18));
+                    set("--warn", semantic.warning);
+                    set("--warn-bg", alpha(semantic.warning, 0.118));
+                    set("--force", semantic.force);
+                    set("--force-wash", alpha(semantic.force, 0.18));
+                    set("--accent-wash", alpha(accent, 0.18));
+
+                    set("--disabled", semantic.disabled);
+                    set("--modify", semantic.modify);
+                    set("--error", semantic.error);
+                    set("--fail", semantic.fail);
+                    set("--success", semantic.success);
+                    set("--allow", semantic.allow);
+                    set("--disallow", semantic.disallow);
+                    set("--status-alpha", semantic.statusAlpha);
+                    set("--status-beta", semantic.statusBeta);
+                    set("--status-delta", semantic.statusDelta);
+
+                    set("--zoom", String(state.zoom / 100));
+
+                    const motion = {
+                        full: {
+                            hover: "120ms",
+                            state: "160ms",
+                            panel: "220ms",
+                            bar: "280ms",
+                            travel: "4px",
+                            scale: "0.985",
+                            sample: "56px",
+                            drawer: "100%",
+                        },
+                        reduce: {
+                            hover: "120ms",
+                            state: "160ms",
+                            panel: "160ms",
+                            bar: "0ms",
+                            travel: "0px",
+                            scale: "1",
+                            sample: "0px",
+                            drawer: "0px",
+                        },
+                        none: {
+                            hover: "0ms",
+                            state: "0ms",
+                            panel: "0ms",
+                            bar: "0ms",
+                            travel: "0px",
+                            scale: "1",
+                            sample: "0px",
+                            drawer: "0px",
+                        },
+                    }[state.motion];
+
+                    set("--t-hover", motion.hover);
+                    set("--t-state", motion.state);
+                    set("--t-panel", motion.panel);
+                    set("--t-bar", motion.bar);
+                    set("--travel", motion.travel);
+                    set("--scale", motion.scale);
+                    set("--sample-travel", motion.sample);
+                    set("--drawer-shift", motion.drawer);
+
+                    root.dataset.theme = active;
+                    root.dataset.motion = state.motion;
+                    root.dataset.mode = state.mode;
+
+                    syncControls();
+                }
+
+                function finishAnimation(element, done) {
+                    if (state.motion === "none") {
+                        done();
+                        return;
+                    }
+
+                    let settled = false;
+                    let timer = 0;
+                    const finish = () => {
+                        if (settled) {
+                            return;
+                        }
+                        settled = true;
+                        element.removeEventListener("animationend", finish);
+                        clearTimeout(timer);
+                        done();
+                    };
+
+                    element.addEventListener("animationend", finish);
+                    timer = setTimeout(finish, 800);
+                }
+
+                function closePanel() {
+                    if (dock.hidden) {
+                        return;
+                    }
+
+                    dock.classList.remove("entering");
+                    dock.classList.add("leaving");
+                    finishAnimation(dock, () => {
+                        dock.classList.remove("leaving");
+                        dock.hidden = true;
+                        panelToggle.hidden = false;
+                        panelToggle.focus();
+                    });
+                }
+
+                function openPanel() {
+                    dock.hidden = false;
+                    panelToggle.hidden = true;
+                    dock.classList.add("entering");
+                    finishAnimation(dock, () =>
+                        dock.classList.remove("entering"),
+                    );
+                    tab.focus();
+                }
+
+                function setDrawer(open, focus = true) {
+                    document.body.classList.toggle("drawer-open", open);
+                    paletteToggle.setAttribute("aria-expanded", String(open));
+                    palette.toggleAttribute("inert", !open);
+                    palette.setAttribute("aria-hidden", String(!open));
+
+                    if (focus) {
+                        (open ? paletteClose : paletteToggle).focus();
+                    }
+                }
+
+                for (const button of document.querySelectorAll(
+                    '[data-control="theme"] button',
+                )) {
+                    button.addEventListener("click", () => {
+                        state.mode = button.dataset.value;
+                        apply();
+                        renderPalette();
+                        save();
+                    });
+                }
+
+                for (const button of document.querySelectorAll(
+                    '[data-control="motion"] button',
+                )) {
+                    button.addEventListener("click", () => {
+                        state.motion = button.dataset.value;
+                        apply();
+                        save();
+                    });
+                }
+
+                for (const button of document.querySelectorAll("[data-zoom]")) {
+                    button.addEventListener("click", () => {
+                        const next = state.zoom + Number(button.dataset.zoom);
+                        state.zoom = Math.min(200, Math.max(50, next));
+                        apply();
+                        save();
+                    });
+                }
+
+                zoom.addEventListener("input", () => {
+                    state.zoom = Number(zoom.value);
+                    apply();
+                    save();
+                });
+
+                const FRAME = document.querySelector(".zoom-scale");
+                let drag = null;
+
+                function beginResize(event, handle) {
+                    event.preventDefault();
+                    drag = {
+                        dir: handle.dataset.resize,
+                        x: event.clientX,
+                        y: event.clientY,
+                        w: state.size.w,
+                        h: state.size.h,
+                    };
+                    handle.setPointerCapture(event.pointerId);
+                    document.body.style.cursor =
+                        getComputedStyle(handle).cursor;
+                    document.body.classList.add("resizing");
+                }
+
+                function moveResize(event) {
+                    if (!drag) {
+                        return;
+                    }
+
+                    const scale = state.zoom / 100;
+                    const dx = (event.clientX - drag.x) / scale;
+                    const dy = (event.clientY - drag.y) / scale;
+                    const width =
+                        drag.w +
+                        (drag.dir.includes("e") ? dx : 0) -
+                        (drag.dir.includes("w") ? dx : 0);
+                    const height =
+                        drag.h +
+                        (drag.dir.includes("s") ? dy : 0) -
+                        (drag.dir.includes("n") ? dy : 0);
+
+                    state.size.w = clamp(Math.round(width), 320, 1600);
+                    state.size.h = clamp(Math.round(height), 200, 1200);
+                    apply();
+                }
+
+                function endResize() {
+                    if (!drag) {
+                        return;
+                    }
+
+                    drag = null;
+                    document.body.style.cursor = "";
+                    document.body.classList.remove("resizing");
+                    save();
+                }
+
+                for (const dir of [
+                    "n",
+                    "s",
+                    "e",
+                    "w",
+                    "ne",
+                    "nw",
+                    "se",
+                    "sw",
+                ]) {
+                    const handle = document.createElement("span");
+                    handle.className = `resize resize-${dir}`;
+                    handle.dataset.resize = dir;
+                    handle.setAttribute("aria-hidden", "true");
+                    handle.addEventListener("pointerdown", (event) =>
+                        beginResize(event, handle),
+                    );
+                    handle.addEventListener("pointermove", moveResize);
+                    handle.addEventListener("pointerup", endResize);
+                    handle.addEventListener("pointercancel", endResize);
+                    FRAME.append(handle);
+                }
+
+                motionPlay.addEventListener("click", () => {
+                    motionTrack.classList.remove("run");
+                    void motionTrack.offsetWidth;
+                    motionTrack.classList.add("run");
+                });
+
+                motionTrack.addEventListener("animationend", () =>
+                    motionTrack.classList.remove("run"),
+                );
+
+                paletteToggle.addEventListener("click", () =>
+                    setDrawer(!document.body.classList.contains("drawer-open")),
+                );
+                paletteClose.addEventListener("click", () => setDrawer(false));
+                scrim.addEventListener("click", () => setDrawer(false));
+
+                document.addEventListener("keydown", (event) => {
+                    if (
+                        event.key === "Escape" &&
+                        document.body.classList.contains("drawer-open")
+                    ) {
+                        event.preventDefault();
+                        setDrawer(false);
+                    }
+                });
+
+                $("restore-theme").addEventListener("click", () => {
+                    const active = theme();
+                    state.grounds[active] = copy(DEFAULTS.grounds[active]);
+                    state.semantic[active] = copy(DEFAULTS.semantic[active]);
+                    apply();
+                    renderPalette();
+                    save();
+                });
+
+                $("restore-all").addEventListener("click", () => {
+                    state.primary = DEFAULTS.primary;
+                    state.accent = DEFAULTS.accent;
+                    state.grounds = copy(DEFAULTS.grounds);
+                    state.semantic = copy(DEFAULTS.semantic);
+                    apply();
+                    renderPalette();
+                    save();
+                });
+
+                tabClose.addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    closePanel();
+                });
+
+                panelToggle.addEventListener("click", () => openPanel());
+
+                systemTheme.addEventListener("change", () => {
+                    if (state.mode === "system") {
+                        apply();
+                        renderPalette();
+                    }
+                });
+
+                apply();
+                renderPalette();
+                setDrawer(false, false);
+            })();
+        </script>
+    </body>
+</html>

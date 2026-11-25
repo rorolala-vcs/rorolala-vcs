@@ -70,13 +70,21 @@ Choose the location by phase:
 
 Replace `<name>` with a short kebab-case label describing the interface. Temporary paths start with `__` and stay inside the project root; the user deletes them once the design is settled.
 
+### Start from the panel template
+
+A prototype of a Desktop panel starts from `dev/tmpls/desktop-prototype/index.html`, not from a blank page. Copy it to the location for the phase, rename the tab, and put the design in the empty `.content` surface. Do not edit `dev/tmpls/desktop-prototype/index.html` in place, because every later prototype is copied from it.
+
+Keep the chrome and the tokens, because they are the Desktop's: the 32px strip, the 40px leading room, the 14px selected tab, the square frame and the 1px border; the resize handles; the palette variables and the derived inks, lines and washes; the light, dark and system themes; the palette editor and its restore; the Full, Reduce and None motion levels; the zoom; the local storage; the panel's enter and exit; and the focus ring. The stage behind the panel carries the template's square grid.
+
+Replace only the tab's name and mark, the `.commands` slot and the empty `.content`. The tab starts with the `info` picture, painted in the tab's ink as the app's own tab marks are; a panel's own picture is drawn from the icon manifest. The template's `README.md` states what each part is and which Desktop files the values come from.
+
 A prototype is a question, not a deliverable. It should contain:
 
 - Real content shapes, using realistic sample data rather than placeholder lorem ipsum.
 - Key states: empty, loading, error, disabled, selected.
 - The interaction under discussion, clickable enough to feel the flow.
 - The intended motion, using real durations.
-- A note on the page stating that it is a prototype and the colors are approximate.
+- A note on the page stating that it is a prototype and where its colors come from.
 
 Keep it to a single HTML file with inline CSS and scripts. Do not wire it into the build output or production assets.
 
@@ -92,4 +100,5 @@ Once the user approves the direction, port it to native controls and standard as
 - Motion is within budget, animates only cheap properties, is interruptible, and respects "reduce motion."
 - Keyboard focus is visible, and primary actions are reachable without a mouse.
 - The result is consistent with existing patterns in the desktop program.
+- A prototype of a Desktop panel was copied from `dev/tmpls/desktop-prototype/index.html`, and its chrome and tokens are the template's.
 - Any prototype used to settle the design has been reviewed by the user, and its temporary directory has been deleted as agreed or left for the user to delete.
