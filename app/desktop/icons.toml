@@ -254,6 +254,17 @@ key = "rorolala_terminal"
 icons = ["terminal-window"]
 
 [[set]]
+plugin = "SightPlugin"
+key = "rorolala_sight"
+
+# The pictures the preview dock draws. `eye` is the dock's own mark and the picture Auto falls back to;
+# `info` is the corner tool that shows what the preview is made of; `text-t`, `image`, `cube` and `file` name
+# the previewers in the folded list, with `arrows-left-right` for the diff and the two notices. The image
+# previewer's tool dock adds the two rotation arrows, `compass` for putting the picture upright and
+# `frame-corners` for resetting the view.
+icons = ["eye", "info", "text-t", "image", "cube", "file", "arrows-left-right", "warning-circle", "x-circle", "arrow-counter-clockwise", "arrow-clockwise", "compass", "frame-corners"]
+
+[[set]]
 plugin = "RorolalaLauncher"
 source = "app/launcher"
 key = "rola_launcher"

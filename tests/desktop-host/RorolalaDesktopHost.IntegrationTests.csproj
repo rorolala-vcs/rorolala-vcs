@@ -58,6 +58,11 @@
     <ProjectReference
             Include="../../app/desktop/Plugins/TerminalPlugin/TerminalPlugin.csproj"
         />
+    <!-- The preview dock, whose list and metadata the suite reads directly: it is the one plugin that
+         follows the File System's choice without publishing a listing of its own. -->
+    <ProjectReference
+            Include="../../app/desktop/Plugins/SightPlugin/SightPlugin.csproj"
+        />
   </ItemGroup>
 
   <ItemGroup>

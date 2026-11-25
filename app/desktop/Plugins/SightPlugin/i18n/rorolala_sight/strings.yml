@@ -1,0 +1,181 @@
+# What the Sight preview dock is called, what its folded previewer list says, and the metadata it
+# draws. The file is read by the host's own reader, so the words are laid beside the assembly the way
+# every plugin's are.
+
+rorolala_sight:
+  name:
+    en: Sight
+    zh-CN: Sight
+
+  dock:
+    preview:
+      en: Preview
+      zh-CN: 预览
+
+  previewer:
+    label:
+      en: Previewer
+      zh-CN: 预览器
+    auto:
+      en: Auto
+      zh-CN: 自动
+    text:
+      en: Text
+      zh-CN: 文本
+    diff:
+      en: Diff
+      zh-CN: 差异
+    image:
+      en: Image
+      zh-CN: 图片
+    psd:
+      en: PSD
+      zh-CN: PSD
+    model:
+      en: Model
+      zh-CN: 模型
+    next:
+      en: Next previewer
+      zh-CN: 下一个预览器
+
+  metadata:
+    show:
+      en: Show metadata
+      zh-CN: 显示元数据
+    hide:
+      en: Hide metadata
+      zh-CN: 隐藏元数据
+
+  empty:
+    title:
+      en: Nothing chosen
+      zh-CN: 未选择文件
+    hint:
+      en: Choose a file in the listing.
+      zh-CN: 在文件列表中选择一个文件。
+
+  loading:
+    en: Reading the file
+    zh-CN: 正在读取文件
+
+  error:
+    title:
+      en: This file could not be read
+      zh-CN: 无法读取该文件
+    hint:
+      en: Choose another file, or open it another way.
+      zh-CN: 请选择其他文件，或用其他方式打开。
+
+  toolarge:
+    title:
+      en: Too large to preview
+      zh-CN: 文件过大，无法预览
+    hint:
+      en: The preview limit is %{limit}.
+      zh-CN: 预览上限为 %{limit}。
+
+  unsupported:
+    title:
+      en: No previewer handles this file
+      zh-CN: 没有预览器可以读取该文件
+    hint:
+      en: Register a previewer, or open the file another way.
+      zh-CN: 注册一个预览器，或用其他方式打开。
+
+  diff:
+    same:
+      en: No differences
+      zh-CN: 没有差异
+    same_hint:
+      en: The two files hold the same lines.
+      zh-CN: 两个文件的内容相同。
+
+  model:
+    drag:
+      en: Drag to orbit
+      zh-CN: 拖动以旋转
+
+  image:
+    rotate_left:
+      en: Rotate left 90°
+      zh-CN: 向左旋转 90°
+    rotate_right:
+      en: Rotate right 90°
+      zh-CN: 向右旋转 90°
+    upright:
+      en: Reset rotation
+      zh-CN: 回正
+    reset:
+      en: Reset view
+      zh-CN: 重置画面
+
+  meta:
+    format:
+      en: Format
+      zh-CN: 格式
+    size:
+      en: Dimensions
+      zh-CN: 尺寸
+    encoding:
+      en: Encoding
+      zh-CN: 编码
+    lines:
+      en: Lines
+      zh-CN: 行数
+    added:
+      en: Added
+      zh-CN: 新增
+    removed:
+      en: Removed
+      zh-CN: 删除
+    vertices:
+      en: Vertices
+      zh-CN: 顶点
+    triangles:
+      en: Triangles
+      zh-CN: 三角形
+    channels:
+      en: Channels
+      zh-CN: 通道
+    depth:
+      en: Depth
+      zh-CN: 位深
+    mode:
+      en: Mode
+      zh-CN: 模式
+    layers:
+      en: Layers
+      zh-CN: 图层
+
+  psd:
+    composite:
+      en: Flattened composite
+      zh-CN: 合并图像
+    none:
+      en: No merged image
+      zh-CN: 没有合并图像
+    note:
+      en: Layers are not decoded
+      zh-CN: 不解析图层
+
+  menu:
+    preview:
+      en: Preview in Sight
+      zh-CN: 用 Sight 预览
+    compare:
+      en: Compare in Sight
+      zh-CN: 用 Sight 比较
+
+  setting:
+    text_limit:
+      en: Preview size limit (MiB)
+      zh-CN: 预览大小上限（MiB）
+    image_limit:
+      en: Image size limit (MiB)
+      zh-CN: 图片大小上限（MiB）
+    wrap:
+      en: Wrap text
+      zh-CN: 文本自动换行
+    model_grid:
+      en: Show the model grid
+      zh-CN: 显示模型网格

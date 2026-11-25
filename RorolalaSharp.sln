@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -52,6 +52,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "desktop-fonts", "desktop-fonts", "{7FFE6537-F243-9153-CAE5-2277DA5E3CBF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RorolalaDesktopFonts", "utils\desktop-fonts\RorolalaDesktopFonts.csproj", "{8068D1DF-DDBF-417E-975E-EB493DE0FEEE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SightPlugin", "app\desktop\Plugins\SightPlugin\SightPlugin.csproj", "{64F7044F-18DD-4331-9D9A-59C3B012D828}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -243,6 +245,18 @@ Global
 		{8068D1DF-DDBF-417E-975E-EB493DE0FEEE}.Release|x64.Build.0 = Release|Any CPU
 		{8068D1DF-DDBF-417E-975E-EB493DE0FEEE}.Release|x86.ActiveCfg = Release|Any CPU
 		{8068D1DF-DDBF-417E-975E-EB493DE0FEEE}.Release|x86.Build.0 = Release|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Debug|x64.Build.0 = Debug|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Debug|x86.Build.0 = Debug|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Release|Any CPU.Build.0 = Release|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Release|x64.ActiveCfg = Release|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Release|x64.Build.0 = Release|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Release|x86.ActiveCfg = Release|Any CPU
+		{64F7044F-18DD-4331-9D9A-59C3B012D828}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -270,5 +284,6 @@ Global
 		{480AE21B-6A74-42B8-AB42-C8D3A6607344} = {3F9B2C41-7E5A-42D8-9B6C-1A2B3C4D5E6F}
 		{7FFE6537-F243-9153-CAE5-2277DA5E3CBF} = {40C59F42-05A5-44BB-9008-4771BC6A0170}
 		{8068D1DF-DDBF-417E-975E-EB493DE0FEEE} = {7FFE6537-F243-9153-CAE5-2277DA5E3CBF}
+		{64F7044F-18DD-4331-9D9A-59C3B012D828} = {794C85AD-ECF4-4AB7-A0D2-C11939189F1F}
 	EndGlobalSection
 EndGlobal
