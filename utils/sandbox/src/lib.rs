@@ -54,6 +54,14 @@ pub fn run(command: &mut Command) -> Ran {
     let program = command.get_program().to_owned();
     command.stdin(Stdio::null());
 
+    if std::env::var_os("IT_TRACE").is_some() {
+        eprintln!(
+            "RUN {:?} {:?}",
+            program,
+            command.get_args().collect::<Vec<_>>()
+        );
+    }
+
     // PANIC: a program that cannot be started is a broken environment rather than an answer to
     // check, so it is reported rather than handed back as a run with nothing in it.
     let output = command
