@@ -21,7 +21,9 @@ use std::path::{Path, PathBuf};
 use librorolala::layout::{EntryKind, Layout, LayoutPath, MutableData};
 use librorolala::storage::{Key, StorageSet, key_of_file};
 use librorolala::vcs::VCSIndex;
-use librorolala::write::{Effect, EntryState, Journal, LayoutOp, apply_recorded, switch_entry};
+use librorolala::write::{
+    Checkout, Effect, EntryState, Journal, LayoutOp, apply_recorded, switch_entry,
+};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     confirm::YesConfirm,
@@ -310,17 +312,20 @@ impl Keeper<'_> {
 enum Standing {
     /// The tree is as the change left it.
     Matched,
-    /// The tree is not as the change left it.
+    /// The Layout is not as the change left it.
     Changed,
+    /// The file the change wrote holds something else.
+    FileChanged(String),
     /// Something the change left is gone.
-    Absent,
+    Absent(String),
 }
 
 /// The changes one operation can be reversed by, and whether all of them still stand.
 ///
-/// A `File` or `FileMoved` change is left out under `--soft`, since only the record moves back. A
-/// file that changed after the operation is refused here rather than written over: it is the one
-/// thing this run cannot put back, and the caller is told how to say it is what they want.
+/// A `File` or `FileMoved` change is left out under `--soft`, since only the record moves back; an
+/// entry is still reversed, with its file left alone. A file that changed after the operation is
+/// refused here rather than written over: it is the one thing this run cannot put back, and the
+/// caller is told how to say it is what they want.
 fn plan<'a>(
     keeper: &Keeper<'_>,
     effects: &'a [Effect],
@@ -335,26 +340,17 @@ fn plan<'a>(
             continue;
         }
 
-        match standing(keeper, effect) {
+        match standing(keeper, effect, soft) {
             Standing::Matched => chosen.push(effect),
-            Standing::Changed => {
-                if let Some(path) = touched_file(effect) {
-                    if !force {
-                        return Err(ErrorUndoChanged { path }.into());
-                    }
-
-                    chosen.push(effect);
-                } else {
-                    all = false;
+            Standing::Changed => all = false,
+            Standing::FileChanged(path) => {
+                if !force {
+                    return Err(ErrorUndoChanged { path }.into());
                 }
+
+                chosen.push(effect);
             }
-            Standing::Absent => {
-                let Some(path) = touched_file(effect) else {
-                    all = false;
-
-                    continue;
-                };
-
+            Standing::Absent(path) => {
                 if !force {
                     return Err(ErrorUndoAbsent { path }.into());
                 }
@@ -365,26 +361,9 @@ fn plan<'a>(
     Ok((chosen, all))
 }
 
-/// Whether a change is about a file on disk rather than the Layout alone.
+/// Whether a change is only about a file on disk, so that `--soft` has nothing to move.
 fn mentions_file(effect: &Effect) -> bool {
     matches!(effect, Effect::File { .. } | Effect::FileMoved { .. })
-        || matches!(
-            effect,
-            Effect::Entry {
-                after: Some(state),
-                ..
-            } if state.kind == "file"
-        )
-}
-
-/// The path a change wrote, when it wrote one.
-fn touched_file(effect: &Effect) -> Option<String> {
-    match effect {
-        Effect::File { path, .. } => Some(path.clone()),
-        Effect::FileMoved { to, .. } => Some(to.clone()),
-        Effect::Entry { path, .. } => path.clone(),
-        _ => None,
-    }
 }
 
 /// Whether `path` names `id`.
@@ -394,7 +373,10 @@ fn names(layout: &Layout, path: Option<&str>, id: uuid::Uuid) -> bool {
 }
 
 /// How `effect` stands against the tree.
-fn standing(keeper: &Keeper<'_>, effect: &Effect) -> Standing {
+///
+/// Under `--soft` the files are not this run's to read: the record moves back whatever the disk
+/// holds, so only the Layout is compared.
+fn standing(keeper: &Keeper<'_>, effect: &Effect, soft: bool) -> Standing {
     let layout = keeper.layout;
 
     match effect {
@@ -416,6 +398,10 @@ fn standing(keeper: &Keeper<'_>, effect: &Effect) -> Standing {
                 return Standing::Matched;
             };
 
+            if soft {
+                return Standing::Matched;
+            }
+
             // A tree is one material, and its files are not what the Layout holds, so only a file
             // entry has a file on disk to compare.
             let Some(path) = path else {
@@ -434,8 +420,8 @@ fn standing(keeper: &Keeper<'_>, effect: &Effect) -> Standing {
 
             match content_of(&keeper.at(path)) {
                 Some(content) if content == expected => Standing::Matched,
-                Some(_) => Standing::Changed,
-                None => Standing::Absent,
+                Some(_) => Standing::FileChanged(keeper.at(path).display().to_string()),
+                None => Standing::Absent(keeper.at(path).display().to_string()),
             }
         }
         Effect::Path { id, from, to } => {
@@ -473,8 +459,8 @@ fn standing(keeper: &Keeper<'_>, effect: &Effect) -> Standing {
         }
         Effect::File { path, after, .. } => match content_of(&PathBuf::from(path)) {
             Some(content) if Some(&content) == after.as_ref() => Standing::Matched,
-            Some(_) => Standing::Changed,
-            None if after.is_some() => Standing::Absent,
+            Some(_) => Standing::FileChanged(path.clone()),
+            None if after.is_some() => Standing::Absent(path.clone()),
             None => Standing::Matched,
         },
         Effect::FileMoved { from, to } => {
@@ -482,11 +468,11 @@ fn standing(keeper: &Keeper<'_>, effect: &Effect) -> Standing {
             let to = PathBuf::from(to);
 
             if from.exists() {
-                Standing::Changed
+                Standing::FileChanged(to.display().to_string())
             } else if to.exists() {
                 Standing::Matched
             } else {
-                Standing::Absent
+                Standing::Absent(to.display().to_string())
             }
         }
     }
@@ -583,8 +569,19 @@ fn reverse(keeper: &Keeper<'_>, effects: &[&Effect], soft: bool) -> Result<(), S
         }
     }
 
+    // The files follow, and the reading of each is written down as it is left: a run that wrote or
+    // removed a file without saying so would leave `rola track` and `rola status` comparing the work
+    // against what the disk held before the undo.
+    let mut checkout = Checkout::open(keeper.layout, &keeper.root);
+    let mut touched = false;
+
     for action in files {
         action.make(keeper.store)?;
+        touched |= action.remember(&mut checkout, &keeper.root)?;
+    }
+
+    if touched {
+        checkout.finish().map_err(|error| error.to_string())?;
     }
 
     Ok(())
@@ -650,6 +647,41 @@ fn write(layout: &Layout, op: LayoutOp) -> Result<(), String> {
     apply_recorded(layout, &[op], None).map_err(|error| error.to_string())
 }
 
+/// Writes down that `path` under `root` holds what the Layout now names.
+///
+/// A path outside the Workspace names nothing the Layout keeps, and a layout path is written with
+/// the separators the Layout uses whichever way the system spells a directory.
+fn remember(checkout: &mut Checkout, root: &Path, path: &Path) -> Result<bool, String> {
+    let Some(path) = relative(root, path) else {
+        return Ok(false);
+    };
+
+    checkout
+        .remember(&path)
+        .map_err(|error| error.to_string())?;
+
+    Ok(true)
+}
+
+/// Forgets the reading of a path the run took out.
+fn forget(checkout: &mut Checkout, root: &Path, path: &Path) -> Result<bool, String> {
+    let Some(path) = relative(root, path) else {
+        return Ok(false);
+    };
+
+    checkout.forget(&path).map_err(|error| error.to_string())?;
+
+    Ok(true)
+}
+
+/// The path a Layout names, from the whole path a journal recorded.
+fn relative(root: &Path, path: &Path) -> Option<String> {
+    let relative = path.strip_prefix(root).ok()?;
+    let text = relative.to_string_lossy().replace('\\', "/");
+
+    (!text.is_empty()).then_some(text)
+}
+
 /// What reversing one change does to a file on disk.
 enum FileAction {
     /// Puts content back at a path.
@@ -674,15 +706,29 @@ enum FileAction {
 }
 
 impl FileAction {
+    /// Writes down what the path holds now, so the next reading does not compare against what it
+    /// held before the undo. Answers whether there was anything to write.
+    fn remember(&self, checkout: &mut Checkout, root: &Path) -> Result<bool, String> {
+        match self {
+            Self::PutBack { path, .. } => remember(checkout, root, path),
+            Self::Delete { path } => forget(checkout, root, path),
+            Self::MoveBack { from, to } => {
+                forget(checkout, root, from)?;
+
+                remember(checkout, root, to)
+            }
+        }
+    }
+
     /// Carries the action out.
-    fn make(self, store: Option<&StorageSet>) -> Result<(), String> {
+    fn make(&self, store: Option<&StorageSet>) -> Result<(), String> {
         match self {
             Self::PutBack { path, content } => {
                 let Some(store) = store else {
                     return Ok(());
                 };
 
-                let hash = parse_hash(&content).ok_or_else(|| {
+                let hash = parse_hash(content).ok_or_else(|| {
                     t!("undo.err_failed", command = "undo", reason = content)
                         .trim()
                         .to_owned()
@@ -697,10 +743,10 @@ impl FileAction {
                 let runtime = tokio::runtime::Runtime::new().map_err(|error| error.to_string())?;
 
                 runtime
-                    .block_on(store.extract_file(&Key::new(hash), &path))
+                    .block_on(store.extract_file(&Key::new(hash), path))
                     .map_err(|error| error.to_string())
             }
-            Self::Delete { path } => match fs::remove_file(&path) {
+            Self::Delete { path } => match fs::remove_file(path) {
                 Ok(()) => Ok(()),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
                 Err(error) => Err(error.to_string()),
@@ -722,7 +768,7 @@ impl FileAction {
                     return Err(error.to_string());
                 }
 
-                fs::rename(&from, &to).map_err(|error| error.to_string())
+                fs::rename(from, to).map_err(|error| error.to_string())
             }
         }
     }

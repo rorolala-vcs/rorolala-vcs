@@ -3829,6 +3829,7 @@ fn undoing(rola: &Rola, dir: &Path, checked: &mut Checked) {
     );
 
     // `--soft` moves only the record: the work on disk is as it was left.
+    let before_soft = entry_field(rola, dir, "b.psd", "version").expect("the version before the soft undo");
     fs::write(dir.join("b.psd"), "second").expect("a reading to record");
     let ran = rola.run(dir, &["track", "b.psd", "--message", "second", "--no-editor"]);
     checked.exits("the file is recorded again", &ran, 0);
@@ -3839,6 +3840,23 @@ fn undoing(rola: &Rola, dir: &Path, checked: &mut Checked) {
     checked.wants(
         "the work on disk is left as it is",
         fs::read_to_string(dir.join("b.psd")).is_ok_and(|it| it == "third"),
+        &said(&ran),
+    );
+    checked.wants(
+        "the record is moved back all the same",
+        entry_field(rola, dir, "b.psd", "version").as_deref() == Some(before_soft.as_str()),
+        &said(&ran),
+    );
+
+    // The work written by an undo is what the next reading compares against, so a change made
+    // after one is recorded rather than reported as nothing to record.
+    fs::write(dir.join("b.psd"), "fourth").expect("a change after an undo");
+    let ran = rola.run(dir, &["track", "b.psd", "--message", "fourth", "--no-editor"]);
+    checked.exits("a change after an undo is recorded", &ran, 0);
+    checked.stdout_has("the recording names the file", &ran, "b.psd");
+    checked.wants(
+        "the entry records a new version",
+        entry_field(rola, dir, "b.psd", "version").as_deref() != Some(before_soft.as_str()),
         &said(&ran),
     );
 
