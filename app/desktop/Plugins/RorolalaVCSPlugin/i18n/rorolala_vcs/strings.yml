@@ -450,10 +450,9 @@ rorolala_vcs:
     en: The state of the work under the current base directory could not be read
     zh-CN: 无法读取当前基础目录下工作的状态
 
-  # What is said when the leg to the Vault failed rather than the Vault answering: the Overview's own
-  # fetch found it unreachable, so runs that need it are refused here rather than left to wait on it,
-  # and writes that can go on from what is already stored do. The lamp beside the Vault's name says the
-  # same thing without words.
+  # What is said when the Vault has not been reached: its own fetch found it unreachable, or none has
+  # reached it yet, so runs that need it are refused here rather than left to wait on it, and writes that can
+  # go on from what is already stored do. The lamp beside the Vault's name says the same thing without words.
   offline_title:
     en: The Vault cannot be reached
     zh-CN: 无法连接保险库

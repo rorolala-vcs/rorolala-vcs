@@ -74,9 +74,13 @@ public sealed class FetchTests
         Assert.Equal(Reachability.Unknown, VaultFetch.Reach(done: false, code: 1));
     }
 
-    /// <summary>A fetch that has said nothing yet leaves runs that may reach the Vault online.</summary>
+    /// <summary>The Vault is taken as unreachable until a fetch reaches it.</summary>
+    /// <remarks>
+    /// A command made before anything has reached the Vault takes the answer the work here already holds rather
+    /// than waiting on a leg that may not be there. The fetch loop's first run is what says otherwise.
+    /// </remarks>
     [Fact]
-    public void NothingIsOfflineBeforeTheFirstFetch()
+    public void TheVaultIsUnreachableBeforeTheFirstFetch()
     {
         var services = Host.Services();
         var fetch = new VaultFetch(
@@ -85,7 +89,7 @@ public sealed class FetchTests
         );
 
         Assert.Equal(FetchState.Never, fetch.State);
-        Assert.False(fetch.Offline);
+        Assert.True(fetch.Offline);
     }
 
     /// <summary>An unchanged copy fingerprints the same, and a changed rule or pointer does not.</summary>

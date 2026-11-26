@@ -89,13 +89,18 @@ internal sealed class VaultFetch
     /// <summary>What the last fetch came to.</summary>
     private FetchState _state = FetchState.Never;
 
-    /// <summary>Whether the last fetch that said anything about the leg to the Vault found it unreachable.</summary>
+    /// <summary>Whether the Vault is taken as unreachable, which it is until a fetch reaches it.</summary>
     /// <remarks>
+    /// It starts true: no fetch has reached the Vault yet, and a command made before one has would wait on a leg
+    /// that may not be there rather than take the answer the work here already holds. The loop's own fetch is not
+    /// held back by it, so the first fetch to reach the Vault is what makes it false.
+    /// <para>
     /// Reads come from the window's thread and from the workers that run a command, so it is written and read
     /// whole: a stale answer costs one command that could have gone on from what is here, or one that waits on a
     /// Vault that is not there, and both are the answer the state had a moment ago.
+    /// </para>
     /// </remarks>
-    private volatile bool _offline;
+    private volatile bool _offline = true;
 
     /// <summary>The last fetch's verdict on whether the Vault can be reached, or nothing when it gave none.</summary>
     /// <param name="done">Whether the fetch ended well.</param>
@@ -126,11 +131,12 @@ internal sealed class VaultFetch
     /// <summary>What the last fetch came to, which the status bar draws.</summary>
     public FetchState State => _state;
 
-    /// <summary>Whether the Vault could not be reached at the last check.</summary>
+    /// <summary>Whether the Vault is taken as unreachable.</summary>
     /// <remarks>
-    /// It is what the writes that can go on from what is here are opened offline with, and what the ones that
-    /// need the Vault are refused with: a run that waits on a leg already known to fail spends the reader's
-    /// time to learn what the Overview's lamp already says. A fetch that reaches the Vault again clears it.
+    /// It is true until a fetch reaches the Vault, and again after one finds the leg failing. It is what the
+    /// writes that can go on from what is here are opened offline with, and what the ones that need the Vault are
+    /// refused with: a run that waits on a leg already known to fail spends the reader's time to learn what the
+    /// Overview's lamp already says.
     /// </remarks>
     public bool Offline => _offline;
 
@@ -152,8 +158,8 @@ internal sealed class VaultFetch
     /// </summary>
     /// <remarks>
     /// Started once by the plugin: a window may open and close, while the work the loop reads is the one the
-    /// plugin was started for. The first fetch is a minute away, which is the interval the status bar says is not
-    /// fetching yet.
+    /// plugin was started for. The first fetch is made at once, because the plugin starts with the Vault taken as
+    /// unreachable and the loop is what finds it; the interval is the retry after that.
     /// </remarks>
     public void Start()
     {
@@ -179,6 +185,10 @@ internal sealed class VaultFetch
 
         _loop = MakeLoop();
         _loop.Start();
+
+        // The loop is also the first check: the plugin starts with the Vault taken as unreachable, so a fetch made
+        // now is what says whether it is there before a command has to wait on it.
+        Tick();
     }
 
     /// <summary>Makes the timer that asks the Vault once a minute.</summary>
