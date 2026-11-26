@@ -56,6 +56,10 @@ rola:
           vault                     Query and operate on vaults known to the current workspace
           align <path>              Fix inconsistencies between the filesystem and records
           tweak <file> [target]     Adjust a version's record and rebuild what follows it
+          cut <file> [target]       Cut the old history away and start the file again at a version
+          collapse <file> [target]  Fold the local versions above the tracked Vault's version into one
+          opslog                    List the operations this Workspace recorded, newest first
+          undo [count]              Put back what the last recorded operations changed
           pack                      Pack and tidy stored objects
           fsck                      Check the integrity of the storage
       **Low-level operations:**
@@ -111,6 +115,10 @@ rola:
           vault                     查询和操作当前工作区已知的保险库
           align <路径>              修复文件系统和记录不一致的情况
           tweak <文件> [目标]       调整某个版本的记录，并重建它之后的版本
+          cut <文件> [目标]        截掉老历史，从某个版本重新开始这个文件
+          collapse <文件> [目标]   把所追踪保险库版本之上的本地版本折成一个
+          opslog                   列出本工作区记录的操作，最新的在前
+          undo [数量]              撤回最近记录的操作，最新的先撤
           pack                      打包、整理所存储的对象
           fsck                      检查所在存储的完整性
       **底层操作：**
