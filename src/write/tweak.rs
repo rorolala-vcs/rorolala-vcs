@@ -29,11 +29,17 @@ use rorolala_auth::Account;
 use rorolala_ignore::IgnoreRuleSet;
 use rorolala_layout::{EntryKind, Layout, LayoutPath};
 use rorolala_protocol::VaultAddress;
-use rorolala_storage::{Blake3Hash, Key, Resolved, ShortHash, StorageSet, key_of_file};
+use rorolala_status::Relation;
+use rorolala_storage::{Blake3Hash, Key, StorageSet, key_of_file};
 use rorolala_utils_constants::{WORKSPACE_IGNORE_RULES_DIR, WORKSPACE_TWEAKING_DIR};
 use rorolala_utils_location::Locate as _;
 use rorolala_utils_progress::Progress;
 use rorolala_vcs::{Creator, Message, VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version};
+use rorolala_version_search as version_search;
+use rorolala_version_search::{
+    HeadMiss, miss_of, names, named, number_of as chain_number_of, resolve_head, short,
+};
+pub use rorolala_version_search::{Level, TargetMiss};
 use rorolala_workspace::{Merging, Workspace};
 use uuid::Uuid;
 
@@ -43,12 +49,6 @@ use crate::write::checkout::remember;
 use crate::write::layout::set_version;
 use crate::write::tree::put_back;
 use crate::write::{Cancellation, WriteError};
-
-/// How many hex digits a hash is written with when a sheet names it.
-const SHORT: usize = 12;
-
-/// The longest a version's head is drawn as when it stands beside its number.
-const HEAD: usize = 7;
 
 /// The file a plan is written as, inside its directory.
 const PLAN_FILE: &str = "plan.md";
@@ -94,7 +94,8 @@ pub struct Row {
 
 impl Row {
     /// The version `level` stands for, as a row that changes nothing.
-    fn kept(level: &Level) -> Self {
+    #[must_use]
+    pub fn kept(level: &Level) -> Self {
         Self {
             mark: Mark::Kept,
             creator: level.creator.clone(),
@@ -150,6 +151,22 @@ impl Sheet {
             .map(|number| Ok(Row::kept(chain.level(number)?)))
             .collect::<Result<Vec<_>, TweakRefusal>>()?;
 
+        Ok(Self {
+            anchor: Some(chain.short(anchor)?),
+            rows,
+        })
+    }
+
+    /// A sheet made of `rows`, standing from `anchor` to the version the entry records.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TweakRefusal::Nothing`] when the chain is shorter than `anchor`.
+    pub fn from_rows(
+        chain: &Chain,
+        anchor: usize,
+        rows: Vec<Row>,
+    ) -> Result<Self, TweakRefusal> {
         Ok(Self {
             anchor: Some(chain.short(anchor)?),
             rows,
@@ -494,19 +511,6 @@ fn word(text: &str) -> String {
 // The chain
 // ---------------------------------------------------------------------------------------------
 
-/// One version of a chain: the variant that produced it, and what the two say.
-#[derive(Debug, Clone)]
-pub struct Level {
-    /// The version itself.
-    version: Version,
-    /// The variant the version points at, which is what produced it.
-    variant: Variant,
-    /// Who made it, as text.
-    creator: String,
-    /// What it says, as text.
-    message: String,
-}
-
 /// A file's chain, the oldest version first, numbered the way the chain is.
 #[derive(Debug, Clone)]
 pub struct Chain {
@@ -639,50 +643,10 @@ impl Chain {
         Ok(short(self.level(number)?.version.hash().digest()))
     }
 
-    /// The versions of the chain, as keys.
-    fn version_keys(&self) -> Vec<Key> {
-        self.levels
-            .iter()
-            .map(|level| Key::new(*level.version.hash().digest()))
-            .collect()
-    }
-
     /// The number of the version `text` names among this chain's own.
     fn number_of(&self, text: &str) -> Result<usize, HeadMiss> {
-        let keys = self.version_keys();
-        let key = resolve_head(text, &keys)?;
-        keys.iter()
-            .position(|candidate| *candidate == key)
-            .ok_or(HeadMiss::Unknown)
+        chain_number_of(&self.levels, text)
     }
-
-    /// The versions whose names start with the head `text` writes.
-    fn versions_naming(&self, text: &str) -> Vec<usize> {
-        let Ok(head) = ShortHash::new(text) else {
-            return Vec::new();
-        };
-
-        self.levels
-            .iter()
-            .enumerate()
-            .filter(|(_, level)| head.matches(&Key::new(*level.version.hash().digest())))
-            .map(|(number, _)| number)
-            .collect()
-    }
-}
-
-/// The hash of a digest, as a sheet names it.
-fn short(digest: &Blake3Hash) -> String {
-    let hex = Key::new(*digest).hex();
-
-    hex[..hex.len().min(SHORT)].to_owned()
-}
-
-/// A name of a version for a person: its number when it is known, and the head of its hash.
-fn named(version: &str, number: usize) -> String {
-    let head = &version[..version.len().min(HEAD)];
-
-    format!("V{number} ({head})")
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -765,94 +729,11 @@ fn bind<'a>(sheet: &'a Sheet, chain: &Chain) -> Result<Bound<'a>, TweakRefusal> 
     Ok(Bound { entries, anchor })
 }
 
-/// Why a hash named no one object.
-#[derive(Debug)]
-enum HeadMiss {
-    /// It is neither a whole key nor the head of one.
-    Malformed,
-    /// Nothing the run can reach starts with it.
-    Unknown,
-    /// More than one thing does.
-    Ambiguous,
-}
 
-/// Reads `text` as a whole key, or as the head of one among `candidates`.
-fn resolve_head(text: &str, candidates: &[Key]) -> Result<Key, HeadMiss> {
-    if let Ok(key) = Key::from_str(text) {
-        return Ok(key);
-    }
-
-    let Ok(head) = ShortHash::new(text) else {
-        return Err(HeadMiss::Malformed);
-    };
-
-    match head.resolve(candidates) {
-        Resolved::ExactlyOne(key) => Ok(key),
-        Resolved::NoMatch => Err(HeadMiss::Unknown),
-        Resolved::Ambiguous(_) => Err(HeadMiss::Ambiguous),
-    }
-}
-
-/// Whether `text` names `digest`, whether it is the whole key or the head of one.
-fn names(text: &str, digest: &Blake3Hash) -> bool {
-    if let Ok(key) = Key::from_str(text) {
-        return key.digest() == digest;
-    }
-
-    ShortHash::new(text).is_ok_and(|head| head.matches(&Key::new(*digest)))
-}
 
 // ---------------------------------------------------------------------------------------------
 // Naming the version to adjust
 // ---------------------------------------------------------------------------------------------
-
-/// Why a run named no version it can adjust.
-#[derive(Debug)]
-pub enum TargetMiss {
-    /// Nothing on the chain, and nothing the index holds, matches what was written.
-    NoMatch {
-        /// What was written.
-        target: String,
-    },
-    /// More than one version of the chain matches.
-    Ambiguous {
-        /// What was written.
-        target: String,
-        /// The versions it matches, as numbers.
-        candidates: Vec<usize>,
-    },
-    /// The hash names an object that is not on this chain.
-    Elsewhere {
-        /// What was written.
-        target: String,
-    },
-    /// A step count reaches past the first version.
-    OutOfChain {
-        /// What was written.
-        target: String,
-    },
-    /// The version is one the plan already removes.
-    Removed {
-        /// The version, as a name for a person.
-        version: String,
-    },
-}
-
-impl fmt::Display for TargetMiss {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NoMatch { target } => write!(formatter, "nothing matches {target}"),
-            Self::Ambiguous { target, .. } => write!(formatter, "{target} matches more than one"),
-            Self::Elsewhere { target } => write!(formatter, "{target} belongs to another chain"),
-            Self::OutOfChain { target } => {
-                write!(formatter, "{target} reaches past the first version")
-            }
-            Self::Removed { version } => write!(formatter, "{version} is being removed"),
-        }
-    }
-}
-
-impl std::error::Error for TargetMiss {}
 
 /// The version a run names, by its number on the chain.
 ///
@@ -867,97 +748,8 @@ pub fn resolve(chain: &Chain, target: Option<&str>) -> Result<usize, TargetMiss>
     let top = chain.top().map_err(|_| TargetMiss::NoMatch {
         target: target.unwrap_or_default().to_owned(),
     })?;
-    let Some(text) = target else {
-        return Ok(top);
-    };
 
-    if let Some(steps) = text.strip_prefix('~') {
-        let steps: usize = steps.parse().map_err(|_| TargetMiss::NoMatch {
-            target: text.to_owned(),
-        })?;
-
-        return top
-            .checked_sub(steps)
-            .ok_or_else(|| TargetMiss::OutOfChain {
-                target: text.to_owned(),
-            });
-    }
-
-    match chain.number_of(text) {
-        Ok(number) => return Ok(number),
-        Err(HeadMiss::Ambiguous) => {
-            return Err(TargetMiss::Ambiguous {
-                target: text.to_owned(),
-                candidates: chain.versions_naming(text),
-            });
-        }
-        Err(HeadMiss::Malformed | HeadMiss::Unknown) => {}
-    }
-
-    // The variant that produced a version names that version, which is what a run that read the
-    // hash off a drawing means.
-    let variants: Vec<Key> = chain
-        .levels
-        .iter()
-        .map(|level| Key::new(*level.variant.hash().digest()))
-        .collect();
-    if let Ok(variant) = resolve_head(text, &variants)
-        && let Some(number) = variants.iter().position(|candidate| *candidate == variant)
-    {
-        return Ok(number);
-    }
-
-    // A word that is neither a hash nor the head of one is text, and so is a head that names
-    // nothing here: a message is allowed to look like a hash.
-    let needle = text.to_lowercase();
-    let hits: Vec<usize> = chain
-        .levels
-        .iter()
-        .enumerate()
-        .filter(|(_, level)| {
-            level.creator.to_lowercase().contains(&needle)
-                || level.message.to_lowercase().contains(&needle)
-        })
-        .map(|(number, _)| number)
-        .collect();
-
-    match hits.len() {
-        0 => Err(if is_a_hash(text) {
-            TargetMiss::Elsewhere {
-                target: text.to_owned(),
-            }
-        } else {
-            TargetMiss::NoMatch {
-                target: text.to_owned(),
-            }
-        }),
-        1 => Ok(hits[0]),
-        _ => Err(TargetMiss::Ambiguous {
-            target: text.to_owned(),
-            candidates: hits,
-        }),
-    }
-}
-
-/// Whether `text` reads as a hash, whole or as a head, rather than as a word.
-fn is_a_hash(text: &str) -> bool {
-    Key::from_str(text).is_ok() || ShortHash::new(text).is_ok()
-}
-
-/// What a miss at naming a head is told as.
-fn miss_of(text: &str, miss: &HeadMiss) -> TargetMiss {
-    match miss {
-        HeadMiss::Malformed => TargetMiss::NoMatch {
-            target: text.to_owned(),
-        },
-        HeadMiss::Unknown => TargetMiss::Elsewhere {
-            target: text.to_owned(),
-        },
-        HeadMiss::Ambiguous => TargetMiss::Ambiguous {
-            target: text.to_owned(),
-            candidates: Vec::new(),
-        },
-    }
+    version_search::resolve(&chain.levels, top, target)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1658,6 +1450,39 @@ fn index_failed(error: impl fmt::Debug) -> TweakRefusal {
     })
 }
 
+/// The number of the version `upstream` names on `chain`.
+#[must_use]
+pub fn origin_number(chain: &Chain, upstream: &[u8; 32]) -> Option<usize> {
+    chain
+        .levels
+        .iter()
+        .position(|level| level.version.hash().digest() == upstream)
+}
+
+/// The level a chain starts at when a run adjusts from the origin rather than from the first version.
+///
+/// The origin names a level only while this chain holds it, and only while the work stands ahead of
+/// it: a chain that is apart from the Vault, or behind it, has no shared point to start from, so the
+/// run falls back to the first version.
+#[must_use]
+pub fn anchor_at_origin(
+    index: &VCSIndex,
+    chain: &Chain,
+    local: [u8; 32],
+    upstream: [u8; 32],
+) -> Option<usize> {
+    let runtime = runtime().ok()?;
+    let base = rorolala_status::compare(index, &runtime, &local, &upstream);
+    if matches!(
+        base.relation,
+        Relation::Apart | Relation::Behind | Relation::Unknown
+    ) {
+        return None;
+    }
+
+    origin_number(chain, &upstream)
+}
+
 /// Reads the chain a path's entry records.
 ///
 /// A tree records a version the same way a file does, and the chain above it is read here without
@@ -1688,6 +1513,24 @@ pub fn chain_of(
     })
 }
 
+/// How an application chooses its base and what it replays.
+#[derive(Debug, Clone)]
+pub struct ApplyOptions {
+    /// The version the first row is based on, when a run names one.
+    pub base: Option<Blake3Hash>,
+    /// Whether the variants based on a version of the range are replayed beside it.
+    pub replay_based: bool,
+}
+
+impl Default for ApplyOptions {
+    fn default() -> Self {
+        Self {
+            base: None,
+            replay_based: true,
+        }
+    }
+}
+
 /// Applies `sheet` to the chain the path's entry records.
 ///
 /// The versions above the sheet's oldest one are written again, the merge of each carried over and
@@ -1710,6 +1553,34 @@ pub fn apply(
     id: Uuid,
     path: &LayoutPath,
     sheet: &Sheet,
+    progress: &Progress,
+    cancellation: &Cancellation,
+) -> Result<TweakOutcome, TweakRefusal> {
+    apply_with(
+        request,
+        id,
+        path,
+        sheet,
+        &ApplyOptions {
+            base: None,
+            replay_based: true,
+        },
+        progress,
+        cancellation,
+    )
+}
+
+/// Applies `sheet` with the base and the replay `options` give.
+///
+/// # Errors
+///
+/// As [`apply`].
+pub fn apply_with(
+    request: &Request<'_>,
+    id: Uuid,
+    path: &LayoutPath,
+    sheet: &Sheet,
+    options: &ApplyOptions,
     progress: &Progress,
     cancellation: &Cancellation,
 ) -> Result<TweakOutcome, TweakRefusal> {
@@ -1748,14 +1619,19 @@ pub fn apply(
     let mut versions: Vec<Version> = Vec::new();
     let mut map: HashMap<Blake3Hash, Blake3Hash> = HashMap::new();
 
-    // What the new chain stands at before its first row, which is the version the range sits on.
-    let mut base = if bound.anchor == 0 {
-        *Version::root().hash().digest()
-    } else {
-        *chain.level(bound.anchor - 1)?.version.hash().digest()
+    // What the new chain stands at before its first row, which is the version the range sits on
+    // unless a run named a base of its own.
+    let mut base = match options.base {
+        Some(base) => base,
+        None if bound.anchor == 0 => *Version::root().hash().digest(),
+        None => *chain.level(bound.anchor - 1)?.version.hash().digest(),
     };
 
-    let based = based_on(request, &chain, bound.anchor)?;
+    let based = if options.replay_based {
+        based_on(request, &chain, bound.anchor)?
+    } else {
+        HashMap::new()
+    };
 
     for entry in bound.entries.iter().rev() {
         if cancellation.is_cancelled() {
@@ -2329,14 +2205,14 @@ mod tests {
     use rorolala_storage::Key;
     use rorolala_utils_location::Locate as _;
     use rorolala_utils_progress::Progress;
-    use rorolala_vcs::{VCSIndex, VCSWrite as _};
+    use rorolala_vcs::{VCSIndex, VCSWrite as _, Version};
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
 
     use super::{
-        Adjustment, Chain, Change, Mark, Operation, Request, Sheet, SheetError, TargetMiss,
-        TweakOutcome, TweakRefusal, adjust, apply, cancel, operations, plan_dir, read_plan,
-        remove_plan, resolve, width, write_plan,
+        Adjustment, ApplyOptions, Chain, Change, Mark, Operation, Request, Sheet, SheetError,
+        TargetMiss, TweakOutcome, TweakRefusal, adjust, anchor_at_origin, apply, apply_with, cancel,
+        operations, plan_dir, read_plan, remove_plan, resolve, width, write_plan,
     };
     use crate::write::Cancellation;
     use crate::write::track::{TrackOptions, track_file};
@@ -2389,6 +2265,23 @@ mod tests {
         layout.entry(id).unwrap().version()
     }
 
+    #[test]
+    fn a_chain_starts_at_the_origin_only_when_it_holds_it() {
+        let (dir, workspace) = recorded(
+            "origin-anchor",
+            &[("one", "first"), ("two", "second"), ("three", "third")],
+        );
+        let chain = chain_of(&workspace);
+        let index = VCSIndex::locate(workspace.get_root()).unwrap();
+        let local = recorded_version(&workspace);
+        let origin = *chain.level(1).unwrap().version.hash().digest();
+
+        assert_eq!(anchor_at_origin(&index, &chain, local, origin), Some(1));
+        assert_eq!(anchor_at_origin(&index, &chain, local, [9; 32]), None);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
     /// Applies `sheet` to `a.txt`.
     fn applied(workspace: &Workspace, sheet: &Sheet) -> TweakOutcome {
         let layout = workspace.layout().unwrap();
@@ -2417,6 +2310,76 @@ mod tests {
             &Cancellation::new(),
         )
         .unwrap()
+    }
+
+    /// Applies `sheet` to `a.txt` with the base and the replay `options` give.
+    fn applied_with(
+        workspace: &Workspace,
+        sheet: &Sheet,
+        options: &ApplyOptions,
+    ) -> TweakOutcome {
+        let layout = workspace.layout().unwrap();
+        let path = LayoutPath::from_relative("a.txt".as_ref()).unwrap();
+        let id = layout.id_of(&path).unwrap();
+        let index = VCSIndex::locate(workspace.get_root()).unwrap();
+        let store = workspace.storage_set().unwrap();
+        let candidates: Vec<(String, rorolala_protocol::VaultAddress)> = Vec::new();
+        let request = Request {
+            workspace,
+            layout: &layout,
+            index: Some(&index),
+            store: Some(&store),
+            account: None,
+            candidates: &candidates,
+            offline: false,
+            concurrency: 1,
+        };
+
+        apply_with(
+            &request,
+            id,
+            &path,
+            sheet,
+            options,
+            &Progress::silent(),
+            &Cancellation::new(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_base_of_its_own_rebases_the_range_on_the_root() {
+        let (dir, workspace) = recorded(
+            "base-root",
+            &[("one", "first"), ("two", "second"), ("three", "third")],
+        );
+        let chain = chain_of(&workspace);
+        let sheet = Sheet::plain(&chain, 1).unwrap();
+        let root = *Version::root().hash().digest();
+        let outcome = applied_with(
+            &workspace,
+            &sheet,
+            &ApplyOptions {
+                base: Some(root),
+                replay_based: true,
+            },
+        );
+
+        let index = VCSIndex::locate(workspace.get_root()).unwrap();
+        let top = index.read_version(&outcome.to).unwrap();
+        let top_variant = index
+            .read_variant(&Key::new(*top.variant()).to_string())
+            .unwrap();
+        let rebased = index
+            .read_version(&Key::new(*top_variant.base_version()).to_string())
+            .unwrap();
+        let rebased_variant = index
+            .read_variant(&Key::new(*rebased.variant()).to_string())
+            .unwrap();
+
+        assert_eq!(*rebased_variant.base_version(), root);
+
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

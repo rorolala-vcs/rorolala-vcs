@@ -9,7 +9,9 @@ pub mod align;
 pub mod bring;
 pub mod cancel;
 pub mod checkout;
+pub mod collapse;
 pub mod collect;
+pub mod cut;
 pub mod error;
 pub mod fetch_with;
 pub mod index;
@@ -35,6 +37,8 @@ pub mod workspace;
 
 pub use cancel::*;
 pub use checkout::*;
+pub use collapse::*;
+pub use cut::*;
 pub use error::*;
 pub use index::*;
 pub use labels::*;

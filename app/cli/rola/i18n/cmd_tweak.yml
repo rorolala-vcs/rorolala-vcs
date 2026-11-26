@@ -3,39 +3,39 @@ _version: 2
 tweak:
   help:
     en: |
-        # Tweak a chain's history and rebuild the versions after the tweaked point
-        **Usage**: rola [[GREEN]]__tweak__[[/]] <path> [target]
-        A path inside a tree names the tree.
-        **Tweak**:
-         __-d__, __--description__ <TEXT>    Set the **description** of this version
-         __-C__, __--creator__     <TEXT>    Set the **author** of this version
-         __-c__, __--content__     <HASH>    Point this version's content to **another stored content**
-         __-J__, __--join__        <HASH>    Associate this version with a variant as a merge, or leave empty to clear
-             __--insert__                Insert a copy of it above this version
-             __--drop__       <TARGET>   Remove this version
-        **Execution**:
-             __--now__                   **Immediately** execute all pending adjustments
-             __--cancel__      <INDEX>   Delete a pending adjustment by index
-         __-i__, __--interact__              Interactive adjustment
-             __--offline__               Do not connect to the vault; use only existing local content and versions
-             __--concurrency__ <N>       Transfer N pieces of content at a time (default 4)
+      # Tweak a chain's history and rebuild the versions after the tweaked point
+      **Usage**: rola [[GREEN]]__tweak__[[/]] <path> [target]
+      A path inside a tree names the tree.
+      **Tweak**:
+       __-d__, __--description__ <TEXT>    Set the **description** of this version
+       __-C__, __--creator__     <TEXT>    Set the **author** of this version
+       __-c__, __--content__     <HASH>    Point this version's content to **another stored content**
+       __-J__, __--join__        <HASH>    Associate this version with a variant as a merge, or leave empty to clear
+           __--insert__                Insert a copy of it above this version
+           __--drop__       <TARGET>   Remove this version
+      **Execution**:
+           __--now__                   **Immediately** execute all pending adjustments
+           __--cancel__      <INDEX>   Delete a pending adjustment by index
+       __-i__, __--interact__              Interactive adjustment, starting at the version the tracked Vault records when no target is given
+           __--offline__               Do not connect to the vault; use only existing local content and versions
+           __--concurrency__ <N>       Transfer N pieces of content at a time (default 4)
     zh-CN: |
-        # 调整一条链的历史，并重建被调整点之后的版本
-        **用法**：rola [[GREEN]]__tweak__[[/]] <路径> [目标]
-        树内的路径指向该树。
-        **调整**：
-         __-d__、__--description__ <文本>    设置该版本的 **描述**
-         __-C__、__--creator__     <文本>    设置该版本的 **作者**
-         __-c__、__--content__     <哈希>    把该版本的内容指向 **另一份已存内容**
-         __-J__、__--join__        <哈希>    将该版本与一个变体关联为合并，或留空表示清除
-             __--insert__                在该版本上方插入一个它的副本
-             __--drop__        <目标>    移除该版本
-        **执行**：
-             __--now__                   **立刻** 执行全部待定的调整
-             __--cancel__      <序号>    按序号删除一条待定的调整
-         __-i__、__--interact__              交互式调整
-             __--offline__               不连接保险库，只使用本地已有的内容与版本
-             __--concurrency__ <N>       每次同时搬运 N 份内容（默认 4）
+      # 调整一条链的历史，并重建被调整点之后的版本
+      **用法**：rola [[GREEN]]__tweak__[[/]] <路径> [目标]
+      树内的路径指向该树。
+      **调整**：
+       __-d__、__--description__ <文本>    设置该版本的 **描述**
+       __-C__、__--creator__     <文本>    设置该版本的 **作者**
+       __-c__、__--content__     <哈希>    把该版本的内容指向 **另一份已存内容**
+       __-J__、__--join__        <哈希>    将该版本与一个变体关联为合并，或留空表示清除
+           __--insert__                在该版本上方插入一个它的副本
+           __--drop__        <目标>    移除该版本
+      **执行**：
+           __--now__                   **立刻** 执行全部待定的调整
+           __--cancel__      <序号>    按序号删除一条待定的调整
+       __-i__、__--interact__              交互式调整，未指定目标时从所追踪保险库记录的版本开始
+           __--offline__               不连接保险库，只使用本地已有的内容与版本
+           __--concurrency__ <N>       每次同时搬运 N 份内容（默认 4）
 
   complete:
     description:

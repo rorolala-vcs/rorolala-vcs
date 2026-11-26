@@ -46,6 +46,9 @@ fn main() {
     let switching = sandbox.join("switching");
     let soft = sandbox.join("soft");
     let tweaked = sandbox.join("tweaked");
+    let from_origin = sandbox.join("from-origin");
+    let collapsed = sandbox.join("collapsed");
+    let cut_dir = sandbox.join("cutting");
     let joining = sandbox.join("joining");
     let git_rola = sandbox.join("git-rola");
     let tree_project = sandbox.join("git-rola-tree");
@@ -70,6 +73,9 @@ fn main() {
         &switching,
         &soft,
         &tweaked,
+        &from_origin,
+        &collapsed,
+        &cut_dir,
         &joining,
         &git_rola,
         &tree_project,
@@ -124,6 +130,9 @@ fn main() {
     uuid_switch(&rola, &switching, &mut checked);
     soft_delete(&rola, &soft, &mut checked);
     tweaking(&rola, &tweaked, &mut checked);
+    tweaking_from_origin(&rola, &from_origin, &mut checked);
+    collapsing(&rola, &collapsed, &files, &mut checked);
+    cutting(&rola, &cut_dir, &files, &mut checked);
     foreign_storage(&rola, &foreign, &mut checked);
 
     // Collecting is last, since the tracked work it makes acts as an account and installs a key,
@@ -3327,6 +3336,338 @@ fn tweaking(rola: &Rola, dir: &Path, checked: &mut Checked) {
     // The Workspace root is not a tree here, so it names no entry this command takes.
     let ran = rola.run(dir, &["tweak", "."]);
     checked.exits("a Workspace root that is not a tree is refused", &ran, 14);
+}
+
+/// `tweak -i` starts at the version the tracked Vault records, and at the first version when no
+/// fetched copy says which version that is.
+fn tweaking_from_origin(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to adjust from an origin in", &ran, 0);
+
+    let ran = rola.run(dir, &["account", "bob"]);
+    checked.exits("the work acts as an account that is installed", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "one").expect("a file to record");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "first", "--no-editor"],
+    );
+    checked.exits("a file is recorded", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "two").expect("the second reading of the file");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "second", "--no-editor"],
+    );
+    checked.exits("the file is recorded again", &ran, 0);
+
+    // The copy of a Vault's Layout a fetch leaves, recording the second version, written where the
+    // command reads the origin from. The `TRACK` file is written directly rather than by
+    // `layout set-track`, since no Vault is served here.
+    fs::write(dir.join(".rola/layout/TRACK"), "vault\n").expect("the tracked Vault");
+    copy_into(
+        &dir.join(".rola/layout"),
+        &dir.join(".rola/cache/readonly-layouts/vault/truth"),
+    );
+
+    fs::write(dir.join("a.psd"), "three").expect("the third reading of the file");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "third", "--no-editor"],
+    );
+    checked.exits("the file is recorded once more", &ran, 0);
+
+    let editor = editor_that_copies(dir);
+    let mut command = rola.command(dir, &["tweak", "a.psd", "-i"]);
+    command.env("ROLA_EDITOR", &editor);
+    let ran = run(&mut command);
+    checked.exits("the editor run ends successfully", &ran, 0);
+
+    let sheet = fs::read_to_string(dir.join(".rola/TWEAKING.md.copy"))
+        .expect("the sheet the editor was given");
+    checked.wants(
+        "the editor starts at the version the Vault records",
+        rows_of(&sheet) == 2,
+        &sheet,
+    );
+
+    // Without the fetched copy there is no origin, so the range starts at the first version.
+    fs::remove_dir_all(dir.join(".rola/cache/readonly-layouts/vault"))
+        .expect("the fetched copy is taken away");
+    let mut command = rola.command(dir, &["tweak", "a.psd", "-i"]);
+    command.env("ROLA_EDITOR", &editor);
+    let ran = run(&mut command);
+    checked.exits("the editor run without a copy ends successfully", &ran, 0);
+
+    let sheet = fs::read_to_string(dir.join(".rola/TWEAKING.md.copy"))
+        .expect("the sheet the editor was given again");
+    checked.wants(
+        "the editor starts at the first version when there is no origin",
+        rows_of(&sheet) == 3,
+        &sheet,
+    );
+}
+
+/// Folding the local versions above the origin into one, and keeping a merge as a checkpoint.
+fn collapsing(rola: &Rola, dir: &Path, files: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to fold a chain in", &ran, 0);
+
+    let ran = rola.run(dir, &["account", "bob"]);
+    checked.exits("the work acts as an account that is installed", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "one").expect("a file to record");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "first", "--no-editor"],
+    );
+    checked.exits("a file is recorded", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "two").expect("the second reading of the file");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "second", "--no-editor"],
+    );
+    checked.exits("the file is recorded again", &ran, 0);
+
+    // The fetched copy records the second version, which is the origin of the fold.
+    fs::write(dir.join(".rola/layout/TRACK"), "vault\n").expect("the tracked Vault");
+    copy_into(
+        &dir.join(".rola/layout"),
+        &dir.join(".rola/cache/readonly-layouts/vault/truth"),
+    );
+
+    fs::write(dir.join("a.psd"), "three").expect("the third reading of the file");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "third", "--no-editor"],
+    );
+    checked.exits("the file is recorded once more", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "four").expect("the fourth reading of the file");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "fourth", "--no-editor"],
+    );
+    checked.exits("the file is recorded a fourth time", &ran, 0);
+    let before = entry_field(rola, dir, "a.psd", "version").expect("the version the entry records");
+
+    let ran = rola.run(dir, &["collapse", "a.psd"]);
+    checked.exits("the fold ends successfully", &ran, 0);
+    checked.stdout_has("the run says what the chain came to", &ran, "Collapsed");
+    checked.wants(
+        "the file keeps the top content",
+        fs::read_to_string(dir.join("a.psd")).is_ok_and(|it| it == "four"),
+        &said(&ran),
+    );
+    let after = entry_field(rola, dir, "a.psd", "version").expect("the version after the fold");
+    checked.wants(
+        "the entry records a new version",
+        after != before,
+        &said(&ran),
+    );
+
+    // A merge in the range is kept as a checkpoint instead of being folded away.
+    merge_into(rola, dir, "merge", files, checked);
+    fs::write(dir.join("merge/a.txt"), "after\n").expect("a version after the merge");
+    let ran = rola.run(
+        dir,
+        &["track", "merge/a.txt", "--message", "after", "--no-editor"],
+    );
+    checked.exits("the merged file is recorded again", &ran, 0);
+
+    fs::write(dir.join("merge/a.txt"), "after more\n").expect("the top of the merge chain");
+    let ran = rola.run(
+        dir,
+        &[
+            "track",
+            "merge/a.txt",
+            "--message",
+            "after more",
+            "--no-editor",
+        ],
+    );
+    checked.exits("the merged file is recorded once more", &ran, 0);
+
+    let ran = rola.run(dir, &["collapse", "merge/a.txt", "--keep-join"]);
+    checked.exits("a fold with merges kept ends successfully", &ran, 0);
+    checked.stdout_has("the merged run says what the chain came to", &ran, "Collapsed");
+}
+
+/// Records a merge into `<work>/a.txt`, leaving the merge version as the top of the chain.
+fn merge_into(rola: &Rola, ws: &Path, work: &str, files: &Path, checked: &mut Checked) {
+    fs::create_dir_all(ws.join(work)).expect("a directory to work in");
+    fs::write(ws.join(work).join("a.txt"), "base\n").expect("a file to merge into");
+    let ran = rola.run(
+        ws,
+        &[
+            "track",
+            &format!("{work}/a.txt"),
+            "--message",
+            "base",
+            "--no-editor",
+        ],
+    );
+    checked.exits("a file to merge into is recorded", &ran, 0);
+
+    let incoming = files.join("incoming.bin");
+    fs::write(&incoming, "from elsewhere\n").expect("the incoming content");
+    let ran = rola.run(ws, &["storage", "write-file", &text(&incoming)]);
+    checked.exits("the incoming content is stored", &ran, 0);
+    let storage = ran.stdout.trim().to_owned();
+    let creator = rola
+        .run(ws, &["vcs-index", "write-creator", "bob"])
+        .stdout
+        .trim()
+        .to_owned();
+    let message = rola
+        .run(ws, &["vcs-index", "write-msg", "from bob"])
+        .stdout
+        .trim()
+        .to_owned();
+    let root = rola
+        .run(ws, &["vcs-index", "print-rootver"])
+        .stdout
+        .trim()
+        .to_owned();
+    let ran = rola.run(
+        ws,
+        &[
+            "vcs-index",
+            "write-variant",
+            &root,
+            &storage,
+            &creator,
+            &message,
+        ],
+    );
+    checked.exits("a variant is written", &ran, 0);
+    let variant = ran.stdout.trim().to_owned();
+
+    let ran = rola.run(ws, &["bring", &variant, "--join", &format!("{work}/a.txt")]);
+    checked.exits("a variant is brought in for a file", &ran, 0);
+    fs::write(ws.join(work).join("a.txt"), "base and theirs\n").expect("the merged work");
+    let ran = rola.run(
+        ws,
+        &[
+            "track",
+            &format!("{work}/a.txt"),
+            "--message",
+            "merged",
+            "--no-editor",
+        ],
+    );
+    checked.exits("the merge is recorded", &ran, 0);
+}
+
+/// Cutting the old history off a file, keeping the uuid when asked, and dropping merges.
+fn cutting(rola: &Rola, dir: &Path, files: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to cut a chain in", &ran, 0);
+
+    let ran = rola.run(dir, &["account", "bob"]);
+    checked.exits("the work acts as an account that is installed", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "one").expect("a file to record");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "first", "--no-editor"],
+    );
+    checked.exits("a file is recorded", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "two").expect("the second reading of the file");
+    let ran = rola.run(
+        dir,
+        &["track", "a.psd", "--message", "second", "--no-editor"],
+    );
+    checked.exits("the file is recorded again", &ran, 0);
+
+    // The copy of the Vault's Layout records the second version, which is the origin of the cut.
+    fs::write(dir.join(".rola/layout/TRACK"), "vault\n").expect("the tracked Vault");
+    copy_into(
+        &dir.join(".rola/layout"),
+        &dir.join(".rola/cache/readonly-layouts/vault/truth"),
+    );
+
+    for (content, message) in [("three", "third"), ("four", "fourth")] {
+        fs::write(dir.join("a.psd"), content).expect("a reading of the file");
+        let ran = rola.run(
+            dir,
+            &["track", "a.psd", "--message", message, "--no-editor"],
+        );
+        checked.exits("the file is recorded once more", &ran, 0);
+    }
+
+    let old_uuid = entry_field(rola, dir, "a.psd", "uuid").expect("the entry the file records");
+    let old_version = entry_field(rola, dir, "a.psd", "version").expect("the version it records");
+
+    let ran = rola.run(dir, &["cut", "a.psd"]);
+    checked.exits("the cut ends successfully", &ran, 0);
+    checked.stdout_has("the run says what the chain came to", &ran, "Cut");
+
+    let new_uuid = entry_field(rola, dir, "a.psd", "uuid").expect("the entry after the cut");
+    let new_version = entry_field(rola, dir, "a.psd", "version").expect("the version after the cut");
+    checked.wants(
+        "the path records a new Uuid",
+        new_uuid != old_uuid,
+        &said(&ran),
+    );
+    checked.wants(
+        "the path records a new version",
+        new_version != old_version,
+        &said(&ran),
+    );
+    checked.wants(
+        "the file keeps the top content",
+        fs::read_to_string(dir.join("a.psd")).is_ok_and(|it| it == "four"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["cut", "a.psd", "--keep-uuid"]);
+    checked.exits("a cut that keeps the uuid ends successfully", &ran, 0);
+    checked.stdout_has("the kept run says what the chain came to", &ran, "Cut");
+    let kept_uuid = entry_field(rola, dir, "a.psd", "uuid").expect("the entry the uuid is kept");
+    checked.wants(
+        "the path records the same Uuid",
+        kept_uuid == new_uuid,
+        &said(&ran),
+    );
+
+    // A merge is dropped when the run asks for it.
+    merge_into(rola, dir, "merge", files, checked);
+    fs::write(dir.join("merge/a.txt"), "after\n").expect("a version after the merge");
+    let ran = rola.run(
+        dir,
+        &["track", "merge/a.txt", "--message", "after", "--no-editor"],
+    );
+    checked.exits("the merged file is recorded again", &ran, 0);
+
+    let ran = rola.run(dir, &["cut", "merge/a.txt", "--strip-join"]);
+    checked.exits("a cut that drops merges ends successfully", &ran, 0);
+    checked.stdout_has("the merged run says what the chain came to", &ran, "Cut");
+}
+
+/// An editor command that copies the file it is given beside it, for a run that must not edit.
+fn editor_that_copies(dir: &Path) -> String {
+    if cfg!(windows) {
+        let path = dir.join("editor.bat");
+        fs::write(&path, "@echo off\r\ncopy \"%1\" \"%1.copy\" >nul\r\n").expect("an editor");
+
+        format!("cmd /c {}", path.display())
+    } else {
+        let path = dir.join("editor.sh");
+        fs::write(&path, "#!/bin/sh\ncp \"$1\" \"$1.copy\"\n").expect("an editor");
+
+        format!("sh {}", path.display())
+    }
+}
+
+/// The number of version rows a sheet draws, between `>>> LOCAL` and the anchor marker.
+fn rows_of(sheet: &str) -> usize {
+    sheet
+        .lines()
+        .filter(|line| !line.is_empty() && !line.starts_with('#') && !line.starts_with(">>>"))
+        .count()
 }
 
 /// Whether nothing waits under the directory plans are kept in.

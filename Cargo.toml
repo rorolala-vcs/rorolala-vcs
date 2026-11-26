@@ -35,6 +35,7 @@ members = [
     "modules/workspace-analyze",
     "modules/vault",
     "modules/vcs",
+    "modules/version-search",
     "modules/workspace",
     "utils/cli-theme",
     "utils/configure",
@@ -111,6 +112,7 @@ rorolala-utils-mapped = { path = "utils/mapped" }
 rorolala-utils-progress = { path = "utils/progress" }
 rorolala-vault = { path = "modules/vault" }
 rorolala-vcs = { path = "modules/vcs" }
+rorolala-version-search = { path = "modules/version-search" }
 rorolala-workspace = { path = "modules/workspace" }
 
 # CLI Framework
@@ -288,6 +290,7 @@ rorolala-utils-location.workspace = true
 rorolala-utils-progress.workspace = true
 rorolala-vault.workspace = true
 rorolala-vcs.workspace = true
+rorolala-version-search.workspace = true
 rorolala-workspace.workspace = true
 rola-desktop-pty.workspace = true
 serde.workspace = true

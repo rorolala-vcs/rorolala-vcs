@@ -1,0 +1,122 @@
+_version: 2
+
+cut:
+  help:
+    en: |
+      # Cut the old history off a file and start a new file at a kept version
+      **Usage**: rola [[GREEN]]__cut__[[/]] <path...> [target]
+      A target may be given only when one path is named.
+      **Flags**:
+           __--keep-uuid__             Keep the entry's Uuid, which forks it from the Vault
+           __--strip-join__            Drop every merge in the kept range
+           __--offline__               Do not connect to the vault; use only existing local content and versions
+           __--concurrency__ <N>       Transfer N pieces of content at a time (default 4)
+    zh-CN: |
+      # 从一个文件上截掉老历史，并在保留的版本处开始一个新文件
+      **用法**：rola [[GREEN]]__cut__[[/]] <路径...> [目标]
+      只有指定一个路径时才能给出目标。
+      **标识**：
+           __--keep-uuid__             保留条目的 Uuid，这会与保险库分叉
+           __--strip-join__            丢弃保留范围内的所有合并
+           __--offline__               不连接保险库，只使用本地已有的内容与版本
+           __--concurrency__ <N>       每次同时搬运 N 份内容（默认 4）
+
+  complete:
+    keep_uuid:
+      en: Keep the entry's Uuid, which forks it from the Vault
+      zh-CN: 保留条目的 Uuid，这会与保险库分叉
+    strip_join:
+      en: Drop every merge in the kept range
+      zh-CN: 丢弃保留范围内的所有合并
+
+  description:
+    en: Cut a file's old history away and start a new file at a kept version, changing only the base of each version
+    zh-CN: 截掉文件的老历史，在保留的版本处开始一个新文件，只改变每个版本的基
+
+  result:
+    en: "Cut `%{file}` at `%{point}`: the new file records `%{to}`, %{count} versions kept"
+    zh-CN: "已在 `%{point}` 处裁切 `%{file}`：新文件记录 `%{to}`，保留了 %{count} 个版本"
+
+  result_kept_uuid:
+    en: "Cut `%{file}` at `%{point}`: `%{uuid}` now records `%{to}`, %{count} versions kept, forked from the Vault"
+    zh-CN: "已在 `%{point}` 处裁切 `%{file}`：`%{uuid}` 现在记录 `%{to}`，保留了 %{count} 个版本，已与保险库分叉"
+
+  err_no_file:
+    en: Please name the files whose old history is to be cut
+    zh-CN: 请指定要截掉老历史的文件
+
+  err_no_file_help:
+    en: Please name one or more paths, see `rola cut --help` for usage
+    zh-CN: 请指定一个或多个路径，用法见 `rola cut --help`
+
+  err_target_many_files:
+    en: "A target may be given only when one path is named, but %{count} paths were named"
+    zh-CN: "只有指定一个路径时才能给出目标，却指定了 %{count} 个路径"
+
+  err_target_many_files_help:
+    en: Please name one path to choose its cut point, or leave the target out to cut every path at its first local version
+    zh-CN: 请只指定一个路径来选择切断点，或去掉目标来在每个路径的第一个本地版本处裁切
+
+  err_not_local:
+    en: "`%{file}` is not a local path of this Workspace"
+    zh-CN: "`%{file}` 不是本工作区的本地路径"
+
+  err_not_local_help:
+    en: Please name a path inside this Workspace, the way `rola track` takes one
+    zh-CN: 请指定本工作区内的路径，与 `rola track` 接受的一样
+
+  err_not_recorded:
+    en: "`%{file}` is not recorded in the Layout"
+    zh-CN: "`%{file}` 没有被布局记录"
+
+  err_not_recorded_help:
+    en: Please record it with `rola track` first
+    zh-CN: 请先用 `rola track` 记录它
+
+  err_no_chain:
+    en: The version `%{file}` records is not the top of a chain
+    zh-CN: "`%{file}` 记录的版本不是一条链的顶端"
+
+  err_no_chain_help:
+    en: Please run `rola fsck` to check the index
+    zh-CN: 请运行 `rola fsck` 检查索引
+
+  err_merging:
+    en: "`%{file}` has the variant `%{variant}` waiting to be joined into it"
+    zh-CN: "`%{file}` 有变体 `%{variant}` 等待合并进来"
+
+  err_merging_help:
+    en: Please finish or end the merge with `rola track` before cutting the chain
+    zh-CN: 请先用 `rola track` 完成或结束这次合并，再裁切版本链
+
+  err_target_none:
+    en: Nothing on the chain of `%{file}` matches "%{target}"
+    zh-CN: 在 `%{file}` 的链上没有找到 “%{target}”
+
+  err_target_none_help:
+    en: Please name a version hash, a variant hash, `~N`, or text of one creator or message
+    zh-CN: 请给出至少 4 位的版本哈希、变体哈希、`~N`，或某个作者或描述的文本
+
+  err_target_many:
+    en: '"%{target}" matches %{count} versions of `%{file}`'
+    zh-CN: "“%{target}” 命中了 `%{file}` 的 %{count} 个版本"
+
+  err_target_many_help:
+    en: Please narrow the target with a hash or a number of steps
+    zh-CN: 请用哈希或回溯步数把目标写得更精确
+
+  err_target_other:
+    en: "`%{target}` belongs to another entry's chain"
+    zh-CN: "`%{target}` 属于别的条目的链"
+
+  err_target_other_help:
+    en: Please name a version or a variant of the chain `%{file}` records
+    zh-CN: 请给出 `%{file}` 所记录的那条链上的版本或变体
+
+  err_failed:
+    en: "Cutting `%{file}` failed: %{cause}"
+    zh-CN: "裁切 `%{file}` 失败：%{cause}"
+
+  err_failed_help:
+    en: Please check that the Layout and the index are writable, then try again
+    zh-CN: 请检查布局与索引是否可写，然后重试

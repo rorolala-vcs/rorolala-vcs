@@ -1,0 +1,8 @@
+[package]
+name = "rorolala-version-search"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rorolala-storage.workspace = true
+rorolala-vcs.workspace = true

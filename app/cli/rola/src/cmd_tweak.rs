@@ -381,10 +381,17 @@ pub fn handle_tweak(
         }
     };
 
-    // An editor is opened on the range from the earliest version named to the one recorded, and
-    // on the whole history when the run named no version at all.
+    // An editor is opened on the range from the earliest version named to the one recorded. A run
+    // that named no version starts at the version the tracked Vault records when this chain holds
+    // it, and at the first version otherwise.
     if state.interact {
-        let anchor = if state.target.is_none() { 0 } else { target };
+        let anchor = if state.target.is_none() {
+            librorolala::status::upstream_version(held, id)
+                .and_then(|upstream| tweak::anchor_at_origin(index, &chain, local, upstream))
+                .unwrap_or(0)
+        } else {
+            target
+        };
 
         return edit(&state, &root, &chain, anchor, editor, |sheet| {
             applied(

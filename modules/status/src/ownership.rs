@@ -15,6 +15,7 @@ use rorolala_layout::{Layout, LayoutError, LayoutPath};
 use rorolala_utils_constants::VAULT_LAYOUT_NAME;
 use rorolala_workspace::Workspace;
 use rorolala_workspace_analyze::TreeDiff;
+use uuid::Uuid;
 
 /// The Vault the Layout being worked in tracks, when it tracks one.
 #[must_use]
@@ -33,6 +34,18 @@ pub fn vault_copy(workspace: &Workspace) -> Option<Layout> {
     let dir = workspace.readonly_layout_copy(&vault, VAULT_LAYOUT_NAME)?;
 
     Layout::open(&dir).ok()
+}
+
+/// The version the tracked Vault's fetched Layout records for `id`.
+///
+/// An entry upstream does not name, or one it has never had a version for, answers nothing: there is
+/// no origin for a chain to be read from.
+#[must_use]
+pub fn upstream_version(workspace: &Workspace, id: Uuid) -> Option<[u8; 32]> {
+    let copy = vault_copy(workspace)?;
+    let version = copy.entry(id)?.version();
+
+    (version != [0; 32]).then_some(version)
 }
 
 /// The content changes that are not `me`'s to record, split by who stands in the way.
