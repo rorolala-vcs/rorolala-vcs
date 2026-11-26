@@ -8,19 +8,19 @@ _version: 2
 fs_ops:
   help:
     en: |
-        # Move, copy or remove a path
-        **Usage**: rola [[GREEN]]__fs-ops__[[/]] <SUBCOMMAND>
-        **Commands**:
-            mv <FROM> <TO>    Move or rename
-            cp <FROM> <TO>    Copy
-            rm <PATH>         Remove
+      # Move, copy or remove a path
+      **Usage**: rola [[GREEN]]__fs-ops__[[/]] <SUBCOMMAND>
+      **Commands**:
+          mv <FROM> <TO>    Move or rename
+          cp <FROM> <TO>    Copy
+          rm <PATH>         Remove
     zh-CN: |
-        # 移动、复制或删除路径
-        **用法**：rola [[GREEN]]__fs-ops__[[/]] <子命令>
-        **命令**：
-            mv <源路径> <目标路径>    移动或重命名
-            cp <源路径> <目标路径>    复制
-            rm <路径>                 删除
+      # 移动、复制或删除路径
+      **用法**：rola [[GREEN]]__fs-ops__[[/]] <子命令>
+      **命令**：
+          mv <源路径> <目标路径>    移动或重命名
+          cp <源路径> <目标路径>    复制
+          rm <路径>                 删除
 
   cmd_fs_ops_description:
     en: Move, copy or remove a path
@@ -28,11 +28,15 @@ fs_ops:
 
   mv_help:
     en: |
-        # Put a path at another position
-        **Usage**: rola fs-ops [[GREEN]]__mv__[[/]] <FROM> <TO>
+      # Put a path at another position
+      **Usage**: rola fs-ops [[GREEN]]__mv__[[/]] <FROM> <TO>
+
+      A destination that names a directory receives the path under the name it already has.
     zh-CN: |
-        # 把路径放到另一个位置
-        **用法**：rola fs-ops [[GREEN]]__mv__[[/]] <源路径> <目标路径>
+      # 把路径放到另一个位置
+      **用法**：rola fs-ops [[GREEN]]__mv__[[/]] <源路径> <目标路径>
+
+      目标为已存在的目录时，路径会被放入其中，并保留原来的名字。
 
   mv_description:
     en: Put a path at another position
@@ -40,11 +44,15 @@ fs_ops:
 
   cp_help:
     en: |
-        # Put a copy of a path at another position
-        **Usage**: rola fs-ops [[GREEN]]__cp__[[/]] <FROM> <TO>
+      # Put a copy of a path at another position
+      **Usage**: rola fs-ops [[GREEN]]__cp__[[/]] <FROM> <TO>
+
+      A destination that names a directory receives the copy under the name the source already has.
     zh-CN: |
-        # 把路径的副本放到另一个位置
-        **用法**：rola fs-ops [[GREEN]]__cp__[[/]] <源路径> <目标路径>
+      # 把路径的副本放到另一个位置
+      **用法**：rola fs-ops [[GREEN]]__cp__[[/]] <源路径> <目标路径>
+
+      目标为已存在的目录时，副本会被放入其中，并沿用源路径的名字。
 
   cp_description:
     en: Put a copy of a path at another position
@@ -52,11 +60,11 @@ fs_ops:
 
   rm_help:
     en: |
-        # Take a path away
-        **Usage**: rola fs-ops [[GREEN]]__rm__[[/]] <PATH>
+      # Take a path away
+      **Usage**: rola fs-ops [[GREEN]]__rm__[[/]] <PATH>
     zh-CN: |
-        # 把路径移除
-        **用法**：rola fs-ops [[GREEN]]__rm__[[/]] <路径>
+      # 把路径移除
+      **用法**：rola fs-ops [[GREEN]]__rm__[[/]] <路径>
 
   rm_description:
     en: Take a path away
@@ -78,9 +86,17 @@ fs_ops:
     en: "`%{path}` is outside the git-rola project, and its `rola.toml` cannot name a path outside it"
     zh-CN: "`%{path}` 在 git-rola 项目之外，项目的 `rola.toml` 无法命名项目之外的路径"
 
+  err_blocked_same:
+    en: "`%{path}` is the source itself"
+    zh-CN: "`%{path}` 就是源路径本身"
+
   err_blocked_inside:
-    en: "`%{path}` is inside the source, and a copy cannot be written into what it reads"
-    zh-CN: "`%{path}` 位于源路径内部，无法把副本写入正在读取的位置"
+    en: "`%{path}` is inside the source, and an operation cannot be written into what it reads"
+    zh-CN: "`%{path}` 位于源路径内部，操作无法写入正在读取的位置"
+
+  err_blocked_self_help:
+    en: Name a destination other than the source, and outside the directory it holds
+    zh-CN: 请把目标写成源路径之外的位置，也不要放进源目录内部
 
   err_blocked_help:
     en: Keep the change within what the Layout allows, and it is applied whole rather than half made
@@ -112,6 +128,6 @@ fs_ops:
 
   err_failed_help:
     en: |
-        Please check that the paths can be read and written and that they are indeed what is said, then try again
+      Please check that the paths can be read and written and that they are indeed what is said, then try again
     zh-CN: |
-        请确认这些路径可读可写，且确实是所说的路径，然后重试
+      请确认这些路径可读可写，且确实是所说的路径，然后重试

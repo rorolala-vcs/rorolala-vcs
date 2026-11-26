@@ -189,12 +189,46 @@ pub fn render_error_fs_ops_failed(error: ErrorFsOpsFailed, ec: &mut ResExitCode)
     ec.exit_code = EC_ERR_FS_OPS_FAILED;
 }
 
-/// Puts a path at another, whichever of the two is a directory.
+/// The path an operation lands on, read from the destination the caller gave.
 ///
-/// A rename the filesystem refuses (across two devices, most often) is still a move to a reader, so
-/// it is done the long way instead: copied, and then removed. Nothing is asked and nothing is
-/// confirmed: a name already taken at the destination is what the destination being there means, and
-/// whether it should have been replaced was settled before this was called.
+/// A destination naming a directory is the directory the source is put into, under the name it
+/// already has, which is how `mv` and `cp` are read elsewhere and what the Desktop settles before it
+/// calls. Any other destination is the path the source is to have, so one that is not there yet, or
+/// that names a file, is taken as it stands.
+///
+/// A source with no name of its own, the filesystem root above all, has nothing to be put under, so
+/// the destination is taken as it stands and the filesystem refuses the operation.
+pub fn destination(from: &Path, to: &Path) -> PathBuf {
+    if !to.is_dir() {
+        return to.to_path_buf();
+    }
+
+    from.file_name()
+        .map_or_else(|| to.to_path_buf(), |name| to.join(name))
+}
+
+/// The way a move or copy is refused for putting a path onto itself, when it is.
+///
+/// A destination that is the source changes nothing. One inside a source directory is read while it
+/// is written, since the copy a rename falls back to walks the source and would take in the
+/// destination it is making, so the run ends on a stack overflow rather than an answer. Both are
+/// read from the whole paths, and `starts_with` compares whole components, so a sibling whose name
+/// begins with the source's is not taken for one under it.
+pub fn against_itself(from: &Path, to: &Path) -> Option<FsOpsBlock> {
+    if from == to {
+        return Some(FsOpsBlock::Same);
+    }
+
+    (from.is_dir() && to.starts_with(from)).then_some(FsOpsBlock::Inside)
+}
+
+/// Puts a path at another, `to` being the path it is to have.
+///
+/// What a directory destination means is [`destination`]'s to say, and it is read before this is
+/// called. A rename the filesystem refuses (across two devices, most often) is still a move to a
+/// reader, so it is done the long way instead: copied, and then removed. Nothing is asked and
+/// nothing is confirmed: a name already taken at the destination is what the destination being there
+/// means, and whether it should have been replaced was settled before this was called.
 ///
 /// # Errors
 ///
@@ -208,7 +242,8 @@ pub fn move_to(from: &Path, to: &Path) -> io::Result<()> {
     remove_at(from)
 }
 
-/// Copies a path to another, a directory and everything under it included.
+/// Copies a path to another, `to` being the path the copy is to have, a directory and everything
+/// under it included.
 ///
 /// # Errors
 ///
@@ -392,7 +427,9 @@ pub enum FsOpsBlock {
     Project,
     /// The destination is outside the git-rola project the source is in.
     Outside,
-    /// The destination is the source itself or lies inside it.
+    /// The destination is the source itself.
+    Same,
+    /// The destination lies inside the source.
     Inside,
 }
 
@@ -407,6 +444,7 @@ impl Failure for ErrorFsOpsBlocked {
             FsOpsBlock::Variant => t!("fs_ops.err_blocked_variant", path = self.path),
             FsOpsBlock::Project => t!("fs_ops.err_blocked_project", path = self.path),
             FsOpsBlock::Outside => t!("fs_ops.err_blocked_outside", path = self.path),
+            FsOpsBlock::Same => t!("fs_ops.err_blocked_same", path = self.path),
             FsOpsBlock::Inside => t!("fs_ops.err_blocked_inside", path = self.path),
         };
 
@@ -419,7 +457,15 @@ failure!(ErrorFsOpsBlocked);
 #[renderer(buffer)]
 pub fn render_error_fs_ops_blocked(error: ErrorFsOpsBlocked, ec: &mut ResExitCode) {
     r_eprintln!("{}", err_line!(error.reason()));
-    r_eprintln!("{}", help_line!(t!("fs_ops.err_blocked_help").trim()));
+
+    // The two refusals about a path against itself are the paths' alone, so the help that speaks of
+    // the Layout would send the reader to the wrong place.
+    let help = match &error.kind {
+        FsOpsBlock::Same | FsOpsBlock::Inside => t!("fs_ops.err_blocked_self_help"),
+        _ => t!("fs_ops.err_blocked_help"),
+    };
+
+    r_eprintln!("{}", help_line!(help.trim()));
     ec.exit_code = EC_ERR_FS_OPS_FAILED;
 }
 
@@ -430,7 +476,9 @@ mod tests {
 
     use librorolala::layout::LayoutPath;
 
-    use super::{copy_to, move_to, moved, remove_at, under};
+    use super::{
+        FsOpsBlock, against_itself, copy_to, destination, move_to, moved, remove_at, under,
+    };
 
     /// A directory of this test's own, emptied first, under the temporary directory.
     fn scratch(name: &str) -> PathBuf {
@@ -504,6 +552,52 @@ mod tests {
         remove_at(&dir.join("a")).expect("the removal");
 
         assert!(!dir.join("a").exists());
+    }
+
+    #[test]
+    fn a_destination_that_names_a_directory_takes_the_source_under_its_own_name() {
+        let dir = scratch("destination");
+        let into = dir.join("into");
+        fs::create_dir_all(&into).expect("a directory to put a path into");
+        fs::create_dir_all(dir.join("a")).expect("a directory to put");
+        let file = dir.join("one.txt");
+        fs::write(&file, b"hello").expect("a file");
+
+        assert_eq!(destination(&file, &into), into.join("one.txt"));
+        assert_eq!(destination(&dir.join("a"), &into), into.join("a"));
+        assert_eq!(
+            destination(&file, &dir.join("two.txt")),
+            dir.join("two.txt")
+        );
+        assert_eq!(
+            destination(&file, &dir.join("nothing")),
+            dir.join("nothing")
+        );
+    }
+
+    #[test]
+    fn a_path_is_refused_against_itself() {
+        let dir = scratch("itself");
+        fs::create_dir_all(dir.join("a/b")).expect("a tree");
+        let file = dir.join("a/x.txt");
+        fs::write(&file, b"x").expect("a file");
+
+        assert!(matches!(
+            against_itself(&dir.join("a"), &dir.join("a")),
+            Some(FsOpsBlock::Same)
+        ));
+        assert!(matches!(
+            against_itself(&file, &file),
+            Some(FsOpsBlock::Same)
+        ));
+        assert!(matches!(
+            against_itself(&dir.join("a"), &dir.join("a/b")),
+            Some(FsOpsBlock::Inside)
+        ));
+
+        // A sibling whose name begins with the source's is not under it.
+        assert!(against_itself(&dir.join("a"), &dir.join("ab")).is_none());
+        assert!(against_itself(&file, &dir.join("a/y.txt")).is_none());
     }
 
     #[test]

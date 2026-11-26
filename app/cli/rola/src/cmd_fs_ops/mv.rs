@@ -58,9 +58,10 @@ pub fn complete_fs_ops_mv(ctx: ShellContext) -> Suggest {
 
 /// Puts `FROM` at `TO`.
 ///
-/// `TO` is the path the thing is to have, not the directory it is to be put in: what a name already
-/// taken there means was settled before this was called. Either path may name a file or a directory,
-/// and moving a directory moves everything under it.
+/// A `TO` that names a directory is the directory the thing is put into, under the name it already
+/// has, so `mv a.psd ok` leaves it at `ok/a.psd`. Any other `TO` is the path the thing is to have,
+/// and what a name already taken there means was settled before this is called. Either path may
+/// name a file or a directory, and moving a directory moves everything under it.
 ///
 /// Who holds the entry upstream is not read: a move is about this tree, and the Vault's Layout goes on
 /// naming what it named until the change is recorded and sent up.
@@ -68,8 +69,9 @@ pub fn complete_fs_ops_mv(ctx: ShellContext) -> Suggest {
 /// # Errors
 ///
 /// Renders [`ErrorFsOpsArguments`] when both paths were not named, [`ErrorFsOpsBlocked`] when the
-/// destination already names something in the Layout being worked in, or a variant file would be moved
-/// to a place no merge can record, and [`ErrorFsOpsFailed`] when the filesystem refused the move.
+/// destination is the source or lies inside it, when it already names something in the Layout being
+/// worked in, or when a variant file would be moved to a place no merge can record, and
+/// [`ErrorFsOpsFailed`] when the filesystem refused the move.
 #[command(node = "fs-ops.mv")]
 pub fn fs_ops_mv(args: EntryFsOpsMv) -> Next {
     let picked = args
@@ -128,14 +130,28 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv) -> Next {
         }
     };
 
+    // The paths as the caller gave them, before a destination that names a directory is read as the
+    // place the source is put into. Settling it here is what keeps the filesystem from answering: a
+    // rename, and the copy it falls back to, refuse a directory with a word about permissions.
+    let from = whole(&cwd, &from);
+    let asked = whole(&cwd, &to);
+    let to = cmd_fs_ops::destination(&from, &asked);
+
+    // A path put onto itself changes nothing, and one put into the directory it holds is read while
+    // it is written: the copy a rename falls back to would follow it until the stack runs out.
+    if let Some(kind) = cmd_fs_ops::against_itself(&from, &to) {
+        return ErrorFsOpsBlocked {
+            path: to.display().to_string(),
+            kind,
+        }
+        .into();
+    }
+
     // A git-rola project keeps its record in `rola.toml` and `rola.lock` rather than in a Workspace
     // Layout, so a move inside one changes those two files instead of the Layout below. The move is
     // still where an entry lies rather than what it holds, which is why the lock keeps its content
     // hash and kind. The plan is worked out before anything moves, so a record this build cannot
     // read is a refusal rather than a move half made.
-    let from = whole(&cwd, &from);
-    let to = whole(&cwd, &to);
-
     if let Some(root) = cmd_fs_ops::git_rola::project_of(&from) {
         if !to.starts_with(&root) {
             return ErrorFsOpsBlocked {

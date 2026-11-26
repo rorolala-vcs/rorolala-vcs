@@ -1163,6 +1163,48 @@ fn movement(rola: &Rola, plain: &Path, files: &Path, checked: &mut Checked) {
     checked.exits("a path is removed", &ran, 0);
     checked.wants("the removed path is gone", !three.exists(), &said(&ran));
 
+    // A destination that names a directory is the place the path is put into, under the name it
+    // already has, so the directory a shell completes to works as an argument.
+    let place = files.join("place");
+    fs::create_dir_all(&place).expect("a directory to put paths into");
+    let four = files.join("four.txt");
+    fs::write(&four, "four\n").expect("a file to put into a directory");
+
+    let ran = rola.run(plain, &["fs-ops", "cp", &text(&four), &text(&place)]);
+    checked.exits("a path is copied into a directory", &ran, 0);
+    checked.wants(
+        "the copy lands inside the directory under its own name",
+        place.join("four.txt").is_file(),
+        &said(&ran),
+    );
+
+    let trailing = format!("{}{}", text(&place), std::path::MAIN_SEPARATOR);
+    let ran = rola.run(plain, &["fs-ops", "mv", &text(&four), &trailing]);
+    checked.exits("a path is moved into a directory", &ran, 0);
+    checked.wants(
+        "the moved path is inside the directory and not where it was",
+        place.join("four.txt").is_file() && !four.exists(),
+        &said(&ran),
+    );
+
+    // A path put onto itself changes nothing, and one put into the directory it holds would be read
+    // while it is written.
+    let ran = rola.run(
+        plain,
+        &[
+            "fs-ops",
+            "mv",
+            &text(&place.join("four.txt")),
+            &text(&place),
+        ],
+    );
+    checked.exits("a move onto its own directory is refused", &ran, 111);
+
+    let tree = files.join("tree");
+    fs::create_dir_all(tree.join("sub")).expect("a tree to move into itself");
+    let ran = rola.run(plain, &["fs-ops", "mv", &text(&tree), &text(&tree.join("sub"))]);
+    checked.exits("a move into the source itself is refused", &ran, 111);
+
     let ran = rola.run(plain, &["fs-ops", "cp"]);
     checked.exits("a copy without its paths is refused", &ran, 110);
 }

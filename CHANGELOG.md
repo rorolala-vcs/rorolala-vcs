@@ -6,16 +6,17 @@ This document records all Changelog entries for Rorolala VCS starting from 0.1.0
 
 ## Bugfix
 
-1. [`app`] [`rola`] [`retrack`] Answer a retrack with no earlier version instead of panicking. [See details](dev/CHANGELOG-DETAILS.md#1-app-rola-retrack-answer-a-retrack-with-no-earlier-version-instead-of-panicking)
-2. [`app`] [`rola`] [`tree`] Read a short hash in the tree commands that name a version. [See details](dev/CHANGELOG-DETAILS.md#2-app-rola-tree-read-a-short-hash-in-the-tree-commands-that-name-a-version)
-3. [`app`] [`RorolalaDesktop`] [`docking`] Give a dock's header strip back when the dock leaves its group. [See details](dev/CHANGELOG-DETAILS.md#3-app-rorolaladesktop-docking-give-a-docks-header-strip-back-when-the-dock-leaves-its-group)
-4. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Ask a row again when the answers behind it were let go of. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-plugins-file-system-ask-a-row-again-when-the-answers-behind-it-were-let-go-of)
-5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Stand a place's tile on the plate a file's stands on. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-file-system-stand-a-places-tile-on-the-plate-a-files-stands-on)
-6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Give a tile the room its badges stand in. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-file-system-icons-give-a-tile-the-room-its-badges-stand-in)
-7. [`librorolala`] [`fetch`] Let a bring finish offline from content the store already holds. [See details](dev/CHANGELOG-DETAILS.md#7-librorolala-fetch-let-a-bring-finish-offline-from-content-the-store-already-holds)
-8. [`librorolala`] [`write`] [`sync`] Write a tree's work when a sync pulls its version. [See details](dev/CHANGELOG-DETAILS.md#8-librorolala-write-sync-write-a-trees-work-when-a-sync-pulls-its-version)
-9. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused. [See details](dev/CHANGELOG-DETAILS.md#9-librorolala-write-track-refuse-a-tree-another-account-holds-as-a-file-is-refused)
-10. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault. [See details](dev/CHANGELOG-DETAILS.md#10-modules-rola-sharp-locate-accounts-and-members-without-a-vault)
+1. **\[BREAKING!\]** [`app`] [`rola`] [`fs-ops`] Read a directory destination as the place a path is put. [See details](dev/CHANGELOG-DETAILS.md#1-breaking-app-rola-fs-ops-read-a-directory-destination-as-the-place-a-path-is-put)
+2. [`app`] [`rola`] [`retrack`] Answer a retrack with no earlier version instead of panicking. [See details](dev/CHANGELOG-DETAILS.md#2-app-rola-retrack-answer-a-retrack-with-no-earlier-version-instead-of-panicking)
+3. [`app`] [`rola`] [`tree`] Read a short hash in the tree commands that name a version. [See details](dev/CHANGELOG-DETAILS.md#3-app-rola-tree-read-a-short-hash-in-the-tree-commands-that-name-a-version)
+4. [`app`] [`RorolalaDesktop`] [`docking`] Give a dock's header strip back when the dock leaves its group. [See details](dev/CHANGELOG-DETAILS.md#4-app-rorolaladesktop-docking-give-a-docks-header-strip-back-when-the-dock-leaves-its-group)
+5. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Ask a row again when the answers behind it were let go of. [See details](dev/CHANGELOG-DETAILS.md#5-app-rorolaladesktop-plugins-file-system-ask-a-row-again-when-the-answers-behind-it-were-let-go-of)
+6. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Stand a place's tile on the plate a file's stands on. [See details](dev/CHANGELOG-DETAILS.md#6-app-rorolaladesktop-plugins-file-system-stand-a-places-tile-on-the-plate-a-files-stands-on)
+7. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`icons`] Give a tile the room its badges stand in. [See details](dev/CHANGELOG-DETAILS.md#7-app-rorolaladesktop-plugins-file-system-icons-give-a-tile-the-room-its-badges-stand-in)
+8. [`librorolala`] [`fetch`] Let a bring finish offline from content the store already holds. [See details](dev/CHANGELOG-DETAILS.md#8-librorolala-fetch-let-a-bring-finish-offline-from-content-the-store-already-holds)
+9. [`librorolala`] [`write`] [`sync`] Write a tree's work when a sync pulls its version. [See details](dev/CHANGELOG-DETAILS.md#9-librorolala-write-sync-write-a-trees-work-when-a-sync-pulls-its-version)
+10. [`librorolala`] [`write`] [`track`] Refuse a tree another account holds, as a file is refused. [See details](dev/CHANGELOG-DETAILS.md#10-librorolala-write-track-refuse-a-tree-another-account-holds-as-a-file-is-refused)
+11. [`modules`] [`rola-sharp`] Locate accounts and members without a Vault. [See details](dev/CHANGELOG-DETAILS.md#11-modules-rola-sharp-locate-accounts-and-members-without-a-vault)
 
 ## Optimized
 

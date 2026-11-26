@@ -28,7 +28,7 @@ use uuid::Uuid;
 
 use crate::Next;
 use crate::cmd_fs_ops::{
-    self, ErrorFsOpsArguments, ErrorFsOpsBlocked, ErrorFsOpsFailed, FsOpsBlock, ResultFsOps,
+    self, ErrorFsOpsArguments, ErrorFsOpsBlocked, ErrorFsOpsFailed, ResultFsOps,
 };
 use crate::complete::typing_flag;
 use crate::exit_codes::EC_HELP;
@@ -59,11 +59,12 @@ pub fn complete_fs_ops_cp(ctx: ShellContext) -> Suggest {
 
 /// Copies `FROM` to `TO`, `FROM` being left where it is.
 ///
-/// `TO` is the path the copy is to have, not the directory it is to be put in: what a name already
-/// taken there means was settled before this was called. Either path may name a file or a directory,
-/// and copying a directory copies everything under it, content and structure, which is all that is
-/// claimed: permissions, ownership and times are the destination's own, as the system gives them for
-/// anything newly written.
+/// A `TO` that names a directory is the directory the copy is put into, under the name the source
+/// already has, so `cp a.psd ok` leaves it at `ok/a.psd`. Any other `TO` is the path the copy is to
+/// have, and what a name already taken there means was settled before this is called. Either path
+/// may name a file or a directory, and copying a directory copies everything under it, content and
+/// structure, which is all that is claimed: permissions, ownership and times are the destination's
+/// own, as the system gives them for anything newly written.
 ///
 /// A copy inside one Workspace keeps that Workspace's Layout in step: an entry the copy takes in is
 /// forked at the destination path with a new `Uuid` and the source's own version, so the copy shares
@@ -134,15 +135,19 @@ pub fn handle_fs_ops_cp(state: StateFsOpsCp) -> Next {
         }
     };
 
+    // The paths as the caller gave them, before a destination that names a directory is read as the
+    // place the source is put into. Settling it here is what keeps the filesystem from answering: a
+    // copy refuses a directory with a word about permissions.
     let from = whole(&cwd, &from);
-    let to = whole(&cwd, &to);
+    let asked = whole(&cwd, &to);
+    let to = cmd_fs_ops::destination(&from, &asked);
 
     // A copy that writes into what it is reading, or onto the file it reads, would take the source
     // apart while copying it. The Desktop refuses it before calling, and the command does too.
-    if to == from || (from.is_dir() && to.starts_with(&from)) {
+    if let Some(kind) = cmd_fs_ops::against_itself(&from, &to) {
         return ErrorFsOpsBlocked {
             path: to.display().to_string(),
-            kind: FsOpsBlock::Inside,
+            kind,
         }
         .into();
     }
