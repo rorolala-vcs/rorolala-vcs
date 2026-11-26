@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use librorolala::layout::{EntryKind, Layout, LayoutPath, MutableData};
 use librorolala::tree as rola_tree;
 use librorolala::workspace::Workspace;
+use librorolala::write::{FileStates, Journal, LayoutSnapshot};
 use mingling::{
     Grouped, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -171,6 +172,19 @@ pub fn handle_fs_ops_cp(state: StateFsOpsCp) -> Next {
         None
     };
 
+    // What the copy is what `rola undo` reverses. The Layout is read before the forks are written down,
+    // and the files before the copy writes them: a file the copy lands on may hold content a version
+    // does not, and only reading it here can say what it was.
+    let mut journal = source
+        .as_ref()
+        .filter(|_| same)
+        .map(|held| Journal::open(held, "fs-ops cp"));
+    let before = plan.as_ref().map(|plan| LayoutSnapshot::of(&plan.layout));
+    let files = plan.as_ref().map_or_else(
+        || same.then(|| FileStates::read(&to)),
+        |plan| Some(FileStates::of(plan.destinations())),
+    );
+
     // The filesystem first, since that is what was asked for, and the Layout follows it. A Layout
     // that could not be written leaves the two disagreeing, which is what `rola align` settles
     // rather than something this run can put back.
@@ -197,10 +211,30 @@ pub fn handle_fs_ops_cp(state: StateFsOpsCp) -> Next {
         .into();
     }
 
-    if let Some(plan) = plan
+    if let Some(plan) = plan.as_ref()
         && let Err(next) = record(plan)
     {
         return next;
+    }
+
+    if let Some(journal) = journal.as_mut() {
+        if let Some(files) = &files {
+            files.record(journal);
+        }
+
+        if let (Some(before), Some(plan)) = (before.as_ref(), plan.as_ref()) {
+            before.record(&LayoutSnapshot::of(&plan.layout), journal);
+        }
+    }
+
+    if let Some(journal) = journal
+        && let Err(error) = journal.finish()
+    {
+        return ErrorFsOpsFailed {
+            verb: "cp",
+            cause: error.to_string(),
+        }
+        .into();
     }
 
     ResultFsOps {
@@ -231,6 +265,23 @@ impl CpPlan {
             .filter(|fork| fork.data.kind() == EntryKind::Tree)
             .map(|fork| (fork.dest.as_str().to_owned(), fork.id))
             .collect()
+    }
+
+    /// The files the copy writes or replaces, so what they held can be read before and after.
+    fn destinations(&self) -> Vec<PathBuf> {
+        let mut paths: Vec<PathBuf> = self
+            .forks
+            .iter()
+            .map(|fork| self.root.join(fork.dest.as_str()))
+            .collect();
+
+        for (path, id) in self.layout.paths() {
+            if self.dropped.contains(&id) {
+                paths.push(self.root.join(path.as_str()));
+            }
+        }
+
+        paths
     }
 }
 
@@ -312,11 +363,11 @@ fn plan_cp(held: &Workspace, cwd: &Path, from: &Path, to: &Path) -> Option<CpPla
 }
 
 /// Writes the forks down and remembers the edit state each file copy carries.
-fn record(plan: CpPlan) -> Result<(), Next> {
+fn record(plan: &CpPlan) -> Result<(), Next> {
     let mut batch = plan.layout.batch();
 
-    for id in plan.dropped {
-        if let Err(error) = batch.remove_entry(id) {
+    for id in &plan.dropped {
+        if let Err(error) = batch.remove_entry(*id) {
             return Err(crate::layout::failed(&error));
         }
     }

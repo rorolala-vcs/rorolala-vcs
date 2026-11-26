@@ -57,6 +57,8 @@ fn main() {
     let gcchain = sandbox.join("gcchain");
     let foreign = sandbox.join("foreign");
     let copying = sandbox.join("copying");
+    let records = sandbox.join("records");
+    let undone = sandbox.join("undone");
 
     for dir in [
         &home,
@@ -84,6 +86,8 @@ fn main() {
         &gcchain,
         &foreign,
         &copying,
+        &records,
+        &undone,
     ] {
         fs::create_dir_all(dir).expect("a sandbox directory");
     }
@@ -133,6 +137,8 @@ fn main() {
     tweaking_from_origin(&rola, &from_origin, &mut checked);
     collapsing(&rola, &collapsed, &files, &mut checked);
     cutting(&rola, &cut_dir, &files, &mut checked);
+    logging(&rola, &records, &mut checked);
+    undoing(&rola, &undone, &mut checked);
     foreign_storage(&rola, &foreign, &mut checked);
 
     // Collecting is last, since the tracked work it makes acts as an account and installs a key,
@@ -2134,6 +2140,11 @@ fn merging(rola: &Rola, ws: &Path, files: &Path, checked: &mut Checked) {
         ],
     );
     checked.exits("a variant file is moved by hand", &ran, 0);
+    checked.wants(
+        "the move is recorded in the journal",
+        logged(ws, "fs-ops mv"),
+        &said(&ran),
+    );
 
     let ran = rola.run(ws, &["status", "--json"]);
     checked.wants(
@@ -2713,6 +2724,11 @@ fn held_by_another(rola: &Rola, dir: &Path, checked: &mut Checked) {
     let ran = rola.run(dir, &["fs-ops", "rm", "solo.psd"]);
     checked.exits("a path another account holds is removed", &ran, 0);
     checked.wants(
+        "the removal is recorded in the journal",
+        logged(dir, "fs-ops rm"),
+        &said(&ran),
+    );
+    checked.wants(
         "the held path is gone",
         !dir.join("solo.psd").exists(),
         &said(&ran),
@@ -2764,6 +2780,11 @@ fn copying_a_path(rola: &Rola, dir: &Path, checked: &mut Checked) {
 
     let ran = rola.run(dir, &["fs-ops", "cp", "solo.psd", "solo-copy.psd"]);
     checked.exits("a tracked file is copied", &ran, 0);
+    checked.wants(
+        "the copy is recorded in the journal",
+        logged(dir, "fs-ops cp"),
+        &said(&ran),
+    );
     checked.wants(
         "the tracked file's copy is there",
         dir.join("solo-copy.psd").is_file(),
@@ -3030,6 +3051,17 @@ fn copying_a_path(rola: &Rola, dir: &Path, checked: &mut Checked) {
             &said(&ran),
         ),
     }
+
+    // A path the Layout names and the tree no longer holds is confirmed gone by `align --delete`,
+    // which changes the Layout and is what the journal keeps.
+    fs::remove_file(dir.join("solo-copy.psd")).expect("the copy is gone");
+    let ran = rola.run(dir, &["align", "solo-copy.psd", "--delete"]);
+    checked.exits("a lost path is confirmed gone", &ran, 0);
+    checked.wants(
+        "the alignment is recorded in the journal",
+        logged(dir, "align"),
+        &said(&ran),
+    );
 }
 
 /// Taking ownership and letting it go, which the Desktop's ownership menu runs the same way.
@@ -3210,6 +3242,11 @@ fn tweaking(rola: &Rola, dir: &Path, checked: &mut Checked) {
         &["track", "a.psd", "--message", "first", "--no-editor"],
     );
     checked.exits("a file is recorded", &ran, 0);
+    checked.wants(
+        "the recording is recorded in the journal",
+        logged(dir, "track"),
+        &said(&ran),
+    );
 
     fs::write(dir.join("a.psd"), "two").expect("the second reading of the file");
     let ran = rola.run(
@@ -3674,6 +3711,180 @@ fn cutting(rola: &Rola, dir: &Path, files: &Path, checked: &mut Checked) {
     checked.stdout_has("the merged run says what the chain came to", &ran, "Cut");
 }
 
+/// The operations a Workspace recorded, as `rola opslog` lists them.
+///
+/// The list is the stack `rola undo` reads: one line per recorded run, numbered from the newest, with
+/// the command that made it, when it ended, and how many changes it holds.
+fn logging(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to list records in", &ran, 0);
+
+    let ran = rola.run(dir, &["opslog"]);
+    checked.exits("a Workspace with nothing recorded still answers", &ran, 0);
+    checked.stdout_has(
+        "an empty list says there is nothing",
+        &ran,
+        "No operation is recorded",
+    );
+
+    let ran = rola.run(dir, &["key", "generate", "--install", "ops"]);
+    checked.exits("a key pair is made for the records", &ran, 0);
+
+    let ran = rola.run(dir, &["account", "ops"]);
+    checked.exits("the records act as that account", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "art\n").expect("a file to record");
+    let ran = rola.run(dir, &["track", "a.psd", "--message", "first", "--no-editor"]);
+    checked.exits("a file is recorded", &ran, 0);
+
+    let ran = rola.run(dir, &["fs-ops", "cp", "a.psd", "b.psd"]);
+    checked.exits("a file is copied", &ran, 0);
+
+    let ran = rola.run(dir, &["opslog"]);
+    checked.exits("the records are listed", &ran, 0);
+    checked.stdout_has("the list is headed", &ran, "Recorded operations");
+    checked.stdout_has("the newest run is numbered first", &ran, "1. fs-ops cp");
+    checked.stdout_has("the run before it is numbered second", &ran, "2. track");
+}
+
+/// Undoing what a run recorded, newest first.
+///
+/// What an undo puts back is the Layout and the files together: a tracked version goes back to the
+/// one before it and the file to its content, a file that changed is refused until `--force`, and
+/// `--soft` moves only the record.
+fn undoing(rola: &Rola, dir: &Path, checked: &mut Checked) {
+    let ran = rola.run(dir, &["init"]);
+    checked.exits("a Workspace is made to undo in", &ran, 0);
+
+    let ran = rola.run(dir, &["key", "generate", "--install", "undoer"]);
+    checked.exits("a key pair is made to undo with", &ran, 0);
+
+    let ran = rola.run(dir, &["account", "undoer"]);
+    checked.exits("the undo acts as that account", &ran, 0);
+
+    fs::write(dir.join("a.psd"), "one").expect("a file to record");
+    let ran = rola.run(dir, &["track", "a.psd", "--message", "first", "--no-editor"]);
+    checked.exits("a file is recorded", &ran, 0);
+    let first = entry_field(rola, dir, "a.psd", "version").expect("the first version");
+
+    for (content, message) in [("two", "second"), ("three", "third")] {
+        fs::write(dir.join("a.psd"), content).expect("a reading of the file");
+        let ran = rola.run(dir, &["track", "a.psd", "--message", message, "--no-editor"]);
+        checked.exits("the file is recorded again", &ran, 0);
+    }
+
+    // Two operations at once, the newest first.
+    let ran = rola.run(dir, &["undo", "2"]);
+    checked.exits("two operations are undone", &ran, 0);
+    checked.stdout_has("the run says how many were undone", &ran, "Undid 2 operation(s)");
+    checked.wants(
+        "the entry is back at the version it held",
+        entry_field(rola, dir, "a.psd", "version").as_deref() == Some(first.as_str()),
+        &said(&ran),
+    );
+    checked.wants(
+        "the file holds the content of that version",
+        fs::read_to_string(dir.join("a.psd")).is_ok_and(|it| it == "one"),
+        &said(&ran),
+    );
+
+    // The recording itself, which takes the entry away and leaves the work where it is.
+    let ran = rola.run(dir, &["undo"]);
+    checked.exits("the first recording is undone", &ran, 0);
+    checked.stdout_has("the undo names the command", &ran, "Undid `track`");
+    checked.wants(
+        "the entry is gone",
+        entry_field(rola, dir, "a.psd", "uuid").is_none(),
+        &said(&ran),
+    );
+    checked.wants(
+        "the file is left where it was",
+        fs::read_to_string(dir.join("a.psd")).is_ok_and(|it| it == "one"),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["undo"]);
+    checked.exits("an empty stack is refused", &ran, 249);
+    checked.stderr_has("the refusal says there is nothing", &ran, "no operation");
+
+    // A file that changed after the recording is refused, and `--force` writes over it.
+    fs::write(dir.join("b.psd"), "bee").expect("a file to record");
+    let ran = rola.run(dir, &["track", "b.psd", "--message", "bee", "--no-editor"]);
+    checked.exits("a second file is recorded", &ran, 0);
+    fs::write(dir.join("b.psd"), "second").expect("a second reading to record");
+    let ran = rola.run(dir, &["track", "b.psd", "--message", "second", "--no-editor"]);
+    checked.exits("the second file is recorded again", &ran, 0);
+    fs::write(dir.join("b.psd"), "changed").expect("the file changed after the recording");
+
+    let ran = rola.run(dir, &["undo"]);
+    checked.exits("a changed file is refused", &ran, 249);
+    checked.stderr_has("the refusal names the file", &ran, "b.psd");
+
+    let ran = rola.run(dir, &["undo", "--force"]);
+    checked.exits("a forced undo writes over the file", &ran, 0);
+    checked.wants(
+        "the file is what the version before it holds",
+        fs::read_to_string(dir.join("b.psd")).is_ok_and(|it| it == "bee"),
+        &said(&ran),
+    );
+
+    // `--soft` moves only the record: the work on disk is as it was left.
+    fs::write(dir.join("b.psd"), "second").expect("a reading to record");
+    let ran = rola.run(dir, &["track", "b.psd", "--message", "second", "--no-editor"]);
+    checked.exits("the file is recorded again", &ran, 0);
+    fs::write(dir.join("b.psd"), "third").expect("an unrecorded change");
+
+    let ran = rola.run(dir, &["undo", "--soft"]);
+    checked.exits("a soft undo moves only the record", &ran, 0);
+    checked.wants(
+        "the work on disk is left as it is",
+        fs::read_to_string(dir.join("b.psd")).is_ok_and(|it| it == "third"),
+        &said(&ran),
+    );
+
+    // A cut is undone: the path goes back to the Uuid and the version it had.
+    fs::write(dir.join("c.psd"), "one").expect("a file to cut");
+    let ran = rola.run(dir, &["track", "c.psd", "--message", "first", "--no-editor"]);
+    checked.exits("a file is recorded to cut", &ran, 0);
+    fs::write(dir.join("c.psd"), "two").expect("a second reading");
+    let ran = rola.run(dir, &["track", "c.psd", "--message", "second", "--no-editor"]);
+    checked.exits("the file is recorded twice", &ran, 0);
+
+    fs::write(dir.join(".rola/layout/TRACK"), "vault\n").expect("the tracked Vault");
+    copy_into(
+        &dir.join(".rola/layout"),
+        &dir.join(".rola/cache/readonly-layouts/vault/truth"),
+    );
+
+    fs::write(dir.join("c.psd"), "three").expect("a third reading");
+    let ran = rola.run(dir, &["track", "c.psd", "--message", "third", "--no-editor"]);
+    checked.exits("the file is recorded past the origin", &ran, 0);
+
+    let uuid = entry_field(rola, dir, "c.psd", "uuid").expect("the entry before the cut");
+    let version = entry_field(rola, dir, "c.psd", "version").expect("the version before the cut");
+
+    let ran = rola.run(dir, &["cut", "c.psd"]);
+    checked.exits("the history is cut", &ran, 0);
+    checked.wants(
+        "the cut records a new Uuid",
+        entry_field(rola, dir, "c.psd", "uuid").as_deref() != Some(uuid.as_str()),
+        &said(&ran),
+    );
+
+    let ran = rola.run(dir, &["undo"]);
+    checked.exits("the cut is undone", &ran, 0);
+    checked.wants(
+        "the path records the Uuid it had",
+        entry_field(rola, dir, "c.psd", "uuid").as_deref() == Some(uuid.as_str()),
+        &said(&ran),
+    );
+    checked.wants(
+        "the path records the version it had",
+        entry_field(rola, dir, "c.psd", "version").as_deref() == Some(version.as_str()),
+        &said(&ran),
+    );
+}
+
 /// An editor command that copies the file it is given beside it, for a run that must not edit.
 fn editor_that_copies(dir: &Path) -> String {
     if cfg!(windows) {
@@ -3744,6 +3955,11 @@ fn uuid_switch(rola: &Rola, dir: &Path, checked: &mut Checked) {
     // by hand is put at.
     let ran = rola.run(dir, &["retrack", "a.txt"]);
     checked.exits("the file is taken back one version", &ran, 0);
+    checked.wants(
+        "the retrack is recorded in the journal",
+        logged(dir, "retrack"),
+        &said(&ran),
+    );
     let bottom = entry_field(rola, dir, "a.txt", "version").expect("the version it went back to");
 
     let ran = rola.run(dir, &["retrack", "a.txt", &top]);

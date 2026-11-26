@@ -13,8 +13,8 @@ use rorolala_vault::Vault;
 use rorolala_workspace::{Merging, Workspace};
 use uuid::Uuid;
 
-use crate::write::journal::{Effect, EntryState, Journal};
 use crate::write::WriteError;
+use crate::write::journal::{Effect, EntryState, Journal};
 
 /// One change to a Layout.
 #[derive(Debug, Clone)]
@@ -180,13 +180,15 @@ pub fn apply_recorded(
                         reason: error.to_string(),
                     })?;
                 if let Some(path) = path {
+                    // The path names the old `Uuid` until it is let go of, so it is cleared before it
+                    // is bound again: binding it while it still names something is a name taken.
                     batch
-                        .create_path(&path, to)
+                        .remove_path(&path)
                         .map_err(|error| WriteError::Layout {
                             reason: error.to_string(),
                         })?;
                     batch
-                        .remove_path(&path)
+                        .create_path(&path, to)
                         .map_err(|error| WriteError::Layout {
                             reason: error.to_string(),
                         })?;

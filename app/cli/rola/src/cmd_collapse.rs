@@ -2,9 +2,9 @@
 //!
 //! A run names one file or many. A target chooses the first version folded, and names a version only
 //! when one path is named; `--keep` holds a version apart from the fold, and `--keep-join` holds a
-//! merge apart the same way. The fold itself is the library's, see [`librorolala::write::collapse`]:
-//! what is here is the shape of the command, the paths it resolves, the words it prints and the exit
-//! code it ends on.
+//! merge apart the same way. The fold itself is the library's, see
+//! [`collapse`](fn@librorolala::write::collapse): what is here is the shape of the command, the paths
+//! it resolves, the words it prints and the exit code it ends on.
 
 // A collapse reads a path, a Layout, a chain, a target and the account it may reach before it hands
 // the work over, and every step of that is a refusal of its own to say. The handler's parameters are
@@ -55,7 +55,6 @@ use crate::progress::Reporting;
 
 /// The files whose local versions are folded.
 const ARG_FILES: PickerArg<'static, Vec<String>> = arg![Vec<String>];
-
 
 /// A version to keep apart from the fold.
 const ARG_KEEP: PickerArg<'static, Vec<String>> = arg![keep: Vec<String>];
@@ -175,6 +174,13 @@ pub fn handle_collapse(
     concurrency: &ResConcurrency,
     progress: &ResProgressSetting,
 ) -> Next {
+    let StateCollapse {
+        files: named,
+        keep,
+        keep_join,
+    } = state;
+    let first = named.first().cloned().unwrap_or_default();
+
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
         Err(next) => return next,
@@ -187,20 +193,19 @@ pub fn handle_collapse(
     let root = held.get_root().to_path_buf();
     let cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,
-        Err(error) => return failed(&state.files.first().cloned().unwrap_or_default(), error.to_string()),
+        Err(error) => {
+            return failed(&first, error.to_string());
+        }
     };
 
     let Some(index) = index.get_ref().as_ref() else {
-        return failed(
-            &state.files.first().cloned().unwrap_or_default(),
-            t!("tweak.err_no_index").trim().to_owned(),
-        );
+        return failed(&first, t!("tweak.err_no_index").trim().to_owned());
     };
 
     // A target is a last word that names a version on the first path's chain, and only when one path
     // is named. Everything else is a path, which is what lets `collapse a.psd` and `collapse a.psd ~1`
     // read the way a person writes them.
-    let mut files = state.files.clone();
+    let mut files = named;
     let mut target = None;
     if files.len() >= 2 {
         let first = files.first().cloned().unwrap_or_default();
@@ -220,7 +225,7 @@ pub fn handle_collapse(
     if target.is_some() && files.len() > 1 {
         return ErrorCollapseTargetManyFiles { count: files.len() }.into();
     }
-    if target.is_none() && !state.keep.is_empty() && files.len() > 1 {
+    if target.is_none() && !keep.is_empty() && files.len() > 1 {
         return ErrorCollapseTargetManyFiles { count: files.len() }.into();
     }
 
@@ -287,8 +292,8 @@ pub fn handle_collapse(
     };
     let options = CollapseOptions {
         target,
-        keep: state.keep.clone(),
-        keep_join: state.keep_join,
+        keep,
+        keep_join,
     };
     let mut journal = librorolala::write::Journal::open(held, "collapse");
     let cancellation = crate::cancel::on_ctrl_c();
@@ -323,10 +328,7 @@ pub fn handle_collapse(
     }
 
     if let Err(error) = journal.finish() {
-        return failed(
-            &state.files.first().cloned().unwrap_or_default(),
-            error.to_string(),
-        );
+        return failed(&first, error.to_string());
     }
 
     ().into()
@@ -361,7 +363,9 @@ fn refused(file: &str, chain: &Chain, refusal: CollapseRefusal) -> Next {
 /// Draws what a target that names no one version is told as.
 fn target_miss(file: &str, chain: &Chain, miss: TargetMiss) -> Next {
     let (target, kind) = match miss {
-        TargetMiss::NoMatch { target } => (target, TargetKind::None),
+        TargetMiss::NoMatch { target } | TargetMiss::OutOfChain { target } => {
+            (target, TargetKind::None)
+        }
         TargetMiss::Ambiguous { target, candidates } => {
             let candidates = candidates
                 .iter()
@@ -380,7 +384,6 @@ fn target_miss(file: &str, chain: &Chain, miss: TargetMiss) -> Next {
             (target, TargetKind::Many(candidates))
         }
         TargetMiss::Elsewhere { target } => (target, TargetKind::Other),
-        TargetMiss::OutOfChain { target } => (target, TargetKind::None),
         TargetMiss::Removed { version } => (version, TargetKind::None),
     };
 
@@ -690,10 +693,7 @@ pub fn render_error_collapse_target(error: ErrorCollapseTarget, ec: &mut ResExit
                     .trim()
                 );
             }
-            r_eprintln!(
-                "{}",
-                help_line!(t!("collapse.err_target_many_help").trim())
-            );
+            r_eprintln!("{}", help_line!(t!("collapse.err_target_many_help").trim()));
         }
         TargetKind::Other => {
             r_eprintln!(
@@ -702,10 +702,7 @@ pub fn render_error_collapse_target(error: ErrorCollapseTarget, ec: &mut ResExit
             );
         }
         TargetKind::None => {
-            r_eprintln!(
-                "{}",
-                help_line!(t!("collapse.err_target_none_help").trim())
-            );
+            r_eprintln!("{}", help_line!(t!("collapse.err_target_none_help").trim()));
         }
     }
     ec.exit_code = EC_ERR_TWEAK;

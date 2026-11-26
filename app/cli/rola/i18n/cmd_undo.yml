@@ -1,0 +1,87 @@
+_version: 2
+
+undo:
+  help:
+    en: |
+      # Undo the last recorded operations, newest first
+      **Usage**: rola [[GREEN]]__undo__[[/]] [COUNT]
+      COUNT is how many recorded operations to undo, newest first (default 1).
+      **Flags**:
+           __--force__    Continue when the operation matches only in part, and write over files that changed
+           __--soft__     Move only the record back, and leave the work on disk as it is
+    zh-CN: |
+      # 撤回最近记录的操作，最新的先撤
+      **用法**：rola [[GREEN]]__undo__[[/]] [数量]
+      数量是要撤回的操作数，最新的先撤（默认 1）。
+      **标识**：
+           __--force__    操作只局部命中时继续，并覆盖已改动的文件
+           __--soft__     只把记录移回，磁盘上的文件保持原样
+
+  complete:
+    soft:
+      en: Move only the record back, and leave the work on disk as it is
+      zh-CN: 只把记录移回，磁盘上的文件保持原样
+
+  description:
+    en: Undo the last recorded operations, newest first
+    zh-CN: 撤回最近记录的操作，最新的先撤
+
+  result:
+    en: "Undid %{count} operation(s): %{commands}"
+    zh-CN: "已撤回 %{count} 个操作：%{commands}"
+
+  result_one:
+    en: "Undid `%{command}`"
+    zh-CN: "已撤回 `%{command}`"
+
+  partial:
+    en: The operation matches only in part, so undoing it may be incomplete. Continue?
+    zh-CN: 该操作局部命中，可能撤回不完整，是否继续？
+
+  err_no_log:
+    en: This Workspace records no operation to undo
+    zh-CN: 本工作区没有可撤回的操作记录
+
+  err_no_log_help:
+    en: Nothing has been recorded yet; `rola opslog` lists what is there
+    zh-CN: 尚未记录任何操作，`rola opslog` 会列出已有的记录
+
+  err_count:
+    en: "`%{count}` is not a number from 1 to %{available}"
+    zh-CN: "`%{count}` 不在 1 到 %{available} 之间"
+
+  err_count_help:
+    en: Please read the number from `rola opslog`
+    zh-CN: 请从 `rola opslog` 的列表里读取数量
+
+  err_changed:
+    en: "`%{path}` has changed since the operation was recorded"
+    zh-CN: "`%{path}` 在该操作被记录之后发生了变化"
+
+  err_changed_help:
+    en: Please add `--force` to write over it, or `--soft` to move only the record
+    zh-CN: 请加 `--force` 覆盖它，或加 `--soft` 只移动记录
+
+  err_absent:
+    en: "`%{path}` is gone, and the operation expected it to be there"
+    zh-CN: "`%{path}` 已不存在，而该操作期望它仍在"
+
+  err_absent_help:
+    en: Please put the file back, or add `--force` to skip what is missing
+    zh-CN: 请把文件放回原处，或加 `--force` 跳过缺失的部分
+
+  err_flags:
+    en: "`--force` and `--soft` ask for different undos"
+    zh-CN: "`--force` 与 `--soft` 要求不同的撤回方式"
+
+  err_flags_help:
+    en: Please give one of them
+    zh-CN: 请只给出其中之一
+
+  err_failed:
+    en: "Undoing `%{command}` failed: %{reason}"
+    zh-CN: "撤回 `%{command}` 失败：%{reason}"
+
+  err_failed_help:
+    en: Please check that the Layout and the store are writable, then try again
+    zh-CN: 请检查布局与仓库是否可写，然后重试

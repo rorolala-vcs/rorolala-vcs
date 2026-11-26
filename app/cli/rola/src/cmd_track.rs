@@ -35,11 +35,11 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
-use librorolala::write::WriteError;
 use librorolala::write::track::batch::{
     Action as TrackedAction, Carry, FileKind, Messages, Options, Refusal, Subject,
 };
 use librorolala::write::track::batch::{apply, plan};
+use librorolala::write::{Journal, LayoutSnapshot, WriteError};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -427,6 +427,11 @@ fn record(
         }
     };
 
+    // What the run changed is what `rola undo` reverses, so the Layout is read before the recording
+    // writes it. A run that changes nothing writes no journal, the file follows the effects.
+    let mut journal = Journal::open(held, "track");
+    let before = LayoutSnapshot::of(&layout);
+
     let outcome = match apply(&carry, plan, &texts, options, progress, cancellation) {
         Ok(outcome) => outcome,
         Err(error) => return track_write_error(error),
@@ -434,6 +439,12 @@ fn record(
 
     if let Some(refusal) = outcome.refused.first() {
         return refusal_state(refusal.clone());
+    }
+
+    before.record(&LayoutSnapshot::of(&layout), &mut journal);
+
+    if let Err(error) = journal.finish() {
+        return track_write_error(error);
     }
 
     ResultTrack {

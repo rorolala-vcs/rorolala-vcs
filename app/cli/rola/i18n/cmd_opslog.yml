@@ -1,0 +1,40 @@
+_version: 2
+
+opslog:
+  help:
+    en: |
+      # List the operations recorded in this Workspace, newest first
+      **Usage**: rola [[GREEN]]__opslog__[[/]]
+      The list is the stack `rola undo` reads.
+    zh-CN: |
+      # 列出本工作区记录的操作，最新的在前
+      **用法**：rola [[GREEN]]__opslog__[[/]]
+      这份列表就是 `rola undo` 读取的栈。
+
+  description:
+    en: List the operations recorded in this Workspace, newest first
+    zh-CN: 列出本工作区记录的操作，最新的在前
+
+  empty:
+    en: No operation is recorded in this Workspace
+    zh-CN: 本工作区没有记录任何操作
+
+  header:
+    en: "Recorded operations, newest first:"
+    zh-CN: "已记录的操作，最新的在前："
+
+  item:
+    en: "%{number}. %{command} at %{time}, %{count} changes"
+    zh-CN: "%{number}、%{command}，时间为 %{time}，共 %{count} 项变更"
+
+  warn_skipped:
+    en: "Skipped a log file that could not be read: %{file}"
+    zh-CN: "已跳过无法读取的日志文件：%{file}"
+
+  err_read:
+    en: "The operation log could not be read: %{reason}"
+    zh-CN: "无法读取操作日志：%{reason}"
+
+  err_read_help:
+    en: Please check that `.rola/cache/log` is readable, then try again
+    zh-CN: 请检查 `.rola/cache/log` 是否可读，然后重试

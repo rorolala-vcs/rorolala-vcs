@@ -30,12 +30,12 @@ use librorolala::layout::{Layout, LayoutPath};
 use librorolala::protocol::VaultAddress;
 use librorolala::status::tracked_vault;
 use librorolala::workspace::Workspace;
-use librorolala::write::WriteError;
 use librorolala::write::path::{PathRefusal, local_path};
 use librorolala::write::retrack::{
     EntryRefusal, Recorded, Recording, Request, RetrackMessages, RetrackOptions, RetrackOutcome,
     RetrackRefusal, TargetRefusal, recording_of, retrack_path, tree_above,
 };
+use librorolala::write::{FileStates, Journal, LayoutSnapshot, WriteError};
 use mingling::{
     Grouped, LazyRes, Routable, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -351,6 +351,12 @@ pub fn handle_retrack(
     };
     let path = locate(&root, &cwd, &file)?;
 
+    // What the run changes is what `rola undo` reverses: the entry it moves and the file it writes
+    // the old content over.
+    let mut journal = Journal::open(held, "retrack");
+    let before = LayoutSnapshot::of(&layout);
+    let files = FileStates::read(root.join(path.as_str()));
+
     // How the Workspace reaches a Vault and which account it acts as are answered here, before the
     // library asks: each is a failure of its own with its own exit code, and a library cannot speak
     // one. A run that asks for neither is never told what came of reading them.
@@ -406,7 +412,16 @@ pub fn handle_retrack(
     reporting.finish();
 
     match answer {
-        Ok(outcome) => moved_state(outcome),
+        Ok(outcome) => {
+            before.record(&LayoutSnapshot::of(&layout), &mut journal);
+            files.record(&mut journal);
+
+            if let Err(error) = journal.finish() {
+                return failed(error.to_string());
+            }
+
+            moved_state(outcome)
+        }
         Err(refusal) => refusal_state(refusal, &file, &written, &mut answered),
     }
 }

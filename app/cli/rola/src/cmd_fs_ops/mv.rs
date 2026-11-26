@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::workspace::{Merging, Workspace};
+use librorolala::write::{Effect, Journal, LayoutSnapshot};
 use mingling::{
     Grouped, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -226,6 +227,10 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv) -> Next {
     let plan = source
         .as_ref()
         .and_then(|held| plan_mv(held, &cwd, &from, &to, same).map(|plan| (held, plan)));
+    let mut journal = source.as_ref().map(|held| Journal::open(held, "fs-ops mv"));
+    let before = plan
+        .as_ref()
+        .map(|(_, plan)| LayoutSnapshot::of(&plan.layout));
 
     // A destination that already names an entry is refused before anything moves: a move that took it
     // would leave two names for one path, which is the replacement the caller settled being made where
@@ -265,6 +270,13 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv) -> Next {
             cause: error.to_string(),
         }
         .into();
+    }
+
+    if let Some(journal) = journal.as_mut() {
+        journal.record(Effect::FileMoved {
+            from: from.display().to_string(),
+            to: to.display().to_string(),
+        });
     }
 
     // A moved variant file is written down where it now lies, so the merge is not left looking for it
@@ -320,6 +332,21 @@ pub fn handle_fs_ops_mv(state: StateFsOpsMv) -> Next {
                 Err(error) => return crate::layout::failed(&error),
             }
         }
+
+        if let (Some(before), Some(journal)) = (before.as_ref(), journal.as_mut()) {
+            let after = LayoutSnapshot::of(&plan.layout);
+            before.record(&after, journal);
+        }
+    }
+
+    if let Some(journal) = journal
+        && let Err(error) = journal.finish()
+    {
+        return ErrorFsOpsFailed {
+            verb: "mv",
+            cause: error.to_string(),
+        }
+        .into();
     }
 
     ResultFsOps {

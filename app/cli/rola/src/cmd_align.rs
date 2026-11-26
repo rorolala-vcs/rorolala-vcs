@@ -18,11 +18,13 @@
 // setting is one of those resources and is taken by reference, which is what the injection gives it.
 #![allow(clippy::too_many_arguments, clippy::trivially_copy_pass_by_ref)]
 
+use std::path::{Path, PathBuf};
+
 use librorolala::status::tracked_vault;
-use librorolala::write::WriteError;
 use librorolala::write::align::{
     Carry, Did, Item, Messages, Mode, MoveKind, Options, Outcome, Refusal, settle,
 };
+use librorolala::write::{FileStates, Journal, LayoutSnapshot, WriteError};
 use mingling::{
     Grouped, LazyRes, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -314,6 +316,17 @@ pub fn handle_align(
         Err(error) => return align_failed(error),
     };
 
+    // What the run settles is what `rola undo` reverses: the entry it moves and the file it puts back
+    // or removes. A refused run writes no journal.
+    let mut journal = Journal::open(held, "align");
+    let before = LayoutSnapshot::of(&layout);
+    let target = if Path::new(&path).is_absolute() {
+        PathBuf::from(&path)
+    } else {
+        cwd.join(&path)
+    };
+    let files = FileStates::read(target);
+
     // Content a restore writes comes out of the store, and the store may not hold it: what is
     // missing is asked of the Vaults the Workspace has bound. A run that cannot say which account it
     // acts as has none to ask, and then restores only what is here.
@@ -371,6 +384,18 @@ pub fn handle_align(
     // nothing says nothing.
     report_brought(&settled.took);
     reporting.finish();
+
+    if matches!(
+        &settled.outcome,
+        Ok(Outcome::Paths(_) | Outcome::Tree { .. } | Outcome::TreeFile { .. })
+    ) {
+        before.record(&LayoutSnapshot::of(&layout), &mut journal);
+        files.record(&mut journal);
+
+        if let Err(error) = journal.finish() {
+            return align_write_error(error);
+        }
+    }
 
     align_next(settled.outcome)
 }

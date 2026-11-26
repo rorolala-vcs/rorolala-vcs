@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use librorolala::layout::{Layout, LayoutPath};
 use librorolala::workspace::{Merging, Workspace};
+use librorolala::write::{FileStates, Journal, LayoutSnapshot};
 use mingling::{
     Grouped, Routable, ShellContext, Suggest,
     consts::UNMATCHED,
@@ -163,6 +164,16 @@ pub fn handle_fs_ops_rm(state: StateFsOpsRm) -> Next {
         .as_ref()
         .and_then(|held| plan_rm(held, &cwd, &path).map(|(layout, named)| (held, layout, named)));
 
+    // What the run is what `rola undo` reverses. The path is read before it is removed, since what a
+    // file held is not something the Layout answers once it is gone.
+    let mut journal = workspace
+        .as_ref()
+        .map(|held| Journal::open(held, "fs-ops rm"));
+    let files = workspace.as_ref().map(|_| FileStates::read(&path));
+    let before = plan
+        .as_ref()
+        .map(|(_, layout, _)| LayoutSnapshot::of(layout));
+
     // The filesystem first, since that is what was asked for, and the Layout follows it. A removal
     // that could not be written leaves the path the Layout names unheld, which is what `rola align`
     // settles rather than something this run can put back.
@@ -174,7 +185,7 @@ pub fn handle_fs_ops_rm(state: StateFsOpsRm) -> Next {
         .into();
     }
 
-    if let Some((held, layout, named)) = plan {
+    if let Some((held, layout, named)) = &plan {
         // A file the Layout no longer names has no merge waiting for it either: its variant file, if
         // there is one, is left where it lies as a file of its own, the way `rola align --delete`
         // leaves it.
@@ -182,11 +193,11 @@ pub fn handle_fs_ops_rm(state: StateFsOpsRm) -> Next {
         let mut ended = false;
 
         for (_, id) in named {
-            if let Err(error) = layout.remove_entry(id) {
+            if let Err(error) = layout.remove_entry(*id) {
                 return crate::layout::failed(&error);
             }
 
-            ended |= merging.remove(id);
+            ended |= merging.remove(*id);
         }
 
         if ended && let Err(error) = merging.write(held.get_root()) {
@@ -196,6 +207,26 @@ pub fn handle_fs_ops_rm(state: StateFsOpsRm) -> Next {
             }
             .into();
         }
+    }
+
+    if let Some(journal) = journal.as_mut() {
+        if let Some(files) = &files {
+            files.record(journal);
+        }
+
+        if let (Some(before), Some((_, layout, _))) = (before.as_ref(), plan.as_ref()) {
+            before.record(&LayoutSnapshot::of(layout), journal);
+        }
+    }
+
+    if let Some(journal) = journal
+        && let Err(error) = journal.finish()
+    {
+        return ErrorFsOpsFailed {
+            verb: "rm",
+            cause: error.to_string(),
+        }
+        .into();
     }
 
     ResultFsOps {

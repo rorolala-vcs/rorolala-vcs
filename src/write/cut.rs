@@ -96,7 +96,7 @@ impl From<TweakRefusal> for CutRefusal {
             TweakRefusal::NotAChain => Self::NotAChain,
             TweakRefusal::Merging { variant } => Self::Merging { variant },
             TweakRefusal::Target(miss) => Self::Target(miss),
-            TweakRefusal::Sheet { reason } => Self::Sheet(reason.to_string()),
+            TweakRefusal::Sheet { reason } => Self::Sheet(reason),
             TweakRefusal::Failed(error) => Self::Failed(error),
         }
     }
@@ -229,8 +229,8 @@ mod tests {
     use super::{CutOptions, CutOutcome, cut};
     use crate::write::Cancellation;
     use crate::write::Journal;
-    use crate::write::tweak::{Chain, Request};
     use crate::write::track::{TrackOptions, track_file};
+    use crate::write::tweak::{Chain, Request};
 
     /// A Workspace holding `a.txt`, recorded once per pair of content and message.
     fn recorded(name: &str, versions: &[(&str, &str)]) -> (PathBuf, Workspace) {

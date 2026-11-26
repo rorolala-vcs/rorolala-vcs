@@ -32,7 +32,7 @@ use librorolala::write::bring::{
     resolve,
 };
 use librorolala::write::request::{Common, Target};
-use librorolala::write::{Labels, WriteError};
+use librorolala::write::{FileStates, Journal, Labels, LayoutSnapshot, WriteError};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -382,6 +382,12 @@ pub fn handle_bring(
     };
     let cancellation = crate::cancel::on_ctrl_c();
 
+    // What the run brings in is what `rola undo` reverses: the entries it adds and the files it
+    // writes. A brought path is refused when one is already here, so every file it writes was
+    // absent before, which is what the file states are read as.
+    let mut journal = Journal::open(held, "bring");
+    let before = LayoutSnapshot::of(&layout);
+
     let brought = match bring_in(
         held,
         &layout,
@@ -408,6 +414,22 @@ pub fn handle_bring(
     report_fetched(&sources);
     drop(sources);
     reporting.finish();
+
+    let files = FileStates::absent_before(
+        brought
+            .entries
+            .iter()
+            .map(|item| held.get_root().join(&item.local_path)),
+    );
+    before.record(&LayoutSnapshot::of(&layout), &mut journal);
+    files.record(&mut journal);
+
+    if let Err(cause) = journal.finish() {
+        return ErrorBringFailed {
+            cause: cause.to_string(),
+        }
+        .into();
+    }
 
     ResultBroughtIn {
         layout: DEFAULT_LAYOUT_NAME.to_owned(),

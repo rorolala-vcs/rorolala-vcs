@@ -18,14 +18,17 @@
 //! never overwrites what the run does not know about; merging is not here yet.
 
 // `#[chain]` copies the attributes of the function it is given onto the struct it generates,
-// so a lint allowed on the handler below is reported as defined twice. The allow lives here,
-// where it covers the one signature that needs it.
-#![allow(clippy::trivially_copy_pass_by_ref)]
+// so a lint allowed on the handler below is reported as defined twice. The allows live here, where
+// they cover the one signature that needs them: the progress setting is a resource the injection
+// gives by reference, and a sync makes the plan, stops where a dry run or a blocked entry asks it
+// to, and carries the plan out in one pass read in the order the steps happen.
+#![allow(clippy::too_many_lines, clippy::trivially_copy_pass_by_ref)]
 
 use librorolala::daemon::{FetchLayoutRequest, action_fetch_layout};
 use librorolala::layout::Layout;
 use librorolala::storage::StorageSet;
 use librorolala::vcs::VCSIndex;
+use librorolala::write::{Journal, LayoutSnapshot};
 use mingling::{
     Grouped, LazyRes, ShellContext, StructuralData, Suggest,
     consts::UNMATCHED,
@@ -298,6 +301,10 @@ pub fn handle_sync(
     // which `--no-layout` says, makes no plan and reads no copy. One watching covers the whole run:
     // the steps that make the plan and carry it out are one thing to a reader, and a bar waiting on
     // each part would never have been let out at all.
+    // What the run applies is what `rola undo` reverses: one effect for each version the plan moves.
+    let mut journal = Journal::open(held, "sync");
+    let before = LayoutSnapshot::of(&layout);
+
     let reporting = Reporting::start(*progress);
 
     let plan = if state.skip.layout {
@@ -363,12 +370,23 @@ pub fn handle_sync(
     reporting.finish();
 
     match outcome {
-        Ok(carried) => done(
-            plan.as_ref(),
-            DEFAULT_LAYOUT_NAME.to_owned(),
-            vault_name,
-            carried,
-        ),
+        Ok(carried) => {
+            before.record(&LayoutSnapshot::of(&layout), &mut journal);
+
+            if let Err(cause) = journal.finish() {
+                return ErrorSyncFailed {
+                    cause: cause.to_string(),
+                }
+                .into();
+            }
+
+            done(
+                plan.as_ref(),
+                DEFAULT_LAYOUT_NAME.to_owned(),
+                vault_name,
+                carried,
+            )
+        }
         Err(error) => error.into(),
     }
 }

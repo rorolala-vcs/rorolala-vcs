@@ -3,8 +3,8 @@
 //! A run names one file or many. A target chooses the first version the new chain keeps, and is
 //! allowed only when one path is named. `--keep-uuid` keeps the entry's `Uuid`, which forks it from
 //! the Vault, and `--strip-join` drops every merge in the kept range. The cut itself is the
-//! library's, see [`librorolala::write::cut`]: what is here is the shape of the command, the paths it
-//! resolves, the words it prints and the exit code it ends on.
+//! library's, see [`cut`](fn@librorolala::write::cut): what is here is the shape of the command, the
+//! paths it resolves, the words it prints and the exit code it ends on.
 
 // A cut reads a path, a Layout, a chain, a target and the account it may reach before it hands the
 // work over, and every step of that is a refusal of its own to say. The handler's parameters are the
@@ -174,6 +174,13 @@ pub fn handle_cut(
     concurrency: &ResConcurrency,
     progress: &ResProgressSetting,
 ) -> Next {
+    let StateCut {
+        files: named,
+        keep_uuid,
+        strip_join,
+    } = state;
+    let first = named.first().cloned().unwrap_or_default();
+
     let layout = match chosen(workspace.get_ref(), vault.get_ref(), None) {
         Ok(layout) => layout,
         Err(next) => return next,
@@ -187,24 +194,18 @@ pub fn handle_cut(
     let cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,
         Err(error) => {
-            return failed(
-                &state.files.first().cloned().unwrap_or_default(),
-                error.to_string(),
-            );
+            return failed(&first, error.to_string());
         }
     };
 
     let Some(index) = index.get_ref().as_ref() else {
-        return failed(
-            &state.files.first().cloned().unwrap_or_default(),
-            t!("tweak.err_no_index").trim().to_owned(),
-        );
+        return failed(&first, t!("tweak.err_no_index").trim().to_owned());
     };
 
     // A target is a last word that names a version on the first path's chain, and only when one path
     // is named. Everything else is a path, which is what lets `cut a.psd` and `cut a.psd ~1` read the
     // way a person writes them.
-    let mut files = state.files.clone();
+    let mut files = named;
     let mut target = None;
     if files.len() >= 2 {
         let first = files.first().cloned().unwrap_or_default();
@@ -288,8 +289,8 @@ pub fn handle_cut(
     };
     let options = CutOptions {
         target,
-        keep_uuid: state.keep_uuid,
-        strip_join: state.strip_join,
+        keep_uuid,
+        strip_join,
     };
     let mut journal = librorolala::write::Journal::open(held, "cut");
     let cancellation = crate::cancel::on_ctrl_c();
@@ -309,7 +310,7 @@ pub fn handle_cut(
 
         match outcome {
             Ok(outcome) => {
-                let text = if state.keep_uuid {
+                let text = if keep_uuid {
                     t!(
                         "cut.result_kept_uuid",
                         file = file,
@@ -334,10 +335,7 @@ pub fn handle_cut(
     }
 
     if let Err(error) = journal.finish() {
-        return failed(
-            &state.files.first().cloned().unwrap_or_default(),
-            error.to_string(),
-        );
+        return failed(&first, error.to_string());
     }
 
     ().into()
@@ -368,7 +366,9 @@ fn refused(file: &str, chain: &Chain, refusal: CutRefusal) -> Next {
 /// Draws what a target that names no one version is told as.
 fn target_miss(file: &str, chain: &Chain, miss: TargetMiss) -> Next {
     let (target, kind) = match miss {
-        TargetMiss::NoMatch { target } => (target, TargetKind::None),
+        TargetMiss::NoMatch { target } | TargetMiss::OutOfChain { target } => {
+            (target, TargetKind::None)
+        }
         TargetMiss::Ambiguous { target, candidates } => {
             let candidates = candidates
                 .iter()
@@ -387,7 +387,6 @@ fn target_miss(file: &str, chain: &Chain, miss: TargetMiss) -> Next {
             (target, TargetKind::Many(candidates))
         }
         TargetMiss::Elsewhere { target } => (target, TargetKind::Other),
-        TargetMiss::OutOfChain { target } => (target, TargetKind::None),
         TargetMiss::Removed { version } => (version, TargetKind::None),
     };
 
@@ -474,9 +473,7 @@ impl Failure for ErrorCutFile {
     }
 
     fn reason(&self) -> String {
-        t!("cut.err_not_local", file = self.file)
-            .trim()
-            .to_string()
+        t!("cut.err_not_local", file = self.file).trim().to_string()
     }
 }
 
@@ -530,9 +527,7 @@ impl Failure for ErrorCutNoChain {
     }
 
     fn reason(&self) -> String {
-        t!("cut.err_no_chain", file = self.file)
-            .trim()
-            .to_string()
+        t!("cut.err_no_chain", file = self.file).trim().to_string()
     }
 }
 

@@ -37,7 +37,7 @@ use rorolala_utils_progress::Progress;
 use rorolala_vcs::{Creator, Message, VCSIndex, VCSIndexObject, VCSWrite as _, Variant, Version};
 use rorolala_version_search as version_search;
 use rorolala_version_search::{
-    HeadMiss, miss_of, names, named, number_of as chain_number_of, resolve_head, short,
+    HeadMiss, miss_of, named, names, number_of as chain_number_of, resolve_head, short,
 };
 pub use rorolala_version_search::{Level, TargetMiss};
 use rorolala_workspace::{Merging, Workspace};
@@ -163,11 +163,7 @@ impl Sheet {
     /// # Errors
     ///
     /// Returns [`TweakRefusal::Nothing`] when the chain is shorter than `anchor`.
-    pub fn from_rows(
-        chain: &Chain,
-        anchor: usize,
-        rows: Vec<Row>,
-    ) -> Result<Self, TweakRefusal> {
+    pub fn from_rows(chain: &Chain, anchor: usize, rows: Vec<Row>) -> Result<Self, TweakRefusal> {
         Ok(Self {
             anchor: Some(chain.short(anchor)?),
             rows,
@@ -729,8 +725,6 @@ fn bind<'a>(sheet: &'a Sheet, chain: &Chain) -> Result<Bound<'a>, TweakRefusal> 
 
     Ok(Bound { entries, anchor })
 }
-
-
 
 // ---------------------------------------------------------------------------------------------
 // Naming the version to adjust
@@ -1577,6 +1571,10 @@ pub fn apply(
 /// # Errors
 ///
 /// As [`apply`].
+#[allow(
+    clippy::too_many_arguments,
+    reason = "an apply reads the request, the entry, the sheet, the options, the watching and the journal it records into, and gathering them would only move the count"
+)]
 pub fn apply_with(
     request: &Request<'_>,
     id: Uuid,
@@ -1731,14 +1729,7 @@ pub fn apply_with(
     } else {
         set_version(request.layout, id, base)?;
 
-        bring_up_to_date(
-            request,
-            path,
-            &chain,
-            base,
-            progress,
-            journal.as_deref_mut(),
-        )?
+        bring_up_to_date(request, path, &chain, base, progress, journal)?
     };
 
     remove_plan(root, id, &data.version())?;
@@ -1971,7 +1962,7 @@ fn bring_up_to_date(
     chain: &Chain,
     to: Blake3Hash,
     progress: &Progress,
-    mut journal: Option<&mut Journal>,
+    journal: Option<&mut Journal>,
 ) -> Result<Vec<TweakWarning>, TweakRefusal> {
     let Some(store) = request.store else {
         return Ok(Vec::new());
@@ -2014,7 +2005,7 @@ fn bring_up_to_date(
         }
     }
 
-    if let Some(journal) = journal.as_deref_mut() {
+    if let Some(journal) = journal {
         journal.record(Effect::File {
             path: path.as_str().to_owned(),
             before: Some(Key::new(was).hex()),
@@ -2240,8 +2231,8 @@ mod tests {
 
     use super::{
         Adjustment, ApplyOptions, Chain, Change, Mark, Operation, Request, Sheet, SheetError,
-        TargetMiss, TweakOutcome, TweakRefusal, adjust, anchor_at_origin, apply, apply_with, cancel,
-        operations, plan_dir, read_plan, remove_plan, resolve, width, write_plan,
+        TargetMiss, TweakOutcome, TweakRefusal, adjust, anchor_at_origin, apply, apply_with,
+        cancel, operations, plan_dir, read_plan, remove_plan, resolve, width, write_plan,
     };
     use crate::write::Cancellation;
     use crate::write::track::{TrackOptions, track_file};
@@ -2342,11 +2333,7 @@ mod tests {
     }
 
     /// Applies `sheet` to `a.txt` with the base and the replay `options` give.
-    fn applied_with(
-        workspace: &Workspace,
-        sheet: &Sheet,
-        options: &ApplyOptions,
-    ) -> TweakOutcome {
+    fn applied_with(workspace: &Workspace, sheet: &Sheet, options: &ApplyOptions) -> TweakOutcome {
         let layout = workspace.layout().unwrap();
         let path = LayoutPath::from_relative("a.txt".as_ref()).unwrap();
         let id = layout.id_of(&path).unwrap();

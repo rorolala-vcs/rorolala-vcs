@@ -5,13 +5,14 @@
 //! before and after it, which is enough to put the work back without asking the command what it
 //! meant. A run that made no change writes nothing.
 
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rorolala_layout::{EntryKind, MutableData};
-use rorolala_storage::Key;
+use rorolala_layout::{EntryKind, Layout, MutableData};
+use rorolala_storage::{Key, key_of_file};
 use rorolala_utils_constants::WORKSPACE_LOG_DIR;
 use rorolala_utils_location::Locate as _;
 use rorolala_workspace::Workspace;
@@ -151,13 +152,13 @@ impl Journal {
 
     /// How many changes it holds.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.effects.len()
     }
 
     /// Whether it holds no change.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.effects.is_empty()
     }
 
@@ -253,6 +254,172 @@ impl Journal {
     }
 }
 
+/// A Layout's entries and paths, as a run found them or left them.
+#[derive(Debug, Default)]
+pub struct LayoutSnapshot {
+    entries: BTreeMap<Uuid, EntryState>,
+    paths: BTreeMap<String, Uuid>,
+}
+
+impl LayoutSnapshot {
+    /// Reads `layout`.
+    #[must_use]
+    pub fn of(layout: &Layout) -> Self {
+        let entries = layout
+            .entries()
+            .into_iter()
+            .map(|(id, data)| (id, EntryState::of(&data)))
+            .collect();
+        let paths = layout
+            .paths()
+            .into_iter()
+            .map(|(path, id)| (path.as_str().to_owned(), id))
+            .collect();
+
+        Self { entries, paths }
+    }
+
+    /// Records what changed between `self` and `after`.
+    pub fn record(&self, after: &Self, journal: &mut Journal) {
+        let before_paths = by_id(&self.paths);
+        let after_paths = by_id(&after.paths);
+
+        for (id, before) in &self.entries {
+            match after.entries.get(id) {
+                Some(after) if after != before => journal.record(Effect::Entry {
+                    id: *id,
+                    path: after_paths
+                        .get(id)
+                        .or_else(|| before_paths.get(id))
+                        .cloned(),
+                    before: Some(before.clone()),
+                    after: Some(after.clone()),
+                }),
+                None => journal.record(Effect::Entry {
+                    id: *id,
+                    path: before_paths.get(id).cloned(),
+                    before: Some(before.clone()),
+                    after: None,
+                }),
+                _ => {}
+            }
+        }
+        for (id, after) in &after.entries {
+            if !self.entries.contains_key(id) {
+                journal.record(Effect::Entry {
+                    id: *id,
+                    path: after_paths.get(id).cloned(),
+                    before: None,
+                    after: Some(after.clone()),
+                });
+            }
+        }
+
+        for (path, id) in &self.paths {
+            match after.paths.get(path) {
+                Some(after_id) if after_id != id => {
+                    let (Some(before), Some(after)) =
+                        (self.entries.get(id), after.entries.get(after_id))
+                    else {
+                        continue;
+                    };
+                    journal.record(Effect::Uuid {
+                        from: *id,
+                        to: *after_id,
+                        path: Some(path.clone()),
+                        before: before.clone(),
+                        after: after.clone(),
+                    });
+                }
+                None => journal.record(Effect::Path {
+                    id: *id,
+                    from: Some(path.clone()),
+                    to: None,
+                }),
+                _ => {}
+            }
+        }
+        for (path, id) in &after.paths {
+            if !self.paths.contains_key(path) {
+                journal.record(Effect::Path {
+                    id: *id,
+                    from: None,
+                    to: Some(path.clone()),
+                });
+            }
+        }
+    }
+}
+
+/// The path each entry is at, by the entry.
+fn by_id(paths: &BTreeMap<String, Uuid>) -> BTreeMap<Uuid, String> {
+    paths.iter().map(|(path, id)| (*id, path.clone())).collect()
+}
+
+/// The content of the files a run touched, by the path each lies at.
+///
+/// A run that writes a working file records what it held before, which a version cannot answer: the
+/// content may be one the run only ever had on disk. A file read here is read again when the run
+/// ends, and the two readings are what the journal keeps.
+#[derive(Debug, Default)]
+pub struct FileStates {
+    files: BTreeMap<String, Option<String>>,
+}
+
+impl FileStates {
+    /// Reads each path in `paths`.
+    #[must_use]
+    pub fn of(paths: impl IntoIterator<Item = PathBuf>) -> Self {
+        let files = paths
+            .into_iter()
+            .map(|path| (path.display().to_string(), content_of(&path)))
+            .collect();
+
+        Self { files }
+    }
+
+    /// Reads one path.
+    #[must_use]
+    pub fn read(path: impl Into<PathBuf>) -> Self {
+        Self::of([path.into()])
+    }
+
+    /// Reads each path in `paths` as holding nothing, for a run that writes only paths it knows were
+    /// not there.
+    #[must_use]
+    pub fn absent_before(paths: impl IntoIterator<Item = PathBuf>) -> Self {
+        let files = paths
+            .into_iter()
+            .map(|path| (path.display().to_string(), None))
+            .collect();
+
+        Self { files }
+    }
+
+    /// Records each path whose content is not what it was when read.
+    pub fn record(&self, journal: &mut Journal) {
+        for (path, before) in &self.files {
+            let after = content_of(Path::new(path));
+
+            if after != *before {
+                journal.record(Effect::File {
+                    path: path.clone(),
+                    before: before.clone(),
+                    after,
+                });
+            }
+        }
+    }
+}
+
+/// The key of the content at `path`, or nothing when there is no file there.
+///
+/// A directory is not a file of its own, so it reads as nothing: a tree is recorded as one entry
+/// rather than as the files under it.
+fn content_of(path: &Path) -> Option<String> {
+    key_of_file(path).ok().map(|key| key.hex())
+}
+
 /// The day and time a run ended, in UTC, as `YYYY-MM-DDTHH:MM:SSZ`.
 fn utc_stamp() -> String {
     let seconds = SystemTime::now()
@@ -264,7 +431,10 @@ fn utc_stamp() -> String {
     let minute = (of_day % 3_600) / 60;
     let second = of_day % 60;
 
-    format!("{}T{hour:02}:{minute:02}:{second:02}Z", civil_from_days(days))
+    format!(
+        "{}T{hour:02}:{minute:02}:{second:02}Z",
+        civil_from_days(days)
+    )
 }
 
 /// The date `days` after the Unix epoch, as `YYYY-MM-DD`.
@@ -297,7 +467,9 @@ mod tests {
     use rorolala_workspace::Workspace;
     use uuid::Uuid;
 
-    use super::{Effect, Journal};
+    use rorolala_layout::{LayoutPath, MutableData};
+
+    use super::{Effect, FileStates, Journal, LayoutSnapshot};
     use crate::write::layout::{LayoutOp, apply_recorded};
 
     /// A Workspace under a directory of its own.
@@ -338,7 +510,7 @@ mod tests {
         let journal = Journal::open(&workspace, "test");
 
         assert_eq!(journal.finish().unwrap(), None);
-        assert!(Journal::files(&workspace).unwrap().is_empty());
+        assert_eq!(Journal::files(&workspace).unwrap(), [] as [PathBuf; 0]);
 
         let _ = fs::remove_dir_all(dir);
     }
@@ -363,7 +535,106 @@ mod tests {
         let files = Journal::files(&workspace).unwrap();
         assert_eq!(files.len(), 2);
         assert!(first < second);
-        assert_eq!(Journal::read(files.last().unwrap()).unwrap().command, "second");
+        assert_eq!(
+            Journal::read(files.last().unwrap()).unwrap().command,
+            "second"
+        );
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_snapshot_records_what_changed() {
+        let (dir, workspace) = scratch("snapshot");
+        let layout = workspace.layout().unwrap();
+        let id = Uuid::from_u128(1);
+        apply_recorded(
+            &layout,
+            &[LayoutOp::CreateEntry {
+                id,
+                path: Some(LayoutPath::new("a.psd").unwrap()),
+                data: MutableData::new(None, [1; 32], String::new()),
+            }],
+            None,
+        )
+        .unwrap();
+        let before = LayoutSnapshot::of(&layout);
+
+        apply_recorded(
+            &layout,
+            &[LayoutOp::UpdateEntry {
+                id,
+                data: MutableData::new(None, [2; 32], String::new()),
+            }],
+            None,
+        )
+        .unwrap();
+        let after = LayoutSnapshot::of(&layout);
+        let mut journal = Journal::open(&workspace, "test");
+        before.record(&after, &mut journal);
+        let path = journal.finish().unwrap().unwrap();
+        let group = Journal::read(&path).unwrap();
+
+        assert_eq!(group.effects.len(), 1);
+        assert!(matches!(
+            &group.effects[0],
+            Effect::Entry {
+                before: Some(before),
+                after: Some(after),
+                ..
+            } if before.version != after.version
+        ));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_file_state_records_what_changed() {
+        let (dir, workspace) = scratch("file-states");
+        let path = dir.join("a.txt");
+        fs::write(&path, b"one").unwrap();
+        let files = FileStates::read(path.clone());
+        fs::write(&path, b"two").unwrap();
+        let mut journal = Journal::open(&workspace, "test");
+        files.record(&mut journal);
+        let written = journal.finish().unwrap().unwrap();
+        let group = Journal::read(&written).unwrap();
+
+        assert_eq!(group.effects.len(), 1);
+        assert!(matches!(
+            &group.effects[0],
+            Effect::File {
+                before: Some(before),
+                after: Some(after),
+                ..
+            } if before != after
+        ));
+
+        // A path that is what it was leaves nothing, and so does a path absent both times.
+        let unchanged = FileStates::read(path);
+        let missing = FileStates::absent_before([dir.join("gone.txt")]);
+        let mut journal = Journal::open(&workspace, "test");
+        unchanged.record(&mut journal);
+        missing.record(&mut journal);
+        assert_eq!(journal.finish().unwrap(), None);
+
+        // A path absent before and written after is a file the run made.
+        let made = dir.join("b.txt");
+        let files = FileStates::absent_before([made.clone()]);
+        fs::write(&made, b"three").unwrap();
+        let mut journal = Journal::open(&workspace, "test");
+        files.record(&mut journal);
+        let written = journal.finish().unwrap().unwrap();
+        let group = Journal::read(&written).unwrap();
+
+        assert!(matches!(
+            &group.effects[0],
+            Effect::File {
+                before: None,
+                after: Some(_),
+                ..
+            }
+        ));
 
         let _ = fs::remove_dir_all(dir);
     }
@@ -383,7 +654,7 @@ mod tests {
 
         assert!(result.is_err());
         drop(journal);
-        assert!(Journal::files(&workspace).unwrap().is_empty());
+        assert_eq!(Journal::files(&workspace).unwrap(), [] as [PathBuf; 0]);
 
         let _ = fs::remove_dir_all(dir);
     }
