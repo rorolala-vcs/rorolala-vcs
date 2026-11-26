@@ -66,7 +66,6 @@ internal static class Host
             ProgramIcon = icon,
             Theme = making.Service,
             Palette = making.Palette,
-            Rola = new RolaCapability(),
             Preference = preference,
             Settings = new SettingRegistry(preference),
             Shell = shell,

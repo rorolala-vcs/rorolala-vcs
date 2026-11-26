@@ -567,7 +567,16 @@ Every transparent struct, union and enum the header declares carries a size macr
 
 ## Refactor
 
-### 1. **\[BREAKING!\]** [`librororala`] [`ffi`] Stop sending and answering JSON across the C ABI
+### 1. **\[BREAKING!\]** [`app`] [`RorolalaDesktop`] [`contract`] Remove the empty IRola capability interface
+
+The Desktop's `IRola` interface and the `Rola` member of `IPluginHost` are removed. The interface
+was empty from the day it shipped: no plugin read it, and the plugins that need Rorolala call the
+bindings in `modules/rola-sharp` directly. `HostServices.Rola` and `RolaCapability` go with them.
+
+A plugin that read `IPluginHost.Rola` must drop the read. The contract assembly is raised to 0.17.0,
+so a plugin built against 0.16.0 is refused at load and must be rebuilt.
+
+### 2. **\[BREAKING!\]** [`librororala`] [`ffi`] Stop sending and answering JSON across the C ABI
 
 The C ABI no longer takes or answers JSON. Every read that answered a document now answers a typed handle, every write result is a typed handle, and every request is a struct the caller fills, so a C or C++ caller reads fields instead of parsing a document.
 
@@ -577,7 +586,7 @@ The `RolaActionError` JSON payload is now a struct with the message, line and co
 
 `ROROLALA_ABI_VERSION` is now 10200. A caller built against the previous header has to be rebuilt: the removed functions and request documents do not exist, and the exports they replaced take different arguments.
 
-### 2. **\[BREAKING!\]** [`modules`] [`daemon`] [`abi`] Type the daemon action requests and answers across the C ABI
+### 3. **\[BREAKING!\]** [`modules`] [`daemon`] [`abi`] Type the daemon action requests and answers across the C ABI
 
 The daemon actions are a request struct or a slice the caller fills, not a `const char *` document: `RolaDaemonSyncAllRequest`, `RolaDaemonListRemoteRequest`, `RolaDaemonSyncHashesRequest`, `RolaDaemonListRemoteIndexRequest`, `RolaDaemonReadRemoteIndexRequest`, `RolaDaemonFetchLayoutRequest`, `RolaDaemonRequestOwnershipRequest`, `RolaDaemonGiveupOwnershipRequest`, `RolaDaemonFetchIgnoreRulesRequest`, `RolaDaemonRemoveRemotePathRequest` and `RolaDaemonBringRemoteIndexRequest`, beside the `RolaDaemonRemoteCreate` and `RolaDaemonRemoteSet` arrays `rola_daemon_action_write_remote_entries` reads. `rola_daemon_action_sync_index_all` takes no input at all. Every string in a request is borrowed for the call.
 
@@ -585,11 +594,11 @@ The answers that were JSON documents are typed handles: `RolaDaemonOwnerships` a
 
 `ROROLALA_ABI_VERSION` is now 10300. A caller built against the previous header has to be rebuilt and to fill the request structs instead of serialising a document.
 
-### 3. **\[BREAKING!\]** [`modules`] [`rola-sharp`] Remove the first-generation C# bindings and keep RolaSharp as the one assembly
+### 4. **\[BREAKING!\]** [`modules`] [`rola-sharp`] Remove the first-generation C# bindings and keep RolaSharp as the one assembly
 
 The first-generation C# bindings are gone from `modules/rola-sharp`. The project, the assembly and the namespaces are `RolaSharp` and `RolaSharp.Write`, the names the removed generation held, and the `Scope` family and the writers are the whole surface. A caller of the removed `RolaLayouts`, `RolaLayoutEntries`, `RolaWorkspaceConfig`, `RolaAccounts`, `RolaMembers`, `RolaTreeMark` or `RolaKeyLocateRule` moves to `LayoutScope`, `WorkspaceScope`, `UserScope`, `AccountScope`, `TreeScope` and `RolaPaths`; the key rule is no longer a public handle. A binary built against the old `RolaSharp.dll` has to be rebuilt, since the assembly carries the same name and a different surface.
 
-### 4. **\[BREAKING!\]** [`utils`] [`location`] [`user-data`] Keep each build's user data under its userdata name
+### 5. **\[BREAKING!\]** [`utils`] [`location`] [`user-data`] Keep each build's user data under its userdata name
 
 The user-level directory is now `<data home>/rola/<userdata-name>/`, where the name is chosen when
 the artifacts are built: `cargo dev export --userdata-name=<name>` (default `develop`) and
@@ -603,26 +612,26 @@ A machine that already has files under `~/.local/share/rola/keys`, `rola/daemon`
 published program, or `rola/develop/` for a development export. The old layout is not read and is
 not migrated.
 
-### 5. [`app`] [`rola`] Run the write commands through librorolala
+### 6. [`app`] [`rola`] Run the write commands through librorolala
 
 `rola bring`, `rola track`, `rola align`, `rola retrack`, `rola hold` and `rola giveup` no longer keep their own workflow bodies. Each builds the library's request, calls the same function the C ABI calls, and keeps only the arguments, the completion, the editor, the words and the drawing. What a run prints and the exit code it ends with are unchanged, except that a variant merge no longer says what was fetched from the Vaults, since the library answers the merge without that report.
 
-### 6. [`app`] [`ROLALauncher`] [`settings`] Center the launcher's setting names and drop their hints
+### 7. [`app`] [`ROLALauncher`] [`settings`] Center the launcher's setting names and drop their hints
 
 The launcher's settings window no longer draws a sentence under `Day or night` and `Window frame`. Each name sits on the middle line of the row its control is on, and the two hint keys are gone from the translations. The dialog is shorter because it sizes to its content.
 
-### 7. [`app`] [`RorolalaDesktop`] [`icons`] Draw every Desktop picture from Phosphor Icons
+### 8. [`app`] [`RorolalaDesktop`] [`icons`] Draw every Desktop picture from Phosphor Icons
 
 The Desktop program, its plugins and the launcher now draw their interface pictures from Phosphor Icons instead of Google's Material Design set. `cargo dev icons` clones `phosphor-icons/core` at a pinned commit into `THIRD_PARTY/phosphor-icons` and draws the `regular` weight, and each `icons/` directory carries the MIT license and the commit it came from. The pictures keep their role, so the keys and the generated C# constants are renamed to the Phosphor names they now draw: `CropSquare` is `Square`, `MoreVert` is `DotsThreeVertical`, and `EditNote` is `NotePencil`. A picture worn as a badge is drawn again at bold under a `-bold` key, because a tile shows it at a dozen pixels where the regular weight closes up, and the menus, the progress capsules and the dock headers keep the regular picture. The set's MIT license is laid beside the programs as `THIRD_PARTY/Icons/Phosphor/LICENSE`, so an export carries the terms of the pictures it embeds. The file listing's own icon sets, Adwaita and pure-style, are unchanged.
 
-### 8. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Stop drawing a word over an empty folder
+### 9. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] Stop drawing a word over an empty folder
 
 The folder tree and a plain directory listing no longer draw a folder picture and a word over a place
 that holds nothing. The row the tree has is the answer, and the word sat over space that belongs to
 the tree. A logical listing, which lists what a provider answers at an address rather than what a
 directory holds, keeps its word, because there the empty answer is about the address.
 
-### 9. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw the folder tree as a list of places
+### 10. [`app`] [`RorolalaDesktop`] [`plugins`] [`file-system`] [`tree`] Draw the folder tree as a list of places
 
 A folder's step in the tree is now its name alone: the shared folder picture is gone, since the
 chevron already says which rows open. A file keeps its picture, and the picture stands where the name
@@ -634,60 +643,60 @@ tree no longer scrolls sideways.
 The look gives a step the pane's whole width: the wash reaches both edges, its corners are square,
 the arrow has room on either side, and a step is two pixels taller.
 
-### 10. [`app`] [`RorolalaDesktop`] [`theme`] Draw a scrollbar as a quiet pill over the content
+### 11. [`app`] [`RorolalaDesktop`] [`theme`] Draw a scrollbar as a quiet pill over the content
 
 Every scrolling pane in the Desktop now draws its scrollbars over the content rather than beside it,
 so a bar that appears or goes away does not narrow what is being read. The vertical bar has no arrow
 at either end and its thumb is a pill whatever its length. It is invisible until the pointer is in
 the pane, is drawn faintly then, and is drawn more strongly while the pointer is over the bar itself.
 
-### 11. [`app`] [`RorolalaVCSPlugin`] Bring and own entries through the C# writers
+### 12. [`app`] [`RorolalaVCSPlugin`] Bring and own entries through the C# writers
 
 The bring flow, the join path, the ownership menu and the ownership sources no longer start `rola`. Bring builds a `BringRequest`, the join a `BringVariantRequest`, and ownership plans with `PlanOwnership` before it applies with `ApplyOwnership`, keeping the per-path failures and the allow-partial behaviour. No desktop file references the V1 assembly any more; the layout path move and the Vault's own ownership doors stay on the command line.
 
-### 12. [`app`] [`RorolalaVCSPlugin`] Read the ignore rules, the Workspace and the account from the C# bindings
+### 13. [`app`] [`RorolalaVCSPlugin`] Read the ignore rules, the Workspace and the account from the C# bindings
 
 The ignore rules, the Workspace check and the account the work acts as now come from `RolaSharp`'s `IgnoreScope`, `WorkspaceScope` and `UserScope`. The V2 user scope gained the current account name, which the old user reader had and no V2 member answered. Listing order, i18n keys and the silence of a read that cannot be made are unchanged.
 
-### 13. [`app`] [`RorolalaVCSPlugin`] Run track, align and retrack through the C# writers
+### 14. [`app`] [`RorolalaVCSPlugin`] Run track, align and retrack through the C# writers
 
 The track, retrack and align commands no longer start `rola`. Track plans, keeps the subjects the plan answered and applies that same plan with the one message the panel holds; retrack and the align modes build their request and call the writer; the tree restore makes the tree-relative path absolute before it asks. A refusal whose category the desktop has no words for is shown as the writer's message. The command line remains only for the file removal an unmerge does before its align.
 
-### 14. [`app`] [`RorolalaVCSPlugin`] [`graph`] Read the version graph from the C# bindings
+### 15. [`app`] [`RorolalaVCSPlugin`] [`graph`] Read the version graph from the C# bindings
 
 The version graph's variant reading comes from `RolaSharp`'s `VariantGraphScope`, with the same records, the same silence when there is no graph, the same one warning for a read that fails otherwise, and the same drawing. V1's version graph type stays until a V2 consumer needs the fields it alone carries.
 
-### 15. [`app`] [`RorolalaVCSPlugin`] [`layout`] Move a path through the C# Layout writer
+### 16. [`app`] [`RorolalaVCSPlugin`] [`layout`] Move a path through the C# Layout writer
 
 A move in the Workspace's own Layout, and the bring's local move, no longer start `rola`: they open the Layout the panel holds and call `LayoutWriter.MovePath`. A move in a fetched Vault copy and the new-uuid fork stay on the command line, because the writer cannot write a fetched copy and its `ChangeUuid` is not the fork the command makes.
 
-### 16. [`app`] [`RorolalaVCSPlugin`] [`overview`] Read the overview from the C# bindings
+### 17. [`app`] [`RorolalaVCSPlugin`] [`overview`] Read the overview from the C# bindings
 
 The overview, status, standing, merge, upstream, lock and sync panels read through `RolaSharp`'s `StatusScope` and `OwnershipScope` instead of V1's `RolaStatus` and `RolaOwnership`. The fields, the i18n keys and the silence when there is no Workspace are unchanged; the graph and tree panels keep V1 until their own slices.
 
-### 17. [`app`] [`RorolalaVCSPlugin`] [`sync`] Run sync through the C# writer
+### 18. [`app`] [`RorolalaVCSPlugin`] [`sync`] Run sync through the C# writer
 
 The sync panel and the sync strip no longer start `rola`: they build a `SyncRequest`, plan with `PlanSync`, and apply the same plan with `Sync`, draining `Progress` on the dispatcher into the same records and bars. The scope dropdowns no longer show the `--no-index`, `--no-layout` and `--no-storage` flags, since the command no longer runs; their labels, checked state and effects are unchanged. The Vault Layout fetch that planning makes before the apply has no bar yet, because only the apply holds a progress handle.
 
-### 18. [`app`] [`RorolalaVCSPlugin`] [`tree`] Read a tree from the C# bindings
+### 19. [`app`] [`RorolalaVCSPlugin`] [`tree`] Read a tree from the C# bindings
 
 The tree panel, the tree reading and the graph bars that show a tree read through `RolaSharp`'s `TreeScope` and `TreeStatus`. The records, the silence when no tree is there and the i18n keys are unchanged; the graph records themselves stay on V1 until their own slice.
 
-### 19. [`app`] [`TerminalPlugin`] Run the terminal's pty through the C# bindings
+### 20. [`app`] [`TerminalPlugin`] Run the terminal's pty through the C# bindings
 
 The terminal view opens, reads, writes and resizes its pseudo-terminal through `RolaSharp`'s `Pty`. The argument encoding and the size clamp are the ones the old wrapper made, so the program started and the terminal's extent are the same. The plugin references V2 alone now that its only V1 use is gone.
 
-### 20. [`librorolala`] Resolve accounts and Vaults from one implementation
+### 21. [`librorolala`] Resolve accounts and Vaults from one implementation
 
 The account search and the Vault name and address rules are now `librorolala::keys` and `librorolala::remote`. The command line's key search and `ResCurrentRemoteVault` delegate to them, and the ABI request layer calls the same functions, so the scopes, the order, the shadowing and the failure wording have one place to be kept right.
 
-### 21. [`librorolala`] [`vcs`] Drop the chain's terminal drawing
+### 22. [`librorolala`] [`vcs`] Drop the chain's terminal drawing
 
 The terminal drawing is gone from `rorolala-vcs`: `draw`, `Cell`, `Role`, `Drawing`, `VersionRow` and
 the layout that fed them. What a terminal shows is drawn in `rola`, and the chain's shape stays, since
 the Desktop's Version Graph reads it. Nothing the command line or the C ABI exposes changes.
 
-### 22. [`librororala`] [`abi`] Name every C ABI export after one rule
+### 23. [`librororala`] [`abi`] Name every C ABI export after one rule
 
 Every exported function, type and release now follows one rule: a function is `rola_<area>_<subject>_<verb>`, a type is `Rola<Area><Thing>`, and a release is `free_` followed by the type in snake case. `locate_rola_workspace` is `rola_workspace_locate`, `VaultConfig` is `RolaVaultConfig`, and `free_rola_vcsindex` is `free_rola_vcs_index`, to name three.
 

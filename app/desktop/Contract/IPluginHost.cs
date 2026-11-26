@@ -34,9 +34,6 @@ public interface IPluginHost
     /// <summary>Where the plugin adds the translations it carries.</summary>
     II18n I18n { get; }
 
-    /// <summary>What Rorolala can do, injected over the C ABI.</summary>
-    IRola Rola { get; }
-
     /// <summary>The plugin's own section of <c>preference.json</c>.</summary>
     IPluginConfig Config { get; }
 

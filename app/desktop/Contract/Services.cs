@@ -220,16 +220,6 @@ public sealed record PluginSetting(
 );
 
 /// <summary>
-/// What Rorolala can do, injected over the C ABI.
-/// </summary>
-/// <remarks>
-/// A plugin calls this; it never invokes the <c>rola</c> command line and never reimplements
-/// Rorolala semantics. The surface corresponds to what the C ABI exports today and is filled in as
-/// the exports are; the file-level storage operations are a known gap with no export yet.
-/// </remarks>
-public interface IRola { }
-
-/// <summary>
 /// What the files may have done, said by whichever plugin changed them.
 /// </summary>
 /// <remarks>

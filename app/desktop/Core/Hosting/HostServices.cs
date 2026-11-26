@@ -72,9 +72,6 @@ internal sealed class HostServices
     /// <remarks>One instance, because the service is a view over the program's one statement of its motion.</remarks>
     public IMotion Motion { get; } = new MotionService();
 
-    /// <summary>What Rorolala can do.</summary>
-    public required IRola Rola { get; init; }
-
     /// <summary>The user's preferences.</summary>
     public required PreferenceConfiguration Preference { get; init; }
 
@@ -203,9 +200,6 @@ internal sealed class PluginHost
 
     /// <inheritdoc />
     public II18n I18n => _services.I18n;
-
-    /// <inheritdoc />
-    public IRola Rola => _services.Rola;
 
     /// <inheritdoc />
     public IPluginConfig Config { get; }

@@ -324,7 +324,6 @@ internal sealed class Desktop
             ProgramIcon = icon,
             Theme = theme,
             Palette = making.Palette,
-            Rola = new RolaCapability(),
             Preference = _state.Preference,
             Settings = new SettingRegistry(_state.Preference),
             Shell = shell,

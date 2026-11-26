@@ -58,10 +58,6 @@ dotnet_diagnostic.CA1308.severity = none
 # for nothing.
 dotnet_diagnostic.CA1003.severity = none
 
-# An empty interface: `IRola` is deliberately empty until the C ABI's exports land (Section 13). It
-# is the shape a plugin is handed rather than a stand-in for something missing.
-dotnet_diagnostic.CA1040.severity = none
-
 # A member named for a language keyword (`ILog.Error`): the log levels are the words every log has,
 # and the contract is read by C# and by C alike. Renaming `Error` so that C# is easier would make it
 # worse for everyone else.
